@@ -27,7 +27,6 @@ import static org.junit.Assert.*;
 import org.junit.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
@@ -38,10 +37,6 @@ import com.oracle.graal.nodes.type.*;
 public class IntegerStampTest {
 
     private StructuredGraph graph;
-
-    private static Stamp addIntStamp(Stamp a, Stamp b) {
-        return IntegerStamp.OPS.getAdd().foldStamp(a, b);
-    }
 
     @Before
     public void before() {
@@ -129,151 +124,147 @@ public class IntegerStampTest {
         assertEquals(new IntegerStamp(64, -10000, 1000, 0, 0xffffffffffffffffL), StampFactory.forInteger(Kind.Long, -10000, 1000));
     }
 
-    private static Stamp narrowingKindConversion(Stamp stamp, Kind kind) {
-        Stamp narrow = IntegerStamp.OPS.getNarrow().foldStamp(kind.getBitCount(), stamp);
-        IntegerConvertOp implicitExtend = kind.isUnsigned() ? IntegerStamp.OPS.getZeroExtend() : IntegerStamp.OPS.getSignExtend();
-        return implicitExtend.foldStamp(32, narrow);
-    }
-
     @Test
     public void testNarrowingConversions() {
         // byte cases
-        assertEquals(StampFactory.forInteger(Kind.Int, 0, 0), narrowingKindConversion(StampFactory.forInteger(Kind.Int, 0, 0), Kind.Byte));
-        assertEquals(StampFactory.forInteger(Kind.Int, 0, 10), narrowingKindConversion(StampFactory.forInteger(Kind.Int, 0, 10), Kind.Byte));
-        assertEquals(StampFactory.forInteger(Kind.Int, 10, 20), narrowingKindConversion(StampFactory.forInteger(Kind.Int, 10, 20), Kind.Byte));
-        assertEquals(StampFactory.forInteger(Kind.Int, -10, 0), narrowingKindConversion(StampFactory.forInteger(Kind.Int, -10, 0), Kind.Byte));
-        assertEquals(StampFactory.forInteger(Kind.Int, -20, -10), narrowingKindConversion(StampFactory.forInteger(Kind.Int, -20, -10), Kind.Byte));
-        assertEquals(StampFactory.forInteger(Kind.Int, Byte.MIN_VALUE, Byte.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Int, 100, 200), Kind.Byte));
-        assertEquals(StampFactory.forInteger(Kind.Int, Byte.MIN_VALUE, Byte.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Int, -100, 200), Kind.Byte));
-        assertEquals(StampFactory.forInteger(Kind.Int, Byte.MIN_VALUE, Byte.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Int, -200, -100), Kind.Byte));
+        assertEquals(StampFactory.forInteger(Kind.Int, 0, 0), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, 0, 0), Kind.Byte));
+        assertEquals(StampFactory.forInteger(Kind.Int, 0, 10), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, 0, 10), Kind.Byte));
+        assertEquals(StampFactory.forInteger(Kind.Int, 10, 20), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, 10, 20), Kind.Byte));
+        assertEquals(StampFactory.forInteger(Kind.Int, -10, 0), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, -10, 0), Kind.Byte));
+        assertEquals(StampFactory.forInteger(Kind.Int, -20, -10), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, -20, -10), Kind.Byte));
+        assertEquals(StampFactory.forInteger(Kind.Int, Byte.MIN_VALUE, Byte.MAX_VALUE), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, 100, 200), Kind.Byte));
+        assertEquals(StampFactory.forInteger(Kind.Int, Byte.MIN_VALUE, Byte.MAX_VALUE), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, -100, 200), Kind.Byte));
+        assertEquals(StampFactory.forInteger(Kind.Int, Byte.MIN_VALUE, Byte.MAX_VALUE), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, -200, -100), Kind.Byte));
         // char cases
-        assertEquals(StampFactory.forInteger(Kind.Int, 0, 10), narrowingKindConversion(StampFactory.forInteger(Kind.Int, 0, 10), Kind.Char));
-        assertEquals(StampFactory.forInteger(Kind.Int, 10, 20), narrowingKindConversion(StampFactory.forInteger(Kind.Int, 10, 20), Kind.Char));
-        assertEquals(StampFactory.forInteger(Kind.Int, Character.MIN_VALUE, Character.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Int, 20000, 80000), Kind.Char));
-        assertEquals(StampFactory.forInteger(Kind.Int, Character.MIN_VALUE, Character.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Int, -10000, 40000), Kind.Char));
-        assertEquals(StampFactory.forInteger(Kind.Int, Character.MIN_VALUE, Character.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Int, -40000, -10000), Kind.Char));
+        assertEquals(StampFactory.forInteger(Kind.Int, 0, 10), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, 0, 10), Kind.Char));
+        assertEquals(StampFactory.forInteger(Kind.Int, 10, 20), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, 10, 20), Kind.Char));
+        assertEquals(StampFactory.forInteger(Kind.Int, Character.MIN_VALUE, Character.MAX_VALUE), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, 20000, 80000), Kind.Char));
+        assertEquals(StampFactory.forInteger(Kind.Int, Character.MIN_VALUE, Character.MAX_VALUE), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, -10000, 40000), Kind.Char));
+        assertEquals(StampFactory.forInteger(Kind.Int, Character.MIN_VALUE, Character.MAX_VALUE), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, -40000, -10000), Kind.Char));
         // short cases
-        assertEquals(StampFactory.forInteger(Kind.Int, 0, 10), narrowingKindConversion(StampFactory.forInteger(Kind.Int, 0, 10), Kind.Short));
-        assertEquals(StampFactory.forInteger(Kind.Int, 10, 20), narrowingKindConversion(StampFactory.forInteger(Kind.Int, 10, 20), Kind.Short));
-        assertEquals(StampFactory.forInteger(Kind.Int, Short.MIN_VALUE, Short.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Int, 20000, 40000), Kind.Short));
-        assertEquals(StampFactory.forInteger(Kind.Int, Short.MIN_VALUE, Short.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Int, -10000, 40000), Kind.Short));
-        assertEquals(StampFactory.forInteger(Kind.Int, Short.MIN_VALUE, Short.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Int, -40000, -10000), Kind.Short));
+        assertEquals(StampFactory.forInteger(Kind.Int, 0, 10), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, 0, 10), Kind.Short));
+        assertEquals(StampFactory.forInteger(Kind.Int, 10, 20), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, 10, 20), Kind.Short));
+        assertEquals(StampFactory.forInteger(Kind.Int, Short.MIN_VALUE, Short.MAX_VALUE), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, 20000, 40000), Kind.Short));
+        assertEquals(StampFactory.forInteger(Kind.Int, Short.MIN_VALUE, Short.MAX_VALUE), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, -10000, 40000), Kind.Short));
+        assertEquals(StampFactory.forInteger(Kind.Int, Short.MIN_VALUE, Short.MAX_VALUE), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Int, -40000, -10000), Kind.Short));
         // int cases
-        assertEquals(StampFactory.forInteger(Kind.Int, 0, 10), narrowingKindConversion(StampFactory.forInteger(Kind.Long, 0, 10), Kind.Int));
-        assertEquals(StampFactory.forInteger(Kind.Int, 10, 20), narrowingKindConversion(StampFactory.forInteger(Kind.Long, 10, 20), Kind.Int));
-        assertEquals(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Long, 20000000000L, 40000000000L), Kind.Int));
-        assertEquals(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Long, -10000000000L, 40000000000L), Kind.Int));
-        assertEquals(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MAX_VALUE), narrowingKindConversion(StampFactory.forInteger(Kind.Long, -40000000000L, -10000000000L), Kind.Int));
+        assertEquals(StampFactory.forInteger(Kind.Int, 0, 10), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Long, 0, 10), Kind.Int));
+        assertEquals(StampFactory.forInteger(Kind.Int, 10, 20), StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Long, 10, 20), Kind.Int));
+        assertEquals(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MAX_VALUE),
+                        StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Long, 20000000000L, 40000000000L), Kind.Int));
+        assertEquals(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MAX_VALUE),
+                        StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Long, -10000000000L, 40000000000L), Kind.Int));
+        assertEquals(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MAX_VALUE),
+                        StampTool.narrowingKindConversion(StampFactory.forInteger(Kind.Long, -40000000000L, -10000000000L), Kind.Int));
     }
 
     @Test
     public void testXor() {
-        assertEquals(new IntegerStamp(32, 0, 0xff, 0, 0xff), IntegerStamp.OPS.getXor().foldStamp(new IntegerStamp(32, 0, 0, 0, 0), new IntegerStamp(32, 0, 0xff, 0, 0xff)));
-        assertEquals(new IntegerStamp(32, 0x10, 0x1f, 0x10, 0x1f), IntegerStamp.OPS.getXor().foldStamp(new IntegerStamp(32, 0, 0, 0, 0), new IntegerStamp(32, 0x10, 0x1f, 0x10, 0x1f)));
-        assertEquals(new IntegerStamp(32, 0x0, 0xf, 0x0, 0xf), IntegerStamp.OPS.getXor().foldStamp(new IntegerStamp(32, 0x10, 0x10, 0x10, 0x10), new IntegerStamp(32, 0x10, 0x1f, 0x10, 0x1f)));
-        assertEquals(new IntegerStamp(32, 0x10, 0x1f, 0x10, 0x1f), IntegerStamp.OPS.getXor().foldStamp(new IntegerStamp(32, 0x10, 0x10, 0x10, 0x10), new IntegerStamp(32, 0x0, 0xf, 0x0, 0xf)));
+        assertEquals(new IntegerStamp(32, 0, 0xff, 0, 0xff), StampTool.xor(new IntegerStamp(32, 0, 0, 0, 0), new IntegerStamp(32, 0, 0xff, 0, 0xff)));
+        assertEquals(new IntegerStamp(32, 0x10, 0x1f, 0x10, 0x1f), StampTool.xor(new IntegerStamp(32, 0, 0, 0, 0), new IntegerStamp(32, 0x10, 0x1f, 0x10, 0x1f)));
+        assertEquals(new IntegerStamp(32, 0x0, 0xf, 0x0, 0xf), StampTool.xor(new IntegerStamp(32, 0x10, 0x10, 0x10, 0x10), new IntegerStamp(32, 0x10, 0x1f, 0x10, 0x1f)));
+        assertEquals(new IntegerStamp(32, 0x10, 0x1f, 0x10, 0x1f), StampTool.xor(new IntegerStamp(32, 0x10, 0x10, 0x10, 0x10), new IntegerStamp(32, 0x0, 0xf, 0x0, 0xf)));
     }
 
     @Test
     public void testNot() {
-        assertEquals(new IntegerStamp(32, -11, -1, 0xffff_fff0L, 0xffff_ffffL), IntegerStamp.OPS.getNot().foldStamp(new IntegerStamp(32, 0, 10, 0, 0xf)));
+        assertEquals(new IntegerStamp(32, -11, -1, 0xffff_fff0L, 0xffff_ffffL), StampTool.not(new IntegerStamp(32, 0, 10, 0, 0xf)));
     }
 
     @Test
     public void testAddIntSimple() {
-        assertEquals(StampFactory.forInteger(Kind.Int, 0, 30, 0, 31), addIntStamp(StampFactory.forInteger(Kind.Int, 0, 10), StampFactory.forInteger(Kind.Int, 0, 20)));
+        assertEquals(StampFactory.forInteger(Kind.Int, 0, 30, 0, 31), StampTool.add(StampFactory.forInteger(Kind.Int, 0, 10), StampFactory.forInteger(Kind.Int, 0, 20)));
     }
 
     @Test
     public void testAddNegativeOverFlowInt1() {
         assertEquals(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MAX_VALUE, 0, 0xffff_ffffL),
-                        addIntStamp(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, 0), StampFactory.forInteger(Kind.Int, -1, 0)));
+                        StampTool.add(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, 0), StampFactory.forInteger(Kind.Int, -1, 0)));
     }
 
     @Test
     public void testAddNegativeOverFlowInt2() {
         assertEquals(StampFactory.forInteger(Kind.Int, Integer.MAX_VALUE - 2, Integer.MAX_VALUE, 0x7fff_fffcL, 0x7fff_ffffL),
-                        addIntStamp(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MIN_VALUE + 1), StampFactory.forInteger(Kind.Int, -3, -2)));
+                        StampTool.add(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MIN_VALUE + 1), StampFactory.forInteger(Kind.Int, -3, -2)));
     }
 
     @Test
     public void testAddPositiveOverFlowInt1() {
-        assertEquals(StampFactory.forKind(Kind.Int), addIntStamp(StampFactory.forInteger(Kind.Int, 0, 1), StampFactory.forInteger(Kind.Int, 0, Integer.MAX_VALUE)));
+        assertEquals(StampFactory.forKind(Kind.Int), StampTool.add(StampFactory.forInteger(Kind.Int, 0, 1), StampFactory.forInteger(Kind.Int, 0, Integer.MAX_VALUE)));
     }
 
     @Test
     public void testAddPositiveOverFlowInt2() {
         assertEquals(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MIN_VALUE + 2),
-                        addIntStamp(StampFactory.forInteger(Kind.Int, Integer.MAX_VALUE - 1, Integer.MAX_VALUE), StampFactory.forInteger(Kind.Int, 2, 3)));
+                        StampTool.add(StampFactory.forInteger(Kind.Int, Integer.MAX_VALUE - 1, Integer.MAX_VALUE), StampFactory.forInteger(Kind.Int, 2, 3)));
     }
 
     @Test
     public void testAddOverFlowsInt() {
-        assertEquals(StampFactory.forKind(Kind.Int), addIntStamp(StampFactory.forInteger(Kind.Int, -1, 1), StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MAX_VALUE)));
+        assertEquals(StampFactory.forKind(Kind.Int), StampTool.add(StampFactory.forInteger(Kind.Int, -1, 1), StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, Integer.MAX_VALUE)));
     }
 
     @Test
     public void testAddLongSimple() {
-        assertEquals(StampFactory.forInteger(Kind.Long, 0, 30, 0, 31), addIntStamp(StampFactory.forInteger(Kind.Long, 0, 10), StampFactory.forInteger(Kind.Long, 0, 20)));
+        assertEquals(StampFactory.forInteger(Kind.Long, 0, 30, 0, 31), StampTool.add(StampFactory.forInteger(Kind.Long, 0, 10), StampFactory.forInteger(Kind.Long, 0, 20)));
     }
 
     @Test
     public void testAddNegativOverFlowLong1() {
         assertEquals(StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MAX_VALUE, 0, 0xffff_ffff_ffff_ffffL),
-                        addIntStamp(StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MIN_VALUE + 1), StampFactory.forInteger(Kind.Long, Integer.MIN_VALUE, Integer.MAX_VALUE)));
+                        StampTool.add(StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MIN_VALUE + 1), StampFactory.forInteger(Kind.Long, Integer.MIN_VALUE, Integer.MAX_VALUE)));
     }
 
     @Test
     public void testAddNegativeOverFlowLong2() {
         assertEquals(StampFactory.forInteger(Kind.Long, Long.MAX_VALUE - 2, Long.MAX_VALUE),
-                        addIntStamp(StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MIN_VALUE + 1), StampFactory.forInteger(Kind.Long, -3, -2)));
+                        StampTool.add(StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MIN_VALUE + 1), StampFactory.forInteger(Kind.Long, -3, -2)));
     }
 
     @Test
     public void testAddPositiveOverFlowLong1() {
-        assertEquals(StampFactory.forKind(Kind.Long), addIntStamp(StampFactory.forInteger(Kind.Long, 0, 1), StampFactory.forInteger(Kind.Long, 0, Long.MAX_VALUE)));
+        assertEquals(StampFactory.forKind(Kind.Long), StampTool.add(StampFactory.forInteger(Kind.Long, 0, 1), StampFactory.forInteger(Kind.Long, 0, Long.MAX_VALUE)));
     }
 
     @Test
     public void testAddPositiveOverFlowLong2() {
         assertEquals(StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MIN_VALUE + 2),
-                        addIntStamp(StampFactory.forInteger(Kind.Long, Long.MAX_VALUE - 1, Long.MAX_VALUE), StampFactory.forInteger(Kind.Long, 2, 3)));
+                        StampTool.add(StampFactory.forInteger(Kind.Long, Long.MAX_VALUE - 1, Long.MAX_VALUE), StampFactory.forInteger(Kind.Long, 2, 3)));
     }
 
     @Test
     public void testAddOverFlowsLong() {
-        assertEquals(StampFactory.forKind(Kind.Long), addIntStamp(StampFactory.forInteger(Kind.Long, -1, 1), StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MAX_VALUE)));
+        assertEquals(StampFactory.forKind(Kind.Long), StampTool.add(StampFactory.forInteger(Kind.Long, -1, 1), StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MAX_VALUE)));
     }
 
     @Test
     public void testAdd1() {
         assertEquals(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE + 1, 31 + (Integer.MIN_VALUE + 1)),
-                        addIntStamp(StampFactory.forInteger(Kind.Int, 0, 31), StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE + 1, Integer.MIN_VALUE + 1)));
+                        StampTool.add(StampFactory.forInteger(Kind.Int, 0, 31), StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE + 1, Integer.MIN_VALUE + 1)));
     }
 
     @Test
     public void testAdd2() {
         assertEquals(StampFactory.forInteger(Kind.Int, 0x8000_007e, 0x8000_007f, 0x8000_007eL, 0x8000_007fL),
-                        addIntStamp(StampFactory.forInteger(Kind.Int, 0x7fff_fffe, 0x7fff_ffff, 0x7fff_fffeL, 0x7ffff_fffL), StampFactory.forInteger(Kind.Int, 128, 128)));
+                        StampTool.add(StampFactory.forInteger(Kind.Int, 0x7fff_fffe, 0x7fff_ffff, 0x7fff_fffeL, 0x7ffff_fffL), StampFactory.forInteger(Kind.Int, 128, 128)));
     }
 
     @Test
     public void testAdd3() {
         assertEquals(StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MAX_VALUE - 1, 0, 0xffff_ffff_ffff_fffeL),
-                        addIntStamp(StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MAX_VALUE - 1, 0, 0xffff_ffff_ffff_fffeL),
+                        StampTool.add(StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MAX_VALUE - 1, 0, 0xffff_ffff_ffff_fffeL),
                                         StampFactory.forInteger(Kind.Long, Long.MIN_VALUE, Long.MAX_VALUE - 1, 0, 0xffff_ffff_ffff_fffeL)));
 
     }
 
     @Test
     public void testAnd() {
-        assertEquals(new IntegerStamp(32, Integer.MIN_VALUE, 0x40000000L, 0, 0xc0000000L),
-                        IntegerStamp.OPS.getAnd().foldStamp(StampFactory.forKind(Kind.Int), StampFactory.forConstant(Constant.forInt(0xc0000000))));
+        assertEquals(new IntegerStamp(32, Integer.MIN_VALUE, 0x40000000L, 0, 0xc0000000L), StampTool.and(StampFactory.forKind(Kind.Int), StampFactory.forConstant(Constant.forInt(0xc0000000))));
     }
 
     private static void testSignExtendShort(long lower, long upper) {
         Stamp shortStamp = StampFactory.forInteger(16, lower, upper);
-        Stamp intStamp = IntegerStamp.OPS.getSignExtend().foldStamp(32, shortStamp);
+        Stamp intStamp = StampTool.signExtend(shortStamp, 32);
         assertEquals(StampFactory.forInteger(32, lower, upper), intStamp);
     }
 
@@ -289,7 +280,7 @@ public class IntegerStampTest {
 
     private static void testZeroExtendShort(long lower, long upper, long newLower, long newUpper) {
         Stamp shortStamp = StampFactory.forInteger(16, lower, upper);
-        Stamp intStamp = IntegerStamp.OPS.getZeroExtend().foldStamp(32, shortStamp);
+        Stamp intStamp = StampTool.zeroExtend(shortStamp, 32);
         assertEquals(StampFactory.forInteger(32, newLower, newUpper), intStamp);
     }
 
@@ -307,17 +298,5 @@ public class IntegerStampTest {
     public void testIllegalJoin() {
         assertFalse(new IntegerStamp(32, 0, 0xff00, 0, 0xff00).join(new IntegerStamp(32, 1, 0xff, 0x00, 0xff)).isLegal());
         assertFalse(new IntegerStamp(32, 0x100, 0xff00, 0, 0xff00).join(new IntegerStamp(32, 0, 0xff, 0x00, 0xff)).isLegal());
-    }
-
-    @Test
-    public void testShiftLeft() {
-        assertEquals(new IntegerStamp(32, 0, 0x1ff, 0, 0x1ff), StampTool.leftShift(new IntegerStamp(32, 0, 0xff, 0, 0xff), new IntegerStamp(32, 0, 1, 0, 1)));
-        assertEquals(new IntegerStamp(32, 0, 0x1fe0, 0, 0x1fe0), StampTool.leftShift(new IntegerStamp(32, 0, 0xff, 0, 0xff), new IntegerStamp(32, 5, 5, 5, 5)));
-        assertEquals(new IntegerStamp(32, 0x1e0, 0x1fe0, 0, 0x1fe0), StampTool.leftShift(new IntegerStamp(32, 0xf, 0xff, 0, 0xff), new IntegerStamp(32, 5, 5, 5, 5)));
-
-        assertEquals(new IntegerStamp(64, 0, 0x1ff, 0, 0x1ff), StampTool.leftShift(new IntegerStamp(64, 0, 0xff, 0, 0xff), new IntegerStamp(32, 0, 1, 0, 1)));
-        assertEquals(new IntegerStamp(64, 0, 0x1fe0, 0, 0x1fe0), StampTool.leftShift(new IntegerStamp(64, 0, 0xff, 0, 0xff), new IntegerStamp(32, 5, 5, 5, 5)));
-        assertEquals(new IntegerStamp(64, 0x1e0, 0x1fe0, 0, 0x1fe0), StampTool.leftShift(new IntegerStamp(64, 0xf, 0xff, 0, 0xff), new IntegerStamp(32, 5, 5, 5, 5)));
-
     }
 }
