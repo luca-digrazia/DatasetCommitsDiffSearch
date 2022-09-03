@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,22 +30,22 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.stream.Stream;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.Value;
 
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.graphbuilderconf.InvocationPlugin;
+import com.oracle.graal.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.jtt.JTTTest;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.FixedWithNextNode;
 import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.nodes.spi.LIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
@@ -65,7 +65,7 @@ public abstract class LIRTest extends JTTTest {
         @Input protected NodeInputList<ValueNode> values;
         public final SnippetReflectionProvider snippetReflection;
 
-        protected LIRTestNode(SnippetReflectionProvider snippetReflection, JavaKind kind, ValueNode opsNode, ValueNode[] values) {
+        public LIRTestNode(SnippetReflectionProvider snippetReflection, JavaKind kind, ValueNode opsNode, ValueNode[] values) {
             super(TYPE, StampFactory.forKind(kind));
             this.opsNode = opsNode;
             this.values = new NodeInputList<>(this, values);
@@ -107,7 +107,7 @@ public abstract class LIRTest extends JTTTest {
         @Input protected ValueNode name;
         public final SnippetReflectionProvider snippetReflection;
 
-        protected LIRValueNode(SnippetReflectionProvider snippetReflection, JavaKind kind, ValueNode opsNode, ValueNode name) {
+        public LIRValueNode(SnippetReflectionProvider snippetReflection, JavaKind kind, ValueNode opsNode, ValueNode name) {
             super(TYPE, StampFactory.forKind(kind));
             this.opsNode = opsNode;
             this.name = name;
