@@ -213,7 +213,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
         }
 
         public static boolean tryGlobalValueNumbering(Node node, NodeClass nodeClass) {
-            if (nodeClass.valueNumberable() && !nodeClass.isLeafNode()) {
+            if (nodeClass.valueNumberable() && !node.isLeafNode()) {
                 Node newNode = node.graph().findDuplicate(node);
                 if (newNode != null) {
                     assert !(node instanceof FixedNode || newNode instanceof FixedNode);
@@ -310,9 +310,6 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                 if (canonical != null && !canonical.isAlive()) {
                     assert !canonical.isDeleted();
                     canonical = graph.addOrUniqueWithInputs(canonical);
-                    if (canonical == node) {
-                        graph.addOrUniqueWithInputs(newCanonical);
-                    }
                 }
                 if (node instanceof FloatingNode) {
                     if (canonical == null) {
