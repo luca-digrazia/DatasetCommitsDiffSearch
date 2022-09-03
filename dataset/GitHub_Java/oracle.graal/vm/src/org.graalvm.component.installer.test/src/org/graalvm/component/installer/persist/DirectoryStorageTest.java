@@ -24,11 +24,6 @@
  */
 package org.graalvm.component.installer.persist;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -46,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
-
 import org.graalvm.component.installer.BundleConstants;
 import org.graalvm.component.installer.FailedOperationException;
 import org.graalvm.component.installer.TestBase;
@@ -55,8 +49,9 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Rule;
 import org.junit.Test;
+import static org.junit.Assert.*;
+import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
@@ -184,14 +179,14 @@ public class DirectoryStorageTest extends TestBase {
         copyDir("list1", registryPath);
         ComponentInfo info = storage.loadComponentMetadata("fastr-2");
         assertEquals("org.graalvm.fastr", info.getId());
-
+        
         assertTrue(info.isPolyglotRebuild());
         assertTrue(info.getWorkingDirectories().contains("jre/languages/test/scrap"));
         assertTrue(info.getWorkingDirectories().contains("jre/lib/test/scrapdir"));
     }
 
     /**
-     * Should strip whitespaces around.
+     * Should strip whitespaces around
      * 
      * @throws Exception
      */
@@ -206,7 +201,7 @@ public class DirectoryStorageTest extends TestBase {
     }
 
     /**
-     * Should strip whitespaces around.
+     * Should strip whitespaces around
      * 
      * @throws Exception
      */
@@ -378,8 +373,9 @@ public class DirectoryStorageTest extends TestBase {
         ComponentInfo info = new ComponentInfo("x", "y", "2.0");
         info.setPolyglotRebuild(true);
         info.addWorkingDirectories(Arrays.asList(
-                        "jre/languages/test/scrap",
-                        "jre/lib/test/scrapdir"));
+                "jre/languages/test/scrap",
+                "jre/lib/test/scrapdir"
+        ));
 
         Path p = registryPath.resolve("x.component");
         assertFalse(Files.exists(p));
@@ -392,11 +388,10 @@ public class DirectoryStorageTest extends TestBase {
         List<String> golden = Files.readAllLines(dataFile("golden-save-optional.properties")).stream()
                         .filter((l) -> !l.startsWith("#"))
                         .collect(Collectors.toList());
-
+        
         assertEquals(golden, lines);
 
     }
-
     @Test
     public void saveComponentFiles() throws Exception {
         ComponentInfo info = new ComponentInfo("x", "y", "2.0");
@@ -416,5 +411,5 @@ public class DirectoryStorageTest extends TestBase {
 
         assertEquals(golden, lines);
     }
-
+    
 }

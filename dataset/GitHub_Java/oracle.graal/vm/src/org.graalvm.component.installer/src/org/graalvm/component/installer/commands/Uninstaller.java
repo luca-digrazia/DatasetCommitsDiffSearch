@@ -1,26 +1,7 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
  */
 package org.graalvm.component.installer.commands;
 
@@ -40,7 +21,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
-
 import org.graalvm.component.installer.CommonConstants;
 import org.graalvm.component.installer.Feedback;
 import org.graalvm.component.installer.model.ComponentInfo;
@@ -78,13 +58,14 @@ public class Uninstaller {
     public boolean isRebuildPolyglot() {
         return rebuildPolyglot;
     }
-
+    
     void deleteContentsRecursively(Path rootPath) throws IOException {
         if (dryRun) {
             return;
         }
         try (Stream<Path> paths = Files.walk(rootPath)) {
-            paths.sorted(Comparator.reverseOrder()).forEach((p) -> {
+            paths.sorted(Comparator.reverseOrder()).
+                forEach((p) -> {
                 try {
                     deleteOneFile(p, rootPath);
                 } catch (IOException ex) {
@@ -98,14 +79,14 @@ public class Uninstaller {
                     }
                     throw new UncheckedIOException(ex);
                 }
-            });
+        });
         } catch (UncheckedIOException ex) {
-            throw ex.getCause();
+            throw  ex.getCause();
         }
     }
-
+    
     private static final Set<PosixFilePermission> ALL_WRITE_PERMS = PosixFilePermissions.fromString("rwxrwxrwx");
-
+    
     private void deleteOneFile(Path p, Path rootPath) throws IOException {
         try {
             if (p.equals(rootPath)) {
@@ -116,7 +97,7 @@ public class Uninstaller {
             // try again to adjust permissions for the file AND the containing
             // directory AND try again:
             PosixFileAttributeView attrs = Files.getFileAttributeView(
-                            p, PosixFileAttributeView.class);
+                    p, PosixFileAttributeView.class);
             Set<PosixFilePermission> restoreDirPermissions = null;
             if (attrs != null) {
                 Files.setPosixFilePermissions(p, ALL_WRITE_PERMS);
@@ -205,12 +186,16 @@ public class Uninstaller {
                 }
             }
         }
-
+        
         rebuildPolyglot = componentInfo.isPolyglotRebuild() ||
-                        componentInfo.getPaths().stream().filter(p -> !p.endsWith("/") && p.startsWith(CommonConstants.PATH_POLYGLOT_REGISTRY))
-                                        .findAny()
-                                        .isPresent();
-
+                    componentInfo.getPaths().stream()
+                        .filter(
+                            (p) -> 
+                                !p.endsWith("/") &&
+                                p.startsWith(CommonConstants.PATH_POLYGLOT_REGISTRY))
+                        .findAny()
+                        .isPresent();
+        
     }
 
     public boolean isIgnoreFailedDeletions() {
