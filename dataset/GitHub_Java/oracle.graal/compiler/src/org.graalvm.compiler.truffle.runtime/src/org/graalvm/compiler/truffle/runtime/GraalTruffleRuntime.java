@@ -202,7 +202,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     public String getName() {
         String compilerConfigurationName = getTruffleCompiler().getCompilerConfigurationName();
         assert compilerConfigurationName != null;
-        return "GraalVM " + compilerConfigurationName;
+        return "Graal " + compilerConfigurationName;
     }
 
     protected GraalTVMCI getTvmci() {
