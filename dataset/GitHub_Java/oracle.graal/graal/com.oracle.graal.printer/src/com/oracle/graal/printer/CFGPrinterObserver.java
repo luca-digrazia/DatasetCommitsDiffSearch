@@ -45,7 +45,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
 
     private CFGPrinter cfgPrinter;
     private File cfgFile;
-    private JavaMethod curMethod;
+    private ResolvedJavaMethod curMethod;
     private List<String> curDecorators = Collections.emptyList();
 
     @Override
@@ -54,7 +54,6 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             dumpSandboxed(object, message);
         } catch (Throwable ex) {
             TTY.println("CFGPrinter: Exception during output of " + message + ": " + ex);
-            ex.printStackTrace();
         }
     }
 
@@ -64,18 +63,17 @@ public class CFGPrinterObserver implements DebugDumpHandler {
      * and decorator pair.
      */
     private boolean checkMethodScope() {
-        JavaMethod method = null;
+        ResolvedJavaMethod method = null;
         ArrayList<String> decorators = new ArrayList<>();
         for (Object o : Debug.context()) {
-            if (o instanceof JavaMethod) {
-                method = (JavaMethod) o;
+            if (o instanceof ResolvedJavaMethod) {
+                method = (ResolvedJavaMethod) o;
                 decorators.clear();
             } else if (o instanceof StructuredGraph) {
                 StructuredGraph graph = (StructuredGraph) o;
-                if (graph.method() != null) {
-                    method = graph.method();
-                    decorators.clear();
-                }
+                assert graph != null && graph.method() != null : "cannot find method context for CFG dump";
+                method = graph.method();
+                decorators.clear();
             } else if (o instanceof DebugDumpScope) {
                 DebugDumpScope debugDumpScope = (DebugDumpScope) o;
                 if (debugDumpScope.decorator) {
@@ -117,23 +115,18 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             return;
         }
 
+        cfgPrinter.target = Debug.contextLookup(TargetDescription.class);
         if (object instanceof LIR) {
             cfgPrinter.lir = (LIR) object;
         } else {
             cfgPrinter.lir = Debug.contextLookup(LIR.class);
         }
         cfgPrinter.lirGenerator = Debug.contextLookup(LIRGenerator.class);
-        if (cfgPrinter.lirGenerator != null) {
-            cfgPrinter.target = cfgPrinter.lirGenerator.target();
-        }
         if (cfgPrinter.lir != null) {
             cfgPrinter.cfg = cfgPrinter.lir.cfg;
         }
 
         CodeCacheProvider runtime = Debug.contextLookup(CodeCacheProvider.class);
-        if (runtime != null) {
-            cfgPrinter.target = runtime.getTarget();
-        }
 
         if (object instanceof BciBlockMapping) {
             BciBlockMapping blockMap = (BciBlockMapping) object;
@@ -147,17 +140,37 @@ public class CFGPrinterObserver implements DebugDumpHandler {
 
         } else if (object instanceof StructuredGraph) {
             if (cfgPrinter.cfg == null) {
-                StructuredGraph graph = (StructuredGraph) object;
-                cfgPrinter.cfg = ControlFlowGraph.compute(graph, true, true, true, false);
+                cfgPrinter.cfg = ControlFlowGraph.compute((StructuredGraph) object, true, true, true, false);
             }
             cfgPrinter.printCFG(message, Arrays.asList(cfgPrinter.cfg.getBlocks()));
 
         } else if (object instanceof CompilationResult) {
-            final CompilationResult compResult = (CompilationResult) object;
-            cfgPrinter.printMachineCode(runtime.disassemble(compResult, null), message);
-        } else if (isCompilationResultAndInstalledCode(object)) {
+            final CompilationResult tm = (CompilationResult) object;
+            final byte[] code = Arrays.copyOf(tm.getTargetCode(), tm.getTargetCodeSize());
+            CodeInfo info = new CodeInfo() {
+
+                public ResolvedJavaMethod getMethod() {
+                    return curMethod;
+                }
+
+                public long getStart() {
+                    return 0L;
+                }
+
+                public byte[] getCode() {
+                    return code;
+                }
+
+                @Override
+                public String toString() {
+                    int size = code == null ? 0 : code.length;
+                    return getMethod() + " installed code; length = " + size;
+                }
+            };
+            cfgPrinter.printMachineCode(runtime.disassemble(info, tm), message);
+        } else if (isCompilationResultAndCodeInfo(object)) {
             Object[] tuple = (Object[]) object;
-            cfgPrinter.printMachineCode(runtime.disassemble((CompilationResult) tuple[0], (InstalledCode) tuple[1]), message);
+            cfgPrinter.printMachineCode(runtime.disassemble((CodeInfo) tuple[1], (CompilationResult) tuple[0]), message);
         } else if (object instanceof Interval[]) {
             cfgPrinter.printIntervals(message, (Interval[]) object);
 
@@ -170,10 +183,10 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         cfgPrinter.flush();
     }
 
-    private static boolean isCompilationResultAndInstalledCode(Object object) {
+    private static boolean isCompilationResultAndCodeInfo(Object object) {
         if (object instanceof Object[]) {
             Object[] tuple = (Object[]) object;
-            if (tuple.length == 2 && tuple[0] instanceof CompilationResult && tuple[1] instanceof InstalledCode) {
+            if (tuple.length == 2 && tuple[0] instanceof CompilationResult && tuple[1] instanceof CodeInfo) {
                 return true;
             }
         }
