@@ -169,7 +169,7 @@ public final class LLVMFrameReadWriteFactory {
     }
 
     public static FrameSlotKind getFrameSlotKind(ResolvedType type) {
-        LLVMBaseType llvmType = LLVMTypeHelper.getLLVMType(type).getType();
+        LLVMBaseType llvmType = LLVMTypeHelper.getLLVMType(type).type;
         return LLVMFrameReadWriteFactory.getFrameSlotKind(llvmType);
     }
 

@@ -124,7 +124,7 @@ public final class LLVMFunctionFactory {
         if (retValue == null || retSlot == null) {
             throw new AssertionError();
         }
-        LLVMBaseType type = LLVMTypeHelper.getLLVMType(resolvedType).getType();
+        LLVMBaseType type = LLVMTypeHelper.getLLVMType(resolvedType).type;
         if (LLVMTypeHelper.isVectorType(type)) {
             return LLVMVectorRetNodeGen.create((LLVMVectorNode) retValue, retSlot);
         } else {

@@ -50,7 +50,6 @@ import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.asm.amd64.Parser;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
@@ -334,8 +333,8 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMNode createBasicBlockNode(LLVMNode[] statementNodes, LLVMNode terminatorNode, int blockId, String blockName) {
-        return LLVMBlockFactory.createBasicBlock(statementNodes, (LLVMTerminatorNode) terminatorNode, blockId, blockName);
+    public LLVMNode createBasicBlockNode(LLVMNode[] statementNodes, LLVMNode terminatorNode, int blockId) {
+        return LLVMBlockFactory.createBasicBlock(statementNodes, (LLVMTerminatorNode) terminatorNode, blockId);
     }
 
     @Override
@@ -345,9 +344,8 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
-    public RootNode createFunctionStartNode(LLVMExpressionNode functionBodyNode, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, SourceSection sourceSection, FrameDescriptor frameDescriptor,
-                    String functionName) {
-        return new LLVMFunctionStartNode(functionBodyNode, beforeFunction, afterFunction, sourceSection, frameDescriptor, functionName);
+    public RootNode createFunctionStartNode(LLVMExpressionNode functionBodyNode, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, FrameDescriptor frameDescriptor, String functionName) {
+        return new LLVMFunctionStartNode(functionBodyNode, beforeFunction, afterFunction, frameDescriptor, functionName);
     }
 
     @Override
