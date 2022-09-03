@@ -138,7 +138,8 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
                         boolean multiUsage = (convertX.asNode().hasMoreThanOneUsage() || convertY.asNode().hasMoreThanOneUsage());
                         if ((forX instanceof ZeroExtendNode || forX instanceof SignExtendNode) && multiUsage) {
                             // Do not perform for zero or sign extend if there are multiple usages
-                            // of the value.
+                            // of
+                            // the value.
                             return null;
                         }
                         return duplicateModified(convertX.getValue(), convertY.getValue(), unorderedIsTrue);
@@ -153,7 +154,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             if (nonConstant instanceof ConditionalNode) {
                 return optimizeConditional(constant, (ConditionalNode) nonConstant, constantReflection, mirrored ? condition.mirror() : condition, unorderedIsTrue);
             } else if (nonConstant instanceof NormalizeCompareNode) {
-                return optimizeNormalizeCompare(constantReflection, metaAccess, options, smallestCompareWidth, constant, (NormalizeCompareNode) nonConstant, mirrored);
+                return optimizeNormalizeCompare(constant, (NormalizeCompareNode) nonConstant, mirrored);
             } else if (nonConstant instanceof ConvertNode) {
                 ConvertNode convert = (ConvertNode) nonConstant;
                 boolean multiUsage = (convert.asNode().hasMoreThanOneUsage() && convert.getValue().hasExactlyOneUsage());
@@ -199,9 +200,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             return null;
         }
 
-        @SuppressWarnings("unused")
-        protected LogicNode optimizeNormalizeCompare(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
-                        Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
+        protected LogicNode optimizeNormalizeCompare(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
             throw new GraalError("NormalizeCompareNode connected to %s (%s %s %s)", this, constant, normalizeNode, mirrored);
         }
 
@@ -260,41 +259,6 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             assert condition == Condition.BT;
             assert x.getStackKind().isNumericInteger();
             comparison = IntegerBelowNode.create(x, y);
-        }
-
-        return comparison;
-    }
-
-    public static LogicNode createCompareNode(StructuredGraph graph, ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
-                    Condition condition, ValueNode x, ValueNode y) {
-        LogicNode result = createCompareNode(constantReflection, metaAccess, options, smallestCompareWidth, condition, x, y);
-        return (result.graph() == null ? graph.addOrUniqueWithInputs(result) : result);
-    }
-
-    public static LogicNode createCompareNode(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
-                    Condition condition, ValueNode x, ValueNode y) {
-        assert x.getStackKind() == y.getStackKind();
-        assert condition.isCanonical();
-        assert !x.getStackKind().isNumericFloat();
-
-        LogicNode comparison;
-        if (condition == Condition.EQ) {
-            if (x.stamp() instanceof AbstractObjectStamp) {
-                assert smallestCompareWidth == null;
-                comparison = ObjectEqualsNode.create(constantReflection, metaAccess, options, x, y);
-            } else if (x.stamp() instanceof AbstractPointerStamp) {
-                comparison = PointerEqualsNode.create(x, y);
-            } else {
-                assert x.getStackKind().isNumericInteger();
-                comparison = IntegerEqualsNode.create(constantReflection, metaAccess, options, smallestCompareWidth, x, y);
-            }
-        } else if (condition == Condition.LT) {
-            assert x.getStackKind().isNumericInteger();
-            comparison = IntegerLessThanNode.create(constantReflection, metaAccess, options, smallestCompareWidth, x, y);
-        } else {
-            assert condition == Condition.BT;
-            assert x.getStackKind().isNumericInteger();
-            comparison = IntegerBelowNode.create(constantReflection, metaAccess, options, smallestCompareWidth, x, y);
         }
 
         return comparison;
