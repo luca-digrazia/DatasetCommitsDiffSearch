@@ -26,8 +26,15 @@ package com.oracle.truffle.api;
 
 public class OptimizationFailedException extends RuntimeException {
 
-    public OptimizationFailedException(Throwable cause) {
+    private final RootCallTarget callTarget;
+
+    public OptimizationFailedException(Throwable cause, RootCallTarget callTarget) {
         super(cause);
+        this.callTarget = callTarget;
+    }
+
+    public RootCallTarget getCallTarget() {
+        return callTarget;
     }
 
     private static final long serialVersionUID = -8797188744430210785L;
