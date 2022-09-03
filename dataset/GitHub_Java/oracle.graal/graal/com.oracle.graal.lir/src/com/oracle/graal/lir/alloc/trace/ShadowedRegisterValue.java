@@ -22,18 +22,13 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import java.util.EnumSet;
+import java.util.*;
 
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.meta.AllocatableValue;
+import jdk.internal.jvmci.code.*;
 
-import com.oracle.graal.lir.CompositeValue;
-import com.oracle.graal.lir.InstructionValueConsumer;
-import com.oracle.graal.lir.InstructionValueProcedure;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
@@ -45,9 +40,9 @@ final class ShadowedRegisterValue extends CompositeValue {
     private static final EnumSet<OperandFlag> stackslotFlags = EnumSet.of(STACK);
 
     @Component({REG}) protected RegisterValue register;
-    @Component({STACK}) protected AllocatableValue stackslot;
+    @Component({STACK}) protected StackSlotValue stackslot;
 
-    public ShadowedRegisterValue(RegisterValue register, AllocatableValue stackslot) {
+    public ShadowedRegisterValue(RegisterValue register, StackSlotValue stackslot) {
         super(register.getLIRKind());
         assert (register.getLIRKind().equals(stackslot.getLIRKind()));
         this.register = register;
@@ -58,14 +53,14 @@ final class ShadowedRegisterValue extends CompositeValue {
         return register;
     }
 
-    public AllocatableValue getStackSlot() {
+    public StackSlotValue getStackSlot() {
         return stackslot;
     }
 
     @Override
     public CompositeValue forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueProcedure proc) {
         RegisterValue newRegister = (RegisterValue) proc.doValue(inst, register, mode, registerFlags);
-        AllocatableValue newStackSlot = (AllocatableValue) proc.doValue(inst, stackslot, mode, stackslotFlags);
+        StackSlotValue newStackSlot = (StackSlotValue) proc.doValue(inst, stackslot, mode, stackslotFlags);
         if (register.equals(newRegister) || stackslot.equals(newStackSlot)) {
             return this;
         }
@@ -76,31 +71,6 @@ final class ShadowedRegisterValue extends CompositeValue {
     protected void visitEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc) {
         proc.visitValue(inst, register, mode, registerFlags);
         proc.visitValue(inst, stackslot, mode, stackslotFlags);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (this == obj) {
-            return true;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        ShadowedRegisterValue other = (ShadowedRegisterValue) obj;
-        assert register != null;
-        assert stackslot != null;
-        assert other.register != null;
-        assert other.stackslot != null;
-        if (!register.equals(other.register)) {
-            return false;
-        }
-        if (!stackslot.equals(other.stackslot)) {
-            return false;
-        }
-        return true;
     }
 
 }
