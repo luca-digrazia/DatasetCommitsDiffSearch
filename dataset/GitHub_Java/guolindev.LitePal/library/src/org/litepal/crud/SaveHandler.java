@@ -1,6 +1,23 @@
+/*
+ * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.litepal.crud;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -46,8 +63,14 @@ class SaveHandler extends DataHandler {
 	 * 
 	 * @param baseObj
 	 *            Current model to persist.
+	 * @throws InvocationTargetException
+	 * @throws IllegalAccessException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalArgumentException
+	 * @throws SecurityException
 	 */
-	void onSave(DataSupport baseObj) {
+	void onSave(DataSupport baseObj) throws SecurityException, IllegalArgumentException,
+			NoSuchMethodException, IllegalAccessException, InvocationTargetException {
 		String className = baseObj.getClassName();
 		List<Field> supportedFields = getSupportedFields(className);
 		Collection<AssociationsInfo> associationInfos = getAssociationInfo(className);
@@ -71,8 +94,15 @@ class SaveHandler extends DataHandler {
 	 * 
 	 * @param collection
 	 *            Holds all models to persist.
+	 * @throws InvocationTargetException
+	 * @throws IllegalAccessException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalArgumentException
+	 * @throws SecurityException
 	 */
-	<T extends DataSupport> void onSaveAll(Collection<T> collection) {
+	<T extends DataSupport> void onSaveAll(Collection<T> collection) throws SecurityException,
+			IllegalArgumentException, NoSuchMethodException, IllegalAccessException,
+			InvocationTargetException {
 		if (collection != null && collection.size() > 0) {
 			DataSupport[] array = collection.toArray(new DataSupport[0]);
 			DataSupport firstObj = array[0];
@@ -107,8 +137,15 @@ class SaveHandler extends DataHandler {
 	 *            Current model to persist.
 	 * @param supportedFields
 	 *            List of all supported fields.
+	 * @throws InvocationTargetException
+	 * @throws IllegalAccessException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalArgumentException
+	 * @throws SecurityException
 	 */
-	private void doSaveAction(DataSupport baseObj, List<Field> supportedFields) {
+	private void doSaveAction(DataSupport baseObj, List<Field> supportedFields)
+			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
+			IllegalAccessException, InvocationTargetException {
 		ContentValues values = new ContentValues();
 		beforeSave(baseObj, supportedFields, values);
 		long id = saving(baseObj, values);
@@ -126,8 +163,15 @@ class SaveHandler extends DataHandler {
 	 *            List of all supported fields.
 	 * @param values
 	 *            To store data of current model for persisting.
+	 * @throws InvocationTargetException
+	 * @throws IllegalAccessException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalArgumentException
+	 * @throws SecurityException
 	 */
-	private void beforeSave(DataSupport baseObj, List<Field> supportedFields, ContentValues values) {
+	private void beforeSave(DataSupport baseObj, List<Field> supportedFields, ContentValues values)
+			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
+			IllegalAccessException, InvocationTargetException {
 		putFieldsValue(baseObj, supportedFields, values);
 		putForeignKeyValue(values, baseObj);
 	}
@@ -168,8 +212,15 @@ class SaveHandler extends DataHandler {
 	 * 
 	 * @param baseObj
 	 *            The class of base object.
+	 * @throws InvocationTargetException
+	 * @throws IllegalAccessException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalArgumentException
+	 * @throws SecurityException
 	 */
-	private void doUpdateAction(DataSupport baseObj, List<Field> supportedFields) {
+	private void doUpdateAction(DataSupport baseObj, List<Field> supportedFields)
+			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
+			IllegalAccessException, InvocationTargetException {
 		ContentValues values = new ContentValues();
 		beforeUpdate(baseObj, supportedFields, values);
 		updating(baseObj, values);
@@ -188,8 +239,15 @@ class SaveHandler extends DataHandler {
 	 *            List of all supported fields.
 	 * @param values
 	 *            To store data of current model for updating.
+	 * @throws InvocationTargetException
+	 * @throws IllegalAccessException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalArgumentException
+	 * @throws SecurityException
 	 */
-	private void beforeUpdate(DataSupport baseObj, List<Field> supportedFields, ContentValues values) {
+	private void beforeUpdate(DataSupport baseObj, List<Field> supportedFields, ContentValues values)
+			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
+			IllegalAccessException, InvocationTargetException {
 		putFieldsValue(baseObj, supportedFields, values);
 		putForeignKeyValue(values, baseObj);
 		for (String fkName : baseObj.getListToClearSelfFK()) {

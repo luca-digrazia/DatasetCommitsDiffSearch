@@ -1,6 +1,23 @@
+/*
+ * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.litepal.crud;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -44,8 +61,14 @@ class UpdateHandler extends DataHandler {
 	 * @param id
 	 *            Which record to update.
 	 * @return The number of rows affected.
+	 * @throws InvocationTargetException
+	 * @throws IllegalAccessException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalArgumentException
+	 * @throws SecurityException
 	 */
-	int onUpdate(DataSupport baseObj, long id) {
+	int onUpdate(DataSupport baseObj, long id) throws SecurityException, IllegalArgumentException,
+			NoSuchMethodException, IllegalAccessException, InvocationTargetException {
 		List<Field> supportedFields = getSupportedFields(baseObj.getClassName());
 		ContentValues values = new ContentValues();
 		putFieldsValue(baseObj, supportedFields, values);
@@ -89,33 +112,20 @@ class UpdateHandler extends DataHandler {
 	 *            A string array representing the WHERE part of an SQL
 	 *            statement.
 	 * @return The number of rows affected.
+	 * @throws InvocationTargetException
+	 * @throws IllegalAccessException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalArgumentException
+	 * @throws SecurityException
 	 */
-	int onUpdateAll(DataSupport baseObj, String... conditions) {
+	int onUpdateAll(DataSupport baseObj, String... conditions) throws SecurityException,
+			IllegalArgumentException, NoSuchMethodException, IllegalAccessException,
+			InvocationTargetException {
 		List<Field> supportedFields = getSupportedFields(baseObj.getClassName());
 		ContentValues values = new ContentValues();
 		putFieldsValue(baseObj, supportedFields, values);
 		putFieldsToDefaultValue(baseObj, values);
 		return doUpdateAllAction(baseObj.getTableName(), values, conditions);
-	}
-
-	/**
-	 * The open interface for other classes in CRUD package to update multiple
-	 * rows. Using modelClass to decide which table to update, and conditions
-	 * representing the WHERE part of an SQL statement. The value that need to
-	 * update is stored in ContentValues.
-	 * 
-	 * @param modelClass
-	 *            Which table to update by class.
-	 * @param conditions
-	 *            A string array representing the WHERE part of an SQL
-	 *            statement.
-	 * @param values
-	 *            A map from column names to new column values. null is a valid
-	 *            value that will be translated to NULL.
-	 * @return The number of rows affected.
-	 */
-	int onUpdateAll(Class<?> modelClass, ContentValues values, String... conditions) {
-		return doUpdateAllAction(getTableName(modelClass), values, conditions);
 	}
 
 	/**
