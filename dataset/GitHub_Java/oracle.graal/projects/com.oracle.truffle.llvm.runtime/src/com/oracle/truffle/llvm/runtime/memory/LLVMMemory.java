@@ -55,6 +55,7 @@ public abstract class LLVMMemory {
 
     private static final Unsafe UNSAFE = getUnsafe();
 
+    @SuppressWarnings("restriction")
     private static Unsafe getUnsafe() {
         CompilerAsserts.neverPartOfCompilation();
         try {
@@ -66,7 +67,7 @@ public abstract class LLVMMemory {
         }
     }
 
-    /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode} instead. */
+    /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMProfiledMemSet} instead. */
     @Deprecated
     public static void memset(LLVMAddress address, long size, byte value) {
         try {
@@ -78,7 +79,19 @@ public abstract class LLVMMemory {
         }
     }
 
-    /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode} instead. */
+    /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMProfiledMemSet} instead. */
+    @Deprecated
+    public static void memset(long address, long size, byte value) {
+        try {
+            UNSAFE.setMemory(address, size, value);
+        } catch (Throwable e) {
+            // this avoids unnecessary exception edges in the compiled code
+            CompilerDirectives.transferToInterpreter();
+            throw e;
+        }
+    }
+
+    /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMProfiledMemMove} instead. */
     @Deprecated
     public static void copyMemory(long sourceAddress, long targetAddress, long length) {
         UNSAFE.copyMemory(sourceAddress, targetAddress, length);
@@ -205,6 +218,11 @@ public abstract class LLVMMemory {
             currentPtr += Byte.BYTES;
         }
         return LLVM80BitFloat.fromBytes(bytes);
+    }
+
+    static long extractAddr(LLVMAddress addr) {
+        assert addr.getVal() != 0;
+        return addr.getVal();
     }
 
     public static LLVMAddress getAddress(LLVMAddress addr) {
@@ -396,7 +414,7 @@ public abstract class LLVMMemory {
         private final int value;
         private final boolean swap;
 
-        private CMPXCHGI32(int value, boolean swap) {
+        public CMPXCHGI32(int value, boolean swap) {
             this.value = value;
             this.swap = swap;
         }
@@ -431,7 +449,7 @@ public abstract class LLVMMemory {
         private final long value;
         private final boolean swap;
 
-        private CMPXCHGI64(long value, boolean swap) {
+        public CMPXCHGI64(long value, boolean swap) {
             this.value = value;
             this.swap = swap;
         }
@@ -466,7 +484,7 @@ public abstract class LLVMMemory {
         private final byte value;
         private final boolean swap;
 
-        private CMPXCHGI8(byte value, boolean swap) {
+        public CMPXCHGI8(byte value, boolean swap) {
             this.value = value;
             this.swap = swap;
         }
@@ -589,8 +607,8 @@ public abstract class LLVMMemory {
         do {
             old = getI64(address);
             nevv = f.applyAsLong(old, value);
-        } while (!UNSAFE.compareAndSwapLong(null, addr, old, nevv));
-        return old;
+        } while (UNSAFE.compareAndSwapLong(null, addr, old, nevv));
+        return nevv;
     }
 
     public static int getAndSetI32(LLVMAddress address, int value) {
@@ -612,8 +630,8 @@ public abstract class LLVMMemory {
         do {
             old = getI32(address);
             nevv = f.applyAsInt(old, value);
-        } while (!UNSAFE.compareAndSwapInt(null, addr, old, nevv));
-        return old;
+        } while (UNSAFE.compareAndSwapInt(null, addr, old, nevv));
+        return nevv;
     }
 
     public static short getAndOpI16(LLVMAddress address, short value, BinaryOperator<Short> f) {
@@ -622,8 +640,8 @@ public abstract class LLVMMemory {
         do {
             old = getI16(address);
             nevv = f.apply(old, value);
-        } while (!compareAndSwapI16(address, old, nevv).swap);
-        return old;
+        } while (compareAndSwapI16(address, old, nevv).swap);
+        return nevv;
     }
 
     public static byte getAndOpI8(LLVMAddress address, byte value, BinaryOperator<Byte> f) {
@@ -632,8 +650,8 @@ public abstract class LLVMMemory {
         do {
             old = getI8(address);
             nevv = f.apply(old, value);
-        } while (!compareAndSwapI8(address, old, nevv).swap);
-        return old;
+        } while (compareAndSwapI8(address, old, nevv).swap);
+        return nevv;
     }
 
     public static boolean getAndOpI1(LLVMAddress address, boolean value, BinaryOperator<Boolean> f) {
@@ -642,11 +660,12 @@ public abstract class LLVMMemory {
         do {
             old = getI8(address);
             nevv = f.apply(old != 0, value);
-        } while (!compareAndSwapI8(address, old, (byte) (nevv ? 1 : 0)).swap);
-        return old != 0;
+        } while (compareAndSwapI8(address, old, (byte) (nevv ? 1 : 0)).swap);
+        return nevv;
     }
 
     public static void fullFence() {
         UNSAFE.fullFence();
     }
+
 }
