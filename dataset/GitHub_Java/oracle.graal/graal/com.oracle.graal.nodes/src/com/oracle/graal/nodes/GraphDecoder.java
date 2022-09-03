@@ -409,7 +409,7 @@ public class GraphDecoder {
             methodScope.unwindNode = (UnwindNode) node;
 
         } else {
-            handleFixedNode(methodScope, loopScope, nodeOrderId, node);
+            simplifyFixedNode(methodScope, loopScope, nodeOrderId, node);
         }
 
         return resultScope;
@@ -527,7 +527,7 @@ public class GraphDecoder {
      * @param nodeOrderId The orderId of the node.
      * @param node The node to be simplified.
      */
-    protected void handleFixedNode(MethodScope methodScope, LoopScope loopScope, int nodeOrderId, FixedNode node) {
+    protected void simplifyFixedNode(MethodScope methodScope, LoopScope loopScope, int nodeOrderId, FixedNode node) {
     }
 
     protected void handleProxyNodes(MethodScope methodScope, LoopScope loopScope, LoopExitNode loopExit) {
@@ -946,7 +946,7 @@ public class GraphDecoder {
             return true;
 
         } else if (node instanceof Invoke) {
-            assert node instanceof InvokeNode || node instanceof InvokeWithExceptionNode : "The only two Invoke node classes";
+            assert node instanceof InvokeNode || node instanceof InvokeWithExceptionNode : "The only two Invoke node classes. Got " + node.getClass();
             assert direct : "Invoke and InvokeWithException only have direct successor and input edges";
             if (edges.type() == Edges.Type.Successors) {
                 assert edges.getCount() == (node instanceof InvokeWithExceptionNode ? 2 : 1) : "InvokeNode has one successor (next); InvokeWithExceptionNode has two successors (next, exceptionEdge)";
