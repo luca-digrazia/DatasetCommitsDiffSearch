@@ -510,7 +510,7 @@ abstract class ExecuteMethodNode extends Node {
         try {
             ret = method.invoke(obj, arguments);
         } catch (IllegalArgumentException ex) {
-            throw UnsupportedTypeException.raise(ex, arguments);
+            throw UnsupportedTypeException.raise(arguments);
         } catch (RuntimeException | Error ex) {
             CompilerDirectives.transferToInterpreter();
             throw ex;
