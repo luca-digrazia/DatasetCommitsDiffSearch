@@ -34,8 +34,6 @@ import com.oracle.graal.truffle.test.nodes.AbstractTestNode;
 import com.oracle.graal.truffle.test.nodes.AddTestNode;
 import com.oracle.graal.truffle.test.nodes.BlockTestNode;
 import com.oracle.graal.truffle.test.nodes.ConstantTestNode;
-import com.oracle.graal.truffle.test.nodes.ExplodeLoopUntilReturnNode;
-import com.oracle.graal.truffle.test.nodes.ExplodeLoopUntilReturnWithThrowNode;
 import com.oracle.graal.truffle.test.nodes.LambdaTestNode;
 import com.oracle.graal.truffle.test.nodes.LoadLocalTestNode;
 import com.oracle.graal.truffle.test.nodes.LoopTestNode;
@@ -256,19 +254,5 @@ public class SimplePartialEvaluationTest extends PartialEvaluationTest {
         OptimizedCallTarget compilable = compileHelper("synchronizedExceptionMerge", rootNode, new Object[0]);
 
         Assert.assertEquals(42, compilable.call(new Object[0]));
-    }
-
-    @Test
-    public void explodeLoopUntilReturn() {
-        FrameDescriptor fd = new FrameDescriptor();
-        AbstractTestNode result = new ExplodeLoopUntilReturnNode();
-        assertPartialEvalEquals("constant42", new RootTestNode(fd, "explodeLoopUntilReturn", result));
-    }
-
-    @Test
-    public void explodeLoopUntilReturnWithThrow() {
-        FrameDescriptor fd = new FrameDescriptor();
-        AbstractTestNode result = new ExplodeLoopUntilReturnWithThrowNode();
-        assertPartialEvalEquals("constant42", new RootTestNode(fd, "explodeLoopUntilReturnWithThrow", result));
     }
 }
