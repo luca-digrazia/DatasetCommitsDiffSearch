@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.compiler.test;
 
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.*;
-
 import org.junit.*;
 
 import com.oracle.graal.api.directives.*;
@@ -35,6 +32,8 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
 
 /**
  * Tests that the hub access and the null check are folded.
@@ -64,7 +63,7 @@ public class ImplicitNullCheckTest extends GraphScheduleTest {
             PhaseContext context = new PhaseContext(getProviders());
             new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
             new FloatingReadPhase().apply(graph);
-            MidTierContext midTierContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
+            MidTierContext midTierContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo(), null);
             new GuardLoweringPhase().apply(graph, midTierContext);
 
             Assert.assertEquals(0, graph.getNodes(DeoptimizeNode.TYPE).count());
