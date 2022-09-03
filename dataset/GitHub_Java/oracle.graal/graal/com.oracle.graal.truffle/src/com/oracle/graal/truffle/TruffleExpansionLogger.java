@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,15 @@
  */
 package com.oracle.graal.truffle;
 
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
 import java.util.Map.Entry;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.phases.util.*;
 
 public class TruffleExpansionLogger {
 
@@ -58,7 +51,7 @@ public class TruffleExpansionLogger {
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
         ResolvedJavaType targetReceiverType = null;
         if (!sourceMethod.isStatic() && callTarget.receiver() != null && callTarget.receiver().isConstant()) {
-            targetReceiverType = providers.getMetaAccess().lookupJavaType(callTarget.arguments().first().asJavaConstant());
+            targetReceiverType = providers.getMetaAccess().lookupJavaType(callTarget.arguments().first().asConstant());
         }
 
         if (targetReceiverType != null) {
@@ -91,7 +84,7 @@ public class TruffleExpansionLogger {
     }
 
     private void registerParentInCalls(ExpansionTree parentTree, StructuredGraph graph) {
-        for (MethodCallTargetNode target : graph.getNodes(MethodCallTargetNode.TYPE)) {
+        for (MethodCallTargetNode target : graph.getNodes(MethodCallTargetNode.class)) {
             callToParentTree.put(target, parentTree);
         }
     }
@@ -192,7 +185,7 @@ public class TruffleExpansionLogger {
                     return String.format("(%s)", e.getFileName());
                 }
             } else {
-                return "(Unknown Source)";
+                return String.format("(Unknown Source)");
             }
         }
     }
