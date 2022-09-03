@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
@@ -46,26 +47,39 @@ import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
 import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter.Builder;
+import com.oracle.truffle.api.instrumentation.SourceSectionFilter.SourcePredicate;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.nodes.NodeCost;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.ConditionProfile;
+import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.tools.Profiler.Counter.TimeKind;
 
 /**
- * Access to Truffle profiling services.
+ * Access to Truffle polyglot profiling.
+ * <p>
+ * Truffle profiling is <em>language-agnostic</em> and depends only on correct
+ * {@linkplain StandardTags.RootTag tagging} of {@linkplain RootNode root nodes} by each
+ * {@linkplain TruffleLanguage guest language implementation}. Results are indexed by the
+ * {@link SourceSection} associated with each tagged node.
+ * <p>
+ * Profiling results are provided in two forms:
+ * <ul>
+ * <li>A {@linkplain #getCounters() map} of counts/timings indexed by {@link SourceSection}; and
+ * </li>
+ * <li>A {@linkplain #printHistograms(PrintStream) textual display}, intended for demonstrations or
+ * simple command line tools, whose format is subject to change at any time.</li>
+ * </ul>
  *
  * @since 0.15
  */
 public final class Profiler {
 
-    private static final int MAX_CODE_LENGTH = 30;
-
     /**
      * Finds profiler associated with given engine. There is at most one profiler associated with
      * any {@link PolyglotEngine}. One can access it by calling this static method.
-     *
      *
      * @param engine the engine to find profiler for
      * @return an instance of associated profiler, never <code>null</code>
@@ -109,6 +123,14 @@ public final class Profiler {
 
     private final Map<SourceSection, Counter> counters = new HashMap<>();
 
+    private final SourcePredicate notInternal = new SourcePredicate() {
+
+        public boolean test(Source source) {
+            return !source.isInternal();
+        }
+
+    };
+
     // TODO temporary solution until TruffleRuntime#getCallerFrame() is fast
     // I am aware that this is not thread safe. (CHumer)
     private Counter activeCounter;
@@ -134,10 +156,13 @@ public final class Profiler {
      * {@linkplain #clearData() cleared}, previously collected data will be included when collection
      * resumes.
      *
+     * @throws IllegalStateException if disposed
      * @since 0.15
      */
     public void setCollecting(boolean isCollecting) {
-        assert !disposed;
+        if (disposed) {
+            throw new IllegalStateException("disposed profiler");
+        }
         if (this.isCollecting != isCollecting) {
             this.isCollecting = isCollecting;
             reset();
@@ -151,10 +176,13 @@ public final class Profiler {
      * {@linkplain #clearData() cleared}, previously collected data will be included when collection
      * resumes.
      *
+     * @throws IllegalStateException if disposed
      * @since 0.15
      */
     public boolean isCollecting() {
-        assert !disposed;
+        if (disposed) {
+            throw new IllegalStateException("disposed profiler");
+        }
         return isCollecting;
     }
 
@@ -168,10 +196,13 @@ public final class Profiler {
      * Unless explicitly {@linkplain #clearData() cleared}, previously collected timing data will be
      * included in data collected when collection resumes.
      *
+     * @throws IllegalStateException if disposed
      * @since 0.15
      */
     public void setTiming(boolean isTiming) {
-        assert !disposed;
+        if (disposed) {
+            throw new IllegalStateException("disposed profiler");
+        }
         if (this.isTiming != isTiming) {
             this.isTiming = isTiming;
             reset();
@@ -179,13 +210,16 @@ public final class Profiler {
     }
 
     /**
-     * Does data being {@linkplain #isCollecting() collected} include timing (default {@code false}
-     * )?
+     * Does data being {@linkplain #isCollecting() collected} include timing}? Default is
+     * {@code false}.
      *
+     * @throws IllegalStateException if disposed
      * @since 0.15
      */
     public boolean isTiming() {
-        assert !disposed;
+        if (disposed) {
+            throw new IllegalStateException("disposed profiler");
+        }
         return isTiming;
     }
 
@@ -195,10 +229,13 @@ public final class Profiler {
      *
      * @param newTypes new list of MIME types, {@code null} or an empty list matches any MIME type.
      *
+     * @throws IllegalStateException if disposed
      * @since 0.15
      */
     public void setMimeTypes(String[] newTypes) {
-        assert !disposed;
+        if (disposed) {
+            throw new IllegalStateException("disposed profiler");
+        }
         mimeTypes = newTypes != null && newTypes.length > 0 ? newTypes : null;
         reset();
     }
@@ -208,20 +245,26 @@ public final class Profiler {
      *
      * @return MIME types matching sources being profiled; {@code null} matches <strong>ANY</strong>
      *         MIME type.
+     * @throws IllegalStateException if disposed
      * @since 0.15
      */
     public String[] getMimeTypes() {
-        assert !disposed;
+        if (disposed) {
+            throw new IllegalStateException("disposed profiler");
+        }
         return mimeTypes == null ? null : Arrays.copyOf(mimeTypes, mimeTypes.length);
     }
 
     /**
      * Is any data currently collected?
      *
+     * @throws IllegalStateException if disposed
      * @since 0.15
      */
     public boolean hasData() {
-        assert !disposed;
+        if (disposed) {
+            throw new IllegalStateException("disposed profiler");
+        }
         for (Counter counter : counters.values()) {
             if (counter.getInvocations(TimeKind.INTERPRETED_AND_COMPILED) > 0) {
                 return true;
@@ -233,10 +276,13 @@ public final class Profiler {
     /**
      * Resets all collected data to zero.
      *
+     * @throws IllegalStateException if disposed
      * @since 0.15
      */
     public void clearData() {
-        assert !disposed;
+        if (disposed) {
+            throw new IllegalStateException("disposed profiler");
+        }
         for (Counter counter : counters.values()) {
             counter.clear();
         }
@@ -245,10 +291,13 @@ public final class Profiler {
     /**
      * Gets an unmodifiable map of all counters.
      *
+     * @throws IllegalStateException if disposed
      * @since 0.15
      */
     public Map<SourceSection, Counter> getCounters() {
-        assert !disposed;
+        if (disposed) {
+            throw new IllegalStateException("disposed profiler");
+        }
         return Collections.unmodifiableMap(counters);
     }
 
@@ -263,7 +312,7 @@ public final class Profiler {
             if (mimeTypes != null) {
                 filterBuilder.mimeTypeIs(mimeTypes);
             }
-            final SourceSectionFilter filter = filterBuilder.tagIs(StandardTags.RootTag.class).build();
+            final SourceSectionFilter filter = filterBuilder.tagIs(StandardTags.RootTag.class).sourceIs(notInternal).build();
             binding = instrumenter.attachFactory(filter, new ExecutionEventNodeFactory() {
                 public ExecutionEventNode create(EventContext context) {
                     return createCountingNode(context);
@@ -276,7 +325,8 @@ public final class Profiler {
         SourceSection sourceSection = context.getInstrumentedSourceSection();
         Counter counter = counters.get(sourceSection);
         if (counter == null) {
-            counter = new Counter(sourceSection);
+            final RootNode rootNode = context.getInstrumentedNode().getRootNode();
+            counter = new Counter(sourceSection, rootNode == null ? "<unknown>>" : rootNode.getName());
             counters.put(sourceSection, counter);
         }
         if (isTiming) {
@@ -290,10 +340,13 @@ public final class Profiler {
      * Prints a simple, default textual summary of currently collected data, format subject to
      * change. Use {@linkplain #getCounters() counters} explicitly for reliable access.
      *
+     * @throws IllegalStateException if disposed
      * @since 0.15
      */
     public void printHistograms(PrintStream out) {
-        assert !disposed;
+        if (disposed) {
+            throw new IllegalStateException("disposed profiler");
+        }
         final List<Counter> sortedCounters = new ArrayList<>(counters.values());
 
         boolean hasCompiled = false;
@@ -325,64 +378,53 @@ public final class Profiler {
             }
         });
 
-        out.println("Truffle profiler histogram for mode " + time);
-        out.println(String.format("%12s | %7s | %11s | %7s | %11s | %-30s | %s ", //
-                        "Invoc", "Total", "PerInvoc", "SelfTime", "PerInvoc", "Source", "Code"));
-        for (Counter counter : sortedCounters) {
-            final long invocations = counter.getInvocations(time);
-            if (invocations <= 0L) {
-                continue;
+        if (isTiming) {
+            out.println("Truffle profiler histogram for mode " + time);
+            out.println(String.format("%12s | %7s | %11s | %7s | %11s | %-15s | %s ", //
+                            "Invoc", "Total", "PerInvoc", "SelfTime", "PerInvoc", "Name", "Source"));
+            for (Counter counter : sortedCounters) {
+                final long invocations = counter.getInvocations(time);
+                if (invocations <= 0L) {
+                    continue;
+                }
+                double totalTimems = counter.getTotalTime(time) / 1000000.0d;
+                double selfTimems = counter.getSelfTime(time) / 1000000.0d;
+                out.println(String.format("%12d |%6.0fms |%10.3fms |%7.0fms |%10.3fms | %-15s | %s", //
+                                invocations, totalTimems, totalTimems / invocations,  //
+                                selfTimems, selfTimems / invocations, //
+                                counter.getName(), getShortDescription(counter.getSourceSection())));
             }
-            double totalTimems = counter.getTotalTime(time) / 1000000.0d;
-            double selfTimems = counter.getSelfTime(time) / 1000000.0d;
-            out.println(String.format("%12d |%6.0fms |%10.3fms |%7.0fms |%10.3fms | %-30s | %s", //
-                            invocations, totalTimems, totalTimems / invocations,  //
-                            selfTimems, selfTimems / invocations, //
-                            getShortDescription(counter.getSourceSection()), getShortSource(counter.getSourceSection())));
+        } else {
+            out.println("Truffle profiler histogram for mode " + time);
+            out.println(String.format("%12s | %-15s | %s ", //
+                            "Invoc", "Name", "Source"));
+            for (Counter counter : sortedCounters) {
+                final long invocations = counter.getInvocations(time);
+                if (invocations <= 0L) {
+                    continue;
+                }
+                out.println(String.format("%12d | %-15s | %s", //
+                                invocations, counter.getName(), getShortDescription(counter.getSourceSection())));
+            }
         }
         out.println();
-    }
-
-    private static Object getShortSource(SourceSection sourceSection) {
-        if (sourceSection.getSource() == null) {
-            return "<unknown>";
-        }
-
-        String code = sourceSection.getCode();
-        if (code.length() > MAX_CODE_LENGTH) {
-            code = code.substring(0, MAX_CODE_LENGTH);
-        }
-
-        return code.replaceAll("\\n", "\\\\n");
     }
 
     // custom version of SourceSection#getShortDescription
     private static String getShortDescription(SourceSection sourceSection) {
         if (sourceSection.getSource() == null) {
-            return sourceSection.getIdentifier();
+            // TODO the source == null branch can be removed if the deprecated
+            // SourceSection#createUnavailable has be removed.
+            return "<Unknown>";
         }
         StringBuilder b = new StringBuilder();
-        if (sourceSection.getIdentifier() != null) {
-            b.append(sourceSection.getSource().getName());
-        } else {
-            b.append("<unknown>");
-        }
-        b.append(":line=");
-
+        b.append(sourceSection.getSource().getName());
+        b.append(":");
         if (sourceSection.getStartLine() == sourceSection.getEndLine()) {
             b.append(sourceSection.getStartLine());
-
         } else {
             b.append(sourceSection.getStartLine()).append("-").append(sourceSection.getEndLine());
         }
-
-        b.append(":chars=");
-        if (sourceSection.getCharIndex() == sourceSection.getEndColumn()) {
-            b.append(sourceSection.getCharIndex());
-        } else {
-            b.append(sourceSection.getCharIndex()).append("-").append(sourceSection.getEndColumn());
-        }
-
         return b.toString();
     }
 
@@ -416,10 +458,10 @@ public final class Profiler {
         protected void onDispose(VirtualFrame frame) {
             FrameDescriptor frameDescriptor = context.getInstrumentedNode().getRootNode().getFrameDescriptor();
             if (frameDescriptor.getIdentifiers().contains(KEY_TIME_STARTED)) {
-                frameDescriptor.removeFrameSlot(timeStartedSlot);
+                frameDescriptor.removeFrameSlot(KEY_TIME_STARTED);
             }
             if (frameDescriptor.getIdentifiers().contains(KEY_PARENT_COUNTER)) {
-                frameDescriptor.removeFrameSlot(parentCounterSlot);
+                frameDescriptor.removeFrameSlot(KEY_PARENT_COUNTER);
             }
         }
 
@@ -512,13 +554,23 @@ public final class Profiler {
      */
     public static final class Counter {
 
-        enum TimeKind {
+        /**
+         * Identifies the execution mode for timing results.
+         */
+        public enum TimeKind {
+
+            /** Timing results includes both modes of operation. */
             INTERPRETED_AND_COMPILED,
+
+            /** Timing results include only slow-path execution. */
             INTERPRETED,
+
+            /** Timing results include only fast-path execution. */
             COMPILED
         }
 
         private final SourceSection sourceSection;
+        private final String name;
         private long interpretedInvocations;
         private long interpretedChildTime;
         private long interpretedTotalTime;
@@ -532,8 +584,9 @@ public final class Profiler {
          */
         private boolean compiled;
 
-        private Counter(SourceSection sourceSection) {
+        private Counter(SourceSection sourceSection, String name) {
             this.sourceSection = sourceSection;
+            this.name = name;
         }
 
         private void clear() {
@@ -555,9 +608,19 @@ public final class Profiler {
         }
 
         /**
+         * The name of the method/procedure being profiled.
+         *
+         * since 0.16
+         */
+        public String getName() {
+            return name;
+        }
+
+        /**
          * Number of times the program element has been executed since the last time data was
          * {@linkplain #clear() cleared}.
          *
+         * @param kind specifies execution mode for results: slow-path, fast-path, or combined.
          * @since 0.15
          */
         public long getInvocations(TimeKind kind) {
@@ -574,9 +637,10 @@ public final class Profiler {
         }
 
         /**
-         * Total time taken executing the program element since the last time data was
-         * {@linkplain #clear() cleared}.
+         * Total time in nanoseconds taken executing the program element since the last time data
+         * was {@linkplain #clear() cleared}.
          *
+         * @param kind specifies execution mode for results: slow-path, fast-path, or combined.
          * @since 0.15
          */
         public long getTotalTime(TimeKind kind) {
@@ -593,9 +657,10 @@ public final class Profiler {
         }
 
         /**
-         * Self time taken executing the program element since the last time data was
+         * Self time in nanoseconds taken executing the program element since the last time data was
          * {@linkplain #clear() cleared}.
          *
+         * @param kind specifies execution mode for results: slow-path, fast-path, or combined.
          * @since 0.15
          */
         public long getSelfTime(TimeKind kind) {
