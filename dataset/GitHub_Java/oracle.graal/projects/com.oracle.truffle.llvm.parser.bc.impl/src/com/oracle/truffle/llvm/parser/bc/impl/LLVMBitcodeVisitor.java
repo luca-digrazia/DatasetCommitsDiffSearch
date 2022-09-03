@@ -56,6 +56,7 @@ import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMFreeFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyFactory;
@@ -288,7 +289,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         final LLVMExpressionNode stackPointerNode = factoryFacade.createFunctionArgNode(0, LLVMBaseType.ADDRESS);
         formalParamInits.add(factoryFacade.createFrameWrite(LLVMBaseType.ADDRESS, stackPointerNode, frame.findFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID)));
 
-        int argIndex = factoryFacade.getArgStartIndex().get();
+        int argIndex = LLVMCallNode.ARG_START_INDEX;
         if (method.getReturnType() instanceof StructureType) {
             final LLVMExpressionNode functionReturnParameterNode = factoryFacade.createFunctionArgNode(argIndex++, LLVMBaseType.STRUCT);
             final FrameSlot returnSlot = frame.findOrAddFrameSlot(LLVMFrameIDs.FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
@@ -444,7 +445,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
             final int byteSize = parserRuntime.getByteSize(((PointerType) global.getType()).getPointeeType());
             final LLVMAddress nativeStorage = LLVMHeap.allocateMemory(byteSize);
             final LLVMAddressNode addressLiteralNode = new LLVMAddressLiteralNode(nativeStorage);
-            parserRuntime.addDestructor(LLVMFreeFactory.create(addressLiteralNode));
+            deallocations.add(LLVMFreeFactory.create(addressLiteralNode));
             descriptor.declare(nativeStorage);
         }
 
@@ -624,7 +625,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         @Override
         public void addDestructor(LLVMNode destructorNode) {
-            deallocations.add(destructorNode);
+            throw new UnsupportedOperationException("Not implemented!");
         }
 
         @Override
