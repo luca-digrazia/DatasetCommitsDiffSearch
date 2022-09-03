@@ -510,7 +510,6 @@ public class BytecodeParser implements GraphBuilderContext {
          */
         private void processPlaceholderFrameStates(IntrinsicContext intrinsic) {
             StructuredGraph graph = parser.getGraph();
-            graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "Before processPlaceholderFrameStates in %s", parser.method);
             boolean sawInvalidFrameState = false;
             for (Node node : graph.getNewNodes(mark)) {
                 if (node instanceof FrameState) {
@@ -588,7 +587,7 @@ public class BytecodeParser implements GraphBuilderContext {
                     }
                 }
             }
-            if (sawInvalidFrameState) {
+            if (sawInvalidFrameState && !(parser.lastInstr instanceof MergeNode)) {
                 JavaKind returnKind = parser.getInvokeReturnType().getJavaKind();
                 FrameStateBuilder frameStateBuilder = parser.frameState;
                 ValueNode returnValue = frameStateBuilder.pop(returnKind);
@@ -598,7 +597,6 @@ public class BytecodeParser implements GraphBuilderContext {
                 proxy.setStateAfter(parser.createFrameState(parser.stream.nextBCI(), proxy));
                 parser.lastInstr = proxy;
             }
-            graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "After processPlaceholderFrameStates in %s", parser.method);
         }
     }
 
@@ -2201,14 +2199,6 @@ public class BytecodeParser implements GraphBuilderContext {
                 if (returnMergeNode != null) {
                     returnMergeNode.setStateAfter(createFrameState(stream.nextBCI(), returnMergeNode));
                     lastInstr = finishInstruction(returnMergeNode, frameState);
-                }
-            }
-            /*
-             * Propagate any side effects into the caller when parsing intrinsics.
-             */
-            if (parser.frameState.isAfterSideEffect()) {
-                for (StateSplit sideEffect : parser.frameState.sideEffects()) {
-                    frameState.addSideEffect(sideEffect);
                 }
             }
 
