@@ -111,10 +111,10 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
         }
 
         @Override
-        public Integer smallestCompareWidth() {
-            // to be safe, just report null here
+        public boolean supportSubwordCompare(int bits) {
+            // to be safe, just report false here
             // there will be more opportunities for this optimization later
-            return null;
+            return false;
         }
     }
 

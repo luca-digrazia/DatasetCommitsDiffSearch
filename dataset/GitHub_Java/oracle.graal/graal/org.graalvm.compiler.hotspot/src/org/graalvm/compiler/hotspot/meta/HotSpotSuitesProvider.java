@@ -90,7 +90,7 @@ public class HotSpotSuitesProvider extends SuitesProviderBase {
 
         if (ImmutableCode.getValue(options)) {
             // lowering introduces class constants, therefore it must be after lowering
-            ret.getHighTier().appendPhase(new LoadJavaMirrorWithKlassPhase(config));
+            ret.getHighTier().appendPhase(new LoadJavaMirrorWithKlassPhase(config.classMirrorOffset, config.useCompressedOops ? config.getOopEncoding() : null));
             if (VerifyPhases.getValue(options)) {
                 ret.getHighTier().appendPhase(new AheadOfTimeVerificationPhase());
             }

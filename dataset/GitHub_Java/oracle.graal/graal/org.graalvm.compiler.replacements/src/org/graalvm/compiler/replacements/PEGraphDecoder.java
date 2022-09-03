@@ -137,6 +137,10 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         protected final InvokeData invokeData;
         protected final int inliningDepth;
 
+        protected final LoopExplosionPlugin loopExplosionPlugin;
+        protected final InvocationPlugins invocationPlugins;
+        protected final InlineInvokePlugin[] inlineInvokePlugins;
+        protected final ParameterPlugin parameterPlugin;
         protected final ValueNode[] arguments;
 
         protected FrameState outerState;
@@ -145,13 +149,18 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         protected NodeSourcePosition callerBytecodePosition;
 
         protected PEMethodScope(StructuredGraph targetGraph, PEMethodScope caller, LoopScope callerLoopScope, EncodedGraph encodedGraph, ResolvedJavaMethod method, InvokeData invokeData,
-                        int inliningDepth, LoopExplosionPlugin loopExplosionPlugin, ValueNode[] arguments) {
+                        int inliningDepth, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins, InlineInvokePlugin[] inlineInvokePlugins, ParameterPlugin parameterPlugin,
+                        ValueNode[] arguments) {
             super(callerLoopScope, targetGraph, encodedGraph, loopExplosionKind(method, loopExplosionPlugin));
 
             this.caller = caller;
             this.method = method;
             this.invokeData = invokeData;
             this.inliningDepth = inliningDepth;
+            this.loopExplosionPlugin = loopExplosionPlugin;
+            this.invocationPlugins = invocationPlugins;
+            this.inlineInvokePlugins = inlineInvokePlugins;
+            this.parameterPlugin = parameterPlugin;
             this.arguments = arguments;
         }
 
@@ -390,19 +399,11 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     }
 
     protected final OptionValues options;
-    private final LoopExplosionPlugin loopExplosionPlugin;
-    private final InvocationPlugins invocationPlugins;
-    private final InlineInvokePlugin[] inlineInvokePlugins;
-    private final ParameterPlugin parameterPlugin;
 
     public PEGraphDecoder(Architecture architecture, StructuredGraph graph, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
-                    StampProvider stampProvider, OptionValues options, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins, InlineInvokePlugin[] inlineInvokePlugins,
-                    ParameterPlugin parameterPlugin) {
+                    StampProvider stampProvider,
+                    OptionValues options) {
         super(architecture, graph, metaAccess, constantReflection, constantFieldProvider, stampProvider, true);
-        this.loopExplosionPlugin = loopExplosionPlugin;
-        this.invocationPlugins = invocationPlugins;
-        this.inlineInvokePlugins = inlineInvokePlugins;
-        this.parameterPlugin = parameterPlugin;
         this.options = options;
     }
 
@@ -414,8 +415,11 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
     }
 
-    public void decode(ResolvedJavaMethod method) {
-        PEMethodScope methodScope = new PEMethodScope(graph, null, null, lookupEncodedGraph(method, null), method, null, 0, loopExplosionPlugin, null);
+    public void decode(StructuredGraph targetGraph, ResolvedJavaMethod method, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins, InlineInvokePlugin[] inlineInvokePlugins,
+                    ParameterPlugin parameterPlugin) {
+        PEMethodScope methodScope = new PEMethodScope(targetGraph, null, null, lookupEncodedGraph(method, null), method, null, 0, loopExplosionPlugin, invocationPlugins,
+                        inlineInvokePlugins,
+                        parameterPlugin, null);
         decode(createInitialLoopScope(methodScope, null));
         cleanupGraph(methodScope);
 
@@ -516,21 +520,21 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             return inlineLoopScope;
         }
 
-        for (InlineInvokePlugin plugin : inlineInvokePlugins) {
+        for (InlineInvokePlugin plugin : methodScope.inlineInvokePlugins) {
             plugin.notifyNotInlined(new PENonAppendGraphBuilderContext(methodScope, invokeData.invoke), callTarget.targetMethod(), invokeData.invoke);
         }
         return null;
     }
 
     protected boolean tryInvocationPlugin(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
-        if (invocationPlugins == null) {
+        if (methodScope.invocationPlugins == null) {
             return false;
         }
 
         Invoke invoke = invokeData.invoke;
 
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
-        InvocationPlugin invocationPlugin = invocationPlugins.lookupInvocation(targetMethod);
+        InvocationPlugin invocationPlugin = methodScope.invocationPlugins.lookupInvocation(targetMethod);
         if (invocationPlugin == null) {
             return false;
         }
@@ -543,7 +547,8 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
          */
         invoke.asNode().replaceAtPredecessor(null);
 
-        PEMethodScope inlineScope = new PEMethodScope(graph, methodScope, loopScope, null, targetMethod, invokeData, methodScope.inliningDepth + 1, loopExplosionPlugin, arguments);
+        PEMethodScope inlineScope = new PEMethodScope(graph, methodScope, loopScope, null, targetMethod, invokeData, methodScope.inliningDepth + 1, methodScope.loopExplosionPlugin,
+                        methodScope.invocationPlugins, methodScope.inlineInvokePlugins, null, arguments);
         PEAppendGraphBuilderContext graphBuilderContext = new PEAppendGraphBuilderContext(inlineScope, invokePredecessor);
         InvocationPluginReceiver invocationPluginReceiver = new InvocationPluginReceiver(graphBuilderContext);
 
@@ -583,7 +588,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         ValueNode[] arguments = callTarget.arguments().toArray(new ValueNode[0]);
         GraphBuilderContext graphBuilderContext = new PENonAppendGraphBuilderContext(methodScope, invokeData.invoke);
 
-        for (InlineInvokePlugin plugin : inlineInvokePlugins) {
+        for (InlineInvokePlugin plugin : methodScope.inlineInvokePlugins) {
             InlineInfo inlineInfo = plugin.shouldInlineInvoke(graphBuilderContext, targetMethod, arguments);
             if (inlineInfo != null) {
                 if (inlineInfo.getMethodToInline() == null) {
@@ -607,7 +612,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             throw tooDeepInlining(methodScope);
         }
 
-        for (InlineInvokePlugin plugin : inlineInvokePlugins) {
+        for (InlineInvokePlugin plugin : methodScope.inlineInvokePlugins) {
             plugin.notifyBeforeInline(inlineMethod);
         }
 
@@ -617,7 +622,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         invokeNode.replaceAtPredecessor(null);
 
         PEMethodScope inlineScope = new PEMethodScope(graph, methodScope, loopScope, graphToInline, inlineMethod, invokeData, methodScope.inliningDepth + 1,
-                        loopExplosionPlugin, arguments);
+                        methodScope.loopExplosionPlugin, methodScope.invocationPlugins, methodScope.inlineInvokePlugins, null, arguments);
 
         /*
          * After decoding all the nodes of the inlined method, we need to re-wire the return and
@@ -714,7 +719,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
         deleteInvoke(invoke);
 
-        for (InlineInvokePlugin plugin : inlineInvokePlugins) {
+        for (InlineInvokePlugin plugin : methodScope.inlineInvokePlugins) {
             plugin.notifyAfterInline(inlineMethod);
         }
 
@@ -816,9 +821,9 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                 assert result != null;
                 return result;
 
-            } else if (!methodScope.isInlinedMethod() && parameterPlugin != null) {
+            } else if (methodScope.parameterPlugin != null) {
                 GraphBuilderContext graphBuilderContext = new PENonAppendGraphBuilderContext(methodScope, null);
-                Node result = parameterPlugin.interceptParameter(graphBuilderContext, param.index(),
+                Node result = methodScope.parameterPlugin.interceptParameter(graphBuilderContext, param.index(),
                                 StampPair.create(param.stamp(), param.uncheckedStamp()));
                 if (result != null) {
                     return result;
