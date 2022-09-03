@@ -29,7 +29,6 @@ import static com.oracle.graal.hotspot.nfi.NativeCallStubGraphBuilder.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
@@ -37,6 +36,7 @@ import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
@@ -57,6 +57,7 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
     public HotSpotNativeFunctionInterface(HotSpotProviders providers, RawNativeCallNodeFactory factory, Backend backend, long dlopen, long dlsym, long rtldDefault) {
         this.rtldDefault = rtldDefault == HotSpotVMConfig.INVALID_RTLD_DEFAULT_HANDLE ? null : new HotSpotNativeLibraryHandle("RTLD_DEFAULT", rtldDefault);
         this.providers = providers;
+        assert backend != null;
         this.backend = backend;
         this.factory = factory;
         this.libraryLoadFunctionPointer = new HotSpotNativeFunctionPointer(dlopen, "os::dll_load");
@@ -160,13 +161,16 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
     private InstalledCode installNativeFunctionStub(long functionPointer, Class<?> returnType, Class<?>... argumentTypes) {
         StructuredGraph g = getGraph(providers, factory, functionPointer, returnType, argumentTypes);
         Suites suites = providers.getSuites().createSuites();
+        LIRSuites lirSuites = providers.getSuites().createLIRSuites();
         PhaseSuite<HighTierContext> phaseSuite = backend.getSuites().getDefaultGraphBuilderSuite().copy();
         CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, g.method(), false);
-        CompilationResult compResult = GraalCompiler.compileGraph(g, null, cc, g.method(), providers, backend, backend.getTarget(), null, phaseSuite, OptimisticOptimizations.ALL,
-                        DefaultProfilingInfo.get(TriState.UNKNOWN), null, suites, new CompilationResult(), CompilationResultBuilderFactory.Default);
+        CompilationResult compResult = GraalCompiler.compileGraph(g, cc, g.method(), providers, backend, backend.getTarget(), null, phaseSuite, OptimisticOptimizations.ALL,
+                        DefaultProfilingInfo.get(TriState.UNKNOWN), null, suites, lirSuites, new CompilationResult(), CompilationResultBuilderFactory.Default);
         InstalledCode installedCode;
         try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache(), g.method())) {
             installedCode = providers.getCodeCache().addMethod(g.method(), compResult, null, null);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
         }
         return installedCode;
     }
