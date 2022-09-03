@@ -50,13 +50,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public boolean useAESIntrinsics;
     public boolean useG1GC;
 
-    // Compressed Oops related values.
-    public boolean useCompressedOops;
-    public boolean useCompressedKlassPointers;
-    public long narrowOopBase;
-    public int narrowOopShift;
-    public int logMinObjAlignment;
-
     // CPU capabilities
     public int useSSE;
     public int useAVX;
