@@ -22,13 +22,11 @@ import android.database.sqlite.SQLiteDatabase;
 import android.util.SparseArray;
 
 import org.litepal.LitePalBase;
-import org.litepal.annotation.Encrypt;
 import org.litepal.crud.model.AssociationsInfo;
 import org.litepal.exceptions.DataSupportException;
 import org.litepal.exceptions.DatabaseGenerateException;
 import org.litepal.tablemanager.model.GenericModel;
 import org.litepal.util.BaseUtility;
-import org.litepal.util.cipher.CipherUtil;
 import org.litepal.util.Const;
 import org.litepal.util.DBUtility;
 
@@ -268,10 +266,6 @@ abstract class DataHandler extends LitePalBase {
                 Date date = (Date) fieldValue;
                 fieldValue = date.getTime();
             }
-            Encrypt annotation = field.getAnnotation(Encrypt.class);
-            if (annotation != null && "java.lang.String".equals(field.getType().getName())) {
-                fieldValue = encryptValue(annotation.algorithm(), fieldValue);
-            }
             Object[] parameters = new Object[] { changeCase(DBUtility.convertToValidColumnName(field.getName())), fieldValue };
             Class<?>[] parameterTypes = getParameterTypes(field, fieldValue, parameters);
             DynamicExecutor.send(values, "put", parameters, values.getClass(), parameterTypes);
@@ -305,32 +299,9 @@ abstract class DataHandler extends LitePalBase {
             Date date = (Date) fieldValue;
             fieldValue = date.getTime();
         }
-        Encrypt annotation = field.getAnnotation(Encrypt.class);
-        if (annotation != null && "java.lang.String".equals(field.getType().getName())) {
-            fieldValue = encryptValue(annotation.algorithm(), fieldValue);
-        }
         Object[] parameters = new Object[] { changeCase(DBUtility.convertToValidColumnName(field.getName())), fieldValue };
         Class<?>[] parameterTypes = getParameterTypes(field, fieldValue, parameters);
         DynamicExecutor.send(values, "put", parameters, values.getClass(), parameterTypes);
-    }
-
-    /**
-     * Encrypt the field value with targeted algorithm.
-     * @param algorithm
-     *          The algorithm to encrypt value.
-     * @param fieldValue
-     *          Field value to encrypt.
-     * @return Encrypted value by targeted algorithm.
-     */
-    protected Object encryptValue(String algorithm, Object fieldValue) {
-        if (algorithm != null && fieldValue != null) {
-            if (DataSupport.AES.equalsIgnoreCase(algorithm)) {
-                fieldValue = CipherUtil.aesEncrypt((String) fieldValue);
-            } else if (DataSupport.MD5.equalsIgnoreCase(algorithm)) {
-                fieldValue = CipherUtil.md5Encrypt((String) fieldValue);
-            }
-        }
-        return fieldValue;
     }
 
 	/**
@@ -655,7 +626,7 @@ abstract class DataHandler extends LitePalBase {
 			for (Class<?> parameterType : types) {
 				if (parameterType == modelClass) {
 					key = key + 10000; // plus the key for not using this constructor
-				} else if (parameterType.getName().startsWith("com.android") && parameterType.getName().endsWith("InstantReloadException")) {
+				} else if (parameterType.getName().equals("com.android.tools.fd.runtime.InstantReloadException")) {
                     key = key + 10000; // plus the key for not using this constructor
                 }
 			}
@@ -1376,36 +1347,11 @@ abstract class DataHandler extends LitePalBase {
                 }
                 DynamicExecutor.setField(modelInstance, field.getName(), collection, modelInstance.getClass());
             }
-            Encrypt annotation = field.getAnnotation(Encrypt.class);
-            if (annotation != null && "java.lang.String".equals(getGenericTypeName(field))) {
-                value = decryptValue(annotation.algorithm(), value);
-            }
             collection.add(value);
         } else {
-            Encrypt annotation = field.getAnnotation(Encrypt.class);
-            if (annotation != null && "java.lang.String".equals(field.getType().getName())) {
-                value = decryptValue(annotation.algorithm(), value);
-            }
             DynamicExecutor.setField(modelInstance, field.getName(), value,
                     modelInstance.getClass());
         }
-    }
-
-    /**
-     * Decrypt the field value with targeted algorithm.
-     * @param algorithm
-     *          The algorithm to decrypt value.
-     * @param fieldValue
-     *          Field value to decrypt.
-     * @return Decrypted value by targeted algorithm.
-     */
-    protected Object decryptValue(String algorithm, Object fieldValue) {
-        if (algorithm != null && fieldValue != null) {
-            if (DataSupport.AES.equalsIgnoreCase(algorithm)) {
-                fieldValue = CipherUtil.aesDecrypt((String) fieldValue);
-            }
-        }
-        return fieldValue;
     }
 
     /**
