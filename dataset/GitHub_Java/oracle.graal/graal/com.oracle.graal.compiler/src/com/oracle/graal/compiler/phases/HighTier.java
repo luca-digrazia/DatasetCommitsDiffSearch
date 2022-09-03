@@ -37,7 +37,7 @@ import com.oracle.graal.virtual.phases.ea.*;
 
 public class HighTier extends PhaseSuite<HighTierContext> {
 
-    public static class Options {
+    static class Options {
 
         // @formatter:off
         @Option(help = "")

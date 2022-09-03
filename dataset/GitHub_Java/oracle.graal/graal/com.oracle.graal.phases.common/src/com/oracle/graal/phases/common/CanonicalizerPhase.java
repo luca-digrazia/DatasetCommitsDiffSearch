@@ -215,7 +215,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
         }
 
         public static boolean tryGlobalValueNumbering(Node node) {
-            if (node.getNodeClass().valueNumberable() && !node.getNodeClass().isLeafNode()) {
+            if (node.getNodeClass().valueNumberable()) {
                 Node newNode = node.graph().findDuplicate(node);
                 if (newNode != null) {
                     assert !(node instanceof FixedNode || newNode instanceof FixedNode);
