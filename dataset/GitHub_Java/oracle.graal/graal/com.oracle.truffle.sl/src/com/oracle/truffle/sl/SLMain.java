@@ -31,7 +31,8 @@ import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.api.vm.*;
+import com.oracle.truffle.api.tools.*;
+import com.oracle.truffle.api.vm.TruffleVM;
 import com.oracle.truffle.sl.builtins.*;
 import com.oracle.truffle.sl.factory.*;
 import com.oracle.truffle.sl.nodes.*;
@@ -42,7 +43,6 @@ import com.oracle.truffle.sl.nodes.instrument.*;
 import com.oracle.truffle.sl.nodes.local.*;
 import com.oracle.truffle.sl.parser.*;
 import com.oracle.truffle.sl.runtime.*;
-import com.oracle.truffle.tools.*;
 
 /**
  * SL is a simple language to demonstrate and showcase features of Truffle. The implementation is as

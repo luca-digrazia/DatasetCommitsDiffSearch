@@ -454,13 +454,14 @@ public final class NodeUtil {
     }
 
     public static <T> T findFirstNodeInstance(Node root, Class<T> clazz) {
-        if (clazz.isInstance(root)) {
-            return clazz.cast(root);
-        }
-        for (Node child : root.getChildren()) {
-            T node = findFirstNodeInstance(child, clazz);
-            if (node != null) {
-                return node;
+        for (Node childNode : findNodeChildren(root)) {
+            if (clazz.isInstance(childNode)) {
+                return clazz.cast(childNode);
+            } else {
+                T node = findFirstNodeInstance(childNode, clazz);
+                if (node != null) {
+                    return node;
+                }
             }
         }
         return null;

@@ -288,13 +288,20 @@ public final class HotSpotJVMCIRuntime implements HotSpotJVMCIRuntimeProvider, H
         return Collections.unmodifiableMap(backends);
     }
 
+    private HotSpotVMEventListener vmEventListener;
+
+    public void registerVMEventListener(HotSpotVMEventListener l) {
+        assert vmEventListener == null : "cannot register multiple HotSpotVMEventListeners";
+        vmEventListener = l;
+    }
+
     /**
      * Called from the VM.
      */
-    @SuppressWarnings({"unused", "static-method"})
+    @SuppressWarnings("unused")
     private void compileTheWorld() throws Throwable {
-        for (HotSpotVMEventListener l : Services.load(HotSpotVMEventListener.class)) {
-            l.notifyCompileTheWorld();
+        if (vmEventListener != null) {
+            vmEventListener.notifyCompileTheWorld();
         }
     }
 
@@ -303,10 +310,10 @@ public final class HotSpotJVMCIRuntime implements HotSpotJVMCIRuntimeProvider, H
      *
      * Called from the VM.
      */
-    @SuppressWarnings({"unused", "static-method"})
+    @SuppressWarnings("unused")
     private void shutdown() throws Exception {
-        for (HotSpotVMEventListener l : Services.load(HotSpotVMEventListener.class)) {
-            l.notifyShutdown();
+        if (vmEventListener != null) {
+            vmEventListener.notifyShutdown();
         }
     }
 }
