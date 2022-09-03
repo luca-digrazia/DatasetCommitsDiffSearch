@@ -246,7 +246,7 @@ import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.BytecodeTableSwitch;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.bytecode.DualStack;
-import com.oracle.truffle.espresso.vm.InterpreterToVM;
+import com.oracle.truffle.espresso.bytecode.InterpreterToVM;
 import com.oracle.truffle.espresso.bytecode.OperandStack;
 import com.oracle.truffle.espresso.classfile.ClassConstant;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
@@ -269,7 +269,7 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.types.SignatureDescriptor;
 
-public class EspressoRootNode extends RootNode implements LinkedNode {
+public class EspressoRootNode extends RootNode {
     private final MethodInfo method;
     private final InterpreterToVM vm;
 
@@ -1212,7 +1212,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
     }
 
     private void invokeVirtual(OperandStack stack, MethodInfo method) {
-        if (method.isFinal()) {
+        if (Modifier.isFinal(method.getModifiers())) {
             // TODO(peterssen): Intercept/hook methods on primitive arrays e.g. int[].clone().
             // Receiver can be a primitive array (not a StaticObject).
             Object receiver = nullCheck(stack.peekReceiver(method));
@@ -1241,17 +1241,13 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
     }
 
     private void invoke(OperandStack stack, MethodInfo targetMethod, Object receiver, boolean hasReceiver, SignatureDescriptor signature) {
-        CallTarget callTarget = targetMethod.getCallTarget();
-        // In bytecode boolean, byte, char and short are just plain ints.
-        // When a method is intrinsified it will obey Java types, so we need to convert the
-        // (boolean, byte, char, short) result back to int.
-        // (pop)Arguments have proper Java types.
-        if (targetMethod.isIntrinsified()) {
+        CallTarget redirectedMethod = vm.getIntrinsic(targetMethod);
+        if (redirectedMethod != null) {
             CompilerDirectives.transferToInterpreter();
-            invokeRedirectedMethodViaVM(stack, targetMethod, callTarget);
+            invokeRedirectedMethodViaVM(stack, targetMethod, redirectedMethod);
         } else {
             Object[] arguments = popArguments(stack, hasReceiver, signature);
-
+            CallTarget callTarget = targetMethod.getCallTarget();
             assert receiver == null || arguments[0] == receiver;
             JavaKind resultKind = signature.getReturnTypeDescriptor().toKind();
             Object result = callTarget.call(arguments);
@@ -1275,6 +1271,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
     }
 
     private void invokeRedirectedMethodViaVM(OperandStack stack, MethodInfo originalMethod, CallTarget intrinsic) {
+        // CompilerAsserts.partialEvaluationConstant(originalMethod);
         Object[] originalCalleeParameters = popArguments(stack, !originalMethod.isStatic(), originalMethod.getSignature());
         Object returnValue = call(intrinsic, originalCalleeParameters);
         pushKindIntrinsic(stack, returnValue, originalMethod.getSignature().resultKind());
@@ -1728,10 +1725,5 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
     @Override
     public String toString() {
         return method.getDeclaringClass().getName() + "." + method.getName() + method.getSignature().toString();
-    }
-
-    @Override
-    public Meta.Method getOriginalMethod() {
-        return Meta.meta(method);
     }
 }
