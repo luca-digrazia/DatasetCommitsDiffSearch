@@ -47,6 +47,7 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Language;
 import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
 import com.oracle.truffle.tck.Schema.Type;
+import com.oracle.truffle.tck.TckSnippets.ExecWithTimeOut;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.Executors;
@@ -1522,11 +1523,10 @@ public abstract class TruffleTCK {
      */
     @Test
     public void timeOutTest() throws Exception {
-        final ExecWithTimeOut timeOutExecution = new ExecWithTimeOut();
+        final ExecWithTimeOut timeOutExecution = new TckSnippets().new ExecWithTimeOut();
         ScheduledExecutorService executor = new MockExecutorService();
 
-        Builder builder = PolyglotEngine.newBuilder();
-        timeOutExecution.registerEventHandler(builder);
+        Builder builder = PolyglotEngine.newBuilder().onEvent(timeOutExecution);
         timeOutExecution.engine = prepareVM(builder);
         timeOutExecution.getDebugger(); // pre-initialize foundDebugger
         PolyglotEngine.Value counting = timeOutExecution.engine.findGlobalSymbol(countUpWhile());
