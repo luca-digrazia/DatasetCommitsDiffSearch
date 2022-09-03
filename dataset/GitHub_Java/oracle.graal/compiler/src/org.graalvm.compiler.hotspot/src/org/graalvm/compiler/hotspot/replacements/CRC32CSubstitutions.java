@@ -32,6 +32,7 @@ import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.hotspot.nodes.ComputeObjectAddressNode;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.word.Word;
+import org.graalvm.word.Pointer;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 
@@ -40,7 +41,7 @@ import jdk.vm.ci.meta.JavaKind;
 // JaCoCo Exclude
 
 /**
- * Substitutions for java.util.zip.CRC32C.
+ * Substitutions for {@link java.util.zip.CRC32C}.
  */
 @ClassSubstitution(className = "java.util.zip.CRC32C", optional = true)
 public class CRC32CSubstitutions {
@@ -62,3 +63,4 @@ public class CRC32CSubstitutions {
     @NodeIntrinsic(ForeignCallNode.class)
     public static native int updateBytesCRC32(@ConstantNodeParameter ForeignCallDescriptor descriptor, int crc, WordBase buf, int length);
 }
+
