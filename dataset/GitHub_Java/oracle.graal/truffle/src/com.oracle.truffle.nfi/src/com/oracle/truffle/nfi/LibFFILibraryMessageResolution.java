@@ -24,11 +24,9 @@
  */
 package com.oracle.truffle.nfi;
 
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.CanResolve;
-import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -40,8 +38,6 @@ import com.oracle.truffle.nfi.LibFFILibraryMessageResolutionFactory.CachedLookup
 class LibFFILibraryMessageResolution {
 
     abstract static class CachedLookupSymbolNode extends Node {
-
-        private final ContextReference<NFIContext> ctxRef = NFILanguage.getCurrentContextReference();
 
         protected abstract TruffleObject executeLookup(LibFFILibrary receiver, String symbol);
 
@@ -61,7 +57,7 @@ class LibFFILibraryMessageResolution {
                 return preBound;
             }
             try {
-                return ctxRef.get().lookupSymbol(receiver, symbol);
+                return receiver.lookupSymbol(symbol);
             } catch (UnsatisfiedLinkError ex) {
                 throw UnknownIdentifierException.raise(symbol);
             }
@@ -75,27 +71,6 @@ class LibFFILibraryMessageResolution {
 
         public TruffleObject access(LibFFILibrary receiver, String symbol) {
             return cached.executeLookup(receiver, symbol);
-        }
-    }
-
-    @Resolve(message = "KEY_INFO")
-    abstract static class KeyInfoNode extends Node {
-
-        private final ContextReference<NFIContext> ctxRef = NFILanguage.getCurrentContextReference();
-
-        private static final int READABLE = KeyInfo.newBuilder().setReadable(true).build();
-        private static final int NOT_EXISTING = 0;
-
-        public int access(LibFFILibrary receiver, String symbol) {
-            if (receiver.findSymbol(symbol) == null) {
-                try {
-                    ctxRef.get().lookupSymbol(receiver, symbol);
-                } catch (UnsatisfiedLinkError ex) {
-                    return NOT_EXISTING;
-                }
-            }
-
-            return READABLE;
         }
     }
 
