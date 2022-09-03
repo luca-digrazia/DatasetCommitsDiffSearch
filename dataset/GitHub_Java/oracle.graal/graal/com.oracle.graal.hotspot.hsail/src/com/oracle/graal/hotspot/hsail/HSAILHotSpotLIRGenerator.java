@@ -122,9 +122,6 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator implements HotSp
         HSAILAddressValue storeAddress = asAddressValue(address);
         if (isConstant(inputVal)) {
             Constant c = asConstant(inputVal);
-            if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(c)) {
-                c = Constant.INT_0;
-            }
             if (canStoreConstant(c, false)) {
                 append(new StoreConstantOp(getMemoryKind(kind), storeAddress, c, state));
                 return;
@@ -227,9 +224,7 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator implements HotSp
     @Override
     protected HSAILLIRInstruction createMove(AllocatableValue dst, Value src) {
         if (dst.getPlatformKind() == NarrowOopStamp.NarrowOop) {
-            if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(src)) {
-                return new MoveToRegOp(Kind.Int, dst, Constant.INT_0);
-            } else if (isRegister(src) || isStackSlot(dst)) {
+            if (isRegister(src) || isStackSlot(dst)) {
                 return new MoveFromRegOp(Kind.Int, dst, src);
             } else {
                 return new MoveToRegOp(Kind.Int, dst, src);
@@ -296,4 +291,5 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator implements HotSp
         emitMove(obj, address);
         append(new HSAILMove.NullCheckOp(obj, state));
     }
+
 }

@@ -29,7 +29,6 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.hsail.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
 import com.oracle.graal.hotspot.meta.*;
@@ -43,7 +42,6 @@ import com.oracle.graal.nodes.*;
 /**
  * The HotSpot specific portion of the HSAIL LIR generator.
  */
-@NodeInfo
 public class HSAILHotSpotNodeLIRBuilder extends HSAILNodeLIRBuilder implements HotSpotNodeLIRBuilder {
 
     public HSAILHotSpotNodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool lirGen) {
@@ -80,11 +78,11 @@ public class HSAILHotSpotNodeLIRBuilder extends HSAILNodeLIRBuilder implements H
     }
 
     public void visitDirectCompareAndSwap(DirectCompareAndSwapNode x) {
+        Kind kind = x.newValue().getKind();
+        assert kind == x.expectedValue().getKind();
+
         Variable expected = getGen().load(operand(x.expectedValue()));
         Variable newVal = getGen().load(operand(x.newValue()));
-
-        LIRKind kind = newVal.getLIRKind();
-        assert kind.equals(expected.getLIRKind());
 
         int disp = 0;
         HSAILAddressValue address;
@@ -97,8 +95,8 @@ public class HSAILHotSpotNodeLIRBuilder extends HSAILNodeLIRBuilder implements H
             throw GraalInternalError.shouldNotReachHere("NYI");
         }
 
-        Variable casResult = gen.newVariable(kind);
-        append(new CompareAndSwapOp((Kind) kind.getPlatformKind(), casResult, address, expected, newVal));
+        Variable casResult = newVariable(kind);
+        append(new CompareAndSwapOp(kind, casResult, address, expected, newVal));
 
         setResult(x, casResult);
     }
