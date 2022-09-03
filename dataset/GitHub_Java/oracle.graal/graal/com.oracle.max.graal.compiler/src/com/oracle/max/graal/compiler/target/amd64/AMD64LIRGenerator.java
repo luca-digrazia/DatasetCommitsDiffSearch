@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,19 +23,54 @@
 
 package com.oracle.max.graal.compiler.target.amd64;
 
+import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.oracle.max.graal.lir.amd64.AMD64Arithmetic.*;
+import static com.oracle.max.graal.lir.amd64.AMD64Compare.*;
+
+import java.util.*;
+
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.graal.compiler.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ci.CiTargetMethod.Mark;
+import com.oracle.max.cri.ri.*;
+import com.oracle.max.cri.xir.CiXirAssembler.XirMark;
+import com.oracle.max.cri.xir.*;
 import com.oracle.max.graal.compiler.gen.*;
-import com.oracle.max.graal.compiler.globalstub.*;
-import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.sun.cri.bytecode.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
-import com.sun.cri.ri.RiType.*;
-import com.sun.cri.xir.*;
+import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.lir.*;
+import com.oracle.max.graal.lir.StandardOp.JumpOp;
+import com.oracle.max.graal.lir.StandardOp.LabelOp;
+import com.oracle.max.graal.lir.amd64.AMD64Arithmetic.DivOp;
+import com.oracle.max.graal.lir.amd64.AMD64Arithmetic.Op1Reg;
+import com.oracle.max.graal.lir.amd64.AMD64Arithmetic.Op1Stack;
+import com.oracle.max.graal.lir.amd64.AMD64Arithmetic.Op2Reg;
+import com.oracle.max.graal.lir.amd64.AMD64Arithmetic.Op2Stack;
+import com.oracle.max.graal.lir.amd64.AMD64Arithmetic.ShiftOp;
+import com.oracle.max.graal.lir.amd64.AMD64Call.DirectCallOp;
+import com.oracle.max.graal.lir.amd64.AMD64Call.IndirectCallOp;
+import com.oracle.max.graal.lir.amd64.AMD64Compare.CompareOp;
+import com.oracle.max.graal.lir.amd64.AMD64ControlFlow.BranchOp;
+import com.oracle.max.graal.lir.amd64.AMD64ControlFlow.CondMoveOp;
+import com.oracle.max.graal.lir.amd64.AMD64ControlFlow.FloatBranchOp;
+import com.oracle.max.graal.lir.amd64.AMD64ControlFlow.FloatCondMoveOp;
+import com.oracle.max.graal.lir.amd64.AMD64ControlFlow.ReturnOp;
+import com.oracle.max.graal.lir.amd64.AMD64ControlFlow.TableSwitchOp;
+import com.oracle.max.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
+import com.oracle.max.graal.lir.amd64.AMD64Move.LeaOp;
+import com.oracle.max.graal.lir.amd64.AMD64Move.LoadOp;
+import com.oracle.max.graal.lir.amd64.AMD64Move.MembarOp;
+import com.oracle.max.graal.lir.amd64.AMD64Move.MoveFromRegOp;
+import com.oracle.max.graal.lir.amd64.AMD64Move.MoveToRegOp;
+import com.oracle.max.graal.lir.amd64.AMD64Move.NullCheckOp;
+import com.oracle.max.graal.lir.amd64.AMD64Move.SpillMoveOp;
+import com.oracle.max.graal.lir.amd64.AMD64Move.StoreOp;
+import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
+import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.nodes.calc.*;
+import com.oracle.max.graal.nodes.extended.*;
+import com.oracle.max.graal.nodes.java.*;
 
 /**
  * This class implements the X86-specific portion of the LIR generator.
@@ -44,516 +79,528 @@ public class AMD64LIRGenerator extends LIRGenerator {
 
     private static final CiRegisterValue RAX_I = AMD64.rax.asValue(CiKind.Int);
     private static final CiRegisterValue RAX_L = AMD64.rax.asValue(CiKind.Long);
-    private static final CiRegisterValue RAX_W = AMD64.rax.asValue(CiKind.Word);
     private static final CiRegisterValue RDX_I = AMD64.rdx.asValue(CiKind.Int);
     private static final CiRegisterValue RDX_L = AMD64.rdx.asValue(CiKind.Long);
+    private static final CiRegisterValue RCX_I = AMD64.rcx.asValue(CiKind.Int);
 
-    private static final CiRegisterValue LDIV_TMP = RDX_L;
-
-
-    /**
-     * The register in which MUL puts the result for 64-bit multiplication.
-     */
-    private static final CiRegisterValue LMUL_OUT = RAX_L;
-
-    private static final CiRegisterValue SHIFT_COUNT_IN = AMD64.rcx.asValue(CiKind.Int);
-
-    protected static final CiValue ILLEGAL = CiValue.IllegalValue;
-
-    public AMD64LIRGenerator(C1XCompilation compilation) {
-        super(compilation);
-    }
-
-    @Override
-    protected boolean canStoreAsConstant(Value v, CiKind kind) {
-        if (kind == CiKind.Short || kind == CiKind.Char) {
-            // there is no immediate move of word values in asemblerI486.?pp
-            return false;
+    public static class AMD64SpillMoveFactory implements LIR.SpillMoveFactory {
+        @Override
+        public LIRInstruction createMove(CiValue result, CiValue input) {
+            return new SpillMoveOp(result, input);
         }
-        return v instanceof Constant;
-    }
 
-    @Override
-    protected boolean canInlineAsConstant(Value v) {
-        if (v.kind == CiKind.Long) {
-            if (v.isConstant() && NumUtil.isInt(v.asConstant().asLong())) {
-                return true;
-            }
-            return false;
+        @Override
+        public LIRInstruction createExchange(CiValue input1, CiValue input2) {
+            // TODO (cwimmer) implement XCHG operation for LIR
+            return null;
         }
-        return v.kind != CiKind.Object || v.isNullConstant();
+    }
+
+    public AMD64LIRGenerator(Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
+        super(graph, runtime, target, frameMap, method, lir, xir);
+        lir.methodEndMarker = new AMD64MethodEndStub();
+        lir.spillMoveFactory = new AMD64SpillMoveFactory();
     }
 
     @Override
-    protected CiAddress genAddress(CiValue base, CiValue index, int shift, int disp, CiKind kind) {
-        assert base.isVariableOrRegister();
-        if (index.isConstant()) {
-            return new CiAddress(kind, base, (((CiConstant) index).asInt() << shift) + disp);
+    protected void emitNode(ValueNode node) {
+        if (node instanceof AMD64LIRLowerable) {
+            ((AMD64LIRLowerable) node).generateAmd64(this);
         } else {
-            assert index.isVariableOrRegister();
-            return new CiAddress(kind, base, (index), CiAddress.Scale.fromShift(shift), disp);
+            super.emitNode(node);
         }
     }
 
     @Override
-    protected void genCmpMemInt(Condition condition, CiValue base, int disp, int c, LIRDebugInfo info) {
-        lir.cmpMemInt(condition, base, disp, c, info);
+    public boolean canStoreConstant(CiConstant c) {
+        // there is no immediate move of 64-bit constants on Intel
+        switch (c.kind) {
+            case Long:   return Util.isInt(c.asLong());
+            case Double: return false;
+            case Object: return c.isNull();
+            default:     return true;
+        }
     }
 
     @Override
-    protected void genCmpRegMem(Condition condition, CiValue reg, CiValue base, int disp, CiKind kind, LIRDebugInfo info) {
-        lir.cmpRegMem(condition, reg, new CiAddress(kind, base, disp), info);
+    public boolean canInlineConstant(CiConstant c) {
+        switch (c.kind) {
+            case Long:   return NumUtil.isInt(c.asLong());
+            case Object: return c.isNull();
+            default:     return true;
+        }
     }
 
     @Override
-    protected boolean strengthReduceMultiply(CiValue left, int c, CiValue result, CiValue tmp) {
-        if (tmp.isLegal()) {
-            if (CiUtil.isPowerOf2(c + 1)) {
-                lir.move(left, tmp);
-                lir.shiftLeft(left, CiUtil.log2(c + 1), left);
-                lir.sub(left, tmp, result);
-                return true;
-            } else if (CiUtil.isPowerOf2(c - 1)) {
-                lir.move(left, tmp);
-                lir.shiftLeft(left, CiUtil.log2(c - 1), left);
-                lir.add(left, tmp, result);
-                return true;
+    public CiAddress makeAddress(LocationNode location, ValueNode object) {
+        CiValue base = operand(object);
+        CiValue index = CiValue.IllegalValue;
+        int scale = 1;
+        long displacement = location.displacement();
+
+        if (isConstant(base)) {
+            if (!asConstant(base).isNull()) {
+                displacement += asConstant(base).asLong();
             }
+            base = CiValue.IllegalValue;
         }
-        return false;
-    }
 
-    @Override
-    public void visitNegate(Negate x) {
-        LIRItem value = new LIRItem(x.x(), this);
-        value.setDestroysRegister();
-        value.loadItem();
-        CiVariable reg = newVariable(x.kind);
-        GlobalStub globalStub = null;
-        if (x.kind == CiKind.Float) {
-            globalStub = stubFor(GlobalStub.Id.fneg);
-        } else if (x.kind == CiKind.Double) {
-            globalStub = stubFor(GlobalStub.Id.dneg);
-        }
-        lir.negate(value.result(), reg, globalStub);
-        setResult(x, reg);
-    }
+        if (location instanceof IndexedLocationNode) {
+            IndexedLocationNode indexedLoc = (IndexedLocationNode) location;
 
-    public boolean livesLonger(Value x, Value y) {
-        // TODO(tw): Estimate which value will live longer.
-        return false;
-    }
-
-    public void visitArithmeticOpFloat(Arithmetic x) {
-        LIRItem left = new LIRItem(x.x(), this);
-        LIRItem right = new LIRItem(x.y(), this);
-        assert !left.isStack() || !right.isStack() : "can't both be memory operands";
-        boolean mustLoadBoth = x.opcode == Bytecodes.FREM || x.opcode == Bytecodes.DREM;
-
-        // Both are in register, swap operands such that the short-living one is on the left side.
-        if (x.isCommutative() && left.isRegisterOrVariable() && right.isRegisterOrVariable()) {
-            if (livesLonger(x.x(), x.y())) {
-                LIRItem tmp = left;
-                left = right;
-                right = tmp;
+            index = operand(indexedLoc.index());
+            if (indexedLoc.indexScalingEnabled()) {
+                scale = target().sizeInBytes(location.getValueKind());
             }
-        }
-
-        if (left.isRegisterOrVariable() || x.x().isConstant() || mustLoadBoth) {
-            left.loadItem();
-        }
-
-        if (mustLoadBoth) {
-            // frem and drem destroy also right operand, so move it to a new register
-            right.setDestroysRegister();
-            right.loadItem();
-        } else if (right.isRegisterOrVariable()) {
-            right.loadItem();
-        }
-
-        CiVariable reg;
-
-        if (x.opcode == Bytecodes.FREM) {
-            reg = callRuntimeWithResult(CiRuntimeCall.ArithmeticFrem, null, left.result(), right.result());
-        } else if (x.opcode == Bytecodes.DREM) {
-            reg = callRuntimeWithResult(CiRuntimeCall.ArithmeticDrem, null, left.result(), right.result());
-        } else {
-            reg = newVariable(x.kind);
-            arithmeticOpFpu(x.opcode, reg, left.result(), right.result(), ILLEGAL);
-        }
-
-        setResult(x, reg);
-    }
-
-    public void visitArithmeticOpLong(Arithmetic x) {
-        int opcode = x.opcode;
-        if (opcode == Bytecodes.LDIV || opcode == Bytecodes.LREM) {
-            // emit inline 64-bit code
-            LIRDebugInfo info = stateFor(x);
-            CiValue dividend = force(x.x(), RAX_L); // dividend must be in RAX
-            CiValue divisor = load(x.y());            // divisor can be in any (other) register
-
-            CiValue result = createResultVariable(x);
-            CiValue resultReg;
-            if (opcode == Bytecodes.LREM) {
-                resultReg = RDX_L; // remainder result is produced in rdx
-                lir.lrem(dividend, divisor, resultReg, LDIV_TMP, info);
-            } else {
-                resultReg = RAX_L; // division result is produced in rax
-                lir.ldiv(dividend, divisor, resultReg, LDIV_TMP, info);
-            }
-
-            lir.move(resultReg, result);
-        } else if (opcode == Bytecodes.LMUL) {
-            LIRItem right = new LIRItem(x.y(), this);
-
-            // right register is destroyed by the long mul, so it must be
-            // copied to a new register.
-            right.setDestroysRegister();
-
-            CiValue left = load(x.x());
-            right.loadItem();
-
-            arithmeticOpLong(opcode, LMUL_OUT, left, right.result(), null);
-            CiValue result = createResultVariable(x);
-            lir.move(LMUL_OUT, result);
-        } else {
-            LIRItem right = new LIRItem(x.y(), this);
-
-            CiValue left = load(x.x());
-            // don't load constants to save register
-            right.loadNonconstant();
-            createResultVariable(x);
-            arithmeticOpLong(opcode, x.operand(), left, right.result(), null);
-        }
-    }
-
-    public void visitArithmeticOpInt(Arithmetic x) {
-        int opcode = x.opcode;
-        if (opcode == Bytecodes.IDIV || opcode == Bytecodes.IREM) {
-            // emit code for integer division or modulus
-
-            // Call 'stateFor' before 'force()' because 'stateFor()' may
-            // force the evaluation of other instructions that are needed for
-            // correct debug info.  Otherwise the live range of the fixed
-            // register might be too long.
-            LIRDebugInfo info = stateFor(x);
-
-            CiValue dividend = force(x.x(), RAX_I); // dividend must be in RAX
-            CiValue divisor = load(x.y());          // divisor can be in any (other) register
-
-            // idiv and irem use rdx in their implementation so the
-            // register allocator must not assign it to an interval that overlaps
-            // this division instruction.
-            CiRegisterValue tmp = RDX_I;
-
-            CiValue result = createResultVariable(x);
-            CiValue resultReg;
-            if (opcode == Bytecodes.IREM) {
-                resultReg = tmp; // remainder result is produced in rdx
-                lir.irem(dividend, divisor, resultReg, tmp, info);
-            } else {
-                resultReg = RAX_I; // division result is produced in rax
-                lir.idiv(dividend, divisor, resultReg, tmp, info);
-            }
-
-            lir.move(resultReg, result);
-        } else {
-            // emit code for other integer operations
-            LIRItem left = new LIRItem(x.x(), this);
-            LIRItem right = new LIRItem(x.y(), this);
-            LIRItem leftArg = left;
-            LIRItem rightArg = right;
-            if (x.isCommutative() && left.isStack() && right.isRegisterOrVariable()) {
-                // swap them if left is real stack (or cached) and right is real register(not cached)
-                leftArg = right;
-                rightArg = left;
-            }
-
-            leftArg.loadItem();
-
-            // do not need to load right, as we can handle stack and constants
-            if (opcode == Bytecodes.IMUL) {
-                // check if we can use shift instead
-                boolean useConstant = false;
-                boolean useTmp = false;
-                if (rightArg.result().isConstant()) {
-                    int iconst = rightArg.instruction.asConstant().asInt();
-                    if (iconst > 0) {
-                        if (CiUtil.isPowerOf2(iconst)) {
-                            useConstant = true;
-                        } else if (CiUtil.isPowerOf2(iconst - 1) || CiUtil.isPowerOf2(iconst + 1)) {
-                            useConstant = true;
-                            useTmp = true;
-                        }
-                    }
-                }
-                if (!useConstant) {
-                    rightArg.loadItem();
-                }
-                CiValue tmp = ILLEGAL;
-                if (useTmp) {
-                    tmp = newVariable(CiKind.Int);
-                }
-                createResultVariable(x);
-
-                arithmeticOpInt(opcode, x.operand(), leftArg.result(), rightArg.result(), tmp);
-            } else {
-                createResultVariable(x);
-                CiValue tmp = ILLEGAL;
-                arithmeticOpInt(opcode, x.operand(), leftArg.result(), rightArg.result(), tmp);
-            }
-        }
-    }
-
-    public void visitArithmeticOpWord(Arithmetic x) {
-        int opcode = x.opcode;
-        if (opcode == Bytecodes.WDIV || opcode == Bytecodes.WREM || opcode == Bytecodes.WDIVI || opcode == Bytecodes.WREMI) {
-            // emit code for long division or modulus
-                // emit inline 64-bit code
-                LIRDebugInfo info = stateFor(x);
-                CiValue dividend = force(x.x(), RAX_L); // dividend must be in RAX
-                CiValue divisor = load(x.y());            // divisor can be in any (other) register
-
-                CiValue result = createResultVariable(x);
-                CiValue resultReg;
-                if (opcode == Bytecodes.WREM) {
-                    resultReg = RDX_L; // remainder result is produced in rdx
-                    lir.wrem(dividend, divisor, resultReg, LDIV_TMP, info);
-                } else if (opcode == Bytecodes.WREMI) {
-                    resultReg = RDX_L; // remainder result is produced in rdx
-                    lir.wremi(dividend, divisor, resultReg, LDIV_TMP, info);
-                } else if (opcode == Bytecodes.WDIV) {
-                    resultReg = RAX_L; // division result is produced in rax
-                    lir.wdiv(dividend, divisor, resultReg, LDIV_TMP, info);
+            if (isConstant(index)) {
+                long newDisplacement = displacement + asConstant(index).asLong() * scale;
+                // only use the constant index if the resulting displacement fits into a 32 bit offset
+                if (NumUtil.isInt(newDisplacement)) {
+                    displacement = newDisplacement;
+                    index = CiValue.IllegalValue;
                 } else {
-                    assert opcode == Bytecodes.WDIVI;
-                    resultReg = RAX_L; // division result is produced in rax
-                    lir.wdivi(dividend, divisor, resultReg, LDIV_TMP, info);
+                    // create a temporary variable for the index, the pointer load cannot handle a constant index
+                    CiValue newIndex = newVariable(CiKind.Long);
+                    emitMove(index, newIndex);
+                    index = newIndex;
                 }
+            }
+        }
 
-                lir.move(resultReg, result);
-        } else if (opcode == Bytecodes.LMUL) {
-            LIRItem right = new LIRItem(x.y(), this);
+        return new CiAddress(location.getValueKind(), base, index, CiAddress.Scale.fromInt(scale), (int) displacement);
+    }
 
-            // right register is destroyed by the long mul, so it must be
-            // copied to a new register.
-            right.setDestroysRegister();
+    @Override
+    public Variable emitMove(CiValue input) {
+        Variable result = newVariable(input.kind);
+        emitMove(input, result);
+        return result;
+    }
 
-            CiValue left = load(x.x());
-            right.loadItem();
-
-            CiValue reg = LMUL_OUT;
-            arithmeticOpLong(opcode, reg, left, right.result(), null);
-            CiValue result = createResultVariable(x);
-            lir.move(reg, result);
+    @Override
+    public void emitMove(CiValue src, CiValue dst) {
+        if (isRegister(src) || isStackSlot(dst)) {
+            append(new MoveFromRegOp(dst, src));
         } else {
-            LIRItem right = new LIRItem(x.y(), this);
-
-            CiValue left = load(x.x());
-            // don't load constants to save register
-            right.loadNonconstant();
-            createResultVariable(x);
-            arithmeticOpLong(opcode, x.operand(), left, right.result(), null);
+            append(new MoveToRegOp(dst, src));
         }
     }
 
     @Override
-    public void visitArithmetic(Arithmetic x) {
-        trySwap(x);
+    public Variable emitLoad(CiValue loadAddress, boolean canTrap) {
+        Variable result = newVariable(loadAddress.kind);
+        append(new LoadOp(result, loadAddress, canTrap ? state() : null));
+        return result;
+    }
 
-        if (x.kind.isWord() || x.opcode == Bytecodes.WREMI) {
-            visitArithmeticOpWord(x);
-            return;
-        }
+    @Override
+    public void emitStore(CiValue storeAddress, CiValue inputVal, boolean canTrap) {
+        CiValue input = loadForStore(inputVal, storeAddress.kind);
+        append(new StoreOp(storeAddress, input, canTrap ? state() : null));
+    }
 
-        assert Util.archKindsEqual(x.x().kind, x.kind) && Util.archKindsEqual(x.y().kind, x.kind) : "wrong parameter types: " + Bytecodes.nameOf(x.opcode);
-        switch (x.kind) {
-            case Float:
-            case Double:
-                visitArithmeticOpFloat(x);
-                return;
-            case Long:
-                visitArithmeticOpLong(x);
-                return;
+    @Override
+    public Variable emitLea(CiValue address) {
+        Variable result = newVariable(target().wordKind);
+        append(new LeaOp(result, address));
+        return result;
+    }
+
+    @Override
+    public void emitLabel(Label label, boolean align) {
+        append(new LabelOp(label, align));
+    }
+
+    @Override
+    public void emitJump(LabelRef label, LIRDebugInfo info) {
+        append(new JumpOp(label, info));
+    }
+
+    @Override
+    public void emitBranch(CiValue left, CiValue right, Condition cond, boolean unorderedIsTrue, LabelRef label, LIRDebugInfo info) {
+        emitCompare(left, right);
+        switch (left.kind) {
+            case Boolean:
             case Int:
-                visitArithmeticOpInt(x);
-                return;
-        }
-        throw Util.shouldNotReachHere();
-    }
-
-    @Override
-    public void visitShift(Shift x) {
-        // count must always be in rcx
-        CiValue count = makeOperand(x.y());
-        boolean mustLoadCount = !count.isConstant() || x.kind == CiKind.Long;
-        if (mustLoadCount) {
-            // count for long must be in register
-            count = force(x.y(), SHIFT_COUNT_IN);
-        }
-
-        CiValue value = load(x.x());
-        CiValue reg = createResultVariable(x);
-
-        shiftOp(x.opcode, reg, value, count, ILLEGAL);
-    }
-
-    @Override
-    public void visitLogic(Logic x) {
-        trySwap(x);
-
-        LIRItem right = new LIRItem(x.y(), this);
-
-        CiValue left = load(x.x());
-        right.loadNonconstant();
-        CiValue reg = createResultVariable(x);
-
-        logicOp(x.opcode, reg, left, right.result());
-    }
-
-    private void trySwap(Binary x) {
-        // (tw) TODO: Check what this is for?
-    }
-
-    @Override
-    public void visitMaterialize(NormalizeCompare x) {
-        LIRItem left = new LIRItem(x.x(), this);
-        LIRItem right = new LIRItem(x.y(), this);
-        if (!x.kind.isVoid() && x.x().kind.isLong()) {
-            left.setDestroysRegister();
-        }
-        left.loadItem();
-        right.loadItem();
-
-        if (x.kind.isVoid()) {
-            lir.cmp(Condition.TRUE, left.result(), right.result());
-        } else if (x.x().kind.isFloat() || x.x().kind.isDouble()) {
-            CiValue reg = createResultVariable(x);
-            int code = x.opcode;
-            lir.fcmp2int(left.result(), right.result(), reg, code == Bytecodes.FCMPL || code == Bytecodes.DCMPL);
-        } else if (x.x().kind.isLong() || x.x().kind.isWord()) {
-            CiValue reg = createResultVariable(x);
-            lir.lcmp2int(left.result(), right.result(), reg);
-        } else {
-            assert false;
+            case Long:
+            case Object: append(new BranchOp(cond, label, info)); break;
+            case Float:
+            case Double: append(new FloatBranchOp(cond, unorderedIsTrue, label, info)); break;
+            default: throw GraalInternalError.shouldNotReachHere("" + left.kind);
         }
     }
 
     @Override
-    public void visitConvert(Convert x) {
-        CiValue input = load(x.value());
-        CiVariable result = newVariable(x.kind);
-        // arguments of lirConvert
-        GlobalStub globalStub = null;
-        // Checkstyle: off
-        switch (x.opcode) {
-            case Bytecodes.F2I: globalStub = stubFor(GlobalStub.Id.f2i); break;
-            case Bytecodes.F2L: globalStub = stubFor(GlobalStub.Id.f2l); break;
-            case Bytecodes.D2I: globalStub = stubFor(GlobalStub.Id.d2i); break;
-            case Bytecodes.D2L: globalStub = stubFor(GlobalStub.Id.d2l); break;
+    public Variable emitCMove(CiValue left, CiValue right, Condition cond, boolean unorderedIsTrue, CiValue trueValue, CiValue falseValue) {
+        emitCompare(left, right);
+
+        Variable result = newVariable(trueValue.kind);
+        switch (left.kind) {
+            case Boolean:
+            case Int:
+            case Long:
+            case Object: append(new CondMoveOp(result, cond, load(trueValue), loadNonConst(falseValue))); break;
+            case Float:
+            case Double: append(new FloatCondMoveOp(result, cond, unorderedIsTrue, load(trueValue), load(falseValue))); break;
+
         }
-        // Checkstyle: on
-        if (globalStub != null) {
-            // Force result to be rax to match global stubs expectation.
-            CiValue stubResult = x.kind == CiKind.Int ? RAX_I : RAX_L;
-            lir.convert(x.opcode, input, stubResult, globalStub);
-            lir.move(stubResult, result);
-        } else {
-            lir.convert(x.opcode, input, result, globalStub);
+        return result;
+    }
+
+    private void emitCompare(CiValue a, CiValue b) {
+        Variable left = load(a);
+        CiValue right = loadNonConst(b);
+        switch (left.kind) {
+            case Jsr:
+            case Int: append(new CompareOp(ICMP, left, right)); break;
+            case Long: append(new CompareOp(LCMP, left, right)); break;
+            case Object: append(new CompareOp(ACMP, left, right)); break;
+            case Float: append(new CompareOp(FCMP, left, right)); break;
+            case Double: append(new CompareOp(DCMP, left, right)); break;
+            default: throw GraalInternalError.shouldNotReachHere();
         }
-        setResult(x, result);
     }
 
     @Override
-    public void visitMerge(Merge x) {
-        // nothing to do for now
+    public Variable emitNegate(CiValue input) {
+        Variable result = newVariable(input.kind);
+        switch (input.kind) {
+            case Int:    append(new Op1Stack(INEG, result, input)); break;
+            case Long:   append(new Op1Stack(LNEG, result, input)); break;
+            case Float:  append(new Op2Reg(FXOR, result, input, CiConstant.forFloat(Float.intBitsToFloat(0x80000000)))); break;
+            case Double: append(new Op2Reg(DXOR, result, input, CiConstant.forDouble(Double.longBitsToDouble(0x8000000000000000L)))); break;
+            default: throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
     }
 
     @Override
-    public void visitIf(If x) {
-        CiKind kind = x.compare().x().kind;
+    public Variable emitAdd(CiValue a, CiValue b) {
+        Variable result = newVariable(a.kind);
+        switch(a.kind) {
+            case Int:    append(new Op2Stack(IADD, result, a, loadNonConst(b))); break;
+            case Long:   append(new Op2Stack(LADD, result, a, loadNonConst(b))); break;
+            case Float:  append(new Op2Stack(FADD, result, a, loadNonConst(b))); break;
+            case Double: append(new Op2Stack(DADD, result, a, loadNonConst(b))); break;
+            default:     throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+    }
 
-        Condition cond = x.compare().condition();
+    @Override
+    public Variable emitSub(CiValue a, CiValue b) {
+        Variable result = newVariable(a.kind);
+        switch(a.kind) {
+            case Int:    append(new Op2Stack(ISUB, result, a, loadNonConst(b))); break;
+            case Long:   append(new Op2Stack(LSUB, result, a, loadNonConst(b))); break;
+            case Float:  append(new Op2Stack(FSUB, result, a, loadNonConst(b))); break;
+            case Double: append(new Op2Stack(DSUB, result, a, loadNonConst(b))); break;
+            default:     throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+    }
 
-        LIRItem xitem = new LIRItem(x.compare().x(), this);
-        LIRItem yitem = new LIRItem(x.compare().y(), this);
-        LIRItem xin = xitem;
-        LIRItem yin = yitem;
+    @Override
+    public Variable emitMul(CiValue a, CiValue b) {
+        Variable result = newVariable(a.kind);
+        switch(a.kind) {
+            case Int:    append(new Op2Reg(IMUL, result, a, loadNonConst(b))); break;
+            case Long:   append(new Op2Reg(LMUL, result, a, loadNonConst(b))); break;
+            case Float:  append(new Op2Stack(FMUL, result, a, loadNonConst(b))); break;
+            case Double: append(new Op2Stack(DMUL, result, a, loadNonConst(b))); break;
+            default:     throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+    }
 
-        if (kind.isLong()) {
-            // for longs, only conditions "eql", "neq", "lss", "geq" are valid;
-            // mirror for other conditions
-            if (cond == Condition.GT || cond == Condition.LE) {
-                cond = cond.mirror();
-                xin = yitem;
-                yin = xitem;
+    @Override
+    public Variable emitDiv(CiValue a, CiValue b) {
+        switch(a.kind) {
+            case Int:
+                emitMove(a, RAX_I);
+                append(new DivOp(IDIV, RAX_I, RAX_I, load(b), state()));
+                return emitMove(RAX_I);
+            case Long:
+                emitMove(a, RAX_L);
+                append(new DivOp(LDIV, RAX_L, RAX_L, load(b), state()));
+                return emitMove(RAX_L);
+            case Float: {
+                Variable result = newVariable(a.kind);
+                append(new Op2Stack(FDIV, result, a, loadNonConst(b)));
+                return result;
             }
-            xin.setDestroysRegister();
-        }
-        xin.loadItem();
-        if (kind.isLong() && yin.result().isConstant() && yin.instruction.asConstant().asLong() == 0 && (cond == Condition.EQ || cond == Condition.NE)) {
-            // dont load item
-        } else if (kind.isLong() || kind.isFloat() || kind.isDouble()) {
-            // longs cannot handle constants at right side
-            yin.loadItem();
-        }
-
-        setNoResult(x);
-
-        CiValue left = xin.result();
-        CiValue right = yin.result();
-        lir.cmp(cond, left, right);
-        if (x.compare().x().kind.isFloat() || x.compare().x().kind.isDouble()) {
-            Instruction unorderedSucc = x.falseSuccessor();
-            if (x.compare().unorderedIsTrue()) {
-                unorderedSucc = x.trueSuccessor();
+            case Double: {
+                Variable result = newVariable(a.kind);
+                append(new Op2Stack(DDIV, result, a, loadNonConst(b)));
+                return result;
             }
-            lir.branch(cond, right.kind, getLIRBlock(x.trueSuccessor()), getLIRBlock(unorderedSucc));
-        } else {
-            lir.branch(cond, right.kind, getLIRBlock(x.trueSuccessor()));
+            default:
+                throw GraalInternalError.shouldNotReachHere();
         }
-        assert x.defaultSuccessor() == x.falseSuccessor() : "wrong destination above";
-        lir.jump(getLIRBlock(x.defaultSuccessor()));
     }
 
     @Override
-    public void visitExceptionDispatch(ExceptionDispatch x) {
-        // TODO ls: this needs some more work...
-
-        RiType riType = x.catchType();
-        assert riType.isResolved();
-
-        XirArgument obj = toXirArgument(x.exception());
-        XirArgument clazz = toXirArgument(riType.getEncoding(Representation.ObjectHub));
-        XirSnippet snippet = xir.genInstanceOf(site(x), obj, clazz, riType);
-        CiValue result = emitXir(snippet, x, stateFor(x), null, true);
-
-        lir.cmp(Condition.EQ, result, CiConstant.TRUE);
-        lir.branch(Condition.EQ, CiKind.Boolean, getLIRBlock(x.catchSuccessor()));
-
-        lir.jump(getLIRBlock(x.otherSuccessor()));
+    public Variable emitRem(CiValue a, CiValue b) {
+        switch(a.kind) {
+            case Int:
+                emitMove(a, RAX_I);
+                append(new DivOp(IREM, RDX_I, RAX_I, load(b), state()));
+                return emitMove(RDX_I);
+            case Long:
+                emitMove(a, RAX_L);
+                append(new DivOp(LREM, RDX_L, RAX_L, load(b), state()));
+                return emitMove(RDX_L);
+            case Float:
+                return emitCallToRuntime(CiRuntimeCall.ArithmeticFrem, false, a, b);
+            case Double:
+                return emitCallToRuntime(CiRuntimeCall.ArithmeticDrem, false, a, b);
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
     }
 
     @Override
-    public void visitLoopBegin(LoopBegin x) {
-        visitMerge(x);
+    public Variable emitUDiv(CiValue a, CiValue b) {
+        switch(a.kind) {
+            case Int:
+                emitMove(a, RAX_I);
+                append(new DivOp(IUDIV, RAX_I, RAX_I, load(b), state()));
+                return emitMove(RAX_I);
+            case Long:
+                emitMove(a, RAX_L);
+                append(new DivOp(LUDIV, RAX_L, RAX_L, load(b), state()));
+                return emitMove(RAX_L);
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
     }
 
     @Override
-    public void visitLoopEnd(LoopEnd x) {
-        setNoResult(x);
+    public Variable emitURem(CiValue a, CiValue b) {
+        switch(a.kind) {
+            case Int:
+                emitMove(a, RAX_I);
+                append(new DivOp(IUREM, RDX_I, RAX_I, load(b), state()));
+                return emitMove(RDX_I);
+            case Long:
+                emitMove(a, RAX_L);
+                append(new DivOp(LUREM, RDX_L, RAX_L, load(b), state()));
+                return emitMove(RDX_L);
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
+    }
 
-        // emit phi-instruction moves after safepoint since this simplifies
-        // describing the state at the safepoint.
 
-        moveToPhi();
-        lir.jump(getLIRBlock(x.loopBegin()));
+    @Override
+    public Variable emitAnd(CiValue a, CiValue b) {
+        Variable result = newVariable(a.kind);
+        switch(a.kind) {
+            case Int:    append(new Op2Stack(IAND, result, a, loadNonConst(b))); break;
+            case Long:   append(new Op2Stack(LAND, result, a, loadNonConst(b))); break;
+            default:     throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
     }
 
     @Override
-    public void visitValueAnchor(ValueAnchor valueAnchor) {
-        // nothing to do for ValueAnchors
+    public Variable emitOr(CiValue a, CiValue b) {
+        Variable result = newVariable(a.kind);
+        switch(a.kind) {
+            case Int:    append(new Op2Stack(IOR, result, a, loadNonConst(b))); break;
+            case Long:   append(new Op2Stack(LOR, result, a, loadNonConst(b))); break;
+            default:     throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
     }
 
+    @Override
+    public Variable emitXor(CiValue a, CiValue b) {
+        Variable result = newVariable(a.kind);
+        switch(a.kind) {
+            case Int:    append(new Op2Stack(IXOR, result, a, loadNonConst(b))); break;
+            case Long:   append(new Op2Stack(LXOR, result, a, loadNonConst(b))); break;
+            default:     throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+    }
+
+
+    @Override
+    public Variable emitShl(CiValue a, CiValue b) {
+        Variable result = newVariable(a.kind);
+        switch (a.kind) {
+            case Int:    append(new ShiftOp(ISHL, result, a, loadShiftCount(b))); break;
+            case Long:   append(new ShiftOp(LSHL, result, a, loadShiftCount(b))); break;
+            default: GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+    }
+
+    @Override
+    public Variable emitShr(CiValue a, CiValue b) {
+        Variable result = newVariable(a.kind);
+        switch (a.kind) {
+            case Int:    append(new ShiftOp(ISHR, result, a, loadShiftCount(b))); break;
+            case Long:   append(new ShiftOp(LSHR, result, a, loadShiftCount(b))); break;
+            default: GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+    }
+
+    @Override
+    public Variable emitUShr(CiValue a, CiValue b) {
+        Variable result = newVariable(a.kind);
+        switch (a.kind) {
+            case Int:    append(new ShiftOp(IUSHR, result, a, loadShiftCount(b))); break;
+            case Long:   append(new ShiftOp(LUSHR, result, a, loadShiftCount(b))); break;
+            default: GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+    }
+
+    private CiValue loadShiftCount(CiValue value) {
+        if (isConstant(value)) {
+            return value;
+        }
+        // Non-constant shift count must be in RCX
+        emitMove(value, RCX_I);
+        return RCX_I;
+    }
+
+
+    @Override
+    public Variable emitConvert(ConvertNode.Op opcode, CiValue inputVal) {
+        Variable input = load(inputVal);
+        Variable result = newVariable(opcode.to);
+        switch (opcode) {
+            case I2L: append(new Op1Reg(I2L, result, input)); break;
+            case L2I: append(new Op1Stack(L2I, result, input)); break;
+            case I2B: append(new Op1Stack(I2B, result, input)); break;
+            case I2C: append(new Op1Stack(I2C, result, input)); break;
+            case I2S: append(new Op1Stack(I2S, result, input)); break;
+            case F2D: append(new Op1Reg(F2D, result, input)); break;
+            case D2F: append(new Op1Reg(D2F, result, input)); break;
+            case I2F: append(new Op1Reg(I2F, result, input)); break;
+            case I2D: append(new Op1Reg(I2D, result, input)); break;
+            case F2I: append(new Op1Reg(F2I, result, input)); break;
+            case D2I: append(new Op1Reg(D2I, result, input)); break;
+            case L2F: append(new Op1Reg(L2F, result, input)); break;
+            case L2D: append(new Op1Reg(L2D, result, input)); break;
+            case F2L: append(new Op1Reg(F2L, result, input)); break;
+            case D2L: append(new Op1Reg(D2L, result, input)); break;
+            case MOV_I2F: append(new Op1Reg(MOV_I2F, result, input)); break;
+            case MOV_L2D: append(new Op1Reg(MOV_L2D, result, input)); break;
+            case MOV_F2I: append(new Op1Reg(MOV_F2I, result, input)); break;
+            case MOV_D2L: append(new Op1Reg(MOV_D2L, result, input)); break;
+            default: throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+    }
+
+
+    @Override
+    public void emitDeoptimizeOn(Condition cond, DeoptAction action, Object deoptInfo) {
+        LIRDebugInfo info = state();
+        LabelRef stubEntry = createDeoptStub(action, info, deoptInfo);
+        if (cond != null) {
+            append(new BranchOp(cond, stubEntry, info));
+        } else {
+            append(new JumpOp(stubEntry, info));
+        }
+    }
+
+    @Override
+    public void emitMembar(int barriers) {
+        int necessaryBarriers = target.arch.requiredBarriers(barriers);
+        if (target.isMP && necessaryBarriers != 0) {
+            append(new MembarOp(necessaryBarriers));
+        }
+    }
+
+    @Override
+    protected void emitCall(Object targetMethod, CiValue result, List<CiValue> arguments, CiValue targetAddress, LIRDebugInfo info, Map<XirMark, Mark> marks) {
+        if (isConstant(targetAddress)) {
+            assert asConstant(targetAddress).isDefaultValue() : "destination address should be zero";
+            append(new DirectCallOp(targetMethod, result, arguments.toArray(new CiValue[arguments.size()]), info, marks));
+        } else {
+            append(new IndirectCallOp(targetMethod, result, arguments.toArray(new CiValue[arguments.size()]), targetAddress, info, marks));
+        }
+    }
+
+    @Override
+    protected void emitReturn(CiValue input) {
+        append(new ReturnOp(input));
+    }
+
+    @Override
+    protected void emitXir(XirSnippet snippet, CiValue[] operands, CiValue outputOperand, CiValue[] inputs, CiValue[] temps, int[] inputOperandIndices, int[] tempOperandIndices, int outputOperandIndex,
+                    LIRDebugInfo info, LIRDebugInfo infoAfter, LabelRef trueSuccessor, LabelRef falseSuccessor) {
+        append(new AMD64XirOp(snippet, operands, outputOperand, inputs, temps, inputOperandIndices, tempOperandIndices, outputOperandIndex, info, infoAfter, trueSuccessor, falseSuccessor));
+    }
+
+    @Override
+    protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, CiValue index) {
+        // Making a copy of the switch value is necessary because jump table destroys the input value
+        Variable tmp = emitMove(index);
+        append(new TableSwitchOp(lowKey, defaultTarget, targets, tmp, newVariable(target.wordKind)));
+    }
+
+    @Override
+    protected LabelRef createDeoptStub(DeoptAction action, LIRDebugInfo info, Object deoptInfo) {
+        assert info.topFrame.bci >= 0 : "invalid bci for deopt framestate";
+        AMD64DeoptimizationStub stub = new AMD64DeoptimizationStub(action, info, deoptInfo);
+        lir.deoptimizationStubs.add(stub);
+        return LabelRef.forLabel(stub.label);
+    }
+
+    @Override
+    protected void emitNullCheckGuard(NullCheckNode node) {
+        assert !node.expectedNull;
+        Variable value = load(operand(node.object()));
+        LIRDebugInfo info = state();
+        append(new NullCheckOp(value, info));
+    }
+
+    // TODO (cwimmer) The CompareAndSwapNode in its current form needs to be lowered to several Nodes before code generation to separate three parts:
+    // * The write barriers (and possibly read barriers) when accessing an object field
+    // * The distinction of returning a boolean value (semantic similar to a BooleanNode to be used as a condition?) or the old value being read
+    // * The actual compare-and-swap
+    @Override
+    public void visitCompareAndSwap(CompareAndSwapNode node) {
+        CiKind kind = node.newValue().kind();
+        assert kind == node.expected().kind();
+
+        CiValue expected = loadNonConst(operand(node.expected()));
+        Variable newValue = load(operand(node.newValue()));
+
+        CiAddress address;
+        CiValue index = operand(node.offset());
+        if (isConstant(index) && NumUtil.isInt(asConstant(index).asLong())) {
+            address = new CiAddress(kind, load(operand(node.object())), (int) asConstant(index).asLong());
+        } else {
+            address = new CiAddress(kind, load(operand(node.object())), load(index), CiAddress.Scale.Times1, 0);
+        }
+
+        if (kind == CiKind.Object) {
+            address = new CiAddress(kind, emitLea(address));
+            preGCWriteBarrier(address.base, false, null);
+        }
+
+        CiRegisterValue rax = AMD64.rax.asValue(kind);
+        emitMove(expected, rax);
+        append(new CompareAndSwapOp(rax, address, rax, newValue));
+
+        Variable result = newVariable(node.kind());
+        if (node.directResult()) {
+            emitMove(rax, result);
+        } else {
+            append(new CondMoveOp(result, Condition.EQ, load(CiConstant.TRUE), CiConstant.FALSE));
+        }
+        setResult(node, result);
+
+        if (kind == CiKind.Object) {
+            postGCWriteBarrier(address.base, newValue);
+        }
+    }
 }

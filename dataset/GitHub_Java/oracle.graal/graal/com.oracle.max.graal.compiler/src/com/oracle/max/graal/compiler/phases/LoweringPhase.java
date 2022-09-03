@@ -22,78 +22,123 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import java.util.*;
-
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.schedule.*;
+import com.oracle.max.graal.cri.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.lir.cfg.*;
+import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.nodes.spi.*;
 
 public class LoweringPhase extends Phase {
+
+    private final GraalRuntime runtime;
+
+    public LoweringPhase(GraalRuntime runtime) {
+        this.runtime = runtime;
+    }
+
     @Override
-    protected void run(Graph graph) {
-        NodeMap<Node> javaBlockNodes = graph.createNodeMap();
-        NodeBitMap nodeBitMap = graph.createNodeBitMap();
-        for (Node n : graph.getNodes()) {
-            if (n instanceof FixedNode) {
-                LoweringOp op = n.lookup(LoweringOp.class);
-                if (op != null) {
-                    Node javaBlockNode = getJavaBlockNode(javaBlockNodes, n, nodeBitMap);
-                }
+    protected void run(final StructuredGraph graph) {
+        ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, false, true, true);
+
+        NodeBitMap processed = graph.createNodeBitMap();
+        NodeBitMap activeGuards = graph.createNodeBitMap();
+        processBlock(cfg.getStartBlock(), activeGuards, processed, null);
+
+        processed.negate();
+        final CiLoweringTool loweringTool = new CiLoweringTool() {
+
+            @Override
+            public Node getGuardAnchor() {
+                throw new UnsupportedOperationException();
             }
 
+            @Override
+            public GraalRuntime getRuntime() {
+                return runtime;
+            }
+
+            @Override
+            public Node createGuard(Node condition) {
+                // TODO (thomaswue): Docuemnt why this must not be called on floating nodes.
+                throw new UnsupportedOperationException();
+            }
+        };
+        for (Node node : processed) {
+            if (node instanceof Lowerable) {
+                assert !(node instanceof FixedNode) || node.predecessor() == null;
+                ((Lowerable) node).lower(loweringTool);
+            }
         }
     }
 
-    private Node getJavaBlockNode(NodeMap<Node> javaBlockNodes, Node n, NodeBitMap nodeBitMap) {
-        assert n instanceof FixedNode;
-        if (javaBlockNodes.get(n) == null) {
+    private void processBlock(Block block, NodeBitMap activeGuards, NodeBitMap processed, FixedNode parentAnchor) {
 
-            Node truePred = null;
-            int count = 0;
-            for (Node pred : n.predecessors()) {
-                if (pred instanceof FixedNode) {
-                    truePred = pred;
-                    count++;
-                }
+        FixedNode anchor = parentAnchor;
+        if (anchor == null) {
+            anchor = block.getBeginNode();
+        }
+        process(block, activeGuards, processed, anchor);
+
+        // Process always reached block first.
+        Block alwaysReachedBlock = block.getPostdominator();
+        if (alwaysReachedBlock != null && alwaysReachedBlock.getDominator() == block) {
+            assert alwaysReachedBlock.getDominator() == block;
+            processBlock(alwaysReachedBlock, activeGuards, processed, anchor);
+        }
+
+        // Now go for the other dominators.
+        for (Block dominated : block.getDominated()) {
+            if (dominated != alwaysReachedBlock) {
+                assert dominated.getDominator() == block;
+                processBlock(dominated, activeGuards, processed, null);
+            }
+        }
+
+        if (parentAnchor == null) {
+            for (GuardNode guard : anchor.usages().filter(GuardNode.class)) {
+                activeGuards.clear(guard);
+            }
+        }
+    }
+
+    private void process(final Block b, final NodeBitMap activeGuards, NodeBitMap processed, final Node anchor) {
+
+        final CiLoweringTool loweringTool = new CiLoweringTool() {
+
+            @Override
+            public Node getGuardAnchor() {
+                return anchor;
             }
 
-            assert count > 0;
-            if (count == 1) {
-                if (Schedule.trueSuccessorCount(truePred) == 1) {
-                    javaBlockNodes.set(n, getJavaBlockNode(javaBlockNodes, truePred, nodeBitMap));
-                } else {
-                    // Single predecessor is a split => we are our own block node.
-                    javaBlockNodes.set(n, n);
-                }
-            } else {
-                Node dominator = null;
-                for (Node pred : n.predecessors()) {
-                    if (pred instanceof FixedNode) {
-                       dominator = getCommonDominator(dominator, pred, nodeBitMap);
+            @Override
+            public GraalRuntime getRuntime() {
+                return runtime;
+            }
+
+            @Override
+            public Node createGuard(Node condition) {
+                FixedNode guardAnchor = (FixedNode) getGuardAnchor();
+                if (GraalOptions.OptEliminateGuards) {
+                    for (Node usage : condition.usages()) {
+                        if (activeGuards.isMarked(usage)) {
+                            return usage;
+                        }
                     }
                 }
+                GuardNode newGuard = guardAnchor.graph().unique(new GuardNode((BooleanNode) condition, guardAnchor));
+                activeGuards.grow();
+                activeGuards.mark(newGuard);
+                return newGuard;
+            }
+        };
+
+        // Lower the instructions of this block.
+        for (Node node : b.getNodes()) {
+            processed.mark(node);
+            if (node instanceof Lowerable) {
+                ((Lowerable) node).lower(loweringTool);
             }
         }
-
-        assert Schedule.truePredecessorCount(javaBlockNodes.get(n)) == 1;
-        return javaBlockNodes.get(n);
-    }
-
-    private Node getCommonDominator(Node a, Node b, NodeBitMap map) {
-        if (a == null) {
-            return b;
-        }
-
-        if (b == null) {
-            return a;
-        }
-
-
-        map.clearAll();
-    }
-
-    public interface LoweringOp extends Op {
-        Node lower(Node node);
     }
 }

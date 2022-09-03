@@ -81,7 +81,11 @@ public final class HotSpotTypeResolvedImpl extends HotSpotType implements HotSpo
 
     @Override
     public RiResolvedType uniqueConcreteSubtype() {
-        return (RiResolvedType) compiler.getVMEntries().RiType_uniqueConcreteSubtype(this);
+        if (isArrayClass()) {
+            return Modifier.isFinal(componentType().accessFlags()) ? this : null;
+        } else {
+            return (RiResolvedType) compiler.getVMEntries().RiType_uniqueConcreteSubtype(this);
+        }
     }
 
     @Override
@@ -91,6 +95,15 @@ public final class HotSpotTypeResolvedImpl extends HotSpotType implements HotSpo
             superTypeSet = true;
         }
         return superType;
+    }
+
+    @Override
+    public RiResolvedType leastCommonAncestor(RiResolvedType otherType) {
+        if (otherType instanceof HotSpotTypePrimitive) {
+            return null;
+        } else {
+            return (RiResolvedType) compiler.getVMEntries().RiType_leastCommonAncestor(this, (HotSpotTypeResolved) otherType);
+        }
     }
 
     @Override
@@ -209,7 +222,7 @@ public final class HotSpotTypeResolvedImpl extends HotSpotType implements HotSpo
 
         long id = offset + ((long) flags << 32);
 
-        // (tw) Must cache the fields, because the local load elimination only works if the objects from two field lookups are equal.
+        // (thomaswue) Must cache the fields, because the local load elimination only works if the objects from two field lookups are equal.
         if (fieldCache == null) {
             fieldCache = new HashMap<>(8);
         } else {
@@ -248,5 +261,10 @@ public final class HotSpotTypeResolvedImpl extends HotSpotType implements HotSpo
     @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
         return toJava().getAnnotation(annotationClass);
+    }
+
+    @Override
+    public RiResolvedType resolve(RiResolvedType accessingClass) {
+        return this;
     }
 }

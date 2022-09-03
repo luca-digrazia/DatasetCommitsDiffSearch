@@ -24,13 +24,12 @@ package com.oracle.max.graal.compiler.schedule;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.cfg.*;
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.graph.Node.Verbosity;
+import com.oracle.max.graal.lir.cfg.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.virtual.*;
@@ -53,6 +52,21 @@ public class SchedulePhase extends Phase {
 
         assignBlockToNodes(graph);
         sortNodesWithinBlocks(graph);
+    }
+
+    public void scheduleGraph() {
+        for (Block block : cfg.getBlocks()) {
+            List<Node> nodeList = nodesFor.get(block);
+            ScheduledNode last = null;
+            for (Node node : nodeList) {
+                if (!(node instanceof FrameState)) {
+                    if (last != null) {
+                        last.setScheduledNext((ScheduledNode) node);
+                    }
+                    last = (ScheduledNode) node;
+                }
+            }
+        }
     }
 
     public ControlFlowGraph getCFG() {
@@ -102,6 +116,7 @@ public class SchedulePhase extends Phase {
         } else if (GraalOptions.ScheduleOutOfLoops && !(n instanceof VirtualObjectFieldNode) && !(n instanceof VirtualObjectNode)) {
             Block earliestBlock = earliestBlock(n);
             block = scheduleOutOfLoops(n, latestBlock, earliestBlock);
+            assert earliestBlock.dominates(block) : "Graph can not be scheduled : inconsistent for " + n;
         } else {
             block = latestBlock;
         }
@@ -204,10 +219,11 @@ public class SchedulePhase extends Phase {
                         TTY.println(merge.toString());
                         TTY.println(phi.toString());
                         TTY.println(merge.cfgPredecessors().toString());
+                        TTY.println(mergeBlock.getPredecessors().toString());
                         TTY.println(phi.inputs().toString());
                         TTY.println("value count: " + phi.valueCount());
                     }
-                closure.apply(mergeBlock.getPredecessors().get(i));
+                    closure.apply(mergeBlock.getPredecessors().get(i));
                 }
             }
         } else if (usage instanceof FrameState && ((FrameState) usage).block() != null) {
@@ -270,13 +286,11 @@ public class SchedulePhase extends Phase {
                 }
             }
             if (canNotMove) {
-                // (cwi) this was the assertion commented out below.  However, it is failing frequently when the
-                // scheduler is used for debug printing in early compiler phases. This was annoying during debugging
-                // when an excpetion breakpoint is set for assertion errors, so I changed it to a bailout.
                 if (b.getEndNode() instanceof ControlSplitNode) {
-                    throw new CiBailout("");
+                    throw new GraalInternalError("Schedule is not possible : needs to move a node after the last node of the block which can not be move").
+                    addContext(lastSorted).
+                    addContext(b.getEndNode());
                 }
-                //assert !(b.lastNode() instanceof ControlSplitNode);
 
                 //b.setLastNode(lastSorted);
             } else {
@@ -290,11 +304,6 @@ public class SchedulePhase extends Phase {
     private void addToSorting(Block b, Node i, List<Node> sortedInstructions, NodeBitMap map) {
         if (i == null || map.isMarked(i) || cfg.getNodeToBlock().get(i) != b || i instanceof PhiNode || i instanceof LocalNode) {
             return;
-        }
-
-        if (i instanceof WriteNode) {
-            // TODO(tw): Make sure every ReadNode that is connected to the same memory state is executed before every write node.
-            // WriteNode wn = (WriteNode) i;
         }
 
         FrameState state = null;

@@ -22,21 +22,31 @@
  */
 package com.oracle.max.graal.nodes.java;
 
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
-import com.sun.cri.bytecode.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
 
 /**
  * The {@code CheckCastNode} represents a {@link Bytecodes#CHECKCAST}.
+ *
+ * The {@link #targetClass()} of a CheckCastNode can be null for array store checks!
  */
-public final class CheckCastNode extends TypeCheckNode implements Canonicalizable, LIRLowerable {
+public final class CheckCastNode extends TypeCheckNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType {
 
-    @Input private final AnchorNode anchor;
+    @Input protected final FixedNode anchor;
+    @Data  protected final boolean emitCode;
+
+    public FixedNode anchor() {
+        return anchor;
+    }
+
+    public boolean emitCode() {
+        return emitCode;
+    }
 
     /**
      * Creates a new CheckCast instruction.
@@ -45,9 +55,22 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
      * @param targetClass the class being cast to
      * @param object the instruction producing the object
      */
-    public CheckCastNode(AnchorNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object) {
-        super(targetClassInstruction, targetClass, object, targetClass == null ? StampFactory.forKind(CiKind.Object) : StampFactory.declared(targetClass));
+    public CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object) {
+        this(anchor, targetClassInstruction, targetClass, object, EMPTY_HINTS, false);
+    }
+
+    public CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, boolean emitCode) {
+        this(anchor, targetClassInstruction, targetClass, object, EMPTY_HINTS, false, emitCode);
+    }
+
+    public CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact) {
+        this(anchor, targetClassInstruction, targetClass, object, hints, hintsExact, true);
+    }
+
+    private CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact, boolean emitCode) {
+        super(targetClassInstruction, targetClass, object, hints, hintsExact, targetClass == null ? StampFactory.forKind(CiKind.Object) : StampFactory.declared(targetClass));
         this.anchor = anchor;
+        this.emitCode = emitCode;
     }
 
     @Override
@@ -56,7 +79,7 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         RiResolvedType objectDeclaredType = object().declaredType();
         RiResolvedType targetClass = targetClass();
         if (objectDeclaredType != null && targetClass != null && objectDeclaredType.isSubtypeOf(targetClass)) {
@@ -71,14 +94,21 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
                 return object();
             }
         }
+
+        if (tool.assumptions() != null && hints() != null && targetClass() != null) {
+            if (!hintsExact() && hints().length == 1 && hints()[0] == targetClass().uniqueConcreteSubtype()) {
+                tool.assumptions().recordConcreteSubtype(targetClass(), hints()[0]);
+                return graph().unique(new CheckCastNode(anchor, targetClassInstruction(), targetClass(), object(), hints(), true));
+            }
+        }
         return this;
     }
 
-    // TODO(tw): Find a better way to handle anchors.
+    // TODO (thomaswue): Find a better way to handle anchors.
     private void freeAnchor() {
-        ValueAnchorNode anchor = usages().filter(ValueAnchorNode.class).first();
-        if (anchor != null) {
-            anchor.replaceFirstInput(this, null);
+        ValueAnchorNode anchorUsage = usages().filter(ValueAnchorNode.class).first();
+        if (anchorUsage != null) {
+            anchorUsage.replaceFirstInput(this, null);
         }
     }
 

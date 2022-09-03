@@ -30,7 +30,7 @@ public final class X86InstructionDecoder {
     private int currentEndOfInstruction;
     private int currentDisplacementPosition;
 
-    private class Prefix {
+    private static class Prefix {
 
         // segment overrides
         public static final int CSSegment = 0x2e;
@@ -430,7 +430,7 @@ public final class X86InstructionDecoder {
             }
         }
 
-        assert hasDisp32 : "(tw) not sure if this holds: instruction has no disp32 field";
+        assert hasDisp32 : "(thomaswue) not sure if this holds: instruction has no disp32 field";
 
         // parse the output of emitOperand
         int op2 = 0xFF & code[ip++];
@@ -499,9 +499,9 @@ public final class X86InstructionDecoder {
         assert code[pos + 2] == 0;
         assert code[pos + 3] == 0;
 
-        code[pos++] = (byte) (offset & 0xFF);
-        code[pos++] = (byte) ((offset >> 8) & 0xFF);
-        code[pos++] = (byte) ((offset >> 16) & 0xFF);
-        code[pos++] = (byte) ((offset >> 24) & 0xFF);
+        code[pos] = (byte) (offset & 0xFF);
+        code[pos + 1] = (byte) ((offset >> 8) & 0xFF);
+        code[pos + 2] = (byte) ((offset >> 16) & 0xFF);
+        code[pos + 3] = (byte) ((offset >> 24) & 0xFF);
     }
 }

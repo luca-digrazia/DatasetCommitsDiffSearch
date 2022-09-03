@@ -24,8 +24,8 @@ package com.oracle.max.graal.nodes.type;
 
 import java.util.*;
 
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 
 public class StampFactory {
@@ -81,6 +81,11 @@ public class StampFactory {
         }
 
         @Override
+        public int hashCode() {
+            return kind.hashCode();
+        }
+
+        @Override
         public String toString() {
             return String.format("%c%s %s %s", kind().typeChar, nonNull ? "!" : "", declaredType == null ? "-" : declaredType.name(), exactType == null ? "-" : exactType.name());
         }
@@ -96,7 +101,7 @@ public class StampFactory {
                 return false;
             } else if (other.nonNull() || nonNull()) {
                 // One of the two values cannot be null.
-                return !other.declaredType().isSubtypeOf(declaredType()) && !declaredType().isSubtypeOf(other.declaredType());
+                return !other.declaredType().isInterface() && !declaredType().isInterface() && !other.declaredType().isSubtypeOf(declaredType()) && !declaredType().isSubtypeOf(other.declaredType());
             } else {
                 // Both values may be null.
                 return false;
@@ -124,7 +129,7 @@ public class StampFactory {
     }
 
     public static Stamp exactNonNull(final RiResolvedType type) {
-        // (cwi) type can be null for certain Maxine-internal objects such as the static hub. Is this a problem here?
+        // (cwimmer) type can be null for certain Maxine-internal objects such as the static hub. Is this a problem here?
         assert type == null || type.kind(false) == CiKind.Object;
         return new BasicValueStamp(CiKind.Object, true, type, type);
     }
@@ -168,10 +173,12 @@ public class StampFactory {
             RiResolvedType exactType = first.exactType();
             while (iterator.hasNext()) {
                 Stamp current = iterator.next().stamp();
-                assert current.kind() == first.kind() : values + " first=" + first + " current=" + current;
+                assert current.kind() == first.kind() : values + " first=" + first + " current=" + current + " first kind=" + first.kind() + " current kind=" + current.kind();
                 nonNull &= current.nonNull();
                 declaredType = orTypes(declaredType, current.declaredType());
-                exactType = orTypes(exactType, current.exactType());
+                if (exactType != current.exactType()) {
+                    exactType = null;
+                }
             }
 
             if (nonNull != first.nonNull() || declaredType != first.declaredType() || exactType != first.exactType()) {

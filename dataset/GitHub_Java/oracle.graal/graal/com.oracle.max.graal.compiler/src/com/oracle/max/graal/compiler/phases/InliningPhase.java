@@ -22,264 +22,414 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import java.lang.reflect.*;
 import java.util.*;
 
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.graph.*;
-import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.value.*;
+import com.oracle.max.graal.compiler.phases.PhasePlan.PhasePosition;
+import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.compiler.util.InliningUtil.InlineInfo;
+import com.oracle.max.graal.compiler.util.InliningUtil.InliningCallback;
+import com.oracle.max.graal.cri.*;
+import com.oracle.max.graal.debug.*;
+import com.oracle.max.graal.debug.internal.*;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
+import com.oracle.max.graal.nodes.*;
 
 
-public class InliningPhase extends Phase {
+public class InliningPhase extends Phase implements InliningCallback {
+    /*
+     * - Detect method which only call another method with some parameters set to constants: void foo(a) -> void foo(a, b) -> void foo(a, b, c) ...
+     *   These should not be taken into account when determining inlining depth.
+     * - honor the result of overrideInliningDecision(0, caller, invoke.bci, method, true);
+     */
 
-    private final C1XCompilation compilation;
-    private final IR ir;
+    private final CiTarget target;
+    private final GraalRuntime runtime;
 
-    private final Queue<Invoke> invokes = new ArrayDeque<Invoke>();
-    private final Queue<RiMethod> methods = new ArrayDeque<RiMethod>();
-    private int inliningSize;
+    private final Collection<? extends Invoke> hints;
 
-    public InliningPhase(C1XCompilation compilation, IR ir) {
-        this.compilation = compilation;
-        this.ir = ir;
+    private final PriorityQueue<InlineInfo> inlineCandidates = new PriorityQueue<>();
+    private CiAssumptions assumptions;
+
+    private final PhasePlan plan;
+    private final WeightComputationPolicy weightComputationPolicy;
+    private final InliningPolicy inliningPolicy;
+
+    // Metrics
+    private static final DebugMetric metricInliningPerformed = Debug.metric("InliningPerformed");
+    private static final DebugMetric metricInliningConsidered = Debug.metric("InliningConsidered");
+    private static final DebugMetric metricInliningStoppedByMaxDesiredSize = Debug.metric("InliningStoppedByMaxDesiredSize");
+
+    public InliningPhase(CiTarget target, GraalRuntime runtime, Collection<? extends Invoke> hints, CiAssumptions assumptions, PhasePlan plan) {
+        this.target = target;
+        this.runtime = runtime;
+        this.hints = hints;
+        this.assumptions = assumptions;
+        this.plan = plan;
+        this.weightComputationPolicy = createWeightComputationPolicy();
+        this.inliningPolicy = createInliningPolicy();
     }
 
-    private void addToQueue(Invoke invoke, RiMethod method) {
-        invokes.add(invoke);
-        methods.add(method);
-        inliningSize += method.code().length;
+    @SuppressWarnings("unchecked")
+    @Override
+    protected void run(StructuredGraph graph) {
+        graph.createNodeMap();
+
+        if (hints != null) {
+            scanInvokes((Iterable<? extends Node>) Util.uncheckedCast(this.hints), -1, graph);
+        } else {
+            scanInvokes(graph.getNodes(InvokeNode.class), 0, graph);
+            scanInvokes(graph.getNodes(InvokeWithExceptionNode.class), 0, graph);
+        }
+
+        while (!inlineCandidates.isEmpty() && graph.getNodeCount() < GraalOptions.MaximumDesiredSize) {
+            InlineInfo info = inlineCandidates.remove();
+            if (info.invoke.node().isAlive() && inliningPolicy.isWorthInlining(graph, info)) {
+                Iterable<Node> newNodes = null;
+                try {
+                    info.inline(graph, runtime, this);
+                    Debug.dump(graph, "after %s", info);
+                    // get the new nodes here, the canonicalizer phase will reset the mark
+                    newNodes = graph.getNewNodes();
+                    if (GraalOptions.OptCanonicalizer) {
+                        new CanonicalizerPhase(target, runtime, true, assumptions).apply(graph);
+                    }
+                    if (GraalOptions.Intrinsify) {
+                        new IntrinsificationPhase(runtime).apply(graph);
+                    }
+                    metricInliningPerformed.increment();
+                } catch (CiBailout bailout) {
+                    // TODO determine if we should really bail out of the whole compilation.
+                    throw bailout;
+                } catch (AssertionError e) {
+                    throw new GraalInternalError(e).addContext(info.toString());
+                } catch (RuntimeException e) {
+                    throw new GraalInternalError(e).addContext(info.toString());
+                } catch (GraalInternalError e) {
+                    throw e.addContext(info.toString());
+                }
+
+                if (newNodes != null && info.level < GraalOptions.MaximumInlineLevel) {
+                    scanInvokes(newNodes, info.level + 1, graph);
+                }
+            }
+        }
+
+        if (GraalOptions.Debug && graph.getNodeCount() >= GraalOptions.MaximumDesiredSize) {
+            Debug.log("inlining cut off by MaximumDesiredSize");
+            metricInliningStoppedByMaxDesiredSize.increment();
+        }
+    }
+
+    private void scanInvokes(Iterable<? extends Node> newNodes, int level, StructuredGraph graph) {
+        graph.mark();
+        for (Node node : newNodes) {
+            if (node != null) {
+                if (node instanceof Invoke) {
+                    Invoke invoke = (Invoke) node;
+                    scanInvoke(invoke, level);
+                }
+                for (Node usage : node.usages().filterInterface(Invoke.class).snapshot()) {
+                    scanInvoke((Invoke) usage, level);
+                }
+            }
+        }
+    }
+
+    private void scanInvoke(Invoke invoke, int level) {
+        InlineInfo info = InliningUtil.getInlineInfo(invoke, level >= 0 ? level : computeInliningLevel(invoke), runtime, assumptions, this);
+        if (info != null) {
+            assert level == -1 || computeInliningLevel(invoke) == level : "outer FramesStates must match inlining level";
+            metricInliningConsidered.increment();
+            inlineCandidates.add(info);
+        }
+    }
+
+    public static final Map<RiMethod, Integer> parsedMethods = new HashMap<>();
+
+    @Override
+    public StructuredGraph buildGraph(RiResolvedMethod method) {
+        StructuredGraph newGraph = new StructuredGraph(method);
+
+        if (plan != null) {
+            plan.runPhases(PhasePosition.AFTER_PARSING, newGraph);
+        }
+        assert newGraph.start().next() != null : "graph needs to be populated during PhasePosition.AFTER_PARSING";
+
+        if (GraalOptions.ProbabilityAnalysis) {
+            new DeadCodeEliminationPhase().apply(newGraph);
+            new ComputeProbabilityPhase().apply(newGraph);
+        }
+        if (GraalOptions.OptCanonicalizer) {
+            new CanonicalizerPhase(target, runtime, assumptions).apply(newGraph);
+        }
+        return newGraph;
     }
 
     @Override
-    protected void run(Graph graph) {
-        inliningSize = compilation.method.code().length;
-        int iterations = C1XOptions.MaximumRecursiveInlineLevel;
-        do {
-            for (Node node : graph.getNodes()) {
-                if (node instanceof Invoke) {
-                    Invoke invoke = (Invoke) node;
-                    RiMethod target = invoke.target;
-                    if (!checkInliningConditions(invoke) || !target.isResolved() || Modifier.isNative(target.accessFlags())) {
-                        continue;
-                    }
-                    if (target.canBeStaticallyBound()) {
-                        if (checkInliningConditions(invoke.target)) {
-                            addToQueue(invoke, invoke.target);
-                        }
-                    } else {
-                        RiMethod concrete = invoke.target.holder().uniqueConcreteMethod(invoke.target);
-                        if (concrete != null && concrete.isResolved() && !Modifier.isNative(concrete.accessFlags())) {
-                            if (checkInliningConditions(concrete)) {
-                                if (C1XOptions.TraceInlining) {
-                                    System.out.println("registering concrete method assumption...");
-                                }
-                                compilation.assumptions.recordConcreteMethod(invoke.target, concrete);
-                                addToQueue(invoke, concrete);
-                            }
-                        }
-                    }
-                    if (inliningSize > C1XOptions.MaximumInstructionCount) {
-                        break;
-                    }
-                }
-            }
-
-            assert invokes.size() == methods.size();
-            if (invokes.isEmpty()) {
-                break;
-            }
-
-            Invoke invoke;
-            while ((invoke = invokes.poll()) != null) {
-                RiMethod method = methods.remove();
-                inlineMethod(invoke, method);
-            }
-            DeadCodeEliminationPhase dce = new DeadCodeEliminationPhase();
-            dce.apply(graph);
-            if (dce.deletedNodeCount > 0) {
-                ir.verifyAndPrint("After dead code elimination");
-            }
-            ir.verifyAndPrint("After inlining iteration");
-
-            if (inliningSize > C1XOptions.MaximumInstructionCount) {
-                if (C1XOptions.TraceInlining) {
-                    System.out.println("inlining stopped: MaximumInstructionCount reached");
-                }
-                break;
-            }
-        } while(--iterations > 0);
+    public double inliningWeight(RiResolvedMethod caller, RiResolvedMethod method, Invoke invoke) {
+        boolean preferred = hints != null && hints.contains(invoke);
+        return weightComputationPolicy.computeWeight(caller, method, invoke, preferred);
     }
 
-    private boolean checkInliningConditions(Invoke invoke) {
-        String name = invoke.id() + ": " + CiUtil.format("%H.%n(%p):%r", invoke.target, false);
-        if (invoke.predecessors().size() == 0) {
-            if (C1XOptions.TraceInlining) {
-                System.out.println("not inlining " + name + " because the invoke is dead code");
-            }
-            return false;
-        }
-        return true;
-    }
-
-    private boolean checkInliningConditions(RiMethod method) {
-        String name = null;
-        if (C1XOptions.TraceInlining) {
-            name = CiUtil.format("%H.%n(%p):%r", method, false) + " (" + method.code().length + " bytes)";
-        }
-        if (method.code().length > C1XOptions.MaximumInlineSize) {
-            if (C1XOptions.TraceInlining) {
-                System.out.println("not inlining " + name + " because of code size");
-            }
-            return false;
-        }
-        if (!method.holder().isInitialized()) {
-            if (C1XOptions.TraceInlining) {
-                System.out.println("not inlining " + name + " because of non-initialized class");
-            }
-            return false;
-        }
-        return true;
-    }
-
-    private void inlineMethod(Invoke invoke, RiMethod method) {
-        String name = invoke.id() + ": " + CiUtil.format("%H.%n(%p):%r", method, false) + " (" + method.code().length + " bytes)";
-        FrameState stateAfter = invoke.stateAfter();
-        Instruction exceptionEdge = invoke.exceptionEdge();
-
-        if (C1XOptions.TraceInlining) {
-            System.out.printf("Building graph for %s, locals: %d, stack: %d\n", name, method.maxLocals(), method.maxStackSize());
-        }
-
-        CompilerGraph graph = new CompilerGraph();
-        new GraphBuilderPhase(compilation, method, true).apply(graph);
-
-        boolean withReceiver = !Modifier.isStatic(method.accessFlags());
-
-        int argumentCount = method.signature().argumentCount(false);
-        Value[] parameters = new Value[argumentCount + (withReceiver ? 1 : 0)];
-        int slot = withReceiver ? 1 : 0;
-        int param = withReceiver ? 1 : 0;
-        for (int i = 0; i < argumentCount; i++) {
-            parameters[param++] = invoke.argument(slot);
-            slot += method.signature().argumentKindAt(i).sizeInSlots();
-        }
-        if (withReceiver) {
-            parameters[0] = invoke.argument(0);
-        }
-
-        HashMap<Node, Node> replacements = new HashMap<Node, Node>();
-        ArrayList<Node> nodes = new ArrayList<Node>();
-        ArrayList<Node> frameStates = new ArrayList<Node>();
-        Return returnNode = null;
-        Unwind unwindNode = null;
-        StartNode startNode = graph.start();
+    public static int graphComplexity(StructuredGraph graph) {
+        int result = 0;
         for (Node node : graph.getNodes()) {
-            if (node != null) {
-                if (node instanceof StartNode) {
-                    assert startNode == node;
-                } else if (node instanceof Local) {
-                    replacements.put(node, parameters[((Local) node).index()]);
-                } else {
-                    nodes.add(node);
-                    if (node instanceof Return) {
-                        returnNode = (Return) node;
-                    } else if (node instanceof Unwind) {
-                        unwindNode = (Unwind) node;
-                    } else if (node instanceof FrameState) {
-                        frameStates.add(node);
-                    }
-                }
+            if (node instanceof ConstantNode || node instanceof LocalNode || node instanceof BeginNode || node instanceof ReturnNode || node instanceof UnwindNode) {
+                result += 0;
+            } else if (node instanceof PhiNode) {
+                result += 5;
+            } else if (node instanceof MergeNode || node instanceof Invoke || node instanceof LoopEndNode || node instanceof EndNode) {
+                result += 0;
+            } else if (node instanceof ControlSplitNode) {
+                result += ((ControlSplitNode) node).blockSuccessorCount();
+            } else {
+                result += 1;
             }
         }
+        return Math.max(1, result);
+    }
 
-        if (C1XOptions.TraceInlining) {
-            ir.printGraph("Subgraph " + CiUtil.format("%H.%n(%p):%r", method, false), graph);
-            System.out.println("inlining " + name + ": " + frameStates.size() + " frame states, " + nodes.size() + " nodes");
+
+    @Override
+    public void recordConcreteMethodAssumption(RiResolvedMethod method, RiResolvedType context, RiResolvedMethod impl) {
+        assumptions.recordConcreteMethod(method, context, impl);
+    }
+
+    @Override
+    public void recordMethodContentsAssumption(RiResolvedMethod method) {
+        if (assumptions != null) {
+            assumptions.recordMethodContents(method);
         }
+    }
 
-        assert invoke.predecessors().size() == 1 : "size: " + invoke.predecessors().size();
-        Instruction pred;
-        if (withReceiver) {
-            pred = new NullCheck(parameters[0], compilation.graph);
-        } else {
-            pred = new Merge(compilation.graph);
+    private static int computeInliningLevel(Invoke invoke) {
+        int count = 0;
+        FrameState curState = invoke.stateAfter();
+        while (curState != null) {
+            count++;
+            curState = curState.outerFrameState();
         }
-        invoke.predecessors().get(0).successors().replace(invoke, pred);
-        replacements.put(startNode, pred);
+        return count - 1;
+    }
 
-        Map<Node, Node> duplicates = compilation.graph.addDuplicate(nodes, replacements);
+    private static InliningPolicy createInliningPolicy() {
+        switch(GraalOptions.InliningPolicy) {
+            case 0: return new WeightBasedInliningPolicy();
+            case 1: return new C1StaticSizeBasedInliningPolicy();
+            case 2: return new MinimumCodeSizeBasedInliningPolicy();
+            case 3: return new DynamicSizeBasedInliningPolicy();
+            case 4: return new GreedySizeBasedInliningPolicy();
+            default:
+                GraalInternalError.shouldNotReachHere();
+                return null;
+        }
+    }
 
-        if (returnNode != null) {
-            List<Node> usages = new ArrayList<Node>(invoke.usages());
-            for (Node usage : usages) {
-                if (returnNode.result() instanceof Local) {
-                    usage.inputs().replace(invoke, replacements.get(returnNode.result()));
-                } else {
-                    usage.inputs().replace(invoke, duplicates.get(returnNode.result()));
-                }
+    private WeightComputationPolicy createWeightComputationPolicy() {
+        switch(GraalOptions.WeightComputationPolicy) {
+            case 0: return new ExecutionCountBasedWeightComputationPolicy();
+            case 1: return new BytecodeSizeBasedWeightComputationPolicy();
+            case 2: return new ComplexityBasedWeightComputationPolicy();
+            default:
+                GraalInternalError.shouldNotReachHere();
+                return null;
+        }
+    }
+
+    private interface InliningPolicy {
+        boolean isWorthInlining(StructuredGraph callerGraph, InlineInfo info);
+    }
+
+    private static class WeightBasedInliningPolicy implements InliningPolicy {
+        @Override
+        public boolean isWorthInlining(StructuredGraph callerGraph, InlineInfo info) {
+            if (!checkCompiledCodeSize(info)) {
+                return false;
             }
-            Node returnDuplicate = duplicates.get(returnNode);
-            returnDuplicate.inputs().clearAll();
 
-            assert returnDuplicate.predecessors().size() == 1;
-            Node returnPred = returnDuplicate.predecessors().get(0);
-            int index = returnDuplicate.predecessorsIndex().get(0);
-            returnPred.successors().setAndClear(index, invoke, 0);
-            returnDuplicate.delete();
+            double penalty = Math.pow(GraalOptions.InliningSizePenaltyExp, callerGraph.getNodeCount() / (double) GraalOptions.MaximumDesiredSize) / GraalOptions.InliningSizePenaltyExp;
+            if (info.weight > GraalOptions.MaximumInlineWeight / (1 + penalty * GraalOptions.InliningSizePenalty)) {
+                Debug.log("not inlining (cut off by weight %e): %s", info.weight, info);
+                return false;
+            }
+
+            Debug.log("inlining (weight %f): %s", info.weight, info);
+            return true;
         }
+    }
 
-//        if (invoke.next() instanceof Merge) {
-//            ((Merge) invoke.next()).removePhiPredecessor(invoke);
-//        }
-//        invoke.successors().clearAll();
-        invoke.inputs().clearAll();
-        invoke.setExceptionEdge(null);
-//        invoke.delete();
+    private static class C1StaticSizeBasedInliningPolicy implements InliningPolicy {
+        @Override
+        public boolean isWorthInlining(StructuredGraph callerGraph, InlineInfo info) {
+            double maxSize = Math.max(GraalOptions.MaximumTrivialSize, Math.pow(GraalOptions.NestedInliningSizeRatio, info.level) * GraalOptions.MaximumInlineSize);
+            return decideSizeBasedInlining(info, maxSize);
+        }
+    }
+
+    private static class MinimumCodeSizeBasedInliningPolicy implements InliningPolicy {
+        @Override
+        public boolean isWorthInlining(StructuredGraph callerGraph, InlineInfo info) {
+            assert GraalOptions.ProbabilityAnalysis;
+            if (!checkCompiledCodeSize(info)) {
+                return false;
+            }
+
+            double inlineWeight = Math.min(GraalOptions.ProbabilityCapForInlining, info.invoke.probability());
+            double maxSize = Math.pow(GraalOptions.NestedInliningSizeRatio, info.level) * GraalOptions.MaximumInlineSize * inlineWeight;
+            maxSize = Math.max(GraalOptions.MaximumTrivialSize, maxSize);
+
+            return decideSizeBasedInlining(info, maxSize);
+        }
+    }
+
+    private static class DynamicSizeBasedInliningPolicy implements InliningPolicy {
+        @Override
+        public boolean isWorthInlining(StructuredGraph callerGraph, InlineInfo info) {
+            assert GraalOptions.ProbabilityAnalysis;
+            if (!checkCompiledCodeSize(info)) {
+                return false;
+            }
+
+            double inlineBoost = Math.min(GraalOptions.ProbabilityCapForInlining, info.invoke.probability()) + Math.log10(Math.max(1, info.invoke.probability() - GraalOptions.ProbabilityCapForInlining + 1));
+            double maxSize = Math.pow(GraalOptions.NestedInliningSizeRatio, info.level) * GraalOptions.MaximumInlineSize;
+            maxSize = maxSize + maxSize * inlineBoost;
+            maxSize = Math.min(GraalOptions.MaximumGreedyInlineSize, Math.max(GraalOptions.MaximumTrivialSize, maxSize));
+
+            return decideSizeBasedInlining(info, maxSize);
+        }
+    }
+
+    private static class GreedySizeBasedInliningPolicy implements InliningPolicy {
+        @Override
+        public boolean isWorthInlining(StructuredGraph callerGraph, InlineInfo info) {
+            assert GraalOptions.ProbabilityAnalysis;
+            if (!checkCompiledCodeSize(info)) {
+                return false;
+            }
+
+            double maxSize = GraalOptions.MaximumGreedyInlineSize;
+            if (GraalOptions.InliningBonusPerTransferredValue != 0) {
+                RiSignature signature = info.invoke.callTarget().targetMethod().signature();
+                int transferredValues = signature.argumentCount(true);
+                if (signature.returnKind(false) != CiKind.Void) {
+                    transferredValues++;
+                }
+                maxSize += transferredValues * GraalOptions.InliningBonusPerTransferredValue;
+            }
+
+            double inlineRatio = Math.min(GraalOptions.ProbabilityCapForInlining, info.invoke.probability());
+            maxSize = Math.pow(GraalOptions.NestedInliningSizeRatio, info.level) * maxSize * inlineRatio;
+            maxSize = Math.max(maxSize, GraalOptions.MaximumTrivialSize);
+
+            return decideSizeBasedInlining(info, maxSize);
+        }
+    }
+
+    private static boolean decideSizeBasedInlining(InlineInfo info, double maxSize) {
+        boolean success = info.weight <= maxSize;
+        if (DebugScope.getInstance().isLogEnabled()) {
+            String formatterString = success ? "inlining invoke at %s@%d (size %f <= %f): %s" : "not inlining invoke at %s@%d (too large %f > %f): %s";
+            Debug.log(formatterString, CiUtil.format("%H.%n(%p):%r", info.invoke.stateAfter().method()), info.invoke.bci(), info.weight, maxSize, info);
+        }
+        return success;
+    }
+
+    private static boolean checkCompiledCodeSize(InlineInfo info) {
+        if (GraalOptions.SmallCompiledCodeSize >= 0 && info.compiledCodeSize() > GraalOptions.SmallCompiledCodeSize) {
+            Debug.log("not inlining invoke at %s@%d (CompiledCodeSize %d > %d): %s", CiUtil.format("%H.%n(%p):%r", info.invoke.stateAfter().method()), info.invoke.bci(), info.compiledCodeSize(), GraalOptions.SmallCompiledCodeSize, info);
+            return false;
+        }
+        return true;
+    }
 
 
-        if (exceptionEdge != null) {
-            if (unwindNode != null) {
-                assert unwindNode.predecessors().size() == 1;
-                assert exceptionEdge.successors().size() == 1;
-                ExceptionObject obj = (ExceptionObject) exceptionEdge;
+    private interface WeightComputationPolicy {
+        double computeWeight(RiResolvedMethod caller, RiResolvedMethod method, Invoke invoke, boolean preferredInvoke);
+    }
 
-                List<Node> usages = new ArrayList<Node>(obj.usages());
-                for (Node usage : usages) {
-                    if (replacements.containsKey(unwindNode.exception())) {
-                        usage.inputs().replace(obj, replacements.get(unwindNode.exception()));
+    private class ExecutionCountBasedWeightComputationPolicy implements WeightComputationPolicy {
+        @Override
+        public double computeWeight(RiResolvedMethod caller, RiResolvedMethod method, Invoke invoke, boolean preferredInvoke) {
+            double ratio;
+            if (preferredInvoke) {
+                ratio = 1000000;
+            } else {
+                if (GraalOptions.ProbabilityAnalysis) {
+                    ratio = invoke.node().probability();
+                } else {
+                    RiProfilingInfo profilingInfo = method.profilingInfo();
+                    int executionCount = profilingInfo.getExecutionCount(invoke.bci());
+                    if (executionCount > 0) {
+                        RiResolvedMethod parent = invoke.stateAfter().method();
+                        ratio = executionCount / (float) parent.invocationCount();
                     } else {
-                        usage.inputs().replace(obj, duplicates.get(unwindNode.exception()));
+                        ratio = 1;
                     }
                 }
-                Node unwindDuplicate = duplicates.get(unwindNode);
-                unwindDuplicate.inputs().clearAll();
-
-                assert unwindDuplicate.predecessors().size() == 1;
-                Node unwindPred = unwindDuplicate.predecessors().get(0);
-                int index = unwindDuplicate.predecessorsIndex().get(0);
-                unwindPred.successors().setAndClear(index, obj, 0);
-
-                obj.inputs().clearAll();
-                obj.delete();
-                unwindDuplicate.delete();
-
             }
-        }
 
-        // adjust all frame states that were copied
-        if (frameStates.size() > 0) {
-            FrameState outerFrameState = stateAfter.duplicateModified(invoke.bci, invoke.kind);
-            for (Node frameState : frameStates) {
-                ((FrameState) duplicates.get(frameState)).setOuterFrameState(outerFrameState);
+            final double normalSize;
+            // TODO (lstadler) get rid of this magic, it's here to emulate the old behavior for the time being
+            if (ratio < 0.01) {
+                ratio = 0.01;
             }
-        }
+            if (ratio < 0.5) {
+                normalSize = 10 * ratio / 0.5;
+            } else if (ratio < 2) {
+                normalSize = 10 + (35 - 10) * (ratio - 0.5) / 1.5;
+            } else if (ratio < 20) {
+                normalSize = 35;
+            } else if (ratio < 40) {
+                normalSize = 35 + (350 - 35) * (ratio - 20) / 20;
+            } else {
+                normalSize = 350;
+            }
 
-        if (C1XOptions.TraceInlining) {
-            ir.verifyAndPrint("After inlining " + CiUtil.format("%H.%n(%p):%r", method, false));
+            int count;
+            if (GraalOptions.ParseBeforeInlining) {
+                if (!parsedMethods.containsKey(method)) {
+                    StructuredGraph newGraph = new StructuredGraph(method);
+                    if (plan != null) {
+                        plan.runPhases(PhasePosition.AFTER_PARSING, newGraph);
+                    }
+                    if (GraalOptions.OptCanonicalizer) {
+                        new CanonicalizerPhase(target, runtime, assumptions).apply(newGraph);
+                    }
+                    count = graphComplexity(newGraph);
+                    parsedMethods.put(method, count);
+                } else {
+                    count = parsedMethods.get(method);
+                }
+            } else {
+                count = method.codeSize();
+            }
+
+            return count / normalSize;
+        }
+    }
+
+    private static class BytecodeSizeBasedWeightComputationPolicy implements WeightComputationPolicy {
+        @Override
+        public double computeWeight(RiResolvedMethod caller, RiResolvedMethod method, Invoke invoke, boolean preferredInvoke) {
+            double codeSize = method.codeSize();
+            if (preferredInvoke) {
+                codeSize = codeSize / GraalOptions.BoostInliningForEscapeAnalysis;
+            }
+            return codeSize;
+        }
+    }
+
+    private static class ComplexityBasedWeightComputationPolicy implements WeightComputationPolicy {
+        @Override
+        public double computeWeight(RiResolvedMethod caller, RiResolvedMethod method, Invoke invoke, boolean preferredInvoke) {
+            double complexity = method.compilationComplexity();
+            if (preferredInvoke) {
+                complexity = complexity / GraalOptions.BoostInliningForEscapeAnalysis;
+            }
+            return complexity;
         }
     }
 }

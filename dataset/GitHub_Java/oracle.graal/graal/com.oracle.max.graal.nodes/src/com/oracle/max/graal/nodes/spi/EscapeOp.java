@@ -55,7 +55,7 @@ public abstract class EscapeOp {
         } else if (usage instanceof StoreFieldNode) {
             StoreFieldNode x = (StoreFieldNode) usage;
             // self-references do escape
-            return x.value() == node; // TODO(tw) Check if we can add this condition? && x.object() != node;
+            return x.value() == node; // TODO (thomaswue) Check if we can add this condition? && x.object() != node;
         } else if (usage instanceof LoadIndexedNode) {
             LoadIndexedNode x = (LoadIndexedNode) usage;
             if (x.index() == node) {
@@ -108,7 +108,7 @@ public abstract class EscapeOp {
             assert x.type() == ((ValueNode) node).exactType();
             ((StructuredGraph) x.graph()).replaceFloating(x, ConstantNode.forBoolean(true, node.graph()));
         } else if (usage instanceof AccessMonitorNode) {
-            ((AccessMonitorNode) usage).makeEliminated();
+            ((AccessMonitorNode) usage).eliminate();
         }
     }
 

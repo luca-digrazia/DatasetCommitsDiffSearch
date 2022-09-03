@@ -31,7 +31,7 @@ import com.oracle.max.graal.nodes.type.*;
  */
 public final class AnchorNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable {
 
-    @Input(notDataflow = true) private final NodeInputList<GuardNode> guards = new NodeInputList<GuardNode>(this);
+    @Input(notDataflow = true) private final NodeInputList<GuardNode> guards = new NodeInputList<>(this);
 
     public AnchorNode() {
         super(StampFactory.illegal());
@@ -42,16 +42,15 @@ public final class AnchorNode extends FixedWithNextNode implements LIRLowerable,
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (this.usages().size() == 0 && guards.size() == 0) {
-            return next();
+            return null;
         }
         return this;
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        // TODO is it necessary to do something for the "guards" list here?
         // Currently, there is nothing to emit since anchors are only a structural element with no execution semantics.
     }
 }

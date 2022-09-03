@@ -22,14 +22,13 @@
  */
 package com.oracle.max.graal.nodes.calc;
 
-import com.oracle.max.graal.graph.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
 
-/* TODO(tw/gd) For high-level optimization purpose the compare node should be a boolean *value* (it is currently only a helper node)
+/* TODO (thomaswue/gdub) For high-level optimization purpose the compare node should be a boolean *value* (it is currently only a helper node)
  * But in the back-end the comparison should not always be materialized (for example in x86 the comparison result will not be in a register but in a flag)
  *
  * Compare should probably be made a value (so that it can be canonicalized for example) and in later stages some Compare usage should be transformed
@@ -116,7 +115,7 @@ public final class CompareNode extends BooleanNode implements Canonicalizable, L
         }
     }
 
-    private Node optimizeMaterialize(CiConstant constant, MaterializeNode materializeNode, RiRuntime runtime) {
+    private ValueNode optimizeMaterialize(CiConstant constant, MaterializeNode materializeNode, RiRuntime runtime) {
         CiConstant trueConstant = materializeNode.trueValue().asConstant();
         CiConstant falseConstant = materializeNode.falseValue().asConstant();
 
@@ -144,30 +143,19 @@ public final class CompareNode extends BooleanNode implements Canonicalizable, L
         return this;
     }
 
-    private Node optimizeNormalizeCmp(CiConstant constant, NormalizeCompareNode normalizeNode) {
+    private ValueNode optimizeNormalizeCmp(CiConstant constant, NormalizeCompareNode normalizeNode) {
         if (constant.kind == CiKind.Int && constant.asInt() == 0) {
-            Condition condition = condition();
-            if (normalizeNode.x().kind().isFloatOrDouble()) {
-                switch (condition) {
-                    case LT: condition = Condition.BT; break;
-                    case LE: condition = Condition.BE; break;
-                    case GE: condition = Condition.AE; break;
-                    case GT: condition = Condition.AT; break;
-                }
-            }
-            if (normalizeNode == y()) {
-                condition = condition.mirror();
-            }
-            boolean isLess = condition == Condition.LE || condition == Condition.LT || condition == Condition.BE || condition == Condition.BT;
-            boolean canonUnorderedIsTrue = condition != Condition.EQ && (condition == Condition.NE || !(isLess ^ normalizeNode.isUnorderedLess));
-            CompareNode result = graph().unique(new CompareNode(normalizeNode.x(), condition, canonUnorderedIsTrue, normalizeNode.y()));
+            Condition cond = condition();
+            boolean isLess = cond == Condition.LE || cond == Condition.LT || cond == Condition.BE || cond == Condition.BT;
+            boolean canonUnorderedIsTrue = cond != Condition.EQ && (cond == Condition.NE || !(isLess ^ normalizeNode.isUnorderedLess));
+            CompareNode result = graph().unique(new CompareNode(normalizeNode.x(), cond, canonUnorderedIsTrue, normalizeNode.y()));
             return result;
         }
         return this;
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x().isConstant() && !y().isConstant()) { // move constants to the left (y)
             return graph().unique(new CompareNode(y(), condition.mirror(), unorderedIsTrue(), x()));
         } else if (x().isConstant() && y().isConstant()) {

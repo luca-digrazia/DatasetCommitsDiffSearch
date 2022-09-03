@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,14 +26,15 @@ import java.util.*;
 
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.asm.*;
-import com.oracle.max.graal.compiler.lir.*;
-import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.lir.*;
+import com.oracle.max.graal.lir.amd64.*;
+import com.oracle.max.graal.lir.asm.*;
 import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
-import com.sun.cri.ci.*;
 
-public class AMD64DeoptimizationStub implements LIR.SlowPath {
+public class AMD64DeoptimizationStub extends AMD64SlowPath {
     public final Label label = new Label();
     public final LIRDebugInfo info;
     public final DeoptAction action;
@@ -46,22 +47,20 @@ public class AMD64DeoptimizationStub implements LIR.SlowPath {
     }
 
 
-    private static ArrayList<Object> keepAlive = new ArrayList<Object>();
+    private static ArrayList<Object> keepAlive = new ArrayList<>();
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm) {
-        AMD64MacroAssembler masm = (AMD64MacroAssembler) tasm.asm;
-
-        // TODO(cwi): we want to get rid of a generally reserved scratch register.
-        CiRegister scratch = tasm.compilation.registerConfig.getScratchRegister();
+    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+        // TODO (cwimmer): we want to get rid of a generally reserved scratch register.
+        CiRegister scratch = tasm.frameMap.registerConfig.getScratchRegister();
 
         masm.bind(label);
         if (GraalOptions.CreateDeoptInfo && deoptInfo != null) {
             masm.nop();
             keepAlive.add(deoptInfo.toString());
-            AMD64MoveOpcode.move(tasm, masm, scratch.asValue(), CiConstant.forObject(deoptInfo));
-            // TODO Why use scratch register here? Is it an implicit calling convention that the runtime function reads this register?
-            AMD64CallOpcode.directCall(tasm, masm, CiRuntimeCall.SetDeoptInfo, info);
+            AMD64Move.move(tasm, masm, scratch.asValue(), CiConstant.forObject(deoptInfo));
+            // TODO Make this an explicit calling convention instead of using a scratch register
+            AMD64Call.directCall(tasm, masm, CiRuntimeCall.SetDeoptInfo, info);
         }
         int code;
         switch(action) {
@@ -81,11 +80,11 @@ public class AMD64DeoptimizationStub implements LIR.SlowPath {
                 code = 4;
                 break;
             default:
-                throw Util.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
         masm.movq(scratch, code);
-        // TODO Why use scratch register here? Is it an implicit calling convention that the runtime function reads this register?
-        AMD64CallOpcode.directCall(tasm, masm, CiRuntimeCall.Deoptimize, info);
-        AMD64CallOpcode.shouldNotReachHere(tasm, masm);
+     // TODO Make this an explicit calling convention instead of using a scratch register
+        AMD64Call.directCall(tasm, masm, CiRuntimeCall.Deoptimize, info);
+        AMD64Call.shouldNotReachHere(tasm, masm);
     }
 }
