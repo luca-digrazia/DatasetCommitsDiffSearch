@@ -34,15 +34,11 @@ import javax.tools.*;
 
 import com.oracle.graal.api.runtime.*;
 
+@SupportedSourceVersion(SourceVersion.RELEASE_7)
 @SupportedAnnotationTypes("com.oracle.graal.api.runtime.ServiceProvider")
 public class ServiceProviderProcessor extends AbstractProcessor {
 
     private final Set<TypeElement> processed = new HashSet<>();
-
-    @Override
-    public SourceVersion getSupportedSourceVersion() {
-        return SourceVersion.latest();
-    }
 
     private boolean verifyAnnotation(TypeMirror serviceInterface, TypeElement serviceProvider) {
         if (!processingEnv.getTypeUtils().isSubtype(serviceProvider.asType(), serviceInterface)) {
@@ -75,15 +71,6 @@ public class ServiceProviderProcessor extends AbstractProcessor {
     }
 
     private void createProviderFile(TypeElement serviceProvider, String interfaceName) {
-        if (serviceProvider.getNestingKind().isNested()) {
-            // This is a simplifying constraint that means we don't have to
-            // processed the qualified name to insert '$' characters at
-            // the relevant positions.
-            String msg = String.format("Service provider class %s must be a top level class", serviceProvider.getSimpleName());
-            processingEnv.getMessager().printMessage(Kind.ERROR, msg, serviceProvider);
-            return;
-        }
-
         String filename = "META-INF/providers/" + serviceProvider.getQualifiedName();
         try {
             FileObject file = processingEnv.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "", filename, serviceProvider);
