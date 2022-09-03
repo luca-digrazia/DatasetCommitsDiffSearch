@@ -227,6 +227,7 @@ public class AMD64Move {
                         tasm.recordImplicitException(masm.codeBuffer.position(), state);
                     }
                     masm.movl(address.toAddress(), asRegister(scratch));
+                    // masm.movq(asRegister(scratch), 0xDEADBEEF);
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
