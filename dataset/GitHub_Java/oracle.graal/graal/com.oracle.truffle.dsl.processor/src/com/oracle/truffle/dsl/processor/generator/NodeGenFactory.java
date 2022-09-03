@@ -2125,19 +2125,13 @@ public class NodeGenFactory {
         return new CodeTree[]{expressionBuilder.build(), assertionBuilder.build()};
     }
 
-    private Map<Variable, CodeTree> castBoundTypes(Map<Variable, LocalVariable> bindings) {
-
+    private static Map<Variable, CodeTree> castBoundTypes(Map<Variable, LocalVariable> bindings) {
         Map<Variable, CodeTree> resolvedBindings = new HashMap<>();
         for (Variable variable : bindings.keySet()) {
             LocalVariable localVariable = bindings.get(variable);
             CodeTree resolved = localVariable.createReference();
-            TypeMirror sourceType = localVariable.getTypeMirror();
-            TypeMirror targetType = variable.getResolvedTargetType();
-            if (targetType == null) {
-                targetType = variable.getResolvedType();
-            }
-            if (!ElementUtils.isAssignable(sourceType, targetType)) {
-                resolved = CodeTreeBuilder.createBuilder().cast(targetType, resolved).build();
+            if (!ElementUtils.typeEquals(variable.getResolvedType(), localVariable.getTypeMirror())) {
+                resolved = CodeTreeBuilder.createBuilder().cast(variable.getResolvedType(), resolved).build();
             }
             resolvedBindings.put(variable, resolved);
         }
@@ -2577,11 +2571,6 @@ public class NodeGenFactory {
 
         public LocalVariable makeGeneric() {
             return newType(type.getTypeSystem().getGenericTypeData());
-        }
-
-        @Override
-        public String toString() {
-            return "Local[type = " + getTypeMirror() + ", name = " + name + ", accessWith = " + accessorTree + "]";
         }
 
     }
