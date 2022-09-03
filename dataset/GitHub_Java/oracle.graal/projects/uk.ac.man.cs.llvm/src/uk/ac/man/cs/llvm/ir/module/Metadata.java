@@ -36,7 +36,6 @@ import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 
 import uk.ac.man.cs.llvm.bc.ParserListener;
-import uk.ac.man.cs.llvm.ir.ModuleGenerator;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataBasicType;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataCompileUnit;
@@ -61,21 +60,27 @@ import uk.ac.man.cs.llvm.ir.types.Type;
 
 public class Metadata implements ParserListener {
 
+    protected int idx = 1; // TODO: remove
+
     protected final Types types;
 
     protected final List<Type> symbols;
 
-    protected final MetadataBlock metadata;
+    protected final MetadataBlock metadata = new MetadataBlock();
 
-    public Metadata(Types types, List<Type> symbols, ModuleGenerator generator) {
+    protected int oldMetadataSize = 0; // TODO: only for debugging purpose
+
+    public Metadata(Types types, List<Type> symbols) {
         this.types = types;
         this.symbols = symbols;
-        metadata = generator.getMetadata();
         metadata.setStartIndex(1);
     }
 
     protected void printMetadataDebugMsg() {
-        LLVMLogger.info("!" + (metadata.getCurrentIndex() - 1) + " - " + metadata.getAbsolute(metadata.size() - 1));
+        if (metadata.size() != oldMetadataSize) {
+            LLVMLogger.info("!" + idx + " - " + metadata.getAbsolute(metadata.size() - 1));
+            oldMetadataSize = metadata.size();
+        }
     }
 
     protected static long unrotateSign(long u) {
@@ -183,14 +188,15 @@ public class Metadata implements ParserListener {
                 break;
 
             default:
-                metadata.add(null);
-                System.out.println("! - " + record + ": " + Arrays.toString(args));
+                System.out.println("!" + idx + " - " + record + ": " + Arrays.toString(args));
                 break;
         }
 
         if (LLVMBaseOptionFacade.verboseEnabled()) {
             printMetadataDebugMsg();
         }
+
+        idx++;
     }
 
     protected void createString(long[] args) {
@@ -235,12 +241,11 @@ public class Metadata implements ParserListener {
 
     protected void createDistinctNode(long[] args) {
         // [n x md num]
-        metadata.add(null);
-        System.out.println("! - " + MetadataRecord.DISTINCT_NODE + " - " + Arrays.toString(args));
+
+        System.out.println("!" + idx + " - " + MetadataRecord.DISTINCT_NODE + " - " + Arrays.toString(args));
     }
 
     protected void createKind(long[] args) {
-        // symbols.add(MetaType.METADATA); // TODO
         StringBuilder builder = new StringBuilder();
         for (int i = 1; i < args.length; i++) {
             builder.append((char) args[i]); // TODO: unicode characters?
@@ -259,8 +264,8 @@ public class Metadata implements ParserListener {
         // long column = args[i++];
         // long scope = args[i++];
         // long inlineAt = args[i++];
-        metadata.add(null);
-        System.out.println("! - " + MetadataRecord.LOCATION + " - " + Arrays.toString(args));
+
+        System.out.println("!" + idx + " - " + MetadataRecord.LOCATION + " - " + Arrays.toString(args));
     }
 
     protected void createNamedNode(long[] args) {
@@ -275,8 +280,8 @@ public class Metadata implements ParserListener {
 
     protected void createAttachment(long[] args) {
         // [n x mdnodes]
-        metadata.add(null);
-        System.out.println("! - " + MetadataRecord.ATTACHMENT + " - " + Arrays.toString(args));
+
+        System.out.println("!" + idx + " - " + MetadataRecord.ATTACHMENT + " - " + Arrays.toString(args));
     }
 
     protected void createGenericDebug(long[] args) {
@@ -287,8 +292,8 @@ public class Metadata implements ParserListener {
         // long vers = args[i++];
         // long header = args[i++];
         // TODO: args[4] // n x md num
-        metadata.add(null);
-        System.out.println("! - " + MetadataRecord.GENERIC_DEBUG + " - " + Arrays.toString(args));
+
+        System.out.println("!" + idx + " - " + MetadataRecord.GENERIC_DEBUG + " - " + Arrays.toString(args));
     }
 
     protected void createSubrange(long[] args) {

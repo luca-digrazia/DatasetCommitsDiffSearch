@@ -29,25 +29,36 @@
  */
 package com.oracle.truffle.llvm.runtime.options;
 
-public class LLVMBaseOptionFacade {
+public final class LLVMBaseOptionFacade {
+
+    private LLVMBaseOptionFacade() {
+    }
 
     public static boolean debugEnabled() {
-        return LLVMOptions.getParsedProperty(Property.DEBUG);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.DEBUG);
+    }
+
+    public static boolean verboseEnabled() {
+        return debugEnabled() && (boolean) LLVMOptions.getParsedProperty(LLVMBaseOption.VERBOSE);
     }
 
     public static boolean printFunctionASTs() {
-        return LLVMOptions.getParsedProperty(Property.PRINT_FUNCTION_ASTS);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.PRINT_FUNCTION_ASTS);
+    }
+
+    public static boolean testBinaryParser() {
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.TEST_BINARY_PARSER);
     }
 
     public static String getRemoteTestBootClassPath() {
-        if (LLVMOptions.getParsedProperty(Property.REMOTE_TEST_BOOT_CLASSPATH) == null) {
+        if (LLVMOptions.getParsedProperty(LLVMBaseOption.REMOTE_TEST_BOOT_CLASSPATH) == null) {
             throw new AssertionError();
         }
-        return LLVMOptions.getParsedProperty(Property.REMOTE_TEST_BOOT_CLASSPATH);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.REMOTE_TEST_BOOT_CLASSPATH);
     }
 
     public static String getTestDiscoveryPath() {
-        return LLVMOptions.getParsedProperty(Property.TEST_DISCOVERY_PATH);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.TEST_DISCOVERY_PATH);
     }
 
     public static boolean discoveryTestModeEnabled() {
@@ -55,71 +66,95 @@ public class LLVMBaseOptionFacade {
     }
 
     public static String[] getDynamicLibraryPaths() {
-        return LLVMOptions.getParsedProperty(Property.DYN_LIBRARY_PATHS);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.DYN_LIBRARY_PATHS);
     }
 
     public static String getProjectRoot() {
-        return LLVMOptions.getParsedProperty(Property.PROJECT_ROOT);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.PROJECT_ROOT);
     }
 
     public static boolean specializeForExpectIntrinsic() {
-        return !disableSpeculativeOptimizations() && (boolean) LLVMOptions.getParsedProperty(Property.OPTIMIZATION_SPECIALIZE_EXPECT_INTRINSIC);
+        return !disableSpeculativeOptimizations() && (boolean) LLVMOptions.getParsedProperty(LLVMBaseOption.OPTIMIZATION_SPECIALIZE_EXPECT_INTRINSIC);
     }
 
     public static boolean valueProfileMemoryReads() {
-        return !disableSpeculativeOptimizations() && (boolean) LLVMOptions.getParsedProperty(Property.OPTIMIZATION_VALUE_PROFILE_MEMORY_READS);
+        return !disableSpeculativeOptimizations() && (boolean) LLVMOptions.getParsedProperty(LLVMBaseOption.OPTIMIZATION_VALUE_PROFILE_MEMORY_READS);
     }
 
     public static boolean intrinsifyCLibraryFunctions() {
-        return LLVMOptions.getParsedProperty(Property.OPTIMIZATION_INTRINSIFY_C_FUNCTIONS);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.OPTIMIZATION_INTRINSIFY_C_FUNCTIONS);
     }
 
     public static boolean injectBranchProbabilities() {
-        return !disableSpeculativeOptimizations() && (boolean) LLVMOptions.getParsedProperty(Property.OPTIMIZATION_BRANCH_PROBABILITIES);
+        return !disableSpeculativeOptimizations() && (boolean) LLVMOptions.getParsedProperty(LLVMBaseOption.OPTIMIZATION_BRANCH_PROBABILITIES);
     }
 
     public static boolean printNativeCallStats() {
-        return LLVMOptions.getParsedProperty(Property.NATIVE_CALL_STATS);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.NATIVE_CALL_STATS);
     }
 
     public static boolean disableSpeculativeOptimizations() {
-        return LLVMOptions.getParsedProperty(Property.OPTIMIZATIONS_DISABLE_SPECULATIVE);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.OPTIMIZATIONS_DISABLE_SPECULATIVE);
     }
 
     public static boolean lifeTimeAnalysisEnabled() {
-        return LLVMOptions.getParsedProperty(Property.OPTIMIZATION_LIFE_TIME_ANALYSIS);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.OPTIMIZATION_LIFE_TIME_ANALYSIS);
     }
 
     public static boolean printLifeTimeAnalysis() {
-        return lifeTimeAnalysisEnabled() && (boolean) LLVMOptions.getParsedProperty(Property.LIFE_TIME_ANALYSIS_STATS);
+        return lifeTimeAnalysisEnabled() && (boolean) LLVMOptions.getParsedProperty(LLVMBaseOption.LIFE_TIME_ANALYSIS_STATS);
     }
 
     public static boolean launchRemoteTestCasesAsLocal() {
-        return LLVMOptions.getParsedProperty(Property.REMOTE_TEST_CASES_AS_LOCAL);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.REMOTE_TEST_CASES_AS_LOCAL);
+    }
+
+    public static boolean generateLifetimeReferenceOutput() {
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.LIFETIME_TEST_GENERATE_REFERENCE_OUTPUT);
     }
 
     public static boolean printPerformanceWarnings() {
-        return LLVMOptions.getParsedProperty(Property.PRINT_PERFORMANCE_WARNINGS);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.PRINT_PERFORMANCE_WARNINGS);
     }
 
     public static int getInlineCacheSize() {
-        return LLVMOptions.getParsedProperty(Property.OPTIMIZATION_INLINE_CACHE_SIZE);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.OPTIMIZATION_INLINE_CACHE_SIZE);
     }
 
     public static int getExecutionCount() {
-        return LLVMOptions.getParsedProperty(Property.EXECUTION_COUNT);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.EXECUTION_COUNT);
     }
 
     public static boolean valueProfileFunctionArgs() {
-        return LLVMOptions.getParsedProperty(Property.OPTIMIZATION_VALUE_PROFILE_FUNCTION_ARGS);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.OPTIMIZATION_VALUE_PROFILE_FUNCTION_ARGS);
     }
 
     public static boolean performanceWarningsAreFatal() {
-        return LLVMOptions.getParsedProperty(Property.PERFORMANCE_WARNING_ARE_FATAL);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.PERFORMANCE_WARNING_ARE_FATAL);
     }
 
     public static String[] getDynamicBitcodeLibraries() {
-        return LLVMOptions.getParsedProperty(Property.DYN_BITCODE_LIBRARIES);
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.DYN_BITCODE_LIBRARIES);
+    }
+
+    public static boolean printExecutionTime() {
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.PRINT_EXECUTION_TIME);
+    }
+
+    public static long getStackSizeKB() {
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.STACK_SIZE_KB);
+    }
+
+    public static String getLLVMVersion() {
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.LLVM_VERSION);
+    }
+
+    public static String getNodeConfiguration() {
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.NODE_CONFIGURATION);
+    }
+
+    public static boolean traceExecutionEnabled() {
+        return LLVMOptions.getParsedProperty(LLVMBaseOption.TRACE_EXECUTION);
     }
 
 }
