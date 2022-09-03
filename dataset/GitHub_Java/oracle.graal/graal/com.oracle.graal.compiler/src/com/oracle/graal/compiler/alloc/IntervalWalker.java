@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.compiler.alloc;
 
-import com.oracle.max.criutils.*;
-import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.alloc.Interval.RegisterBinding;
 import com.oracle.graal.compiler.alloc.Interval.RegisterBindingLists;
 import com.oracle.graal.compiler.alloc.Interval.State;
+import com.oracle.graal.debug.*;
 
 /**
  */
@@ -66,9 +65,11 @@ public class IntervalWalker {
 
     /**
      * Processes the {@linkplain #currentInterval} interval in an attempt to allocate a physical
-     * register to it and thus allow it to be moved to a list of {@linkplain #activeLists active} intervals.
-     *
-     * @return {@code true} if a register was allocated to the {@linkplain #currentInterval} interval
+     * register to it and thus allow it to be moved to a list of {@linkplain #activeLists active}
+     * intervals.
+     * 
+     * @return {@code true} if a register was allocated to the {@linkplain #currentInterval}
+     *         interval
      */
     boolean activateCurrent() {
         return true;
@@ -84,10 +85,12 @@ public class IntervalWalker {
 
     /**
      * Creates a new interval walker.
-     *
+     * 
      * @param allocator the register allocator context
-     * @param unhandledFixed the list of unhandled {@linkplain RegisterBinding#Fixed fixed} intervals
-     * @param unhandledAny the list of unhandled {@linkplain RegisterBinding#Any non-fixed} intervals
+     * @param unhandledFixed the list of unhandled {@linkplain RegisterBinding#Fixed fixed}
+     *            intervals
+     * @param unhandledAny the list of unhandled {@linkplain RegisterBinding#Any non-fixed}
+     *            intervals
      */
     IntervalWalker(LinearScan allocator, Interval unhandledFixed, Interval unhandledAny) {
         this.allocator = allocator;
@@ -204,13 +207,6 @@ public class IntervalWalker {
             boolean isActive = currentInterval.from() <= toOpId;
             int opId = isActive ? currentInterval.from() : toOpId;
 
-            if (GraalOptions.TraceLinearScanLevel >= 2 && !TTY.isSuppressed()) {
-                if (currentPosition < opId) {
-                    TTY.println();
-                    TTY.println("walkTo(%d) *", opId);
-                }
-            }
-
             // set currentPosition prior to call of walkTo
             currentPosition = opId;
 
@@ -219,13 +215,15 @@ public class IntervalWalker {
             walkTo(State.Inactive, opId);
 
             if (isActive) {
-                currentInterval.state = State.Active;
-                if (activateCurrent()) {
-                    activeLists.addToListSortedByCurrentFromPositions(currentBinding, currentInterval);
-                    intervalMoved(currentInterval, State.Unhandled, State.Active);
-                }
+                try (Indent indent = Debug.logAndIndent("walk to op %d", opId)) {
+                    currentInterval.state = State.Active;
+                    if (activateCurrent()) {
+                        activeLists.addToListSortedByCurrentFromPositions(currentBinding, currentInterval);
+                        intervalMoved(currentInterval, State.Unhandled, State.Active);
+                    }
 
-                nextInterval();
+                    nextInterval();
+                }
             } else {
                 return;
             }
@@ -235,10 +233,8 @@ public class IntervalWalker {
     private void intervalMoved(Interval interval, State from, State to) {
         // intervalMoved() is called whenever an interval moves from one interval list to another.
         // In the implementation of this method it is prohibited to move the interval to any list.
-        if (GraalOptions.TraceLinearScanLevel >= 4 && !TTY.isSuppressed()) {
-            TTY.print(from.toString() + " to " + to.toString());
-            TTY.fillTo(23);
-            TTY.out().println(interval.logString(allocator));
+        if (Debug.isLogEnabled()) {
+            Debug.log("interval moved from %s to %s: %s", from, to, interval.logString(allocator));
         }
     }
 }

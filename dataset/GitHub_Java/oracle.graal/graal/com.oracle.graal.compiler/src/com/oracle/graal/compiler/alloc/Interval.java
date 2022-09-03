@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,8 +30,8 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.phases.util.*;
 
@@ -69,60 +69,45 @@ public final class Interval {
          */
         public Interval any;
 
-        /**
-         * List of intervals whose binding is currently {@link RegisterBinding#Stack}.
-         */
-        public Interval stack;
-
-        public RegisterBindingLists(Interval fixed, Interval any, Interval stack) {
+        public RegisterBindingLists(Interval fixed, Interval any) {
             this.fixed = fixed;
             this.any = any;
-            this.stack = stack;
         }
 
         /**
          * Gets the list for a specified binding.
-         *
+         * 
          * @param binding specifies the list to be returned
          * @return the list of intervals whose binding is {@code binding}
          */
         public Interval get(RegisterBinding binding) {
-            switch (binding) {
-                case Any:
-                    return any;
-                case Fixed:
-                    return fixed;
-                case Stack:
-                    return stack;
+            if (binding == RegisterBinding.Any) {
+                return any;
             }
-            throw GraalInternalError.shouldNotReachHere();
+            assert binding == RegisterBinding.Fixed;
+            return fixed;
         }
 
         /**
          * Sets the list for a specified binding.
-         *
+         * 
          * @param binding specifies the list to be replaced
          * @param list a list of intervals whose binding is {@code binding}
          */
         public void set(RegisterBinding binding, Interval list) {
             assert list != null;
-            switch (binding) {
-                case Any:
-                    any = list;
-                    break;
-                case Fixed:
-                    fixed = list;
-                    break;
-                case Stack:
-                    stack = list;
-                    break;
+            if (binding == RegisterBinding.Any) {
+                any = list;
+            } else {
+                assert binding == RegisterBinding.Fixed;
+                fixed = list;
             }
         }
 
         /**
          * Adds an interval to a list sorted by {@linkplain Interval#currentFrom() current from}
          * positions.
-         *
+         * 
          * @param binding specifies the list to be updated
          * @param interval the interval to add
          */
@@ -149,7 +134,7 @@ public final class Interval {
         /**
          * Adds an interval to a list sorted by {@linkplain Interval#from() start} positions and
          * {@linkplain Interval#firstUsage(RegisterPriority) first usage} positions.
-         *
+         * 
          * @param binding specifies the list to be updated
          * @param interval the interval to add
          */
@@ -172,7 +157,7 @@ public final class Interval {
 
         /**
          * Removes an interval from a list.
-         *
+         * 
          * @param binding specifies the list to be updated
          * @param i the interval to remove
          */
@@ -198,7 +183,7 @@ public final class Interval {
      * increasing order of priority are are used to optimize spilling when multiple overlapping
      * intervals compete for limited registers.
      */
-    public enum RegisterPriority {
+    enum RegisterPriority {
         /**
          * No special reason for an interval to be allocated a register.
          */
@@ -249,12 +234,7 @@ public final class Interval {
         /**
          * Interval has no specific register requirements.
          */
-        Any,
-
-        /**
-         * Interval is bound to a stack slot.
-         */
-        Stack;
+        Any;
 
         public static final RegisterBinding[] VALUES = values();
     }
@@ -330,7 +310,7 @@ public final class Interval {
      * List of use positions. Each entry in the list records the use position and register priority
      * associated with the use position. The entries in the list are in descending order of use
      * position.
-     *
+     * 
      */
     public static final class UsePosList {
 
@@ -338,7 +318,7 @@ public final class Interval {
 
         /**
          * Creates a use list.
-         *
+         * 
          * @param initialCapacity the initial capacity of the list in terms of entries
          */
         public UsePosList(int initialCapacity) {
@@ -353,7 +333,7 @@ public final class Interval {
          * Splits this list around a given position. All entries in this list with a use position
          * greater or equal than {@code splitPos} are removed from this list and added to the
          * returned list.
-         *
+         * 
          * @param splitPos the position for the split
          * @return a use position list containing all entries removed from this list that have a use
          *         position greater or equal than {@code splitPos}
@@ -375,7 +355,7 @@ public final class Interval {
 
         /**
          * Gets the use position at a specified index in this list.
-         *
+         * 
          * @param index the index of the entry for which the use position is returned
          * @return the use position of entry {@code index} in this list
          */
@@ -385,7 +365,7 @@ public final class Interval {
 
         /**
          * Gets the register priority for the use position at a specified index in this list.
-         *
+         * 
          * @param index the index of the entry for which the register priority is returned
          * @return the register priority of entry {@code index} in this list
          */
@@ -451,7 +431,7 @@ public final class Interval {
     /**
      * The kind of this interval.
      */
-    private LIRKind kind;
+    private PlatformKind kind;
 
     /**
      * The head of the list of ranges describing this interval. This list is sorted by
@@ -533,7 +513,7 @@ public final class Interval {
     void assignLocation(AllocatableValue newLocation) {
         if (isRegister(newLocation)) {
             assert this.location == null : "cannot re-assign location for " + this;
-            if (newLocation.getLIRKind().equals(LIRKind.Illegal) && !kind.equals(LIRKind.Illegal)) {
+            if (newLocation.getPlatformKind() == Kind.Illegal && kind != Kind.Illegal) {
                 this.location = asRegister(newLocation).asValue(kind);
                 return;
             }
@@ -542,8 +522,8 @@ public final class Interval {
         } else {
             assert this.location == null || isRegister(this.location) : "cannot re-assign location for " + this;
             assert isStackSlot(newLocation);
-            assert !newLocation.getLIRKind().equals(LIRKind.Illegal);
-            assert newLocation.getLIRKind().equals(this.kind);
+            assert newLocation.getPlatformKind() != Kind.Illegal;
+            assert newLocation.getPlatformKind() == this.kind;
         }
         this.location = newLocation;
     }
@@ -556,13 +536,13 @@ public final class Interval {
         return location;
     }
 
-    public LIRKind kind() {
+    public PlatformKind kind() {
         assert !isRegister(operand) : "cannot access type for fixed interval";
         return kind;
     }
 
-    void setKind(LIRKind kind) {
-        assert isRegister(operand) || this.kind().equals(LIRKind.Illegal) || this.kind().equals(kind) : "overwriting existing type";
+    void setKind(PlatformKind kind) {
+        assert isRegister(operand) || this.kind() == Kind.Illegal || this.kind() == kind : "overwriting existing type";
         this.kind = kind;
     }
 
@@ -715,7 +695,7 @@ public final class Interval {
         } else {
             assert isIllegal(operand) || isVariable(operand);
         }
-        this.kind = LIRKind.Illegal;
+        this.kind = Kind.Illegal;
         this.first = Range.EndMarker;
         this.usePosList = new UsePosList(4);
         this.current = Range.EndMarker;
@@ -774,7 +754,7 @@ public final class Interval {
                 Interval i1 = splitChildren.get(i);
 
                 assert i1.splitParent() == this : "not a split child of this interval";
-                assert i1.kind().equals(kind()) : "must be equal for all split children";
+                assert i1.kind() == kind() : "must be equal for all split children";
                 assert (i1.spillSlot() == null && spillSlot == null) || i1.spillSlot().equals(spillSlot()) : "must be equal for all split children";
 
                 for (int j = i + 1; j < splitChildren.size(); j++) {
@@ -881,32 +861,6 @@ public final class Interval {
         }
         assert result.covers(opId, mode) : "opId not covered by interval";
         return true;
-    }
-
-    // returns the interval that covers the given opId or null if there is none
-    Interval getIntervalCoveringOpId(int opId) {
-        assert opId >= 0 : "invalid opId";
-        assert opId < to() : "can only look into the past";
-
-        if (opId >= from()) {
-            return this;
-        }
-
-        Interval parent = splitParent();
-        Interval result = null;
-
-        assert !parent.splitChildren.isEmpty() : "no split children available";
-        int len = parent.splitChildren.size();
-
-        for (int i = len - 1; i >= 0; i--) {
-            Interval cur = parent.splitChildren.get(i);
-            if (cur.from() <= opId && opId < cur.to()) {
-                assert result == null : "covered by multiple split children " + result + " and " + cur;
-                result = cur;
-            }
-        }
-
-        return result;
     }
 
     // returns the last split child that ends before the given opId
@@ -1090,7 +1044,7 @@ public final class Interval {
      * When a split child is split again, the new created interval is a direct child of the original
      * parent. That is, there is no tree of split children stored, just a flat list. All split
      * children are spilled to the same {@linkplain #spillSlot spill slot}.
-     *
+     * 
      * @param splitPos the position at which to split this interval
      * @param allocator the register allocator context
      * @return the child interval split off from this interval
@@ -1140,7 +1094,7 @@ public final class Interval {
     /**
      * Splits this interval at a specified position and returns the head as a new interval (this
      * interval is the tail).
-     *
+     * 
      * Currently, only the first range can be split, and the new interval must not have split
      * positions
      */
@@ -1225,9 +1179,7 @@ public final class Interval {
         String to = "?";
         if (first != null && first != Range.EndMarker) {
             from = String.valueOf(from());
-            // to() may cache a computed value, modifying the current object, which is a bad idea
-            // for a printing function. Compute it directly instead.
-            to = String.valueOf(calcTo());
+            to = String.valueOf(to());
         }
         String locationString = this.location == null ? "" : "@" + this.location;
         return operandNumber + ":" + operand + (isRegister(operand) ? "" : locationString) + "[" + from + "," + to + "]";
@@ -1242,7 +1194,7 @@ public final class Interval {
 
     /**
      * Gets a single line string for logging the details of this interval to a log stream.
-     *
+     * 
      * @param allocator the register allocator context
      */
     public String logString(LinearScan allocator) {

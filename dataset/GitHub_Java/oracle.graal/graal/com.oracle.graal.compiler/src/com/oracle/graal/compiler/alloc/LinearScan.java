@@ -1036,7 +1036,7 @@ public final class LinearScan {
             // detection of method-parameters and roundfp-results
             interval.setSpillState(SpillState.StartInMemory);
         }
-        interval.addMaterializationValue(gen.getMaterializedValue(op, operand, interval));
+        interval.addMaterializationValue(gen.getMaterializedValue(op, operand));
 
         Debug.log("add def: %s defPos %d (%s)", interval, defPos, registerPriority.name());
     }
@@ -1839,7 +1839,7 @@ public final class LinearScan {
         /*
          * This is the point to enable debug logging for the whole register allocation.
          */
-        Indent indent = Debug.logAndIndent("LinearScan allocate %s", gen.getGraph().method());
+        Indent indent = Debug.logAndIndent(false, "LinearScan allocate %s", gen.getGraph().method());
 
         try (Scope s = Debug.scope("LifetimeAnalysis")) {
             numberInstructions();
@@ -1887,7 +1887,16 @@ public final class LinearScan {
             throw Debug.handle(e);
         }
 
-        printLir("After register number assignment", true);
+        try (Scope s = Debug.scope("ControlFlowOptimizations")) {
+            printLir("After register number assignment", true);
+            EdgeMoveOptimizer.optimize(ir);
+            ControlFlowOptimizer.optimize(ir);
+            RedundantMoveElimination.optimize(ir, frameMap, gen.getGraph().method());
+            NullCheckOptimizer.optimize(ir, target.implicitNullCheckLimit);
+            printLir("After control flow optimization", false);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
 
         indent.outdent();
     }
@@ -1933,7 +1942,7 @@ public final class LinearScan {
 
     private void verifyRegisters() {
         // Enable this logging to get output for the verification process.
-        try (Indent indent = Debug.logAndIndent("verifying register allocation")) {
+        try (Indent indent = Debug.logAndIndent(false, "verifying register allocation")) {
             RegisterVerifier verifier = new RegisterVerifier(this);
             verifier.verify(blockAt(0));
         }
