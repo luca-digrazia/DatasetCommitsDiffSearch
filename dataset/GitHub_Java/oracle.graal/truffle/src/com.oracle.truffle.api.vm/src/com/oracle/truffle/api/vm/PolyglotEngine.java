@@ -1818,14 +1818,7 @@ public class PolyglotEngine {
 
         @Override
         public <T> T installJavaInteropCodeCache(Object languageContext, Object key, T value, Class<T> expectedType) {
-            PolyglotEngine engine = (PolyglotEngine) languageContext;
-            if (engine == null) {
-                engine = PolyglotEngine.GLOBAL_PROFILE.get();
-            }
-            if (engine == null) {
-                return value;
-            }
-            T result = expectedType.cast(engine.javaInteropCodeCache.putIfAbsent(key, value));
+            T result = expectedType.cast(((PolyglotEngine) languageContext).javaInteropCodeCache.putIfAbsent(key, value));
             if (result != null) {
                 return result;
             } else {
@@ -1835,14 +1828,7 @@ public class PolyglotEngine {
 
         @Override
         public <T> T lookupJavaInteropCodeCache(Object languageContext, Object key, Class<T> expectedType) {
-            PolyglotEngine engine = (PolyglotEngine) languageContext;
-            if (engine == null) {
-                engine = PolyglotEngine.GLOBAL_PROFILE.get();
-            }
-            if (engine == null) {
-                return null;
-            }
-            return expectedType.cast(engine.javaInteropCodeCache.get(key));
+            return expectedType.cast(((PolyglotEngine) languageContext).javaInteropCodeCache.get(key));
         }
 
         private static LanguageShared findVMObject(Object obj) {

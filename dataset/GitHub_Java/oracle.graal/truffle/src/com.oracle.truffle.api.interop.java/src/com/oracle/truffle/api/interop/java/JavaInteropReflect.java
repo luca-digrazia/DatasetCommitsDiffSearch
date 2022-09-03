@@ -344,7 +344,7 @@ class FunctionProxyNode extends HostEntryRootNode<TruffleObject> implements Supp
 
     static CallTarget lookup(Object languageContext, Class<?> receiverClass, Method method) {
         EngineSupport engine = JavaInterop.ACCESSOR.engine();
-        if (engine == null || languageContext == null) {
+        if (engine == null) {
             return createTarget(new FunctionProxyNode(receiverClass, method));
         }
         FunctionProxyNode node = new FunctionProxyNode(receiverClass, method);
@@ -379,10 +379,7 @@ final class FunctionProxyHandler implements InvocationHandler {
         }
     }
 
-    private Object[] spreadVarArgsArray(Object[] arguments) {
-        if (!functionMethod.isVarArgs()) {
-            return arguments;
-        }
+    private static Object[] spreadVarArgsArray(Object[] arguments) {
         if (arguments.length == 1) {
             return (Object[]) arguments[0];
         } else {
@@ -476,7 +473,7 @@ class ObjectProxyNode extends HostEntryRootNode<TruffleObject> implements Suppli
 
     static CallTarget lookup(Object languageContext, Class<?> receiverClass, Class<?> interfaceClass) {
         EngineSupport engine = JavaInterop.ACCESSOR.engine();
-        if (engine == null || languageContext == null) {
+        if (engine == null) {
             return createTarget(new ObjectProxyNode(receiverClass, interfaceClass));
         }
         ObjectProxyNode node = new ObjectProxyNode(receiverClass, interfaceClass);
@@ -504,7 +501,7 @@ abstract class ProxyInvokeNode extends Node {
      */
     @Specialization(guards = {"cachedMethod.equals(method)"}, limit = "LIMIT")
     @SuppressWarnings("unused")
-    protected Object doCachedMethod(Object languageContext, TruffleObject receiver, @SuppressWarnings("unused") Method method, Object[] arguments,
+    protected static Object doCachedMethod(Object languageContext, TruffleObject receiver, @SuppressWarnings("unused") Method method, Object[] arguments,
                     @Cached("method") Method cachedMethod,
                     @Cached("method.getName()") String name,
                     @Cached("getMethodReturnType(method)") Class<?> returnClass,
@@ -598,7 +595,6 @@ abstract class ProxyInvokeNode extends Node {
     private static Object invokeOrExecute(TruffleObject receiver, Object[] arguments, String name, Node invokeNode, Node keyInfoNode, Node readNode, Node isExecutableNode, Node executeNode,
                     ConditionProfile branchProfile) {
         try {
-
             int keyInfo = ForeignAccess.sendKeyInfo(keyInfoNode, receiver, name);
             if (branchProfile.profile(KeyInfo.isInvocable(keyInfo))) {
                 try {
@@ -615,15 +611,12 @@ abstract class ProxyInvokeNode extends Node {
                         return ForeignAccess.sendExecute(executeNode, truffleReadValue, arguments);
                     }
                 }
-                if (arguments.length == 0) {
-                    return readValue;
-                }
             }
             CompilerDirectives.transferToInterpreter();
-            throw HostEntryRootNode.newUnsupportedOperationException("Member " + name + " not executable or readable.");
+            throw HostEntryRootNode.newUnsupportedOperationException("Member not executable.");
         } catch (UnknownIdentifierException e) {
             CompilerDirectives.transferToInterpreter();
-            throw HostEntryRootNode.newUnsupportedOperationException("Unknown member " + e.getUnknownIdentifier() + ".");
+            throw HostEntryRootNode.newIllegalArgumentException("Unknown member " + e.getUnknownIdentifier() + ".");
         } catch (UnsupportedTypeException e) {
             CompilerDirectives.transferToInterpreter();
             throw HostEntryRootNode.newIllegalArgumentException("Illegal argument provided.");

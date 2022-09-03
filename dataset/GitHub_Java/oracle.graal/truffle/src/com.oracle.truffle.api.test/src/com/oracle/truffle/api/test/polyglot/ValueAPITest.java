@@ -25,9 +25,7 @@ package com.oracle.truffle.api.test.polyglot;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.assertValue;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.ARRAY_ELEMENTS;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.BOOLEAN;
-import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.EXECUTABLE;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.HOST_OBJECT;
-import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.INSTANTIABLE;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.MEMBERS;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.NULL;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.NUMBER;
@@ -56,7 +54,6 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.TypeLiteral;
@@ -153,18 +150,6 @@ public class ValueAPITest {
                     new JavaSuperClass(),
                     new BigInteger("42"),
                     new BigDecimal("42"),
-                    new Function<Object, Object>() {
-                        public Object apply(Object t) {
-                            return t;
-                        }
-                    },
-                    new Supplier<String>() {
-                        public String get() {
-                            return "foobar";
-                        }
-                    },
-                    BigDecimal.class,
-                    Class.class,
                     Proxy.newProxyInstance(ValueAPITest.class.getClassLoader(), new Class[]{ProxyInterface.class}, new InvocationHandler() {
                         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                             switch (method.getName()) {
@@ -176,7 +161,7 @@ public class ValueAPITest {
                                     throw new UnsupportedOperationException(method.getName());
                             }
                         }
-                    })};
+                    }),};
 
     @Test
     public void testHostObject() {
@@ -184,14 +169,8 @@ public class ValueAPITest {
         assertTrue(context.asValue(new PrivateObject()).getMemberKeys().isEmpty());
 
         for (Object value : HOST_OBJECTS) {
-            boolean functionalInterface = value instanceof Supplier || value instanceof Function;
-            boolean instantiable = value instanceof Class && value != Class.class;
-            if (functionalInterface) {
-                assertValue(context, context.asValue(value), MEMBERS, HOST_OBJECT, EXECUTABLE);
-            } else if (value instanceof List) {
+            if (value instanceof List) {
                 assertValue(context, context.asValue(value), MEMBERS, HOST_OBJECT, ARRAY_ELEMENTS);
-            } else if (instantiable) {
-                assertValue(context, context.asValue(value), MEMBERS, HOST_OBJECT, INSTANTIABLE);
             } else {
                 assertValue(context, context.asValue(value), MEMBERS, HOST_OBJECT);
             }
@@ -213,10 +192,10 @@ public class ValueAPITest {
                     new Byte[]{42, 42, 42},
                     new Short[]{42, 42, 42},
                     new Integer[]{42, 42, 42},
-                    new Long[]{42L, 42L, 42L},
+                    new Long[]{42l, 42l, 42l},
                     new Float[]{42f, 42f, 42f},
                     new Double[]{42d, 42d, 42d},
-                    new Object[]{true, 'a', "ab", (byte) 42, (short) 42, 42, 42L, 42f, 42d},
+                    new Object[]{true, 'a', "ab", (byte) 42, (short) 42, 42, 42l, 42f, 42d},
                     new String[]{"a", "b", "c"},
                     new CharSequence[]{"a"},
                     new ArrayList<>(Arrays.asList("a", 42)),
@@ -254,12 +233,12 @@ public class ValueAPITest {
         assertEquals("baz", value.get(0).get("foo").get("bar")[0]);
     }
 
-    public interface JavaInterface {
+    public static interface JavaInterface {
 
     }
 
     @FunctionalInterface
-    public interface JavaFunctionalInterface {
+    public static interface JavaFunctionalInterface {
 
         void foo();
 
@@ -585,7 +564,7 @@ public class ValueAPITest {
         @SuppressWarnings("unused") public EmptyObject member;
     }
 
-    private interface ProxyInterface {
+    private static interface ProxyInterface {
 
         Object foobar(Object... args);
 
@@ -708,6 +687,31 @@ public class ValueAPITest {
 
         public Object execute(Value... arguments) {
             return executableResult;
+        }
+
+    }
+
+    private static class Instantiable implements ProxyInstantiable {
+
+        Object instantiableResult;
+
+        public Object newInstance(Value... arguments) {
+            return instantiableResult;
+        }
+
+    }
+
+    private static class ExecutableAndInstantiable implements ProxyExecutable, ProxyInstantiable {
+
+        Object executableResult;
+        Object instantiableResult;
+
+        public Object execute(Value... arguments) {
+            return executableResult;
+        }
+
+        public Object newInstance(Value... arguments) {
+            return instantiableResult;
         }
 
     }
