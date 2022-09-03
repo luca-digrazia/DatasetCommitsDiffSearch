@@ -26,39 +26,32 @@ import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
 import org.graalvm.compiler.core.common.alloc.Trace;
 import org.graalvm.compiler.core.common.alloc.TraceBuilderResult;
 import org.graalvm.compiler.debug.Debug;
-import org.graalvm.compiler.lir.alloc.trace.TraceBuilderPhase;
+import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.lir.alloc.trace.lsra.TraceLinearScanPhase.TraceLinearScan;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool.MoveFactory;
-import org.graalvm.compiler.lir.phases.LIRPhase;
 
 import jdk.vm.ci.code.TargetDescription;
 
-abstract class TraceLinearScanAllocationPhase {
-
-    final CharSequence getName() {
-        return LIRPhase.createName(getClass());
-    }
+final class TraceLinearScanRegisterAllocationPhase extends TraceLinearScanAllocationPhase {
 
     @Override
-    public final String toString() {
-        return getName().toString();
-    }
-
-    final void apply(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig,
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig,
                     TraceBuilderResult traceBuilderResult, TraceLinearScan allocator) {
-        apply(target, lirGenRes, trace, spillMoveFactory, registerAllocationConfig, traceBuilderResult, allocator, true);
+        allocateRegisters(allocator);
     }
 
-    final void apply(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig,
-                    TraceBuilderResult traceBuilderResult, TraceLinearScan allocator, boolean dumpLIR) {
-        run(target, lirGenRes, trace, spillMoveFactory, registerAllocationConfig, traceBuilderResult, allocator);
-        if (dumpLIR && Debug.isDumpEnabled(TraceBuilderPhase.TRACE_DUMP_LEVEL)) {
-            Debug.dump(TraceBuilderPhase.TRACE_DUMP_LEVEL, trace, "%s (Trace%s: %s)", getName(), trace.getId(), trace);
+    @SuppressWarnings("try")
+    private static void allocateRegisters(TraceLinearScan allocator) {
+        try (Indent indent = Debug.logAndIndent("allocate registers")) {
+            FixedInterval precoloredIntervals = allocator.createFixedUnhandledList();
+            TraceInterval notPrecoloredIntervals = allocator.createUnhandledListByFrom(TraceLinearScanPhase.IS_VARIABLE_INTERVAL);
+
+            // allocate cpu registers
+            TraceLinearScanWalker lsw = new TraceLinearScanWalker(allocator, precoloredIntervals, notPrecoloredIntervals);
+            lsw.walk();
+            lsw.finishAllocation();
         }
     }
-
-    abstract void run(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig,
-                    TraceBuilderResult traceBuilderResult, TraceLinearScan allocator);
 
 }

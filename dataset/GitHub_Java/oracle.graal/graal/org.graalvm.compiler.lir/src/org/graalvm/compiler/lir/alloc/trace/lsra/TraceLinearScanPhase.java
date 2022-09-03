@@ -56,6 +56,7 @@ import org.graalvm.compiler.lir.VirtualStackSlot;
 import org.graalvm.compiler.lir.alloc.trace.GlobalLivenessInfo;
 import org.graalvm.compiler.lir.alloc.trace.TraceAllocationPhase;
 import org.graalvm.compiler.lir.alloc.trace.TraceAllocationPhase.TraceAllocationContext;
+import org.graalvm.compiler.lir.alloc.trace.TraceBuilderPhase;
 import org.graalvm.compiler.lir.alloc.trace.TraceRegisterAllocationPhase;
 import org.graalvm.compiler.lir.alloc.trace.TraceUtil;
 import org.graalvm.compiler.lir.alloc.trace.lsra.TraceInterval.RegisterPriority;
@@ -596,7 +597,7 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
 
                 try (Scope s = Debug.scope("AfterLifetimeAnalysis", this)) {
 
-                    printLir("After instruction numbering");
+                    printLir("Before register allocation", true);
                     printIntervals("Before register allocation");
 
                     sortIntervalsBeforeAllocation();
@@ -625,9 +626,9 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
             }
         }
 
-        public void printLir(String label) {
-            if (Debug.isDumpEnabled(Debug.DETAILED_LEVEL)) {
-                Debug.dump(Debug.DETAILED_LEVEL, sortedBlocks(), "%s (Trace%d)", label, trace.getId());
+        public void printLir(String label, @SuppressWarnings("unused") boolean hirValid) {
+            if (Debug.isDumpEnabled(TraceBuilderPhase.TRACE_DUMP_LEVEL)) {
+                Debug.dump(TraceBuilderPhase.TRACE_DUMP_LEVEL, sortedBlocks(), label);
             }
         }
 
@@ -1047,7 +1048,7 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
 
         @SuppressWarnings("try")
         public void printIntervals(String label) {
-            if (Debug.isDumpEnabled(Debug.DETAILED_LEVEL)) {
+            if (Debug.isDumpEnabled(TraceBuilderPhase.TRACE_DUMP_LEVEL)) {
                 if (Debug.isLogEnabled()) {
                     try (Indent indent = Debug.logAndIndent("intervals %s", label)) {
                         for (FixedInterval interval : fixedIntervals) {
@@ -1069,7 +1070,7 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
                         }
                     }
                 }
-                Debug.dump(Debug.DETAILED_LEVEL, this, "%s (Trace%d)", label, trace.getId());
+                Debug.dump(Debug.INFO_LEVEL, this, label);
             }
         }
 
