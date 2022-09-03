@@ -66,7 +66,7 @@ final class PolyglotLanguageContext implements VMObject {
     volatile PolyglotValue defaultValueCache;
     volatile OptionValuesImpl optionValues;
     volatile Value nullValue;
-    String[] applicationArguments;    // effectively final
+    final String[] applicationArguments;
     final Set<PolyglotThread> activePolyglotThreads = new HashSet<>();
     volatile boolean creating; // true when context is currently being created.
     volatile boolean finalized;
@@ -228,24 +228,20 @@ final class PolyglotLanguageContext implements VMObject {
                         } finally {
                             creating = false;
                         }
-                        if (!context.inContextPreInitialization) {
-                            LANGUAGE.initializeThread(env, Thread.currentThread());
-                        }
+                        LANGUAGE.initializeThread(env, Thread.currentThread());
+
                         LANGUAGE.postInitEnv(env);
 
-                        if (!context.inContextPreInitialization) {
-                            if (!singleThreaded) {
-                                LANGUAGE.initializeMultiThreading(env);
-                            }
-
-                            for (PolyglotThreadInfo threadInfo : context.getSeenThreads().values()) {
-                                if (threadInfo.thread == Thread.currentThread()) {
-                                    continue;
-                                }
-                                LANGUAGE.initializeThread(env, threadInfo.thread);
-                            }
+                        if (!singleThreaded) {
+                            LANGUAGE.initializeMultiThreading(env);
                         }
 
+                        for (PolyglotThreadInfo threadInfo : context.getSeenThreads().values()) {
+                            if (threadInfo.thread == Thread.currentThread()) {
+                                continue;
+                            }
+                            LANGUAGE.initializeThread(env, threadInfo.thread);
+                        }
                     } catch (Throwable e) {
                         // language not successfully initialized reset to avoid inconsistent
                         // language contexts
@@ -308,21 +304,6 @@ final class PolyglotLanguageContext implements VMObject {
 
     ToGuestValuesNode createToGuestValues() {
         return new ToGuestValuesNode();
-    }
-
-    void preInitialize() {
-        ensureInitialized(null);
-    }
-
-    boolean patch(OptionValuesImpl values, String[] applicationArguments) {
-        this.optionValues = values;
-        this.applicationArguments = applicationArguments;
-        final Env newEnv = LANGUAGE.patchEnvContext(env, context.out, context.err, context.in, config, getOptionValues(), applicationArguments);
-        if (newEnv != null) {
-            env = newEnv;
-            return true;
-        }
-        return false;
     }
 
     final class ToGuestValuesNode {
