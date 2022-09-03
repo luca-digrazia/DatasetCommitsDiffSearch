@@ -119,11 +119,6 @@ public final class SpecializationGroup {
         if (previous == null || previous.getGuards().size() != elseConnectedGuards.size() + 1) {
             return null;
         }
-
-        if (elseConnectedGuards.contains(guard)) {
-            return guard;
-        }
-
         GuardData previousGuard = previous.getGuards().get(elseConnectedGuards.size());
         if (guard.getMethod().equals(previousGuard.getMethod()) && guard.isNegated() != previousGuard.isNegated()) {
             return guard;
@@ -217,7 +212,7 @@ public final class SpecializationGroup {
             int signatureIndex = 0;
             for (ActualParameter parameter : guardMatch.getParameters()) {
                 signatureIndex++;
-                if (!parameter.getSpecification().isSignature()) {
+                if (parameter.getSpecification().isSignature()) {
                     continue;
                 }
 
