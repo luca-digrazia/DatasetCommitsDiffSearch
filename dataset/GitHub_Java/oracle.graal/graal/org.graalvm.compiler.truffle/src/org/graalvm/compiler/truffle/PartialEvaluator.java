@@ -89,7 +89,6 @@ import org.graalvm.compiler.truffle.nodes.AssumptionValidAssumption;
 import org.graalvm.compiler.truffle.nodes.asserts.NeverPartOfCompilationNode;
 import org.graalvm.compiler.truffle.nodes.frame.AllowMaterializeNode;
 import org.graalvm.compiler.truffle.phases.InstrumentBranchesPhase;
-import org.graalvm.compiler.truffle.phases.InstrumentTruffleBoundariesPhase;
 import org.graalvm.compiler.truffle.phases.VerifyFrameDoesNotEscapePhase;
 import org.graalvm.compiler.truffle.substitutions.TruffleGraphBuilderPlugins;
 import org.graalvm.compiler.truffle.substitutions.TruffleInvocationPluginProvider;
@@ -416,7 +415,7 @@ public class PartialEvaluator {
         GraphBuilderConfiguration newConfig = config.copy();
         InvocationPlugins invocationPlugins = newConfig.getPlugins().getInvocationPlugins();
         registerTruffleInvocationPlugins(invocationPlugins, canDelayIntrinsification);
-        boolean mustInstrumentBranches = TruffleCompilerOptions.TruffleInstrumentBranches.getValue() || TruffleCompilerOptions.TruffleInstrumentBoundaries.getValue();
+        boolean mustInstrumentBranches = TruffleCompilerOptions.TruffleInstrumentBranches.getValue();
         return newConfig.withNodeSourcePosition(newConfig.trackNodeSourcePosition() || mustInstrumentBranches || TruffleCompilerOptions.TraceTrufflePerformanceWarnings.getValue());
     }
 
@@ -479,7 +478,6 @@ public class PartialEvaluator {
 
     protected void applyInstrumentationPhases(StructuredGraph graph, HighTierContext tierContext) {
         new InstrumentBranchesPhase().apply(graph, tierContext);
-        new InstrumentTruffleBoundariesPhase().apply(graph, tierContext);
     }
 
     @SuppressWarnings("try")
