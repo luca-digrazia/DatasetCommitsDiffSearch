@@ -34,6 +34,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
@@ -96,7 +97,7 @@ public final class LLVMFrameNullerUtil {
     }
 
     public static void nullFunction(VirtualFrame frame, FrameSlot frameSlot) {
-        frame.setObject(frameSlot, LLVMAddress.nullPointer());
+        frame.setObject(frameSlot, LLVMFunctionHandle.createHandle(0));
     }
 
     public static void nullFrameSlot(VirtualFrame frame, FrameSlot frameSlot) {
