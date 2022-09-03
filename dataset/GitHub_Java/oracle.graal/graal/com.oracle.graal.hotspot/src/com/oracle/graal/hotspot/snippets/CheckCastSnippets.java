@@ -21,26 +21,23 @@
  * questions.
  */
 package com.oracle.graal.hotspot.snippets;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
-import static com.oracle.graal.snippets.SnippetTemplate.*;
+import static com.oracle.graal.snippets.Snippet.Varargs.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.NodeIntrinsic;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
 import com.oracle.graal.snippets.Snippet.Parameter;
-import com.oracle.graal.snippets.Snippet.Varargs;
 import com.oracle.graal.snippets.Snippet.VarargsParameter;
 import com.oracle.graal.snippets.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.snippets.SnippetTemplate.Arguments;
@@ -55,25 +52,21 @@ import com.oracle.graal.snippets.nodes.*;
  */
 public class CheckCastSnippets implements SnippetsInterface {
 
-    @NodeIntrinsic(BreakpointNode.class)
-    static native void bkpt(Object object, Word hub, Word objectHub);
-
     /**
      * Type test used when the type being tested against is a final type.
      */
     @Snippet
     public static Object checkcastExact(
                     @Parameter("object") Object object,
-                    @Parameter("exactHub") Word exactHub,
+                    @Parameter("exactHub") Object exactHub,
                     @ConstantParameter("checkNull") boolean checkNull) {
         if (checkNull && object == null) {
             isNull.inc();
             return object;
         }
-        Word objectHub = loadHub(object);
+        Object objectHub = loadHub(object);
         if (objectHub != exactHub) {
             exactMiss.inc();
-            //bkpt(object, exactHub, objectHub);
             DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.ClassCastException);
         }
         exactHit.inc();
@@ -89,7 +82,7 @@ public class CheckCastSnippets implements SnippetsInterface {
      */
     @Snippet
     public static Object checkcastPrimary(
-                    @Parameter("hub") Word hub,
+                    @Parameter("hub") Object hub,
                     @Parameter("object") Object object,
                     @ConstantParameter("checkNull") boolean checkNull,
                     @ConstantParameter("superCheckOffset") int superCheckOffset) {
@@ -97,8 +90,8 @@ public class CheckCastSnippets implements SnippetsInterface {
             isNull.inc();
             return object;
         }
-        Word objectHub = loadHub(object);
-        if (loadWordFromWord(objectHub, superCheckOffset) != hub) {
+        Object objectHub = loadHub(object);
+        if (UnsafeLoadNode.loadObject(objectHub, 0, superCheckOffset, true) != hub) {
             displayMiss.inc();
             DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.ClassCastException);
         }
@@ -111,19 +104,19 @@ public class CheckCastSnippets implements SnippetsInterface {
      */
     @Snippet
     public static Object checkcastSecondary(
-                    @Parameter("hub") Word hub,
+                    @Parameter("hub") Object hub,
                     @Parameter("object") Object object,
-                    @VarargsParameter("hints") Word[] hints,
+                    @VarargsParameter("hints") Object[] hints,
                     @ConstantParameter("checkNull") boolean checkNull) {
         if (checkNull && object == null) {
             isNull.inc();
             return object;
         }
-        Word objectHub = loadHub(object);
+        Object objectHub = loadHub(object);
         // if we get an exact match: succeed immediately
         ExplodeLoopNode.explodeLoop();
         for (int i = 0; i < hints.length; i++) {
-            Word hintHub = hints[i];
+            Object hintHub = hints[i];
             if (hintHub == objectHub) {
                 hintsHit.inc();
                 return object;
@@ -140,28 +133,39 @@ public class CheckCastSnippets implements SnippetsInterface {
      * in an object array store check).
      */
     @Snippet
-    public static Object checkcastDynamic(
-                    @Parameter("hub") Word hub,
+    public static Object checkcastUnknown(
+                    @Parameter("hub") Object hub,
                     @Parameter("object") Object object,
+                    @VarargsParameter("hints") Object[] hints,
                     @ConstantParameter("checkNull") boolean checkNull) {
         if (checkNull && object == null) {
             isNull.inc();
             return object;
         }
-        Word objectHub = loadHub(object);
+        Object objectHub = loadHub(object);
+        // if we get an exact match: succeed immediately
+        ExplodeLoopNode.explodeLoop();
+        for (int i = 0; i < hints.length; i++) {
+            Object hintHub = hints[i];
+            if (hintHub == objectHub) {
+                hintsHit.inc();
+                return object;
+            }
+        }
         if (!checkUnknownSubType(hub, objectHub)) {
             DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.ClassCastException);
         }
         return object;
     }
 
-    static Word loadWordElement(Word metaspaceArray, int index) {
-        return loadWordFromWord(metaspaceArray, metaspaceArrayBaseOffset() + index * wordSize());
+    //This is used instead of a Java array read to avoid the array bounds check.
+    static Object loadNonNullObjectElement(Object array, int index) {
+        return UnsafeLoadNode.loadObject(array, arrayBaseOffset(Kind.Object), index * arrayIndexScale(Kind.Object), true);
     }
 
-    static boolean checkSecondarySubType(Word t, Word s) {
+    static boolean checkSecondarySubType(Object t, Object s) {
         // if (S.cache == T) return true
-        if (loadWordFromWord(s, secondarySuperCacheOffset()) == t) {
+        if (UnsafeLoadNode.loadObject(s, 0, secondarySuperCacheOffset(), true) == t) {
             cacheHit.inc();
             return true;
         }
@@ -173,11 +177,11 @@ public class CheckCastSnippets implements SnippetsInterface {
         }
 
         // if (S.scan_s_s_array(T)) { S.cache = T; return true; }
-        Word secondarySupers = loadWordFromWord(s, secondarySupersOffset());
-        int length = loadIntFromWord(secondarySupers, metaspaceArrayLengthOffset());
-        for (int i = 0; i < length; i++) {
-            if (t == loadWordElement(secondarySupers, i)) {
-                DirectObjectStoreNode.storeWord(s, secondarySuperCacheOffset(), 0, t);
+        Object[] secondarySupers = UnsafeCastNode.cast(UnsafeLoadNode.loadObject(s, 0, secondarySupersOffset(), true), Object[].class);
+
+        for (int i = 0; i < secondarySupers.length; i++) {
+            if (t == loadNonNullObjectElement(secondarySupers, i)) {
+                DirectObjectStoreNode.storeObject(s, secondarySuperCacheOffset(), 0, t);
                 secondariesHit.inc();
                 return true;
             }
@@ -186,13 +190,13 @@ public class CheckCastSnippets implements SnippetsInterface {
         return false;
     }
 
-    static boolean checkUnknownSubType(Word t, Word s) {
+    static boolean checkUnknownSubType(Object t, Object s) {
         // int off = T.offset
         int superCheckOffset = UnsafeLoadNode.load(t, 0, superCheckOffsetOffset(), Kind.Int);
         boolean primary = superCheckOffset != secondarySuperCacheOffset();
 
         // if (T = S[off]) return true
-        if (loadWordFromWord(s, superCheckOffset) == t) {
+        if (UnsafeLoadNode.loadObject(s, 0, superCheckOffset, true) == t) {
             if (primary) {
                 cacheHit.inc();
             } else {
@@ -214,11 +218,10 @@ public class CheckCastSnippets implements SnippetsInterface {
         }
 
         // if (S.scan_s_s_array(T)) { S.cache = T; return true; }
-        Word secondarySupers = loadWordFromWord(s, secondarySupersOffset());
-        int length = loadIntFromWord(secondarySupers, metaspaceArrayLengthOffset());
-        for (int i = 0; i < length; i++) {
-            if (t == loadWordElement(secondarySupers, i)) {
-                DirectObjectStoreNode.storeWord(s, secondarySuperCacheOffset(), 0, t);
+        Object[] secondarySupers = UnsafeCastNode.cast(UnsafeLoadNode.loadObject(s, 0, secondarySupersOffset(), true), Object[].class);
+        for (int i = 0; i < secondarySupers.length; i++) {
+            if (t == loadNonNullObjectElement(secondarySupers, i)) {
+                DirectObjectStoreNode.storeObject(s, secondarySuperCacheOffset(), 0, t);
                 secondariesHit.inc();
                 return true;
             }
@@ -233,14 +236,14 @@ public class CheckCastSnippets implements SnippetsInterface {
         private final ResolvedJavaMethod exact;
         private final ResolvedJavaMethod primary;
         private final ResolvedJavaMethod secondary;
-        private final ResolvedJavaMethod dynamic;
+        private final ResolvedJavaMethod unknown;
 
         public Templates(CodeCacheProvider runtime) {
             super(runtime, CheckCastSnippets.class);
-            exact = snippet("checkcastExact", Object.class, Word.class, boolean.class);
-            primary = snippet("checkcastPrimary", Word.class, Object.class, boolean.class, int.class);
-            secondary = snippet("checkcastSecondary", Word.class, Object.class, Word[].class, boolean.class);
-            dynamic = snippet("checkcastDynamic", Word.class, Object.class, boolean.class);
+            exact = snippet("checkcastExact", Object.class, Object.class, boolean.class);
+            primary = snippet("checkcastPrimary", Object.class, Object.class, boolean.class, int.class);
+            secondary = snippet("checkcastSecondary", Object.class, Object.class, Object[].class, boolean.class);
+            unknown = snippet("checkcastUnknown", Object.class, Object.class, Object[].class, boolean.class);
         }
 
         /**
@@ -248,55 +251,41 @@ public class CheckCastSnippets implements SnippetsInterface {
          */
         public void lower(CheckCastNode checkcast, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) checkcast.graph();
+            ValueNode hub = checkcast.targetClassInstruction();
             ValueNode object = checkcast.object();
-            final HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) checkcast.type();
-            TypeCheckHints hintInfo = new TypeCheckHints(checkcast.type(), checkcast.profile(), tool.assumptions(), GraalOptions.CheckcastMinHintHitProbability, GraalOptions.CheckcastMaxHints);
-            ValueNode hub = ConstantNode.forConstant(type.klass(), runtime, checkcast.graph());
+            TypeCheckHints hintInfo = new TypeCheckHints(checkcast.targetClass(), checkcast.profile(), tool.assumptions(), GraalOptions.CheckcastMinHintHitProbability, GraalOptions.CheckcastMaxHints);
+            final HotSpotResolvedJavaType target = (HotSpotResolvedJavaType) checkcast.targetClass();
             boolean checkNull = !object.stamp().nonNull();
             Arguments arguments;
             Key key;
 
-            assert type != null;
-            if (hintInfo.exact) {
-                ConstantNode[] hints = createHints(hintInfo, runtime, graph);
+            if (target == null) {
+                HotSpotKlassOop[] hints = createHints(hintInfo);
+                key = new Key(unknown).add("hints", vargargs(Object.class, hints.length)).add("checkNull", checkNull);
+                arguments = arguments("hub", hub).add("object", object).add("hints", hints);
+            } else if (hintInfo.exact) {
+                HotSpotKlassOop[] hints = createHints(hintInfo);
                 assert hints.length == 1;
                 key = new Key(exact).add("checkNull", checkNull);
                 arguments = arguments("object", object).add("exactHub", hints[0]);
-            } else if (type.isPrimaryType()) {
-                key = new Key(primary).add("checkNull", checkNull).add("superCheckOffset", type.superCheckOffset());
+            } else if (target.isPrimaryType()) {
+                key = new Key(primary).add("checkNull", checkNull).add("superCheckOffset", target.superCheckOffset());
                 arguments = arguments("hub", hub).add("object", object);
             } else {
-                ConstantNode[] hints = createHints(hintInfo, runtime, graph);
-                key = new Key(secondary).add("hints", Varargs.vargargs(new Word[hints.length], wordStamp())).add("checkNull", checkNull);
+                HotSpotKlassOop[] hints = createHints(hintInfo);
+                key = new Key(secondary).add("hints", vargargs(Object.class, hints.length)).add("checkNull", checkNull);
                 arguments = arguments("hub", hub).add("object", object).add("hints", hints);
             }
 
             SnippetTemplate template = cache.get(key);
             Debug.log("Lowering checkcast in %s: node=%s, template=%s, arguments=%s", graph, checkcast, template, arguments);
-            template.instantiate(runtime, checkcast, DEFAULT_REPLACER, arguments);
+            template.instantiate(runtime, checkcast, arguments);
         }
 
-        /**
-         * Lowers a dynamic checkcast node.
-         */
-        public void lower(CheckCastDynamicNode checkcast) {
-            StructuredGraph graph = (StructuredGraph) checkcast.graph();
-            ValueNode hub = checkcast.type();
-            ValueNode object = checkcast.object();
-            boolean checkNull = !object.stamp().nonNull();
-
-            Key key = new Key(dynamic).add("checkNull", checkNull);
-            Arguments arguments = arguments("hub", hub).add("object", object);
-
-            SnippetTemplate template = cache.get(key);
-            Debug.log("Lowering dynamic checkcast in %s: node=%s, template=%s, arguments=%s", graph, checkcast, template, arguments);
-            template.instantiate(runtime, checkcast, DEFAULT_REPLACER, arguments);
-        }
-
-        static ConstantNode[] createHints(TypeCheckHints hints, MetaAccessProvider runtime, Graph graph) {
-            ConstantNode[] hintHubs = new ConstantNode[hints.types.length];
+        static HotSpotKlassOop[] createHints(TypeCheckHints hints) {
+            HotSpotKlassOop[] hintHubs = new HotSpotKlassOop[hints.types.length];
             for (int i = 0; i < hintHubs.length; i++) {
-                hintHubs[i] = ConstantNode.forConstant(((HotSpotJavaType) hints.types[i]).klass(), runtime, graph);
+                hintHubs[i] = ((HotSpotJavaType) hints.types[i]).klassOop();
             }
             return hintHubs;
         }
