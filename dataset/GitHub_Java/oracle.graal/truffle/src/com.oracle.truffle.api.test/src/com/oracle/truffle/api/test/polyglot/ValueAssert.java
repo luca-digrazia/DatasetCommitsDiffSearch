@@ -103,19 +103,18 @@ public class ValueAssert {
         assertSame(value, value.as(Value.class));
 
         for (Trait supportedType : expectedTypes) {
-            String msg = "expected " + supportedType.name() + " but was " + value.toString();
             switch (supportedType) {
                 case NULL:
-                    assertTrue(msg, value.isNull());
+                    assertTrue("expected " + supportedType.name(), value.isNull());
                     break;
                 case BOOLEAN:
-                    assertTrue(msg, value.isBoolean());
+                    assertTrue("expected " + supportedType.name(), value.isBoolean());
                     boolean booleanValue = value.asBoolean();
                     assertEquals(booleanValue, value.as(Boolean.class));
                     assertEquals(booleanValue, value.as(boolean.class));
                     break;
                 case STRING:
-                    assertTrue(msg, value.isString());
+                    assertTrue("expected " + supportedType.name(), value.isString());
                     String stringValue = value.asString();
                     assertEquals(stringValue, value.as(String.class));
                     if (stringValue.length() == 1) {
@@ -127,11 +126,11 @@ public class ValueAssert {
                     assertValueNumber(value);
                     break;
                 case ARRAY_ELEMENTS:
-                    assertTrue(msg, value.hasArrayElements());
+                    assertTrue("expected " + supportedType.name(), value.hasArrayElements());
                     assertValueArrayElements(context, value);
                     break;
                 case EXECUTABLE:
-                    assertTrue(msg, value.canExecute());
+                    assertTrue("expected " + supportedType.name(), value.canExecute());
                     assertFunctionalInterfaceMapping(context, value, arguments);
                     if (arguments != null) {
                         Value result = value.execute(arguments);
@@ -139,7 +138,7 @@ public class ValueAssert {
                     }
                     break;
                 case INSTANTIABLE:
-                    assertTrue(msg, value.canInstantiate());
+                    assertTrue("expected " + supportedType.name(), value.canInstantiate());
                     value.as(Function.class);
                     if (arguments != null) {
                         Value result = value.newInstance(arguments);
@@ -152,18 +151,18 @@ public class ValueAssert {
                     break;
 
                 case HOST_OBJECT:
-                    assertTrue(msg, value.isHostObject());
+                    assertTrue("expected " + supportedType.name(), value.isHostObject());
                     Object hostObject = value.asHostObject();
                     assertTrue(!(hostObject instanceof Proxy));
                     // TODO assert mapping to interfaces
                     break;
                 case PROXY_OBJECT:
-                    assertTrue(msg, value.isProxyObject());
+                    assertTrue("expected " + supportedType.name(), value.isProxyObject());
                     Object proxyObject = value.asProxyObject();
                     assertTrue(proxyObject instanceof Proxy);
                     break;
                 case MEMBERS:
-                    assertTrue(msg, value.hasMembers());
+                    assertTrue("expected " + supportedType.name(), value.hasMembers());
 
                     for (String key : value.getMemberKeys()) {
                         assertValue(context, value.getMember(key));
@@ -172,7 +171,7 @@ public class ValueAssert {
                     // TODO virify setting and getting
                     break;
                 case NATIVE:
-                    assertTrue(msg, value.isNativePointer());
+                    assertTrue("expected " + supportedType.name(), value.isNativePointer());
                     value.asNativePointer();
                     break;
             }
@@ -247,7 +246,7 @@ public class ValueAssert {
                     assertFails(() -> value.getMemberKeys(), UnsupportedOperationException.class);
                     break;
                 case EXECUTABLE:
-                    assertFalse(value.toString(), value.canExecute());
+                    assertFalse(value.canExecute());
                     assertFails(() -> value.execute(), UnsupportedOperationException.class);
                     if (!value.canInstantiate()) {
                         assertFails(() -> value.as(Function.class), ClassCastException.class);
@@ -352,30 +351,26 @@ public class ValueAssert {
         }, exceptionType);
     }
 
-    static <T extends Throwable> void assertFails(Callable<?> callable, Class<T> exceptionType, Consumer<T> verifier) {
+    static <T extends Throwable> void assertFails(Callable<?> callable, Class<T> exceptionType, Consumer<T> verfier) {
         try {
             callable.call();
         } catch (Throwable t) {
             if (!exceptionType.isInstance(t)) {
-                throw new AssertionError("expected instanceof " + exceptionType.getName() + " was " + t.getClass().getName(), t);
+                throw new AssertionError("expected instanceof " + exceptionType + " was " + t.getClass(), t);
             }
-            verifier.accept(exceptionType.cast(t));
-            return;
+            verfier.accept(exceptionType.cast(t));
         }
-        fail("expected " + exceptionType.getName() + " but no exception was thrown");
     }
 
-    static <T extends Throwable> void assertFails(Runnable run, Class<T> exceptionType, Consumer<T> verifier) {
+    static <T extends Throwable> void assertFails(Runnable run, Class<T> exceptionType, Consumer<T> verfier) {
         try {
             run.run();
         } catch (Throwable t) {
             if (!exceptionType.isInstance(t)) {
-                throw new AssertionError("expected instanceof " + exceptionType.getName() + " was " + t.getClass().getName(), t);
+                throw new AssertionError("expected instanceof " + exceptionType + " was " + t.getClass(), t);
             }
-            verifier.accept(exceptionType.cast(t));
-            return;
+            verfier.accept(exceptionType.cast(t));
         }
-        fail("expected " + exceptionType.getName() + " but no exception was thrown");
     }
 
     static void assertFails(Callable<?> callable, Class<? extends Throwable> exceptionType) {
@@ -383,11 +378,9 @@ public class ValueAssert {
             callable.call();
         } catch (Throwable t) {
             if (!exceptionType.isInstance(t)) {
-                throw new AssertionError("expected instanceof " + exceptionType.getName() + " was " + t.getClass().getName(), t);
+                throw new AssertionError("expected instanceof " + exceptionType + " was " + t.getClass(), t);
             }
-            return;
         }
-        fail("expected " + exceptionType.getName() + " but no exception was thrown");
     }
 
     private static void assertValueNumber(Value value) {
