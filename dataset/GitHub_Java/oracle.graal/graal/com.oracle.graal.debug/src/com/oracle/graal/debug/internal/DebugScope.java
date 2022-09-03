@@ -32,32 +32,23 @@ public final class DebugScope {
 
     private final class IndentImpl implements Indent {
 
-        private static final String INDENTATION_INCREMENT = "  ";
-
         final String indent;
         boolean enabled;
         final IndentImpl parentIndent;
 
         IndentImpl(IndentImpl parentIndent, boolean enabled) {
             this.parentIndent = parentIndent;
-            this.indent = (parentIndent == null ? "" : parentIndent.indent + INDENTATION_INCREMENT);
+            this.indent = (parentIndent == null ? "" : parentIndent.indent + "    ");
             this.enabled = enabled;
-        }
-
-        private void printScopeName() {
-            if (logScopeName) {
-                if (parentIndent != null) {
-                    parentIndent.printScopeName();
-                }
-                output.println(indent + "[thread:" + Thread.currentThread().getId() + "] scope: " + qualifiedName);
-                logScopeName = false;
-            }
         }
 
         @Override
         public void log(String msg, Object... args) {
             if (enabled) {
-                printScopeName();
+                if (logScopeName) {
+                    output.println(indent + "scope: " + qualifiedName);
+                    logScopeName = false;
+                }
                 output.println(indent + String.format(msg, args));
                 lastUsedIndent = this;
             }
@@ -95,13 +86,13 @@ public final class DebugScope {
     private static DebugTimer scopeTime = Debug.timer("ScopeTime");
 
     private final DebugScope parent;
-    private IndentImpl lastUsedIndent;
-    private boolean logScopeName;
+    private IndentImpl lastUsedIndent = null;
+    private boolean logScopeName = false;
 
     private Object[] context;
 
-    private final DebugValueMap valueMap;
-    private final String qualifiedName;
+    private DebugValueMap valueMap;
+    private String qualifiedName;
 
     private static final char SCOPE_SEP = '.';
 
@@ -132,10 +123,10 @@ public final class DebugScope {
         this.context = context;
         this.qualifiedName = qualifiedName;
         if (parent != null) {
-            lastUsedIndent = new IndentImpl(parent.lastUsedIndent, parent.isLogEnabled());
+            this.lastUsedIndent = new IndentImpl(parent.lastUsedIndent, parent.isLogEnabled());
             logScopeName = !parent.qualifiedName.equals(qualifiedName);
         } else {
-            lastUsedIndent = new IndentImpl(null, false);
+            this.lastUsedIndent = new IndentImpl(null, false);
             logScopeName = true;
         }
 
@@ -184,7 +175,10 @@ public final class DebugScope {
 
     public void printf(String msg, Object... args) {
         if (isLogEnabled()) {
-            lastUsedIndent.printScopeName();
+            if (logScopeName) {
+                output.println("scope: " + qualifiedName);
+                logScopeName = false;
+            }
             output.printf(msg, args);
         }
     }

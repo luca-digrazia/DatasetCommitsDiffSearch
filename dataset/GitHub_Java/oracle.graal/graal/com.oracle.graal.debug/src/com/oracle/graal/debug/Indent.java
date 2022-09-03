@@ -48,20 +48,8 @@ package com.oracle.graal.debug;
  *          in.outdent();
  *      }
  * </pre>
- * 
- * Example usage with try-with-resources:
- * 
- * <pre>
- * 
- *      try (Indent in = Debug.logIndent("header message")) {
- *          ...
- *          in.log("message");
- *          ...
- *      }
- * 
- * </pre>
  */
-public interface Indent extends AutoCloseable {
+public interface Indent {
 
     /**
      * Prints an indented message to the DebugLevel's logging stream if logging is enabled.
@@ -93,9 +81,9 @@ public interface Indent extends AutoCloseable {
      * @param msg The format string of the log message
      * @param args The arguments referenced by the log message string
      * @return The new indentation level
-     * @see Debug#logAndIndent
+     * @see Debug#logIndent
      */
-    Indent logAndIndent(String msg, Object... args);
+    Indent logIndent(String msg, Object... args);
 
     /**
      * Restores the previous indent level. Calling this method is important to restore the correct
@@ -104,6 +92,4 @@ public interface Indent extends AutoCloseable {
      * @return The indent level from which this Indent was created.
      */
     Indent outdent();
-
-    void close();
 }

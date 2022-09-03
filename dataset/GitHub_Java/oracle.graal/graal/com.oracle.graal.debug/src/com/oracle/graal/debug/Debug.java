@@ -342,9 +342,6 @@ public class Debug {
         }
     }
 
-    /**
-     * Creates an object for counting value frequencies.
-     */
     public static DebugHistogram createHistogram(String name) {
         return new DebugHistogramImpl(name);
     }
