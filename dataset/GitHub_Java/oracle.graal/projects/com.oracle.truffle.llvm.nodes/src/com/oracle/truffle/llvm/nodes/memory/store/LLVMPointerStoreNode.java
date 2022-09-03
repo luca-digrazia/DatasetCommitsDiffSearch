@@ -51,15 +51,10 @@ public abstract class LLVMPointerStoreNode extends LLVMStoreNodeCommon {
         super(sourceLocation);
     }
 
-    @Specialization(guards = "!isAutoDerefHandle(addr)")
+    @Specialization
     protected void doAddress(long addr, Object value,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
         getLLVMMemoryCached().putPointer(addr, toNative.executeWithTarget(value));
-    }
-
-    @Specialization(guards = "isAutoDerefHandle(addr)")
-    protected void doDerefAddress(long addr, Object value) {
-        doTruffleObject(getDerefHandleGetReceiverNode().execute(addr), value);
     }
 
     @Specialization(guards = "!isAutoDerefHandle(addr)")
