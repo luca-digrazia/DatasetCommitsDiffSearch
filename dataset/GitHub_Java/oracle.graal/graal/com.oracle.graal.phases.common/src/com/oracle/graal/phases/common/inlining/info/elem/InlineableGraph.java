@@ -63,7 +63,8 @@ public class InlineableGraph implements Inlineable {
     private static StructuredGraph buildGraph(final ResolvedJavaMethod method, final Invoke invoke, final HighTierContext context, CanonicalizerPhase canonicalizer) {
         StructuredGraph newGraph = getOriginalGraph(method, context);
         if (newGraph == null) {
-            newGraph = parseBytecodes(method, context, canonicalizer);
+            newGraph = new StructuredGraph(method);
+            parseBytecodes(newGraph, context, canonicalizer);
         }
         newGraph = newGraph.copy();
 
@@ -170,12 +171,11 @@ public class InlineableGraph implements Inlineable {
     }
 
     /**
-     * This method builds the IR nodes for the given <code>method</code> and canonicalizes them.
-     * Provided profiling info is mature, the resulting graph is cached. The caller is responsible
-     * for cloning before modification.</p>
+     * This method builds the IR nodes for <code>newGraph</code> and canonicalizes them. Provided
+     * profiling info is mature, the resulting graph is cached. The caller is responsible for
+     * cloning before modification.</p>
      */
-    private static StructuredGraph parseBytecodes(ResolvedJavaMethod method, HighTierContext context, CanonicalizerPhase canonicalizer) {
-        StructuredGraph newGraph = new StructuredGraph(method);
+    private static StructuredGraph parseBytecodes(StructuredGraph newGraph, HighTierContext context, CanonicalizerPhase canonicalizer) {
         try (Debug.Scope s = Debug.scope("InlineGraph", newGraph)) {
             if (context.getGraphBuilderSuite() != null) {
                 context.getGraphBuilderSuite().apply(newGraph, context);
