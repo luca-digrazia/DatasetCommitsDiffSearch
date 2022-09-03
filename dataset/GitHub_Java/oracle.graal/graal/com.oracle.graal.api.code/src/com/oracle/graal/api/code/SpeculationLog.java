@@ -36,11 +36,11 @@ public final class SpeculationLog {
 
     public static final int MAX_CACHE_SIZE = 1 << 15;
 
-    private List<Object> speculations = new ArrayList<>();
+    private List<DeoptimizationReason> speculations = new ArrayList<>();
     private boolean[] map = new boolean[10];
-    private Set<Object> snapshot = new HashSet<>();
+    private Set<DeoptimizationReason> snapshot = new HashSet<>();
 
-    private short addSpeculation(Object reason) {
+    public short addSpeculation(DeoptimizationReason reason) {
         short index = (short) speculations.indexOf(reason);
         if (index != -1) {
             // Nothing to add, reason already registered.
@@ -68,10 +68,7 @@ public final class SpeculationLog {
         }
     }
 
-    public Constant maySpeculate(Object reason) {
-        if (snapshot.contains(reason)) {
-            return null;
-        }
-        return Constant.forShort(addSpeculation(reason));
+    public boolean maySpeculate(DeoptimizationReason reason) {
+        return !snapshot.contains(reason);
     }
 }

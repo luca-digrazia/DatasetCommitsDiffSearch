@@ -35,11 +35,11 @@ import com.oracle.graal.hotspot.meta.*;
  */
 public class CompilerToVMImpl implements CompilerToVM {
 
-    private native int installCode0(HotSpotCompilationResult comp, HotSpotInstalledCode code, boolean[] triggeredDeoptimizations);
+    private native int installCode0(HotSpotCompilationResult comp, HotSpotInstalledCode code, HotSpotCodeInfo info, boolean[] triggeredDeoptimizations);
 
     @Override
-    public CodeInstallResult installCode(HotSpotCompilationResult comp, HotSpotInstalledCode code, SpeculationLog speculationLog) {
-        return CodeInstallResult.values()[installCode0(comp, code, (speculationLog == null) ? null : speculationLog.getRawMap())];
+    public CodeInstallResult installCode(HotSpotCompilationResult comp, HotSpotInstalledCode code, HotSpotCodeInfo info, SpeculationLog speculationLog) {
+        return CodeInstallResult.values()[installCode0(comp, code, info, (speculationLog == null) ? null : speculationLog.getRawMap())];
     }
 
     @Override
@@ -124,10 +124,10 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native long getMaxCallTargetOffset(long stub);
 
     @Override
-    public native String disassembleNMethod(long nmethod);
+    public native String disassembleNative(byte[] code, long address);
 
     @Override
-    public native byte[] getCode(long nmethod);
+    public native String disassembleNMethod(long nmethod);
 
     @Override
     public native StackTraceElement getStackTraceElement(long metaspaceMethod, int bci);
@@ -145,6 +145,9 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native long[] getDeoptedLeafGraphIds();
 
     @Override
+    public native String decodePC(long pc);
+
+    @Override
     public native long[] getLineNumberTable(HotSpotResolvedJavaMethod method);
 
     @Override
@@ -152,7 +155,4 @@ public class CompilerToVMImpl implements CompilerToVM {
 
     @Override
     public native String getFileName(HotSpotResolvedJavaType method);
-
-    @Override
-    public native void clearQueuedForCompilation(HotSpotResolvedJavaMethod method);
 }

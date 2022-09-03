@@ -149,10 +149,6 @@ public class GraalCompiler {
             new PartialEscapeAnalysisPhase(runtime, assumptions, true).apply(graph);
         }
 
-        if (GraalOptions.OptConvertDeoptsToGuards) {
-            new ConvertDeoptimizeToGuardPhase().apply(graph);
-        }
-
         new LockEliminationPhase().apply(graph);
 
         if (GraalOptions.OptLoopTransform) {

@@ -33,25 +33,26 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
-import com.oracle.graal.replacements.SnippetTemplate.Key;
+import com.oracle.graal.snippets.*;
+import com.oracle.graal.snippets.Snippet.ConstantParameter;
+import com.oracle.graal.snippets.SnippetTemplate.AbstractTemplates;
+import com.oracle.graal.snippets.SnippetTemplate.Key;
 
 /**
  * Base class for implementing some low level code providing the out-of-line slow path for a
  * snippet. A concrete stub is defined a subclass of this class.
  * <p>
  * Implementation detail: The stub classes re-use some of the functionality for {@link Snippet}s
- * purely for convenience (e.g., can re-use the {@link ReplacementsInstaller}).
+ * purely for convenience (e.g., can re-use the {@link SnippetInstaller}).
  */
-public abstract class Stub extends AbstractTemplates implements Snippets {
+public abstract class Stub extends AbstractTemplates implements SnippetsInterface {
 
     /**
      * The method implementing the stub.
@@ -107,7 +108,7 @@ public abstract class Stub extends AbstractTemplates implements Snippets {
      * it.
      */
     public void install(Backend backend) {
-        StructuredGraph graph = (StructuredGraph) stubMethod.getCompilerStorage().get(Snippet.class);
+        StructuredGraph graph = (StructuredGraph) stubMethod.getCompilerStorage().get(Graph.class);
 
         Key key = new Key(stubMethod);
         populateKey(key);
@@ -120,21 +121,22 @@ public abstract class Stub extends AbstractTemplates implements Snippets {
         final CompilationResult compResult = GraalCompiler.compileMethod(runtime(), backend, runtime().getTarget(), stubMethod, graph, null, phasePlan, OptimisticOptimizations.ALL,
                         new SpeculationLog());
 
+        final CodeInfo[] info = new CodeInfo[1];
         stubCode = Debug.scope("CodeInstall", new Object[]{runtime(), stubMethod}, new Callable<InstalledCode>() {
 
             @Override
             public InstalledCode call() {
-                InstalledCode installedCode = runtime().addMethod(stubMethod, compResult);
+                InstalledCode installedCode = runtime().addMethod(stubMethod, compResult, info);
                 assert installedCode != null : "error installing stub " + stubMethod;
                 if (Debug.isDumpEnabled()) {
-                    Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
+                    Debug.dump(new Object[]{compResult, info[0]}, "After code installation");
                 }
                 return installedCode;
             }
         });
 
         assert stubCode != null : "error installing stub " + stubMethod;
-        linkage.setAddress(stubCode.getStart());
+        linkage.setAddress(info[0].getStart());
     }
 
     /**
