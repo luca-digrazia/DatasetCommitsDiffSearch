@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,6 +22,9 @@
  */
 package org.graalvm.compiler.replacements.classfile;
 
+import static org.graalvm.compiler.serviceprovider.JDK9Method.getModule;
+import static org.graalvm.compiler.serviceprovider.JDK9Method.getResourceAsStream;
+
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,7 +34,7 @@ import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
-import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.compiler.serviceprovider.JDK9Method;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -97,6 +98,20 @@ public final class ClassfileBytecodeProvider implements BytecodeProvider {
         return false;
     }
 
+    private static InputStream getClassfileAsStream(Class<?> c) {
+        String classfilePath = c.getName().replace('.', '/') + ".class";
+        if (JDK9Method.JAVA_SPECIFICATION_VERSION >= 9) {
+            Object module = getModule(c);
+            return getResourceAsStream(module, classfilePath);
+        } else {
+            ClassLoader cl = c.getClassLoader();
+            if (cl == null) {
+                return ClassLoader.getSystemResourceAsStream(classfilePath);
+            }
+            return cl.getResourceAsStream(classfilePath);
+        }
+    }
+
     /**
      * Gets a {@link Classfile} created by parsing the class file bytes for {@code c}.
      *
@@ -108,7 +123,7 @@ public final class ClassfileBytecodeProvider implements BytecodeProvider {
         if (classfile == null) {
             try {
                 ResolvedJavaType type = metaAccess.lookupJavaType(c);
-                InputStream in = GraalServices.getClassfileAsStream(c);
+                InputStream in = getClassfileAsStream(c);
                 if (in != null) {
                     DataInputStream stream = new DataInputStream(in);
                     classfile = new Classfile(type, stream, this);

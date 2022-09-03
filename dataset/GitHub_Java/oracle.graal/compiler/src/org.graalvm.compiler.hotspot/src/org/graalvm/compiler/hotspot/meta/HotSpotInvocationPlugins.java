@@ -149,6 +149,7 @@ final class HotSpotInvocationPlugins extends InvocationPlugins {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static EconomicSet<Object> initTrustedModules(CompilerConfiguration compilerConfiguration) throws GraalError {
         try {
             EconomicSet<Object> res = EconomicSet.create();

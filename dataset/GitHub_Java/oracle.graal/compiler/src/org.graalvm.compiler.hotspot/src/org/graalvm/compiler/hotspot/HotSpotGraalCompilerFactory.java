@@ -199,12 +199,8 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
                     if (JVMCI_LOADER != null) {
                         // When running with +UseJVMCIClassLoader all classes in
                         // the JVMCI loader should be compiled with C1.
-                        try {
-                            if (declaringClass.getClassLoader() == JVMCI_LOADER) {
-                                return CompilationLevel.Simple;
-                            }
-                        } catch (SecurityException e) {
-                            // This is definitely not a JVMCI or Graal class
+                        if (declaringClass.getClassLoader() == JVMCI_LOADER) {
+                            return CompilationLevel.Simple;
                         }
                     } else {
                         // JVMCI and Graal are on the bootclasspath so match based on the package.
