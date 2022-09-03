@@ -24,10 +24,11 @@
  */
 package com.oracle.truffle.api.object;
 
-public interface LayoutFactory {
-    Layout createLayout(LayoutBuilder layoutBuilder);
+public interface ObjectLocation extends TypedLocation {
+    Class<? extends Object> getType();
 
-    Property createProperty(Object id, Location location, int flags);
-
-    int getPriority();
+    /**
+     * If {@code true}, this location does not accept {@code null} values.
+     */
+    boolean isNonNull();
 }

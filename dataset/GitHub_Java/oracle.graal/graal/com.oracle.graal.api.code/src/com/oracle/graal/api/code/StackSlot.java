@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,58 +22,38 @@
  */
 package com.oracle.graal.api.code;
 
-import static com.oracle.graal.api.meta.Kind.*;
-
 import com.oracle.graal.api.meta.*;
 
 /**
- * Represents a compiler spill slot or an outgoing stack-based argument in a method's frame
- * or an incoming stack-based argument in a method's {@linkplain #inCallerFrame() caller's frame}.
+ * Represents a compiler spill slot or an outgoing stack-based argument in a method's frame or an
+ * incoming stack-based argument in a method's {@linkplain #isInCallerFrame() caller's frame}.
  */
-public final class StackSlot extends Value {
+public final class StackSlot extends StackSlotValue {
+
     private static final long serialVersionUID = -7725071921307318433L;
 
     private final int offset;
     private final boolean addFrameSize;
 
     /**
-     * Gets a {@link StackSlot} instance representing a stack slot at a given index
-     * holding a value of a given kind.
+     * Gets a {@link StackSlot} instance representing a stack slot at a given index holding a value
+     * of a given kind.
      *
      * @param kind The kind of the value stored in the stack slot.
      * @param offset The offset of the stack slot (in bytes)
-     * @param inCallerFrame Specifies if the offset is relative to the stack pointer,
-     *        or the beginning of the frame (stack pointer + total frame size).
+     * @param addFrameSize Specifies if the offset is relative to the stack pointer, or the
+     *            beginning of the frame (stack pointer + total frame size).
      */
-    public static StackSlot get(Kind kind, int offset, boolean addFrameSize) {
-        assert kind.stackKind() == kind;
+    public static StackSlot get(LIRKind kind, int offset, boolean addFrameSize) {
         assert addFrameSize || offset >= 0;
-
-        if (offset % CACHE_GRANULARITY == 0) {
-            StackSlot[][] cache;
-            int index = offset / CACHE_GRANULARITY;
-            if (!addFrameSize) {
-                cache = OUT_CACHE;
-            } else if (offset >= 0) {
-                cache = IN_CACHE;
-            } else {
-                cache = SPILL_CACHE;
-                index = -index;
-            }
-            StackSlot[] slots = cache[kind.ordinal()];
-            if (index < slots.length) {
-                StackSlot slot = slots[index];
-                assert slot.kind == kind && slot.offset == offset && slot.addFrameSize == addFrameSize;
-                return slot;
-            }
-        }
         return new StackSlot(kind, offset, addFrameSize);
     }
 
     /**
-     * Private constructor to enforce use of {@link #get()} so that a cache can be used.
+     * Private constructor to enforce use of {@link #get(LIRKind, int, boolean)} so that a cache can
+     * be used.
      */
-    private StackSlot(Kind kind, int offset, boolean addFrameSize) {
+    private StackSlot(LIRKind kind, int offset, boolean addFrameSize) {
         super(kind);
         this.offset = offset;
         this.addFrameSize = addFrameSize;
@@ -81,52 +61,36 @@ public final class StackSlot extends Value {
 
     /**
      * Gets the offset of this stack slot, relative to the stack pointer.
+     *
      * @return The offset of this slot (in bytes).
      */
-    public int offset(int totalFrameSize) {
+    public int getOffset(int totalFrameSize) {
         assert totalFrameSize > 0 || !addFrameSize;
         int result = offset + (addFrameSize ? totalFrameSize : 0);
         assert result >= 0;
         return result;
     }
 
-    public boolean inCallerFrame() {
+    public boolean isInCallerFrame() {
         return addFrameSize && offset >= 0;
     }
 
-    public int rawOffset() {
+    public int getRawOffset() {
         return offset;
     }
 
-    public boolean rawAddFrameSize() {
+    public boolean getRawAddFrameSize() {
         return addFrameSize;
-    }
-
-    @Override
-    public int hashCode() {
-        return kind.ordinal() ^ (offset << 4) ^ (addFrameSize ? 15 : 0);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == this) {
-            return true;
-        }
-        if (o instanceof StackSlot) {
-            StackSlot l = (StackSlot) o;
-            return l.kind == kind && l.offset == offset && l.addFrameSize == addFrameSize;
-        }
-        return false;
     }
 
     @Override
     public String toString() {
         if (!addFrameSize) {
-            return "out:" + offset + kindSuffix();
+            return "out:" + offset + getKindSuffix();
         } else if (offset >= 0) {
-            return "in:" + offset + kindSuffix();
+            return "in:" + offset + getKindSuffix();
         } else {
-            return "stack:" + (-offset) + kindSuffix();
+            return "stack:" + (-offset) + getKindSuffix();
         }
     }
 
@@ -136,7 +100,7 @@ public final class StackSlot extends Value {
     public StackSlot asOutArg() {
         assert offset >= 0;
         if (addFrameSize) {
-            return get(kind, offset, false);
+            return get(getLIRKind(), offset, false);
         }
         return this;
     }
@@ -147,29 +111,26 @@ public final class StackSlot extends Value {
     public StackSlot asInArg() {
         assert offset >= 0;
         if (!addFrameSize) {
-            return get(kind, offset, true);
+            return get(getLIRKind(), offset, true);
         }
         return this;
     }
 
+    @Override
+    public int hashCode() {
+        final int prime = 37;
+        int result = super.hashCode();
+        result = prime * result + (addFrameSize ? 1231 : 1237);
+        result = prime * result + offset;
+        return result;
+    }
 
-    private static final int CACHE_GRANULARITY = 8;
-    private static final int SPILL_CACHE_PER_KIND_SIZE = 100;
-    private static final int PARAM_CACHE_PER_KIND_SIZE = 10;
-
-    private static final StackSlot[][] SPILL_CACHE = makeCache(SPILL_CACHE_PER_KIND_SIZE, -1, true);
-    private static final StackSlot[][] IN_CACHE = makeCache(PARAM_CACHE_PER_KIND_SIZE, 1, true);
-    private static final StackSlot[][] OUT_CACHE = makeCache(PARAM_CACHE_PER_KIND_SIZE, 1, false);
-
-    private static StackSlot[][] makeCache(int cachePerKindSize, int sign, boolean addFrameSize) {
-        StackSlot[][] cache = new StackSlot[Kind.VALUES.length][];
-        for (Kind kind : new Kind[] {Illegal, Int, Long, Float, Double, Object, Jsr}) {
-            StackSlot[] slots = new StackSlot[cachePerKindSize];
-            for (int i = 0; i < cachePerKindSize; i++) {
-                slots[i] = new StackSlot(kind, sign * i * CACHE_GRANULARITY, addFrameSize);
-            }
-            cache[kind.ordinal()] = slots;
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof StackSlot) {
+            StackSlot other = (StackSlot) obj;
+            return super.equals(obj) && addFrameSize == other.addFrameSize && offset == other.offset;
         }
-        return cache;
+        return false;
     }
 }

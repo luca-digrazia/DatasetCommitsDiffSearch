@@ -156,6 +156,11 @@ public abstract class Shape {
     public abstract Allocator allocator();
 
     /**
+     * For copying over properties after exchanging the prototype of an object.
+     */
+    public abstract Shape copyOverPropertiesInternal(Shape destination);
+
+    /**
      * Get number of properties in this shape.
      */
     public abstract int getPropertyCount();

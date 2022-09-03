@@ -24,10 +24,8 @@
  */
 package com.oracle.truffle.api.object;
 
-public interface LayoutFactory {
-    Layout createLayout(LayoutBuilder layoutBuilder);
+import com.oracle.truffle.api.nodes.*;
 
-    Property createProperty(Object id, Location location, int flags);
-
-    int getPriority();
+public final class FinalLocationException extends SlowPathException {
+    private static final long serialVersionUID = -30188494510914293L;
 }

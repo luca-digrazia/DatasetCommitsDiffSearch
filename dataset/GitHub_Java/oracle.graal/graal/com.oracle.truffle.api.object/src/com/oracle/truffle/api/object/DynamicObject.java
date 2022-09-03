@@ -25,9 +25,8 @@
 package com.oracle.truffle.api.object;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.interop.*;
 
-public interface DynamicObject extends TypedObject, TruffleObject {
+public interface DynamicObject extends TypedObject {
     /**
      * Get the object's current shape.
      */

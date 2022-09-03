@@ -24,10 +24,9 @@
  */
 package com.oracle.truffle.api.object;
 
-public interface LayoutFactory {
-    Layout createLayout(LayoutBuilder layoutBuilder);
-
-    Property createProperty(Object id, Location location, int flags);
-
-    int getPriority();
+public interface TypedLocation extends BaseLocation {
+    /**
+     * The type of this location.
+     */
+    Class<?> getType();
 }

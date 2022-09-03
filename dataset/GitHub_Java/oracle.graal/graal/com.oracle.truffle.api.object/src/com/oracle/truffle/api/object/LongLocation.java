@@ -24,10 +24,31 @@
  */
 package com.oracle.truffle.api.object;
 
-public interface LayoutFactory {
-    Layout createLayout(LayoutBuilder layoutBuilder);
+public interface LongLocation extends TypedLocation {
+    /**
+     * @see #get(DynamicObject, Shape)
+     */
+    long getLong(DynamicObject store, Shape shape);
 
-    Property createProperty(Object id, Location location, int flags);
+    /**
+     * @see #get(DynamicObject, boolean)
+     */
+    long getLong(DynamicObject store, boolean condition);
 
-    int getPriority();
+    /**
+     * @see #set(DynamicObject, Object)
+     */
+    void setLong(DynamicObject store, long value) throws FinalLocationException;
+
+    /**
+     * @see #set(DynamicObject, Object, Shape)
+     */
+    void setLong(DynamicObject store, long value, Shape shape) throws FinalLocationException;
+
+    /**
+     * @see #set(DynamicObject, Object, Shape, Shape)
+     */
+    void setLong(DynamicObject store, long value, Shape oldShape, Shape newShape);
+
+    Class<Long> getType();
 }

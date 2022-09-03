@@ -58,12 +58,12 @@ public class AMD64FrameMapBuilder extends DelayedFrameMapBuilder {
     }
 
     @Override
-    protected void mapStackSlots(HashMap<VirtualStackSlot, StackSlot> mapping) {
+    protected void mapStackSlots(FrameMap frameMap, HashMap<VirtualStackSlot, StackSlot> mapping) {
         if (rbpSpillSlot != null) {
-            StackSlot reservedSlot = rbpSpillSlot.transform();
+            StackSlot reservedSlot = rbpSpillSlot.transform(frameMap);
             assert asStackSlot(reservedSlot).getRawOffset() == -16 : asStackSlot(reservedSlot).getRawOffset();
             mapping.put(rbpSpillSlot, reservedSlot);
         }
-        super.mapStackSlots(mapping);
+        super.mapStackSlots(frameMap, mapping);
     }
 }

@@ -24,11 +24,7 @@
  */
 package com.oracle.truffle.api.object;
 
-import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.*;
-import com.oracle.truffle.api.interop.exception.*;
-import com.oracle.truffle.api.interop.messages.*;
 
 public class ObjectType {
     /**
@@ -70,18 +66,5 @@ public class ObjectType {
      * @param shapeAfter shape after the property was added
      */
     public void onPropertyAdded(Property property, Shape shapeBefore, Shape shapeAfter) {
-    }
-
-    public ForeignAccessFactory getForeignAccessFactory() {
-        return new ForeignAccessFactory() {
-
-            public InteropPredicate getLanguageCheck() {
-                throw new AccessException(this.toString() + " cannot be shared");
-            }
-
-            public CallTarget getAccess(Message tree) {
-                throw new AccessException(this.toString() + " cannot be shared; Message not possible: " + tree.toString());
-            }
-        };
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,10 +24,46 @@
  */
 package com.oracle.truffle.api.object;
 
-public interface LayoutFactory {
-    Layout createLayout(LayoutBuilder layoutBuilder);
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.atomic.*;
 
-    Property createProperty(Object id, Location location, int flags);
+public final class DebugCounter {
+    private static final ArrayList<DebugCounter> allCounters = new ArrayList<>();
 
-    int getPriority();
+    private final String name;
+    private final AtomicLong value;
+
+    private DebugCounter(String name) {
+        this.name = name;
+        this.value = new AtomicLong();
+        allCounters.add(this);
+    }
+
+    public static DebugCounter create(String name) {
+        return new DebugCounter(name);
+    }
+
+    public long get() {
+        return value.get();
+    }
+
+    public void inc() {
+        value.incrementAndGet();
+    }
+
+    @Override
+    public String toString() {
+        return name + ": " + value;
+    }
+
+    public static void dumpCounters() {
+        dumpCounters(System.out);
+    }
+
+    public static void dumpCounters(PrintStream out) {
+        for (DebugCounter counter : allCounters) {
+            out.println(counter);
+        }
+    }
 }
