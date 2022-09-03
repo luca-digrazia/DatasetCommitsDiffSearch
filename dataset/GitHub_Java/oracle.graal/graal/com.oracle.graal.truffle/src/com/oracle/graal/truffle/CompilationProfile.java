@@ -22,17 +22,13 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilationThreshold;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInvalidationReprofileCount;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleMinInvokeThreshold;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleReplaceReprofileCount;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleOSRCompilationThreshold;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
 public class CompilationProfile {
-    private static final int RESET_OSR_VALUE = Integer.MAX_VALUE - TruffleOSRCompilationThreshold.getValue();
+
+    private static final int TIMESTAMP_THRESHOLD = Math.max(TruffleCompilationThreshold.getValue() / 2, 1);
 
     /**
      * Number of times an installed code for this tree was invalidated.
@@ -45,14 +41,11 @@ public class CompilationProfile {
     private int compilationCallThreshold;
     private int compilationCallAndLoopThreshold;
 
-    private int osrThreshold;
-
     private long timestamp;
 
     public CompilationProfile() {
         compilationCallThreshold = TruffleMinInvokeThreshold.getValue();
         compilationCallAndLoopThreshold = TruffleCompilationThreshold.getValue();
-        osrThreshold = RESET_OSR_VALUE;
     }
 
     @Override
@@ -114,21 +107,12 @@ public class CompilationProfile {
         ensureProfiling(reprofile, reprofile);
     }
 
-    final void reportOSRCompiledLoop() {
-        osrThreshold = RESET_OSR_VALUE;
-    }
-
-    final void reportOSR() throws ArithmeticException {
-        osrThreshold = Math.incrementExact(osrThreshold);
-    }
-
     public void reportInterpreterCall() {
-        osrThreshold = RESET_OSR_VALUE;
         interpreterCallCount++;
         interpreterCallAndLoopCount++;
 
         int callsMissing = compilationCallAndLoopThreshold - interpreterCallAndLoopCount;
-        if (callsMissing == getTimestampThreshold()) {
+        if (callsMissing == TIMESTAMP_THRESHOLD) {
             timestamp = System.nanoTime();
         }
     }
@@ -146,7 +130,7 @@ public class CompilationProfile {
     }
 
     public void deferCompilation() {
-        ensureProfiling(0, getTimestampThreshold() + 1);
+        ensureProfiling(0, TIMESTAMP_THRESHOLD + 1);
         timestamp = 0;
         deferedCount++;
     }
@@ -155,7 +139,7 @@ public class CompilationProfile {
         interpreterCallAndLoopCount += count;
 
         int callsMissing = compilationCallAndLoopThreshold - interpreterCallAndLoopCount;
-        if (callsMissing <= getTimestampThreshold() && callsMissing + count > getTimestampThreshold()) {
+        if (callsMissing <= TIMESTAMP_THRESHOLD && callsMissing + count > TIMESTAMP_THRESHOLD) {
             timestamp = System.nanoTime();
         }
     }
@@ -170,7 +154,4 @@ public class CompilationProfile {
         return timestamp;
     }
 
-    private static int getTimestampThreshold() {
-        return Math.max(TruffleCompilationThreshold.getValue() / 2, 1);
-    }
 }
