@@ -22,34 +22,25 @@
  */
 package com.oracle.graal.compiler.test;
 
+import static org.junit.Assert.*;
+
 import org.junit.*;
 
-import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 
-public class SimpleCFGTest extends GraalCompilerTest {
-
-    private static void dumpGraph(final StructuredGraph graph) {
-        Debug.scope("SimpleCFGTest", new Runnable() {
-
-            @Override
-            public void run() {
-                Debug.dump(graph, "Graph");
-            }
-        });
-    }
+public class SimpleCFGTest {
 
     @Test
     public void testImplies() {
         StructuredGraph graph = new StructuredGraph();
 
-        AbstractEndNode trueEnd = graph.add(new EndNode());
-        AbstractEndNode falseEnd = graph.add(new EndNode());
+        EndNode trueEnd = graph.add(new EndNode());
+        EndNode falseEnd = graph.add(new EndNode());
 
-        AbstractBeginNode trueBegin = graph.add(new BeginNode());
+        BeginNode trueBegin = graph.add(new BeginNode());
         trueBegin.setNext(trueEnd);
-        AbstractBeginNode falseBegin = graph.add(new BeginNode());
+        BeginNode falseBegin = graph.add(new BeginNode());
         falseBegin.setNext(falseEnd);
 
         IfNode ifNode = graph.add(new IfNode(null, trueBegin, falseBegin, 0.5));
@@ -60,8 +51,6 @@ public class SimpleCFGTest extends GraalCompilerTest {
         merge.addForwardEnd(falseEnd);
         ReturnNode returnNode = graph.add(new ReturnNode(null));
         merge.setNext(returnNode);
-
-        dumpGraph(graph);
 
         ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, true, true);
 
@@ -99,15 +88,15 @@ public class SimpleCFGTest extends GraalCompilerTest {
     }
 
     public static void assertDominator(Block block, Block expectedDominator) {
-        Assert.assertEquals("dominator of " + block, expectedDominator, block.getDominator());
+        assertEquals("dominator of " + block, expectedDominator, block.getDominator());
     }
 
     public static void assertDominatedSize(Block block, int size) {
-        Assert.assertEquals("number of dominated blocks of " + block, size, block.getDominated().size());
+        assertEquals("number of dominated blocks of " + block, size, block.getDominated().size());
     }
 
     public static void assertPostdominator(Block block, Block expectedPostdominator) {
-        Assert.assertEquals("postdominator of " + block, expectedPostdominator, block.getPostdominator());
+        assertEquals("postdominator of " + block, expectedPostdominator, block.getPostdominator());
     }
 
 }

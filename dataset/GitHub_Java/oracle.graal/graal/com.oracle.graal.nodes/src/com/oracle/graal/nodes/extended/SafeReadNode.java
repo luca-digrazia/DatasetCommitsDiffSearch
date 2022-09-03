@@ -22,15 +22,14 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 
-
+/**
+ * An analog to {@link ReadNode} with the additional semantics of null-checking the receiver object
+ * before reading from it.
+ */
 public class SafeReadNode extends SafeAccessNode implements Lowerable {
 
     public SafeReadNode(ValueNode object, LocationNode location, Stamp stamp) {
@@ -39,11 +38,11 @@ public class SafeReadNode extends SafeAccessNode implements Lowerable {
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
+    public void lower(LoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) graph();
-        GuardNode guard = (GuardNode) tool.createGuard(graph.unique(new NullCheckNode(object(), false)), RiDeoptReason.NullCheckException);
+        ValueNode guard = tool.createNullCheckGuard(object());
         ReadNode read = graph.add(new ReadNode(object(), location(), stamp()));
-        read.setGuard(guard);
+        read.dependencies().add(guard);
 
         graph.replaceFixedWithFixed(this, read);
     }

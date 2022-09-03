@@ -29,8 +29,9 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "Deopt", nameTemplate = "Deopt {p#reason/s}")
-public class DeoptimizeNode extends ControlSinkNode implements Node.IterableNodeType, LIRLowerable {
+public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, LIRLowerable {
 
+    private String message;
     private final DeoptimizationAction action;
     private final DeoptimizationReason reason;
 
@@ -38,6 +39,14 @@ public class DeoptimizeNode extends ControlSinkNode implements Node.IterableNode
         super(StampFactory.forVoid());
         this.action = action;
         this.reason = reason;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    public String message() {
+        return message;
     }
 
     public DeoptimizationAction action() {
@@ -50,7 +59,7 @@ public class DeoptimizeNode extends ControlSinkNode implements Node.IterableNode
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.emitDeoptimize(action, reason);
+        gen.emitDeoptimize(action, reason, message);
     }
 
     @NodeIntrinsic

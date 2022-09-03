@@ -79,25 +79,27 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         } else if (deoptBegin.predecessor() instanceof IfNode) {
             IfNode ifNode = (IfNode) deoptBegin.predecessor();
             BeginNode otherBegin = ifNode.trueSuccessor();
-            LogicNode conditionNode = ifNode.condition();
-            if (conditionNode instanceof InstanceOfNode || conditionNode instanceof InstanceOfDynamicNode) {
+            BooleanNode conditionNode = ifNode.condition();
+            if (conditionNode instanceof InstanceOfNode) {
                 // TODO The lowering currently does not support a FixedGuard as the usage of an
                 // InstanceOfNode. Relax this restriction.
                 return;
             }
-            FixedWithNextNode pred = (FixedWithNextNode) ifNode.predecessor();
             boolean negated = false;
             if (deoptBegin == ifNode.trueSuccessor()) {
                 negated = true;
-                graph.removeSplitPropagate(ifNode, ifNode.falseSuccessor());
-            } else {
-                graph.removeSplitPropagate(ifNode, ifNode.trueSuccessor());
+                otherBegin = ifNode.falseSuccessor();
             }
-            Debug.log("Converting %s on %-5s branch of %s to guard for remaining branch %s.", deopt, deoptBegin == ifNode.trueSuccessor() ? "true" : "false", ifNode, otherBegin);
+            BeginNode ifBlockBegin = findBeginNode(ifNode);
+            Debug.log("Converting %s on %-5s branch of %s to guard for remaining branch %s. IfBegin=%s", deopt, deoptBegin == ifNode.trueSuccessor() ? "true" : "false", ifNode, otherBegin,
+                            ifBlockBegin);
             FixedGuardNode guard = graph.add(new FixedGuardNode(conditionNode, deopt.reason(), deopt.action(), negated));
-            FixedNode next = pred.next();
-            pred.setNext(guard);
+            otherBegin.replaceAtUsages(ifBlockBegin);
+            FixedNode next = otherBegin.next();
+            otherBegin.setNext(null);
             guard.setNext(next);
+            ifNode.replaceAtPredecessor(guard);
+            GraphUtil.killCFG(ifNode);
         }
     }
 }

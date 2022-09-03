@@ -65,16 +65,6 @@ public abstract class LIRGeneratorTool {
 
     public abstract Address makeAddress(LocationNode location, ValueNode object);
 
-    public abstract Address makeAddress(Kind kind, Value base, int displacement);
-
-    public Address makeAddress(Kind kind, Value base) {
-        return makeAddress(kind, base, 0);
-    }
-
-    public Address makeAddress(Kind kind, int address) {
-        return makeAddress(kind, Value.ILLEGAL, address);
-    }
-
     public abstract Value emitMove(Value input);
 
     public abstract void emitMove(Value src, Value dst);
@@ -127,7 +117,7 @@ public abstract class LIRGeneratorTool {
 
     public abstract void emitConditional(ConditionalNode i);
 
-    public abstract void emitGuardCheck(LogicNode comp, DeoptimizationReason deoptReason, DeoptimizationAction deoptAction, boolean negated);
+    public abstract void emitGuardCheck(BooleanNode comp, DeoptimizationReason deoptReason, DeoptimizationAction deoptAction, boolean negated);
 
     public abstract void emitSwitch(SwitchNode i);
 

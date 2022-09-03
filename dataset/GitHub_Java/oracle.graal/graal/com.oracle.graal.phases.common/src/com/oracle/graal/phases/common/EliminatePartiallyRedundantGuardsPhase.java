@@ -49,10 +49,10 @@ public class EliminatePartiallyRedundantGuardsPhase extends Phase {
 
     private static class Condition {
 
-        final LogicNode conditionNode;
+        final BooleanNode conditionNode;
         final boolean negated;
 
-        public Condition(LogicNode conditionNode, boolean negated) {
+        public Condition(BooleanNode conditionNode, boolean negated) {
             this.conditionNode = conditionNode;
             this.negated = negated;
         }
@@ -139,7 +139,7 @@ public class EliminatePartiallyRedundantGuardsPhase extends Phase {
         }
         Graph graph = merge.graph();
         for (GuardNode guard : hits) {
-            PhiNode phi = graph.add(new PhiNode(PhiType.Guard, merge, null));
+            PhiNode phi = graph.add(new PhiNode(PhiType.Guard, merge));
             for (EndNode otherEnd : merge.forwardEnds()) {
                 phi.addInput(graph.unique(new GuardNode(guard.condition(), BeginNode.prevBegin(otherEnd), guard.reason(), guard.action(), guard.negated())));
             }

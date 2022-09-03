@@ -36,9 +36,9 @@ public interface LoweringTool {
 
     ValueNode createNullCheckGuard(ValueNode object);
 
-    ValueNode createGuard(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action);
+    ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action);
 
-    ValueNode createGuard(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated);
+    ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated);
 
     Assumptions assumptions();
 
@@ -48,9 +48,4 @@ public interface LoweringTool {
      * Gets the closest fixed node preceding the node currently being lowered.
      */
     FixedWithNextNode lastFixedNode();
-
-    /**
-     * Sets the closest fixed node preceding the next node to be lowered.
-     */
-    void setLastFixedNode(FixedWithNextNode n);
 }

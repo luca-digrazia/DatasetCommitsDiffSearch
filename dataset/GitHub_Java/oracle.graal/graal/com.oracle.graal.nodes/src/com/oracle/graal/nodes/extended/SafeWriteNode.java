@@ -22,20 +22,35 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-
-public class SafeWriteNode extends SafeAccessNode implements Lowerable{
+/**
+ * An analog to {@link WriteNode} with the additional semantics of null-checking the receiver object
+ * before writing to it.
+ */
+public class SafeWriteNode extends SafeAccessNode implements StateSplit, Lowerable {
 
     @Input private ValueNode value;
+    @Input(notDataflow = true) private FrameState stateAfter;
+
+    public FrameState stateAfter() {
+        return stateAfter;
+    }
+
+    public void setStateAfter(FrameState x) {
+        assert x == null || x.isAlive() : "frame state must be in a graph";
+        updateUsages(stateAfter, x);
+        stateAfter = x;
+    }
+
+    public boolean hasSideEffect() {
+        return true;
+    }
 
     public SafeWriteNode(ValueNode object, ValueNode value, LocationNode location) {
-        super(object, location, StampFactory.forKind(CiKind.Void));
+        super(object, location, StampFactory.forVoid());
         this.value = value;
     }
 
@@ -44,11 +59,11 @@ public class SafeWriteNode extends SafeAccessNode implements Lowerable{
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
+    public void lower(LoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) graph();
-        GuardNode guard = (GuardNode) tool.createGuard(graph.unique(new NullCheckNode(object(), false)));
+        ValueNode guard = tool.createNullCheckGuard(object());
         WriteNode write = graph.add(new WriteNode(object(), value(), location()));
-        write.setGuard(guard);
+        write.dependencies().add(guard);
         graph.replaceFixedWithFixed(this, write);
     }
 }

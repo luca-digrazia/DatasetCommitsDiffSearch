@@ -323,7 +323,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             }
         }
         assert !ends.hasNext();
-        assert falseEnds.size() + trueEnds.size() == xs.length;
 
         connectEnds(falseEnds, phiValues, oldFalseSuccessor, merge, tool);
         connectEnds(trueEnds, phiValues, oldTrueSuccessor, merge, tool);

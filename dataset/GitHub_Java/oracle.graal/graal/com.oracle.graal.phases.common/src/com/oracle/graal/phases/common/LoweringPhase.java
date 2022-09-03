@@ -70,7 +70,7 @@ public class LoweringPhase extends Phase {
         }
 
         @Override
-        public ValueNode createGuard(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action) {
+        public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action) {
             return createGuard(condition, deoptReason, action, false);
         }
 
@@ -80,7 +80,7 @@ public class LoweringPhase extends Phase {
         }
 
         @Override
-        public ValueNode createGuard(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
+        public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
             if (GraalOptions.OptEliminateGuards) {
                 for (Node usage : condition.usages()) {
                     if (!activeGuards.isNew(usage) && activeGuards.isMarked(usage)) {
@@ -139,7 +139,7 @@ public class LoweringPhase extends Phase {
             deferred = false;
             processBlock(schedule.getCFG().getStartBlock(), graph.createNodeBitMap(), null, schedule, processed);
             Debug.dump(graph, "Lowering iteration %d", i++);
-            new CanonicalizerPhase(runtime, assumptions, mark, null).apply(graph);
+            new CanonicalizerPhase(null, runtime, assumptions, mark, null).apply(graph);
 
             if (!deferred && !containsLowerable(graph.getNewNodes(mark))) {
                 // No new lowerable nodes - done!

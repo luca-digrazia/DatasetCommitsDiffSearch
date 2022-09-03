@@ -30,8 +30,8 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 
-
 public class ConvertUnreachedToGuardPhase extends Phase {
+
     private OptimisticOptimizations opt;
 
     public ConvertUnreachedToGuardPhase(OptimisticOptimizations opt) {
@@ -49,19 +49,20 @@ public class ConvertUnreachedToGuardPhase extends Phase {
                 BeginNode insertGuard = null;
                 BeginNode delete = null;
                 boolean inverted = false;
-                if (ifNode.probability(IfNode.TRUE_EDGE) == 0) {
+                if (ifNode.probability(ifNode.trueSuccessor()) == 0) {
                     insertGuard = ifNode.falseSuccessor();
                     delete = ifNode.trueSuccessor();
                     inverted = true;
-                } else if (ifNode.probability(IfNode.FALSE_EDGE) == 0) {
+                } else if (ifNode.probability(ifNode.falseSuccessor()) == 0) {
                     insertGuard = ifNode.trueSuccessor();
                     delete = ifNode.falseSuccessor();
                 }
                 if (insertGuard != null) {
-                    GuardNode guard = graph.unique(new GuardNode(ifNode.compare(), BeginNode.prevBegin(ifNode), DeoptimizationReason.UnreachedCode, DeoptimizationAction.InvalidateReprofile, inverted, ifNode.leafGraphId()));
+                    GuardNode guard = graph.unique(new GuardNode(ifNode.condition(), BeginNode.prevBegin(ifNode), DeoptimizationReason.UnreachedCode, DeoptimizationAction.InvalidateReprofile,
+                                    inverted));
                     graph.addBeforeFixed(ifNode, graph.add(new ValueAnchorNode(guard)));
                     GraphUtil.killCFG(delete);
-                    graph.removeSplit(ifNode, inverted ? IfNode.FALSE_EDGE : IfNode.TRUE_EDGE);
+                    graph.removeSplit(ifNode, inverted ? ifNode.falseSuccessor() : ifNode.trueSuccessor());
                 }
             }
         }

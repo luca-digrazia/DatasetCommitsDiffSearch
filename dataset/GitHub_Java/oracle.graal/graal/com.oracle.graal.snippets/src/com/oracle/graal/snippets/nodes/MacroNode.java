@@ -33,14 +33,14 @@ import com.oracle.graal.nodes.spi.*;
 
 public class MacroNode extends AbstractStateSplit implements Lowerable {
 
-    @Input protected NodeInputList<ValueNode> arguments;
+    @Input protected final NodeInputList<ValueNode> arguments;
 
     private final int bci;
     private final ResolvedJavaMethod targetMethod;
     private final JavaType returnType;
 
-    protected MacroNode(InvokeNode invoke) {
-        super(invoke.stamp(), invoke.stateAfter());
+    protected MacroNode(Invoke invoke) {
+        super(invoke.node().stamp(), invoke.stateAfter());
         this.arguments = new NodeInputList<>(this, invoke.methodCallTarget().arguments());
         this.bci = invoke.bci();
         this.targetMethod = invoke.methodCallTarget().targetMethod();
@@ -62,7 +62,7 @@ public class MacroNode extends AbstractStateSplit implements Lowerable {
     protected InvokeNode createInvoke() {
         InvokeKind invokeKind = Modifier.isStatic(targetMethod.getModifiers()) ? InvokeKind.Static : InvokeKind.Special;
         MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(invokeKind, targetMethod, arguments.toArray(new ValueNode[arguments.size()]), returnType));
-        InvokeNode invoke = graph().add(new InvokeNode(callTarget, bci, StructuredGraph.INVALID_GRAPH_ID));
+        InvokeNode invoke = graph().add(new InvokeNode(callTarget, bci));
         invoke.setStateAfter(stateAfter());
         return invoke;
     }

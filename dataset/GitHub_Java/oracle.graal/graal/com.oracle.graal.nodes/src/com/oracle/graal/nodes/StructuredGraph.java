@@ -44,22 +44,20 @@ public class StructuredGraph extends Graph {
 
     private final Set<Long> leafGraphIds = new HashSet<>(4);
 
-    private StartNode start;
+    private final StartNode start;
     private final ResolvedJavaMethod method;
     private final long graphId;
     private final int entryBCI;
 
     /**
-     * Creates a new Graph containing a single {@link AbstractBeginNode} as the {@link #start()
-     * start} node.
+     * Creates a new Graph containing a single {@link BeginNode} as the {@link #start() start} node.
      */
     public StructuredGraph() {
         this(null, null);
     }
 
     /**
-     * Creates a new Graph containing a single {@link AbstractBeginNode} as the {@link #start()
-     * start} node.
+     * Creates a new Graph containing a single {@link BeginNode} as the {@link #start() start} node.
      */
     public StructuredGraph(String name, ResolvedJavaMethod method) {
         this(name, method, uniqueGraphIds.incrementAndGet(), INVOCATION_ENTRY_BCI);
@@ -75,7 +73,7 @@ public class StructuredGraph extends Graph {
 
     private StructuredGraph(String name, ResolvedJavaMethod method, long graphId, int entryBCI) {
         super(name);
-        this.setStart(add(new StartNode()));
+        this.start = add(new StartNode());
         this.method = method;
         this.graphId = graphId;
         this.entryBCI = entryBCI;
@@ -116,10 +114,6 @@ public class StructuredGraph extends Graph {
 
     public long graphId() {
         return graphId;
-    }
-
-    public void setStart(StartNode start) {
-        this.start = start;
     }
 
     /**
@@ -220,8 +214,8 @@ public class StructuredGraph extends Graph {
      */
     public void removeFixed(FixedWithNextNode node) {
         assert node != null;
-        if (node instanceof AbstractBeginNode) {
-            ((AbstractBeginNode) node).prepareDelete();
+        if (node instanceof BeginNode) {
+            ((BeginNode) node).prepareDelete();
         }
         assert node.usages().isEmpty() : node + " " + node.usages();
         FixedNode next = node.next();
@@ -242,6 +236,7 @@ public class StructuredGraph extends Graph {
 
     public void replaceFixedWithFixed(FixedWithNextNode node, FixedWithNextNode replacement) {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
+        replacement.setProbability(node.probability());
         FixedNode next = node.next();
         node.setNext(null);
         replacement.setNext(next);
@@ -257,7 +252,7 @@ public class StructuredGraph extends Graph {
         node.safeDelete();
     }
 
-    public void removeSplit(ControlSplitNode node, AbstractBeginNode survivingSuccessor) {
+    public void removeSplit(ControlSplitNode node, BeginNode survivingSuccessor) {
         assert node != null;
         assert node.usages().isEmpty();
         assert survivingSuccessor != null;
@@ -266,7 +261,7 @@ public class StructuredGraph extends Graph {
         node.safeDelete();
     }
 
-    public void removeSplitPropagate(ControlSplitNode node, AbstractBeginNode survivingSuccessor) {
+    public void removeSplitPropagate(ControlSplitNode node, BeginNode survivingSuccessor) {
         assert node != null;
         assert node.usages().isEmpty();
         assert survivingSuccessor != null;
@@ -277,13 +272,13 @@ public class StructuredGraph extends Graph {
         for (Node successor : snapshot) {
             if (successor != null && successor.isAlive()) {
                 if (successor != survivingSuccessor) {
-                    GraphUtil.killCFG((AbstractBeginNode) successor);
+                    GraphUtil.killCFG((BeginNode) successor);
                 }
             }
         }
     }
 
-    public void replaceSplit(ControlSplitNode node, Node replacement, AbstractBeginNode survivingSuccessor) {
+    public void replaceSplit(ControlSplitNode node, Node replacement, BeginNode survivingSuccessor) {
         if (replacement instanceof FixedWithNextNode) {
             replaceSplitWithFixed(node, (FixedWithNextNode) replacement, survivingSuccessor);
         } else {
@@ -293,7 +288,7 @@ public class StructuredGraph extends Graph {
         }
     }
 
-    public void replaceSplitWithFixed(ControlSplitNode node, FixedWithNextNode replacement, AbstractBeginNode survivingSuccessor) {
+    public void replaceSplitWithFixed(ControlSplitNode node, FixedWithNextNode replacement, BeginNode survivingSuccessor) {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
         assert survivingSuccessor != null;
         node.clearSuccessors();
@@ -301,7 +296,7 @@ public class StructuredGraph extends Graph {
         node.replaceAndDelete(replacement);
     }
 
-    public void replaceSplitWithFloating(ControlSplitNode node, FloatingNode replacement, AbstractBeginNode survivingSuccessor) {
+    public void replaceSplitWithFloating(ControlSplitNode node, FloatingNode replacement, BeginNode survivingSuccessor) {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
         assert survivingSuccessor != null;
         node.clearSuccessors();
@@ -312,6 +307,7 @@ public class StructuredGraph extends Graph {
 
     public void addAfterFixed(FixedWithNextNode node, FixedNode newNode) {
         assert node != null && newNode != null && node.isAlive() && newNode.isAlive() : "cannot add " + newNode + " after " + node;
+        newNode.setProbability(node.probability());
         FixedNode next = node.next();
         node.setNext(newNode);
         if (next != null) {
@@ -326,6 +322,7 @@ public class StructuredGraph extends Graph {
         assert node != null && newNode != null && node.isAlive() && newNode.isAlive() : "cannot add " + newNode + " before " + node;
         assert node.predecessor() != null && node.predecessor() instanceof FixedWithNextNode : "cannot add " + newNode + " before " + node;
         assert newNode.next() == null : newNode;
+        newNode.setProbability(node.probability());
         FixedWithNextNode pred = (FixedWithNextNode) node.predecessor();
         pred.setNext(newNode);
         newNode.setNext(node);
@@ -337,6 +334,7 @@ public class StructuredGraph extends Graph {
             reduceTrivialMerge(begin);
         } else { // convert to merge
             MergeNode merge = this.add(new MergeNode());
+            merge.setProbability(begin.probability());
             this.replaceFixedWithFixed(begin, merge);
         }
     }
@@ -354,7 +352,7 @@ public class StructuredGraph extends Graph {
         if (merge instanceof LoopBeginNode) {
             ((LoopBeginNode) merge).removeExits();
         }
-        AbstractEndNode singleEnd = merge.forwardEndAt(0);
+        EndNode singleEnd = merge.forwardEndAt(0);
         FixedNode sux = merge.next();
         FrameState stateAfter = merge.stateAfter();
         // evacuateGuards

@@ -30,6 +30,9 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
 
+/**
+ * The {@code StoreFieldNode} represents a write to a static or instance field.
+ */
 @NodeInfo(nameTemplate = "MaterializeStore#{p#target/s}")
 public final class CyclicMaterializeStoreNode extends FixedWithNextNode implements Lowerable, Virtualizable {
 
@@ -68,7 +71,7 @@ public final class CyclicMaterializeStoreNode extends FixedWithNextNode implemen
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) graph();
         ResolvedJavaType type = object.objectStamp().type();
         FixedWithNextNode store;
