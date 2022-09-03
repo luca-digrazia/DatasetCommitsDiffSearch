@@ -53,6 +53,7 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FieldLocationIdentity;
 import org.graalvm.compiler.nodes.FixedNode;
+import org.graalvm.compiler.nodes.GuardedValueNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NamedLocationIdentity;
 import org.graalvm.compiler.nodes.PiNode;
@@ -392,9 +393,9 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         JavaKind elementKind = loadIndexed.elementKind();
         Stamp loadStamp = loadStamp(loadIndexed.stamp(), elementKind);
 
-        GuardingNode boundsCheck = getBoundsCheckedIndex(loadIndexed, array, tool);
-        AddressNode address = createArrayAddress(graph, array, elementKind, loadIndexed.index());
-        ReadNode memoryRead = graph.add(new ReadNode(address, NamedLocationIdentity.getArrayLocation(elementKind), loadStamp, boundsCheck, BarrierType.NONE));
+        ValueNode checkedIndex = getBoundsCheckedIndex(loadIndexed, array, tool);
+        AddressNode address = createArrayAddress(graph, array, elementKind, checkedIndex);
+        ReadNode memoryRead = graph.add(new ReadNode(address, NamedLocationIdentity.getArrayLocation(elementKind), loadStamp, BarrierType.NONE));
         ValueNode readValue = implicitLoadConvert(graph, elementKind, memoryRead);
 
         loadIndexed.replaceAtUsages(readValue);
@@ -409,7 +410,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
         array = this.createNullCheckedValue(array, storeIndexed, tool);
 
-        GuardingNode checkedIndex = getBoundsCheckedIndex(storeIndexed, array, tool);
+        ValueNode checkedIndex = getBoundsCheckedIndex(storeIndexed, array, tool);
 
         JavaKind elementKind = storeIndexed.elementKind();
 
@@ -436,9 +437,9 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             }
         }
 
-        AddressNode address = createArrayAddress(graph, array, elementKind, storeIndexed.index());
+        AddressNode address = createArrayAddress(graph, array, elementKind, checkedIndex);
         WriteNode memoryWrite = graph.add(new WriteNode(address, NamedLocationIdentity.getArrayLocation(elementKind), implicitStoreConvert(graph, elementKind, value),
-                        arrayStoreBarrierType(storeIndexed.elementKind()), checkedIndex, false));
+                        arrayStoreBarrierType(storeIndexed.elementKind())));
         if (condition != null) {
             GuardingNode storeCheckGuard = tool.createGuard(storeIndexed, condition, DeoptimizationReason.ArrayStoreException, DeoptimizationAction.InvalidateReprofile);
             memoryWrite.setStoreCheckGuard(storeCheckGuard);
@@ -937,7 +938,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     protected abstract ValueNode createReadArrayComponentHub(StructuredGraph graph, ValueNode arrayHub, FixedNode anchor);
 
-    protected GuardingNode getBoundsCheckedIndex(AccessIndexedNode n, ValueNode array, LoweringTool tool) {
+    protected ValueNode getBoundsCheckedIndex(AccessIndexedNode n, ValueNode array, LoweringTool tool) {
         StructuredGraph graph = n.graph();
         ValueNode arrayLength = readArrayLength(array, tool.getConstantReflection());
         if (arrayLength == null) {
@@ -946,12 +947,17 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             arrayLength = arrayLength.isAlive() ? arrayLength : graph.addOrUniqueWithInputs(arrayLength);
         }
 
-        LogicNode boundsCheck = IntegerBelowNode.create(n.index(), arrayLength, tool.getConstantReflection());
-        if (boundsCheck.isTautology()) {
-            return null;
-        } else {
-            return tool.createGuard(n, graph.addOrUniqueWithInputs(boundsCheck), BoundsCheckException, InvalidateReprofile);
+        if (arrayLength.isConstant() && n.index().isConstant()) {
+            int l = arrayLength.asJavaConstant().asInt();
+            int i = n.index().asJavaConstant().asInt();
+            if (i >= 0 && i < l) {
+                // unneeded range check
+                return n.index();
+            }
         }
+
+        GuardingNode guard = tool.createGuard(n, graph.unique(new IntegerBelowNode(n.index(), arrayLength)), BoundsCheckException, InvalidateReprofile);
+        return graph.unique(new GuardedValueNode(n.index(), guard));
     }
 
     protected GuardingNode createNullCheck(ValueNode object, FixedNode before, LoweringTool tool) {
