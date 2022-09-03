@@ -37,12 +37,12 @@ import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.snippets.*;
 
 /**
  * Singleton class holding the instance of the {@link GraalRuntime}.
- * 
- * The platform specific subclass is created by a call from the C++ HotSpot code.
+ *
+ * The platform specific subclass is created by a call from
+ * the C++ HotSpot code.
  */
 public abstract class HotSpotGraalRuntime implements GraalRuntime {
 
@@ -106,8 +106,8 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         return unsafe.getInt(address);
     }
 
-    protected/* final */CompilerToVM compilerToVm;
-    protected/* final */VMToCompiler vmToCompiler;
+    protected /*final*/ CompilerToVM compilerToVm;
+    protected /*final*/ VMToCompiler vmToCompiler;
 
     protected final HotSpotRuntime runtime;
     protected final GraalCompiler compiler;
@@ -164,9 +164,7 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
     }
 
     protected abstract TargetDescription createTarget();
-
     protected abstract HotSpotBackend createBackend();
-
     protected abstract HotSpotRuntime createRuntime();
 
     public HotSpotVMConfig getConfig() {
@@ -197,7 +195,7 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         if (name.length() == 1 && vmToCompiler instanceof VMToCompilerImpl) {
             VMToCompilerImpl impl = (VMToCompilerImpl) vmToCompiler;
             Kind kind = Kind.fromPrimitiveOrVoidTypeChar(name.charAt(0));
-            switch (kind) {
+            switch(kind) {
                 case Boolean:
                     return impl.typeBoolean;
                 case Byte:
@@ -259,11 +257,14 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
     @SuppressWarnings("unchecked")
     @Override
     public <T> T getCapability(Class<T> clazz) {
-        if (clazz == GraalCodeCacheProvider.class || clazz == MetaAccessProvider.class || clazz == SnippetProvider.class) {
+        if (clazz == GraalCodeCacheProvider.class || clazz == MetaAccessProvider.class) {
             return (T) getRuntime();
         }
         if (clazz == GraalCompiler.class) {
             return (T) getCompiler();
+        }
+        if (clazz == MetaAccessProvider.class) {
+            return (T) getRuntime();
         }
         if (clazz == RuntimeInterpreterInterface.class) {
             return (T) getRuntimeInterpreterInterface();
