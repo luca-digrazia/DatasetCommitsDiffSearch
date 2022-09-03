@@ -853,7 +853,7 @@ public class Debug {
      * A disabled tracker has virtually no overhead.
      */
     public static DebugMemUseTracker memUseTracker(CharSequence name) {
-        if (!isUnconditionalMemUseTrackingEnabled && !ENABLED) {
+        if (!ENABLED) {
             return VOID_MEM_USE_TRACKER;
         }
         return createMemUseTracker("%s", name, null);
@@ -871,7 +871,7 @@ public class Debug {
      * @see #metric(String, Object, Object)
      */
     public static DebugMemUseTracker memUseTracker(String format, Object arg) {
-        if (!isUnconditionalMemUseTrackingEnabled && !ENABLED) {
+        if (!ENABLED) {
             return VOID_MEM_USE_TRACKER;
         }
         return createMemUseTracker(format, arg, null);
@@ -898,7 +898,7 @@ public class Debug {
      * @see #memUseTracker(CharSequence)
      */
     public static DebugMemUseTracker memUseTracker(String format, Object arg1, Object arg2) {
-        if (!isUnconditionalMemUseTrackingEnabled && !ENABLED) {
+        if (!ENABLED) {
             return VOID_MEM_USE_TRACKER;
         }
         return createMemUseTracker(format, arg1, arg2);
@@ -906,7 +906,7 @@ public class Debug {
 
     private static DebugMemUseTracker createMemUseTracker(String format, Object arg1, Object arg2) {
         String name = formatDebugName(format, arg1, arg2);
-        return new MemUseTrackerImpl(name, !isUnconditionalMemUseTrackingEnabled);
+        return new MemUseTrackerImpl(name);
     }
 
     /**
@@ -920,7 +920,7 @@ public class Debug {
      * A disabled metric has virtually no overhead.
      */
     public static DebugMetric metric(CharSequence name) {
-        if (!areUnconditionalMetricsEnabled() && !ENABLED) {
+        if (enabledMetrics == null && !ENABLED) {
             return VOID_METRIC;
         }
         return createMetric("%s", name, null);
@@ -963,7 +963,7 @@ public class Debug {
      * @see #metric(String, Object, Object)
      */
     public static DebugMetric metric(String format, Object arg) {
-        if (!areUnconditionalMetricsEnabled() && !ENABLED) {
+        if (enabledMetrics == null && !ENABLED) {
             return VOID_METRIC;
         }
         return createMetric(format, arg, null);
@@ -990,7 +990,7 @@ public class Debug {
      * @see #metric(CharSequence)
      */
     public static DebugMetric metric(String format, Object arg1, Object arg2) {
-        if (!areUnconditionalMetricsEnabled() && !ENABLED) {
+        if (enabledMetrics == null && !ENABLED) {
             return VOID_METRIC;
         }
         return createMetric(format, arg1, arg2);
@@ -1131,18 +1131,14 @@ public class Debug {
 
     private static final DebugMemUseTracker VOID_MEM_USE_TRACKER = new DebugMemUseTracker() {
 
-        public DebugCloseable start() {
-            return DebugCloseable.VOID_CLOSEABLE;
+        public Closeable start() {
+            return MemUseTrackerImpl.VOID_CLOSEABLE;
         }
 
         public long getCurrentValue() {
             return 0;
         }
     };
-
-    public static final String ENABLE_UNSCOPED_TIMERS_PROPERTY_NAME = "graal.debug.unscopedTimers";
-    public static final String ENABLE_UNSCOPED_METRICS_PROPERTY_NAME = "graal.debug.unscopedMetrics";
-    public static final String ENABLE_UNSCOPED_MEM_USE_TRACKERS_PROPERTY_NAME = "graal.debug.unscopedMemUseTrackers";
 
     /**
      * @see #timer(CharSequence)
@@ -1154,53 +1150,20 @@ public class Debug {
      */
     public static final String ENABLE_METRIC_PROPERTY_NAME_PREFIX = "graal.debug.metric.";
 
-    /**
-     * Set of unconditionally enabled metrics. Possible values and their meanings:
-     * <ul>
-     * <li>{@code null}: no unconditionally enabled metrics</li>
-     * <li>{@code isEmpty()}: all metrics are unconditionally enabled</li>
-     * <li>{@code !isEmpty()}: use {@link #findMatch(Set, Set, String)} on this set and
-     * {@link #enabledMetricsSubstrings} to determine which metrics are unconditionally enabled</li>
-     * </ul>
-     */
     private static final Set<String> enabledMetrics;
-
-    /**
-     * Set of unconditionally enabled timers. Same interpretation of values as for
-     * {@link #enabledMetrics}.
-     */
     private static final Set<String> enabledTimers;
-
     private static final Set<String> enabledMetricsSubstrings = new HashSet<>();
     private static final Set<String> enabledTimersSubstrings = new HashSet<>();
-
-    /**
-     * Specifies if all mem use trackers are unconditionally enabled.
-     */
-    private static final boolean isUnconditionalMemUseTrackingEnabled;
 
     static {
         Set<String> metrics = new HashSet<>();
         Set<String> timers = new HashSet<>();
         parseMetricAndTimerSystemProperties(metrics, timers, enabledMetricsSubstrings, enabledTimersSubstrings);
-        metrics = metrics.isEmpty() && enabledMetricsSubstrings.isEmpty() ? null : metrics;
-        timers = timers.isEmpty() && enabledTimersSubstrings.isEmpty() ? null : timers;
-        if (metrics == null && Boolean.getBoolean(ENABLE_UNSCOPED_METRICS_PROPERTY_NAME)) {
-            metrics = Collections.emptySet();
-        }
-        if (timers == null && Boolean.getBoolean(ENABLE_UNSCOPED_TIMERS_PROPERTY_NAME)) {
-            timers = Collections.emptySet();
-        }
-        enabledMetrics = metrics;
-        enabledTimers = timers;
-        isUnconditionalMemUseTrackingEnabled = Boolean.getBoolean(ENABLE_UNSCOPED_MEM_USE_TRACKERS_PROPERTY_NAME);
+        enabledMetrics = metrics.isEmpty() && enabledMetricsSubstrings.isEmpty() ? null : metrics;
+        enabledTimers = timers.isEmpty() && enabledTimersSubstrings.isEmpty() ? null : timers;
     }
 
     private static boolean findMatch(Set<String> haystack, Set<String> haystackSubstrings, String needle) {
-        if (haystack.isEmpty()) {
-            // Empty haystack means match all
-            return true;
-        }
         if (haystack.contains(needle)) {
             return true;
         }
@@ -1261,7 +1224,7 @@ public class Debug {
      * A disabled timer has virtually no overhead.
      */
     public static DebugTimer timer(CharSequence name) {
-        if (!areUnconditionalTimersEnabled() && !ENABLED) {
+        if (enabledTimers == null && !ENABLED) {
             return VOID_TIMER;
         }
         return createTimer("%s", name, null);
@@ -1279,7 +1242,7 @@ public class Debug {
      * @see #timer(String, Object, Object)
      */
     public static DebugTimer timer(String format, Object arg) {
-        if (!areUnconditionalTimersEnabled() && !ENABLED) {
+        if (enabledTimers == null && !ENABLED) {
             return VOID_TIMER;
         }
         return createTimer(format, arg, null);
@@ -1306,7 +1269,7 @@ public class Debug {
      * @see #timer(CharSequence)
      */
     public static DebugTimer timer(String format, Object arg1, Object arg2) {
-        if (!areUnconditionalTimersEnabled() && !ENABLED) {
+        if (enabledTimers == null && !ENABLED) {
             return VOID_TIMER;
         }
         return createTimer(format, arg1, arg2);
@@ -1356,8 +1319,8 @@ public class Debug {
 
     private static final DebugTimer VOID_TIMER = new DebugTimer() {
 
-        public DebugCloseable start() {
-            return DebugCloseable.VOID_CLOSEABLE;
+        public TimerCloseable start() {
+            return TimerImpl.VOID_CLOSEABLE;
         }
 
         public void setConditional(boolean flag) {
