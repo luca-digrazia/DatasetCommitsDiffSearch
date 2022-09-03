@@ -36,7 +36,22 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
  * </p>
  *
  * <p>
- * <b> Usage example: </b> {@codesnippet BranchProfileSample}
+ * <b> Usage example: </b>
+ *
+ * <pre>
+ * class SampleNode extends Node {
+ * 
+ *     final BranchProfile errorProfile = BranchProfile.create();
+ * 
+ *     void execute(int value) {
+ *         if (value == Integer.MAX_VALUE) {
+ *             errorProfile.enter();
+ *             throw new Error(&quot;Invalid input value&quot;)
+ *         }
+ *         return value;
+ *     }
+ * }
+ * </pre>
  *
  * {@inheritDoc}
  *

@@ -39,47 +39,34 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
  * </p>
  *
  * {@inheritDoc}
- * 
- * @since 0.10
  */
 public abstract class PrimitiveValueProfile extends ValueProfile {
 
     PrimitiveValueProfile() {
     }
 
-    /** @since 0.10 */
     @Override
     public abstract <T> T profile(T value);
 
-    /** @since 0.10 */
     public abstract byte profile(byte value);
 
-    /** @since 0.10 */
     public abstract short profile(short value);
 
-    /** @since 0.10 */
     public abstract int profile(int value);
 
-    /** @since 0.10 */
     public abstract long profile(long value);
 
-    /** @since 0.10 */
     public abstract float profile(float value);
 
-    /** @since 0.10 */
     public abstract double profile(double value);
 
-    /** @since 0.10 */
     public abstract boolean profile(boolean value);
 
-    /** @since 0.10 */
     public abstract char profile(char value);
 
     /**
      * Returns a {@link PrimitiveValueProfile} that speculates on the primitive equality or object
      * identity of a value.
-     * 
-     * @since 0.10
      */
     public static PrimitiveValueProfile createEqualityProfile() {
         if (Profile.isProfilingEnabled()) {
@@ -91,7 +78,6 @@ public abstract class PrimitiveValueProfile extends ValueProfile {
 
     /**
      * @deprecated going to get removed without replacement
-     * @since 0.10
      */
     @Deprecated
     public static boolean exactCompare(float a, float b) {
@@ -104,7 +90,6 @@ public abstract class PrimitiveValueProfile extends ValueProfile {
 
     /**
      * @deprecated going to get removed without replacement
-     * @since 0.10
      */
     @Deprecated
     public static boolean exactCompare(double a, double b) {
@@ -117,196 +102,234 @@ public abstract class PrimitiveValueProfile extends ValueProfile {
 
     static final class Enabled extends PrimitiveValueProfile {
 
-        private static final Object UNINITIALIZED = new Object();
-        private static final Object GENERIC = new Object();
+        private static final byte STATE_UNINITIALIZED = 0;
+        private static final byte STATE_BYTE = 1;
+        private static final byte STATE_SHORT = 2;
+        private static final byte STATE_INTEGER = 3;
+        private static final byte STATE_LONG = 4;
+        private static final byte STATE_BOOLEAN = 5;
+        private static final byte STATE_CHARACTER = 6;
+        private static final byte STATE_FLOAT = 7;
+        private static final byte STATE_DOUBLE = 8;
+        private static final byte STATE_IDENTITY = 9;
+        private static final byte STATE_GENERIC = 10;
 
-        // Use only one field for thread safety.
-        @CompilationFinal private Object cachedValue = UNINITIALIZED;
+        @CompilationFinal private byte state = STATE_UNINITIALIZED;
+        @CompilationFinal private Object cachedValue;
 
         Enabled() {
         }
 
         @SuppressWarnings("unchecked")
         @Override
-        public <T> T profile(T v) {
-            Object snapshot = this.cachedValue;
-            if (snapshot != GENERIC) {
-                Object value = v;
-                if (snapshot instanceof Byte) {
-                    if (value instanceof Byte && (byte) snapshot == (byte) value) {
+        public <T> T profile(T value) {
+            byte s = this.state;
+            Object snapshot;
+            switch (s) {
+                case STATE_BYTE:
+                case STATE_SHORT:
+                case STATE_INTEGER:
+                case STATE_LONG:
+                case STATE_BOOLEAN:
+                case STATE_CHARACTER:
+                    snapshot = this.cachedValue;
+                    if (snapshot.equals(value)) {
                         return (T) snapshot;
                     }
-                } else if (snapshot instanceof Short) {
-                    if (value instanceof Short && (short) snapshot == (short) value) {
+                    break;
+                case STATE_DOUBLE:
+                    snapshot = this.cachedValue;
+                    if (value instanceof Double && exactCompare((Double) snapshot, (Double) value)) {
                         return (T) snapshot;
                     }
-                } else if (snapshot instanceof Integer) {
-                    if (value instanceof Integer && (int) snapshot == (int) value) {
+                    break;
+                case STATE_FLOAT:
+                    snapshot = this.cachedValue;
+                    if (value instanceof Float && exactCompare((Float) snapshot, (Float) value)) {
                         return (T) snapshot;
                     }
-                } else if (snapshot instanceof Long) {
-                    if (value instanceof Long && (long) snapshot == (long) value) {
+                    break;
+                case STATE_IDENTITY:
+                    snapshot = this.cachedValue;
+                    if (snapshot == value) {
                         return (T) snapshot;
                     }
-                } else if (snapshot instanceof Float) {
-                    if (value instanceof Float && exactCompare((float) snapshot, (float) value)) {
-                        return (T) snapshot;
-                    }
-                } else if (snapshot instanceof Double) {
-                    if (value instanceof Double && exactCompare((double) snapshot, (double) value)) {
-                        return (T) snapshot;
-                    }
-                } else if (snapshot instanceof Boolean) {
-                    if (value instanceof Boolean && (boolean) snapshot == (boolean) value) {
-                        return (T) snapshot;
-                    }
-                } else if (snapshot instanceof Character) {
-                    if (value instanceof Character && (char) snapshot == (char) value) {
-                        return (T) snapshot;
-                    }
-                } else if (snapshot == value) {
-                    return (T) snapshot;
-                }
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                slowPath(value);
+                    break;
+                case STATE_GENERIC:
+                    return value;
             }
-            return v;
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            slowpath(s, value);
+            return value;
         }
 
-        /** @since 0.8 or earlier */
         @Override
         public byte profile(byte value) {
-            Object snapshot = this.cachedValue;
-            if (snapshot != GENERIC) {
-                if (snapshot instanceof Byte && (byte) snapshot == value) {
-                    return (byte) snapshot;
-                } else {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    slowPath(value);
+            byte s = this.state;
+            if (s != STATE_GENERIC) {
+                if (s == STATE_BYTE) {
+                    byte castCachedValue = (byte) this.cachedValue;
+                    if (castCachedValue == value) {
+                        return castCachedValue;
+                    }
                 }
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                slowpath(s, value);
             }
             return value;
         }
 
-        /** @since 0.8 or earlier */
         @Override
         public short profile(short value) {
-            Object snapshot = this.cachedValue;
-            if (snapshot != GENERIC) {
-                if (snapshot instanceof Short && (short) snapshot == value) {
-                    return (short) snapshot;
-                } else {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    slowPath(value);
+            byte s = this.state;
+            if (s != STATE_GENERIC) {
+                if (s == STATE_SHORT) {
+                    short castCachedValue = (short) this.cachedValue;
+                    if (castCachedValue == value) {
+                        return castCachedValue;
+                    }
                 }
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                slowpath(s, value);
             }
             return value;
         }
 
-        /** @since 0.8 or earlier */
         @Override
         public int profile(int value) {
-            Object snapshot = this.cachedValue;
-            if (snapshot != GENERIC) {
-                if (snapshot instanceof Integer && (int) snapshot == value) {
-                    return (int) snapshot;
-                } else {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    slowPath(value);
+            byte s = this.state;
+            if (s != STATE_GENERIC) {
+                if (s == STATE_INTEGER) {
+                    int castCachedValue = (int) this.cachedValue;
+                    if (castCachedValue == value) {
+                        return castCachedValue;
+                    }
                 }
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                slowpath(s, value);
             }
             return value;
         }
 
-        /** @since 0.8 or earlier */
         @Override
         public long profile(long value) {
-            Object snapshot = this.cachedValue;
-            if (snapshot != GENERIC) {
-                if (snapshot instanceof Long && (long) snapshot == value) {
-                    return (long) snapshot;
-                } else {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    slowPath(value);
+            byte s = this.state;
+            if (s != STATE_GENERIC) {
+                if (s == STATE_LONG) {
+                    long castCachedValue = (long) this.cachedValue;
+                    if (castCachedValue == value) {
+                        return castCachedValue;
+                    }
                 }
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                slowpath(s, value);
             }
             return value;
         }
 
-        /** @since 0.8 or earlier */
         @Override
         public float profile(float value) {
-            Object snapshot = this.cachedValue;
-            if (snapshot != GENERIC) {
-                if (snapshot instanceof Float && exactCompare((float) snapshot, value)) {
-                    return (float) snapshot;
-                } else {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    slowPath(value);
+            byte s = this.state;
+            if (s != STATE_GENERIC) {
+                if (s == STATE_FLOAT) {
+                    float castCachedValue = (float) this.cachedValue;
+                    if (exactCompare(castCachedValue, value)) {
+                        return castCachedValue;
+                    }
                 }
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                slowpath(s, value);
             }
             return value;
         }
 
-        /** @since 0.8 or earlier */
         @Override
         public double profile(double value) {
-            Object snapshot = this.cachedValue;
-            if (snapshot != GENERIC) {
-                if (snapshot instanceof Double && exactCompare((double) snapshot, value)) {
-                    return (double) snapshot;
-                } else {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    slowPath(value);
+            byte s = this.state;
+            if (s != STATE_GENERIC) {
+                if (s == STATE_DOUBLE) {
+                    double castCachedValue = (double) this.cachedValue;
+                    if (exactCompare(castCachedValue, value)) {
+                        return castCachedValue;
+                    }
                 }
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                slowpath(s, value);
             }
             return value;
+
         }
 
-        /** @since 0.8 or earlier */
         @Override
         public boolean profile(boolean value) {
-            Object snapshot = this.cachedValue;
-            if (snapshot != GENERIC) {
-                if (snapshot instanceof Boolean && (boolean) snapshot == value) {
-                    return (boolean) snapshot;
-                } else {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    slowPath(value);
+            byte s = this.state;
+            if (s != STATE_GENERIC) {
+                if (s == STATE_BOOLEAN) {
+                    boolean castCachedValue = (boolean) this.cachedValue;
+                    if (castCachedValue == value) {
+                        return castCachedValue;
+                    }
                 }
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                slowpath(s, value);
             }
             return value;
         }
 
-        /** @since 0.8 or earlier */
         @Override
         public char profile(char value) {
-            Object snapshot = this.cachedValue;
-            if (snapshot != GENERIC) {
-                if (snapshot instanceof Character && (char) snapshot == value) {
-                    return (char) snapshot;
-                } else {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    slowPath(value);
+            byte s = this.state;
+            if (s != STATE_GENERIC) {
+                if (s == STATE_CHARACTER) {
+                    char castCachedValue = (char) this.cachedValue;
+                    if (castCachedValue == value) {
+                        return castCachedValue;
+                    }
                 }
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                slowpath(s, value);
             }
             return value;
         }
 
-        private void slowPath(Object value) {
-            if (cachedValue == UNINITIALIZED) {
+        private void slowpath(byte s, Object value) {
+            if (s == STATE_UNINITIALIZED) {
                 cachedValue = value;
+                state = specialize(value);
             } else {
-                cachedValue = GENERIC;
+                state = STATE_GENERIC;
+                cachedValue = null;
+            }
+        }
+
+        private static byte specialize(Object value) {
+            if (value instanceof Byte) {
+                return STATE_BYTE;
+            } else if (value instanceof Short) {
+                return STATE_SHORT;
+            } else if (value instanceof Integer) {
+                return STATE_INTEGER;
+            } else if (value instanceof Long) {
+                return STATE_LONG;
+            } else if (value instanceof Boolean) {
+                return STATE_BOOLEAN;
+            } else if (value instanceof Character) {
+                return STATE_CHARACTER;
+            } else if (value instanceof Double) {
+                return STATE_DOUBLE;
+            } else if (value instanceof Float) {
+                return STATE_FLOAT;
+            } else {
+                return STATE_IDENTITY;
             }
         }
 
         boolean isGeneric() {
-            return cachedValue == GENERIC;
+            return state == STATE_GENERIC;
         }
 
         boolean isUninitialized() {
-            return cachedValue == UNINITIALIZED;
+            return state == STATE_UNINITIALIZED;
         }
 
         Object getCachedValue() {
@@ -315,21 +338,20 @@ public abstract class PrimitiveValueProfile extends ValueProfile {
 
         @Override
         public String toString() {
-            return toString(PrimitiveValueProfile.class, isUninitialized(), isGeneric(), formatSpecialization());
+            return toString(PrimitiveValueProfile.class, state == STATE_UNINITIALIZED, state == STATE_GENERIC, formatSpecialization());
         }
 
         private String formatSpecialization() {
-            if (!isUninitialized() && !isGeneric()) {
-                Object snapshot = this.cachedValue;
+            Object snapshot = this.cachedValue;
+            if (state != STATE_UNINITIALIZED && state != STATE_GENERIC) {
                 if (snapshot == null) {
                     return String.format("value == null");
                 } else {
-                    if (snapshot instanceof Byte || snapshot instanceof Short || snapshot instanceof Integer || snapshot instanceof Long || snapshot instanceof Float || snapshot instanceof Double ||
-                                    snapshot instanceof Boolean || snapshot instanceof Character) {
-                        return String.format("value == (%s)%s", snapshot.getClass().getSimpleName(), snapshot);
-                    } else {
+                    if (state == STATE_IDENTITY) {
                         String simpleName = snapshot.getClass().getSimpleName();
                         return String.format("value == %s@%x", simpleName, Objects.hash(snapshot));
+                    } else {
+                        return String.format("value == (%s)%s", snapshot.getClass().getSimpleName(), snapshot);
                     }
                 }
             }

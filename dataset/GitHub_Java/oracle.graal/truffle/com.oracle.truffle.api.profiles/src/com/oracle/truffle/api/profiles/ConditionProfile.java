@@ -37,9 +37,9 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
  *
  * <pre>
  * class AbsoluteNode extends Node {
- *
+ * 
  *     final ConditionProfile greaterZeroProfile = ConditionProfile.create{Binary,Counting}Profile();
- *
+ * 
  *     void execute(int value) {
  *         if (greaterZeroProfile.profile(value >= 0)) {
  *             return value;
@@ -124,13 +124,6 @@ public abstract class ConditionProfile extends Profile {
         @CompilationFinal private int trueCount;
         @CompilationFinal private int falseCount;
 
-        /**
-         * A constant holding the maximum value an {@code int} can have, 2<sup>30</sup>-1. The sum
-         * of the true and false count must not overflow. This constant is used to check whether one
-         * of the counts does not exceed the required maximum value.
-         */
-        public static final int MAX_VALUE = 0x3fffffff;
-
         Counting() {
             /* package protected constructor */
         }
@@ -141,13 +134,13 @@ public abstract class ConditionProfile extends Profile {
                 if (value) {
                     // local required to guarantee no overflow in multi-threaded environments
                     int t = trueCount;
-                    if (t < MAX_VALUE) {
+                    if (t < Integer.MAX_VALUE) {
                         trueCount = t + 1;
                     }
                 } else {
                     // local required to guarantee no overflow in multi-threaded environments
                     int f = falseCount;
-                    if (f < MAX_VALUE) {
+                    if (f < Integer.MAX_VALUE) {
                         falseCount = f + 1;
                     }
                 }
@@ -160,14 +153,15 @@ public abstract class ConditionProfile extends Profile {
                 if (value) {
                     if (t == 0) {
                         CompilerDirectives.transferToInterpreterAndInvalidate();
+                        t = 1;
                     }
                 } else {
                     if (f == 0) {
                         CompilerDirectives.transferToInterpreterAndInvalidate();
+                        f = 1;
                     }
                 }
-                int sum = t + f;
-                return CompilerDirectives.injectBranchProbability((double) t / (double) sum, value);
+                return CompilerDirectives.injectBranchProbability((double) t / (double) (t + f), value);
             }
         }
 
@@ -183,9 +177,8 @@ public abstract class ConditionProfile extends Profile {
         public String toString() {
             int t = trueCount;
             int f = falseCount;
-            int sum = t + f;
-            String details = String.format("trueProbability=%s (trueCount=%s, falseCount=%s)", (double) t / (double) sum, t, f);
-            return toString(ConditionProfile.class, sum == 0, false, details);
+            return toString(ConditionProfile.class, trueCount == 0 && falseCount == 0, false, //
+                            String.format("trueProbability=%s (trueCount=%s, falseCount=%s)", (double) t / (double) (t + f), t, f));
         }
 
         /* Needed for lazy class loading. */

@@ -84,14 +84,12 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
  * @see #createBinaryProfile()
  * @see #createCountingProfile()
  * @see LoopConditionProfile
- * @since 0.10
  */
 public abstract class LoopConditionProfile extends ConditionProfile {
 
     LoopConditionProfile() {
     }
 
-    /** @since 0.10 */
     @Override
     public abstract boolean profile(boolean value);
 
@@ -100,7 +98,6 @@ public abstract class LoopConditionProfile extends ConditionProfile {
      * see {@link LoopConditionProfile} for an usage example.
      *
      * @see #inject(boolean)
-     * @since 0.10
      */
     public abstract void profileCounted(long length);
 
@@ -109,7 +106,6 @@ public abstract class LoopConditionProfile extends ConditionProfile {
      * see {@link LoopConditionProfile} for an usage example.
      *
      * @see #inject(boolean)
-     * @since 0.10
      */
     public abstract boolean inject(boolean condition);
 
@@ -119,7 +115,6 @@ public abstract class LoopConditionProfile extends ConditionProfile {
      * profiles are intended to be used for loop conditions.
      *
      * @see LoopConditionProfile
-     * @since 0.10
      */
     public static LoopConditionProfile createCountingProfile() {
         if (Profile.isProfilingEnabled()) {
@@ -212,7 +207,7 @@ public abstract class LoopConditionProfile extends ConditionProfile {
         @Override
         public String toString() {
             return toString(LoopConditionProfile.class, falseCount == 0, false, //
-                            String.format("trueProbability=%s (trueCount=%s, falseCount=%s)", calculateProbability(trueCount, falseCount), trueCount, falseCount));
+                            String.format("trueProbability=%s (trueCount=%s, falseCount=%s)", calculateProbability(trueCount, falseCount), falseCount, trueCount));
         }
 
         /* Needed for lazy class loading. */
