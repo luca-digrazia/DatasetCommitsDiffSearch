@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
@@ -99,33 +100,33 @@ abstract class ToDouble extends ForeignToLLVM {
     }
 
     @Specialization
-    protected double fromLLVMFunctionDescriptor(LLVMFunctionDescriptor fd,
+    protected double fromLLVMFunctionDescriptor(VirtualFrame frame, LLVMFunctionDescriptor fd,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
-        return toNative.executeWithTarget(fd).getVal();
+        return toNative.executeWithTarget(frame, fd).getVal();
     }
 
     @Specialization
-    protected double fromSharedDescriptor(LLVMSharedGlobalVariable shared,
+    protected double fromSharedDescriptor(VirtualFrame frame, LLVMSharedGlobalVariable shared,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
-        return access.executeWithTarget(shared.getDescriptor()).getVal();
+        return access.executeWithTarget(frame, shared.getDescriptor()).getVal();
     }
 
     @Specialization
-    protected double fromForeignPrimitive(LLVMBoxedPrimitive boxed) {
-        return recursiveConvert(boxed.getValue());
+    protected double fromForeignPrimitive(VirtualFrame frame, LLVMBoxedPrimitive boxed) {
+        return recursiveConvert(frame, boxed.getValue());
     }
 
     @Specialization(guards = "notLLVM(obj)")
-    protected double fromTruffleObject(TruffleObject obj) {
-        return recursiveConvert(fromForeign(obj));
+    protected double fromTruffleObject(VirtualFrame frame, TruffleObject obj) {
+        return recursiveConvert(frame, fromForeign(obj));
     }
 
-    private double recursiveConvert(Object o) {
+    private double recursiveConvert(VirtualFrame frame, Object o) {
         if (toDouble == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             toDouble = ToDoubleNodeGen.create();
         }
-        return (double) toDouble.executeWithTarget(o);
+        return (double) toDouble.executeWithTarget(frame, o);
     }
 
     @TruffleBoundary

@@ -42,7 +42,6 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMTypesGen;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
 @NodeChild(value = "address", type = LLVMExpressionNode.class)
@@ -69,7 +68,7 @@ public abstract class LLVMDoubleArrayLiteralNode extends LLVMExpressionNode {
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
         long currentPtr = addr.getVal();
         for (int i = 0; i < values.length; i++) {
-            double currentValue = LLVMTypesGen.asDouble(values[i].executeGeneric(frame));
+            double currentValue = values[i].executeDouble(frame);
             memory.putDouble(currentPtr, currentValue);
             currentPtr += stride;
         }
@@ -86,7 +85,7 @@ public abstract class LLVMDoubleArrayLiteralNode extends LLVMExpressionNode {
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
         LLVMTruffleObject currentPtr = addr;
         for (int i = 0; i < values.length; i++) {
-            double currentValue = LLVMTypesGen.asDouble(values[i].executeGeneric(frame));
+            double currentValue = values[i].executeDouble(frame);
             foreignWrite.execute(frame, currentPtr, currentValue);
             currentPtr = currentPtr.increment(stride, currentPtr.getType());
         }

@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
@@ -89,13 +90,13 @@ abstract class ToI32 extends ForeignToLLVM {
     }
 
     @Specialization
-    protected int fromForeignPrimitive(LLVMBoxedPrimitive boxed) {
-        return recursiveConvert(boxed.getValue());
+    protected int fromForeignPrimitive(VirtualFrame frame, LLVMBoxedPrimitive boxed) {
+        return recursiveConvert(frame, boxed.getValue());
     }
 
     @Specialization(guards = "notLLVM(obj)")
-    protected int fromTruffleObject(TruffleObject obj) {
-        return recursiveConvert(fromForeign(obj));
+    protected int fromTruffleObject(VirtualFrame frame, TruffleObject obj) {
+        return recursiveConvert(frame, fromForeign(obj));
     }
 
     @Specialization
@@ -109,23 +110,23 @@ abstract class ToI32 extends ForeignToLLVM {
     }
 
     @Specialization
-    protected int fromLLVMFunctionDescriptor(LLVMFunctionDescriptor fd,
+    protected int fromLLVMFunctionDescriptor(VirtualFrame frame, LLVMFunctionDescriptor fd,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
-        return (int) toNative.executeWithTarget(fd).getVal();
+        return (int) toNative.executeWithTarget(frame, fd).getVal();
     }
 
     @Specialization
-    protected int fromSharedDescriptor(LLVMSharedGlobalVariable shared,
+    protected int fromSharedDescriptor(VirtualFrame frame, LLVMSharedGlobalVariable shared,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
-        return (int) access.executeWithTarget(shared.getDescriptor()).getVal();
+        return (int) access.executeWithTarget(frame, shared.getDescriptor()).getVal();
     }
 
-    private int recursiveConvert(Object o) {
+    private int recursiveConvert(VirtualFrame frame, Object o) {
         if (toI32 == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             toI32 = ToI32NodeGen.create();
         }
-        return (int) toI32.executeWithTarget(o);
+        return (int) toI32.executeWithTarget(frame, o);
     }
 
     @TruffleBoundary

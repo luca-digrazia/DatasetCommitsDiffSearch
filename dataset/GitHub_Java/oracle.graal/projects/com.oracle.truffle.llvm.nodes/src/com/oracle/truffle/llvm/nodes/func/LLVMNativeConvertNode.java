@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -61,7 +62,7 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 
 public abstract class LLVMNativeConvertNode extends LLVMNode {
 
-    public abstract Object executeConvert(Object arg);
+    public abstract Object executeConvert(VirtualFrame frame, Object arg);
 
     protected static boolean checkIsPointer(Node isPointer, TruffleObject object) {
         return ForeignAccess.sendIsPointer(isPointer, object);
@@ -105,15 +106,15 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
         }
 
         @Specialization
-        protected long addressToNative(LLVMGlobal address,
+        protected long addressToNative(VirtualFrame frame, LLVMGlobal address,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
-            return globalAccess.executeWithTarget(address).getVal();
+            return globalAccess.executeWithTarget(frame, address).getVal();
         }
 
         @Specialization
-        protected long doLLVMTruffleObject(LLVMTruffleObject truffleObject,
+        protected long doLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject truffleObject,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
-            return toNative.executeWithTarget(truffleObject).getVal();
+            return toNative.executeWithTarget(frame, truffleObject).getVal();
         }
     }
 

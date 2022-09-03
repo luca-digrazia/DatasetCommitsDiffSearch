@@ -196,7 +196,7 @@ public class LLVMVectorLiteralNode {
         protected LLVMAddressVector doAddressVector(VirtualFrame frame) {
             LLVMAddress[] vals = new LLVMAddress[toNatives.length];
             for (int i = 0; i < toNatives.length; i++) {
-                vals[i] = toNatives[i].execute(frame);
+                vals[i] = toNatives[i].executeGeneric(frame);
             }
             return LLVMAddressVector.create(vals);
         }

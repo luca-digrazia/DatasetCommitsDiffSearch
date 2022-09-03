@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.cast.LLVMToI64Node.LLVMToI64BitNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
@@ -55,28 +56,28 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 public abstract class LLVMToI32Node extends LLVMExpressionNode {
 
     @Specialization
-    protected int doI32(LLVMFunctionDescriptor from,
+    protected int doI32(VirtualFrame frame, LLVMFunctionDescriptor from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
-        return (int) toNative.executeWithTarget(from).getVal();
+        return (int) toNative.executeWithTarget(frame, from).getVal();
     }
 
     @Specialization
-    protected int doGlobal(LLVMGlobal from,
+    protected int doGlobal(VirtualFrame frame, LLVMGlobal from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
-        return (int) access.executeWithTarget(from).getVal();
+        return (int) access.executeWithTarget(frame, from).getVal();
     }
 
     @Child private ForeignToLLVM convert = ForeignToLLVM.create(ForeignToLLVMType.I32);
 
     @Specialization
-    protected int doLLVMTruffleObject(LLVMTruffleObject from,
+    protected int doLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
-        return (int) toNative.executeWithTarget(from).getVal();
+        return (int) toNative.executeWithTarget(frame, from).getVal();
     }
 
     @Specialization
-    protected int doLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
-        return (int) convert.executeWithTarget(from.getValue());
+    protected int doLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
+        return (int) convert.executeWithTarget(frame, from.getValue());
     }
 
     public abstract static class LLVMToI32NoZeroExtNode extends LLVMToI32Node {

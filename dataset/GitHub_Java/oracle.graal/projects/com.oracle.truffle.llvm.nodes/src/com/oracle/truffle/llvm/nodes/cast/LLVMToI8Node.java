@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.cast.LLVMToI64Node.LLVMToI64BitNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
@@ -52,28 +53,28 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 public abstract class LLVMToI8Node extends LLVMExpressionNode {
 
     @Specialization
-    protected byte doI8(LLVMFunctionDescriptor from,
+    protected byte doI8(VirtualFrame frame, LLVMFunctionDescriptor from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
-        return (byte) toNative.executeWithTarget(from).getVal();
+        return (byte) toNative.executeWithTarget(frame, from).getVal();
     }
 
     @Specialization
-    protected byte doGlobal(LLVMGlobal from,
+    protected byte doGlobal(VirtualFrame frame, LLVMGlobal from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
-        return (byte) access.executeWithTarget(from).getVal();
+        return (byte) access.executeWithTarget(frame, from).getVal();
     }
 
     @Child private ForeignToLLVM convert = ForeignToLLVM.create(ForeignToLLVMType.I8);
 
     @Specialization
-    protected byte doLLVMTruffleObject(LLVMTruffleObject from,
+    protected byte doLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
-        return (byte) toNative.executeWithTarget(from).getVal();
+        return (byte) toNative.executeWithTarget(frame, from).getVal();
     }
 
     @Specialization
-    protected byte doLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
-        return (byte) convert.executeWithTarget(from.getValue());
+    protected byte doLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
+        return (byte) convert.executeWithTarget(frame, from.getValue());
     }
 
     public abstract static class LLVMToI8NoZeroExtNode extends LLVMToI8Node {

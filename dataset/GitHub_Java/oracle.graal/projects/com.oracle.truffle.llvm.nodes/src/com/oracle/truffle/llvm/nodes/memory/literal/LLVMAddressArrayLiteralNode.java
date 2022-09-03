@@ -65,7 +65,7 @@ public abstract class LLVMAddressArrayLiteralNode extends LLVMExpressionNode {
         return forceToLLVM;
     }
 
-    public LLVMToNativeNode[] getValues() {
+    public LLVMExpressionNode[] getValues() {
         return values;
     }
 
@@ -82,7 +82,7 @@ public abstract class LLVMAddressArrayLiteralNode extends LLVMExpressionNode {
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
         long currentPtr = addr.getVal();
         for (int i = 0; i < values.length; i++) {
-            LLVMAddress currentValue = values[i].execute(frame);
+            LLVMAddress currentValue = values[i].executeGeneric(frame);
             memory.putAddress(currentPtr, currentValue);
             currentPtr += stride;
         }
@@ -107,7 +107,7 @@ public abstract class LLVMAddressArrayLiteralNode extends LLVMExpressionNode {
                     @Cached("createForeignWrites()") LLVMForeignWriteNode[] foreignWrites) {
         LLVMTruffleObject currentPtr = addr;
         for (int i = 0; i < values.length; i++) {
-            Object currentValue = values[i].execute(frame);
+            Object currentValue = values[i].executeGeneric(frame);
             foreignWrites[i].execute(frame, currentPtr, currentValue);
             currentPtr = currentPtr.increment(stride, currentPtr.getType());
         }

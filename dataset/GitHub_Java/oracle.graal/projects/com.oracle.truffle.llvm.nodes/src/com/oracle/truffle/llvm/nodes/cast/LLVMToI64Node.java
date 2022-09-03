@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
@@ -56,28 +57,28 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 public abstract class LLVMToI64Node extends LLVMExpressionNode {
 
     @Specialization
-    protected long doI64(LLVMFunctionDescriptor from,
+    protected long doI64(VirtualFrame frame, LLVMFunctionDescriptor from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
-        return toNative.executeWithTarget(from).getVal();
+        return toNative.executeWithTarget(frame, from).getVal();
     }
 
     @Specialization
-    protected long doGlobal(LLVMGlobal from,
+    protected long doGlobal(VirtualFrame frame, LLVMGlobal from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
-        return access.executeWithTarget(from).getVal();
+        return access.executeWithTarget(frame, from).getVal();
     }
 
     @Child private ForeignToLLVM convert = ForeignToLLVM.create(ForeignToLLVMType.I64);
 
     @Specialization
-    protected long doTruffleObject(LLVMTruffleObject from,
+    protected long doTruffleObject(VirtualFrame frame, LLVMTruffleObject from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toAddress) {
-        return toAddress.executeWithTarget(from).getVal();
+        return toAddress.executeWithTarget(frame, from).getVal();
     }
 
     @Specialization
-    protected long doLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
-        return (long) convert.executeWithTarget(from.getValue());
+    protected long doLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
+        return (long) convert.executeWithTarget(frame, from.getValue());
     }
 
     public abstract static class LLVMToI64NoZeroExtNode extends LLVMToI64Node {

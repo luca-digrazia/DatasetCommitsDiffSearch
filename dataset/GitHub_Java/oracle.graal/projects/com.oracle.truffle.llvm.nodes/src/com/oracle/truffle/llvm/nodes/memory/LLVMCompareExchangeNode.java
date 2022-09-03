@@ -56,16 +56,16 @@ public abstract class LLVMCompareExchangeNode extends LLVMExpressionNode {
 
     @Child private LLVMCMPXCHInternalNode cmpxch;
 
-    public LLVMCompareExchangeNode(int resultSize, long secondValueOffset) {
+    public LLVMCompareExchangeNode(int resultSize, int secondValueOffset) {
         this.cmpxch = LLVMCMPXCHInternalNodeGen.create(resultSize, secondValueOffset);
     }
 
     abstract static class LLVMCMPXCHInternalNode extends LLVMNode {
 
         private final int resultSize;
-        private final long secondValueOffset;
+        private final int secondValueOffset;
 
-        LLVMCMPXCHInternalNode(int resultSize, long secondValueOffset) {
+        LLVMCMPXCHInternalNode(int resultSize, int secondValueOffset) {
             this.resultSize = resultSize;
             this.secondValueOffset = secondValueOffset;
         }
