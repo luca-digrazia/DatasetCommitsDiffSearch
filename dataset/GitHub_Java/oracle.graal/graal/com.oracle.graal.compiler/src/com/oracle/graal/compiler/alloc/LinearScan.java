@@ -164,7 +164,7 @@ public final class LinearScan {
         this.ir = ir;
         this.frameMap = frameMap;
         this.sortedBlocks = ir.linearScanOrder();
-        this.registerAttributes = frameMap.getRegisterConfig().getAttributesMap();
+        this.registerAttributes = frameMap.registerConfig.getAttributesMap();
 
         this.registers = target.arch.getRegisters();
         this.firstVariableNumber = registers.length;
@@ -1168,7 +1168,7 @@ public final class LinearScan {
             };
 
             // create a list with all caller-save registers (cpu, fpu, xmm)
-            Register[] callerSaveRegs = frameMap.getRegisterConfig().getCallerSaveRegisters();
+            Register[] callerSaveRegs = frameMap.registerConfig.getCallerSaveRegisters();
 
             // iterate all blocks in reverse order
             for (int i = blockCount() - 1; i >= 0; i--) {
