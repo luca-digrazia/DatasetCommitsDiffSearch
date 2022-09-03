@@ -47,8 +47,8 @@ import java.util.Map;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.type.StampPair;
-import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.DebugContext.Scope;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.graph.Node;
@@ -114,7 +114,6 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.SpeculationLog;
 
 /**
  * Class performing the partial evaluation starting from the root node of an AST.
@@ -182,41 +181,33 @@ public class PartialEvaluator {
         return new ResolvedJavaMethod[]{callSiteProxyMethod, callDirectMethod};
     }
 
-    @SuppressWarnings("unused")
-    public StructuredGraph createGraph(DebugContext debug, final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, ResolvedJavaMethod rootMethod, AllowAssumptions allowAssumptions,
-                    CompilationIdentifier compilationId, CancellableCompileTask task) {
-        return createGraph(debug, callTarget, inliningDecision, rootForCallTarget(callTarget), allowAssumptions, compilationId, callTarget.getSpeculationLog(), task);
-    }
-
-    public StructuredGraph createGraph(DebugContext debug, final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, AllowAssumptions allowAssumptions,
-                    CompilationIdentifier compilationId,
+    public StructuredGraph createGraph(final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId,
                     CancellableCompileTask task) {
-        return createGraph(debug, callTarget, inliningDecision, rootForCallTarget(callTarget), allowAssumptions, compilationId, callTarget.getSpeculationLog(), task);
+        return createGraph(callTarget, inliningDecision, rootForCallTarget(callTarget), allowAssumptions, compilationId, task);
     }
 
     @SuppressWarnings("try")
-    public StructuredGraph createGraph(DebugContext debug, final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, ResolvedJavaMethod rootMethod, AllowAssumptions allowAssumptions,
-                    CompilationIdentifier compilationId, SpeculationLog log, CancellableCompileTask task) {
+    public StructuredGraph createGraph(final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, ResolvedJavaMethod rootMethod, AllowAssumptions allowAssumptions,
+                    CompilationIdentifier compilationId, CancellableCompileTask task) {
+        try (Scope c = Debug.scope("TruffleTree")) {
+            Debug.dump(Debug.BASIC_LEVEL, new TruffleTreeDumpHandler.TruffleTreeDump(callTarget), "%s", callTarget);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
 
         String name = callTarget.toString();
         OptionValues options = TruffleCompilerOptions.getOptions();
         // @formatter:off
-        final StructuredGraph graph = new StructuredGraph.Builder(options, debug, allowAssumptions).
+        final StructuredGraph graph = new StructuredGraph.Builder(options, allowAssumptions).
                         name(name).
                         method(rootMethod).
-                        speculationLog(log).
+                        speculationLog(callTarget.getSpeculationLog()).
                         compilationId(compilationId).
                         cancellable(task).
                         build();
         // @formatter:on
 
-        try (DebugContext.Scope s = debug.scope("CreateGraph", graph); Indent indent = debug.logAndIndent("createGraph %s", graph)) {
-
-            try (Scope c = debug.scope("TruffleTree")) {
-                debug.dump(DebugContext.BASIC_LEVEL, new TruffleTreeDumpHandler.TruffleTreeDump(callTarget), "%s", callTarget);
-            } catch (Throwable e) {
-                throw debug.handle(e);
-            }
+        try (Scope s = Debug.scope("CreateGraph", graph); Indent indent = Debug.logAndIndent("createGraph %s", graph)) {
 
             PhaseContext baseContext = new PhaseContext(providers);
             HighTierContext tierContext = new HighTierContext(providers, new PhaseSuite<HighTierContext>(), OptimisticOptimizations.NONE);
@@ -231,7 +222,7 @@ public class PartialEvaluator {
             postPartialEvaluation(graph);
 
         } catch (Throwable e) {
-            throw debug.handle(e);
+            throw Debug.handle(e);
         }
 
         return graph;
@@ -425,7 +416,7 @@ public class PartialEvaluator {
 
         Providers compilationUnitProviders = providers.copyWith(new TruffleConstantFieldProvider(providers.getConstantFieldProvider(), providers.getMetaAccess()));
         return new CachingPEGraphDecoder(architecture, graph, compilationUnitProviders, newConfig, TruffleCompiler.Optimizations, AllowAssumptions.ifNonNull(graph.getAssumptions()),
-                        loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePluginList);
+                        graph.getOptions(), loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePluginList);
     }
 
     protected void doGraphPE(OptimizedCallTarget callTarget, StructuredGraph graph, HighTierContext tierContext, TruffleInlining inliningDecision) {
@@ -482,9 +473,8 @@ public class PartialEvaluator {
 
     @SuppressWarnings({"try", "unused"})
     private void fastPartialEvaluation(OptimizedCallTarget callTarget, TruffleInlining inliningDecision, StructuredGraph graph, PhaseContext baseContext, HighTierContext tierContext) {
-        DebugContext debug = graph.getDebug();
         doGraphPE(callTarget, graph, tierContext, inliningDecision);
-        debug.dump(DebugContext.BASIC_LEVEL, graph, "After Partial Evaluation");
+        Debug.dump(Debug.BASIC_LEVEL, graph, "After Partial Evaluation");
 
         graph.maybeCompress();
 
@@ -504,10 +494,10 @@ public class PartialEvaluator {
         canonicalizer.apply(graph, tierContext);
 
         // Do single partial escape and canonicalization pass.
-        try (DebugContext.Scope pe = debug.scope("TrufflePartialEscape", graph)) {
+        try (Scope pe = Debug.scope("TrufflePartialEscape", graph)) {
             new PartialEscapePhase(TruffleCompilerOptions.getValue(TruffleIterativePartialEscape), canonicalizer, graph.getOptions()).apply(graph, tierContext);
         } catch (Throwable t) {
-            debug.handle(t);
+            Debug.handle(t);
         }
 
         // recompute loop frequencies now that BranchProbabilities have had time to canonicalize
@@ -640,7 +630,6 @@ public class PartialEvaluator {
             if (!isEnabled()) {
                 return;
             }
-            DebugContext debug = graph.getDebug();
             ArrayList<ValueNode> warnings = new ArrayList<>();
             for (MethodCallTargetNode call : graph.getNodes(MethodCallTargetNode.TYPE)) {
                 if (call.targetMethod().isNative()) {
@@ -668,11 +657,11 @@ public class PartialEvaluator {
                 logPerformanceInfo(target.getName(), entry.getValue(), String.format("non-leaf type check: %s", entry.getKey()), Collections.singletonMap("Nodes", entry.getValue()));
             }
 
-            if (debug.areScopesEnabled() && !warnings.isEmpty()) {
-                try (DebugContext.Scope s = debug.scope("TrufflePerformanceWarnings", graph)) {
-                    debug.dump(DebugContext.BASIC_LEVEL, graph, "performance warnings %s", warnings);
+            if (Debug.isEnabled() && !warnings.isEmpty()) {
+                try (Scope s = Debug.scope("TrufflePerformanceWarnings", graph)) {
+                    Debug.dump(Debug.BASIC_LEVEL, graph, "performance warnings %s", warnings);
                 } catch (Throwable t) {
-                    debug.handle(t);
+                    Debug.handle(t);
                 }
             }
 
