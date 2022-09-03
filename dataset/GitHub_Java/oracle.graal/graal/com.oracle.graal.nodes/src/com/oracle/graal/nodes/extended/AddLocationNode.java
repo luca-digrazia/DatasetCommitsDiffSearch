@@ -86,20 +86,20 @@ public final class AddLocationNode extends LocationNode implements Canonicalizab
     }
 
     @Override
-    public Value generateAddress(LIRGeneratorTool gen, Value base) {
-        Value xAddr = getX().generateAddress(gen, base);
-        return getY().generateAddress(gen, xAddr);
+    public Value generateLea(LIRGeneratorTool gen, Value base) {
+        Value xAddr = getX().generateLea(gen, base);
+        return getY().generateLea(gen, xAddr);
     }
 
     @Override
     public Value generateLoad(LIRGeneratorTool gen, Value base, DeoptimizingNode deopting) {
-        Value xAddr = getX().generateAddress(gen, base);
+        Value xAddr = getX().generateLea(gen, base);
         return getY().generateLoad(gen, xAddr, deopting);
     }
 
     @Override
     public void generateStore(LIRGeneratorTool gen, Value base, Value value, DeoptimizingNode deopting) {
-        Value xAddr = getX().generateAddress(gen, base);
+        Value xAddr = getX().generateLea(gen, base);
         getY().generateStore(gen, xAddr, value, deopting);
     }
 
