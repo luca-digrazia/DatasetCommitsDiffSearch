@@ -39,7 +39,6 @@ import java.util.stream.Stream;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.FieldInfo;
-import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.MethodInfo;
 import com.oracle.truffle.espresso.intrinsics.Type;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
@@ -92,7 +91,8 @@ public final class Meta {
     }
 
     public static Klass.WithInstance meta(StaticObject obj) {
-        assert StaticObject.notNull(obj);
+        assert obj != null;
+        assert obj != StaticObject.NULL;
         return meta(obj.getKlass()).forInstance(obj);
     }
 
@@ -113,7 +113,8 @@ public final class Meta {
     }
 
     public Klass meta(Object obj) {
-        assert StaticObject.notNull(obj);
+        assert obj != null;
+        assert obj != StaticObject.NULL;
         if (obj instanceof StaticObject) {
             assert ((StaticObject) obj).getKlass().getContext() == context;
             return meta(((StaticObject) obj).getKlass());
@@ -138,6 +139,9 @@ public final class Meta {
         }
 
         throw EspressoError.shouldNotReachHere();
+        // Arrays of primitives int[] are "adopted" by the Meta context.
+        // assert obj.getClass().isArray() && obj.getClass().getComponentType().isPrimitive();
+        // return new Meta.Klass(((StaticObject) obj).getKlass()).forInstance(obj);
     }
 
     public final Klass OBJECT;
@@ -235,7 +239,8 @@ public final class Meta {
 
     @CompilerDirectives.TruffleBoundary
     public static String toHost(StaticObject str) {
-        if (StaticObject.isNull(str)) {
+        assert str != null;
+        if (str == StaticObject.NULL) {
             return null;
         }
         char[] value = (char[]) meta(str).declaredField("value").get();
@@ -311,7 +316,7 @@ public final class Meta {
         if (guestObject == null) {
             return null;
         }
-        if (StaticObject.isNull(guestObject)) {
+        if (guestObject == StaticObject.NULL) {
             return null;
         }
         if (guestObject == StaticObject.VOID) {
@@ -338,7 +343,7 @@ public final class Meta {
         if (guestObject == null) {
             return null;
         }
-        if (StaticObject.isNull(guestObject)) {
+        if (guestObject == StaticObject.NULL) {
             return null;
         }
         if (guestObject == StaticObject.VOID) {
@@ -592,7 +597,8 @@ public final class Meta {
             private final StaticObject instance;
 
             WithInstance(StaticObject obj) {
-                assert StaticObject.notNull(obj);
+                assert obj != null;
+                assert obj != StaticObject.NULL;
                 this.instance = obj;
             }
 
@@ -642,12 +648,7 @@ public final class Meta {
         }
 
         public Meta.Klass[] getParameterTypes() {
-            com.oracle.truffle.espresso.impl.Klass[] params = method.getParameterTypes();
-            Meta.Klass[] metaParams = new Meta.Klass[params.length];
-            for (int i = 0; i < params.length; i++) {
-                metaParams[i] = meta(params[i]);
-            }
-            return metaParams;
+            return Arrays.stream(method.getParameterTypes()).map(Meta::meta).toArray(Meta.Klass[]::new);
         }
 
         public int getParameterCount() {
@@ -748,7 +749,7 @@ public final class Meta {
 
             WithInstance(StaticObject obj) {
                 assert !isStatic() || ((StaticObjectImpl) obj).isStatic();
-                assert StaticObject.notNull(obj);
+                assert obj != StaticObject.NULL;
                 instance = obj;
             }
 
