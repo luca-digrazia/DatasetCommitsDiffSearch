@@ -100,8 +100,7 @@ public abstract class TruffleCompiler {
 
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
 
-        boolean needSourcePositions = graalTruffleRuntime.enableInfopoints() || TruffleCompilerOptions.TruffleInstrumentBranches.getValue();
-        GraphBuilderConfiguration baseConfig = GraphBuilderConfiguration.getDefault(new Plugins(plugins)).withNodeSourcePosition(needSourcePositions);
+        GraphBuilderConfiguration baseConfig = GraphBuilderConfiguration.getDefault(new Plugins(plugins)).withNodeSourcePosition(graalTruffleRuntime.enableInfopoints());
         this.config = baseConfig.withSkippedExceptionTypes(skippedExceptionTypes).withOmitAssertions(TruffleCompilerOptions.TruffleExcludeAssertions.getValue());
 
         this.partialEvaluator = createPartialEvaluator();

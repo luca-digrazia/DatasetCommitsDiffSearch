@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,121 +22,239 @@
  */
 package com.oracle.graal.compiler.test.inlining;
 
-import static org.junit.Assert.*;
+import jdk.vm.ci.code.site.InfopointReason;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import java.util.concurrent.*;
+import org.junit.Ignore;
+import org.junit.Test;
 
-import org.junit.*;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugDumpScope;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.FullInfopointNode;
+import com.oracle.graal.nodes.Invoke;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.PhaseSuite;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
+import com.oracle.graal.phases.common.inlining.InliningPhase;
+import com.oracle.graal.phases.tiers.HighTierContext;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-
-// TODO (chaeubl): add more test cases
-@SuppressWarnings("unused")
 public class InliningTest extends GraalCompilerTest {
+
     @Test
     public void testInvokeStaticInlining() {
-        assertInlined(getGraph("invokeStaticSnippet"));
-        assertInlined(getGraph("invokeStaticOnInstanceSnippet"));
+        assertInlined(getGraph("invokeStaticSnippet", false));
+        assertInlined(getGraph("invokeStaticOnInstanceSnippet", false));
     }
 
     @SuppressWarnings("all")
     public static Boolean invokeStaticSnippet(boolean value) {
         return Boolean.valueOf(value);
     }
-    @SuppressWarnings("all")
+
+    @SuppressWarnings({"all", "static"})
     public static Boolean invokeStaticOnInstanceSnippet(Boolean obj, boolean value) {
         return obj.valueOf(value);
     }
 
-
     @Test
     public void testStaticBindableInlining() {
-        assertInlined(getGraph("invokeConstructorSnippet"));
-        assertInlined(getGraph("invokeFinalMethodSnippet"));
-        assertInlined(getGraph("invokeMethodOnFinalClassSnippet"));
+        assertInlined(getGraph("invokeConstructorSnippet", false));
+        assertInlined(getGraph("invokeFinalMethodSnippet", false));
+        assertInlined(getGraph("invokeMethodOnFinalClassSnippet", false));
+        assertInlined(getGraph("invokeMethodOnStaticFinalFieldSnippet", false));
+    }
+
+    @Ignore("would need read elimination/EA before inlining")
+    @Test
+    public void testDependentStaticBindableInlining() {
+        assertInlined(getGraph("invokeMethodOnFinalFieldSnippet", false));
+        assertInlined(getGraph("invokeMethodOnFieldSnippet", false));
+    }
+
+    @Test
+    public void testStaticBindableInliningIP() {
+        assertManyMethodInfopoints(assertInlined(getGraph("invokeConstructorSnippet", true)));
+        assertManyMethodInfopoints(assertInlined(getGraph("invokeFinalMethodSnippet", true)));
+        assertManyMethodInfopoints(assertInlined(getGraph("invokeMethodOnFinalClassSnippet", true)));
+        assertManyMethodInfopoints(assertInlined(getGraph("invokeMethodOnStaticFinalFieldSnippet", true)));
+    }
+
+    @Ignore("would need read elimination/EA before inlining")
+    @Test
+    public void testDependentStaticBindableInliningIP() {
+        assertManyMethodInfopoints(assertInlined(getGraph("invokeMethodOnFinalFieldSnippet", true)));
+        assertManyMethodInfopoints(assertInlined(getGraph("invokeMethodOnFieldSnippet", true)));
     }
 
     @SuppressWarnings("all")
     public static Object invokeConstructorSnippet(int value) {
         return new SuperClass(value);
     }
+
     @SuppressWarnings("all")
     public static int invokeFinalMethodSnippet(SuperClass superClass, SubClassA subClassA, FinalSubClass finalSubClass) {
-        return superClass.publicFinalMethod() +
-               subClassA.publicFinalMethod() +
-               finalSubClass.publicFinalMethod() +
-               superClass.protectedFinalMethod() +
-               subClassA.protectedFinalMethod() +
-               finalSubClass.protectedFinalMethod();
-    }
-    @SuppressWarnings("all")
-    public static int invokeMethodOnFinalClassSnippet(FinalSubClass finalSubClass) {
-        return finalSubClass.publicFinalMethod() +
-               finalSubClass.publicNotOverriddenMethod() +
-               finalSubClass.publicOverriddenMethod() +
-               finalSubClass.protectedFinalMethod() +
-               finalSubClass.protectedNotOverriddenMethod() +
-               finalSubClass.protectedOverriddenMethod();
+        return superClass.publicFinalMethod() + subClassA.publicFinalMethod() + finalSubClass.publicFinalMethod() + superClass.protectedFinalMethod() + subClassA.protectedFinalMethod() +
+                        finalSubClass.protectedFinalMethod();
     }
 
+    @SuppressWarnings("all")
+    public static int invokeMethodOnFinalClassSnippet(FinalSubClass finalSubClass) {
+        return finalSubClass.publicFinalMethod() + finalSubClass.publicNotOverriddenMethod() + finalSubClass.publicOverriddenMethod() + finalSubClass.protectedFinalMethod() +
+                        finalSubClass.protectedNotOverriddenMethod() + finalSubClass.protectedOverriddenMethod();
+    }
+
+    @SuppressWarnings("all")
+    public static int invokeMethodOnStaticFinalFieldSnippet() {
+        return StaticFinalFields.NumberStaticFinalField.intValue() + StaticFinalFields.SuperClassStaticFinalField.publicOverriddenMethod() +
+                        StaticFinalFields.FinalSubClassStaticFinalField.publicOverriddenMethod() + StaticFinalFields.SingleImplementorStaticFinalField.publicOverriddenMethod() +
+                        StaticFinalFields.MultipleImplementorsStaticFinalField.publicOverriddenMethod() + StaticFinalFields.SubClassAStaticFinalField.publicOverriddenMethod() +
+                        StaticFinalFields.SubClassBStaticFinalField.publicOverriddenMethod() + StaticFinalFields.SubClassCStaticFinalField.publicOverriddenMethod();
+    }
+
+    @SuppressWarnings("all")
+    public static int invokeMethodOnFinalFieldSnippet() {
+        FinalFields fields = new FinalFields();
+        return fields.numberFinalField.intValue() + fields.superClassFinalField.publicOverriddenMethod() + fields.finalSubClassFinalField.publicOverriddenMethod() +
+                        fields.singleImplementorFinalField.publicOverriddenMethod() + fields.multipleImplementorsFinalField.publicOverriddenMethod() +
+                        fields.subClassAFinalField.publicOverriddenMethod() + fields.subClassBFinalField.publicOverriddenMethod() + fields.subClassCFinalField.publicOverriddenMethod();
+    }
+
+    @SuppressWarnings("all")
+    public static int invokeMethodOnFieldSnippet() {
+        Fields fields = new Fields();
+        return fields.numberField.intValue() + fields.superClassField.publicOverriddenMethod() + fields.finalSubClassField.publicOverriddenMethod() +
+                        fields.singleImplementorField.publicOverriddenMethod() + fields.multipleImplementorsField.publicOverriddenMethod() + fields.subClassAField.publicOverriddenMethod() +
+                        fields.subClassBField.publicOverriddenMethod() + fields.subClassCField.publicOverriddenMethod();
+    }
+
+    public interface Attributes {
+
+        int getLength();
+    }
+
+    public class NullAttributes implements Attributes {
+
+        @Override
+        public int getLength() {
+            return 0;
+        }
+
+    }
+
+    public class TenAttributes implements Attributes {
+
+        @Override
+        public int getLength() {
+            return 10;
+        }
+
+    }
+
+    public int getAttributesLength(Attributes a) {
+        return a.getLength();
+    }
+
+    @Test
+    public void testGuardedInline() {
+        NullAttributes nullAttributes = new NullAttributes();
+        for (int i = 0; i < 10000; i++) {
+            getAttributesLength(nullAttributes);
+        }
+        getAttributesLength(new TenAttributes());
+
+        test("getAttributesLength", nullAttributes);
+        test("getAttributesLength", (Object) null);
+    }
 
     @Test
     public void testClassHierarchyAnalysis() {
-        assertInlined(getGraph("invokeLeafClassMethodSnippet"));
-        assertInlined(getGraph("invokeConcreteMethodSnippet"));
-        assertInlined(getGraph("invokeSingleImplementorInterfaceSnippet"));
-        assertInlined(getGraph("invokeConcreteInterfaceMethodSnippet"));
+        assertInlined(getGraph("invokeLeafClassMethodSnippet", false));
+        assertInlined(getGraph("invokeConcreteMethodSnippet", false));
+        assertInlined(getGraph("invokeSingleImplementorInterfaceSnippet", false));
+        // assertInlined(getGraph("invokeConcreteInterfaceMethodSnippet", false));
 
-        assertNotInlined(getGraph("invokeOverriddenInterfaceMethodSnippet"));
+        assertNotInlined(getGraph("invokeOverriddenPublicMethodSnippet", false));
+        assertNotInlined(getGraph("invokeOverriddenProtectedMethodSnippet", false));
+        assertNotInlined(getGraph("invokeOverriddenInterfaceMethodSnippet", false));
+    }
+
+    @Test
+    public void testClassHierarchyAnalysisIP() {
+        assertManyMethodInfopoints(assertInlined(getGraph("invokeLeafClassMethodSnippet", true)));
+        assertManyMethodInfopoints(assertInlined(getGraph("invokeConcreteMethodSnippet", true)));
+        assertManyMethodInfopoints(assertInlined(getGraph("invokeSingleImplementorInterfaceSnippet", true)));
+        //@formatter:off
+        // assertInlineInfopoints(assertInlined(getGraph("invokeConcreteInterfaceMethodSnippet", true)));
+        //@formatter:on
+
+        assertFewMethodInfopoints(assertNotInlined(getGraph("invokeOverriddenPublicMethodSnippet", true)));
+        assertFewMethodInfopoints(assertNotInlined(getGraph("invokeOverriddenProtectedMethodSnippet", true)));
+        assertFewMethodInfopoints(assertNotInlined(getGraph("invokeOverriddenInterfaceMethodSnippet", true)));
     }
 
     @SuppressWarnings("all")
     public static int invokeLeafClassMethodSnippet(SubClassA subClassA) {
-        return subClassA.publicFinalMethod() +
-               subClassA.publicNotOverriddenMethod() +
-               subClassA.publicOverriddenMethod();
+        return subClassA.publicFinalMethod() + subClassA.publicNotOverriddenMethod() + subClassA.publicOverriddenMethod();
     }
+
     @SuppressWarnings("all")
     public static int invokeConcreteMethodSnippet(SuperClass superClass) {
-        return superClass.publicNotOverriddenMethod() +
-               superClass.protectedNotOverriddenMethod();
+        return superClass.publicNotOverriddenMethod() + superClass.protectedNotOverriddenMethod();
     }
+
     @SuppressWarnings("all")
     public static int invokeSingleImplementorInterfaceSnippet(SingleImplementorInterface testInterface) {
-        return testInterface.publicNotOverriddenMethod() +
-               testInterface.publicOverriddenMethod();
+        return testInterface.publicNotOverriddenMethod() + testInterface.publicOverriddenMethod();
     }
+
     @SuppressWarnings("all")
     public static int invokeConcreteInterfaceMethodSnippet(MultipleImplementorsInterface testInterface) {
         return testInterface.publicNotOverriddenMethod();
     }
+
     @SuppressWarnings("all")
     public static int invokeOverriddenInterfaceMethodSnippet(MultipleImplementorsInterface testInterface) {
         return testInterface.publicOverriddenMethod();
     }
 
-    private StructuredGraph getGraph(final String snippet) {
-        return Debug.scope("InliningTest", new DebugDumpScope(snippet), new Callable<StructuredGraph>() {
-            @Override
-            public StructuredGraph call() {
-                StructuredGraph graph = parse(snippet);
-                PhasePlan phasePlan = getDefaultPhasePlan();
-                Assumptions assumptions = new Assumptions(true);
-                new ComputeProbabilityPhase().apply(graph);
-                Debug.dump(graph, "Graph");
-                new InliningPhase(null, runtime(), null, assumptions, null, phasePlan, OptimisticOptimizations.ALL).apply(graph);
-                Debug.dump(graph, "Graph");
-                new CanonicalizerPhase(null, runtime(), assumptions).apply(graph);
+    @SuppressWarnings("all")
+    public static int invokeOverriddenPublicMethodSnippet(SuperClass superClass) {
+        return superClass.publicOverriddenMethod();
+    }
+
+    @SuppressWarnings("all")
+    public static int invokeOverriddenProtectedMethodSnippet(SuperClass superClass) {
+        return superClass.protectedOverriddenMethod();
+    }
+
+    @SuppressWarnings("try")
+    private StructuredGraph getGraph(final String snippet, final boolean eagerInfopointMode) {
+        try (Scope s = Debug.scope("InliningTest", new DebugDumpScope(snippet, true))) {
+            ResolvedJavaMethod method = getResolvedJavaMethod(snippet);
+            StructuredGraph graph = eagerInfopointMode ? parseDebug(method, AllowAssumptions.YES) : parseEager(method, AllowAssumptions.YES);
+            try (Scope s2 = Debug.scope("Inlining", graph)) {
+                PhaseSuite<HighTierContext> graphBuilderSuite = eagerInfopointMode
+                                ? getCustomGraphBuilderSuite(GraphBuilderConfiguration.getDefault(getDefaultGraphBuilderPlugins()).withFullInfopoints(true))
+                                : getDefaultGraphBuilderSuite();
+                HighTierContext context = new HighTierContext(getProviders(), graphBuilderSuite, OptimisticOptimizations.ALL);
+                Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+                new CanonicalizerPhase().apply(graph, context);
+                new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
+                Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+                new CanonicalizerPhase().apply(graph, context);
                 new DeadCodeEliminationPhase().apply(graph);
                 return graph;
             }
-        });
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
     }
 
     private static StructuredGraph assertInlined(StructuredGraph graph) {
@@ -148,7 +266,7 @@ public class InliningTest extends GraalCompilerTest {
     }
 
     private static StructuredGraph assertNotInGraph(StructuredGraph graph, Class<?> clazz) {
-        for (Node node: graph.getNodes()) {
+        for (Node node : graph.getNodes()) {
             if (clazz.isInstance(node)) {
                 fail(node.toString());
             }
@@ -157,7 +275,7 @@ public class InliningTest extends GraalCompilerTest {
     }
 
     private static StructuredGraph assertInGraph(StructuredGraph graph, Class<?> clazz) {
-        for (Node node: graph.getNodes()) {
+        for (Node node : graph.getNodes()) {
             if (clazz.isInstance(node)) {
                 return graph;
             }
@@ -166,29 +284,64 @@ public class InliningTest extends GraalCompilerTest {
         return graph;
     }
 
+    private static int[] countMethodInfopoints(StructuredGraph graph) {
+        int start = 0;
+        int end = 0;
+        for (FullInfopointNode ipn : graph.getNodes().filter(FullInfopointNode.class)) {
+            if (ipn.getReason() == InfopointReason.METHOD_START) {
+                ++start;
+            } else if (ipn.getReason() == InfopointReason.METHOD_END) {
+                ++end;
+            }
+        }
+        return new int[]{start, end};
+    }
+
+    private static StructuredGraph assertManyMethodInfopoints(StructuredGraph graph) {
+        int[] counts = countMethodInfopoints(graph);
+        if (counts[0] <= 1 || counts[1] <= 1) {
+            fail(String.format("Graph contains too few required method boundary infopoints: %d starts, %d ends.", counts[0], counts[1]));
+        }
+        return graph;
+    }
+
+    private static StructuredGraph assertFewMethodInfopoints(StructuredGraph graph) {
+        int[] counts = countMethodInfopoints(graph);
+        if (counts[0] > 1 || counts[1] > 1) {
+            fail(String.format("Graph contains too many method boundary infopoints: %d starts, %d ends.", counts[0], counts[1]));
+        }
+        return graph;
+    }
 
     // some interfaces and classes for testing
     private interface MultipleImplementorsInterface {
+
         int publicNotOverriddenMethod();
+
         int publicOverriddenMethod();
     }
 
     private interface SingleImplementorInterface {
+
         int publicNotOverriddenMethod();
+
         int publicOverriddenMethod();
     }
 
     private static class SuperClass implements MultipleImplementorsInterface {
+
         protected int value;
 
-        public SuperClass(int value) {
+        SuperClass(int value) {
             this.value = value;
         }
 
+        @Override
         public int publicNotOverriddenMethod() {
             return value;
         }
 
+        @Override
         public int publicOverriddenMethod() {
             return value;
         }
@@ -211,7 +364,8 @@ public class InliningTest extends GraalCompilerTest {
     }
 
     private static class SubClassA extends SuperClass implements SingleImplementorInterface {
-        public SubClassA(int value) {
+
+        SubClassA(int value) {
             super(value);
         }
 
@@ -227,7 +381,8 @@ public class InliningTest extends GraalCompilerTest {
     }
 
     private static class SubClassB extends SuperClass {
-        public SubClassB(int value) {
+
+        SubClassB(int value) {
             super(value);
         }
 
@@ -243,7 +398,8 @@ public class InliningTest extends GraalCompilerTest {
     }
 
     private static class SubClassC extends SuperClass {
-        public SubClassC(int value) {
+
+        SubClassC(int value) {
             super(value);
         }
 
@@ -259,7 +415,8 @@ public class InliningTest extends GraalCompilerTest {
     }
 
     private static final class FinalSubClass extends SuperClass {
-        public FinalSubClass(int value) {
+
+        FinalSubClass(int value) {
             super(value);
         }
 
@@ -272,5 +429,41 @@ public class InliningTest extends GraalCompilerTest {
         protected int protectedOverriddenMethod() {
             return value * 5;
         }
+    }
+
+    private static final class StaticFinalFields {
+
+        private static final Number NumberStaticFinalField = new Integer(1);
+        private static final SuperClass SuperClassStaticFinalField = new SubClassA(2);
+        private static final FinalSubClass FinalSubClassStaticFinalField = new FinalSubClass(3);
+        private static final SingleImplementorInterface SingleImplementorStaticFinalField = new SubClassA(4);
+        private static final MultipleImplementorsInterface MultipleImplementorsStaticFinalField = new SubClassC(5);
+        private static final SubClassA SubClassAStaticFinalField = new SubClassA(6);
+        private static final SubClassB SubClassBStaticFinalField = new SubClassB(7);
+        private static final SubClassC SubClassCStaticFinalField = new SubClassC(8);
+    }
+
+    private static final class FinalFields {
+
+        private final Number numberFinalField = new Integer(1);
+        private final SuperClass superClassFinalField = new SubClassA(2);
+        private final FinalSubClass finalSubClassFinalField = new FinalSubClass(3);
+        private final SingleImplementorInterface singleImplementorFinalField = new SubClassA(4);
+        private final MultipleImplementorsInterface multipleImplementorsFinalField = new SubClassC(5);
+        private final SubClassA subClassAFinalField = new SubClassA(6);
+        private final SubClassB subClassBFinalField = new SubClassB(7);
+        private final SubClassC subClassCFinalField = new SubClassC(8);
+    }
+
+    private static final class Fields {
+
+        private Number numberField = new Integer(1);
+        private SuperClass superClassField = new SubClassA(2);
+        private FinalSubClass finalSubClassField = new FinalSubClass(3);
+        private SingleImplementorInterface singleImplementorField = new SubClassA(4);
+        private MultipleImplementorsInterface multipleImplementorsField = new SubClassC(5);
+        private SubClassA subClassAField = new SubClassA(6);
+        private SubClassB subClassBField = new SubClassB(7);
+        private SubClassC subClassCField = new SubClassC(8);
     }
 }
