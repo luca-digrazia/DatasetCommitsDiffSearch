@@ -340,30 +340,17 @@ public class InstalledCodeBuilder {
             metaInfoAllocator.close();
         }
 
-        Throwable[] errorBox = {null};
         VMOperation.enqueueBlockingSafepoint("Install code", () -> {
-            try {
-                CodeInfoTable.getRuntimeCodeCache().addMethod(runtimeMethodInfo);
+            CodeInfoTable.getRuntimeCodeCache().addMethod(runtimeMethodInfo);
 
-                /*
-                 * This call makes the new code visible, i.e., other threads can start executing it
-                 * immediately. So all metadata must be registered at this point.
-                 */
-                installedCode.setAddress(code.rawValue(), method);
-            } catch (Throwable e) {
-                errorBox[0] = e;
-            }
+            /*
+             * This call makes the new code visible, i.e., other threads can start executing it
+             * immediately. So all metadata must be registered at this point.
+             */
+            installedCode.setAddress(code.rawValue(), method);
         });
-        if (errorBox[0] != null) {
-            throw rethrow(errorBox[0]);
-        }
 
         compilation = null;
-    }
-
-    @SuppressWarnings({"unchecked"})
-    static <E extends Throwable> RuntimeException rethrow(Throwable ex) throws E {
-        throw (E) ex;
     }
 
     @Uninterruptible(reason = "Operates on raw pointers to objects")
