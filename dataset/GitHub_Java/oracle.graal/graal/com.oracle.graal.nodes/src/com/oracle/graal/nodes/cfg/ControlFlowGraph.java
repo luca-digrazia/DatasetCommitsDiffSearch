@@ -22,33 +22,13 @@
  */
 package com.oracle.graal.nodes.cfg;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-
-import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
-import com.oracle.graal.compiler.common.cfg.CFGVerifier;
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.ControlSplitNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopEndNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StartNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 
 public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
     /**
@@ -213,7 +193,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                 stack.remove(stack.size() - 1);
                 postOrder.add(block);
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
         } while (!stack.isEmpty());
 
@@ -288,27 +268,23 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                     computeLoopBlocks(endBlock, loop);
                 }
 
-                if (graph.getGuardsStage() != GuardsStage.AFTER_FSA) {
-                    for (LoopExitNode exit : loopBegin.loopExits()) {
-                        Block exitBlock = nodeToBlock.get(exit);
-                        assert exitBlock.getPredecessorCount() == 1;
-                        computeLoopBlocks(exitBlock.getFirstPredecessor(), loop);
-                        loop.getExits().add(exitBlock);
-                    }
+                for (LoopExitNode exit : loopBegin.loopExits()) {
+                    Block exitBlock = nodeToBlock.get(exit);
+                    assert exitBlock.getPredecessorCount() == 1;
+                    computeLoopBlocks(exitBlock.getFirstPredecessor(), loop);
+                    loop.getExits().add(exitBlock);
                 }
 
-                if (graph.hasValueProxies()) {
-                    // The following loop can add new blocks to the end of the loop's block list.
-                    int size = loop.getBlocks().size();
-                    for (int i = 0; i < size; ++i) {
-                        Block b = loop.getBlocks().get(i);
-                        for (Block sux : b.getSuccessors()) {
-                            if (sux.loop != loop) {
-                                AbstractBeginNode begin = sux.getBeginNode();
-                                if (!(begin instanceof LoopExitNode && ((LoopExitNode) begin).loopBegin() == loopBegin)) {
-                                    Debug.log(3, "Unexpected loop exit with %s, including whole branch in the loop", sux);
-                                    addBranchToLoop(loop, sux);
-                                }
+                // The following loop can add new blocks to the end of the loop's block list.
+                int size = loop.getBlocks().size();
+                for (int i = 0; i < size; ++i) {
+                    Block b = loop.getBlocks().get(i);
+                    for (Block sux : b.getSuccessors()) {
+                        if (sux.loop != loop) {
+                            AbstractBeginNode begin = sux.getBeginNode();
+                            if (!(begin instanceof LoopExitNode && ((LoopExitNode) begin).loopBegin() == loopBegin)) {
+                                Debug.log(3, "Unexpected loop exit with %s, including whole branch in the loop", sux);
+                                addBranchToLoop(loop, sux);
                             }
                         }
                     }
@@ -372,7 +348,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                     c = c.parent;
                 }
             } else {
-                JVMCIError.shouldNotReachHere();
+                GraalInternalError.shouldNotReachHere();
             }
             state = nextState;
         }
