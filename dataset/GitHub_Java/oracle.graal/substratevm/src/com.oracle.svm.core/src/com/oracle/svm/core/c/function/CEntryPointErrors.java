@@ -33,8 +33,6 @@ import java.lang.annotation.Target;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 
-import org.graalvm.util.DirectAnnotationAccess;
-
 import com.oracle.svm.core.util.VMError;
 
 // Checkstyle: resume
@@ -72,9 +70,6 @@ public final class CEntryPointErrors {
     @Description("Locating the image file failed.") //
     public static final int LOCATE_IMAGE_FAILED = 6;
 
-    @Description("Locating the image file failed.") //
-    public static final int LOCATE_IMAGE_IDENTITY_MISMATCH = 601;
-
     @Description("Opening the located image file failed.") //
     public static final int OPEN_IMAGE_FAILED = 7;
 
@@ -92,9 +87,6 @@ public final class CEntryPointErrors {
 
     @Description("Some exception is not caught.") //
     public static final int UNCAUGHT_EXCEPTION = 12;
-
-    @Description("Initialization the isolate failed.") //
-    public static final int ISOLATE_INITIALIZATION_FAILED = 13;
 
     static String getDescription(int code) {
         String result = null;
@@ -117,7 +109,7 @@ public final class CEntryPointErrors {
                     continue;
                 }
                 int value = field.getInt(null);
-                String description = DirectAnnotationAccess.getAnnotation(field, CEntryPointErrors.Description.class).value();
+                String description = field.getDeclaredAnnotation(CEntryPointErrors.Description.class).value();
                 maxValue = Math.max(value, maxValue);
                 if (maxValue >= array.length) {
                     array = Arrays.copyOf(array, 2 * maxValue);
