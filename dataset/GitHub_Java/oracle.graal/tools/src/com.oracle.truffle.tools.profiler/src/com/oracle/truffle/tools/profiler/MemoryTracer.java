@@ -41,10 +41,8 @@ import com.oracle.truffle.tools.profiler.impl.ProfilerToolFactory;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
@@ -90,7 +88,7 @@ public final class MemoryTracer implements Closeable {
 
     private EventBinding<?> stacksBinding;
 
-    private final ProfilerNode<Payload> rootNode = new ProfilerNode<>();
+    private final ProfilerNode<Payload> rootNode = new ProfilerNode<>(this, null);
 
     private boolean stackOverflowed = false;
 
@@ -173,20 +171,8 @@ public final class MemoryTracer implements Closeable {
      * @return The roots of the trees representing the profile of the execution.
      * @since 0.30
      */
-    public synchronized Collection<ProfilerNode<Payload>> getRootNodes() {
-        ProfilerNode<Payload> copy = new ProfilerNode<>();
-        copy.deepCopyChildrenFrom(rootNode, new Function<Payload, Payload>() {
-            @Override
-            public Payload apply(Payload payload) {
-                Payload copy = new Payload();
-                copy.totalAllocations = payload.totalAllocations;
-                for (AllocationEventInfo info : payload.events) {
-                    copy.events.add(new AllocationEventInfo(info.language, info.allocated, info.reallocation, info.metaObjectString));
-                }
-                return copy;
-            }
-        });
-        return copy.getChildren();
+    public Collection<ProfilerNode<Payload>> getRootNodes() {
+        return rootNode.getChildren();
     }
 
     /**
@@ -314,23 +300,21 @@ public final class MemoryTracer implements Closeable {
             if (correctedStackInfo == null) {
                 return false;
             }
-            synchronized (MemoryTracer.this) {
-                // now traverse the stack and reconstruct the call tree
-                ProfilerNode<Payload> treeNode = rootNode;
-                for (int i = 0; i < correctedStackInfo.getLength(); i++) {
-                    SourceLocation location = correctedStackInfo.getStack()[i];
-                    ProfilerNode<Payload> child = treeNode.findChild(location);
-                    if (child == null) {
-                        child = new ProfilerNode<>(treeNode, location, new Payload());
-                        treeNode.addChild(location, child);
-                    }
-                    treeNode = child;
-                    treeNode.getPayload().incrementTotalAllocations();
+            // now traverse the stack and reconstruct the call tree
+            ProfilerNode<Payload> treeNode = rootNode;
+            for (int i = 0; i < correctedStackInfo.getLength(); i++) {
+                SourceLocation location = correctedStackInfo.getStack()[i];
+                ProfilerNode<Payload> child = treeNode.findChild(location);
+                if (child == null) {
+                    child = new ProfilerNode<>(treeNode, location, new Payload());
+                    treeNode.addChild(location, child);
                 }
-                // insert event at the top of the stack
-                treeNode.getPayload().getEvents().add(info);
-                return true;
+                treeNode = child;
+                treeNode.getPayload().incrementTotalAllocations();
             }
+            // insert event at the top of the stack
+            treeNode.getPayload().getEvents().add(info);
+            return true;
         }
     }
 

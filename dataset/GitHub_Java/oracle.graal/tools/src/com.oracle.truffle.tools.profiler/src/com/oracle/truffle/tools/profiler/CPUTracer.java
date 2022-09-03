@@ -42,9 +42,7 @@ import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNode;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
-import com.oracle.truffle.api.instrumentation.StandardTags.ExpressionTag;
 import com.oracle.truffle.api.instrumentation.StandardTags.RootTag;
-import com.oracle.truffle.api.instrumentation.StandardTags.StatementTag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
 import com.oracle.truffle.api.nodes.NodeCost;
@@ -83,6 +81,20 @@ public final class CPUTracer implements Closeable {
     private EventBinding<?> activeBinding;
 
     private final Map<SourceSection, Payload> payloadMap = new ConcurrentHashMap<>();
+
+    /**
+     * Finds {@link CPUTracer} associated with given engine.
+     *
+     * @param engine the engine to find debugger for
+     * @return an instance of associated {@link CPUTracer}
+     * @since 0.30
+     * @deprecated use {@link #find(Engine)} instead
+     */
+    @Deprecated
+    @SuppressWarnings("deprecation")
+    public static CPUTracer find(com.oracle.truffle.api.vm.PolyglotEngine engine) {
+        return CPUTracerInstrument.getTracer(engine);
+    }
 
     /**
      * Finds {@link CPUTracer} associated with given engine.
@@ -161,7 +173,7 @@ public final class CPUTracer implements Closeable {
         return payloadMap.computeIfAbsent(sourceSection, new Function<SourceSection, Payload>() {
             @Override
             public Payload apply(SourceSection section) {
-                return new Payload(new StackTraceEntry(CPUTracer.this.env.getInstrumenter(), context, StackTraceEntry.STATE_INTERPRETED));
+                return new Payload(new SourceLocation(CPUTracer.this.env.getInstrumenter(), context));
             }
         });
     }
@@ -216,12 +228,12 @@ public final class CPUTracer implements Closeable {
      */
     public static final class Payload {
 
-        private final StackTraceEntry location;
+        private final SourceLocation location;
 
         private long countInterpreted;
         private long countCompiled;
 
-        Payload(StackTraceEntry location) {
+        Payload(SourceLocation location) {
             this.location = location;
         }
 
@@ -234,12 +246,8 @@ public final class CPUTracer implements Closeable {
         }
 
         /**
-         * Returns a set tags a stack location marked with. Common tags are {@link RootTag root},
-         * {@link StatementTag statement} and {@link ExpressionTag expression}. Whether statement or
-         * expression stack trace entries appear depends on the configured
-         * {@link CPUSampler#setFilter(com.oracle.truffle.api.instrumentation.SourceSectionFilter)
-         * filter}.
-         *
+         * @return A set of tags for the {@link SourceLocation} associated with this
+         *         {@link ProfilerNode}
          * @since 0.30
          */
         public Set<Class<?>> getTags() {
