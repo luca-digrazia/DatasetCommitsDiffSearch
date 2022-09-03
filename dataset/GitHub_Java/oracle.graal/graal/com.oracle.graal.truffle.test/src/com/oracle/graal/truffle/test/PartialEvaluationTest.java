@@ -28,7 +28,6 @@ import java.util.concurrent.*;
 import org.junit.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.java.*;
@@ -42,7 +41,6 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.printer.*;
-import com.oracle.graal.runtime.*;
 import com.oracle.graal.truffle.*;
 import com.oracle.graal.virtual.phases.ea.*;
 import com.oracle.truffle.api.*;
@@ -58,9 +56,9 @@ public class PartialEvaluationTest extends GraalCompilerTest {
         // Make sure Truffle runtime is initialized.
         Assert.assertTrue(Truffle.getRuntime() instanceof GraalTruffleRuntime);
         Replacements truffleReplacements = ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements();
-        Providers providers = getProviders().copyWith(truffleReplacements);
+        Providers providers = new Providers(getMetaAccess(), getCodeCache(), getConstantReflection(), getForeignCalls(), getLowerer(), truffleReplacements);
         TruffleCache truffleCache = new TruffleCache(providers, GraphBuilderConfiguration.getDefault(), TruffleCompilerImpl.Optimizations);
-        this.partialEvaluator = new PartialEvaluator(Graal.getRequiredCapability(RuntimeProvider.class), providers, truffleCache);
+        this.partialEvaluator = new PartialEvaluator(providers, truffleCache);
 
         DebugEnvironment.initialize(System.out);
     }
