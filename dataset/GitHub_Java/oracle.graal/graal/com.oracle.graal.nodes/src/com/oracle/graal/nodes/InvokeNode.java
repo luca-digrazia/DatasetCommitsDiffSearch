@@ -182,7 +182,7 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
 
     @Override
     public boolean canDeoptimize() {
-        return true;
+        return stateAfter() != null;
     }
 
     @Override
