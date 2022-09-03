@@ -29,7 +29,7 @@ import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.utilities.*;
 import com.oracle.truffle.sl.nodes.*;
 
-@NodeInfo(shortName = "while", description = "The node implementing a while loop")
+@NodeInfo(shortName = "while")
 public final class SLWhileNode extends SLStatementNode {
 
     /**
@@ -39,7 +39,7 @@ public final class SLWhileNode extends SLStatementNode {
      */
     @Child private SLExpressionNode conditionNode;
 
-    /** Statement (or {@link SLBlockNode block}) executed as long as the condition is true. */
+    /** Statement (or {@SLBlockNode block}) executed as long as the condition is true. */
     @Child private SLStatementNode bodyNode;
 
     /**
@@ -51,6 +51,10 @@ public final class SLWhileNode extends SLStatementNode {
     private final BranchProfile breakTaken = new BranchProfile();
 
     public SLWhileNode(SLExpressionNode conditionNode, SLStatementNode bodyNode) {
+        /*
+         * It is a Truffle requirement to call adoptChild(), which performs all the necessary steps
+         * to add the new child to the node tree.
+         */
         this.conditionNode = conditionNode;
         this.bodyNode = bodyNode;
     }

@@ -26,7 +26,6 @@ import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.sl.builtins.*;
 import com.oracle.truffle.sl.nodes.controlflow.*;
-import com.oracle.truffle.sl.runtime.*;
 
 /**
  * The root of all SL execution trees. It is a Truffle requirement that the tree root extends the
@@ -34,7 +33,6 @@ import com.oracle.truffle.sl.runtime.*;
  * builtin functions, the {@link #bodyNode} is a subclass of {@link SLBuiltinNode}. For user-defined
  * functions, the {@link #bodyNode} is a {@link SLFunctionBodyNode}.
  */
-@NodeInfo(language = "Simple Language", description = "The root of all Simple Language execution trees")
 public final class SLRootNode extends RootNode {
 
     /** The function body that is executed, and specialized during execution. */
@@ -50,16 +48,12 @@ public final class SLRootNode extends RootNode {
     /** The name of the function, for printing purposes only. */
     private final String name;
 
-    /** The Simple execution context for this tree **/
-    private final SLContext context;
-
-    public SLRootNode(SLContext context, FrameDescriptor frameDescriptor, SLExpressionNode bodyNode, String name) {
+    public SLRootNode(FrameDescriptor frameDescriptor, SLExpressionNode bodyNode, String name) {
         super(null, frameDescriptor);
         /* Deep copy the body before any specialization occurs during execution. */
         this.uninitializedBodyNode = NodeUtil.cloneNode(bodyNode);
         this.bodyNode = bodyNode;
         this.name = name;
-        this.context = context;
     }
 
     @Override
@@ -74,15 +68,11 @@ public final class SLRootNode extends RootNode {
 
     @Override
     public RootNode split() {
-        return new SLRootNode(this.context, getFrameDescriptor().shallowCopy(), NodeUtil.cloneNode(uninitializedBodyNode), name);
+        return new SLRootNode(getFrameDescriptor().shallowCopy(), NodeUtil.cloneNode(uninitializedBodyNode), name);
     }
 
     @Override
     public String toString() {
         return "root " + name;
-    }
-
-    public SLContext getSLContext() {
-        return this.context;
     }
 }

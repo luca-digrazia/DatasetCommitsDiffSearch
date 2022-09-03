@@ -28,7 +28,7 @@ import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.utilities.*;
 import com.oracle.truffle.sl.nodes.*;
 
-@NodeInfo(shortName = "if", description = "The node implementing a condional statement")
+@NodeInfo(shortName = "if")
 public final class SLIfNode extends SLStatementNode {
 
     /**
@@ -38,10 +38,10 @@ public final class SLIfNode extends SLStatementNode {
      */
     @Child private SLExpressionNode conditionNode;
 
-    /** Statement (or {@link SLBlockNode block}) executed when the condition is true. */
+    /** Statement (or {@SLBlockNode block}) executed when the condition is true. */
     @Child private SLStatementNode thenPartNode;
 
-    /** Statement (or {@link SLBlockNode block}) executed when the condition is false. */
+    /** Statement (or {@SLBlockNode block}) executed when the condition is false. */
     @Child private SLStatementNode elsePartNode;
 
     /**
@@ -53,6 +53,10 @@ public final class SLIfNode extends SLStatementNode {
     private final BranchProfile elseTaken = new BranchProfile();
 
     public SLIfNode(SLExpressionNode conditionNode, SLStatementNode thenPartNode, SLStatementNode elsePartNode) {
+        /*
+         * It is a Truffle requirement to call adoptChild(), which performs all the necessary steps
+         * to add the new child to the node tree.
+         */
         this.conditionNode = conditionNode;
         this.thenPartNode = thenPartNode;
         this.elsePartNode = elsePartNode;
