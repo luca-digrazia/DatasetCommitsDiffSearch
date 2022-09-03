@@ -233,18 +233,12 @@ public class ConvertNode extends FloatingNode implements Canonicalizable, Lowera
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (from == to) {
-            return value;
-        } else if (value.isConstant()) {
+        if (value.isConstant()) {
             return ConstantNode.forPrimitive(evalConst(value.asConstant()), graph());
         } else if (value instanceof ConvertNode) {
             ConvertNode other = (ConvertNode) value;
             if (other.isLossless() && other.to != Kind.Char) {
-                if (other.from == this.to) {
-                    return other.value();
-                } else {
-                    return graph().unique(new ConvertNode(other.from, this.to, other.value()));
-                }
+                return graph().unique(new ConvertNode(other.from, this.to, other.value()));
             }
         }
         return this;
