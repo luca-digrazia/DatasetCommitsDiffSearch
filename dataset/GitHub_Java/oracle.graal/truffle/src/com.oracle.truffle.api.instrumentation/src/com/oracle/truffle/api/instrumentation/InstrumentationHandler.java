@@ -310,14 +310,6 @@ final class InstrumentationHandler {
         instrumenter.create(expectedServices);
     }
 
-    void finalizeInstrumenter(Object key) {
-        AbstractInstrumenter finalisingInstrumenter = instrumenterMap.get(key);
-        if (finalisingInstrumenter == null) {
-            throw new AssertionError("Instrumenter already disposed.");
-        }
-        finalisingInstrumenter.doFinalize();
-    }
-
     void disposeInstrumenter(Object key, boolean cleanupRequired) {
         AbstractInstrumenter disposedInstrumenter = instrumenterMap.remove(key);
         if (disposedInstrumenter == null) {
@@ -1467,9 +1459,14 @@ final class InstrumentationHandler {
             if (TRACE) {
                 trace("Create instrument %s class %s %n", instrument, instrumentClass);
             }
-            services = env.onCreate(instrument);
-            if (expectedServices != null && !TruffleOptions.AOT) {
-                checkServices(expectedServices);
+            try {
+                services = env.onCreate(instrument);
+                if (expectedServices != null && !TruffleOptions.AOT) {
+                    checkServices(expectedServices);
+                }
+            } catch (Throwable e) {
+                failInstrumentInitialization(env, String.format("Failed calling onCreate of instrument class %s", instrumentClass.getName()), e);
+                return;
             }
             if (TRACE) {
                 trace("Created instrument %s class %s %n", instrument, instrumentClass);
@@ -1525,11 +1522,6 @@ final class InstrumentationHandler {
         }
 
         @Override
-        void doFinalize() {
-            instrument.onFinalize(env);
-        }
-
-        @Override
         void dispose() {
             instrument.onDispose(env);
         }
@@ -1553,10 +1545,6 @@ final class InstrumentationHandler {
      * implementations}.
      */
     final class EngineInstrumenter extends AbstractInstrumenter {
-
-        @Override
-        void doFinalize() {
-        }
 
         @Override
         void dispose() {
@@ -1673,11 +1661,6 @@ final class InstrumentationHandler {
         }
 
         @Override
-        void doFinalize() {
-            // nothing to do
-        }
-
-        @Override
         void dispose() {
             // nothing to do
         }
@@ -1694,8 +1677,6 @@ final class InstrumentationHandler {
      * privileges may vary.
      */
     abstract class AbstractInstrumenter extends Instrumenter {
-
-        abstract void doFinalize();
 
         abstract void dispose();
 
@@ -2079,11 +2060,6 @@ final class InstrumentationHandler {
                     }
                 }
                 return descriptors;
-            }
-
-            @Override
-            public void finalizeInstrument(Object instrumentationHandler, Object key) {
-                ((InstrumentationHandler) instrumentationHandler).finalizeInstrumenter(key);
             }
 
             @Override
