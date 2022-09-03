@@ -29,7 +29,6 @@ import static org.junit.Assert.assertNotNull;
 
 import org.junit.Test;
 
-@SuppressWarnings("deprecation")
 public class SourceSectionTest {
 
     private final Source emptySource = Source.fromText("", null);
@@ -138,6 +137,7 @@ public class SourceSectionTest {
         Source complexHello = Source.fromFileName(sample.getPath(), true);
         SourceSection helloTo = complexHello.createSection("world", 6, 5);
         assertEquals("world", helloTo.getCode());
+
 
         try (FileWriter w = new FileWriter(sample)) {
             w.write("Hi world!");
