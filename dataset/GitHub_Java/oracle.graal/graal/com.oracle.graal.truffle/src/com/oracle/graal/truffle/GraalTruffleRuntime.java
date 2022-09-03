@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,37 +22,23 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreThrown;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompileOnly;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleEnableInfopoints;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
-import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.CompilationResult;
 import jdk.vm.ci.code.stack.InspectedFrame;
 import jdk.vm.ci.code.stack.InspectedFrameVisitor;
 import jdk.vm.ci.code.stack.StackIntrospection;
-import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.service.Services;
 
-import com.oracle.graal.api.runtime.GraalRuntime;
-import com.oracle.graal.compiler.CompilerThreadFactory;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.TTY;
@@ -85,29 +71,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 
 public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
-    protected abstract static class BackgroundCompileQueue implements CompilerThreadFactory.DebugConfigAccess {
-        private final ConcurrentMap<OptimizedCallTarget, Future<?>> compilations;
-        private final ExecutorService compileQueue;
-
-        protected BackgroundCompileQueue() {
-            CompilerThreadFactory factory = new CompilerThreadFactory("TruffleCompilerThread", this);
-
-            int selectedProcessors = TruffleCompilerOptions.TruffleCompilerThreads.getValue();
-            if (selectedProcessors == 0) {
-                // No manual selection made, check how many processors are available.
-                int availableProcessors = Runtime.getRuntime().availableProcessors();
-                if (availableProcessors >= 12) {
-                    selectedProcessors = 4;
-                } else if (availableProcessors >= 4) {
-                    selectedProcessors = 2;
-                }
-            }
-            selectedProcessors = Math.max(1, selectedProcessors);
-            compileQueue = Executors.newFixedThreadPool(selectedProcessors, factory);
-            compilations = new ConcurrentHashMap<>();
-        }
-    }
-
     private ArrayList<String> includes;
     private ArrayList<String> excludes;
 
@@ -118,21 +81,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     protected LoopNodeFactory loopNodeFactory;
     protected CallMethods callMethods;
 
-    private final Supplier<GraalRuntime> graalRuntime;
-
-    public GraalTruffleRuntime(Supplier<GraalRuntime> graalRuntime) {
-        this.graalRuntime = graalRuntime;
+    public GraalTruffleRuntime() {
     }
 
     public abstract TruffleCompiler getTruffleCompiler();
-
-    public <T> T getRequiredGraalCapability(Class<T> clazz) {
-        T ret = graalRuntime.get().getCapability(clazz);
-        if (ret == null) {
-            throw new JVMCIError("The VM does not expose the required Graal capability %s.", clazz.getName());
-        }
-        return ret;
-    }
 
     private static <T extends PrioritizedServiceProvider> T loadPrioritizedServiceProvider(Class<T> clazz) {
         Iterable<T> providers = Services.load(clazz);
@@ -340,6 +292,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         getCompilationNotify().notifyShutdown(this);
     }
 
+    public abstract Collection<OptimizedCallTarget> getQueuedCallTargets();
+
+    public abstract void compile(OptimizedCallTarget optimizedCallTarget, boolean mayBeAsynchronous);
+
     @SuppressWarnings("try")
     protected void doCompile(OptimizedCallTarget optimizedCallTarget) {
         boolean success = true;
@@ -353,76 +309,11 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         }
     }
 
-    protected abstract BackgroundCompileQueue getCompileQueue();
+    public abstract boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason);
 
-    public void compile(OptimizedCallTarget optimizedCallTarget, boolean mayBeAsynchronous) {
-        Runnable r = new Runnable() {
-            @Override
-            public void run() {
-                doCompile(optimizedCallTarget);
-            }
-        };
-        BackgroundCompileQueue l = getCompileQueue();
-        Future<?> future = l.compileQueue.submit(r);
-        l.compilations.put(optimizedCallTarget, future);
-        getCompilationNotify().notifyCompilationQueued(optimizedCallTarget);
+    public abstract void waitForCompilation(OptimizedCallTarget optimizedCallTarget, long timeout) throws ExecutionException, TimeoutException;
 
-        if (!mayBeAsynchronous) {
-            try {
-                future.get();
-            } catch (ExecutionException e) {
-                if (TruffleCompilationExceptionsAreThrown.getValue() && !(e.getCause() instanceof BailoutException && !((BailoutException) e.getCause()).isPermanent())) {
-                    throw new RuntimeException(e.getCause());
-                } else {
-                    // silently ignored
-                }
-            } catch (InterruptedException | CancellationException e) {
-                // silently ignored
-            }
-        }
-    }
-
-    public boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
-        BackgroundCompileQueue l = getCompileQueue();
-        Future<?> codeTask = l.compilations.get(optimizedCallTarget);
-        if (codeTask != null && isCompiling(optimizedCallTarget)) {
-            l.compilations.remove(optimizedCallTarget);
-            boolean result = codeTask.cancel(true);
-            if (result) {
-                optimizedCallTarget.notifyCompilationFinished(false);
-                getCompilationNotify().notifyCompilationDequeued(optimizedCallTarget, source, reason);
-            }
-            return result;
-        }
-        return false;
-    }
-
-    public void waitForCompilation(OptimizedCallTarget optimizedCallTarget, long timeout) throws ExecutionException, TimeoutException {
-        Future<?> codeTask = getCompileQueue().compilations.get(optimizedCallTarget);
-        if (codeTask != null && isCompiling(optimizedCallTarget)) {
-            try {
-                codeTask.get(timeout, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                // ignore interrupted
-            }
-        }
-    }
-
-    public Collection<OptimizedCallTarget> getQueuedCallTargets() {
-        return getCompileQueue().compilations.keySet().stream().filter(e -> !getCompileQueue().compilations.get(e).isDone()).collect(Collectors.toList());
-    }
-
-    public boolean isCompiling(OptimizedCallTarget optimizedCallTarget) {
-        Future<?> codeTask = getCompileQueue().compilations.get(optimizedCallTarget);
-        if (codeTask != null) {
-            if (codeTask.isCancelled() || codeTask.isDone()) {
-                getCompileQueue().compilations.remove(optimizedCallTarget);
-                return false;
-            }
-            return true;
-        }
-        return false;
-    }
+    public abstract boolean isCompiling(OptimizedCallTarget optimizedCallTarget);
 
     public abstract void invalidateInstalledCode(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason);
 
