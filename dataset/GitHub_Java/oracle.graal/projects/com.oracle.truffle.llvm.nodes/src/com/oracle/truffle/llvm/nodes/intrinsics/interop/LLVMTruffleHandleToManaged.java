@@ -34,6 +34,7 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
@@ -47,10 +48,10 @@ import com.oracle.truffle.llvm.runtime.types.PointerType;
 public abstract class LLVMTruffleHandleToManaged extends LLVMIntrinsic {
 
     @Specialization
-    protected LLVMTruffleObject doIntrinsic(Object rawHandle,
+    protected LLVMTruffleObject doIntrinsic(VirtualFrame frame, Object rawHandle,
                     @Cached("getContextReference()") ContextReference<LLVMContext> context,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode forceAddressNode) {
-        LLVMAddress handle = forceAddressNode.executeWithTarget(rawHandle);
+        LLVMAddress handle = forceAddressNode.executeWithTarget(frame, rawHandle);
         TruffleObject object = context.get().getManagedObjectForHandle(handle);
         return new LLVMTruffleObject(object, PointerType.VOID);
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,48 +29,44 @@
  */
 package com.oracle.truffle.llvm.runtime.types;
 
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
+import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
-public class PointerType implements Type {
+public final class PointerType extends AggregateType {
+    public static final PointerType I8 = new PointerType(PrimitiveType.I8);
+    public static final PointerType VOID = new PointerType(VoidType.INSTANCE);
 
-    /* This must be mutable to handle circular references */
-    private Type type;
+    @CompilationFinal private Type pointeeType;
+    @CompilationFinal private Assumption pointeeTypeAssumption;
 
-    public PointerType(Type type) {
-        this.type = type;
-    }
-
-    @Override
-    public LLVMBaseType getLLVMBaseType() {
-        // if the pointeetype is also a pointer it will not resolve to LLVMBaseType.ADDRESS but to
-        // its own pointeetype's LLVMBaseType, so we cannot just use type.getLLVMBaseType() but
-        // instead have to use instanceof
-        if (type instanceof FunctionType) {
-            return LLVMBaseType.FUNCTION_ADDRESS;
-        } else {
-            return LLVMBaseType.ADDRESS;
-        }
+    public PointerType(Type pointeeType) {
+        this.pointeeTypeAssumption = Truffle.getRuntime().createAssumption("PointerType.pointeeType");
+        this.pointeeType = pointeeType;
     }
 
     public Type getPointeeType() {
-        return type;
+        if (!pointeeTypeAssumption.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+        }
+        return pointeeType;
     }
 
     public void setPointeeType(Type type) {
-        this.type = type;
-    }
-
-    @Override
-    public int getBits() {
-        return Long.BYTES * Byte.SIZE;
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        this.pointeeTypeAssumption.invalidate();
+        this.pointeeType = type;
+        this.pointeeTypeAssumption = Truffle.getRuntime().createAssumption("PointerType.pointeeType");
     }
 
     @Override
     public int getAlignment(DataSpecConverter targetDataLayout) {
         if (targetDataLayout != null) {
-            return targetDataLayout.getBitAlignment(getLLVMBaseType()) / Byte.SIZE;
+            return targetDataLayout.getBitAlignment(this) / Byte.SIZE;
         } else {
             return Long.BYTES;
         }
@@ -78,61 +74,55 @@ public class PointerType implements Type {
 
     @Override
     public int getSize(DataSpecConverter targetDataLayout) {
-        if (type instanceof FunctionType) {
-            return LLVMHeap.FUNCTION_PTR_SIZE_BYTE;
-        } else {
-            return LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
-        }
+        return LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
     }
 
     @Override
-    public int getIndexOffset(int index, DataSpecConverter targetDataLayout) {
-        return type.getSize(targetDataLayout) * index;
+    public Type shallowCopy() {
+        final PointerType copy = new PointerType(getPointeeType());
+        copy.setSourceType(getSourceType());
+        return copy;
     }
 
     @Override
-    public Type getIndexType(int index) {
-        return type;
+    public long getOffsetOf(long index, DataSpecConverter targetDataLayout) {
+        return getPointeeType().getSize(targetDataLayout) * index;
     }
 
     @Override
-    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
-        switch (type.getRuntimeType()) {
-            case FUNCTION_ADDRESS:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.FUNCTION_ADDRESS;
-            case I1:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.I1_POINTER;
-            case I8:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.I8_POINTER;
-            case I16:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.I16_POINTER;
-            case I32:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.I32_POINTER;
-            case I64:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.I64_POINTER;
-            case HALF:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.HALF_POINTER;
-            case FLOAT:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.FLOAT_POINTER;
-            case DOUBLE:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.DOUBLE_POINTER;
-            default:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.ADDRESS;
-        }
+    public Type getElementType(long index) {
+        return getPointeeType();
+    }
+
+    @Override
+    public int getNumberOfElements() {
+        CompilerDirectives.transferToInterpreter();
+        throw new IllegalStateException();
+    }
+
+    @Override
+    public int getBitSize() {
+        return Long.BYTES * Byte.SIZE;
+    }
+
+    @Override
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
+    }
+
+    @Override
+    @TruffleBoundary
+    public String toString() {
+        return String.format("%s*", getPointeeType());
     }
 
     @Override
     public int hashCode() {
-        return type.hashCode();
+        return PointerType.class.hashCode();
     }
 
     @Override
     public boolean equals(Object obj) {
-        return this == obj || (obj instanceof PointerType && type.equals(((PointerType) obj).type));
-    }
-
-    @Override
-    public String toString() {
-        return String.format("%s*", type);
+        return obj instanceof PointerType;
     }
 }

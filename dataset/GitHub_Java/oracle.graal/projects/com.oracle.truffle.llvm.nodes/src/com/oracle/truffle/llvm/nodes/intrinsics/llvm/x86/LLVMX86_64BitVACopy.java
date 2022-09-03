@@ -48,6 +48,7 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
 @NodeField(type = int.class, name = "numberExplicitArguments")
@@ -78,42 +79,42 @@ public abstract class LLVMX86_64BitVACopy extends LLVMBuiltin {
     }
 
     private void setGPOffset(VirtualFrame frame, Object address, int value) {
-        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.GP_OFFSET);
+        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.GP_OFFSET, PrimitiveType.I32);
         gpOffsetStore.executeWithTarget(frame, p, value);
     }
 
     private void setFPOffset(VirtualFrame frame, Object address, int value) {
-        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.FP_OFFSET);
+        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.FP_OFFSET, PrimitiveType.I32);
         fpOffsetStore.executeWithTarget(frame, p, value);
     }
 
     private void setOverflowArgArea(VirtualFrame frame, Object address, Object value) {
-        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.OVERFLOW_ARG_AREA);
+        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.OVERFLOW_ARG_AREA, PointerType.VOID);
         overflowArgAreaStore.executeWithTarget(frame, p, value);
     }
 
     private void setRegSaveArea(VirtualFrame frame, Object address, Object value) {
-        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.REG_SAVE_AREA);
+        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.REG_SAVE_AREA, PointerType.VOID);
         regSaveAreaStore.executeWithTarget(frame, p, value);
     }
 
     private int getGPOffset(VirtualFrame frame, Object address) {
-        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.GP_OFFSET);
+        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.GP_OFFSET, PrimitiveType.I32);
         return (int) gpOffsetLoad.executeWithTarget(frame, p);
     }
 
     private int getFPOffset(VirtualFrame frame, Object address) {
-        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.FP_OFFSET);
+        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.FP_OFFSET, PrimitiveType.I32);
         return (int) fpOffsetLoad.executeWithTarget(frame, p);
     }
 
     private Object getOverflowArgArea(VirtualFrame frame, Object address) {
-        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.OVERFLOW_ARG_AREA);
+        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.OVERFLOW_ARG_AREA, PointerType.VOID);
         return overflowArgAreaLoad.executeWithTarget(frame, p);
     }
 
     private Object getRegSaveArea(VirtualFrame frame, Object address) {
-        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.REG_SAVE_AREA);
+        Object p = pointerArithmeticStructInit.executeWithTarget(frame, address, X86_64BitVarArgs.REG_SAVE_AREA, PointerType.VOID);
         return regSaveAreaLoad.executeWithTarget(frame, p);
     }
 
