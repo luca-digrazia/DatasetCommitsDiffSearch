@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.api.meta.DeoptimizationAction.*;
+import static com.oracle.graal.api.code.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.nodes.CStringNode.*;
@@ -37,6 +37,7 @@ import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.word.*;
@@ -87,7 +88,7 @@ public class StubUtil {
      */
     @Fold
     public static boolean cAssertionsEnabled() {
-        return runtime().getConfig().cAssertions;
+        return graalRuntime().getConfig().cAssertions;
     }
 
     @NodeIntrinsic(StubForeignCallNode.class)
@@ -218,7 +219,7 @@ public class StubUtil {
 
             Pointer oop = Word.fromObject(object);
             if (object != null) {
-                BeginNode anchorNode = BeginNode.anchor();
+                BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
                 // make sure object is 'reasonable'
                 if (!oop.and(unsigned(verifyOopMask())).equal(unsigned(verifyOopBits()))) {
                     fatal("oop not in heap: %p", oop.rawValue());
