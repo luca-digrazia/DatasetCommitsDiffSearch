@@ -201,12 +201,7 @@ public final class SourceSection {
      */
     @Override
     public String toString() {
-        if (source == null) {
-            return kind + ": " + identifier;
-        } else {
-            return "source=" + source.getShortName() + " pos=" + charIndex + " len=" + charLength + " line=" + startLine + " col=" + startColumn +
-                            (identifier != null ? " identifier=" + identifier : "") + " code=" + getCode();
-        }
+        return getShortDescription();
     }
 
     @Override
