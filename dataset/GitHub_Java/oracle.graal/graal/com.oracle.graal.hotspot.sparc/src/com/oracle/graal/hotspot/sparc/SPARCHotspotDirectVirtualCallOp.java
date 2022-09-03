@@ -43,12 +43,10 @@ import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 final class SPARCHotspotDirectVirtualCallOp extends DirectCallOp {
 
     private final InvokeKind invokeKind;
-    private final HotSpotVMConfig config;
 
-    SPARCHotspotDirectVirtualCallOp(ResolvedJavaMethod target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind, HotSpotVMConfig config) {
+    SPARCHotspotDirectVirtualCallOp(ResolvedJavaMethod target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind) {
         super(target, result, parameters, temps, state);
         this.invokeKind = invokeKind;
-        this.config = config;
         assert invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual;
     }
 
@@ -58,6 +56,6 @@ final class SPARCHotspotDirectVirtualCallOp extends DirectCallOp {
         // instruction that loads the Klass from the inline cache.
         MarkId.recordMark(crb, invokeKind == InvokeKind.Virtual ? MarkId.INVOKEVIRTUAL : MarkId.INVOKEINTERFACE);
         Register scratchRegister = g5;
-        new Setx(config.nonOopBits, scratchRegister, true).emit(masm);
+        new Setx(HotSpotGraalRuntime.runtime().getConfig().nonOopBits, scratchRegister, true).emit(masm);
     }
 }

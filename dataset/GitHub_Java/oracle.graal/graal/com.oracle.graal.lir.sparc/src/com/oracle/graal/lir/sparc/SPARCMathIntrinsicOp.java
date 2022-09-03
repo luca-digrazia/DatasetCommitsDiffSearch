@@ -25,12 +25,13 @@ package com.oracle.graal.lir.sparc;
 import static com.oracle.graal.api.code.ValueUtil.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
-public class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+public class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements TailDelayedLIRInstruction {
 
     public enum IntrinsicOpcode {
         SQRT,
@@ -45,6 +46,7 @@ public class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements SPARCTa
     @Opcode private final IntrinsicOpcode opcode;
     @Def protected Value result;
     @Use protected Value input;
+    private DelaySlotHolder delaySlotHolder = DelaySlotHolder.DUMMY;
 
     public SPARCMathIntrinsicOp(IntrinsicOpcode opcode, Value result, Value input) {
         this.opcode = opcode;
@@ -55,15 +57,15 @@ public class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements SPARCTa
     @Override
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
         Kind inputKind = (Kind) input.getLIRKind().getPlatformKind();
-        delayedControlTransfer.emitControlTransfer(crb, masm);
+        delaySlotHolder.emitForDelay(crb, masm);
         switch (opcode) {
             case SQRT:
                 switch (inputKind) {
                     case Float:
-                        masm.fsqrts(asFloatReg(input), asFloatReg(result));
+                        new Fsqrts(asFloatReg(input), asFloatReg(result)).emit(masm);
                         break;
                     case Double:
-                        masm.fsqrtd(asDoubleReg(input), asDoubleReg(result));
+                        new Fsqrtd(asDoubleReg(input), asDoubleReg(result)).emit(masm);
                         break;
                     default:
                         GraalInternalError.shouldNotReachHere();
@@ -72,10 +74,10 @@ public class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements SPARCTa
             case ABS:
                 switch (inputKind) {
                     case Float:
-                        masm.fabss(asFloatReg(input), asFloatReg(result));
+                        new Fabss(asFloatReg(input), asFloatReg(result)).emit(masm);
                         break;
                     case Double:
-                        masm.fabsd(asDoubleReg(input), asDoubleReg(result));
+                        new Fabsd(asDoubleReg(input), asDoubleReg(result)).emit(masm);
                         break;
                     default:
                         GraalInternalError.shouldNotReachHere();
@@ -89,6 +91,10 @@ public class SPARCMathIntrinsicOp extends SPARCLIRInstruction implements SPARCTa
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
+    }
+
+    public void setDelaySlotHolder(DelaySlotHolder holder) {
+        this.delaySlotHolder = holder;
     }
 
 }

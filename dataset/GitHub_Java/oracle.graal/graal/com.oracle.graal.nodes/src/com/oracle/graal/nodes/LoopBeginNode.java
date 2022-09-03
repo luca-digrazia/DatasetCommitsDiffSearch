@@ -39,13 +39,13 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo
 public class LoopBeginNode extends MergeNode implements IterableNodeType, LIRLowerable {
 
-    protected double loopFrequency;
-    protected int nextEndIndex;
-    protected int unswitches;
+    private double loopFrequency;
+    private int nextEndIndex;
+    private int unswitches;
     @OptionalInput(InputType.Guard) GuardingNode overflowGuard;
 
     public static LoopBeginNode create() {
-        return new LoopBeginNode();
+        return USE_GENERATED_NODES ? new LoopBeginNodeGen() : new LoopBeginNode();
     }
 
     protected LoopBeginNode() {
@@ -219,7 +219,7 @@ public class LoopBeginNode extends MergeNode implements IterableNodeType, LIRLow
      */
     public void removeDeadPhis() {
         if (phis().isNotEmpty()) {
-            Set<PhiNode> alive = Node.newSet();
+            Set<PhiNode> alive = new HashSet<>();
             for (PhiNode phi : phis()) {
                 NodePredicate isAlive = u -> !isPhiAtMerge(u) || alive.contains(u);
                 if (phi.usages().filter(isAlive).isNotEmpty()) {
@@ -251,9 +251,9 @@ public class LoopBeginNode extends MergeNode implements IterableNodeType, LIRLow
             if (input != null && input instanceof AddNode && input.stamp() instanceof IntegerStamp) {
                 AddNode add = (AddNode) input;
                 if (add.getX() == phi && add.getY().isConstant()) {
-                    increment = add.getY().asJavaConstant().asLong();
+                    increment = add.getY().asConstant().asLong();
                 } else if (add.getY() == phi && add.getX().isConstant()) {
-                    increment = add.getX().asJavaConstant().asLong();
+                    increment = add.getX().asConstant().asLong();
                 }
             } else if (input == phi) {
                 increment = 0;
@@ -283,7 +283,7 @@ public class LoopBeginNode extends MergeNode implements IterableNodeType, LIRLow
                 if (phi != null) {
                     nextPhi: for (int otherPhiIndex = phiIndex + 1; otherPhiIndex < phiCount; otherPhiIndex++) {
                         PhiNode otherPhi = phis[otherPhiIndex];
-                        if (otherPhi == null || phi.getNodeClass() != otherPhi.getNodeClass() || !phi.valueEquals(otherPhi)) {
+                        if (otherPhi == null || phi.getNodeClass() != otherPhi.getNodeClass() || !phi.getNodeClass().valueEqual(phi, otherPhi)) {
                             continue nextPhi;
                         }
                         if (selfIncrement[phiIndex] == null) {

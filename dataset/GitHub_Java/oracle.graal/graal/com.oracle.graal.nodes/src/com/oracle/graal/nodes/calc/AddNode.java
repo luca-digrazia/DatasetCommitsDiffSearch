@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -39,7 +38,7 @@ public class AddNode extends BinaryArithmeticNode implements NarrowableArithmeti
     }
 
     protected AddNode(ValueNode x, ValueNode y) {
-        super(ArithmeticOpTable::getAdd, x, y);
+        super(ArithmeticOpTable.forStamp(x.stamp()).getAdd(), x, y);
     }
 
     @Override
@@ -52,8 +51,7 @@ public class AddNode extends BinaryArithmeticNode implements NarrowableArithmeti
         if (forX.isConstant() && !forY.isConstant()) {
             return AddNode.create(forY, forX);
         }
-        BinaryOp op = getOp(forX, forY);
-        boolean associative = op.isAssociative();
+        boolean associative = getOp().isAssociative();
         if (associative) {
             if (forX instanceof SubNode) {
                 SubNode sub = (SubNode) forX;
@@ -72,7 +70,7 @@ public class AddNode extends BinaryArithmeticNode implements NarrowableArithmeti
         }
         if (forY.isConstant()) {
             Constant c = forY.asConstant();
-            if (op.isNeutral(c)) {
+            if (getOp().isNeutral(c)) {
                 return forX;
             }
             if (associative) {
@@ -97,9 +95,9 @@ public class AddNode extends BinaryArithmeticNode implements NarrowableArithmeti
         assert op1 != null : getX() + ", this=" + this;
         Value op2 = builder.operand(getY());
         if (!getY().isConstant() && !BinaryArithmeticNode.livesLonger(this, getY(), builder)) {
-            Value tmp = op1;
+            Value op = op1;
             op1 = op2;
-            op2 = tmp;
+            op2 = op;
         }
         builder.setResult(this, gen.emitAdd(op1, op2));
     }

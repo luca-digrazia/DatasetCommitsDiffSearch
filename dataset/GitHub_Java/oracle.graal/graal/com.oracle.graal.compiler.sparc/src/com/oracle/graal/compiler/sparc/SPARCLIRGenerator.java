@@ -36,6 +36,7 @@ import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.sparc.*;
@@ -83,6 +84,18 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
+    public boolean canStoreConstant(Constant c) {
+        // SPARC can only store integer null constants (via g0)
+        switch (c.getKind()) {
+            case Float:
+            case Double:
+                return false;
+            default:
+                return c.isDefaultForKind();
+        }
+    }
+
+    @Override
     public boolean canInlineConstant(Constant c) {
         switch (c.getKind()) {
             case Int:
@@ -94,6 +107,13 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             default:
                 return false;
         }
+    }
+
+    @Override
+    public Variable emitMove(Value input) {
+        Variable result = newVariable(input.getLIRKind());
+        emitMove(result, input);
+        return result;
     }
 
     protected SPARCLIRInstruction createMove(AllocatableValue dst, Value src) {
@@ -977,13 +997,13 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         } else if (fromBits > 32) {
             assert inputVal.getKind() == Kind.Long;
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Long));
-            long mask = CodeUtil.mask(fromBits);
+            long mask = IntegerStamp.defaultMask(fromBits);
             append(new BinaryRegConst(SPARCArithmetic.LAND, result, asAllocatable(inputVal), Constant.forLong(mask), null));
             return result;
         } else {
             assert inputVal.getKind() == Kind.Int || inputVal.getKind() == Kind.Short || inputVal.getKind() == Kind.Byte || inputVal.getKind() == Kind.Char : inputVal.getKind();
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Int));
-            long mask = CodeUtil.mask(fromBits);
+            long mask = IntegerStamp.defaultMask(fromBits);
             Constant constant = Constant.forInt((int) mask);
             if (fromBits == 32) {
                 append(new BinaryRegConst(IUSHR, result, inputVal, Constant.forInt(0)));

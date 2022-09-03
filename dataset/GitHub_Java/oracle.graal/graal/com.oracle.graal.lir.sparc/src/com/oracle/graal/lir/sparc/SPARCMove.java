@@ -27,45 +27,15 @@ import static com.oracle.graal.api.meta.Kind.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static com.oracle.graal.sparc.SPARC.*;
+import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import static com.oracle.graal.lir.StandardOp.*;
 
+import com.oracle.graal.api.code.CompilationResult.RawData;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Add;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fmovd;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fmovs;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fzerod;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fzeros;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Lddf;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldf;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsb;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsh;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsw;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Lduh;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Membar;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Movdtox;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Movstosw;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Movstouw;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Movwtos;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Movxtod;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Or;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Stb;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Stdf;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Stf;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Sth;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Stw;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Stx;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Cas;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Casx;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Clr;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Mov;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.ImplicitNullCheck;
-import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.StandardOp.NullCheck;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.sparc.*;
 import com.oracle.graal.sparc.SPARC.CPUFeature;
@@ -73,10 +43,11 @@ import com.oracle.graal.sparc.SPARC.CPUFeature;
 public class SPARCMove {
 
     @Opcode("MOVE_TOREG")
-    public static class MoveToRegOp extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
+    public static class MoveToRegOp extends SPARCLIRInstruction implements MoveOp, TailDelayedLIRInstruction {
 
         @Def({REG, HINT}) protected AllocatableValue result;
         @Use({REG, STACK, CONST}) protected Value input;
+        private DelaySlotHolder delaySlotLir = DelaySlotHolder.DUMMY;
 
         public MoveToRegOp(AllocatableValue result, Value input) {
             this.result = result;
@@ -85,7 +56,12 @@ public class SPARCMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            move(crb, masm, getResult(), getInput(), delayedControlTransfer);
+            move(crb, masm, getResult(), getInput(), delaySlotLir);
+        }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            assert delaySlotLir == DelaySlotHolder.DUMMY : "Should be set only once";
+            this.delaySlotLir = holder;
         }
 
         @Override
@@ -100,10 +76,11 @@ public class SPARCMove {
     }
 
     @Opcode("MOVE_FROMREG")
-    public static class MoveFromRegOp extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
+    public static class MoveFromRegOp extends SPARCLIRInstruction implements MoveOp, TailDelayedLIRInstruction {
 
         @Def({REG, STACK}) protected AllocatableValue result;
         @Use({REG, CONST, HINT}) protected Value input;
+        private DelaySlotHolder delaySlotLir = DelaySlotHolder.DUMMY;
 
         public MoveFromRegOp(AllocatableValue result, Value input) {
             this.result = result;
@@ -112,7 +89,11 @@ public class SPARCMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            move(crb, masm, getResult(), getInput(), delayedControlTransfer);
+            move(crb, masm, getResult(), getInput(), delaySlotLir);
+        }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotLir = holder;
         }
 
         @Override
@@ -127,16 +108,17 @@ public class SPARCMove {
     }
 
     /**
-     * Move between floating-point and general purpose register domain (WITHOUT VIS3).
+     * Move between floating-point and general purpose register domain (WITHOUT VIS3)
      */
     @Opcode("MOVE")
-    public static class MoveFpGp extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
+    public static class MoveFpGp extends SPARCLIRInstruction implements MoveOp, TailDelayedLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue input;
-        @Use({STACK}) protected StackSlotValue temp;
+        @Use({STACK}) protected StackSlot temp;
+        private DelaySlotHolder delaySlotLir = DelaySlotHolder.DUMMY;
 
-        public MoveFpGp(AllocatableValue result, AllocatableValue input, StackSlotValue temp) {
+        public MoveFpGp(AllocatableValue result, AllocatableValue input, StackSlot temp) {
             super();
             this.result = result;
             this.input = input;
@@ -150,6 +132,10 @@ public class SPARCMove {
 
         public AllocatableValue getResult() {
             return result;
+        }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotLir = holder;
         }
 
         @Override
@@ -189,7 +175,7 @@ public class SPARCMove {
                     default:
                         GraalInternalError.shouldNotReachHere();
                 }
-                delayedControlTransfer.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 switch (resultKind) {
                     case Long:
                         new Ldx(tempAddress, asLongReg(result)).emit(masm);
@@ -221,13 +207,14 @@ public class SPARCMove {
     }
 
     /**
-     * Move between floating-point and general purpose register domain (WITH VIS3).
+     * Move between floating-point and general purpose register domain (WITH VIS3)
      */
     @Opcode("MOVE")
-    public static class MoveFpGpVIS3 extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
+    public static class MoveFpGpVIS3 extends SPARCLIRInstruction implements MoveOp, TailDelayedLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue input;
+        private DelaySlotHolder delayHolder = DelaySlotHolder.DUMMY;
 
         public MoveFpGpVIS3(AllocatableValue result, AllocatableValue input) {
             super();
@@ -247,7 +234,7 @@ public class SPARCMove {
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             Kind inputKind = (Kind) input.getPlatformKind();
             Kind resultKind = (Kind) result.getPlatformKind();
-            delayedControlTransfer.emitControlTransfer(crb, masm);
+            delayHolder.emitForDelay(crb, masm);
             if (resultKind == Float) {
                 if (inputKind == Int || inputKind == Short || inputKind == Char || inputKind == Byte) {
                     new Movwtos(asIntReg(input), asFloatReg(result)).emit(masm);
@@ -273,6 +260,10 @@ public class SPARCMove {
                     throw GraalInternalError.shouldNotReachHere();
                 }
             }
+        }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delayHolder = holder;
         }
     }
 
@@ -304,9 +295,10 @@ public class SPARCMove {
         }
     }
 
-    public static class LoadOp extends MemOp implements SPARCTailDelayedLIRInstruction {
+    public static class LoadOp extends MemOp implements TailDelayedLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
+        DelaySlotHolder delaySlotHolder = DelaySlotHolder.DUMMY;
 
         public LoadOp(Kind kind, AllocatableValue result, SPARCAddressValue address, LIRFrameState state) {
             super(kind, address, state);
@@ -319,7 +311,7 @@ public class SPARCMove {
                 Register scratch = sc.getRegister();
                 final SPARCAddress addr = generateSimm13OffsetLoad(address.toAddress(), masm, scratch);
                 final Register dst = asRegister(result);
-                delayedControlTransfer.emitControlTransfer(crb, masm);
+                delaySlotHolder.emitForDelay(crb, masm);
                 if (state != null) {
                     crb.recordImplicitException(masm.position(), state);
                 }
@@ -354,12 +346,17 @@ public class SPARCMove {
                 }
             }
         }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotHolder = holder;
+        }
     }
 
-    public static class LoadAddressOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+    public static class LoadAddressOp extends SPARCLIRInstruction implements TailDelayedLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
         @Use({COMPOSITE, UNINITIALIZED}) protected SPARCAddressValue addressValue;
+        private DelaySlotHolder delaySlotHolder = DelaySlotHolder.DUMMY;
 
         public LoadAddressOp(AllocatableValue result, SPARCAddressValue address) {
             this.result = result;
@@ -369,7 +366,11 @@ public class SPARCMove {
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             SPARCAddress address = addressValue.toAddress();
-            loadEffectiveAddress(crb, masm, address, asLongReg(result), delayedControlTransfer);
+            loadEffectiveAddress(crb, masm, address, asLongReg(result), delaySlotHolder);
+        }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotHolder = holder;
         }
     }
 
@@ -385,7 +386,8 @@ public class SPARCMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            SPARCAddress addr = (SPARCAddress) crb.recordDataReferenceInCode(data, 16);
+            RawData rawData = new RawData(data, 16);
+            SPARCAddress addr = (SPARCAddress) crb.recordDataReferenceInCode(rawData);
             assert addr == masm.getPlaceholder();
             final boolean forceRelocatable = true;
             Register dstReg = asRegister(result);
@@ -407,10 +409,11 @@ public class SPARCMove {
         }
     }
 
-    public static class NullCheckOp extends SPARCLIRInstruction implements NullCheck, SPARCTailDelayedLIRInstruction {
+    public static class NullCheckOp extends SPARCLIRInstruction implements NullCheck, TailDelayedLIRInstruction {
 
         @Use({REG}) protected AllocatableValue input;
         @State protected LIRFrameState state;
+        private DelaySlotHolder delaySlotHolder = DelaySlotHolder.DUMMY;
 
         public NullCheckOp(Variable input, LIRFrameState state) {
             this.input = input;
@@ -419,7 +422,7 @@ public class SPARCMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            delayedControlTransfer.emitControlTransfer(crb, masm);
+            delaySlotHolder.emitForDelay(crb, masm);
             crb.recordImplicitException(masm.position(), state);
             new Ldx(new SPARCAddress(asRegister(input), 0), r0).emit(masm);
         }
@@ -431,18 +434,21 @@ public class SPARCMove {
         public LIRFrameState getState() {
             return state;
         }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotHolder = holder;
+        }
     }
 
     @Opcode("CAS")
     public static class CompareAndSwapOp extends SPARCLIRInstruction {
 
-        @Def({REG, HINT}) protected AllocatableValue result;
-        @Alive({REG}) protected AllocatableValue address;
-        @Alive({REG}) protected AllocatableValue cmpValue;
-        @Use({REG}) protected AllocatableValue newValue;
+        // @Def protected AllocatableValue result;
+        @Use protected AllocatableValue address;
+        @Use protected AllocatableValue cmpValue;
+        @Use protected AllocatableValue newValue;
 
-        public CompareAndSwapOp(AllocatableValue result, AllocatableValue address, AllocatableValue cmpValue, AllocatableValue newValue) {
-            this.result = result;
+        public CompareAndSwapOp(AllocatableValue address, AllocatableValue cmpValue, AllocatableValue newValue) {
             this.address = address;
             this.cmpValue = cmpValue;
             this.newValue = newValue;
@@ -450,49 +456,54 @@ public class SPARCMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            move(crb, masm, result, newValue, delayedControlTransfer);
-            compareAndSwap(masm, address, cmpValue, result);
+            compareAndSwap(masm, address, cmpValue, newValue);
         }
     }
 
-    public static class StackLoadAddressOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+    public static class StackLoadAddressOp extends SPARCLIRInstruction implements TailDelayedLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
-        @Use({STACK, UNINITIALIZED}) protected StackSlotValue slot;
+        @Use({STACK, UNINITIALIZED}) protected StackSlot slot;
+        private DelaySlotHolder delaySlotHolder = DelaySlotHolder.DUMMY;
 
-        public StackLoadAddressOp(AllocatableValue result, StackSlotValue address) {
+        public StackLoadAddressOp(AllocatableValue result, StackSlot slot) {
             this.result = result;
-            this.slot = address;
+            this.slot = slot;
         }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             SPARCAddress address = (SPARCAddress) crb.asAddress(slot);
-            loadEffectiveAddress(crb, masm, address, asLongReg(result), delayedControlTransfer);
+            loadEffectiveAddress(crb, masm, address, asLongReg(result), delaySlotHolder);
+        }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotHolder = holder;
         }
     }
 
-    private static void loadEffectiveAddress(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCAddress address, Register result, SPARCDelayedControlTransfer delaySlotHolder) {
+    private static void loadEffectiveAddress(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCAddress address, Register result, DelaySlotHolder delaySlotHolder) {
         if (address.getIndex().equals(Register.None)) {
             if (isSimm13(address.getDisplacement())) {
-                delaySlotHolder.emitControlTransfer(crb, masm);
+                delaySlotHolder.emitForDelay(crb, masm);
                 new Add(address.getBase(), address.getDisplacement(), result).emit(masm);
             } else {
                 assert result.encoding() != address.getBase().encoding();
                 new Setx(address.getDisplacement(), result).emit(masm);
                 // No relocation, therefore, the add can be delayed as well
-                delaySlotHolder.emitControlTransfer(crb, masm);
+                delaySlotHolder.emitForDelay(crb, masm);
                 new Add(address.getBase(), result, result).emit(masm);
             }
         } else {
-            delaySlotHolder.emitControlTransfer(crb, masm);
+            delaySlotHolder.emitForDelay(crb, masm);
             new Add(address.getBase(), address.getIndex(), result).emit(masm);
         }
     }
 
-    public static class StoreOp extends MemOp implements SPARCTailDelayedLIRInstruction {
+    public static class StoreOp extends MemOp implements TailDelayedLIRInstruction {
 
         @Use({REG}) protected AllocatableValue input;
+        DelaySlotHolder delaySlotHolder = DelaySlotHolder.DUMMY;
 
         public StoreOp(Kind kind, SPARCAddressValue address, AllocatableValue input, LIRFrameState state) {
             super(kind, address, state);
@@ -505,7 +516,7 @@ public class SPARCMove {
             try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                 Register scratch = sc.getRegister();
                 SPARCAddress addr = generateSimm13OffsetLoad(address.toAddress(), masm, scratch);
-                delayedControlTransfer.emitControlTransfer(crb, masm);
+                delaySlotHolder.emitForDelay(crb, masm);
                 if (state != null) {
                     crb.recordImplicitException(masm.position(), state);
                 }
@@ -538,13 +549,18 @@ public class SPARCMove {
                 }
             }
         }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotHolder = holder;
+        }
     }
 
-    public static class StoreConstantOp extends MemOp implements SPARCTailDelayedLIRInstruction {
+    public static class StoreConstantOp extends MemOp implements TailDelayedLIRInstruction {
 
-        protected final JavaConstant input;
+        protected final Constant input;
+        DelaySlotHolder delaySlotHolder = DelaySlotHolder.DUMMY;
 
-        public StoreConstantOp(Kind kind, SPARCAddressValue address, JavaConstant input, LIRFrameState state) {
+        public StoreConstantOp(Kind kind, SPARCAddressValue address, Constant input, LIRFrameState state) {
             super(kind, address, state);
             this.input = input;
             if (!input.isDefaultForKind()) {
@@ -557,7 +573,7 @@ public class SPARCMove {
             try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                 Register scratch = sc.getRegister();
                 SPARCAddress addr = generateSimm13OffsetLoad(address.toAddress(), masm, scratch);
-                delayedControlTransfer.emitControlTransfer(crb, masm);
+                delaySlotHolder.emitForDelay(crb, masm);
                 if (state != null) {
                     crb.recordImplicitException(masm.position(), state);
                 }
@@ -585,9 +601,13 @@ public class SPARCMove {
                 }
             }
         }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotHolder = holder;
+        }
     }
 
-    public static void move(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, SPARCDelayedControlTransfer delaySlotLir) {
+    public static void move(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, DelaySlotHolder delaySlotLir) {
         if (isRegister(input)) {
             if (isRegister(result)) {
                 reg2reg(crb, masm, result, input, delaySlotLir);
@@ -603,7 +623,7 @@ public class SPARCMove {
                 throw GraalInternalError.shouldNotReachHere();
             }
         } else if (isConstant(input)) {
-            JavaConstant constant = asConstant(input);
+            Constant constant = asConstant(input);
             if (isRegister(result)) {
                 const2reg(crb, masm, result, constant, delaySlotLir);
             } else if (isStackSlot(result)) {
@@ -629,7 +649,7 @@ public class SPARCMove {
         }
     }
 
-    private static void reg2reg(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, SPARCDelayedControlTransfer delaySlotLir) {
+    private static void reg2reg(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, DelaySlotHolder delaySlotLir) {
         final Register src = asRegister(input);
         final Register dst = asRegister(result);
         if (src.equals(dst)) {
@@ -643,7 +663,7 @@ public class SPARCMove {
             case Int:
             case Long:
             case Object:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Mov(src, dst).emit(masm);
                 break;
             case Float:
@@ -685,13 +705,13 @@ public class SPARCMove {
         }
     }
 
-    private static void reg2stack(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, SPARCDelayedControlTransfer delaySlotLir) {
+    private static void reg2stack(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, DelaySlotHolder delaySlotLir) {
         SPARCAddress dst = (SPARCAddress) crb.asAddress(result);
         try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
             Register scratch = sc.getRegister();
             dst = generateSimm13OffsetLoad(dst, masm, scratch);
             Register src = asRegister(input);
-            delaySlotLir.emitControlTransfer(crb, masm);
+            delaySlotLir.emitForDelay(crb, masm);
             switch (input.getKind()) {
                 case Byte:
                 case Boolean:
@@ -720,13 +740,13 @@ public class SPARCMove {
         }
     }
 
-    private static void stack2reg(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, SPARCDelayedControlTransfer delaySlotLir) {
+    private static void stack2reg(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, DelaySlotHolder delaySlotLir) {
         SPARCAddress src = (SPARCAddress) crb.asAddress(input);
         try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
             Register scratch = sc.getRegister();
             src = generateSimm13OffsetLoad(src, masm, scratch);
             Register dst = asRegister(result);
-            delaySlotLir.emitControlTransfer(crb, masm);
+            delaySlotLir.emitForDelay(crb, masm);
             switch (input.getKind()) {
                 case Boolean:
                 case Byte:
@@ -757,36 +777,36 @@ public class SPARCMove {
         }
     }
 
-    private static void const2reg(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, JavaConstant input, SPARCDelayedControlTransfer delaySlotLir) {
+    private static void const2reg(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Constant input, DelaySlotHolder delaySlotLir) {
         try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
             Register scratch = sc.getRegister();
             boolean hasVIS3 = ((SPARC) masm.target.arch).getFeatures().contains(CPUFeature.VIS3);
             switch (input.getKind().getStackKind()) {
                 case Int:
                     if (input.isDefaultForKind()) {
-                        delaySlotLir.emitControlTransfer(crb, masm);
+                        delaySlotLir.emitForDelay(crb, masm);
                         new Clr(asIntReg(result)).emit(masm);
                     } else if (isSimm13(input.asLong())) {
-                        delaySlotLir.emitControlTransfer(crb, masm);
+                        delaySlotLir.emitForDelay(crb, masm);
                         new Or(g0, input.asInt(), asIntReg(result)).emit(masm);
                     } else {
                         Setx set = new Setx(input.asLong(), asIntReg(result), false, true);
                         set.emitFirstPartOfDelayed(masm);
-                        delaySlotLir.emitControlTransfer(crb, masm);
+                        delaySlotLir.emitForDelay(crb, masm);
                         set.emitSecondPartOfDelayed(masm);
                     }
                     break;
                 case Long:
                     if (input.isDefaultForKind()) {
-                        delaySlotLir.emitControlTransfer(crb, masm);
+                        delaySlotLir.emitForDelay(crb, masm);
                         new Clr(asLongReg(result)).emit(masm);
                     } else if (isSimm13(input.asLong())) {
-                        delaySlotLir.emitControlTransfer(crb, masm);
+                        delaySlotLir.emitForDelay(crb, masm);
                         new Or(g0, (int) input.asLong(), asLongReg(result)).emit(masm);
                     } else {
                         Setx setx = new Setx(input.asLong(), asLongReg(result), false, true);
                         setx.emitFirstPartOfDelayed(masm);
-                        delaySlotLir.emitControlTransfer(crb, masm);
+                        delaySlotLir.emitForDelay(crb, masm);
                         setx.emitSecondPartOfDelayed(masm);
                     }
                     break;
@@ -794,7 +814,7 @@ public class SPARCMove {
                     float constant = input.asFloat();
                     int constantBits = java.lang.Float.floatToIntBits(constant);
                     if (constantBits == 0) {
-                        delaySlotLir.emitControlTransfer(crb, masm);
+                        delaySlotLir.emitForDelay(crb, masm);
                         new Fzeros(asFloatReg(result)).emit(masm);
                     } else {
                         if (hasVIS3) {
@@ -803,7 +823,7 @@ public class SPARCMove {
                             } else {
                                 new Setx(constantBits, scratch, false).emit(masm);
                             }
-                            delaySlotLir.emitControlTransfer(crb, masm);
+                            delaySlotLir.emitForDelay(crb, masm);
                             // Now load the float value
                             new Movwtos(scratch, asFloatReg(result)).emit(masm);
                         } else {
@@ -811,7 +831,7 @@ public class SPARCMove {
                             // First load the address into the scratch register
                             new Setx(0, scratch, true).emit(masm);
                             // Now load the float value
-                            delaySlotLir.emitControlTransfer(crb, masm);
+                            delaySlotLir.emitForDelay(crb, masm);
                             new Ldf(scratch, asFloatReg(result)).emit(masm);
                         }
                     }
@@ -821,7 +841,7 @@ public class SPARCMove {
                     double constant = input.asDouble();
                     long constantBits = java.lang.Double.doubleToLongBits(constant);
                     if (constantBits == 0) {
-                        delaySlotLir.emitControlTransfer(crb, masm);
+                        delaySlotLir.emitForDelay(crb, masm);
                         new Fzerod(asDoubleReg(result)).emit(masm);
                     } else {
                         if (hasVIS3) {
@@ -830,14 +850,14 @@ public class SPARCMove {
                             } else {
                                 new Setx(constantBits, scratch, false).emit(masm);
                             }
-                            delaySlotLir.emitControlTransfer(crb, masm);
+                            delaySlotLir.emitForDelay(crb, masm);
                             // Now load the float value
                             new Movxtod(scratch, asDoubleReg(result)).emit(masm);
                         } else {
                             crb.asDoubleConstRef(input);
                             // First load the address into the scratch register
                             new Setx(0, scratch, true).emit(masm);
-                            delaySlotLir.emitControlTransfer(crb, masm);
+                            delaySlotLir.emitForDelay(crb, masm);
                             // Now load the float value
                             new Lddf(scratch, asDoubleReg(result)).emit(masm);
                         }
@@ -846,7 +866,7 @@ public class SPARCMove {
                 }
                 case Object:
                     if (input.isNull()) {
-                        delaySlotLir.emitControlTransfer(crb, masm);
+                        delaySlotLir.emitForDelay(crb, masm);
                         new Clr(asRegister(result)).emit(masm);
                     } else if (crb.target.inlineObjects) {
                         crb.recordInlineDataInCode(input); // relocatable cannot be delayed

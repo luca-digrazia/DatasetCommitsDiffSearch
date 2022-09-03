@@ -56,9 +56,10 @@ import com.oracle.graal.nodes.virtual.*;
  */
 @MatchableNode(nodeClass = ConstantNode.class, shareable = true)
 @MatchableNode(nodeClass = FloatConvertNode.class, inputs = {"value"})
+@MatchableNode(nodeClass = FloatSubNode.class, inputs = {"x", "y"})
 @MatchableNode(nodeClass = FloatingReadNode.class, inputs = {"object", "location"})
 @MatchableNode(nodeClass = IfNode.class, inputs = {"condition"})
-@MatchableNode(nodeClass = SubNode.class, inputs = {"x", "y"})
+@MatchableNode(nodeClass = IntegerSubNode.class, inputs = {"x", "y"})
 @MatchableNode(nodeClass = LeftShiftNode.class, inputs = {"x", "y"})
 @MatchableNode(nodeClass = NarrowNode.class, inputs = {"value"})
 @MatchableNode(nodeClass = ReadNode.class, inputs = {"object", "location"})
@@ -68,13 +69,15 @@ import com.oracle.graal.nodes.virtual.*;
 @MatchableNode(nodeClass = WriteNode.class, inputs = {"object", "location", "value"})
 @MatchableNode(nodeClass = ZeroExtendNode.class, inputs = {"value"})
 @MatchableNode(nodeClass = AndNode.class, inputs = {"x", "y"}, commutative = true)
+@MatchableNode(nodeClass = FloatAddNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = FloatEqualsNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = FloatLessThanNode.class, inputs = {"x", "y"}, commutative = true)
-@MatchableNode(nodeClass = AddNode.class, inputs = {"x", "y"}, commutative = true)
+@MatchableNode(nodeClass = FloatMulNode.class, inputs = {"x", "y"}, commutative = true)
+@MatchableNode(nodeClass = IntegerAddNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = IntegerBelowNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = IntegerEqualsNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = IntegerLessThanNode.class, inputs = {"x", "y"}, commutative = true)
-@MatchableNode(nodeClass = MulNode.class, inputs = {"x", "y"}, commutative = true)
+@MatchableNode(nodeClass = IntegerMulNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = IntegerTestNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = ObjectEqualsNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = OrNode.class, inputs = {"x", "y"}, commutative = true)
@@ -456,8 +459,8 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
     @Override
     public void emitInvoke(Invoke x) {
         LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
-        CallingConvention invokeCc = gen.getResult().getFrameMap().getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp().javaType(gen.getMetaAccess()),
-                        callTarget.signature(), gen.target(), false);
+        CallingConvention invokeCc = gen.getResult().getFrameMap().registerConfig.getCallingConvention(callTarget.callType(), x.asNode().stamp().javaType(gen.getMetaAccess()), callTarget.signature(),
+                        gen.target(), false);
         gen.getResult().getFrameMap().callsMethod(invokeCc);
 
         Value[] parameters = visitInvokeArguments(invokeCc, callTarget.arguments());

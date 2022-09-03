@@ -70,7 +70,7 @@ public class SPARCSaveRegistersOp extends SPARCLIRInstruction implements SaveReg
 
     private static void saveRegister(CompilationResultBuilder crb, SPARCMacroAssembler masm, StackSlot result, Register register) {
         RegisterValue input = register.asValue(result.getLIRKind());
-        SPARCMove.move(crb, masm, result, input, SPARCDelayedControlTransfer.DUMMY);
+        SPARCMove.move(crb, masm, result, input, DelaySlotHolder.DUMMY);
     }
 
     @Override
@@ -133,26 +133,12 @@ public class SPARCSaveRegistersOp extends SPARCLIRInstruction implements SaveReg
             for (int i = 0; i < savedRegisters.length; i++) {
                 if (savedRegisters[i] != null) {
                     keys[mapIndex] = savedRegisters[i];
-                    StackSlot slot = slots[i];
-                    values[mapIndex] = indexForStackSlot(frameMap, slot);
+                    values[mapIndex] = frameMap.indexForStackSlot(slots[i]);
                     mapIndex++;
                 }
             }
             assert mapIndex == total;
         }
         return new RegisterSaveLayout(keys, values);
-    }
-
-    /**
-     * Computes the index of a stack slot relative to slot 0. This is also the bit index of stack
-     * slots in the reference map.
-     *
-     * @param slot a stack slot
-     * @return the index of the stack slot
-     */
-    private static int indexForStackSlot(FrameMap frameMap, StackSlot slot) {
-        assert frameMap.offsetForStackSlot(slot) % frameMap.getTarget().wordSize == 0;
-        int value = frameMap.offsetForStackSlot(slot) / frameMap.getTarget().wordSize;
-        return value;
     }
 }

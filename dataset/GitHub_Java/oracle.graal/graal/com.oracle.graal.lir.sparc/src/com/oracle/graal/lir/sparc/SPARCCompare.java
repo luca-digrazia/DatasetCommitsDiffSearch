@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,8 +24,6 @@ package com.oracle.graal.lir.sparc;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
@@ -60,7 +58,7 @@ public enum SPARCCompare {
         }
 
         @Override
-        public void verify() {
+        protected void verify() {
             super.verify();
             // @formatter:off
             assert  (name().startsWith("I") &&
@@ -90,10 +88,10 @@ public enum SPARCCompare {
                     new Cmp(asObjectReg(x), asObjectReg(y)).emit(masm);
                     break;
                 case FCMP:
-                    masm.fcmp(Fcc0, Fcmps, asFloatReg(x), asFloatReg(y));
+                    new Fcmp(CC.Fcc0, Opfs.Fcmps, asFloatReg(x), asFloatReg(y)).emit(masm);
                     break;
                 case DCMP:
-                    masm.fcmp(Fcc0, Fcmpd, asDoubleReg(x), asDoubleReg(y));
+                    new Fcmp(CC.Fcc0, Opfs.Fcmpd, asDoubleReg(x), asDoubleReg(y)).emit(masm);
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
@@ -110,17 +108,17 @@ public enum SPARCCompare {
                     new Cmp(asIntReg(x), crb.asIntConst(y)).emit(masm);
                     break;
                 case ACMP:
-                    if (((JavaConstant) y).isNull()) {
+                    if (((Constant) y).isNull()) {
                         new Cmp(asObjectReg(x), 0).emit(masm);
                         break;
                     } else {
                         throw GraalInternalError.shouldNotReachHere("Only null object constants are allowed in comparisons");
                     }
                 case FCMP:
-                    masm.fcmp(Fcc0, Fcmps, asFloatReg(x), asFloatReg(y));
+                    new Fcmp(CC.Fcc0, Opfs.Fcmps, asFloatReg(x), asFloatReg(y)).emit(masm);
                     break;
                 case DCMP:
-                    masm.fcmp(Fcc0, Fcmpd, asDoubleReg(x), asDoubleReg(y));
+                    new Fcmp(CC.Fcc0, Opfs.Fcmpd, asDoubleReg(x), asDoubleReg(y)).emit(masm);
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();

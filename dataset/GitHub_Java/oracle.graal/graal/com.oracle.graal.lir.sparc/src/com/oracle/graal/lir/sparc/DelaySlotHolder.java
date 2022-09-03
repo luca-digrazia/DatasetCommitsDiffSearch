@@ -22,36 +22,30 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import com.oracle.graal.asm.sparc.SPARCAssembler.Bpa;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Nop;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.asm.*;
 
-public class SPARCJumpOp extends JumpOp implements DelaySlotHolder {
-    private boolean emitDone = false;
+/**
+ * This interface can be used for {@link LIRInstruction}s which may provide a delay slot. If a delay
+ * slot for this LIRInstruction is requrested, the requester just calls the method
+ * {@link #emitForDelay(CompilationResultBuilder, SPARCMacroAssembler)}.
+ *
+ * @see TailDelayedLIRInstruction
+ */
+public interface DelaySlotHolder {
 
-    public SPARCJumpOp(LabelRef destination) {
-        super(destination);
-    }
-
-    public void emitForDelay(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-        assert !emitDone;
-        if (!crb.isSuccessorEdge(destination())) {
-            new Bpa(destination().label()).emit(masm);
+    DelaySlotHolder DUMMY = new DelaySlotHolder() {
+        public void emitForDelay(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+            // do nothing
         }
-        emitDone = true;
-    }
 
-    @Override
-    public void emitCode(CompilationResultBuilder crb) {
-        if (!emitDone) {
-            SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
-            if (!crb.isSuccessorEdge(destination())) {
-                new Bpa(destination().label()).emit(masm);
-                new Nop().emit(masm);
-            }
+        @Override
+        public String toString() {
+            return "null";
         }
-    }
+    };
+
+    public void emitForDelay(CompilationResultBuilder crb, SPARCMacroAssembler masm);
+
 }

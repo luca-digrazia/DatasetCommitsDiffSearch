@@ -28,46 +28,51 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Asi;
+import com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
 
 @Opcode("BSWAP")
-public class SPARCByteSwapOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+public class SPARCByteSwapOp extends SPARCLIRInstruction implements TailDelayedLIRInstruction {
 
     @Def({REG, HINT}) protected Value result;
     @Use({REG}) protected Value input;
     @Temp({REG}) protected Value tempIndex;
-    @Use({STACK}) protected StackSlotValue tmpSlot;
+    @Use({STACK}) protected StackSlot tmpSlot;
+    private DelaySlotHolder delaySlotLir = DelaySlotHolder.DUMMY;
 
     public SPARCByteSwapOp(LIRGeneratorTool tool, Value result, Value input) {
         this.result = result;
         this.input = input;
-        this.tmpSlot = tool.getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(Kind.Long));
+        this.tmpSlot = tool.getResult().getFrameMap().allocateSpillSlot(LIRKind.value(Kind.Long));
         this.tempIndex = tool.newVariable(LIRKind.value(Kind.Long));
     }
 
     @Override
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-        SPARCMove.move(crb, masm, tmpSlot, input, SPARCDelayedControlTransfer.DUMMY);
+        SPARCMove.move(crb, masm, tmpSlot, input, DelaySlotHolder.DUMMY);
         SPARCAddress addr = (SPARCAddress) crb.asAddress(tmpSlot);
         if (addr.getIndex().equals(Register.None)) {
             Register tempReg = ValueUtil.asLongReg(tempIndex);
             new SPARCMacroAssembler.Setx(addr.getDisplacement(), tempReg, false).emit(masm);
             addr = new SPARCAddress(addr.getBase(), tempReg);
         }
-        delayedControlTransfer.emitControlTransfer(crb, masm);
+        delaySlotLir.emitForDelay(crb, masm);
         switch (input.getKind()) {
             case Int:
-                masm.lduwa(addr.getBase(), addr.getIndex(), asIntReg(result), Asi.ASI_PRIMARY_LITTLE);
+                new SPARCAssembler.Lduwa(addr.getBase(), addr.getIndex(), asIntReg(result), Asi.ASI_PRIMARY_LITTLE).emit(masm);
                 break;
             case Long:
-                masm.ldxa(addr.getBase(), addr.getIndex(), asLongReg(result), Asi.ASI_PRIMARY_LITTLE);
+                new SPARCAssembler.Ldxa(addr.getBase(), addr.getIndex(), asLongReg(result), Asi.ASI_PRIMARY_LITTLE).emit(masm);
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
+    }
+
+    public void setDelaySlotHolder(DelaySlotHolder holder) {
+        this.delaySlotLir = holder;
     }
 }

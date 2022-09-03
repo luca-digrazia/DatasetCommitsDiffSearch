@@ -51,11 +51,12 @@ public enum SPARCArithmetic {
     /**
      * Unary operation with separate source and destination operand.
      */
-    public static class Unary2Op extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+    public static class Unary2Op extends SPARCLIRInstruction implements TailDelayedLIRInstruction {
 
         @Opcode private final SPARCArithmetic opcode;
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue x;
+        private DelaySlotHolder delaySlotLir = DelaySlotHolder.DUMMY;
 
         public Unary2Op(SPARCArithmetic opcode, AllocatableValue result, AllocatableValue x) {
             this.opcode = opcode;
@@ -65,7 +66,11 @@ public enum SPARCArithmetic {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            emitUnary(crb, masm, opcode, result, x, null, delayedControlTransfer);
+            emitUnary(crb, masm, opcode, result, x, null, delaySlotLir);
+        }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotLir = holder;
         }
     }
 
@@ -73,13 +78,14 @@ public enum SPARCArithmetic {
      * Binary operation with two operands. The first source operand is combined with the
      * destination. The second source operand must be a register.
      */
-    public static class BinaryRegReg extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+    public static class BinaryRegReg extends SPARCLIRInstruction implements TailDelayedLIRInstruction {
 
         @Opcode private final SPARCArithmetic opcode;
         @Def({REG}) protected Value result;
         @Use({REG}) protected Value x;
         @Alive({REG}) protected Value y;
         @State LIRFrameState state;
+        private DelaySlotHolder delaySlotLir = DelaySlotHolder.DUMMY;
 
         public BinaryRegReg(SPARCArithmetic opcode, Value result, Value x, Value y) {
             this(opcode, result, x, y, null);
@@ -95,7 +101,7 @@ public enum SPARCArithmetic {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            emitRegReg(crb, masm, opcode, result, x, y, state, delayedControlTransfer);
+            emitRegReg(crb, masm, opcode, result, x, y, state, delaySlotLir);
         }
 
         @Override
@@ -103,18 +109,23 @@ public enum SPARCArithmetic {
             super.verify();
             verifyKind(opcode, result, x, y);
         }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotLir = holder;
+        }
     }
 
     /**
      * Binary operation with single source/destination operand and one constant.
      */
-    public static class BinaryRegConst extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+    public static class BinaryRegConst extends SPARCLIRInstruction implements TailDelayedLIRInstruction {
 
         @Opcode private final SPARCArithmetic opcode;
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected Value x;
         @State protected LIRFrameState state;
         protected Constant y;
+        private DelaySlotHolder delaySlotLir = DelaySlotHolder.DUMMY;
 
         public BinaryRegConst(SPARCArithmetic opcode, AllocatableValue result, Value x, Constant y) {
             this(opcode, result, x, y, null);
@@ -130,7 +141,7 @@ public enum SPARCArithmetic {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            emitRegConstant(crb, masm, opcode, result, x, y, null, delayedControlTransfer);
+            emitRegConstant(crb, masm, opcode, result, x, y, null, delaySlotLir);
         }
 
         @Override
@@ -138,12 +149,16 @@ public enum SPARCArithmetic {
             super.verify();
             verifyKind(opcode, result, x, y);
         }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotLir = holder;
+        }
     }
 
     /**
      * Special LIR instruction as it requires a bunch of scratch registers.
      */
-    public static class RemOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+    public static class RemOp extends SPARCLIRInstruction implements TailDelayedLIRInstruction {
 
         @Opcode private final SPARCArithmetic opcode;
         @Def({REG}) protected Value result;
@@ -152,6 +167,7 @@ public enum SPARCArithmetic {
         @Temp({REG}) protected Value scratch1;
         @Temp({REG}) protected Value scratch2;
         @State protected LIRFrameState state;
+        private DelaySlotHolder delaySlotLir = DelaySlotHolder.DUMMY;
 
         public RemOp(SPARCArithmetic opcode, Value result, Value x, Value y, LIRFrameState state, LIRGeneratorTool gen) {
             this.opcode = opcode;
@@ -165,7 +181,7 @@ public enum SPARCArithmetic {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            emitRem(crb, masm, opcode, result, x, y, scratch1, scratch2, state, delayedControlTransfer);
+            emitRem(crb, masm, opcode, result, x, y, scratch1, scratch2, state, delaySlotLir);
         }
 
         @Override
@@ -173,14 +189,18 @@ public enum SPARCArithmetic {
             super.verify();
             verifyKind(opcode, result, x, y);
         }
+
+        public void setDelaySlotHolder(DelaySlotHolder holder) {
+            this.delaySlotLir = holder;
+        }
     }
 
     private static void emitRegConstant(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCArithmetic opcode, Value dst, Value src1, Constant src2, LIRFrameState info,
-                    SPARCDelayedControlTransfer delaySlotLir) {
+                    DelaySlotHolder delaySlotLir) {
         assert isSimm13(crb.asIntConst(src2)) : src2;
         int constant = crb.asIntConst(src2);
         int exceptionOffset = -1;
-        delaySlotLir.emitControlTransfer(crb, masm);
+        delaySlotLir.emitForDelay(crb, masm);
         switch (opcode) {
             case IADD:
                 new Add(asIntReg(src1), constant, asIntReg(dst)).emit(masm);
@@ -266,120 +286,119 @@ public enum SPARCArithmetic {
         }
     }
 
-    public static void emitRegReg(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCArithmetic opcode, Value dst, Value src1, Value src2, LIRFrameState info,
-                    SPARCDelayedControlTransfer delaySlotLir) {
+    public static void emitRegReg(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCArithmetic opcode, Value dst, Value src1, Value src2, LIRFrameState info, DelaySlotHolder delaySlotLir) {
         int exceptionOffset = -1;
         assert !isConstant(src1) : src1;
         assert !isConstant(src2) : src2;
         switch (opcode) {
             case IADD:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Add(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                 break;
             case ISUB:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Sub(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                 break;
             case IMUL:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Mulx(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                 break;
             case IDIV:
                 new Signx(asIntReg(src1), asIntReg(src1)).emit(masm);
                 new Signx(asIntReg(src2), asIntReg(src2)).emit(masm);
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 exceptionOffset = masm.position();
                 new Sdivx(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                 break;
             case IUDIV:
                 new Signx(asIntReg(src1), asIntReg(src1)).emit(masm);
                 new Signx(asIntReg(src2), asIntReg(src2)).emit(masm);
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 exceptionOffset = masm.position();
                 new Udivx(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                 break;
             case IAND:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new And(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                 break;
             case IOR:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Or(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                 break;
             case IXOR:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Xor(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                 break;
             case ISHL:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Sll(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                 break;
             case ISHR:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Sra(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                 break;
             case IUSHR:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Srl(asIntReg(src1), asIntReg(src2), asIntReg(dst)).emit(masm);
                 break;
             case IREM:
                 throw GraalInternalError.unimplemented();
             case LADD:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Add(asLongReg(src1), asLongReg(src2), asLongReg(dst)).emit(masm);
                 break;
             case LSUB:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Sub(asLongReg(src1), asLongReg(src2), asLongReg(dst)).emit(masm);
                 break;
             case LMUL:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Mulx(asLongReg(src1), asLongReg(src2), asLongReg(dst)).emit(masm);
                 break;
             case LDIV:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 exceptionOffset = masm.position();
                 new Sdivx(asLongReg(src1), asLongReg(src2), asLongReg(dst)).emit(masm);
                 break;
             case LUDIV:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 exceptionOffset = masm.position();
                 new Udivx(asLongReg(src1), asLongReg(src2), asLongReg(dst)).emit(masm);
                 break;
             case LAND:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new And(asLongReg(src1), asLongReg(src2), asLongReg(dst)).emit(masm);
                 break;
             case LOR:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Or(asLongReg(src1), asLongReg(src2), asLongReg(dst)).emit(masm);
                 break;
             case LXOR:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Xor(asLongReg(src1), asLongReg(src2), asLongReg(dst)).emit(masm);
                 break;
             case LSHL:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Sllx(asLongReg(src1), asIntReg(src2), asLongReg(dst)).emit(masm);
                 break;
             case LSHR:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Srax(asLongReg(src1), asIntReg(src2), asLongReg(dst)).emit(masm);
                 break;
             case LUSHR:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Srlx(asLongReg(src1), asIntReg(src2), asLongReg(dst)).emit(masm);
                 break;
             case FADD:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fadds(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst)).emit(masm);
                 break;
             case FSUB:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fsubs(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst)).emit(masm);
                 break;
             case FMUL:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 if (dst.getPlatformKind() == Kind.Double) {
                     new Fsmuld(asFloatReg(src1), asFloatReg(src2), asDoubleReg(dst)).emit(masm);
                 } else if (dst.getPlatformKind() == Kind.Float) {
@@ -387,33 +406,33 @@ public enum SPARCArithmetic {
                 }
                 break;
             case FDIV:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 exceptionOffset = masm.position();
                 new Fdivs(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst)).emit(masm);
                 break;
             case FREM:
                 throw GraalInternalError.unimplemented();
             case DADD:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Faddd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst)).emit(masm);
                 break;
             case DSUB:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fsubd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst)).emit(masm);
                 break;
             case DMUL:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fmuld(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst)).emit(masm);
                 break;
             case DDIV:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 exceptionOffset = masm.position();
                 new Fdivd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst)).emit(masm);
                 break;
             case DREM:
                 throw GraalInternalError.unimplemented();
             case DAND:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fandd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst)).emit(masm);
                 break;
             default:
@@ -426,7 +445,7 @@ public enum SPARCArithmetic {
     }
 
     public static void emitRem(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCArithmetic opcode, Value dst, Value src1, Value src2, Value scratch1, Value scratch2, LIRFrameState info,
-                    SPARCDelayedControlTransfer delaySlotLir) {
+                    DelaySlotHolder delaySlotLir) {
         int exceptionOffset = -1;
         if (!isConstant(src1) && isConstant(src2)) {
             assert isSimm13(crb.asIntConst(src2));
@@ -439,21 +458,21 @@ public enum SPARCArithmetic {
                     exceptionOffset = masm.position();
                     new Sdivx(asIntReg(dst), crb.asIntConst(src2), asIntReg(scratch1)).emit(masm);
                     new Mulx(asIntReg(scratch1), crb.asIntConst(src2), asIntReg(scratch2)).emit(masm);
-                    delaySlotLir.emitControlTransfer(crb, masm);
+                    delaySlotLir.emitForDelay(crb, masm);
                     new Sub(asIntReg(dst), asIntReg(scratch2), asIntReg(dst)).emit(masm);
                     break;
                 case LREM:
                     exceptionOffset = masm.position();
                     new Sdivx(asLongReg(src1), crb.asIntConst(src2), asLongReg(scratch1)).emit(masm);
                     new Mulx(asLongReg(scratch1), crb.asIntConst(src2), asLongReg(scratch2)).emit(masm);
-                    delaySlotLir.emitControlTransfer(crb, masm);
+                    delaySlotLir.emitForDelay(crb, masm);
                     new Sub(asLongReg(src1), asLongReg(scratch2), asLongReg(dst)).emit(masm);
                     break;
                 case LUREM:
                     exceptionOffset = masm.position();
                     new Udivx(asLongReg(src1), crb.asIntConst(src2), asLongReg(scratch1)).emit(masm);
                     new Mulx(asLongReg(scratch1), crb.asIntConst(src2), asLongReg(scratch2)).emit(masm);
-                    delaySlotLir.emitControlTransfer(crb, masm);
+                    delaySlotLir.emitForDelay(crb, masm);
                     new Sub(asLongReg(src1), asLongReg(scratch2), asLongReg(dst)).emit(masm);
                     break;
                 case IUREM:
@@ -476,7 +495,7 @@ public enum SPARCArithmetic {
                     exceptionOffset = masm.position();
                     new Sdivx(asLongReg(srcLeft), asLongReg(src2), asLongReg(scratch1)).emit(masm);
                     new Mulx(asLongReg(scratch1), asLongReg(src2), asLongReg(scratch1)).emit(masm);
-                    delaySlotLir.emitControlTransfer(crb, masm);
+                    delaySlotLir.emitForDelay(crb, masm);
                     new Sub(asLongReg(srcLeft), asLongReg(scratch1), asLongReg(dst)).emit(masm);
                     break;
                 case LUREM:
@@ -489,7 +508,7 @@ public enum SPARCArithmetic {
                     exceptionOffset = masm.position();
                     new Udivx(asLongReg(srcLeft), asLongReg(src2), asLongReg(scratch1)).emit(masm);
                     new Mulx(asLongReg(scratch1), asLongReg(src2), asLongReg(scratch1)).emit(masm);
-                    delaySlotLir.emitControlTransfer(crb, masm);
+                    delaySlotLir.emitForDelay(crb, masm);
                     new Sub(asLongReg(srcLeft), asLongReg(scratch1), asLongReg(dst)).emit(masm);
                     break;
                 case IREM:
@@ -504,7 +523,7 @@ public enum SPARCArithmetic {
                     exceptionOffset = masm.position();
                     new Sdivx(asIntReg(scratch1), asIntReg(scratch2), asIntReg(dst)).emit(masm);
                     new Mulx(asIntReg(dst), asIntReg(scratch2), asIntReg(dst)).emit(masm);
-                    delaySlotLir.emitControlTransfer(crb, masm);
+                    delaySlotLir.emitForDelay(crb, masm);
                     new Sub(asIntReg(scratch1), asIntReg(dst), asIntReg(dst)).emit(masm);
                     break;
                 case IUREM:
@@ -515,7 +534,7 @@ public enum SPARCArithmetic {
                     exceptionOffset = masm.position();
                     new Udivx(asIntReg(scratch1), asIntReg(dst), asIntReg(scratch2)).emit(masm);
                     new Mulx(asIntReg(scratch2), asIntReg(dst), asIntReg(dst)).emit(masm);
-                    delaySlotLir.emitControlTransfer(crb, masm);
+                    delaySlotLir.emitForDelay(crb, masm);
                     new Sub(asIntReg(scratch1), asIntReg(dst), asIntReg(dst)).emit(masm);
                     break;
                 default:
@@ -530,76 +549,76 @@ public enum SPARCArithmetic {
         }
     }
 
-    public static void emitUnary(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCArithmetic opcode, Value dst, Value src, LIRFrameState info, SPARCDelayedControlTransfer delaySlotLir) {
+    public static void emitUnary(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCArithmetic opcode, Value dst, Value src, LIRFrameState info, DelaySlotHolder delaySlotLir) {
         int exceptionOffset = -1;
         Label notOrdered = new Label();
         switch (opcode) {
             case INEG:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Neg(asIntReg(src), asIntReg(dst)).emit(masm);
                 break;
             case LNEG:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Neg(asLongReg(src), asLongReg(dst)).emit(masm);
                 break;
             case INOT:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Not(asIntReg(src), asIntReg(dst)).emit(masm);
                 break;
             case LNOT:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Not(asLongReg(src), asLongReg(dst)).emit(masm);
                 break;
             case D2F:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fdtos(asDoubleReg(src), asFloatReg(dst)).emit(masm);
                 break;
             case L2D:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fxtod(asDoubleReg(src), asDoubleReg(dst)).emit(masm);
                 break;
             case L2F:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fxtos(asDoubleReg(src), asFloatReg(dst)).emit(masm);
                 break;
             case I2D:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fitod(asFloatReg(src), asDoubleReg(dst)).emit(masm);
                 break;
             case I2L:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Signx(asIntReg(src), asLongReg(dst)).emit(masm);
                 break;
             case L2I:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Signx(asLongReg(src), asIntReg(dst)).emit(masm);
                 break;
             case B2L:
                 new Sllx(asIntReg(src), 56, asLongReg(dst)).emit(masm);
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Srax(asLongReg(dst), 56, asLongReg(dst)).emit(masm);
                 break;
             case B2I:
                 new Sllx(asIntReg(src), 56, asIntReg(dst)).emit(masm);
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Srax(asIntReg(dst), 56, asIntReg(dst)).emit(masm);
                 break;
             case S2L:
                 new Sllx(asIntReg(src), 48, asLongReg(dst)).emit(masm);
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Srax(asLongReg(dst), 48, asLongReg(dst)).emit(masm);
                 break;
             case S2I:
                 new Sllx(asIntReg(src), 48, asIntReg(dst)).emit(masm);
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Srax(asIntReg(dst), 48, asIntReg(dst)).emit(masm);
                 break;
             case I2F:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fitos(asFloatReg(src), asFloatReg(dst)).emit(masm);
                 break;
             case F2D:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fstod(asFloatReg(src), asDoubleReg(dst)).emit(masm);
                 break;
             case F2L:
@@ -634,11 +653,11 @@ public enum SPARCArithmetic {
                 masm.bind(notOrdered);
                 break;
             case FNEG:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fnegs(asFloatReg(src), asFloatReg(dst)).emit(masm);
                 break;
             case DNEG:
-                delaySlotLir.emitControlTransfer(crb, masm);
+                delaySlotLir.emitForDelay(crb, masm);
                 new Fnegd(asDoubleReg(src), asDoubleReg(dst)).emit(masm);
                 break;
             default:
