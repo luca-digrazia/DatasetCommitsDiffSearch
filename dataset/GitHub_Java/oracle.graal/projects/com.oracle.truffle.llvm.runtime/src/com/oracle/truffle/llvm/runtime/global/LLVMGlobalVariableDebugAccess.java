@@ -36,11 +36,11 @@ import com.oracle.truffle.llvm.runtime.LLVMContext;
 public final class LLVMGlobalVariableDebugAccess {
 
     public static boolean isInitialized(LLVMContext context, LLVMGlobal global) {
-        return global.getFrame(context) != null;
+        return context.getGlobalFrame().getValue(global.getSlot()) != null;
     }
 
     public static boolean isInNative(LLVMContext context, LLVMGlobal global) {
-        return global.isNative(context);
+        return context.getGlobalFrame().getValue(global.getSlot()) instanceof LLVMAddress;
     }
 
     public static LLVMAddress getNativeLocation(LLVMContext context, LLVMGlobal global) {
@@ -48,7 +48,7 @@ public final class LLVMGlobalVariableDebugAccess {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException("Global is not in native memory!");
         }
-        return global.getNative(context);
+        return (LLVMAddress) context.getGlobalFrame().getValue(global.getSlot());
     }
 
     public static Object getManagedValue(LLVMContext context, LLVMGlobal global) {
@@ -56,6 +56,6 @@ public final class LLVMGlobalVariableDebugAccess {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException("Global is not managed!");
         }
-        return global.getFrame(context);
+        return LLVMGlobal.fromManagedStore(context.getGlobalFrame().getValue(global.getSlot()));
     }
 }

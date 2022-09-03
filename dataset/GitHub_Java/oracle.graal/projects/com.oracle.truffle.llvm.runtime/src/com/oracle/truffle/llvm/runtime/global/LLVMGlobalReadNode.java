@@ -35,6 +35,7 @@ import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal.GetFrame;
@@ -52,7 +53,6 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNodeFactory.ReadI8No
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNodeFactory.ReadObjectNodeGen;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public abstract class LLVMGlobalReadNode extends LLVMNode {
 
@@ -61,7 +61,7 @@ public abstract class LLVMGlobalReadNode extends LLVMNode {
     @CompilationFinal private LLVMMemory memory;
     @CompilationFinal private boolean memoryResolved = false;
 
-    protected final LLVMMemory getMemory() {
+    protected LLVMMemory getMemory() {
         if (!memoryResolved) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             memory = getLLVMMemory();
@@ -97,7 +97,7 @@ public abstract class LLVMGlobalReadNode extends LLVMNode {
                         @Cached("create()") GetSlot getSlot) {
             Object value = getFrame.execute(getContext()).getValue(getSlot.execute(global));
             if (value == null) {
-                return LLVMNativePointer.createNull();
+                return LLVMAddress.nullPointer();
             }
             return LLVMGlobal.fromManagedStore(value);
         }
@@ -105,7 +105,7 @@ public abstract class LLVMGlobalReadNode extends LLVMNode {
         @Specialization(guards = "isNative(global)")
         protected Object doNative(LLVMGlobal global,
                         @Cached("create()") GetNativePointer getPointer) {
-            return getMemory().getPointer(getPointer.execute(getContext(), global));
+            return getMemory().getAddress(getPointer.execute(getContext(), global));
         }
     }
 

@@ -139,9 +139,8 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
     }
 
     /**
-     * Used as a wrapper if the global variable's value is directly stored in the frame as a managed
-     * object. This is also necessary to disambiguate between a pointer to the native store and a
-     * pointer value.
+     * Used if a managed object is assign to a global to disambiguate from an assignment of a
+     * pointer.
      */
     private static final class Managed {
         final Object wrapped;

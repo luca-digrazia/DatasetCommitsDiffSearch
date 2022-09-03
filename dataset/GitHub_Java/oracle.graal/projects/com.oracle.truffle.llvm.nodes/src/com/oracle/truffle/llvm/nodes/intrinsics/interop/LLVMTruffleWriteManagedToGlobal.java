@@ -43,9 +43,9 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.nodes.vars.LLVMReadNode.AttachInteropTypeNode;
 import com.oracle.truffle.llvm.nodes.vars.LLVMReadNodeFactory.AttachInteropTypeNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
 public abstract class LLVMTruffleWriteManagedToGlobal extends LLVMIntrinsic {
@@ -53,12 +53,12 @@ public abstract class LLVMTruffleWriteManagedToGlobal extends LLVMIntrinsic {
     @Child AttachInteropTypeNode attachType = AttachInteropTypeNodeGen.create();
 
     @Specialization
-    protected LLVMManagedPointer doIntrinsic(LLVMGlobal address, LLVMManagedPointer value,
+    protected LLVMTruffleObject doIntrinsic(LLVMGlobal address, LLVMTruffleObject value,
                     @Cached("create()") LLVMGlobal.GetFrame getFrameNode,
                     @Cached("getContextReference()") ContextReference<LLVMContext> context) {
-        LLVMManagedPointer typedValue = LLVMManagedPointer.cast(attachType.execute(value, address.getInteropType()));
+        LLVMTruffleObject typedValue = (LLVMTruffleObject) attachType.execute(value, address.getInteropType());
         MaterializedFrame globalFrame = getFrameNode.execute(context.get());
-        globalFrame.setObject(address.getSlot(), typedValue);
+        globalFrame.setObject(address.getSlot(), value);
         return typedValue;
     }
 
