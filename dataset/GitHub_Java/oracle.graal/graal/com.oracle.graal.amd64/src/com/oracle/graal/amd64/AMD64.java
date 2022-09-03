@@ -23,59 +23,70 @@
 package com.oracle.graal.amd64;
 
 import static com.oracle.graal.api.code.MemoryBarriers.*;
-import static com.oracle.graal.api.code.Register.RegisterFlag.*;
-import static com.oracle.graal.api.meta.Kind.*;
+import static com.oracle.graal.api.code.Register.*;
+
+import java.nio.*;
+import java.util.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.Register.*;
+import com.oracle.graal.api.code.Register.RegisterCategory;
+import com.oracle.graal.api.meta.*;
 
 /**
  * Represents the AMD64 architecture.
  */
 public class AMD64 extends Architecture {
 
-    // General purpose CPU registers
-    public static final Register rax = new Register(0, 0, 8, "rax", CPU, RegisterFlag.Byte);
-    public static final Register rcx = new Register(1, 1, 8, "rcx", CPU, RegisterFlag.Byte);
-    public static final Register rdx = new Register(2, 2, 8, "rdx", CPU, RegisterFlag.Byte);
-    public static final Register rbx = new Register(3, 3, 8, "rbx", CPU, RegisterFlag.Byte);
-    public static final Register rsp = new Register(4, 4, 8, "rsp", CPU, RegisterFlag.Byte);
-    public static final Register rbp = new Register(5, 5, 8, "rbp", CPU, RegisterFlag.Byte);
-    public static final Register rsi = new Register(6, 6, 8, "rsi", CPU, RegisterFlag.Byte);
-    public static final Register rdi = new Register(7, 7, 8, "rdi", CPU, RegisterFlag.Byte);
+    public static final RegisterCategory CPU = new RegisterCategory("CPU");
 
-    public static final Register r8  = new Register(8,  8,  8, "r8", CPU, RegisterFlag.Byte);
-    public static final Register r9  = new Register(9,  9,  8, "r9", CPU, RegisterFlag.Byte);
-    public static final Register r10 = new Register(10, 10, 8, "r10", CPU, RegisterFlag.Byte);
-    public static final Register r11 = new Register(11, 11, 8, "r11", CPU, RegisterFlag.Byte);
-    public static final Register r12 = new Register(12, 12, 8, "r12", CPU, RegisterFlag.Byte);
-    public static final Register r13 = new Register(13, 13, 8, "r13", CPU, RegisterFlag.Byte);
-    public static final Register r14 = new Register(14, 14, 8, "r14", CPU, RegisterFlag.Byte);
-    public static final Register r15 = new Register(15, 15, 8, "r15", CPU, RegisterFlag.Byte);
+    // @formatter:off
+
+    // General purpose CPU registers
+    public static final Register rax = new Register(0, 0, "rax", CPU);
+    public static final Register rcx = new Register(1, 1, "rcx", CPU);
+    public static final Register rdx = new Register(2, 2, "rdx", CPU);
+    public static final Register rbx = new Register(3, 3, "rbx", CPU);
+    public static final Register rsp = new Register(4, 4, "rsp", CPU);
+    public static final Register rbp = new Register(5, 5, "rbp", CPU);
+    public static final Register rsi = new Register(6, 6, "rsi", CPU);
+    public static final Register rdi = new Register(7, 7, "rdi", CPU);
+
+    public static final Register r8  = new Register(8,  8,  "r8", CPU);
+    public static final Register r9  = new Register(9,  9,  "r9", CPU);
+    public static final Register r10 = new Register(10, 10, "r10", CPU);
+    public static final Register r11 = new Register(11, 11, "r11", CPU);
+    public static final Register r12 = new Register(12, 12, "r12", CPU);
+    public static final Register r13 = new Register(13, 13, "r13", CPU);
+    public static final Register r14 = new Register(14, 14, "r14", CPU);
+    public static final Register r15 = new Register(15, 15, "r15", CPU);
 
     public static final Register[] cpuRegisters = {
         rax, rcx, rdx, rbx, rsp, rbp, rsi, rdi,
         r8, r9, r10, r11, r12, r13, r14, r15
     };
 
-    // XMM registers
-    public static final Register xmm0 = new Register(16, 0, 8, "xmm0", FPU);
-    public static final Register xmm1 = new Register(17, 1, 8, "xmm1", FPU);
-    public static final Register xmm2 = new Register(18, 2, 8, "xmm2", FPU);
-    public static final Register xmm3 = new Register(19, 3, 8, "xmm3", FPU);
-    public static final Register xmm4 = new Register(20, 4, 8, "xmm4", FPU);
-    public static final Register xmm5 = new Register(21, 5, 8, "xmm5", FPU);
-    public static final Register xmm6 = new Register(22, 6, 8, "xmm6", FPU);
-    public static final Register xmm7 = new Register(23, 7, 8, "xmm7", FPU);
+    private static final int XMM_REFERENCE_MAP_SHIFT = 2;
 
-    public static final Register xmm8 =  new Register(24,  8, 8, "xmm8",  FPU);
-    public static final Register xmm9 =  new Register(25,  9, 8, "xmm9",  FPU);
-    public static final Register xmm10 = new Register(26, 10, 8, "xmm10", FPU);
-    public static final Register xmm11 = new Register(27, 11, 8, "xmm11", FPU);
-    public static final Register xmm12 = new Register(28, 12, 8, "xmm12", FPU);
-    public static final Register xmm13 = new Register(29, 13, 8, "xmm13", FPU);
-    public static final Register xmm14 = new Register(30, 14, 8, "xmm14", FPU);
-    public static final Register xmm15 = new Register(31, 15, 8, "xmm15", FPU);
+    public static final RegisterCategory XMM = new RegisterCategory("XMM", cpuRegisters.length, XMM_REFERENCE_MAP_SHIFT);
+
+    // XMM registers
+    public static final Register xmm0 = new Register(16, 0, "xmm0", XMM);
+    public static final Register xmm1 = new Register(17, 1, "xmm1", XMM);
+    public static final Register xmm2 = new Register(18, 2, "xmm2", XMM);
+    public static final Register xmm3 = new Register(19, 3, "xmm3", XMM);
+    public static final Register xmm4 = new Register(20, 4, "xmm4", XMM);
+    public static final Register xmm5 = new Register(21, 5, "xmm5", XMM);
+    public static final Register xmm6 = new Register(22, 6, "xmm6", XMM);
+    public static final Register xmm7 = new Register(23, 7, "xmm7", XMM);
+
+    public static final Register xmm8 =  new Register(24,  8, "xmm8",  XMM);
+    public static final Register xmm9 =  new Register(25,  9, "xmm9",  XMM);
+    public static final Register xmm10 = new Register(26, 10, "xmm10", XMM);
+    public static final Register xmm11 = new Register(27, 11, "xmm11", XMM);
+    public static final Register xmm12 = new Register(28, 12, "xmm12", XMM);
+    public static final Register xmm13 = new Register(29, 13, "xmm13", XMM);
+    public static final Register xmm14 = new Register(30, 14, "xmm14", XMM);
+    public static final Register xmm15 = new Register(31, 15, "xmm15", XMM);
 
     public static final Register[] xmmRegisters = {
         xmm0, xmm1, xmm2,  xmm3,  xmm4,  xmm5,  xmm6,  xmm7,
@@ -92,7 +103,7 @@ public class AMD64 extends Architecture {
     /**
      * Register used to construct an instruction-relative address.
      */
-    public static final Register rip = new Register(32, -1, 0, "rip");
+    public static final Register rip = new Register(32, -1, "rip", SPECIAL);
 
     public static final Register[] allRegisters = {
         rax,  rcx,  rdx,   rbx,   rsp,   rbp,   rsi,   rdi,
@@ -102,27 +113,93 @@ public class AMD64 extends Architecture {
         rip
     };
 
-    public static final RegisterValue RSP = rsp.asValue(Long);
+    // @formatter:on
 
-    public AMD64() {
-        super("AMD64",
-              8,
-              ByteOrder.LittleEndian,
-              allRegisters,
-              LOAD_STORE | STORE_STORE,
-              1,
-              r15.encoding + 1,
-              8);
+    /**
+     * Basic set of CPU features mirroring what is returned from the cpuid instruction.
+     */
+    public static enum CPUFeature {
+        SSE,
+        SSE2,
+        SSE3,
+        SSE4a,
+        SSE4_1,
+        SSE4_2,
+        SSSE3,
+        POPCNT,
+        LZCNT,
+        AVX,
+        AVX2,
+        ERMS,
+        AMD_3DNOW_PREFETCH,
+        AES,
+        BMI1
+    }
+
+    private final EnumSet<CPUFeature> features;
+
+    /**
+     * Set of flags to control code emission.
+     */
+    public static enum Flag {
+        UseCountLeadingZerosInstruction,
+        UseCountTrailingZerosInstruction
+    }
+
+    private final EnumSet<Flag> flags;
+
+    public AMD64(EnumSet<CPUFeature> features, EnumSet<Flag> flags) {
+        super("AMD64", 8, ByteOrder.LITTLE_ENDIAN, true, allRegisters, LOAD_STORE | STORE_STORE, 1, cpuRegisters.length + (xmmRegisters.length << XMM_REFERENCE_MAP_SHIFT), 8);
+        this.features = features;
+        this.flags = flags;
+        assert features.contains(CPUFeature.SSE2) : "minimum config for x64";
+    }
+
+    public EnumSet<CPUFeature> getFeatures() {
+        return features;
+    }
+
+    public EnumSet<Flag> getFlags() {
+        return flags;
     }
 
     @Override
-    public boolean isX86() {
-        return true;
+    public boolean canStoreValue(RegisterCategory category, PlatformKind platformKind) {
+        if (!(platformKind instanceof Kind)) {
+            return false;
+        }
+
+        Kind kind = (Kind) platformKind;
+        if (category.equals(CPU)) {
+            switch (kind) {
+                case Boolean:
+                case Byte:
+                case Char:
+                case Short:
+                case Int:
+                case Long:
+                case Object:
+                    return true;
+            }
+        } else if (category.equals(XMM)) {
+            switch (kind) {
+                case Float:
+                case Double:
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     @Override
-    public boolean twoOperandMode() {
-        return true;
+    public PlatformKind getLargestStorableKind(RegisterCategory category) {
+        if (category.equals(CPU)) {
+            return Kind.Long;
+        } else if (category.equals(XMM)) {
+            return Kind.Double;
+        } else {
+            return Kind.Illegal;
+        }
     }
-
 }

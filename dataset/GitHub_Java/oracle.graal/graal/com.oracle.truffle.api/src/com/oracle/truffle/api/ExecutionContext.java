@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,15 +25,42 @@
 package com.oracle.truffle.api;
 
 import com.oracle.truffle.api.impl.*;
+import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.instrument.impl.*;
 
 /**
  * Access to information and basic services in the runtime context for a Truffle-implemented guest
  * language.
+ * <p>
+ * <strong>Disclaimer:</strong> this class is under development and will change.
  */
 public abstract class ExecutionContext {
 
+    private Visualizer visualizer = new DefaultVisualizer();
+
     protected ExecutionContext() {
     }
+
+    /**
+     * Access to information visualization services for the specific language.
+     */
+    public final Visualizer getVisualizer() {
+        return visualizer;
+    }
+
+    /**
+     * Assign guest language-specific visualization support for tools. This must be assigned outside
+     * the implementation context to avoid build circularities.
+     */
+    public final void setVisualizer(Visualizer visualizer) {
+        this.visualizer = visualizer;
+    }
+
+    /**
+     * Gets the name of the language, possibly with version number. in short enough form that it
+     * might be used for an interactive prompt.
+     */
+    public abstract String getLanguageShortName();
 
     /**
      * Get compiler options specific to this <code>ExecutionContext</code>.

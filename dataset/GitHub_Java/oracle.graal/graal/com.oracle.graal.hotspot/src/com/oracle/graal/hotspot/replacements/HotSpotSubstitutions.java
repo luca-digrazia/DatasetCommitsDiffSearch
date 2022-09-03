@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.nodes.spi.Replacements.*;
-
 import java.lang.reflect.*;
 import java.util.zip.*;
 
@@ -34,7 +32,8 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.hotspot.bridge.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.*;
 
@@ -60,13 +59,13 @@ public class HotSpotSubstitutions implements ReplacementsProvider {
         replacements.registerSubstitutions(System.class, SystemSubstitutions.class);
         replacements.registerSubstitutions(Thread.class, ThreadSubstitutions.class);
         replacements.registerSubstitutions(Unsafe.class, UnsafeSubstitutions.class);
-        replacements.registerSubstitutions(Class.class, HotSpotClassSubstitutions.class);
+        replacements.registerSubstitutions(Class.class, ClassSubstitutions.class);
         replacements.registerSubstitutions(CRC32.class, CRC32Substitutions.class);
         replacements.registerSubstitutions(Reflection.class, ReflectionSubstitutions.class);
-        replacements.registerSubstitutions(CompilerToVMImpl.class, CompilerToVMImplSubstitutions.class);
-        if (SELF_RECURSIVE_INTRINSICS_ENABLED) {
-            replacements.registerSubstitutions(new NamedType("com.sun.crypto.provider.AESCrypt"), AESCryptSubstitutions.class);
-            replacements.registerSubstitutions(new NamedType("com.sun.crypto.provider.CipherBlockChaining"), CipherBlockChainingSubstitutions.class);
-        }
+        replacements.registerSubstitutions(NodeClass.class, HotSpotNodeClassSubstitutions.class);
+        replacements.registerSubstitutions(Node.class, HotSpotNodeSubstitutions.class);
+        replacements.registerSubstitutions(CompositeValueClass.class, CompositeValueClassSubstitutions.class);
+        replacements.registerSubstitutions(new NamedType("com.sun.crypto.provider.AESCrypt"), AESCryptSubstitutions.class);
+        replacements.registerSubstitutions(new NamedType("com.sun.crypto.provider.CipherBlockChaining"), CipherBlockChainingSubstitutions.class);
     }
 }
