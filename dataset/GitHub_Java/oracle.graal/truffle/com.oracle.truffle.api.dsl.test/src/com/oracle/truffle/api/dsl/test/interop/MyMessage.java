@@ -22,18 +22,17 @@
  */
 package com.oracle.truffle.api.dsl.test.interop;
 
-import com.oracle.truffle.api.dsl.test.ExpectError;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.AcceptMessage;
+import com.oracle.truffle.api.interop.Message;
 
-@ExpectError("Inconsistent argument length.")
-@AcceptMessage(value = "com.oracle.truffle.api.dsl.test.interop.MyMessage", receiverType = ValidTruffleObject.class, language = TestTruffleLanguage.class)
-public final class AcceptMyMessage2 extends AcceptMyMessageBase2 {
-    public Object access(VirtualFrame frame, ValidTruffleObject object, int a, double b, Object c) {
-        return true;
+public final class MyMessage extends Message {
+
+    @Override
+    public boolean equals(Object message) {
+        return message instanceof MyMessage;
     }
 
-    public Object access(VirtualFrame frame, ValidTruffleObject object, int a, double b) {
-        return true;
+    @Override
+    public int hashCode() {
+        return 5425432;
     }
 }
