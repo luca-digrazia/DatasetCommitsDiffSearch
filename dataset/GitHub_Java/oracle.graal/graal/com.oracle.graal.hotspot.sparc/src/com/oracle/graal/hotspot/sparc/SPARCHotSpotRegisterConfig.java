@@ -130,10 +130,10 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
         return registers;
     }
 
-    public SPARCHotSpotRegisterConfig(TargetDescription target, HotSpotVMConfig config) {
-        this.architecture = target.arch;
+    public SPARCHotSpotRegisterConfig(Architecture architecture, HotSpotVMConfig config) {
+        this.architecture = architecture;
 
-        csl = new CalleeSaveLayout(target, -1, -1, target.arch.getWordSize(), calleeSaveRegisters);
+        csl = new CalleeSaveLayout(architecture, -1, -1, architecture.getWordSize(), calleeSaveRegisters);
         allocatable = initAllocatable(config.useCompressedOops);
         attributesMap = RegisterAttributes.createMap(this, SPARC.allRegisters);
     }
@@ -203,12 +203,12 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
 
             if (locations[i] == null) {
                 locations[i] = StackSlot.get(kind.getStackKind(), currentStackOffset, !type.out);
-                currentStackOffset += Math.max(target.getSizeInBytes(kind), target.wordSize);
+                currentStackOffset += Math.max(target.arch.getSizeInBytes(kind), target.wordSize);
             }
         }
 
         Kind returnKind = returnType == null ? Kind.Void : returnType.getKind();
-        AllocatableValue returnLocation = returnKind == Kind.Void ? Value.ILLEGAL : getReturnRegister(returnKind, type).asValue(returnKind.getStackKind());
+        AllocatableValue returnLocation = returnKind == Kind.Void ? Value.ILLEGAL : getReturnRegister(returnKind, type).asValue(returnKind);
         return new CallingConvention(currentStackOffset, returnLocation, locations);
     }
 

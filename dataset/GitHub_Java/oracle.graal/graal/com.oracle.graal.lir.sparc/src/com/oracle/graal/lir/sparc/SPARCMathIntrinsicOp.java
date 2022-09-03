@@ -34,12 +34,7 @@ import com.oracle.graal.lir.asm.*;
 public class SPARCMathIntrinsicOp extends SPARCLIRInstruction {
 
     public enum IntrinsicOpcode {
-        SQRT,
-        SIN,
-        COS,
-        TAN,
-        LOG,
-        LOG10
+        SQRT, SIN, COS, TAN, LOG, LOG10
     }
 
     @Opcode private final IntrinsicOpcode opcode;
@@ -53,7 +48,7 @@ public class SPARCMathIntrinsicOp extends SPARCLIRInstruction {
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
         switch (opcode) {
             case SQRT:
                 new Fsqrtd(asDoubleReg(input), asDoubleReg(result)).emit(masm);

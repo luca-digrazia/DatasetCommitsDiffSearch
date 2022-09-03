@@ -24,16 +24,12 @@ package com.oracle.graal.lir.sparc;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import static com.oracle.graal.sparc.SPARC.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Call;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Jmpl;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Jmp;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Nop;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Sethix;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -79,8 +75,8 @@ public class SPARCCall {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            directCall(crb, masm, callTarget, null, true, state);
+        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+            directCall(tasm, masm, callTarget, null, true, state);
         }
     }
 
@@ -95,8 +91,8 @@ public class SPARCCall {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            indirectCall(crb, masm, asRegister(targetAddress), callTarget, state);
+        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+            indirectCall(tasm, masm, asRegister(targetAddress), callTarget, state);
         }
 
         @Override
@@ -129,8 +125,8 @@ public class SPARCCall {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            directCall(crb, masm, callTarget, null, false, state);
+        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+            directCall(tasm, masm, callTarget, null, false, state);
         }
     }
 
@@ -142,16 +138,16 @@ public class SPARCCall {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            directCall(crb, masm, callTarget, o7, false, state);
+        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+            directCall(tasm, masm, callTarget, o7, false, state);
         }
     }
 
-    public static void directCall(CompilationResultBuilder crb, SPARCMacroAssembler masm, InvokeTarget callTarget, Register scratch, boolean align, LIRFrameState info) {
+    public static void directCall(TargetMethodAssembler tasm, SPARCMacroAssembler masm, InvokeTarget callTarget, Register scratch, boolean align, LIRFrameState info) {
         if (align) {
             // We don't need alignment on SPARC.
         }
-        int before = masm.position();
+        int before = masm.codeBuffer.position();
         if (scratch != null) {
             // offset might not fit a 30-bit displacement, generate an
             // indirect call with a 64-bit immediate
@@ -160,29 +156,29 @@ public class SPARCCall {
         } else {
             new Call(0).emit(masm);
         }
-        int after = masm.position();
-        crb.recordDirectCall(before, after, callTarget, info);
-        crb.recordExceptionHandlers(after, info);
+        int after = masm.codeBuffer.position();
+        tasm.recordDirectCall(before, after, callTarget, info);
+        tasm.recordExceptionHandlers(after, info);
         new Nop().emit(masm);  // delay slot
         masm.ensureUniquePC();
     }
 
-    public static void indirectJmp(CompilationResultBuilder crb, SPARCMacroAssembler masm, Register dst, InvokeTarget target) {
-        int before = masm.position();
+    public static void indirectJmp(TargetMethodAssembler tasm, SPARCMacroAssembler masm, Register dst, InvokeTarget target) {
+        int before = masm.codeBuffer.position();
         new Sethix(0L, dst, true).emit(masm);
         new Jmp(new SPARCAddress(dst, 0)).emit(masm);
-        int after = masm.position();
-        crb.recordIndirectCall(before, after, target, null);
+        int after = masm.codeBuffer.position();
+        tasm.recordIndirectCall(before, after, target, null);
         new Nop().emit(masm);  // delay slot
         masm.ensureUniquePC();
     }
 
-    public static void indirectCall(CompilationResultBuilder crb, SPARCMacroAssembler masm, Register dst, InvokeTarget callTarget, LIRFrameState info) {
-        int before = masm.position();
+    public static void indirectCall(TargetMethodAssembler tasm, SPARCMacroAssembler masm, Register dst, InvokeTarget callTarget, LIRFrameState info) {
+        int before = masm.codeBuffer.position();
         new Jmpl(dst, 0, o7).emit(masm);
-        int after = masm.position();
-        crb.recordIndirectCall(before, after, callTarget, info);
-        crb.recordExceptionHandlers(after, info);
+        int after = masm.codeBuffer.position();
+        tasm.recordIndirectCall(before, after, callTarget, info);
+        tasm.recordExceptionHandlers(after, info);
         new Nop().emit(masm);  // delay slot
         masm.ensureUniquePC();
     }

@@ -34,31 +34,13 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.sparc.*;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.BinaryCommutative;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.BinaryRegConst;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.BinaryRegReg;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.Op1Stack;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.Op2Stack;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.RemOp;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.Unary2Op;
-import com.oracle.graal.lir.sparc.SPARCCompare.CompareOp;
-import com.oracle.graal.lir.sparc.SPARCControlFlow.BranchOp;
-import com.oracle.graal.lir.sparc.SPARCControlFlow.CondMoveOp;
-import com.oracle.graal.lir.sparc.SPARCControlFlow.FloatCondMoveOp;
-import com.oracle.graal.lir.sparc.SPARCControlFlow.ReturnOp;
-import com.oracle.graal.lir.sparc.SPARCControlFlow.SequentialSwitchOp;
-import com.oracle.graal.lir.sparc.SPARCControlFlow.SwitchRangesOp;
-import com.oracle.graal.lir.sparc.SPARCControlFlow.TableSwitchOp;
-import com.oracle.graal.lir.sparc.SPARCMove.LoadAddressOp;
-import com.oracle.graal.lir.sparc.SPARCMove.MembarOp;
-import com.oracle.graal.lir.sparc.SPARCMove.MoveFromRegOp;
-import com.oracle.graal.lir.sparc.SPARCMove.MoveToRegOp;
-import com.oracle.graal.lir.sparc.SPARCMove.NullCheckOp;
-import com.oracle.graal.lir.sparc.SPARCMove.StackLoadAddressOp;
+import com.oracle.graal.lir.sparc.SPARCControlFlow.*;
+import com.oracle.graal.lir.sparc.SPARCMove.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.calc.ConvertNode.Op;
@@ -80,6 +62,15 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     public SPARCLIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, CallingConvention cc, LIR lir) {
         super(graph, runtime, target, frameMap, cc, lir);
         lir.spillMoveFactory = new SPARCSpillMoveFactory();
+    }
+
+    @Override
+    protected void emitNode(ValueNode node) {
+        if (node instanceof LIRGenLowerable) {
+            ((LIRGenLowerable) node).generate(this);
+        } else {
+            super.emitNode(node);
+        }
     }
 
     @Override
@@ -403,45 +394,33 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Value emitMathAbs(Value input) {
-        Variable result = newVariable(input.getPlatformKind());
-        append(new BinaryRegConst(DAND, result, asAllocatable(input), Constant.forDouble(Double.longBitsToDouble(0x7FFFFFFFFFFFFFFFL))));
-        return result;
+    public void emitMathAbs(Variable result, Variable input) {
+        append(new BinaryRegConst(DAND, result, input, Constant.forDouble(Double.longBitsToDouble(0x7FFFFFFFFFFFFFFFL))));
     }
 
     @Override
-    public Value emitMathSqrt(Value input) {
-        Variable result = newVariable(input.getPlatformKind());
-        append(new SPARCMathIntrinsicOp(SQRT, result, asAllocatable(input)));
-        return result;
+    public void emitMathSqrt(Variable result, Variable input) {
+        append(new SPARCMathIntrinsicOp(SQRT, result, input));
     }
 
     @Override
-    public Value emitMathLog(Value input, boolean base10) {
-        Variable result = newVariable(input.getPlatformKind());
-        append(new SPARCMathIntrinsicOp(LOG, result, asAllocatable(input)));
-        return result;
+    public void emitMathLog(Variable result, Variable input, boolean base10) {
+        append(new SPARCMathIntrinsicOp(LOG, result, input));
     }
 
     @Override
-    public Value emitMathCos(Value input) {
-        Variable result = newVariable(input.getPlatformKind());
-        append(new SPARCMathIntrinsicOp(COS, result, asAllocatable(input)));
-        return result;
+    public void emitMathCos(Variable result, Variable input) {
+        append(new SPARCMathIntrinsicOp(COS, result, input));
     }
 
     @Override
-    public Value emitMathSin(Value input) {
-        Variable result = newVariable(input.getPlatformKind());
-        append(new SPARCMathIntrinsicOp(SIN, result, asAllocatable(input)));
-        return result;
+    public void emitMathSin(Variable result, Variable input) {
+        append(new SPARCMathIntrinsicOp(SIN, result, input));
     }
 
     @Override
-    public Value emitMathTan(Value input) {
-        Variable result = newVariable(input.getPlatformKind());
-        append(new SPARCMathIntrinsicOp(TAN, result, asAllocatable(input)));
-        return result;
+    public void emitMathTan(Variable result, Variable input) {
+        append(new SPARCMathIntrinsicOp(TAN, result, input));
     }
 
     @Override
@@ -461,22 +440,6 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 break;
             case Double:
                 append(new Op1Stack(DNEG, result, input));
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-        return result;
-    }
-
-    @Override
-    public Value emitNot(Value input) {
-        Variable result = newVariable(input.getKind());
-        switch (input.getKind().getStackKind()) {
-            case Int:
-                append(new Op1Stack(INOT, result, input));
-                break;
-            case Long:
-                append(new Op1Stack(LNOT, result, input));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();

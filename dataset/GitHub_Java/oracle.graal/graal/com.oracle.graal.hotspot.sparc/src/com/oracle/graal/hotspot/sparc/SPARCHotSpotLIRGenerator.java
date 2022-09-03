@@ -276,10 +276,4 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
             append(new StoreOp(kind, storeAddress, input, state));
         }
     }
-
-    @Override
-    public Value emitNot(Value input) {
-        GraalInternalError.shouldNotReachHere("binary negation not implemented");
-        return null;
-    }
 }

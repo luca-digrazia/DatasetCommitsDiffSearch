@@ -247,12 +247,8 @@ public class SPARCControlFlow {
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
-            emitCodeHelper(tasm, masm);
-        }
-
-        public static void emitCodeHelper(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
             new Ret().emit(masm);
-            // On SPARC we always leave the frame (in the delay slot).
+            // On SPARC we always leave the frame.
             tasm.frameContext.leave(tasm);
         }
     }
@@ -279,7 +275,7 @@ public class SPARCControlFlow {
             if (key.getKind() == Kind.Int) {
                 Register intKey = asIntReg(key);
                 for (int i = 0; i < keyConstants.length; i++) {
-                    if (tasm.codeCache.needsDataPatch(keyConstants[i])) {
+                    if (tasm.runtime.needsDataPatch(keyConstants[i])) {
                         tasm.recordDataReferenceInCode(keyConstants[i], 0, true);
                     }
                     long lc = keyConstants[i].asLong();
@@ -446,8 +442,8 @@ public class SPARCControlFlow {
         }
 
         // Load jump table entry into scratch and jump to it
-        // masm.movslq(value, new AMD64Address(scratch, value, Scale.Times4, 0));
-        // masm.addq(scratch, value);
+// masm.movslq(value, new AMD64Address(scratch, value, Scale.Times4, 0));
+// masm.addq(scratch, value);
         new Jmp(new SPARCAddress(scratch, 0)).emit(masm);
         new Nop().emit(masm);  // delay slot
 

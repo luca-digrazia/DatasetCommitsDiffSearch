@@ -213,7 +213,7 @@ public class SPARCMove {
     @Opcode("CAS")
     public static class CompareAndSwapOp extends SPARCLIRInstruction {
 
-        // @Def protected AllocatableValue result;
+// @Def protected AllocatableValue result;
         @Use protected AllocatableValue address;
         @Use protected AllocatableValue cmpValue;
         @Use protected AllocatableValue newValue;
@@ -413,7 +413,7 @@ public class SPARCMove {
     private static void const2reg(TargetMethodAssembler tasm, SPARCMacroAssembler masm, Value result, Constant input) {
         switch (input.getKind().getStackKind()) {
             case Int:
-                if (tasm.codeCache.needsDataPatch(input)) {
+                if (tasm.runtime.needsDataPatch(input)) {
                     tasm.recordDataReferenceInCode(input, 0, true);
                     new Setuw(input.asInt(), asRegister(result)).emit(masm);
                 } else {
@@ -425,7 +425,7 @@ public class SPARCMove {
                 }
                 break;
             case Long: {
-                if (tasm.codeCache.needsDataPatch(input)) {
+                if (tasm.runtime.needsDataPatch(input)) {
                     tasm.recordDataReferenceInCode(input, 0, true);
                     new Setx(input.asLong(), asRegister(result), true).emit(masm);
                 } else {

@@ -42,8 +42,8 @@ public class SPARCMacroAssembler extends SPARCAssembler {
 
     @Override
     public void align(int modulus) {
-        if (position() % modulus != 0) {
-            final int count = modulus - (position() % modulus);
+        if (codeBuffer.position() % modulus != 0) {
+            final int count = modulus - (codeBuffer.position() % modulus);
             for (int i = 0; i < count; i++) {
                 new Nop().emit(this);
             }
@@ -74,7 +74,6 @@ public class SPARCMacroAssembler extends SPARCAssembler {
         return Placeholder;
     }
 
-    @Override
     public final void ensureUniquePC() {
         new Nop().emit(this);
     }
@@ -365,7 +364,7 @@ public class SPARCMacroAssembler extends SPARCAssembler {
             int lo = (int) (value & ~0);
 
             // This is the same logic as MacroAssembler::internal_set.
-            final int startPc = masm.position();
+            final int startPc = masm.codeBuffer.position();
 
             if (hi == 0 && lo >= 0) {
                 new Sethi(hi22(lo), dst).emit(masm);
@@ -400,7 +399,7 @@ public class SPARCMacroAssembler extends SPARCAssembler {
             }
             // Pad out the instruction sequence so it can be patched later.
             if (forceRelocatable) {
-                while (masm.position() < (startPc + (INSTRUCTION_SIZE * 4))) {
+                while (masm.codeBuffer.position() < (startPc + (INSTRUCTION_SIZE * 4))) {
                     new Nop().emit(masm);
                 }
             }

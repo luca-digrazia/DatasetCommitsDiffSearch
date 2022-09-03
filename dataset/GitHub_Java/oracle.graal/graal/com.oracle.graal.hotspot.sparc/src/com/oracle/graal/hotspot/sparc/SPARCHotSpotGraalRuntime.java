@@ -23,8 +23,6 @@
 package com.oracle.graal.hotspot.sparc;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.sparc.*;
@@ -41,12 +39,10 @@ final class SPARCHotSpotGraalRuntime extends HotSpotGraalRuntime {
      * Called from C++ code to retrieve the singleton instance, creating it first if necessary.
      */
     public static HotSpotGraalRuntime makeInstance() {
-        HotSpotGraalRuntime graalRuntime = graalRuntime();
-        if (graalRuntime == null) {
-            graalRuntime = new SPARCHotSpotGraalRuntime();
-            graalRuntime.completeInitialization();
+        if (graalRuntime() == null) {
+            setInstance(new SPARCHotSpotGraalRuntime());
         }
-        return graalRuntime;
+        return graalRuntime();
     }
 
     protected static Architecture createArchitecture() {
@@ -69,10 +65,5 @@ final class SPARCHotSpotGraalRuntime extends HotSpotGraalRuntime {
     @Override
     protected HotSpotRuntime createRuntime() {
         return new SPARCHotSpotRuntime(config, this);
-    }
-
-    @Override
-    protected Value[] getNativeABICallerSaveRegisters() {
-        throw GraalInternalError.unimplemented();
     }
 }
