@@ -69,6 +69,10 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
         return forStoreCheck;
     }
 
+    // TODO (ds) remove once performance regression in compiler.sunflow (and other benchmarks)
+    // caused by new lowering is fixed
+    private static final boolean useNewLowering = true; // Boolean.getBoolean("graal.checkcast.useNewLowering");
+
     /**
      * Lowers a {@link CheckCastNode} to a {@link GuardingPiNode}. That is:
      * 
@@ -97,47 +101,45 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
      */
     @Override
     public void lower(LoweringTool tool, LoweringType loweringType) {
-        InstanceOfNode typeTest = graph().add(new InstanceOfNode(type, object, profile));
-        Stamp stamp = StampFactory.declared(type);
-        if (stamp() instanceof ObjectStamp && object().stamp() instanceof ObjectStamp) {
-            stamp = ((ObjectStamp) object().stamp()).castTo((ObjectStamp) stamp);
-        }
-        ValueNode condition;
-        if (stamp instanceof IllegalStamp) {
-            // This is a check cast that will always fail
-            condition = LogicConstantNode.contradiction(graph());
-            stamp = StampFactory.declared(type);
-        } else if (ObjectStamp.isObjectNonNull(object)) {
-            condition = typeTest;
-        } else {
-            if (profile != null && profile.getNullSeen() == TriState.FALSE) {
-                FixedGuardNode nullGuard = graph().add(new FixedGuardNode(graph().unique(new IsNullNode(object)), UnreachedCode, DeoptimizationAction.InvalidateReprofile, true));
-                graph().addBeforeFixed(this, nullGuard);
+        if (useNewLowering) {
+            InstanceOfNode typeTest = graph().add(new InstanceOfNode(type, object, profile));
+            Stamp stamp = StampFactory.declared(type).join(object.stamp());
+            ValueNode condition;
+            if (stamp == null) {
+                // This is a check cast that will always fail
+                condition = LogicConstantNode.contradiction(graph());
+                stamp = StampFactory.declared(type);
+            } else if (object.stamp().nonNull()) {
                 condition = typeTest;
-                stamp = stamp.join(StampFactory.objectNonNull());
             } else {
-                // TODO (ds) replace with probability of null-seen when available
-                double shortCircuitProbability = NOT_FREQUENT_PROBABILITY;
-                condition = graph().unique(new ShortCircuitOrNode(graph().unique(new IsNullNode(object)), false, typeTest, false, shortCircuitProbability));
+                if (profile != null && profile.getNullSeen() == TriState.FALSE) {
+                    FixedGuardNode nullGuard = graph().add(new FixedGuardNode(graph().unique(new IsNullNode(object)), UnreachedCode, DeoptimizationAction.InvalidateReprofile, true));
+                    graph().addBeforeFixed(this, nullGuard);
+                    condition = typeTest;
+                    stamp = stamp.join(StampFactory.objectNonNull());
+                } else {
+                    // TODO (ds) replace with probability of null-seen when available
+                    double shortCircuitProbability = NOT_FREQUENT_PROBABILITY;
+                    condition = graph().unique(new ShortCircuitOrNode(graph().unique(new IsNullNode(object)), false, typeTest, false, shortCircuitProbability));
+                }
             }
+            GuardingPiNode checkedObject = graph().add(new GuardingPiNode(object, condition, false, forStoreCheck ? ArrayStoreException : ClassCastException, InvalidateReprofile, stamp));
+            graph().replaceFixedWithFixed(this, checkedObject);
+        } else {
+            tool.getRuntime().lower(this, tool);
         }
-        GuardingPiNode checkedObject = graph().add(new GuardingPiNode(object, condition, false, forStoreCheck ? ArrayStoreException : ClassCastException, InvalidateReprofile, stamp));
-        graph().replaceFixedWithFixed(this, checkedObject);
     }
 
     @Override
     public boolean inferStamp() {
-        if (stamp() instanceof ObjectStamp && object().stamp() instanceof ObjectStamp) {
-            return updateStamp(((ObjectStamp) object().stamp()).castTo((ObjectStamp) stamp()));
-        }
-        return false;
+        return updateStamp(stamp().join(object().stamp()));
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         assert object() != null : this;
 
-        ResolvedJavaType objectType = ObjectStamp.typeOrNull(object());
+        ResolvedJavaType objectType = object().objectStamp().type();
         if (objectType != null && type.isAssignableFrom(objectType)) {
             // we don't have to check for null types here because they will also pass the
             // checkcast.
@@ -156,7 +158,7 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
             }
         }
 
-        if (ObjectStamp.isObjectAlwaysNull(object())) {
+        if (object().objectStamp().alwaysNull()) {
             return object();
         }
         if (tool.assumptions().useOptimisticAssumptions()) {
