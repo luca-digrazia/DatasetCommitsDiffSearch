@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,39 +22,42 @@
  */
 package com.oracle.graal.api.meta;
 
-import java.io.*;
-
 /**
- * Abstract base class for values manipulated by the compiler. All values have a {@linkplain Kind kind} and are immutable.
+ * Interface for values manipulated by the compiler. All values have a {@linkplain Kind kind} and
+ * are immutable.
  */
-public abstract class Value implements Serializable {
-    private static final long serialVersionUID = -6909397188697766469L;
+public interface Value extends KindProvider, TrustedInterface {
 
-    @SuppressWarnings("serial")
-    public static Value IllegalValue = new Value(Kind.Illegal) {
+    @SuppressWarnings("serial") AllocatableValue ILLEGAL = new AllocatableValue(LIRKind.Illegal) {
+
         @Override
         public String toString() {
             return "-";
         }
+
+        @Override
+        public boolean equals(Object other) {
+            // Due to de-serialization this object may exist multiple times. So we compare classes
+            // instead of the individual objects. (This anonymous class has always the same meaning)
+            return other != null && this.getClass() == other.getClass();
+        }
     };
 
-    /**
-     * The kind of this value.
-     */
-    public final Kind kind;
+    LIRKind getLIRKind();
 
     /**
-     * Initializes a new value of the specified kind.
-     * @param kind the kind
+     * Returns the platform specific kind used to store this value.
      */
-    protected Value(Kind kind) {
-        this.kind = kind;
-    }
+    PlatformKind getPlatformKind();
 
     /**
-     * String representation of the kind, which should be the end of all {@link #toString()} implementation of subclasses.
+     * Checks if this value is identical to {@code other}.
+     *
+     * Warning: Use with caution! Usually equivalence {@link #equals(Object)} is sufficient and
+     * should be used.
      */
-    protected final String kindSuffix() {
-        return "|" + kind.typeChar;
+    @ExcludeFromIdentityComparisonVerification
+    default boolean identityEquals(Value other) {
+        return this == other;
     }
 }
