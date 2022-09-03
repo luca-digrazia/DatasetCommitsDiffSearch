@@ -22,9 +22,7 @@
  */
 package org.graalvm.compiler.options;
 
-import static org.graalvm.compiler.options.OptionValues.GLOBAL;
-
-import java.util.ServiceLoader;
+import java.util.Formatter;
 
 import org.graalvm.util.EconomicMap;
 
@@ -33,30 +31,12 @@ import org.graalvm.util.EconomicMap;
  */
 public class OptionKey<T> {
 
-    private T defaultValue;
+    private final T defaultValue;
 
     private OptionDescriptor descriptor;
 
     public OptionKey(T defaultValue) {
         this.defaultValue = defaultValue;
-    }
-
-    private static final Object UNINITIALIZED = "UNINITIALIZED";
-
-    /**
-     * Creates an uninitialized option value for a subclass that initializes itself
-     * {@link #defaultValue() lazily}.
-     */
-    @SuppressWarnings("unchecked")
-    protected OptionKey() {
-        this.defaultValue = (T) UNINITIALIZED;
-    }
-
-    /**
-     * Lazy initialization of default value.
-     */
-    protected T defaultValue() {
-        throw new InternalError("Option without a default value value must override defaultValue()");
     }
 
     /**
@@ -76,17 +56,43 @@ public class OptionKey<T> {
     }
 
     /**
+     * Checks that a descriptor exists for this key after triggering loading of descriptors.
+     */
+    protected boolean checkDescriptorExists() {
+        OptionKey.Lazy.init();
+        if (descriptor == null) {
+            Formatter buf = new Formatter();
+            buf.format("Could not find a descriptor for an option key. The most likely cause is " +
+                            "a dependency on the %s annotation without a dependency on the " +
+                            "org.graalvm.compiler.options.processor.OptionProcessor annotation processor.", Option.class.getName());
+            StackTraceElement[] stackTrace = new Exception().getStackTrace();
+            if (stackTrace.length > 2 &&
+                            stackTrace[1].getClassName().equals(OptionKey.class.getName()) &&
+                            stackTrace[1].getMethodName().equals("getValue")) {
+                String caller = stackTrace[2].getClassName();
+                buf.format(" In suite.py, add GRAAL_OPTIONS_PROCESSOR to the \"annotationProcessors\" attribute of the project " +
+                                "containing %s.", caller);
+            }
+            throw new AssertionError(buf.toString());
+        }
+        return true;
+    }
+
+    /**
      * Mechanism for lazily loading all available options which has the side effect of assigning
      * names to the options.
      */
     static class Lazy {
-        static void init() {
-            ServiceLoader<OptionDescriptors> loader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
-            for (OptionDescriptors opts : loader) {
+        static {
+            for (OptionDescriptors opts : OptionsParser.getOptionsLoader()) {
                 for (OptionDescriptor desc : opts) {
                     desc.getName();
                 }
             }
+        }
+
+        static void init() {
+            /* Running the static class initializer does all the initialization. */
         }
     }
 
@@ -110,13 +116,9 @@ public class OptionKey<T> {
     }
 
     /**
-     * The initial value specified in source code. The returned value is not affected by calls to
-     * {@link #setValue(Object)} or by options set on the command line.
+     * The initial value specified in source code.
      */
     public final T getDefaultValue() {
-        if (defaultValue == UNINITIALIZED) {
-            defaultValue = defaultValue();
-        }
         return defaultValue;
     }
 
@@ -125,36 +127,15 @@ public class OptionKey<T> {
      * current value is different than the default.
      */
     public boolean hasBeenSet(OptionValues values) {
-        assert !(this instanceof StableOptionKey);
-        if (!(this instanceof StableOptionKey)) {
-            getValue(values); // ensure initialized
-        }
         return values.containsKey(this);
-    }
-
-    @Override
-    public final int hashCode() {
-        return getName().hashCode();
-    }
-
-    @Override
-    public final boolean equals(Object obj) {
-        return this == obj;
     }
 
     /**
      * Gets the value of this option in {@code values}.
      */
     public T getValue(OptionValues values) {
-        assert !(this instanceof StableOptionKey);
+        assert checkDescriptorExists();
         return values.get(this);
-    }
-
-    /**
-     * Sets the value of this option.
-     */
-    public OptionValues setValue(OptionValues options, Object v) {
-        return options.set(this, v);
     }
 
     /**
@@ -168,13 +149,6 @@ public class OptionKey<T> {
     public void update(EconomicMap<OptionKey<?>, Object> values, Object v) {
         T oldValue = (T) values.put(this, v);
         onValueUpdate(values, oldValue, (T) v);
-    }
-
-    /**
-     * Sets the value of this option.
-     */
-    public final void setValue(Object v) {
-        setValue(GLOBAL, v);
     }
 
     /**
