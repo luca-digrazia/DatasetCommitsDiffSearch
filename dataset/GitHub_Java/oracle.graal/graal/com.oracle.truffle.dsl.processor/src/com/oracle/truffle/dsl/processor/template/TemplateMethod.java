@@ -283,8 +283,8 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
             throw new IllegalStateException("Cannot compare two methods with different type systems.");
         }
 
-        List<TypeMirror> signature1 = getSignatureTypes(getReturnTypeAndParameters());
-        List<TypeMirror> signature2 = getSignatureTypes(compareMethod.getReturnTypeAndParameters());
+        List<TypeMirror> signature1 = getSignatureTypes();
+        List<TypeMirror> signature2 = compareMethod.getSignatureTypes();
         if (signature1.size() != signature2.size()) {
             return signature2.size() - signature1.size();
         }
@@ -333,9 +333,9 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
         return Utils.getSimpleName(signature1).compareTo(Utils.getSimpleName(signature2));
     }
 
-    public static List<TypeMirror> getSignatureTypes(List<ActualParameter> params) {
+    public List<TypeMirror> getSignatureTypes() {
         List<TypeMirror> types = new ArrayList<>();
-        for (ActualParameter param : params) {
+        for (ActualParameter param : getReturnTypeAndParameters()) {
             if (param.getSpecification().isSignature()) {
                 types.add(param.getType());
             }

@@ -1545,7 +1545,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 return true;
             }
             SpecializationGroup previous = group.getPreviousGroup();
-            if (previous == null || previous.getElseConnectableGuards().isEmpty()) {
+            if (previous == null || previous.getElseConnectableGuard() == null) {
                 return true;
             }
 
@@ -1571,7 +1571,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             String guardsAnd = "";
             String guardsCastAnd = "";
 
-            List<GuardData> elseGuards = group.getElseConnectableGuards();
+            GuardData elseGuard = group.getElseConnectableGuard();
 
             boolean minimumState = checkMinimumState;
             if (minimumState) {
@@ -1643,7 +1643,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             }
 
             for (GuardData guard : group.getGuards()) {
-                if (elseGuards.contains(guard)) {
+                if (elseGuard == guard) {
                     continue;
                 }
 
@@ -1656,17 +1656,17 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 }
             }
 
-            int ifCount = startGuardIf(builder, guardsBuilder, 0, elseGuards);
+            int ifCount = startGuardIf(builder, guardsBuilder, 0, elseGuard);
             builder.tree(castBuilder.getRoot());
-            ifCount = startGuardIf(builder, guardsCastBuilder, ifCount, elseGuards);
+            ifCount = startGuardIf(builder, guardsCastBuilder, ifCount, elseGuard);
             return ifCount;
         }
 
-        private int startGuardIf(CodeTreeBuilder builder, CodeTreeBuilder conditionBuilder, int ifCount, List<GuardData> elseGuard) {
+        private int startGuardIf(CodeTreeBuilder builder, CodeTreeBuilder conditionBuilder, int ifCount, GuardData elseGuard) {
             int newIfCount = ifCount;
 
             if (!conditionBuilder.isEmpty()) {
-                if (ifCount == 0 && !elseGuard.isEmpty()) {
+                if (ifCount == 0 && elseGuard != null) {
                     builder.startElseIf();
                 } else {
                     builder.startIf();
@@ -1674,7 +1674,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 builder.tree(conditionBuilder.getRoot());
                 builder.end().startBlock();
                 newIfCount++;
-            } else if (ifCount == 0 && !elseGuard.isEmpty()) {
+            } else if (ifCount == 0 && elseGuard != null) {
                 builder.startElseBlock();
                 newIfCount++;
             }

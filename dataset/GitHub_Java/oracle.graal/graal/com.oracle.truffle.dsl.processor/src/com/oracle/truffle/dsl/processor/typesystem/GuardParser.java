@@ -79,7 +79,7 @@ public class GuardParser extends NodeMethodParser<GuardData> {
     }
 
     @Override
-    public GuardData create(TemplateMethod method, boolean invalid) {
+    public GuardData create(TemplateMethod method) {
         GuardData guard = new GuardData(method, specialization, negated);
         /*
          * Update parameters in way that parameter specifications match again the node field names
