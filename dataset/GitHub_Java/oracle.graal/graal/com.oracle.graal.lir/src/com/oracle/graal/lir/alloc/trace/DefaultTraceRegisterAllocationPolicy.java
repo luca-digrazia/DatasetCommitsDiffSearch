@@ -27,10 +27,8 @@ import java.util.ArrayList;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.alloc.Trace;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.lir.alloc.trace.TraceAllocationPhase.TraceAllocationContext;
 import com.oracle.graal.lir.alloc.trace.TraceRegisterAllocationPolicy.AllocationStrategy;
-import com.oracle.graal.lir.alloc.trace.bu.BottomUpAllocator;
 import com.oracle.graal.lir.alloc.trace.lsra.TraceLinearScanPhase;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
@@ -50,8 +48,7 @@ public final class DefaultTraceRegisterAllocationPolicy {
 
     public enum TraceRAPolicies {
         Default,
-        LinearScanOnly,
-        BottomUpOnly
+        LinearScanOnly
     }
 
     public static class Options {
@@ -84,37 +81,6 @@ public final class DefaultTraceRegisterAllocationPolicy {
         }
     }
 
-    public static class BottomUpStrategy extends AllocationStrategy {
-
-        public BottomUpStrategy(TraceRegisterAllocationPolicy plan) {
-            plan.super();
-        }
-
-        @Override
-        public boolean shouldApplyTo(Trace trace) {
-            return !containsExceptionEdge(trace);
-        }
-
-        private static boolean containsExceptionEdge(Trace trace) {
-            for (AbstractBlockBase<?> block : trace.getBlocks()) {
-                // check if one of the successors is an exception handler
-                for (AbstractBlockBase<?> succ : block.getSuccessors()) {
-                    if (succ.isExceptionEntry()) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        @Override
-        protected TraceAllocationPhase<TraceAllocationContext> initAllocator(TargetDescription target, LIRGenerationResult lirGenRes, MoveFactory spillMoveFactory,
-                        RegisterAllocationConfig registerAllocationConfig, AllocatableValue[] cachedStackSlots, TraceBuilderResult resultTraces, boolean neverSpillConstant,
-                        ArrayList<AllocationStrategy> strategies) {
-            return new BottomUpAllocator(target, lirGenRes, spillMoveFactory, registerAllocationConfig, cachedStackSlots, resultTraces, neverSpillConstant);
-        }
-    }
-
     public static final class TraceLinearScanStrategy extends AllocationStrategy {
 
         public TraceLinearScanStrategy(TraceRegisterAllocationPolicy plan) {
@@ -143,11 +109,6 @@ public final class DefaultTraceRegisterAllocationPolicy {
         switch (Options.TraceRAPolicy.getValue()) {
             case Default:
             case LinearScanOnly:
-                plan.appendStrategy(new TraceLinearScanStrategy(plan));
-                break;
-            case BottomUpOnly:
-                plan.appendStrategy(new BottomUpStrategy(plan));
-                // Fallback
                 plan.appendStrategy(new TraceLinearScanStrategy(plan));
                 break;
             default:
