@@ -50,7 +50,6 @@ import com.oracle.graal.runtime.*;
 import com.oracle.graal.truffle.nodes.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.source.*;
 
 /**
  * Implementation of the Truffle compiler using Graal.
