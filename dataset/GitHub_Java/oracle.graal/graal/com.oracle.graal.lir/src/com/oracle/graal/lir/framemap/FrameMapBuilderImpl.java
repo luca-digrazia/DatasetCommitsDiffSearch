@@ -36,7 +36,7 @@ public class FrameMapBuilderImpl implements FrameMapBuilder {
 
     private final RegisterConfig registerConfig;
     private final CodeCacheProvider codeCache;
-    private final FrameMap frameMap;
+    protected final FrameMap frameMap;
     private final List<VirtualStackSlot> stackSlots;
     private final List<CallingConvention> calls;
     private int numStackSlots;
@@ -75,10 +75,6 @@ public class FrameMapBuilderImpl implements FrameMapBuilder {
 
     public CodeCacheProvider getCodeCache() {
         return codeCache;
-    }
-
-    public FrameMap getFrameMap() {
-        return frameMap;
     }
 
     /**

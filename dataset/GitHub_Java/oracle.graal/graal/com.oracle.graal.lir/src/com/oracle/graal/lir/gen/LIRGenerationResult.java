@@ -24,7 +24,6 @@ package com.oracle.graal.lir.gen;
 
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.framemap.*;
-import com.oracle.graal.lir.stackslotalloc.*;
 
 public interface LIRGenerationResult {
 
@@ -56,6 +55,4 @@ public interface LIRGenerationResult {
     boolean hasForeignCall();
 
     void setForeignCall(boolean b);
-
-    String getCompilationUnitName();
 }

@@ -60,7 +60,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
         BitSet bitSet;
 
         public BciBlockBitMap(BciBlockMapping blockMap) {
-            bitSet = new BitSet(blockMap.blocks.size());
+            bitSet = new BitSet(blockMap.getBlocks().length);
         }
 
         public boolean get(BciBlock block) {
@@ -103,12 +103,6 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             loopHeaders = blockMap.getLoopHeaders();
             liveness = blockMap.liveness;
             blockVisited = new BciBlockBitMap(blockMap);
-            // add predecessors
-            for (BciBlock block : blockMap.blocks) {
-                for (BciBlock successor : block.getSuccessors()) {
-                    successor.getPredecessors().add(block);
-                }
-            }
 
             if (method.isSynchronized()) {
                 throw GraalInternalError.unimplemented("Handle synchronized methods");
@@ -129,13 +123,12 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             BaselineControlFlowGraph cfg = BaselineControlFlowGraph.compute(blockMap);
 
             // create the LIR
-            List<? extends AbstractBlock<?>> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blockMap.blocks.size(), blockMap.startBlock);
-            List<? extends AbstractBlock<?>> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blockMap.blocks.size(), blockMap.startBlock);
+            List<? extends AbstractBlock<?>> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blockMap.getBlocks().length, blockMap.startBlock);
+            List<? extends AbstractBlock<?>> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blockMap.getBlocks().length, blockMap.startBlock);
             LIR lir = new LIR(cfg, linearScanOrder, codeEmittingOrder);
 
             RegisterConfig registerConfig = null;
             FrameMapBuilder frameMapBuilder = backend.newFrameMapBuilder(registerConfig);
-            frameMapBuilder.requireMapping(lir);
             TargetDescription target = backend.getTarget();
             CallingConvention cc = CodeUtil.getCallingConvention(backend.getProviders().getCodeCache(), CallingConvention.Type.JavaCallee, method, false);
             this.lirGenRes = backend.newLIRGenerationResult(lir, frameMapBuilder, method, null);
@@ -147,7 +140,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
 
                     // possibly add all the arguments to slots in the local variable array
 
-                    for (BciBlock block : blockMap.blocks) {
+                    for (BciBlock block : blockMap.getBlocks()) {
                         emitBlock(block);
                     }
 
@@ -160,22 +153,17 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
                 try (Scope s = Debug.scope("Allocator")) {
                     if (backend.shouldAllocateRegisters()) {
                         LinearScan.allocate(target, lirGenRes);
-                    } else if (!LocationMarker.Options.UseLocationMarker.getValue()) {
-                        // build frame map for targets that do not allocate registers
-                        lirGenRes.buildFrameMap();
                     }
                 }
-                if (LocationMarker.Options.UseLocationMarker.getValue()) {
-                    try (Scope s1 = Debug.scope("BuildFrameMap")) {
-                        // build frame map
-                        lirGenRes.buildFrameMap();
-                        Debug.dump(lir, "After FrameMap building");
-                    }
-                    try (Scope s1 = Debug.scope("MarkLocations")) {
-                        if (backend.shouldAllocateRegisters()) {
-                            // currently we mark locations only if we do register allocation
-                            LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
-                        }
+                try (Scope s1 = Debug.scope("BuildFrameMap")) {
+                    // build frame map
+                    lirGenRes.buildFrameMap(new SimpleStackSlotAllocator());
+                    Debug.dump(lir, "After FrameMap building");
+                }
+                try (Scope s1 = Debug.scope("MarkLocations")) {
+                    if (backend.shouldAllocateRegisters()) {
+                        // currently we mark locations only if we do register allocation
+                        LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
                     }
                 }
 
@@ -266,7 +254,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
 
     @Override
     protected Value genIntegerAdd(Kind kind, Value x, Value y) {
-        return gen.emitAdd(x, y);
+        return gen.emitAdd(x, y, false);
     }
 
     @Override
@@ -277,7 +265,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
 
     @Override
     protected Value genIntegerMul(Kind kind, Value x, Value y) {
-        return gen.emitMul(x, y);
+        return gen.emitMul(x, y, false);
     }
 
     @Override

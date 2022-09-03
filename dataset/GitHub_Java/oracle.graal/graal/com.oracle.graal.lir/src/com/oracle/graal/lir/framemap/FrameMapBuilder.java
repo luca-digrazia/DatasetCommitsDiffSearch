@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,17 @@
  */
 package com.oracle.graal.lir.framemap;
 
-import java.util.BitSet;
-import java.util.List;
+import java.util.*;
 
-import com.oracle.graal.lir.VirtualStackSlot;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.meta.LIRKind;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.lir.gen.*;
 
 /**
  * A {@link FrameMapBuilder} is used to collect all information necessary to
  * {@linkplain #buildFrameMap create} a {@link FrameMap}.
  */
-public abstract class FrameMapBuilder {
+public interface FrameMapBuilder {
 
     /**
      * Reserves a spill slot in the frame of the method being compiled. The returned slot is aligned
@@ -47,7 +42,7 @@ public abstract class FrameMapBuilder {
      * @param kind The kind of the spill slot to be reserved.
      * @return A spill slot denoting the reserved memory area.
      */
-    public abstract VirtualStackSlot allocateSpillSlot(LIRKind kind);
+    VirtualStackSlot allocateSpillSlot(LIRKind kind);
 
     /**
      * Reserves a number of contiguous slots in the frame of the method being compiled. If the
@@ -62,11 +57,11 @@ public abstract class FrameMapBuilder {
      *            list
      * @return the first reserved stack slot (i.e., at the lowest address)
      */
-    public abstract VirtualStackSlot allocateStackSlots(int slots, BitSet objects, List<VirtualStackSlot> outObjectStackSlots);
+    VirtualStackSlot allocateStackSlots(int slots, BitSet objects, List<VirtualStackSlot> outObjectStackSlots);
 
-    public abstract RegisterConfig getRegisterConfig();
+    RegisterConfig getRegisterConfig();
 
-    public abstract CodeCacheProvider getCodeCache();
+    CodeCacheProvider getCodeCache();
 
     /**
      * Informs the frame map that the compiled code calls a particular method, which may need stack
@@ -74,11 +69,11 @@ public abstract class FrameMapBuilder {
      *
      * @param cc The calling convention for the called method.
      */
-    public abstract void callsMethod(CallingConvention cc);
+    void callsMethod(CallingConvention cc);
 
     /**
      * Creates a {@linkplain FrameMap} based on the information collected by this
      * {@linkplain FrameMapBuilder}.
      */
-    public abstract FrameMap buildFrameMap(LIRGenerationResult result);
+    FrameMap buildFrameMap(LIRGenerationResult result, StackSlotAllocator allocator);
 }

@@ -323,7 +323,6 @@ public class GraalCompiler {
         }
         try (Scope ds = Debug.scope("BackEnd", lir)) {
             FrameMapBuilder frameMapBuilder = backend.newFrameMapBuilder(registerConfig);
-            frameMapBuilder.requireMapping(lir);
             LIRGenerationResult lirGenRes = backend.newLIRGenerationResult(lir, frameMapBuilder, graph.method(), stub);
             LIRGeneratorTool lirGen = backend.newLIRGenerator(cc, lirGenRes);
             NodeLIRBuilderTool nodeLirGen = backend.newNodeLIRBuilder(graph, lirGen);
@@ -351,25 +350,20 @@ public class GraalCompiler {
             try (Scope s = Debug.scope("Allocator", nodeLirGen)) {
                 if (backend.shouldAllocateRegisters()) {
                     LinearScan.allocate(target, lirGenRes);
-                } else if (!LocationMarker.Options.UseLocationMarker.getValue()) {
-                    // build frame map for targets that do not allocate registers
-                    lirGenRes.buildFrameMap();
                 }
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
 
-            if (LocationMarker.Options.UseLocationMarker.getValue()) {
-                try (Scope s1 = Debug.scope("BuildFrameMap")) {
-                    // build frame map
-                    lirGenRes.buildFrameMap();
-                    Debug.dump(lir, "After FrameMap building");
-                }
-                try (Scope s1 = Debug.scope("MarkLocations")) {
-                    if (backend.shouldAllocateRegisters()) {
-                        // currently we mark locations only if we do register allocation
-                        LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
-                    }
+            try (Scope s1 = Debug.scope("BuildFrameMap")) {
+                // build frame map
+                lirGenRes.buildFrameMap(new SimpleStackSlotAllocator());
+                Debug.dump(lir, "After FrameMap building");
+            }
+            try (Scope s1 = Debug.scope("MarkLocations")) {
+                if (backend.shouldAllocateRegisters()) {
+                    // currently we mark locations only if we do register allocation
+                    LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
                 }
             }
 
