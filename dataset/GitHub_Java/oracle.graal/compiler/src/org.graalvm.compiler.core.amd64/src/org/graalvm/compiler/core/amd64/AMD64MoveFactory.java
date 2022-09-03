@@ -48,6 +48,7 @@ import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.Value;
+import org.graalvm.compiler.lir.LIRInstruction;
 
 public abstract class AMD64MoveFactory extends AMD64MoveFactoryBase {
 
