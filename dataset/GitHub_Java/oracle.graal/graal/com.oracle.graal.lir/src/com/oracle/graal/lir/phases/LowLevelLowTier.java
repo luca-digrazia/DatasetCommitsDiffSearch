@@ -24,34 +24,12 @@ package com.oracle.graal.lir.phases;
 
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.phases.LowLevelLowTierPhase.*;
-import com.oracle.graal.options.*;
 
 public class LowLevelLowTier extends LowLevelPhaseSuite<LowLevelLowTierContext> {
-    public static class Options {
-        // @formatter:off
-        @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LowLevelOptEdgeMoveOptimizer = new OptionValue<>(true);
-        @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LowLevelOptControlFlowOptmizer = new OptionValue<>(true);
-        @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LowLevelOptRedundantMoveElimination = new OptionValue<>(true);
-        @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LowLevelOptNullCheckOptimizer = new OptionValue<>(true);
-        // @formatter:on
-    }
-
     public LowLevelLowTier() {
-        if (Options.LowLevelOptEdgeMoveOptimizer.getValue()) {
-            appendPhase(new EdgeMoveOptimizer());
-        }
-        if (Options.LowLevelOptControlFlowOptmizer.getValue()) {
-            appendPhase(new ControlFlowOptimizer());
-        }
-        if (Options.LowLevelOptRedundantMoveElimination.getValue()) {
-            appendPhase(new RedundantMoveElimination());
-        }
-        if (Options.LowLevelOptNullCheckOptimizer.getValue()) {
-            appendPhase(new NullCheckOptimizer());
-        }
+        appendPhase(new EdgeMoveOptimizer());
+        appendPhase(new ControlFlowOptimizer());
+        appendPhase(new RedundantMoveElimination());
+        appendPhase(new NullCheckOptimizer());
     }
 }
