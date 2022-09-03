@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.truffle.api.CompilerOptions;
+import com.oracle.truffle.api.*;
 
 public class CounterBasedCompilationPolicy implements CompilationPolicy {
 
-    private volatile boolean compilationFailed;
+    private boolean compilationFailed;
 
     @Override
     public boolean shouldCompile(CompilationProfile profile, CompilerOptions options) {

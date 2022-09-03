@@ -89,7 +89,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         this.rootNode = rootNode;
         this.compilationPolicy = compilationPolicy;
         this.rootNode.adoptChildren();
-        this.rootNode.applyInstrumentation();
         this.rootNode.setCallTarget(this);
         this.uninitializedRootNode = sourceCallTarget == null ? cloneRootNode(rootNode) : sourceCallTarget.uninitializedRootNode;
         if (TruffleCallTargetProfiling.getValue()) {
@@ -282,7 +281,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         invalidate(null, null);
     }
 
-    protected void invalidate(Object source, CharSequence reason) {
+    protected void invalidate(Node source, CharSequence reason) {
         if (isValid()) {
             this.runtime.invalidateInstalledCode(this, source, reason);
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,17 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
-
 import com.oracle.truffle.api.*;
 
-public class CounterAndTimeBasedCompilationPolicy extends CounterBasedCompilationPolicy {
+public class InterpreterOnlyCompilationPolicy implements CompilationPolicy {
 
     @Override
     public boolean shouldCompile(CompilationProfile profile, CompilerOptions options) {
-        if (super.shouldCompile(profile, options)) {
-            long threshold = TruffleTimeThreshold.getValue() * 1_000_000L;
+        return false;
+    }
 
-            if (options instanceof GraalCompilerOptions) {
-                threshold = Math.max(threshold, ((GraalCompilerOptions) options).getMinTimeThreshold());
-            }
-
-            long time = profile.getTimestamp();
-            if (time == 0) {
-                throw new AssertionError();
-            }
-            long timeElapsed = System.nanoTime() - time;
-            if (timeElapsed > threshold) {
-                profile.deferCompilation();
-                return false;
-            }
-            return true;
-        } else {
-            return false;
-        }
+    @Override
+    public void recordCompilationFailure(Throwable t) {
     }
 
 }

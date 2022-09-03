@@ -41,8 +41,6 @@ import com.oracle.truffle.api.nodes.*;
 
 public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
-    public static TruffleRuntime alternateRuntime;
-
     private ArrayList<String> includes;
     private ArrayList<String> excludes;
 
