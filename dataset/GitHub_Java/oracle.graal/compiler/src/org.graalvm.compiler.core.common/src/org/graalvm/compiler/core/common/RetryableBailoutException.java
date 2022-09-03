@@ -22,19 +22,20 @@
  */
 package org.graalvm.compiler.core.common;
 
-public class PermanentBailoutException extends GraalBailoutException {
+public class RetryableBailoutException extends GraalBailoutException {
 
-    private static final long serialVersionUID = -2683649650135362549L;
+    private static final long serialVersionUID = -7145365025679144525L;
 
-    public PermanentBailoutException(String format, Object... args) {
-        super(true, format, args);
+    public RetryableBailoutException(String format, Object... args) {
+        super(false, format, args);
     }
 
-    public PermanentBailoutException(String reason) {
-        super(true, "%s", reason);
+    public RetryableBailoutException(String reason) {
+        super(false, reason);
     }
 
-    public PermanentBailoutException(Throwable cause, String format, Object... args) {
+    public RetryableBailoutException(Throwable cause, String format, Object... args) {
         super(cause, format, args);
     }
+
 }
