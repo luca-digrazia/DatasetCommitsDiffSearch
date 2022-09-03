@@ -181,11 +181,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         }
 
         final HotSpotProviders hostProviders = runtime.getHostProviders();
-        HotSpotHostForeignCallsProvider hostForeignCalls = (HotSpotHostForeignCallsProvider) hostProviders.getForeignCalls();
-        assert VerifyOptionsPhase.checkOptions(hostProviders.getMetaAccess(), hostForeignCalls);
-
-        // Initialize host ForeignCallsProvider
-        hostForeignCalls.initialize(hostProviders, config);
+        assert VerifyOptionsPhase.checkOptions(hostProviders.getMetaAccess(), hostProviders.getForeignCalls());
 
         // Install intrinsics.
         if (Intrinsify.getValue()) {
@@ -194,27 +190,45 @@ public class VMToCompilerImpl implements VMToCompiler {
                 @Override
                 public void run() {
 
-                    HotSpotMetaAccessProvider hostMetaAccess = hostProviders.getMetaAccess();
-                    Replacements hostReplacements = hostProviders.getReplacements();
-                    LoweringProvider hostLowerer = hostProviders.getLowerer();
-                    ServiceLoader<ReplacementsProvider> sl = ServiceLoader.loadInstalled(ReplacementsProvider.class);
-                    TargetDescription hostTarget = hostProviders.getCodeCache().getTarget();
-                    for (ReplacementsProvider replacementsProvider : sl) {
-                        replacementsProvider.registerReplacements(hostMetaAccess, hostLowerer, hostReplacements, hostTarget);
+                    List<LoweringProvider> initializedLowerers = new ArrayList<>();
+                    List<ForeignCallsProvider> initializedForeignCalls = new ArrayList<>();
+
+                    for (Map.Entry<?, HotSpotBackend> e : runtime.getBackends().entrySet()) {
+                        HotSpotBackend backend = e.getValue();
+                        HotSpotProviders providers = backend.getProviders();
+
+                        HotSpotForeignCallsProvider foreignCalls = providers.getForeignCalls();
+                        if (!initializedForeignCalls.contains(foreignCalls)) {
+                            initializedForeignCalls.add(foreignCalls);
+                            foreignCalls.initialize(providers, config);
+                        }
+                        HotSpotLoweringProvider lowerer = (HotSpotLoweringProvider) providers.getLowerer();
+                        if (!initializedLowerers.contains(lowerer)) {
+                            initializedLowerers.add(lowerer);
+                            initializeLowerer(providers, lowerer);
+                        }
                     }
+                }
+
+                private void initializeLowerer(HotSpotProviders providers, HotSpotLoweringProvider lowerer) {
+                    final Replacements replacements = providers.getReplacements();
+                    ServiceLoader<ReplacementsProvider> sl = ServiceLoader.loadInstalled(ReplacementsProvider.class);
+                    TargetDescription target = providers.getCodeCache().getTarget();
+                    for (ReplacementsProvider replacementsProvider : sl) {
+                        replacementsProvider.registerReplacements(providers.getMetaAccess(), lowerer, replacements, target);
+                    }
+                    lowerer.initialize(providers, config);
                     if (BootstrapReplacements.getValue()) {
-                        for (ResolvedJavaMethod method : hostReplacements.getAllReplacements()) {
-                            hostReplacements.getMacroSubstitution(method);
-                            hostReplacements.getMethodSubstitution(method);
+                        for (ResolvedJavaMethod method : replacements.getAllReplacements()) {
+                            replacements.getMacroSubstitution(method);
+                            replacements.getMethodSubstitution(method);
+                            replacements.getSnippet(method);
                         }
                     }
                 }
             });
-        }
 
-        // Initialize host LoweringProvider
-        HotSpotHostLoweringProvider hostLowerer = (HotSpotHostLoweringProvider) hostProviders.getLowerer();
-        hostLowerer.initialize(hostProviders, config);
+        }
 
         // Create compilation queue.
         compileQueue = new ThreadPoolExecutor(Threads.getValue(), Threads.getValue(), 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), CompilerThread.FACTORY);
