@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.max.asm.amd64.*;
 
 /**
  * AMD64 specific implementation of {@link HotSpotGraalRuntime}.
@@ -49,7 +49,7 @@ final class AMD64HotSpotGraalRuntime extends HotSpotGraalRuntime {
     protected TargetDescription createTarget() {
         final int wordSize = 8;
         final int stackFrameAlignment = 16;
-        return new TargetDescription(new AMD64(), true, stackFrameAlignment, 0, config.vmPageSize, wordSize, true, true);
+        return new TargetDescription(new AMD64(), true, stackFrameAlignment, config.vmPageSize, wordSize, true, true);
     }
 
     @Override

@@ -24,16 +24,15 @@ package com.oracle.graal.hotspot;
 
 import java.lang.reflect.*;
 
+import com.oracle.graal.api.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.interpreter.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.*;
 
 /**
  * Singleton class holding the instance of the {@link GraalRuntime}.
@@ -58,13 +57,6 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
     protected static void setInstance(HotSpotGraalRuntime runtime) {
         assert instance == null : "runtime already registered";
         instance = runtime;
-    }
-
-    private static Kind wordKind;
-
-    public static Kind wordKind() {
-        assert wordKind != null;
-        return wordKind;
     }
 
     protected final CompilerToVM compilerToVm;
@@ -107,9 +99,6 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         }
 
         target = createTarget();
-        assert wordKind == null || wordKind.equals(target.wordKind);
-        wordKind = target.wordKind;
-
         runtime = createRuntime();
 
         HotSpotBackend backend = createBackend();
