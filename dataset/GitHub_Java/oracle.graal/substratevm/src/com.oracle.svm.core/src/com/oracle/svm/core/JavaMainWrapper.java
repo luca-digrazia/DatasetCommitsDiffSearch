@@ -52,10 +52,12 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.allocationprofile.AllocationSite;
 import com.oracle.svm.core.amd64.AMD64CPUFeatureAccess;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.c.function.CEntryPointSetup.EnterCreateIsolatePrologue;
+import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.jdk.RuntimeFeature;
 import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.option.RuntimeOptionParser;
@@ -121,6 +123,19 @@ public class JavaMainWrapper {
         }
     }
 
+    /** A shutdown hook to print the PrintGCSummary output. */
+    public static class PrintGCSummaryShutdownHook extends Thread {
+
+        public PrintGCSummaryShutdownHook() {
+            super("PrintGCSummaryShutdownHook");
+        }
+
+        @Override
+        public void run() {
+            Heap.getHeap().getGC().printGCSummary();
+        }
+    }
+
     private static final Thread preallocatedThread;
     static {
         preallocatedThread = new Thread("main");
@@ -146,14 +161,13 @@ public class JavaMainWrapper {
         mainArgs = args;
 
         try {
-            if (SubstrateOptions.ParseRuntimeOptions.getValue()) {
-                /*
-                 * When options are not parsed yet, it is also too early to run the startup hooks
-                 * because they often depend on option values. The user is expected to manually run
-                 * the startup hooks after setting all option values.
-                 */
-                RuntimeSupport.getRuntimeSupport().executeStartupHooks();
+            if (AllocationSite.Options.AllocationProfiling.getValue()) {
+                Runtime.getRuntime().addShutdownHook(new AllocationSite.AllocationProfilingShutdownHook());
             }
+            if (SubstrateOptions.PrintGCSummary.getValue()) {
+                Runtime.getRuntime().addShutdownHook(new PrintGCSummaryShutdownHook());
+            }
+            RuntimeSupport.getRuntimeSupport().executeStartupHooks();
 
             /*
              * Invoke the application's main method. Invoking the main method via a method handle
