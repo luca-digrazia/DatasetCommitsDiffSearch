@@ -163,7 +163,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     private static void reportToolUserError(String msg) {
-        reportUserError("native-image " + msg);
+        reportUserError("native-image" + msg);
     }
 
     private static boolean isValidArchitecture() {
@@ -171,7 +171,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     private static boolean isValidOperatingSystem() {
-        return OS.getCurrent() == OS.LINUX || OS.getCurrent() == OS.DARWIN || OS.getCurrent() == OS.WINDOWS;
+        return OS.getCurrent() == OS.LINUX || OS.getCurrent() == OS.DARWIN;
     }
 
     @SuppressWarnings("try")
@@ -216,10 +216,10 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             JavaMainSupport javaMainSupport = null;
 
             AbstractBootImage.NativeImageKind k = AbstractBootImage.NativeImageKind.valueOf(NativeImageOptions.Kind.getValue(parsedHostedOptions));
-            if (k.executable) {
+            if (k == AbstractBootImage.NativeImageKind.EXECUTABLE) {
                 String className = NativeImageOptions.Class.getValue(parsedHostedOptions);
                 if (className == null || className.length() == 0) {
-                    throw UserError.abort("Must specify main entry point class when building " + k + " native image. " +
+                    throw UserError.abort("Must specify main entry point class when building " + AbstractBootImage.NativeImageKind.EXECUTABLE + " native image. " +
                                     "Use '" + SubstrateOptionsParser.commandArgument(NativeImageOptions.Class, "<fully-qualified-class-name>") + "'.");
                 }
                 Class<?> mainClass;
@@ -231,7 +231,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
 
                 String mainEntryPointName = NativeImageOptions.Method.getValue(parsedHostedOptions);
                 if (mainEntryPointName == null || mainEntryPointName.length() == 0) {
-                    throw UserError.abort("Must specify main entry point method when building " + k + " native image. " +
+                    throw UserError.abort("Must specify main entry point method when building " + AbstractBootImage.NativeImageKind.EXECUTABLE + " native image. " +
                                     "Use '" + SubstrateOptionsParser.commandArgument(NativeImageOptions.Method, "<method-name>") + "'.");
                 }
 
@@ -332,7 +332,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             reportToolUserError("runs only on architecture AMD64. Detected architecture: " + GraalAccess.getOriginalTarget().arch.getClass().getSimpleName());
         }
         if (!isValidOperatingSystem()) {
-            reportToolUserError("runs on Linux, Mac OS X and Windows only. Detected OS: " + System.getProperty("os.name"));
+            reportToolUserError("runs on Linux and Mac OS X only. Detected OS: " + System.getProperty("os.name"));
             return false;
         }
 
