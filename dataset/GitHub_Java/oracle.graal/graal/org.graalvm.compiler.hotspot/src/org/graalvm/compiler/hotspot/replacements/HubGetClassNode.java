@@ -25,7 +25,6 @@ package org.graalvm.compiler.hotspot.replacements;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_4;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
 
-import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.graph.Node;
@@ -71,7 +70,7 @@ public final class HubGetClassNode extends FloatingNode implements Lowerable, Ca
             return null;
         } else {
             MetaAccessProvider metaAccess = tool.getMetaAccess();
-            if (metaAccess != null && hub.isConstant() && !GraalOptions.ImmutableCode.getValue(graph().getOptions())) {
+            if (metaAccess != null && hub.isConstant()) {
                 ResolvedJavaType exactType = tool.getConstantReflection().asJavaType(hub.asConstant());
                 if (exactType != null) {
                     return ConstantNode.forConstant(tool.getConstantReflection().asJavaClass(exactType), metaAccess);
