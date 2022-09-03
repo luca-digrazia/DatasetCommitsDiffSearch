@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,70 @@
  */
 package com.oracle.graal.truffle.hotspot;
 
-import com.oracle.jvmci.service.*;
-import com.oracle.truffle.api.*;
+import static com.oracle.graal.options.OptionValues.GLOBAL;
+
+import java.util.function.Supplier;
+
+import com.oracle.graal.api.runtime.GraalJVMCICompiler;
+import com.oracle.graal.api.runtime.GraalRuntime;
+import com.oracle.graal.hotspot.CompilerConfigurationFactory;
+import com.oracle.graal.hotspot.HotSpotGraalCompilerFactory;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionKey;
+import com.oracle.graal.serviceprovider.ServiceProvider;
+import com.oracle.graal.truffle.TruffleCompilerOptions;
+import com.oracle.truffle.api.TruffleRuntime;
+import com.oracle.truffle.api.TruffleRuntimeAccess;
+
+import jdk.vm.ci.runtime.JVMCI;
+import jdk.vm.ci.runtime.JVMCICompiler;
+import jdk.vm.ci.services.Services;
 
 @ServiceProvider(TruffleRuntimeAccess.class)
 public class HotSpotTruffleRuntimeAccess implements TruffleRuntimeAccess {
+
+    static class Options {
+        // @formatter:off
+        @Option(help = "Select a Graal compiler configuration for Truffle compilation (default: use Graal system compiler configuration).")
+        public static final OptionKey<String> TruffleCompilerConfiguration = new OptionKey<>(null);
+        // @formatter:on
+    }
+
+    @Override
     public TruffleRuntime getRuntime() {
-        return HotSpotTruffleRuntime.makeInstance();
+        Services.exportJVMCITo(getClass());
+
+        // initialize JVMCI to make sure the TruffleCompiler option is parsed
+        JVMCI.initialize();
+
+        return new HotSpotTruffleRuntime(new LazyGraalRuntime());
+    }
+
+    private static final class LazyGraalRuntime implements Supplier<GraalRuntime> {
+
+        private volatile GraalRuntime graalRuntime;
+
+        @Override
+        public GraalRuntime get() {
+            if (graalRuntime == null) {
+                synchronized (this) {
+                    if (graalRuntime == null) {
+                        graalRuntime = getCompiler().getGraalRuntime();
+                    }
+                }
+            }
+            return graalRuntime;
+        }
+
+        static GraalJVMCICompiler getCompiler() {
+            if (!Options.TruffleCompilerConfiguration.hasBeenSet(GLOBAL)) {
+                JVMCICompiler compiler = JVMCI.getRuntime().getCompiler();
+                if (compiler instanceof GraalJVMCICompiler) {
+                    return (GraalJVMCICompiler) compiler;
+                }
+            }
+            CompilerConfigurationFactory compilerConfigurationFactory = CompilerConfigurationFactory.selectFactory(TruffleCompilerOptions.getValue(Options.TruffleCompilerConfiguration));
+            return HotSpotGraalCompilerFactory.createCompiler(JVMCI.getRuntime(), compilerConfigurationFactory);
+        }
     }
 }

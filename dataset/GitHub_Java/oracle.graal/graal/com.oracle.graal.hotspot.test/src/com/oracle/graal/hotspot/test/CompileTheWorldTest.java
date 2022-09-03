@@ -22,13 +22,21 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.compiler.GraalCompilerOptions.ExitVMOnException;
+import static com.oracle.graal.options.OptionValues.GLOBAL;
 
-import org.junit.*;
+import java.util.Map;
 
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.CompileTheWorld.Config;
+import org.junit.Test;
+
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.hotspot.CompileTheWorld;
+import com.oracle.graal.hotspot.HotSpotGraalCompiler;
+import com.oracle.graal.options.OptionKey;
+import com.oracle.graal.options.OptionValues;
+
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
 
 /**
  * Tests {@link CompileTheWorld} functionality.
@@ -36,12 +44,14 @@ import com.oracle.graal.hotspot.CompileTheWorld.Config;
 public class CompileTheWorldTest extends GraalCompilerTest {
 
     @Test
-    public void testRtJar() throws Throwable {
-        boolean originalSetting = ExitVMOnException.getValue();
+    public void testJDK() throws Throwable {
+        boolean originalSetting = ExitVMOnException.getValue(GLOBAL);
         // Compile a couple classes in rt.jar
-        String file = System.getProperty("java.home") + "/lib/rt.jar";
-        new CompileTheWorld(file, new Config(null), 1, 5, false).compile();
-        ExitVMOnException.setValue(originalSetting);
+        HotSpotJVMCIRuntimeProvider runtime = HotSpotJVMCIRuntime.runtime();
+        System.setProperty(CompileTheWorld.LIMITMODS_PROPERTY_NAME, "java.base");
+        OptionValues initialOptions = OptionValues.GLOBAL;
+        Map<OptionKey<?>, Object> compilationOptions = CompileTheWorld.parseOptions("Inline=false");
+        new CompileTheWorld(runtime, (HotSpotGraalCompiler) runtime.getCompiler(), CompileTheWorld.SUN_BOOT_CLASS_PATH, 1, 5, null, null, true, initialOptions, compilationOptions).compile();
+        assert ExitVMOnException.getValue(GLOBAL) == originalSetting;
     }
-
 }
