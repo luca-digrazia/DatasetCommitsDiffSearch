@@ -199,18 +199,18 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
                      */
                     canonical = new CanonicalizeToNullNode(node.stamp);
                 }
-                handleCanonicalization(methodScope, loopScope, nodeOrderId, node, canonical);
+                handleCanonicaliation(methodScope, loopScope, nodeOrderId, node, canonical);
             }
 
         } else if (node instanceof Canonicalizable) {
             Node canonical = ((Canonicalizable) node).canonical(new PECanonicalizerTool());
             if (canonical != node) {
-                handleCanonicalization(methodScope, loopScope, nodeOrderId, node, canonical);
+                handleCanonicaliation(methodScope, loopScope, nodeOrderId, node, canonical);
             }
         }
     }
 
-    private void handleCanonicalization(MethodScope methodScope, LoopScope loopScope, int nodeOrderId, FixedNode node, Node c) {
+    private void handleCanonicaliation(MethodScope methodScope, LoopScope loopScope, int nodeOrderId, FixedNode node, Node c) {
         Node canonical = c;
 
         if (canonical == null) {
