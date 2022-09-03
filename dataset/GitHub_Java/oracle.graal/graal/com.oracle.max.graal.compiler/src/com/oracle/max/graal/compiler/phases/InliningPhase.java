@@ -59,7 +59,6 @@ public class InliningPhase extends Phase implements InliningCallback {
     // Metrics
     private static final DebugMetric metricInliningPerformed = Debug.metric("InliningPerformed");
     private static final DebugMetric metricInliningConsidered = Debug.metric("InliningConsidered");
-    private static final DebugMetric metricInliningStoppedByMaxDesiredSize = Debug.metric("InliningStoppedByMaxDesiredSize");
 
     public InliningPhase(CiTarget target, GraalRuntime runtime, Collection<? extends Invoke> hints, CiAssumptions assumptions, PhasePlan plan) {
         this.target = target;
@@ -116,10 +115,6 @@ public class InliningPhase extends Phase implements InliningCallback {
                     scanInvokes(newNodes, info.level + 1, graph);
                 }
             }
-        }
-
-        if (GraalOptions.Debug && graph.getNodeCount() >= GraalOptions.MaximumDesiredSize) {
-            metricInliningStoppedByMaxDesiredSize.increment();
         }
     }
 
@@ -282,7 +277,7 @@ public class InliningPhase extends Phase implements InliningCallback {
                 return false;
             }
 
-            double inlineBoost = Math.min(GraalOptions.ProbabilityCapForInlining, info.invoke.probability()) + Math.log10(Math.max(1, info.invoke.probability() - GraalOptions.ProbabilityCapForInlining + 1));
+            double inlineBoost = Math.min(GraalOptions.ProbabilityCapForInlining, info.invoke.probability()) + Math.log(Math.max(1, info.invoke.probability() - GraalOptions.ProbabilityCapForInlining + 1));
             double maxSize = Math.pow(GraalOptions.NestedInliningSizeRatio, info.level) * GraalOptions.MaximumInlineSize;
             maxSize = maxSize + maxSize * inlineBoost;
             maxSize = Math.min(GraalOptions.MaximumGreedyInlineSize, Math.max(GraalOptions.MaximumTrivialSize, maxSize));
