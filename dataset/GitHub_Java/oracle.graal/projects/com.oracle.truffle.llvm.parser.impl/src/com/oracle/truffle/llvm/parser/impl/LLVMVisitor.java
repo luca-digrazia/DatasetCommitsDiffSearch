@@ -303,7 +303,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
     private void allocateAliases(List<EObject> objects) {
         boolean resolvedAllAliases;
         boolean madeProgress;
-        Object unresolvedAlias = null;
         do {
             resolvedAllAliases = true;
             madeProgress = false;
@@ -322,7 +321,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
                         }
                         if (globalVar == null) {
                             resolvedAllAliases = false;
-                            unresolvedAlias = alias.getName();
                         } else {
                             aliases.put(alias, globalVar);
                             madeProgress = true;
@@ -331,8 +329,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
                 }
             }
             if (!resolvedAllAliases && !madeProgress) {
-                LLVMLogger.info("Could not resolve all aliases (e.g., " + unresolvedAlias + ")");
-                break;
+                throw new AssertionError("Could not make progress in resolving aliases!");
             }
         } while (!resolvedAllAliases);
     }
@@ -448,13 +445,9 @@ public class LLVMVisitor implements LLVMParserRuntime {
         if (globalVars.containsKey(globalVariable)) {
             return globalVars.get(globalVariable);
         } else {
-            try {
-                Object allocation = factoryFacade.allocateGlobalVariable(globalVariable);
-                globalVars.put(globalVariable, allocation);
-                return allocation;
-            } catch (Throwable t) {
-                throw new AssertionError(globalVariable.getName());
-            }
+            Object allocation = factoryFacade.allocateGlobalVariable(globalVariable);
+            globalVars.put(globalVariable, allocation);
+            return allocation;
         }
     }
 
