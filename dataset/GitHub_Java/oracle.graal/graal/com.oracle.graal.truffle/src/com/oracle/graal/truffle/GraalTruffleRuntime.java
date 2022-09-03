@@ -257,14 +257,14 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         private boolean first = true;
         private int skipFrames;
 
-        FrameVisitor(FrameInstanceVisitor<T> visitor, CallMethods methods, int skip) {
+        public FrameVisitor(FrameInstanceVisitor<T> visitor, CallMethods methods, int skip) {
             this.visitor = visitor;
             this.callTargetMethod = methods.callTargetMethod;
             this.callNodeMethod = methods.callNodeMethod;
             this.skipFrames = skip;
         }
 
-        public T visitFrame(InspectedFrame frame) {
+        public final T visitFrame(InspectedFrame frame) {
             if (nextAvailable) {
                 T result = onNext(frame);
                 if (result != null) {
@@ -326,7 +326,9 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     @Override
     public FrameInstance getCallerFrame() {
-        return iterateImpl(frame -> frame, 1);
+        return iterateImpl(frame -> {
+            return frame;
+        }, 1);
     }
 
     @TruffleBoundary
