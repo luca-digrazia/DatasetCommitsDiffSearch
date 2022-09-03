@@ -24,25 +24,21 @@ package com.oracle.graal.phases.common;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * This phase tries to find {@link AbstractDeoptimizeNode DeoptimizeNodes} which use the same
  * {@link FrameState} and merges them together.
  */
-public class DeoptimizationGroupingPhase extends BasePhase<MidTierContext> {
+public class DeoptimizationGroupingPhase extends Phase {
 
     @Override
-    protected void run(StructuredGraph graph, MidTierContext context) {
+    protected void run(StructuredGraph graph) {
         ControlFlowGraph cfg = null;
         for (FrameState fs : graph.getNodes(FrameState.class)) {
             FixedNode target = null;
-            PhiNode reasonActionPhi = null;
-            PhiNode speculationPhi = null;
             List<AbstractDeoptimizeNode> obsoletes = null;
             for (AbstractDeoptimizeNode deopt : fs.usages().filter(AbstractDeoptimizeNode.class)) {
                 if (target == null) {
@@ -55,33 +51,23 @@ public class DeoptimizationGroupingPhase extends BasePhase<MidTierContext> {
                     if (target instanceof AbstractDeoptimizeNode) {
                         merge = graph.add(new MergeNode());
                         EndNode firstEnd = graph.add(new EndNode());
-                        reasonActionPhi = graph.addWithoutUnique(new PhiNode(Kind.Int, merge));
-                        speculationPhi = graph.addWithoutUnique(new PhiNode(Kind.Object, merge));
                         merge.addForwardEnd(firstEnd);
-                        reasonActionPhi.addInput(((AbstractDeoptimizeNode) target).getActionAndReason(context.getMetaAccess()));
-                        speculationPhi.addInput(((AbstractDeoptimizeNode) target).getSpeculation(context.getMetaAccess()));
                         target.predecessor().replaceFirstSuccessor(target, firstEnd);
-
                         exitLoops((AbstractDeoptimizeNode) target, firstEnd, cfg);
-
-                        merge.setNext(graph.add(new DynamicDeoptimizeNode(reasonActionPhi, speculationPhi)));
+                        merge.setNext(target);
                         obsoletes = new LinkedList<>();
-                        obsoletes.add((AbstractDeoptimizeNode) target);
                         target = merge;
                     } else {
                         merge = (MergeNode) target;
                     }
                     EndNode newEnd = graph.add(new EndNode());
                     merge.addForwardEnd(newEnd);
-                    reasonActionPhi.addInput(deopt.getActionAndReason(context.getMetaAccess()));
-                    speculationPhi.addInput(deopt.getSpeculation(context.getMetaAccess()));
                     deopt.predecessor().replaceFirstSuccessor(deopt, newEnd);
                     exitLoops(deopt, newEnd, cfg);
                     obsoletes.add(deopt);
                 }
             }
             if (obsoletes != null) {
-                ((DynamicDeoptimizeNode) ((MergeNode) target).next()).setDeoptimizationState(fs);
                 for (AbstractDeoptimizeNode obsolete : obsoletes) {
                     obsolete.safeDelete();
                 }

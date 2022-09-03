@@ -62,9 +62,6 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.calc.ConvertNode.Op;
 import com.oracle.graal.nodes.java.*;
 
-import java.lang.annotation.*;
-
-
 /**
  * This class implements the PTX specific portion of the LIR generator.
  */
@@ -135,44 +132,20 @@ public class PTXLIRGenerator extends LIRGenerator {
     public void emitPrologue() {
         // Need to emit .param directives based on incoming arguments and return value
         CallingConvention incomingArguments = cc;
-        Object returnObject = incomingArguments.getReturn();
-        AllocatableValue[] params;
-        int argCount;
-
-        if (returnObject == Value.ILLEGAL) {
-            params = incomingArguments.getArguments();
-        } else {
-            argCount = incomingArguments.getArgumentCount();
-            params = new Variable[argCount + 1];
-            for (int i = 0; i < argCount; i++) {
-                params[i] = incomingArguments.getArgument(i);
-            }
-            params[argCount] = (Variable) returnObject;
+        int argCount = incomingArguments.getArgumentCount();
+        // Additional argument for return value.
+        Variable[] params = new Variable[argCount + 1];
+        for (int i = 0; i < argCount; i++) {
+            params[i] = (Variable) incomingArguments.getArgument(i);
         }
+        // Add the return value as the last parameter.
+        params[argCount] = (Variable) incomingArguments.getReturn();
 
         append(new PTXParameterOp(params));
         for (LocalNode local : graph.getNodes(LocalNode.class)) {
             Value param = params[local.index()];
-            Annotation[] annos = graph.method().getParameterAnnotations()[local.index()];
-            Warp warpAnnotation = null;
-
-            if (annos != null) {
-                for (int a = 0; a < annos.length; a++) {
-                    if (annos[a].annotationType().equals(Warp.class)) {
-                        warpAnnotation = (Warp) annos[a];
-                    }
-                }
-            }
-            if (warpAnnotation != null) {
-                // setResult(local, emitWarpParam(param.getKind(), warpAnnotation));
-            }
             setResult(local, emitLoadParam(param.getKind(), param, null));
         }
-    }
-
-    public Variable emitWarpParam(Kind kind, @SuppressWarnings("unused") Warp annotation) {
-        Variable result = newVariable(kind);
-        return result;
     }
 
     @Override
@@ -195,47 +168,39 @@ public class PTXLIRGenerator extends LIRGenerator {
     public PTXAddressValue emitAddress(Value base, long displacement, Value index, int scale) {
         AllocatableValue baseRegister;
         long finalDisp = displacement;
-
         if (isConstant(base)) {
             if (asConstant(base).isNull()) {
                 baseRegister = Value.ILLEGAL;
-            } else if (asConstant(base).getKind() != Kind.Object && !runtime.needsDataPatch(asConstant(base))) {
+            } else if (asConstant(base).getKind() != Kind.Object) {
                 finalDisp += asConstant(base).asLong();
                 baseRegister = Value.ILLEGAL;
             } else {
                 baseRegister = load(base);
             }
-        } else if (base.equals(Value.ILLEGAL)) {
-            baseRegister = Value.ILLEGAL;
         } else {
             baseRegister = asAllocatable(base);
         }
 
-        if (!index.equals(Value.ILLEGAL)) {
+        @SuppressWarnings("unused")
+        Value indexRegister;
+        if (!index.equals(Value.ILLEGAL) && scale != 0) {
             if (isConstant(index)) {
                 finalDisp += asConstant(index).asLong() * scale;
+                indexRegister = Value.ILLEGAL;
             } else {
-                Value convertedIndex;
-                Value indexRegister;
-
-                convertedIndex = emitConvert(Op.I2L, index);
                 if (scale != 1) {
+                    Variable longIndex = emitConvert(Op.I2L, index);
                     if (CodeUtil.isPowerOf2(scale)) {
-                        indexRegister = emitShl(convertedIndex, Constant.forInt(CodeUtil.log2(scale)));
+                        indexRegister = emitShl(longIndex, Constant.forLong(CodeUtil.log2(scale)));
                     } else {
-                        indexRegister = emitMul(convertedIndex, Constant.forInt(scale));
+                        indexRegister = emitMul(longIndex, Constant.forLong(scale));
                     }
                 } else {
-                    indexRegister = convertedIndex;
-                }
-                if (baseRegister.equals(Value.ILLEGAL)) {
-                    baseRegister = asAllocatable(indexRegister);
-                } else {
-                    Variable longBaseRegister = newVariable(Kind.Long);
-                    emitMove(longBaseRegister, baseRegister);
-                    baseRegister = emitAdd(longBaseRegister, indexRegister);
+                    indexRegister = asAllocatable(index);
                 }
             }
+        } else {
+            indexRegister = Value.ILLEGAL;
         }
 
         return new PTXAddressValue(target().wordKind, baseRegister, finalDisp);
@@ -321,7 +286,6 @@ public class PTXLIRGenerator extends LIRGenerator {
         // To be revisited if this needs to be really implemented.
         throw GraalInternalError.unimplemented("PTXLIRGenerator.emitConditionalMove()");
     }
-
 
     @Override
     public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
@@ -540,7 +504,7 @@ public class PTXLIRGenerator extends LIRGenerator {
                 append(new Op2Stack(ISHL, result, a, loadNonConst(b)));
                 break;
             case Long:
-                append(new Op2Stack(LSHL, result, a, loadNonConst(b)));
+                append(new Op1Stack(LSHL, result, loadNonConst(b)));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -556,7 +520,7 @@ public class PTXLIRGenerator extends LIRGenerator {
                 append(new Op2Stack(ISHR, result, a, loadNonConst(b)));
                 break;
             case Long:
-                append(new Op2Stack(LSHR, result, a, loadNonConst(b)));
+                append(new Op1Stack(LSHR, result, loadNonConst(b)));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -655,7 +619,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizingNode deopting) {
+    public void emitDeoptimize(Value actionAndReason, DeoptimizingNode deopting) {
         append(new ReturnOp(Value.ILLEGAL));
     }
 

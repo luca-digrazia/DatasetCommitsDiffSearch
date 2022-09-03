@@ -28,7 +28,6 @@ import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.phases.util.*;
 
 /**
  * Computes probabilities for nodes in a graph.
@@ -59,7 +58,7 @@ public class ComputeProbabilityClosure {
     public ComputeProbabilityClosure(StructuredGraph graph) {
         this.graph = graph;
         this.nodeProbabilities = new NodesToDoubles(graph.getNodeCount());
-        this.loopInfos = new ArraySet<>();
+        this.loopInfos = new HashSet<>();
         this.mergeLoops = new IdentityHashMap<>();
     }
 
@@ -76,7 +75,7 @@ public class ComputeProbabilityClosure {
      * Assume that paths with a DeoptimizeNode at their end are taken infrequently.
      */
     private void adjustControlSplitProbabilities() {
-        Set<ControlSplitNode> result = new ArraySet<>();
+        HashSet<ControlSplitNode> result = new HashSet<>();
         NodeBitMap visitedNodes = new NodeBitMap(graph);
         for (AbstractDeoptimizeNode n : graph.getNodes(AbstractDeoptimizeNode.class)) {
             if (!(n instanceof DeoptimizeNode) || ((DeoptimizeNode) n).action().doesInvalidateCompilation()) {
@@ -91,7 +90,7 @@ public class ComputeProbabilityClosure {
         }
     }
 
-    private static void findParentControlSplitNodes(Set<ControlSplitNode> result, AbstractDeoptimizeNode n, NodeBitMap visitedNodes) {
+    private static void findParentControlSplitNodes(HashSet<ControlSplitNode> result, AbstractDeoptimizeNode n, NodeBitMap visitedNodes) {
         ArrayDeque<FixedNode> nodes = new ArrayDeque<>();
         nodes.push(n);
 
@@ -222,13 +221,13 @@ public class ComputeProbabilityClosure {
     private class Probability extends MergeableState<Probability> {
 
         public double probability;
-        public Set<LoopInfo> loops;
+        public HashSet<LoopInfo> loops;
         public LoopInfo loopInfo;
 
-        public Probability(double probability, Set<LoopInfo> loops) {
+        public Probability(double probability, HashSet<LoopInfo> loops) {
             assert probability >= 0.0;
             this.probability = probability;
-            this.loops = new ArraySet<>(4);
+            this.loops = new HashSet<>(4);
             if (loops != null) {
                 this.loops.addAll(loops);
             }
@@ -242,7 +241,7 @@ public class ComputeProbabilityClosure {
         @Override
         public boolean merge(MergeNode merge, List<Probability> withStates) {
             if (merge.forwardEndCount() > 1) {
-                Set<LoopInfo> intersection = new ArraySet<>(loops);
+                HashSet<LoopInfo> intersection = new HashSet<>(loops);
                 for (Probability other : withStates) {
                     intersection.retainAll(other.loops);
                 }
@@ -272,7 +271,7 @@ public class ComputeProbabilityClosure {
                     assert probability >= 0;
                 }
                 loops = intersection;
-                mergeLoops.put(merge, new ArraySet<>(intersection));
+                mergeLoops.put(merge, new HashSet<>(intersection));
                 probability = Math.max(0.0, probability);
             }
             return true;

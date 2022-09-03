@@ -33,11 +33,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     TargetDescription target();
 
-    MetaAccessProvider getMetaAccess();
-
-    CodeCacheProvider getCodeCache();
-
-    ForeignCallsProvider getForeignCalls();
+    CodeCacheProvider getRuntime();
 
     /**
      * Checks whether the supplied constant can be used without loading it into a register for most
@@ -61,9 +57,9 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     Value emitAddress(StackSlot slot);
 
-    Value emitLoad(Kind kind, Value address, Access access);
+    Value emitLoad(Kind kind, Value address, DeoptimizingNode deopting);
 
-    void emitStore(Kind kind, Value address, Value input, Access access);
+    void emitStore(Kind kind, Value address, Value input, DeoptimizingNode deopting);
 
     void emitMembar(int barriers);
 
