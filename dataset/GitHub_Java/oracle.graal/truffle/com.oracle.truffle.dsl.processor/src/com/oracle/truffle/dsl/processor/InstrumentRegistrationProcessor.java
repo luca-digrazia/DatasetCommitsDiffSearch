@@ -47,7 +47,6 @@ import javax.tools.StandardLocation;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
-import javax.lang.model.type.MirroredTypesException;
 
 @SupportedAnnotationTypes("com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration")
 public final class InstrumentRegistrationProcessor extends AbstractProcessor {
@@ -84,20 +83,6 @@ public final class InstrumentRegistrationProcessor extends AbstractProcessor {
             p.setProperty(prefix + "name", annotation.name());
             p.setProperty(prefix + "version", annotation.version());
             p.setProperty(prefix + "className", className);
-
-            int serviceCounter = 0;
-            try {
-                final Class<?>[] services = annotation.services();
-                if (services != null) {
-                    for (Class<?> service : services) {
-                        p.setProperty(prefix + "service" + serviceCounter++, service.getCanonicalName());
-                    }
-                }
-            } catch (MirroredTypesException ex) {
-                for (TypeMirror service : ex.getTypeMirrors()) {
-                    p.setProperty(prefix + "service" + serviceCounter++, service.toString());
-                }
-            }
         }
         if (numInstruments > 0) {
             try {
