@@ -43,16 +43,8 @@ public final class MaterializeObjectNode extends FixedWithNextNode implements Vi
         this.values = new NodeInputList<>(this, virtualObject.entryCount());
     }
 
-    public NodeInputList<ValueNode> getValues() {
+    public NodeInputList<ValueNode> values() {
         return values;
-    }
-
-    public VirtualObjectNode getVirtualObject() {
-        return virtualObject;
-    }
-
-    public int getLockCount() {
-        return lockCount;
     }
 
     @Override

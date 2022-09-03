@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.nodes.virtual;
 
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -46,9 +48,11 @@ public class VirtualBoxingNode extends VirtualInstanceNode {
     }
 
     @Override
-    public ValueNode getMaterializedRepresentation(ValueNode[] entries, int[] locks) {
-        assert entries.length == 1;
-        assert locks.length == 0;
-        return new BoxNode(entries[0], type(), boxingKind);
+    public void materializeAt(FixedWithNextNode materializeNode, List<ValueNode> values, boolean defaultValuesOnly, int lockCount) {
+        assert values.size() == 1;
+        assert lockCount == 0;
+        StructuredGraph graph = (StructuredGraph) graph();
+        BoxNode valueOf = graph.add(new BoxNode(values.get(0), type(), boxingKind));
+        graph.replaceFixedWithFixed(materializeNode, valueOf);
     }
 }
