@@ -22,8 +22,96 @@
  */
 package com.oracle.graal.truffle;
 
-public interface CompilationPolicy {
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-    boolean shouldCompile(CompilationProfile profile);
+public class CompilationPolicy {
 
+    private int invokeCounter;
+    private int originalInvokeCounter;
+    private int loopAndInvokeCounter;
+    private long prevTimestamp;
+
+    private final int compilationThreshold;
+    private final String name;
+
+    public CompilationPolicy(final int compilationThreshold, final int initialInvokeCounter, final String name) {
+        this.invokeCounter = initialInvokeCounter;
+        this.loopAndInvokeCounter = compilationThreshold;
+        this.originalInvokeCounter = compilationThreshold;
+        this.prevTimestamp = System.nanoTime();
+
+        this.compilationThreshold = compilationThreshold;
+        this.name = name;
+    }
+
+    public String getName() {
+        return this.name;
+    }
+
+    public int getInvokeCounter() {
+        return invokeCounter;
+    }
+
+    public int getOriginalInvokeCounter() {
+        return originalInvokeCounter;
+    }
+
+    public int getLoopAndInvokeCounter() {
+        return loopAndInvokeCounter;
+    }
+
+    public void reportCompilationInvalidated() {
+        int invalidationReprofileCount = TruffleInvalidationReprofileCount.getValue();
+        invokeCounter = invalidationReprofileCount;
+        if (TruffleFunctionInlining.getValue()) {
+            originalInvokeCounter += invalidationReprofileCount;
+        }
+    }
+
+    public void reportInterpreterCall() {
+        invokeCounter--;
+        loopAndInvokeCounter--;
+    }
+
+    public void reportCallInlined(int minInvokesAfterInlining) {
+        invokeCounter = minInvokesAfterInlining;
+        int inliningReprofileCount = TruffleInliningReprofileCount.getValue();
+        loopAndInvokeCounter = inliningReprofileCount;
+        originalInvokeCounter = inliningReprofileCount;
+    }
+
+    public void reportLoopCount(int count) {
+        loopAndInvokeCounter = Math.max(0, loopAndInvokeCounter - count);
+    }
+
+    public void notifyNodeReplaced() {
+        // delay compilation until tree is deemed stable enough
+        int replaceBackoff = TruffleReplaceReprofileCount.getValue();
+        if (loopAndInvokeCounter < replaceBackoff) {
+            loopAndInvokeCounter = replaceBackoff;
+        }
+    }
+
+    public boolean shouldCompileOrInline() {
+        if (invokeCounter <= 0 && loopAndInvokeCounter <= 0) {
+            if (TruffleUseTimeForCompilationDecision.getValue()) {
+                long timestamp = System.nanoTime();
+                long timespan = (timestamp - prevTimestamp);
+                if (timespan < (TruffleCompilationDecisionTime.getValue())) {
+                    return true;
+                }
+                this.loopAndInvokeCounter = compilationThreshold;
+                this.originalInvokeCounter = compilationThreshold;
+                this.prevTimestamp = timestamp;
+                if (TruffleCompilationDecisionTimePrintFail.getValue()) {
+                    // Checkstyle: stop
+                    System.out.println(name + ": timespan  " + (timespan / 1000000) + " ms  larger than threshold");
+                    // Checkstyle: resume
+                }
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
 }

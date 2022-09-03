@@ -41,41 +41,45 @@ import com.oracle.truffle.api.nodes.*;
 public final class OptimizedCallTarget extends DefaultCallTarget implements FrameFactory, LoopCountReceiver, ReplaceObserver {
 
     private static final PrintStream OUT = TTY.out().out();
-
-    private InstalledCode installedCode;
-    private Future<InstalledCode> installedCodeTask;
-    private final TruffleCompiler compiler;
-    private final CompilationProfile compilationProfile;
-    private final CompilationPolicy compilationPolicy;
-    private final TruffleInlining inlining;
-    private boolean disableCompilation;
-    private int callCount;
+    private static final int MIN_INVOKES_AFTER_INLINING = 2;
 
     protected OptimizedCallTarget(RootNode rootNode, FrameDescriptor descriptor, TruffleCompiler compiler, int invokeCounter, int compilationThreshold) {
         super(rootNode, descriptor);
         this.compiler = compiler;
-        this.compilationProfile = new CompilationProfile(compilationThreshold, invokeCounter, rootNode.toString());
+        this.compilationPolicy = new CompilationPolicy(compilationThreshold, invokeCounter, rootNode.toString());
         this.inlining = new TruffleInliningImpl();
         this.rootNode.setCallTarget(this);
-
-        if (TruffleUseTimeForCompilationDecision.getValue()) {
-            compilationPolicy = new TimedCompilationPolicy();
-        } else {
-            compilationPolicy = new DefaultCompilationPolicy();
-        }
 
         if (TruffleCallTargetProfiling.getValue()) {
             registerCallTarget(this);
         }
     }
 
+    private InstalledCode installedCode;
+    private Future<InstalledCode> installedCodeTask;
+    private final TruffleCompiler compiler;
+    private final CompilationPolicy compilationPolicy;
+    private final TruffleInlining inlining;
+    private boolean disableCompilation;
+    private int callCount;
+
+    /**
+     * Number of times an installed code for this tree was invalidated.
+     */
+    private int invalidationCount;
+
+    /**
+     * Number of times a node was replaced in this tree.
+     */
+    private int nodeReplaceCount;
+
     @Override
     public Object call(PackedFrame caller, Arguments args) {
         return callHelper(caller, args);
     }
 
-    public CompilationProfile getCompilationProfile() {
-        return compilationProfile;
+    CompilationPolicy getCompilationPolicy() {
+        return compilationPolicy;
     }
 
     private Object callHelper(PackedFrame caller, Arguments args) {
@@ -111,10 +115,10 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
         if (m != null) {
             CompilerAsserts.neverPartOfCompilation();
             installedCode = null;
-            compilationProfile.reportInvalidated();
+            invalidationCount++;
+            compilationPolicy.reportCompilationInvalidated();
             if (TraceTruffleCompilation.getValue()) {
-                OUT.printf("[truffle] invalidated %-48s |Inv# %d                                     |Replace# %d\n", rootNode, compilationProfile.getInvalidationCount(),
-                                compilationProfile.getNodeReplaceCount());
+                OUT.printf("[truffle] invalidated %-48s |Inv# %d                                     |Replace# %d\n", rootNode, invalidationCount, nodeReplaceCount);
             }
         }
 
@@ -122,14 +126,14 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
         if (task != null) {
             task.cancel(true);
             this.installedCodeTask = null;
-            compilationProfile.reportInvalidated();
+            compilationPolicy.reportCompilationInvalidated();
         }
     }
 
     private Object interpreterCall(PackedFrame caller, Arguments args) {
         CompilerAsserts.neverPartOfCompilation();
-        compilationProfile.reportInterpreterCall();
-        if (disableCompilation || !compilationPolicy.shouldCompile(compilationProfile)) {
+        compilationPolicy.reportInterpreterCall();
+        if (disableCompilation || !compilationPolicy.shouldCompileOrInline()) {
             return executeHelper(caller, args);
         } else {
             return compileOrInline(caller, args);
@@ -150,7 +154,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
         }
 
         if (TruffleFunctionInlining.getValue() && inline()) {
-            compilationProfile.reportInliningPerformed();
+            compilationPolicy.reportCallInlined(MIN_INVOKES_AFTER_INLINING);
             return call(caller, args);
         } else {
             compile();
@@ -210,13 +214,14 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
 
     @Override
     public void reportLoopCount(int count) {
-        compilationProfile.reportLoopCount(count);
+        compilationPolicy.reportLoopCount(count);
     }
 
     @Override
     public void nodeReplaced() {
-        compilationProfile.reportNodeReplaced();
+        nodeReplaceCount++;
         invalidate();
+        compilationPolicy.notifyNodeReplaced();
     }
 
     private static void resetProfiling() {
@@ -254,13 +259,13 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
             String comment = callTarget.installedCode == null ? " int" : "";
             comment += callTarget.disableCompilation ? " fail" : "";
             OUT.printf("%-50s | %10d | %15d | %15d | %10d | %3d%s\n", callTarget.getRootNode(), callTarget.callCount, inlinedCallSiteCount, notInlinedCallSiteCount, nodeCount,
-                            callTarget.getCompilationProfile().getInvalidationCount(), comment);
+                            callTarget.invalidationCount, comment);
 
             totalCallCount += callTarget.callCount;
             totalInlinedCallSiteCount += inlinedCallSiteCount;
             totalNotInlinedCallSiteCount += notInlinedCallSiteCount;
             totalNodeCount += nodeCount;
-            totalInvalidationCount += callTarget.getCompilationProfile().getInvalidationCount();
+            totalInvalidationCount += callTarget.invalidationCount;
         }
         OUT.printf("%-50s | %10d | %15d | %15d | %10d | %3d\n", "Total", totalCallCount, totalInlinedCallSiteCount, totalNotInlinedCallSiteCount, totalNodeCount, totalInvalidationCount);
     }
