@@ -26,22 +26,13 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.extended.*;
 
-/**
- * Lowest-level memory access of native C memory. These methods access the raw memory without any
- * null checks, read- or write barriers. Even when the VM uses compressed pointers, then readObject
- * and writeObject methods access uncompressed pointers.
- * <p>
- * Do not use these methods to access Java objects, i.e., do not use
- * {@code Word.fromObject(obj).readXxx()}. Instead, use {@link ObjectAccess} or
- * {@link BarrieredAccess} to access Java objects.
- */
 public interface Pointer extends Unsigned, PointerBase {
 
     /**
      * Unsafe conversion of this Pointer to a Java language object. No correctness checks or type
      * checks are performed. The caller must ensure that the Pointer contains a valid Java object
      * that can i.e., processed by the garbage collector.
-     *
+     * 
      * @return this Pointer cast to Object.
      */
     Object toObject();
@@ -53,7 +44,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -67,7 +58,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -81,7 +72,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -95,7 +86,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -109,7 +100,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -123,7 +114,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -137,7 +128,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -151,7 +142,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -165,7 +156,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -175,7 +166,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -185,7 +176,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -195,7 +186,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -205,7 +196,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -215,7 +206,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -225,7 +216,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -235,7 +226,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -245,7 +236,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -255,7 +246,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
@@ -269,7 +260,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -283,7 +274,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -297,7 +288,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -311,7 +302,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -325,7 +316,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -339,7 +330,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -353,7 +344,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -367,7 +358,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -381,7 +372,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -395,7 +386,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -405,7 +396,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -415,7 +406,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -425,7 +416,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -435,7 +426,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -445,7 +436,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -455,7 +446,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -465,7 +456,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -475,7 +466,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -485,7 +476,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Initializes the memory at address {@code (this + offset)}. Both the base address and offset
      * are in bytes. The memory must be uninitialized or zero prior to this operation.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -495,7 +486,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
@@ -509,7 +500,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -522,7 +513,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -535,7 +526,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -548,7 +539,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -561,7 +552,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -574,7 +565,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -587,7 +578,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -600,7 +591,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -613,31 +604,31 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
     Object readObject(WordBase offset);
 
     /**
-     * Reads the memory at address {@code (this + offset)}. This access will decompress the oop if
-     * the VM uses compressed oops, and it can be parameterized to allow read barriers (G1 referent
-     * field).
+     * Reads the memory at address {@code (this + offset)}. This particular access can allow
+     * decompression and read barriers (G1 referent field).
      * <p>
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param barrierType the type of the read barrier to be added
+     * @param compressible whether or not the object is a decompression candidate
      * @return the result of the memory access
      */
-    Object readObject(WordBase offset, BarrierType barrierType);
+    Object readObject(WordBase offset, BarrierType barrierType, boolean compressible);
 
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -646,7 +637,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -655,7 +646,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -664,7 +655,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -673,7 +664,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -682,7 +673,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -691,7 +682,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -700,7 +691,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
@@ -709,22 +700,22 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
     Object readObject(int offset);
 
     /**
-     * Reads the memory at address {@code (this + offset)}. This access will decompress the oop if
-     * the VM uses compressed oops, and it can be parameterized to allow read barriers (G1 referent
-     * field).
-     *
+     * Reads the memory at address {@code (this + offset)}. This particular access can be
+     * parameterized to allow decompression and read barriers (G1 referent field).
+     * 
      * @param offset the signed offset for the memory access
      * @param barrierType the type of the read barrier to be added
+     * @param compressible whether or not the object is a decompression candidate
      * @return the result of the memory access
      */
-    Object readObject(int offset, BarrierType barrierType);
+    Object readObject(int offset, BarrierType barrierType, boolean compressible);
 
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
@@ -733,7 +724,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -746,7 +737,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -759,7 +750,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -772,7 +763,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -785,7 +776,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -798,7 +789,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -811,7 +802,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -824,7 +815,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -837,7 +828,7 @@ public interface Pointer extends Unsigned, PointerBase {
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -846,7 +837,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -855,7 +846,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -864,7 +855,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -873,7 +864,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -882,7 +873,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -891,7 +882,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -900,7 +891,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -909,7 +900,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
@@ -918,7 +909,7 @@ public interface Pointer extends Unsigned, PointerBase {
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
-     *
+     * 
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
