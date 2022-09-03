@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,7 +27,6 @@ import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -41,7 +40,6 @@ import com.oracle.graal.word.*;
 @NodeInfo
 public final class NewMultiArrayStubCall extends ForeignCallNode {
 
-    public static final NodeClass TYPE = NodeClass.get(NewMultiArrayStubCall.class);
     private static final Stamp defaultStamp = StampFactory.objectNonNull();
 
     @Input ValueNode hub;
@@ -49,7 +47,7 @@ public final class NewMultiArrayStubCall extends ForeignCallNode {
     protected final int rank;
 
     public NewMultiArrayStubCall(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode hub, int rank, ValueNode dims) {
-        super(TYPE, foreignCalls, NEW_MULTI_ARRAY, defaultStamp);
+        super(foreignCalls, NEW_MULTI_ARRAY, defaultStamp);
         this.hub = hub;
         this.rank = rank;
         this.dims = dims;

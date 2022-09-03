@@ -62,14 +62,6 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
         this.forStoreCheck = forStoreCheck;
     }
 
-    public static ValueNode create(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck) {
-        ValueNode synonym = findSynonym(type, object);
-        if (synonym != null) {
-            return synonym;
-        }
-        return new CheckCastNode(type, object, profile, forStoreCheck);
-    }
-
     public boolean isForStoreCheck() {
         return forStoreCheck;
     }
@@ -152,9 +144,15 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        ValueNode synonym = findSynonym(type, object());
-        if (synonym != null) {
-            return synonym;
+        ResolvedJavaType objectType = StampTool.typeOrNull(object());
+        if (objectType != null && type.isAssignableFrom(objectType)) {
+            // we don't have to check for null types here because they will also pass the
+            // checkcast.
+            return object();
+        }
+
+        if (StampTool.isPointerAlwaysNull(object())) {
+            return object();
         }
 
         if (tool.assumptions() != null && tool.assumptions().useOptimisticAssumptions()) {
@@ -167,20 +165,6 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
         }
 
         return this;
-    }
-
-    private static ValueNode findSynonym(ResolvedJavaType type, ValueNode object) {
-        ResolvedJavaType objectType = StampTool.typeOrNull(object);
-        if (objectType != null && type.isAssignableFrom(objectType)) {
-            // we don't have to check for null types here because they will also pass the
-            // checkcast.
-            return object;
-        }
-
-        if (StampTool.isPointerAlwaysNull(object)) {
-            return object;
-        }
-        return null;
     }
 
     @Override

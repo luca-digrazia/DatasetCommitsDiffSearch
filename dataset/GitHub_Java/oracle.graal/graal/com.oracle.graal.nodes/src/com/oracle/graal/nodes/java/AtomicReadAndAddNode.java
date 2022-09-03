@@ -27,7 +27,6 @@ import sun.misc.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -39,7 +38,6 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public final class AtomicReadAndAddNode extends AbstractMemoryCheckpoint implements LIRLowerable, MemoryCheckpoint.Single {
 
-    public static final NodeClass TYPE = NodeClass.get(AtomicReadAndAddNode.class);
     @Input ValueNode object;
     @Input ValueNode offset;
     @Input ValueNode delta;
@@ -47,7 +45,7 @@ public final class AtomicReadAndAddNode extends AbstractMemoryCheckpoint impleme
     protected final LocationIdentity locationIdentity;
 
     public AtomicReadAndAddNode(ValueNode object, ValueNode offset, ValueNode delta, LocationIdentity locationIdentity) {
-        super(TYPE, StampFactory.forKind(delta.getKind()));
+        super(StampFactory.forKind(delta.getKind()));
         this.object = object;
         this.offset = offset;
         this.delta = delta;

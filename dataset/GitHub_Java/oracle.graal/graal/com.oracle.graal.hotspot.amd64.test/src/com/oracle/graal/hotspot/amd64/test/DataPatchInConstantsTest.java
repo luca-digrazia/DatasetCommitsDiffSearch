@@ -32,7 +32,6 @@ import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.nodes.CompressionNode.CompressionOp;
@@ -155,12 +154,11 @@ public class DataPatchInConstantsTest extends HotSpotGraalCompilerTest {
 
     @NodeInfo
     private static final class LoadThroughPatchNode extends FixedWithNextNode implements LIRLowerable {
-        public static final NodeClass TYPE = NodeClass.get(LoadThroughPatchNode.class);
 
         @Input protected ValueNode input;
 
         public LoadThroughPatchNode(ValueNode input) {
-            super(TYPE, input.stamp());
+            super(input.stamp());
             this.input = input;
         }
 

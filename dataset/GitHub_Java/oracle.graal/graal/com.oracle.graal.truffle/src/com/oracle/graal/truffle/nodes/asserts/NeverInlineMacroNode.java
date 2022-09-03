@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.truffle.nodes.asserts;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -31,10 +30,8 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public final class NeverInlineMacroNode extends MacroStateSplitNode implements com.oracle.graal.graph.IterableNodeType {
 
-    public static final NodeClass TYPE = NodeClass.get(NeverInlineMacroNode.class);
-
     public NeverInlineMacroNode(Invoke invoke) {
-        super(TYPE, invoke);
+        super(invoke);
     }
 
     @Override

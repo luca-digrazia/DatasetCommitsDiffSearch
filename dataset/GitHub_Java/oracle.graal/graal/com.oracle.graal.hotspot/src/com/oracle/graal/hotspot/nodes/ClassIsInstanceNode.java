@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,23 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.nodes.*;
 
 /**
  * {@link MacroNode Macro node} for {@link Class#isInstance(Object)}.
- * 
+ *
  * @see ClassSubstitutions#isInstance(Class, Object)
  */
-public class ClassIsInstanceNode extends MacroNode implements Canonicalizable {
+@NodeInfo
+public final class ClassIsInstanceNode extends MacroNode implements Canonicalizable {
 
     public ClassIsInstanceNode(Invoke invoke) {
         super(invoke);
@@ -49,21 +52,24 @@ public class ClassIsInstanceNode extends MacroNode implements Canonicalizable {
         return arguments.get(1);
     }
 
-    public ValueNode canonical(CanonicalizerTool tool) {
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
             ValueNode object = getObject();
-            Class c = (Class) javaClass.asConstant().asObject();
-            if (c.isPrimitive()) {
-                return ConstantNode.forBoolean(false, graph());
+            ConstantReflectionProvider constantReflection = tool.getConstantReflection();
+            ResolvedJavaType type = constantReflection.asJavaType(javaClass.asConstant());
+            if (type != null) {
+                if (type.isPrimitive()) {
+                    return ConstantNode.forBoolean(false);
+                }
+                if (object.isConstant()) {
+                    JavaConstant c = object.asJavaConstant();
+                    return ConstantNode.forBoolean(c.isNonNull() && type.isInstance(c));
+                }
+                InstanceOfNode instanceOf = new InstanceOfNode(type, object, null);
+                return new ConditionalNode(instanceOf, ConstantNode.forBoolean(true), ConstantNode.forBoolean(false));
             }
-            if (object.isConstant()) {
-                Object o = object.asConstant().asObject();
-                return ConstantNode.forBoolean(o != null && c.isInstance(o), graph());
-            }
-            HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromClass(c);
-            InstanceOfNode instanceOf = graph().unique(new InstanceOfNode(type, object, null));
-            return graph().unique(new ConditionalNode(instanceOf, ConstantNode.forBoolean(true, graph()), ConstantNode.forBoolean(false, graph())));
         }
         return this;
     }

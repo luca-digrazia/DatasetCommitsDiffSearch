@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodeinfo.*;
@@ -34,15 +33,13 @@ import com.oracle.graal.replacements.nodes.*;
 /**
  * {@link MacroNode Macro node} for {@link Class#cast(Object)}.
  *
- * @see HotSpotClassSubstitutions#cast(Class, Object)
+ * @see ClassSubstitutions#cast(Class, Object)
  */
 @NodeInfo
 public final class ClassCastNode extends MacroStateSplitNode implements Canonicalizable.Binary<ValueNode> {
 
-    public static final NodeClass TYPE = NodeClass.get(ClassCastNode.class);
-
     public ClassCastNode(Invoke invoke) {
-        super(TYPE, invoke);
+        super(invoke);
     }
 
     private ValueNode getJavaClass() {

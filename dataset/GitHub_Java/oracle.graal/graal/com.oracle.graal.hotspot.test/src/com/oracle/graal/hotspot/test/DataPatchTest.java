@@ -27,7 +27,6 @@ import org.junit.*;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.nodes.CompressionNode.CompressionOp;
@@ -95,11 +94,10 @@ public class DataPatchTest extends GraalCompilerTest {
     @NodeInfo
     private static final class ConstantFoldBarrier extends FloatingNode implements LIRLowerable {
 
-        public static final NodeClass TYPE = NodeClass.get(ConstantFoldBarrier.class);
         @Input protected ValueNode input;
 
         public ConstantFoldBarrier(ValueNode input) {
-            super(TYPE, input.stamp());
+            super(input.stamp());
             this.input = input;
         }
 

@@ -28,7 +28,6 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -42,11 +41,10 @@ import com.oracle.graal.word.*;
 @NodeInfo
 public final class DimensionsNode extends FixedWithNextNode implements LIRLowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(DimensionsNode.class);
     protected final int rank;
 
     public DimensionsNode(int rank) {
-        super(TYPE, null);
+        super(null);
         this.rank = rank;
     }
 

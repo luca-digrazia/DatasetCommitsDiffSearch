@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ import static com.oracle.graal.graph.iterators.NodePredicates.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -40,10 +39,8 @@ import com.oracle.graal.nodes.virtual.*;
 @NodeInfo(nameTemplate = "LoadField#{p#field/s}")
 public final class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Unary<ValueNode>, VirtualizableRoot, UncheckedInterfaceProvider {
 
-    public static final NodeClass TYPE = NodeClass.get(LoadFieldNode.class);
-
     public LoadFieldNode(ValueNode object, ResolvedJavaField field) {
-        super(TYPE, createStamp(field), object, field);
+        super(createStamp(field), object, field);
     }
 
     public ValueNode getValue() {

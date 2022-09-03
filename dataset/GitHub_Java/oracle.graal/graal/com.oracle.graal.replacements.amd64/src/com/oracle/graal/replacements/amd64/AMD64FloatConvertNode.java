@@ -24,7 +24,6 @@ package com.oracle.graal.replacements.amd64;
 
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.FloatConvertOp;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -39,12 +38,11 @@ import com.oracle.graal.nodes.spi.*;
  */
 @NodeInfo
 public final class AMD64FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> implements ArithmeticLIRLowerable {
-    public static final NodeClass TYPE = NodeClass.get(AMD64FloatConvertNode.class);
 
     protected final FloatConvert op;
 
     public AMD64FloatConvertNode(FloatConvert op, ValueNode value) {
-        super(TYPE, table -> table.getFloatConvert(op), value);
+        super(table -> table.getFloatConvert(op), value);
         this.op = op;
     }
 

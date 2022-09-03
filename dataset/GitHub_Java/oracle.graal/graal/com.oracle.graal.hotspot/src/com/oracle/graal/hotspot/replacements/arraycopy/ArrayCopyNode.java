@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -41,10 +40,8 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public final class ArrayCopyNode extends BasicArrayCopyNode implements Virtualizable, Lowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(ArrayCopyNode.class);
-
     public ArrayCopyNode(Invoke invoke) {
-        super(TYPE, invoke);
+        super(invoke);
     }
 
     private StructuredGraph selectSnippet(LoweringTool tool, final Replacements replacements) {
@@ -76,7 +73,7 @@ public final class ArrayCopyNode extends BasicArrayCopyNode implements Virtualiz
         }
         // the canonicalization before loop unrolling is needed to propagate the length into
         // additions, etc.
-        PhaseContext context = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getLowerer(), tool.getReplacements(), tool.getStampProvider());
+        PhaseContext context = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getLowerer(), tool.getReplacements(), tool.assumptions(), tool.getStampProvider());
         new CanonicalizerPhase(true).apply(snippetGraph, context);
         new LoopFullUnrollPhase(new CanonicalizerPhase(true)).apply(snippetGraph, context);
         new CanonicalizerPhase(true).apply(snippetGraph, context);

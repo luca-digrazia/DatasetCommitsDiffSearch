@@ -88,7 +88,7 @@ public final class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode imple
 
     @Override
     public void lower(LoweringTool tool) {
-        LogicNode compare = CompareNode.createCompareNode(graph(), Condition.EQ, condition, ConstantNode.forBoolean(true, graph()), tool.getConstantReflection());
+        CompareNode compare = CompareNode.createCompareNode(graph(), Condition.EQ, condition, ConstantNode.forBoolean(true, graph()));
         LocationIdentity locationIdentity;
         if (!location.isConstant() || location.isNullConstant()) {
             locationIdentity = LocationIdentity.ANY_LOCATION;

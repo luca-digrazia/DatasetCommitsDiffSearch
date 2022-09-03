@@ -34,16 +34,14 @@ import com.oracle.graal.replacements.nodes.*;
 /**
  * {@link MacroNode Macro node} for {@link Class#getClassLoader0()}.
  *
- * @see HotSpotClassSubstitutions#getClassLoader0(Class)
+ * @see ClassSubstitutions#getClassLoader0(Class)
  */
 @SuppressWarnings("javadoc")
 @NodeInfo
 public final class ClassGetClassLoader0Node extends MacroStateSplitNode implements Canonicalizable {
 
-    public static final NodeClass TYPE = NodeClass.get(ClassGetClassLoader0Node.class);
-
     public ClassGetClassLoader0Node(Invoke invoke) {
-        super(TYPE, invoke);
+        super(invoke);
     }
 
     private ValueNode getJavaClass() {

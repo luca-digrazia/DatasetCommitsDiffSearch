@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,15 +34,13 @@ import com.oracle.graal.replacements.nodes.*;
 /**
  * {@link MacroNode Macro node} for {@link Class#getComponentType()}.
  *
- * @see HotSpotClassSubstitutions#getComponentType(Class)
+ * @see ClassSubstitutions#getComponentType(Class)
  */
 @NodeInfo
 public final class ClassGetComponentTypeNode extends MacroNode implements Canonicalizable {
 
-    public static final NodeClass TYPE = NodeClass.get(ClassGetComponentTypeNode.class);
-
     public ClassGetComponentTypeNode(Invoke invoke) {
-        super(TYPE, invoke);
+        super(invoke);
     }
 
     private ValueNode getJavaClass() {

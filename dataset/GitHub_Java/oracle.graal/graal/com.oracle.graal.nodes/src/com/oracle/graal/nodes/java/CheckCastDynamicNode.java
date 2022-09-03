@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -37,7 +36,6 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo
 public final class CheckCastDynamicNode extends FixedWithNextNode implements Canonicalizable.Binary<ValueNode>, Lowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(CheckCastDynamicNode.class);
     @Input ValueNode object;
     @Input ValueNode hub;
 
@@ -48,7 +46,7 @@ public final class CheckCastDynamicNode extends FixedWithNextNode implements Can
     protected final boolean forStoreCheck;
 
     public CheckCastDynamicNode(ValueNode hub, ValueNode object, boolean forStoreCheck) {
-        super(TYPE, object.stamp());
+        super(object.stamp());
         this.hub = hub;
         this.object = object;
         this.forStoreCheck = forStoreCheck;

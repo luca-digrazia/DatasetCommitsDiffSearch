@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ import static com.oracle.graal.hotspot.HotSpotBackend.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.hotspot.word.*;
@@ -41,14 +40,13 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class NewArrayStubCall extends DeoptimizingStubCall implements LIRLowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(NewArrayStubCall.class);
     private static final Stamp defaultStamp = StampFactory.objectNonNull();
 
     @Input ValueNode hub;
     @Input ValueNode length;
 
     public NewArrayStubCall(ValueNode hub, ValueNode length) {
-        super(TYPE, defaultStamp);
+        super(defaultStamp);
         this.hub = hub;
         this.length = length;
     }

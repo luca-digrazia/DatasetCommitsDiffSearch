@@ -24,7 +24,6 @@ package com.oracle.graal.hotspot.replacements;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.calc.*;
@@ -32,10 +31,9 @@ import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
 public final class CardTableAddressNode extends FloatingNode implements LIRLowerable {
-    public static final NodeClass TYPE = NodeClass.get(CardTableAddressNode.class);
 
     public CardTableAddressNode() {
-        super(TYPE, StampFactory.forKind(Kind.Long));
+        super(StampFactory.forKind(Kind.Long));
     }
 
     @Override

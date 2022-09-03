@@ -38,11 +38,10 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public abstract class AbstractNewObjectNode extends DeoptimizingFixedWithNextNode implements Simplifiable, Lowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(AbstractNewObjectNode.class);
     protected final boolean fillContents;
 
-    public AbstractNewObjectNode(NodeClass c, Stamp stamp, boolean fillContents) {
-        super(c, stamp);
+    public AbstractNewObjectNode(Stamp stamp, boolean fillContents) {
+        super(stamp);
         this.fillContents = fillContents;
     }
 

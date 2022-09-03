@@ -52,6 +52,6 @@ public final class ComputeAddressNode extends FloatingNode implements LIRLowerab
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         Value addr = getLocation().generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(getObject()));
-        gen.setResult(this, gen.getLIRGeneratorTool().asAllocatable(addr));
+        gen.setResult(this, addr);
     }
 }

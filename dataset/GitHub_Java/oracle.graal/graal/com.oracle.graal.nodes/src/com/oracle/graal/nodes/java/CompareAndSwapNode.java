@@ -26,7 +26,6 @@ import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -39,7 +38,6 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public final class CompareAndSwapNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
 
-    public static final NodeClass TYPE = NodeClass.get(CompareAndSwapNode.class);
     @Input ValueNode object;
     @Input ValueNode offset;
     @Input ValueNode expected;
@@ -49,7 +47,7 @@ public final class CompareAndSwapNode extends AbstractMemoryCheckpoint implement
     protected final LocationIdentity locationIdentity;
 
     public CompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, Kind valueKind, LocationIdentity locationIdentity) {
-        super(TYPE, StampFactory.forKind(Kind.Boolean.getStackKind()));
+        super(StampFactory.forKind(Kind.Boolean.getStackKind()));
         assert expected.stamp().isCompatible(newValue.stamp());
         this.object = object;
         this.offset = offset;

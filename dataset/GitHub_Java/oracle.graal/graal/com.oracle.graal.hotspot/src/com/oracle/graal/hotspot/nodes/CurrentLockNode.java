@@ -24,7 +24,6 @@ package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -36,12 +35,11 @@ import com.oracle.graal.word.*;
  */
 @NodeInfo
 public final class CurrentLockNode extends FixedWithNextNode implements LIRLowerable {
-    public static final NodeClass TYPE = NodeClass.get(CurrentLockNode.class);
 
     protected int lockDepth;
 
     public CurrentLockNode(int lockDepth) {
-        super(TYPE, null);
+        super(null);
         this.lockDepth = lockDepth;
     }
 
@@ -51,7 +49,7 @@ public final class CurrentLockNode extends FixedWithNextNode implements LIRLower
         HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen.getLIRGeneratorTool();
         StackSlotValue slot = hsGen.getLockSlot(lockDepth);
         // The register allocator cannot handle stack -> register moves so we use an LEA here
-        Value result = gen.getLIRGeneratorTool().emitAddress(slot);
+        Value result = gen.getLIRGeneratorTool().emitMove(gen.getLIRGeneratorTool().emitAddress(slot));
         gen.setResult(this, result);
     }
 
