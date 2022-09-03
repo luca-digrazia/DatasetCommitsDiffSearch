@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.truffle.api.nodes.*;
+public interface PrioritizedServiceProvider {
 
-public interface LoopNodeFactory extends PrioritizedServiceProvider {
-
-    LoopNode create(RepeatingNode repeatingNode);
+    default int getPriority() {
+        return 0;
+    }
 
 }
