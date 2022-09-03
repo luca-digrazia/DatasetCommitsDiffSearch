@@ -42,7 +42,7 @@ public abstract class AbstractProfilerTest {
 
     // @formatter:off
     protected final Source defaultSource = makeSource(
-            "ROOT(" + 
+            "ROOT(" +
                     "DEFINE(foo,ROOT(STATEMENT))," +
                     "DEFINE(bar,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(foo)))))," +
                     "DEFINE(baz,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(bar)))))," +
@@ -60,18 +60,15 @@ public abstract class AbstractProfilerTest {
         return Source.newBuilder(s).mimeType(InstrumentationTestLanguage.MIME_TYPE).name("test").build();
     }
 
-	protected static final SourceSectionFilter NO_INTERNAL_ROOT_TAG_FILTER = SourceSectionFilter
-			.newBuilder().sourceIs(s -> !s.isInternal())
-			// .rootNameIs(name -> !"create".equals(name))
-			.tagIs(StandardTags.RootTag.class).build();
-	protected static final SourceSectionFilter NO_INTERNAL_CALL_TAG_FILTER = SourceSectionFilter
-			.newBuilder().sourceIs(s -> !s.isInternal())
-			.rootNameIs(name -> !"create".equals(name))
-			.tagIs(StandardTags.CallTag.class).build();
-	protected static final SourceSectionFilter NO_INTERNAL_STATEMENT_TAG_FILTER = SourceSectionFilter
-			.newBuilder().sourceIs(s -> !s.isInternal())
-			.rootNameIs(name -> !"create".equals(name))
-			.tagIs(StandardTags.StatementTag.class).build();
+    protected static final SourceSectionFilter NO_INTERNAL_ROOT_TAG_FILTER = SourceSectionFilter.
+            newBuilder().sourceIs(s -> !s.isInternal()).
+            tagIs(StandardTags.RootTag.class).build();
+    protected static final SourceSectionFilter NO_INTERNAL_CALL_TAG_FILTER = SourceSectionFilter.
+            newBuilder().sourceIs(s -> !s.isInternal()).
+            tagIs(StandardTags.CallTag.class).build();
+    protected static final SourceSectionFilter NO_INTERNAL_STATEMENT_TAG_FILTER = SourceSectionFilter.
+            newBuilder().sourceIs(s -> !s.isInternal()).
+            tagIs(StandardTags.StatementTag.class).build();
 
     // @formatter:on
 
