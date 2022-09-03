@@ -102,11 +102,11 @@ public class VM extends NativeEnv {
     private long vmPtr;
 
     // mokapot.dll (Windows) or libmokapot.so (Unixes) is the Espresso implementation of the VM
-    // interface (libjvm).
+    // interface (libjvm)
     // Espresso loads all shared libraries in a private namespace (e.g. using dlmopen on Linux).
-    // libmokapot must be loaded strictly before any other library in the private namespace to
-    // avoid linking with HotSpot libjvm, then libjava is loaded and further system libraries,
-    // libzip, libnet, libnio ...
+    // mokapot must be loaded strictly before any other library in the private namespace to
+    // linking with HotSpot libjvm (or just linking errors), then libjava is loaded and further
+    // system libraries, libzip ...
     private final TruffleObject mokapotLibrary = NativeLibrary.loadLibrary(System.getProperty("mokapot.library", "mokapot"));
 
     // libjava must be loaded after mokapot.
@@ -489,8 +489,7 @@ public class VM extends NativeEnv {
             return null;
         });
         Meta meta = EspressoLanguage.getCurrentContext().getMeta();
-        meta.THROWABLE.declaredField("backtrace").set(self,
-                        new StaticObjectWrapper(meta.OBJECT.rawKlass(), frames.toArray(new FrameInstance[0])));
+        meta.THROWABLE.declaredField("backtrace").set(self, new StaticObjectWrapper<>(meta.OBJECT.rawKlass(), frames.toArray(new FrameInstance[0])));
         return self;
     }
 
@@ -499,10 +498,10 @@ public class VM extends NativeEnv {
     public int JVM_GetStackTraceDepth(@Type(Throwable.class) StaticObject self) {
         Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         Object backtrace = meta.THROWABLE.declaredField("backtrace").get(self);
-        if (StaticObject.isNull(backtrace)) {
+        if (backtrace == StaticObject.NULL) {
             return 0;
         }
-        return ((FrameInstance[]) ((StaticObjectWrapper) backtrace).getWrapped()).length;
+        return ((FrameInstance[]) ((StaticObjectWrapper<?>) backtrace).getWrapped()).length;
     }
 
     @VmImpl
@@ -511,7 +510,7 @@ public class VM extends NativeEnv {
         Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         StaticObject ste = meta.knownKlass(StackTraceElement.class).allocateInstance();
         Object backtrace = meta.THROWABLE.declaredField("backtrace").get(self);
-        FrameInstance[] frames = (FrameInstance[]) ((StaticObjectWrapper) backtrace).getWrapped();
+        FrameInstance[] frames = (FrameInstance[]) ((StaticObjectWrapper<?>) backtrace).getWrapped();
 
         FrameInstance frame = frames[index];
 
@@ -571,7 +570,7 @@ public class VM extends NativeEnv {
         }
         StaticObject instance = klass.allocateInstance();
 
-        if (StaticObject.isNull(args0)) {
+        if (args0 == StaticObject.NULL) {
             args0 = (StaticObject) meta.OBJECT.allocateArray(0);
         }
 
@@ -817,7 +816,7 @@ public class VM extends NativeEnv {
     @VmImpl
     @JniImpl
     public Object JVM_GetArrayElement(Object array, int index) {
-        if (StaticObject.isNull(array)) {
+        if (array == StaticObject.NULL) {
             throw EspressoLanguage.getCurrentContext().getMeta().throwEx(NullPointerException.class);
         }
         if (array instanceof StaticObjectArray) {
@@ -835,7 +834,7 @@ public class VM extends NativeEnv {
     }
 
     private static StaticObject guestBox(Object elem) {
-        assert StaticObject.notNull(elem);
+        assert elem != null && elem != StaticObject.NULL;
         Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         if (elem instanceof Boolean) {
             return (StaticObject) meta.BOXED_BOOLEAN.staticMethod("valueOf", Boolean.class, boolean.class).invokeDirect((boolean) elem);
