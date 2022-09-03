@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,21 +24,27 @@ package com.oracle.graal.hotspot.sparc;
 
 import static com.oracle.graal.sparc.SPARC.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Lddf;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Mov;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
+import com.oracle.graal.sparc.*;
 
 /**
  * Pops the current frame off the stack.
  */
 @Opcode("LEAVE_CURRENT_STACK_FRAME")
 final class SPARCHotSpotLeaveCurrentStackFrameOp extends SPARCLIRInstruction {
-    public static final LIRInstructionClass<SPARCHotSpotLeaveCurrentStackFrameOp> TYPE = LIRInstructionClass.create(SPARCHotSpotLeaveCurrentStackFrameOp.class);
 
-    public SPARCHotSpotLeaveCurrentStackFrameOp() {
-        super(TYPE);
+    private final SaveRegistersOp saveRegisterOp;
+
+    public SPARCHotSpotLeaveCurrentStackFrameOp(SaveRegistersOp saveRegisterOp) {
+        this.saveRegisterOp = saveRegisterOp;
     }
 
     @Override
@@ -51,10 +57,5 @@ final class SPARCHotSpotLeaveCurrentStackFrameOp extends SPARCLIRInstruction {
         new Mov(o4, i4).emit(masm);
 
         crb.frameContext.leave(crb);
-    }
-
-    @Override
-    public boolean leavesRegisterWindow() {
-        return true;
     }
 }
