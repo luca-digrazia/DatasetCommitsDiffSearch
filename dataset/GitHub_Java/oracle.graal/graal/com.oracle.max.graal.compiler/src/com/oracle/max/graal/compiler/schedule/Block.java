@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.collections.*;
 
 
 public class Block {
@@ -109,9 +108,10 @@ public class Block {
             } else {
                 assert !(firstNode instanceof Anchor);
                 Anchor a = new Anchor(firstNode.graph());
-                assert firstNode.predecessor() != null : firstNode;
-                Node pred = firstNode.predecessor();
-                pred.replaceFirstSuccessor(firstNode, a);
+                assert firstNode.predecessors().size() == 1 : firstNode;
+                Node pred = firstNode.predecessors().get(0);
+                int predIndex = pred.successors().indexOf(firstNode);
+                pred.successors().set(predIndex, a);
                 a.setNext((FixedNode) firstNode);
                 this.anchor = a;
             }
