@@ -24,6 +24,7 @@
  */
 package com.oracle.truffle.api.vm;
 
+import static com.oracle.truffle.api.vm.PolyglotImpl.checkEngine;
 import static com.oracle.truffle.api.vm.PolyglotImpl.checkStateForGuest;
 import static com.oracle.truffle.api.vm.PolyglotImpl.isGuestInteropValue;
 import static com.oracle.truffle.api.vm.PolyglotImpl.wrapGuestException;
@@ -31,10 +32,8 @@ import static com.oracle.truffle.api.vm.VMAccessor.INSTRUMENT;
 import static com.oracle.truffle.api.vm.VMAccessor.LANGUAGE;
 import static com.oracle.truffle.api.vm.VMAccessor.NODES;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.PrintStream;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -58,7 +57,7 @@ import com.oracle.truffle.api.vm.PolyglotImpl.VMObject;
 class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
 
     volatile Thread boundThread;
-    volatile boolean closed;
+    int enteredCount;
     final PolyglotEngineImpl engine;
     final Thread initThread;
     @CompilationFinal(dimensions = 1) final PolyglotLanguageContextImpl[] contexts;
@@ -265,6 +264,7 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
 
     @Override
     public void initializeLanguage(AbstractLanguageImpl languageImpl) {
+        checkEngine(engine);
         PolyglotLanguageImpl language = (PolyglotLanguageImpl) languageImpl;
         PolyglotLanguageContextImpl languageContext = this.contexts[language.index];
         Object prev = PolyglotImpl.enterGuest(languageContext);
@@ -279,6 +279,7 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
 
     @Override
     public Value eval(Object languageImpl, Object sourceImpl) {
+        checkEngine(engine);
         PolyglotLanguageImpl language = (PolyglotLanguageImpl) languageImpl;
         PolyglotLanguageContextImpl languageContext = contexts[language.index];
         Object prev = PolyglotImpl.enterGuest(languageContext);
@@ -305,36 +306,8 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
     }
 
     @Override
-    public void close() {
-        checkStateForGuest(this, false);
-        ensureClosed();
-    }
-
-    void ensureClosed() {
-        if (!closed) {
-            synchronized (this) {
-                if (!closed) {
-                    closed = true;
-                    engine.decrementContextCount();
-                    for (PolyglotLanguageContextImpl context : contexts) {
-                        try {
-                            context.dispose();
-                        } catch (Exception | Error ex) {
-                            try {
-                                err.write(String.format("Error closing language %s: %n", context.language.cache.getId()).getBytes());
-                            } catch (IOException e) {
-                                ex.addSuppressed(e);
-                            }
-                            ex.printStackTrace(new PrintStream(err));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @Override
     public Value lookup(Object languageImpl, String symbolName) {
+        checkEngine(engine);
         PolyglotLanguageContextImpl languageContext = this.contexts[((PolyglotLanguageImpl) languageImpl).index];
         Object prev = PolyglotImpl.enterGuest(languageContext);
         try {
