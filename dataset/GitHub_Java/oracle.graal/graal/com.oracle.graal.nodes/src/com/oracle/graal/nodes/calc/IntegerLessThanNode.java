@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.api.meta.ProfilingInfo.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "<")
-public class IntegerLessThanNode extends CompareNode {
+public final class IntegerLessThanNode extends CompareNode {
 
     /**
      * Constructs a new integer comparison node.
@@ -57,41 +57,46 @@ public class IntegerLessThanNode extends CompareNode {
     }
 
     @Override
-    protected ValueNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
+    protected LogicNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
         assert condition() == Condition.LT;
         if (constant.getKind() == Kind.Int && constant.asInt() == 0) {
-            ValueNode a = mirrored ? normalizeNode.getY() : normalizeNode.getX();
-            ValueNode b = mirrored ? normalizeNode.getX() : normalizeNode.getY();
+            ValueNode a = mirrored ? normalizeNode.y() : normalizeNode.x();
+            ValueNode b = mirrored ? normalizeNode.x() : normalizeNode.y();
 
-            if (normalizeNode.getX().getKind() == Kind.Double || normalizeNode.getX().getKind() == Kind.Float) {
-                return new FloatLessThanNode(a, b, mirrored ^ normalizeNode.isUnorderedLess);
+            if (normalizeNode.x().getKind() == Kind.Double || normalizeNode.x().getKind() == Kind.Float) {
+                return graph().unique(new FloatLessThanNode(a, b, mirrored ^ normalizeNode.isUnorderedLess));
             } else {
-                return new IntegerLessThanNode(a, b);
+                return graph().unique(new IntegerLessThanNode(a, b));
             }
         }
         return this;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        ValueNode result = super.canonical(tool, forX, forY);
-        if (result != this) {
-            return result;
-        }
+    public TriState evaluate(ConstantReflectionProvider constantReflection, ValueNode forX, ValueNode forY) {
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
-            return LogicConstantNode.contradiction();
+            return TriState.FALSE;
         } else if (forX.stamp() instanceof IntegerStamp && forY.stamp() instanceof IntegerStamp) {
             IntegerStamp xStamp = (IntegerStamp) forX.stamp();
             IntegerStamp yStamp = (IntegerStamp) forY.stamp();
             if (xStamp.upperBound() < yStamp.lowerBound()) {
-                return LogicConstantNode.tautology();
+                return TriState.TRUE;
             } else if (xStamp.lowerBound() >= yStamp.upperBound()) {
-                return LogicConstantNode.contradiction();
+                return TriState.FALSE;
             }
         }
-        if (forX.stamp() instanceof IntegerStamp && forY.stamp() instanceof IntegerStamp) {
-            if (IntegerStamp.sameSign((IntegerStamp) forX.stamp(), (IntegerStamp) forY.stamp())) {
-                return new IntegerBelowNode(forX, forY);
+        return super.evaluate(constantReflection, forX, forY);
+    }
+
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        Node result = super.canonical(tool);
+        if (result != this) {
+            return result;
+        }
+        if (x().stamp() instanceof IntegerStamp && y().stamp() instanceof IntegerStamp) {
+            if (IntegerStamp.sameSign((IntegerStamp) x().stamp(), (IntegerStamp) y().stamp())) {
+                return graph().unique(new IntegerBelowThanNode(x(), y()));
             }
         }
         return this;
@@ -99,11 +104,6 @@ public class IntegerLessThanNode extends CompareNode {
 
     @Override
     protected CompareNode duplicateModified(ValueNode newX, ValueNode newY) {
-        if (newX.stamp() instanceof FloatStamp && newY.stamp() instanceof FloatStamp) {
-            return new FloatLessThanNode(newX, newY, true);
-        } else if (newX.stamp() instanceof IntegerStamp && newY.stamp() instanceof IntegerStamp) {
-            return new IntegerLessThanNode(newX, newY);
-        }
-        throw GraalInternalError.shouldNotReachHere();
+        return new IntegerLessThanNode(newX, newY);
     }
 }

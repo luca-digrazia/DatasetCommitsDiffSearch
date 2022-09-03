@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "==")
-public class IntegerEqualsNode extends CompareNode {
+public final class IntegerEqualsNode extends CompareNode {
 
     /**
      * Constructs a new integer equality comparison node.
@@ -57,15 +57,15 @@ public class IntegerEqualsNode extends CompareNode {
     }
 
     @Override
-    protected ValueNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
+    protected LogicNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
         if (constant.getKind() == Kind.Int && constant.asInt() == 0) {
-            ValueNode a = mirrored ? normalizeNode.getY() : normalizeNode.getX();
-            ValueNode b = mirrored ? normalizeNode.getX() : normalizeNode.getY();
+            ValueNode a = mirrored ? normalizeNode.y() : normalizeNode.x();
+            ValueNode b = mirrored ? normalizeNode.x() : normalizeNode.y();
 
-            if (normalizeNode.getX().getKind() == Kind.Double || normalizeNode.getX().getKind() == Kind.Float) {
-                return new FloatEqualsNode(a, b);
+            if (normalizeNode.x().getKind() == Kind.Double || normalizeNode.x().getKind() == Kind.Float) {
+                return graph().unique(new FloatEqualsNode(a, b));
             } else {
-                return new IntegerEqualsNode(a, b);
+                return graph().unique(new IntegerEqualsNode(a, b));
             }
         }
         return this;
@@ -73,65 +73,60 @@ public class IntegerEqualsNode extends CompareNode {
 
     @Override
     protected CompareNode duplicateModified(ValueNode newX, ValueNode newY) {
-        if (newX.stamp() instanceof FloatStamp && newY.stamp() instanceof FloatStamp) {
-            return new FloatEqualsNode(newX, newY);
-        } else if (newX.stamp() instanceof IntegerStamp && newY.stamp() instanceof IntegerStamp) {
-            return new IntegerEqualsNode(newX, newY);
-        }
-        throw GraalInternalError.shouldNotReachHere();
+        return new IntegerEqualsNode(newX, newY);
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+    public TriState evaluate(ConstantReflectionProvider constantReflection, ValueNode forX, ValueNode forY) {
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
-            return LogicConstantNode.tautology();
+            return TriState.TRUE;
         } else if (forX.stamp().alwaysDistinct(forY.stamp())) {
-            return LogicConstantNode.contradiction();
+            return TriState.FALSE;
         }
-        return super.canonical(tool, forX, forY);
+        return super.evaluate(constantReflection, forX, forY);
     }
 
     @Override
-    protected ValueNode canonicalizeSymmetricConstant(CanonicalizerTool tool, Constant constant, ValueNode nonConstant, boolean mirrored) {
+    protected Node canonicalizeSymmetricConstant(CanonicalizerTool tool, Constant constant, ValueNode nonConstant, boolean mirrored) {
         if (constant.asLong() == 0) {
             if (nonConstant instanceof AndNode) {
                 AndNode andNode = (AndNode) nonConstant;
-                return new IntegerTestNode(andNode.getX(), andNode.getY());
+                return graph().unique(new IntegerTestNode(andNode.x(), andNode.y()));
             } else if (nonConstant instanceof ShiftNode) {
                 if (nonConstant instanceof LeftShiftNode) {
                     LeftShiftNode shift = (LeftShiftNode) nonConstant;
-                    if (shift.getY().isConstant()) {
+                    if (shift.y().isConstant()) {
                         int mask = shift.getShiftAmountMask();
-                        int amount = shift.getY().asConstant().asInt() & mask;
-                        if (shift.getX().getKind() == Kind.Int) {
-                            return new IntegerTestNode(shift.getX(), ConstantNode.forInt(-1 >>> amount));
+                        int amount = shift.y().asConstant().asInt() & mask;
+                        if (shift.x().getKind() == Kind.Int) {
+                            return graph().unique(new IntegerTestNode(shift.x(), ConstantNode.forInt(-1 >>> amount, graph())));
                         } else {
-                            assert shift.getX().getKind() == Kind.Long;
-                            return new IntegerTestNode(shift.getX(), ConstantNode.forLong(-1L >>> amount));
+                            assert shift.x().getKind() == Kind.Long;
+                            return graph().unique(new IntegerTestNode(shift.x(), ConstantNode.forLong(-1L >>> amount, graph())));
                         }
                     }
                 } else if (nonConstant instanceof RightShiftNode) {
                     RightShiftNode shift = (RightShiftNode) nonConstant;
-                    if (shift.getY().isConstant() && ((IntegerStamp) shift.getX().stamp()).isPositive()) {
+                    if (shift.y().isConstant() && ((IntegerStamp) shift.x().stamp()).isPositive()) {
                         int mask = shift.getShiftAmountMask();
-                        int amount = shift.getY().asConstant().asInt() & mask;
-                        if (shift.getX().getKind() == Kind.Int) {
-                            return new IntegerTestNode(shift.getX(), ConstantNode.forInt(-1 << amount));
+                        int amount = shift.y().asConstant().asInt() & mask;
+                        if (shift.x().getKind() == Kind.Int) {
+                            return graph().unique(new IntegerTestNode(shift.x(), ConstantNode.forInt(-1 << amount, graph())));
                         } else {
-                            assert shift.getX().getKind() == Kind.Long;
-                            return new IntegerTestNode(shift.getX(), ConstantNode.forLong(-1L << amount));
+                            assert shift.x().getKind() == Kind.Long;
+                            return graph().unique(new IntegerTestNode(shift.x(), ConstantNode.forLong(-1L << amount, graph())));
                         }
                     }
                 } else if (nonConstant instanceof UnsignedRightShiftNode) {
                     UnsignedRightShiftNode shift = (UnsignedRightShiftNode) nonConstant;
-                    if (shift.getY().isConstant()) {
+                    if (shift.y().isConstant()) {
                         int mask = shift.getShiftAmountMask();
-                        int amount = shift.getY().asConstant().asInt() & mask;
-                        if (shift.getX().getKind() == Kind.Int) {
-                            return new IntegerTestNode(shift.getX(), ConstantNode.forInt(-1 << amount));
+                        int amount = shift.y().asConstant().asInt() & mask;
+                        if (shift.x().getKind() == Kind.Int) {
+                            return graph().unique(new IntegerTestNode(shift.x(), ConstantNode.forInt(-1 << amount, graph())));
                         } else {
-                            assert shift.getX().getKind() == Kind.Long;
-                            return new IntegerTestNode(shift.getX(), ConstantNode.forLong(-1L << amount));
+                            assert shift.x().getKind() == Kind.Long;
+                            return graph().unique(new IntegerTestNode(shift.x(), ConstantNode.forLong(-1L << amount, graph())));
                         }
                     }
                 }
