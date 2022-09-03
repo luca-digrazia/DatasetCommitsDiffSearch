@@ -115,16 +115,6 @@ public class ElementUtils {
         return null;
     }
 
-    public static VariableElement findVariableElement(DeclaredType type, String name) {
-        List<? extends VariableElement> elements = ElementFilter.fieldsIn(type.asElement().getEnclosedElements());
-        for (VariableElement variableElement : elements) {
-            if (variableElement.getSimpleName().toString().equals(name)) {
-                return variableElement;
-            }
-        }
-        return null;
-    }
-
     public static boolean needsCastTo(TypeMirror sourceType, TypeMirror targetType) {
         if (typeEquals(sourceType, targetType)) {
             return false;
@@ -805,7 +795,7 @@ public class ElementUtils {
         return (T) unboxedValue;
     }
 
-    public static AnnotationValue getAnnotationValue(AnnotationMirror mirror, String name, boolean resolveDefault) {
+    public static AnnotationValue getAnnotationValue(AnnotationMirror mirror, String name) {
         ExecutableElement valueMethod = null;
         for (ExecutableElement method : ElementFilter.methodsIn(mirror.getAnnotationType().asElement().getEnclosedElements())) {
             if (method.getSimpleName().toString().equals(name)) {
@@ -819,18 +809,11 @@ public class ElementUtils {
         }
 
         AnnotationValue value = mirror.getElementValues().get(valueMethod);
-        if (resolveDefault) {
-            if (value == null) {
-                value = valueMethod.getDefaultValue();
-            }
+        if (value == null) {
+            value = valueMethod.getDefaultValue();
         }
 
         return value;
-    }
-
-    public static AnnotationValue getAnnotationValue(AnnotationMirror mirror, String name) {
-        return getAnnotationValue(mirror, name, true);
-
     }
 
     private static class AnnotationValueVisitorImpl extends AbstractAnnotationValueVisitor7<Object, Void> {
@@ -969,7 +952,7 @@ public class ElementUtils {
             for (int i = 0; i < params.length; i++) {
                 TypeMirror param1 = params[i];
                 TypeMirror param2 = method.getParameters().get(i).asType();
-                if (param1 != null && param1.getKind() != TypeKind.TYPEVAR && param2 != null && param2.getKind() != TypeKind.TYPEVAR) {
+                if (param1.getKind() != TypeKind.TYPEVAR && param2.getKind() != TypeKind.TYPEVAR) {
                     if (!getQualifiedName(param1).equals(getQualifiedName(param2))) {
                         continue method;
                     }
@@ -1278,7 +1261,7 @@ public class ElementUtils {
         }
         Map<String, TypeMirror> sourceTypes = new HashMap<>();
         for (TypeMirror type : types) {
-            sourceTypes.put(ElementUtils.getUniqueIdentifier(type), type);
+            sourceTypes.put(ElementUtils.getTypeId(type), type);
         }
         return sortTypes(new ArrayList<>(sourceTypes.values()), reverse);
     }
