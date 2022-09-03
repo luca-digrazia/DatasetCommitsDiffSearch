@@ -66,14 +66,11 @@ import java.util.Set;
  * @param <C> internal state of the language associated with every thread that is executing program
  *            {@link #parse(com.oracle.truffle.api.source.Source, com.oracle.truffle.api.nodes.Node, java.lang.String...)
  *            parsed} by the language
- * @since 0.8 or earlier
  */
 @SuppressWarnings({"javadoc"})
 public abstract class TruffleLanguage<C> {
     /**
      * Constructor to be called by subclasses.
-     * 
-     * @since 0.8 or earlier
      */
     protected TruffleLanguage() {
     }
@@ -85,8 +82,6 @@ public abstract class TruffleLanguage<C> {
      * <em>one JAR drop to the class path</em> away from your users. Once they include your JAR in
      * their application, your language will be available to the
      * {@link com.oracle.truffle.api.vm.PolyglotEngine Truffle virtual machine}.
-     * 
-     * @since 0.8 or earlier
      */
     @Retention(RetentionPolicy.SOURCE)
     @Target(ElementType.TYPE)
@@ -143,7 +138,6 @@ public abstract class TruffleLanguage<C> {
      *
      * @param env the environment the language is supposed to operate in
      * @return internal data of the language in given environment
-     * @since 0.8 or earlier
      */
     protected abstract C createContext(Env env);
 
@@ -156,7 +150,6 @@ public abstract class TruffleLanguage<C> {
      *
      * @param context the context {@link #createContext(com.oracle.truffle.api.TruffleLanguage.Env)
      *            created by the language}
-     * @since 0.8 or earlier
      */
     protected void disposeContext(C context) {
     }
@@ -181,7 +174,6 @@ public abstract class TruffleLanguage<C> {
      * @throws IOException thrown when I/O or parsing goes wrong. Here-in thrown exception is
      *             propagate to the user who called one of <code>eval</code> methods of
      *             {@link com.oracle.truffle.api.vm.PolyglotEngine}
-     * @since 0.8 or earlier
      */
     protected abstract CallTarget parse(Source code, Node context, String... argumentNames) throws IOException;
 
@@ -209,7 +201,6 @@ public abstract class TruffleLanguage<C> {
      *            the explicitly exported ones?
      * @return an exported object or <code>null</code>, if the symbol does not represent anything
      *         meaningful in this language
-     * @since 0.8 or earlier
      */
     protected abstract Object findExportedSymbol(C context, String globalName, boolean onlyExplicit);
 
@@ -222,7 +213,6 @@ public abstract class TruffleLanguage<C> {
      *
      * @param context context to find the language global in
      * @return the global object or <code>null</code> if the language does not support such concept
-     * @since 0.8 or earlier
      */
     protected abstract Object getLanguageGlobal(C context);
 
@@ -231,14 +221,11 @@ public abstract class TruffleLanguage<C> {
      *
      * @param object the object to check
      * @return <code>true</code> if this language can deal with such object in native way
-     * @since 0.8 or earlier
      */
     protected abstract boolean isObjectOfLanguage(Object object);
 
     /**
      * Gets visualization services for language-specific information.
-     * 
-     * @since 0.8 or earlier
      */
     @Deprecated
     protected Visualizer getVisualizer() {
@@ -252,7 +239,6 @@ public abstract class TruffleLanguage<C> {
      * <b>Note:</b> instrumentation requires a appropriate {@link WrapperNode}
      * 
      * @see WrapperNode
-     * @since 0.8 or earlier
      */
     protected boolean isInstrumentable(@SuppressWarnings("unused") Node node) {
         return false;
@@ -268,7 +254,6 @@ public abstract class TruffleLanguage<C> {
      * </ol>
      *
      * @return an appropriately typed {@link WrapperNode}
-     * @since 0.8 or earlier
      */
     protected WrapperNode createWrapperNode(@SuppressWarnings("unused") Node node) {
         throw new UnsupportedOperationException();
@@ -282,7 +267,6 @@ public abstract class TruffleLanguage<C> {
      * @param mFrame frame where execution halted, {@code null} if no execution context
      * @return result of running the code in the context, or at top level if no execution context.
      * @throws IOException if the evaluation cannot be performed
-     * @since 0.8 or earlier
      */
     protected abstract Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException;
 
@@ -298,7 +282,6 @@ public abstract class TruffleLanguage<C> {
      * @param value the value to convert. Either primitive type or
      *            {@link com.oracle.truffle.api.interop.TruffleObject}
      * @return textual representation of the value in this language
-     * @since 0.8 or earlier
      */
     protected String toString(C context, Object value) {
         return Objects.toString(value);
@@ -311,7 +294,6 @@ public abstract class TruffleLanguage<C> {
      *
      * @return node to be inserted into program to effectively find out current execution context
      *         for this language
-     * @since 0.8 or earlier
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
     protected final Node createFindContextNode() {
@@ -331,7 +313,6 @@ public abstract class TruffleLanguage<C> {
      *         beginning of the language execution
      * @throws ClassCastException if the node has not been created by <code>this</code>.
      *             {@link #createFindContextNode()} method.
-     * @since 0.8 or earlier
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
     protected final C findContext(Node n) {
@@ -376,8 +357,6 @@ public abstract class TruffleLanguage<C> {
      * {@link TruffleLanguage} receives instance of the environment before any code is executed upon
      * it. The environment has knowledge of all active languages and can exchange symbols between
      * them.
-     * 
-     * @since 0.8 or earlier
      */
     public static final class Env {
         private final Object vm;
@@ -412,7 +391,6 @@ public abstract class TruffleLanguage<C> {
          *
          * @param globalName the name of the symbol to search for
          * @return object representing the symbol or <code>null</code>
-         * @since 0.8 or earlier
          */
         public Object importSymbol(String globalName) {
             return API.importSymbol(vm, lang, globalName);
@@ -426,7 +404,6 @@ public abstract class TruffleLanguage<C> {
          * @see #parse(Source, String...)
          *
          * @return a boolean that indicates if the MIME type is supported
-         * @since 0.11
          */
         public boolean isMimeTypeSupported(String mimeType) {
             return API.isMimeTypeSupported(vm, mimeType);
@@ -445,7 +422,6 @@ public abstract class TruffleLanguage<C> {
          *            that can be referenced from the source
          * @return the call target representing the parsed result
          * @throws IOException if the parsing or evaluation fails for some reason
-         * @since 0.8 or earlier
          */
         public CallTarget parse(Source source, String... argumentNames) throws IOException {
             TruffleLanguage<?> language = API.findLanguageImpl(vm, null, source.getMimeType());
@@ -457,7 +433,6 @@ public abstract class TruffleLanguage<C> {
          * being executed in.
          *
          * @return reader, never <code>null</code>
-         * @since 0.8 or earlier
          */
         public InputStream in() {
             return in;
@@ -468,7 +443,6 @@ public abstract class TruffleLanguage<C> {
          * is being executed in.
          *
          * @return writer, never <code>null</code>
-         * @since 0.8 or earlier
          */
         public OutputStream out() {
             return out;
@@ -479,13 +453,11 @@ public abstract class TruffleLanguage<C> {
          * is being executed in.
          *
          * @return writer, never <code>null</code>
-         * @since 0.8 or earlier
          */
         public OutputStream err() {
             return err;
         }
 
-        /** @since 0.8 or earlier */
         public Instrumenter instrumenter() {
             return instrumenter;
         }
@@ -502,7 +474,6 @@ public abstract class TruffleLanguage<C> {
          * @param <T> type of requested service
          * @param type class of requested service
          * @return instance of T or <code>null</code> if there is no such service available
-         * @since 0.12
          */
         public <T> T lookup(Class<T> type) {
             for (Object obj : services) {
@@ -523,7 +494,7 @@ public abstract class TruffleLanguage<C> {
          * straight-forward way to pass implementation-level arguments, as typically specified on a
          * command line, to the languages.
          *
-         * {@link com.oracle.truffle.api.vm.PolyglotEngineSnippets#initializeWithParameters}
+         * {@codesnippet config.specify}
          *
          * In contrast to {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#globalSymbol
          * global symbols} the provided values are passed in exactly as specified, because these
@@ -535,10 +506,9 @@ public abstract class TruffleLanguage<C> {
          * context} to make it possible to take them into account before the language gets ready for
          * execution. This is the most common way to access them:
          *
-         * {@link TruffleLanguageSnippets.MyLanguage#createContext}
+         * {@codesnippet config.read}
          *
          * @return read-only view of configuration options for this language
-         * @since 0.11
          */
         public Map<String, Object> getConfig() {
             return config;
@@ -656,26 +626,4 @@ public abstract class TruffleLanguage<C> {
         }
     }
 
-}
-
-class TruffleLanguageSnippets {
-    class Context {
-        final String[] args;
-
-        Context(String[] args) {
-            this.args = args;
-        }
-    }
-
-    // @formatter:off
-    abstract
-    // BEGIN: TruffleLanguageSnippets.MyLanguage#createContext
-    class MyLanguage extends TruffleLanguage<Context> {
-        @Override
-        protected Context createContext(Env env) {
-            String[] args = (String[]) env.getConfig().get("CMD_ARGS");
-            return new Context(args);
-        }
-    }
-    // END: TruffleLanguageSnippets.MyLanguage#createContext
 }
