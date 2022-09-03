@@ -58,7 +58,6 @@ import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMAddres
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMDoubleStoreNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMFloatStoreNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMFunctionStoreNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMGlobalVariableStoreNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI16StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI1StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI32StoreNodeGen;
@@ -70,7 +69,6 @@ import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreVectorNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMDirectLoadNodeFactory.LLVM80BitFloatDirectLoadNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMDirectLoadNodeFactory.LLVMAddressDirectLoadNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMDirectLoadNodeFactory.LLVMFunctionDirectLoadNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMDirectLoadNodeFactory.LLVMGlobalVariableDirectLoadNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMDirectLoadNodeFactory.LLVMIVarBitDirectLoadNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMDirectLoadNodeFactory.LLVMStructDirectLoadNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMDoubleLoadNodeFactory.LLVMDoubleDirectLoadNodeGen;
@@ -87,7 +85,6 @@ import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMI64LoadNodeFactory.LLV
 import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMI64LoadNodeFactory.LLVMI64ProfilingLoadNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMI8LoadNodeFactory.LLVMI8DirectLoadNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMI8LoadNodeFactory.LLVMI8ProfilingLoadNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMAccessGlobalVariableStorageNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
@@ -99,7 +96,7 @@ public final class LLVMMemoryReadWriteFactory {
     }
 
     public static LLVMExpressionNode createLoad(ResolvedType resolvedResultType, LLVMAddressNode loadTarget, LLVMParserRuntime runtime) {
-        LLVMBaseType resultType = LLVMTypeHelper.getLLVMType(resolvedResultType).type;
+        LLVMBaseType resultType = LLVMTypeHelper.getLLVMType(resolvedResultType);
 
         if (resolvedResultType.isVector()) {
             return createLoadVector(resultType, loadTarget, resolvedResultType.asVector().getSize());
@@ -152,12 +149,16 @@ public final class LLVMMemoryReadWriteFactory {
                 return LLVMDoubleDirectLoadNodeGen.create(loadTarget);
             case X86_FP80:
                 return LLVM80BitFloatDirectLoadNodeGen.create(loadTarget);
+            case I1_POINTER:
+            case I8_POINTER:
+            case I16_POINTER:
+            case I32_POINTER:
+            case I64_POINTER:
+            case HALF_POINTER:
+            case FLOAT_POINTER:
+            case DOUBLE_POINTER:
             case ADDRESS:
-                if (loadTarget instanceof LLVMAccessGlobalVariableStorageNode) {
-                    return LLVMGlobalVariableDirectLoadNodeGen.create(((LLVMAccessGlobalVariableStorageNode) loadTarget).getGlobalVariableStorage());
-                } else {
-                    return LLVMAddressDirectLoadNodeGen.create(loadTarget);
-                }
+                return LLVMAddressDirectLoadNodeGen.create(loadTarget);
             case FUNCTION_ADDRESS:
                 LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
                 return LLVMFunctionDirectLoadNodeGen.create(loadTarget, context.getFunctionRegistry());
@@ -193,7 +194,7 @@ public final class LLVMMemoryReadWriteFactory {
     }
 
     public static LLVMNode createStore(LLVMAddressNode pointerNode, LLVMExpressionNode valueNode, ResolvedType type) {
-        return createStore(pointerNode, valueNode, LLVMTypeHelper.getLLVMType(type).type, LLVMTypeHelper.getByteSize(type));
+        return createStore(pointerNode, valueNode, LLVMTypeHelper.getLLVMType(type), LLVMTypeHelper.getByteSize(type));
     }
 
     public static LLVMNode createStore(LLVMAddressNode pointerNode, LLVMExpressionNode valueNode, LLVMBaseType type, int size) {
@@ -216,12 +217,16 @@ public final class LLVMMemoryReadWriteFactory {
                 return LLVMDoubleStoreNodeGen.create(pointerNode, (LLVMDoubleNode) valueNode);
             case X86_FP80:
                 return LLVM80BitFloatStoreNodeGen.create(pointerNode, (LLVM80BitFloatNode) valueNode);
+            case I1_POINTER:
+            case I8_POINTER:
+            case I16_POINTER:
+            case I32_POINTER:
+            case I64_POINTER:
+            case HALF_POINTER:
+            case FLOAT_POINTER:
+            case DOUBLE_POINTER:
             case ADDRESS:
-                if (pointerNode instanceof LLVMAccessGlobalVariableStorageNode) {
-                    return LLVMGlobalVariableStoreNodeGen.create(((LLVMAccessGlobalVariableStorageNode) pointerNode).getGlobalVariableStorage(), (LLVMAddressNode) valueNode);
-                } else {
-                    return LLVMAddressStoreNodeGen.create(pointerNode, (LLVMAddressNode) valueNode);
-                }
+                return LLVMAddressStoreNodeGen.create(pointerNode, (LLVMAddressNode) valueNode);
             case FUNCTION_ADDRESS:
                 return LLVMFunctionStoreNodeGen.create(pointerNode, (LLVMFunctionNode) valueNode);
             case STRUCT:

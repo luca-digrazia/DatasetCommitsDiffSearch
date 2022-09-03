@@ -27,41 +27,27 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.parser;
+package com.oracle.truffle.llvm.nodes.impl.intrinsics.interop;
 
-public enum LLVMBaseType {
-    VOID,
-    I1,
-    I8,
-    I16,
-    I32,
-    I64,
-    HALF,
-    FLOAT,
-    DOUBLE,
-    F128,
-    X86_FP80,
-    PPC_FP128,
-    ADDRESS,
-    STRUCT,
-    ARRAY,
-    FUNCTION_ADDRESS,
-    I1_POINTER,
-    I8_POINTER,
-    I16_POINTER,
-    I32_POINTER,
-    I64_POINTER,
-    HALF_POINTER,
-    FLOAT_POINTER,
-    DOUBLE_POINTER,
-    I1_VECTOR,
-    I8_VECTOR,
-    I16_VECTOR,
-    I32_VECTOR,
-    I64_VECTOR,
-    FLOAT_VECTOR,
-    DOUBLE_VECTOR,
-    I128_VECTOR,
-    I_VAR_BITWIDTH,
-    ADDRESS_VECTOR;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
+import com.oracle.truffle.llvm.types.LLVMTruffleAddress;
+
+public abstract class LLVMToNullNode extends Node {
+    public abstract Object executeConvert(Object value, LLVMRuntimeType type);
+
+    @Specialization
+    protected static Object fromAddress(LLVMAddress value, LLVMRuntimeType type) {
+        if (LLVMAddress.NULL_POINTER.equals(value)) {
+            return null;
+        }
+        return new LLVMTruffleAddress(value, type);
+    }
+
+    @Specialization
+    protected static Object fromGeneric(Object value, @SuppressWarnings("unused") LLVMRuntimeType type) {
+        return value;
+    }
 }

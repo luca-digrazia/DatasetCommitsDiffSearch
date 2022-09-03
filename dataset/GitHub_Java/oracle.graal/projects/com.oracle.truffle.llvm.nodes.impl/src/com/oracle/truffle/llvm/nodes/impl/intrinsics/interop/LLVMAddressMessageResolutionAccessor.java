@@ -27,41 +27,12 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.parser;
+package com.oracle.truffle.llvm.nodes.impl.intrinsics.interop;
 
-public enum LLVMBaseType {
-    VOID,
-    I1,
-    I8,
-    I16,
-    I32,
-    I64,
-    HALF,
-    FLOAT,
-    DOUBLE,
-    F128,
-    X86_FP80,
-    PPC_FP128,
-    ADDRESS,
-    STRUCT,
-    ARRAY,
-    FUNCTION_ADDRESS,
-    I1_POINTER,
-    I8_POINTER,
-    I16_POINTER,
-    I32_POINTER,
-    I64_POINTER,
-    HALF_POINTER,
-    FLOAT_POINTER,
-    DOUBLE_POINTER,
-    I1_VECTOR,
-    I8_VECTOR,
-    I16_VECTOR,
-    I32_VECTOR,
-    I64_VECTOR,
-    FLOAT_VECTOR,
-    DOUBLE_VECTOR,
-    I128_VECTOR,
-    I_VAR_BITWIDTH,
-    ADDRESS_VECTOR;
+import com.oracle.truffle.api.interop.ForeignAccess;
+
+public class LLVMAddressMessageResolutionAccessor {
+
+    public static final ForeignAccess ACCESS = LLVMAddressMessageResolutionForeign.ACCESS;
+
 }

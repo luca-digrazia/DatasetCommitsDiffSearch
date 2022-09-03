@@ -42,14 +42,14 @@ import com.oracle.truffle.llvm.types.memory.LLVMMemory;
 public class LLVMX86_64BitVAStart extends LLVMNode {
 
     private static final int LONG_DOUBLE_SIZE = 16;
-    private final int numberOfExplicitArguments;
+    private final int numberExplicitArguments;
     @Child private LLVMAddressNode target;
 
-    public LLVMX86_64BitVAStart(int numberOfExplicitArguments, LLVMAddressNode target) {
-        if (numberOfExplicitArguments < 0) {
+    public LLVMX86_64BitVAStart(int numberExplicitArguments, LLVMAddressNode target) {
+        if (numberExplicitArguments < 0) {
             throw new AssertionError();
         }
-        this.numberOfExplicitArguments = numberOfExplicitArguments;
+        this.numberExplicitArguments = numberExplicitArguments;
         this.target = target;
     }
 
@@ -91,7 +91,7 @@ public class LLVMX86_64BitVAStart extends LLVMNode {
     public void executeVoid(VirtualFrame frame) {
         LLVMAddress address = target.executePointee(frame);
         initOffsets(address);
-        int varArgsStartIndex = numberOfExplicitArguments;
+        int varArgsStartIndex = numberExplicitArguments;
         Object[] realArguments = getRealArguments(frame);
         int argumentsLength = realArguments.length;
         if (varArgsStartIndex != argumentsLength) {

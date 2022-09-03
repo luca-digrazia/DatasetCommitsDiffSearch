@@ -119,10 +119,6 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         return functionId;
     }
 
-    public boolean isNullFunction() {
-        return functionId == 0;
-    }
-
     @Override
     public String toString() {
         return getName() + " " + getFunctionIndex();

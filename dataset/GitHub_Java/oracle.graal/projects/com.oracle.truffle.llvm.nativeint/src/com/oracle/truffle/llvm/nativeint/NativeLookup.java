@@ -67,7 +67,7 @@ public class NativeLookup {
 
     private final NodeFactoryFacade facade;
 
-    public static NativeFunctionInterface getNFI() {
+    private static NativeFunctionInterface getNFI() {
         CompilerAsserts.neverPartOfCompilation();
         if (nfi == null) {
             nfi = NativeFunctionInterfaceRuntime.getNativeFunctionInterface();
@@ -140,7 +140,7 @@ public class NativeLookup {
     }
 
     public void addLibraryToNativeLookup(String library) {
-        getLibraryHandles().add(getNFI().getLibraryHandle(library));
+        getNativeFunctionHandles().add(getNFI().getLibraryHandle(library));
     }
 
     /**

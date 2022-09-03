@@ -93,6 +93,14 @@ public final class LLVMAggregateFactory {
                 return LLVMExtractDoubleValueNodeGen.create(targetAddress);
             case X86_FP80:
                 return LLVMExtract80BitFloatValueNodeGen.create(targetAddress);
+            case I1_POINTER:
+            case I8_POINTER:
+            case I16_POINTER:
+            case I32_POINTER:
+            case I64_POINTER:
+            case HALF_POINTER:
+            case FLOAT_POINTER:
+            case DOUBLE_POINTER:
             case ADDRESS:
             case STRUCT:
                 return LLVMExtractAddressValueNodeGen.create(targetAddress);
@@ -135,7 +143,7 @@ public final class LLVMAggregateFactory {
 
     private static LLVMStructWriteNode createStructWriteNode(LLVMExpressionNode parsedConstant, ResolvedType resolvedType) {
         int byteSize = LLVMTypeHelper.getByteSize(resolvedType);
-        LLVMBaseType llvmType = LLVMTypeHelper.getLLVMType(resolvedType).type;
+        LLVMBaseType llvmType = LLVMTypeHelper.getLLVMType(resolvedType);
         switch (llvmType) {
             case I1:
                 return new LLVMI1StructWriteNode((LLVMI1Node) parsedConstant);
@@ -160,6 +168,14 @@ public final class LLVMAggregateFactory {
                 } else {
                     return new LLVMCompoundStructWriteNode((LLVMAddressNode) parsedConstant, byteSize);
                 }
+            case I1_POINTER:
+            case I8_POINTER:
+            case I16_POINTER:
+            case I32_POINTER:
+            case I64_POINTER:
+            case HALF_POINTER:
+            case FLOAT_POINTER:
+            case DOUBLE_POINTER:
             case ADDRESS:
                 return new LLVMAddressStructWriteNode((LLVMAddressNode) parsedConstant);
             case FUNCTION_ADDRESS:
