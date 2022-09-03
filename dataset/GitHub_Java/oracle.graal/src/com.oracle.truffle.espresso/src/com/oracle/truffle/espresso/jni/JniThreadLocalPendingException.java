@@ -27,23 +27,18 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 /**
  * Retains one exception per thread that is pending to be handled in that thread (or none).
  */
-public final class JniThreadLocalPendingException {
-    private ThreadLocal<StaticObject> pendingException = new ThreadLocal<>();
+public class JniThreadLocalPendingException {
+    private static final ThreadLocal<StaticObject> pendingException = new ThreadLocal<>();
 
-    public StaticObject get() {
+    public static StaticObject get() {
         return pendingException.get();
     }
 
-    public void set(StaticObject t) {
+    public static void set(StaticObject t) {
         pendingException.set(t);
     }
 
-    public void clear() {
+    public static void clear() {
         set(null);
-    }
-
-    public void dispose() {
-        pendingException.remove();
-        pendingException = null;
     }
 }

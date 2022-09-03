@@ -600,7 +600,7 @@ public class SubstrateUtil {
             fullName.append(m.getSignature().getReturnType(null).toClassName());
         }
 
-        return stripPackage(m.getDeclaringClass().toJavaName()) + "_" +
+        return m.getDeclaringClass().toJavaName(false) + "_" +
                         (m.isConstructor() ? "constructor" : m.getName()) + "_" +
                         SubstrateUtil.digest(fullName.toString());
     }
@@ -629,12 +629,8 @@ public class SubstrateUtil {
             }
         }
 
-        return stripPackage(m.getDeclaringClass().getTypeName()) + "_" +
+        return m.getDeclaringClass().getSimpleName() + "_" +
                         (m instanceof Constructor ? "constructor" : m.getName()) + "_" +
                         SubstrateUtil.digest(fullName.toString());
-    }
-
-    private static String stripPackage(String qualifiedClassName) {
-        return qualifiedClassName.substring(qualifiedClassName.lastIndexOf(".") + 1);
     }
 }
