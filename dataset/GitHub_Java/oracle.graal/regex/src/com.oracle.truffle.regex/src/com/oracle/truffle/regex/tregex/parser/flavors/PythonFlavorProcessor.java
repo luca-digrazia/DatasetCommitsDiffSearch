@@ -32,7 +32,6 @@ import com.oracle.truffle.regex.UnsupportedRegexException;
 import com.oracle.truffle.regex.chardata.CodePointRange;
 import com.oracle.truffle.regex.chardata.CodePointSet;
 import com.oracle.truffle.regex.chardata.UnicodeCharacterProperties;
-import com.oracle.truffle.regex.tregex.parser.CaseFoldTable;
 import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 
 import java.math.BigInteger;
@@ -564,10 +563,9 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
             return charSet;
         }
         if (getLocalFlags().isLocale()) {
-            bailOut("locale-specific case folding is not supported");
+            throw new UnsupportedRegexException("locale-specific case folding is not supported");
         }
-        CaseFoldTable.CaseFoldingAlgorithm caseFolding = getLocalFlags().isUnicode() ? CaseFoldTable.CaseFoldingAlgorithm.PythonUnicode : CaseFoldTable.CaseFoldingAlgorithm.PythonAscii;
-        return CaseFoldTable.applyCaseFold(charSet, caseFolding);
+        throw new UnsupportedRegexException("case folding not yet implemented");
     }
 
     /// Error reporting
@@ -837,6 +835,8 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
      * @return {@code true} iff a category escape was found
      */
     private boolean categoryEscape(boolean inCharClass) {
+        // TODO: Check with asserts that these character classes are closed on case folding,
+        // once case folding is implemented.
         switch (curChar()) {
             case 'd':
             case 'D':
