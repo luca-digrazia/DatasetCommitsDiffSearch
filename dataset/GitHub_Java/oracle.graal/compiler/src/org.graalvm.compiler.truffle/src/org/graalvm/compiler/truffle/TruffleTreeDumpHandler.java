@@ -33,19 +33,25 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.source.SourceSection;
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.channels.FileChannel;
+import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
 import java.nio.file.Path;
-import java.util.function.Function;
-import java.util.function.Supplier;
+import java.nio.file.StandardOpenOption;
+import java.util.concurrent.Callable;
 import static org.graalvm.compiler.debug.DebugOptions.DumpPath;
+import static org.graalvm.compiler.debug.DebugOptions.PrintBinaryGraphPort;
 import static org.graalvm.compiler.debug.DebugOptions.PrintBinaryGraphs;
+import static org.graalvm.compiler.debug.DebugOptions.PrintGraphHost;
+import static org.graalvm.compiler.debug.DebugOptions.PrintXmlGraphPort;
 import org.graalvm.compiler.debug.PathUtilities;
 import org.graalvm.compiler.truffle.GraphPrintVisitor.GraphPrintAdapter;
 import org.graalvm.compiler.truffle.GraphPrintVisitor.GraphPrintHandler;
 
 public class TruffleTreeDumpHandler implements DebugDumpHandler {
 
-    private final Function<Supplier<Path>, WritableByteChannel> out;
+    private final Callable<WritableByteChannel> out;
     private final OptionValues options;
 
     /**
@@ -61,20 +67,33 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
         }
     }
 
-    public TruffleTreeDumpHandler(Function<Supplier<Path>, WritableByteChannel> createOutput, OptionValues options) {
+    public TruffleTreeDumpHandler(OptionValues options) {
         this.options = options;
-        this.out = createOutput;
+        if (DebugOptions.PrintGraphFile.getValue(options)) {
+            this.out = createFilePrinter(options);
+        } else {
+            this.out = createNetworkPrinter(options);
+        }
     }
 
-    private Path getFilePrinterPath() {
+    private static Path getFilePrinterPath(OptionValues options) throws IOException {
         // Construct the path to the file.
         // PrintGraphFileName -
         String extension = PrintBinaryGraphs.getValue(options) ? "bgv" : "gv.xml";
-        try {
-            return PathUtilities.getPath(options, DumpPath, extension);
-        } catch (IOException ex) {
-            throw rethrowSilently(RuntimeException.class, ex);
-        }
+        return PathUtilities.getPath(options, DumpPath, extension);
+    }
+
+    private static Callable<WritableByteChannel> createFilePrinter(OptionValues options) {
+        return () -> {
+            Path path = getFilePrinterPath(options);
+            return FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
+        };
+    }
+
+    private static Callable<WritableByteChannel> createNetworkPrinter(OptionValues options) {
+        String host = PrintGraphHost.getValue(options);
+        int port = PrintBinaryGraphs.getValue(options) ? PrintBinaryGraphPort.getValue(options) : PrintXmlGraphPort.getValue(options);
+        return () -> SocketChannel.open(new InetSocketAddress(host, port));
     }
 
     @Override
@@ -93,7 +112,7 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
         if (callTarget.getRootNode() != null) {
             final GraphPrintVisitor printer;
             try {
-                printer = new GraphPrintVisitor(out.apply(this::getFilePrinterPath));
+                printer = new GraphPrintVisitor(out.call());
             } catch (RuntimeException | IOException ex) {
                 throw ex;
             } catch (Exception ex) {
@@ -165,10 +184,5 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
     @Override
     public void close() {
         // nothing to do
-    }
-
-    @SuppressWarnings({"unused", "unchecked"})
-    private static <E extends Exception> E rethrowSilently(Class<E> type, Throwable ex) throws E {
-        throw (E) ex;
     }
 }

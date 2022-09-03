@@ -22,8 +22,6 @@
  */
 package org.graalvm.graphio;
 
-import java.util.Map;
-
 /**
  * Representation of methods, fields, their signatures and code locations.
  *
@@ -197,8 +195,4 @@ public interface GraphElements<M, F, S, P> {
      * @return stack trace element for the method, index and position
      */
     StackTraceElement methodStackTraceElement(M method, int bci, P pos);
-
-    interface Stratas<M, F, S, P> extends GraphElements<M, F, S, P> {
-        Map<String, StackTraceElement> stackElement(M method, P pos);
-    }
 }
