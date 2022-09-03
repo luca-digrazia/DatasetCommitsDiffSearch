@@ -85,11 +85,9 @@ public final class Engine implements AutoCloseable {
      * @throws IllegalArgumentException if an invalid language id was provided
      * @see #getLanguages() To get map of all installed languages.
      * @since 1.0
-     * @deprecated use {@link #getLanguages()}.{@link Map#get(Object) get(id)} instead
      */
-    @Deprecated
     public Language getLanguage(String languageId) {
-        return impl.requirePublicLanguage(languageId);
+        return impl.getLanguage(languageId);
     }
 
     /**
@@ -115,11 +113,9 @@ public final class Engine implements AutoCloseable {
      * @throws IllegalArgumentException if an invalid languageId was provided
      * @see #getLanguages() To get map of all installed languages.
      * @since 1.0
-     * @deprecated use {@link #getInstruments()}.{@link Map#get(Object) get(id)} instead
      */
-    @Deprecated
     public Instrument getInstrument(String instrumentId) {
-        return impl.requirePublicInstrument(instrumentId);
+        return impl.getInstrument(instrumentId);
     }
 
     /**
@@ -215,7 +211,7 @@ public final class Engine implements AutoCloseable {
      * @since 1.0
      */
     public static Builder newBuilder() {
-        return EMPTY.new Builder();
+        return new Builder();
     }
 
     static AbstractPolyglotImpl getImpl() {
@@ -229,14 +225,12 @@ public final class Engine implements AutoCloseable {
         return getImpl().loadLanguageClass(className);
     }
 
-    private static final Engine EMPTY = new Engine(null);
-
     /**
      *
      * @since 1.0
      */
     @SuppressWarnings("hiding")
-    public final class Builder {
+    public static final class Builder {
 
         private OutputStream out = System.out;
         private OutputStream err = System.err;
@@ -434,8 +428,8 @@ public final class Engine implements AutoCloseable {
         }
 
         @Override
-        public StackFrame newPolyglotStackTraceElement(PolyglotException e, AbstractStackFrameImpl impl) {
-            return e.new StackFrame(impl);
+        public StackFrame newPolyglotStackTraceElement(AbstractStackFrameImpl impl) {
+            return new StackFrame(impl);
         }
 
     }

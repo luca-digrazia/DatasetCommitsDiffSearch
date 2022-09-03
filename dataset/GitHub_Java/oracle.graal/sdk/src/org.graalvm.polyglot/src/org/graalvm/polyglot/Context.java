@@ -139,9 +139,6 @@ public final class Context implements AutoCloseable {
      * @return result of the evaluation. The returned instance is is never <code>null</code>, but
      *         the result might represent a {@link Value#isNull() null} guest language value.
      * @throws PolyglotException in case parsing or evaluation of the guest language code failed.
-     * @throws IllegalStateException if the context is already closed, the current thread is not
-     *             allowed to access this context or if the language of the given source is not
-     *             installed.
      * @since 1.0
      */
     public Value eval(Source source) {
@@ -155,9 +152,6 @@ public final class Context implements AutoCloseable {
      * @param languageId the id of the language evaluate the code in, eg <code>"js"</code>.
      * @param source textual source code
      * @return result of the evaluation wrapped in a non-null {@link Value}
-     * @throws PolyglotException in case parsing or evaluation of the guest language code failed.
-     * @throws IllegalStateException if the context is already closed, the current thread is not
-     *             allowed to access this context or if the given language is not installed.
      * @since 1.0
      */
     public Value eval(String languageId, CharSequence source) {
@@ -171,13 +165,10 @@ public final class Context implements AutoCloseable {
      * @param languageId
      * @param symbol name of a symbol
      * @return result of the evaluation wrapped in a non-null {@link Value}
-     * @throws PolyglotException in case the lookup failed due to a guest language error.
-     * @throws IllegalStateException if the context is already closed, the current thread is not
-     *             allowed to access this context or if the given language is not installed.
      * @since 1.0
      */
     public Value lookup(String languageId, String symbol) {
-        return impl.lookup(languageId, symbol);
+        return impl.lookup(getEngine().getLanguage(languageId).impl, symbol);
     }
 
     /**
@@ -191,8 +182,6 @@ public final class Context implements AutoCloseable {
      * @return the symbol value or <code>null</code> if no symbol was registered with that name. The
      *         returned instance is is never <code>null</code>, but the result might represent a
      *         {@link Value#isNull() null} guest language value.
-     * @throws IllegalStateException if the context is already closed or the current thread is not
-     *             allowed to access this context.
      * @since 1.0
      */
     public Value importSymbol(String name) {
@@ -210,8 +199,6 @@ public final class Context implements AutoCloseable {
      * @param name the name of the symbol to export.
      * @param value the value to export to the language, a Java value, polyglot {@link Proxy proxy}
      *            or {@link Value} instance is expected to be passed.
-     * @throws IllegalStateException if the context is already closed or the current thread is not
-     *             allowed to access.
      * @since 1.0
      */
     public void exportSymbol(String name, Object value) {
@@ -226,13 +213,10 @@ public final class Context implements AutoCloseable {
      * @throws IllegalArgumentException if the language does not exist.
      * @return <code>true</code> if the language was initialized. Returns <code>false</code> if it
      *         was already initialized.
-     * @throws PolyglotException in case the initialization failed due to a guest language error.
-     * @throws IllegalStateException if the context is already closed, the current thread is not
-     *             allowed to access this context or if the given language is not installed.
      * @since 1.0
      */
     public boolean initialize(String languageId) {
-        return impl.initializeLanguage(languageId);
+        return impl.initializeLanguage(getEngine().getLanguage(languageId).impl);
     }
 
     /**
@@ -252,9 +236,6 @@ public final class Context implements AutoCloseable {
      * @param cancelIfExecuting if <code>true</code> then currently executing contexts will be
      *            cancelled, else an {@link IllegalStateException} is thrown.
      * @see Engine#close() To close an engine.
-     * @throws PolyglotException in case the close failed due to a guest language error.
-     * @throws IllegalStateException if the context is still running and cancelIfExecuting is
-     *             <code>false</code>
      * @since 1.0
      */
     public void close(boolean cancelIfExecuting) {
@@ -273,7 +254,6 @@ public final class Context implements AutoCloseable {
      * then all its methods will throw an {@link IllegalStateException} when invoked. If an attempt
      * to close a context was successful then consecutive calls to close have no effect.
      *
-     * @throws PolyglotException in case the close failed due to a guest language error.
      * @throws IllegalStateException if the context is currently executing on another thread.
      * @see Engine#close() To close an engine.
      * @since 1.0
@@ -303,10 +283,8 @@ public final class Context implements AutoCloseable {
      * @since 1.0
      */
     public static Builder newBuilder(String... onlyLanguages) {
-        return EMPTY.new Builder(onlyLanguages);
+        return new Builder(onlyLanguages);
     }
-
-    private static final Context EMPTY = new Context(null);
 
     /**
      * Builder class to construct {@link Context} instances.
@@ -315,7 +293,7 @@ public final class Context implements AutoCloseable {
      * @since 1.0
      */
     @SuppressWarnings("hiding")
-    public final class Builder {
+    public static final class Builder {
 
         private Engine sharedEngine;
         private String[] onlyLanguages;
@@ -327,7 +305,6 @@ public final class Context implements AutoCloseable {
         private Map<String, String[]> arguments;
         private Predicate<String> hostClassFilter;
         private boolean allowHostAccess;
-        private boolean allowCreateThread;
 
         Builder(String... onlyLanguages) {
             Objects.requireNonNull(onlyLanguages);
@@ -387,24 +364,12 @@ public final class Context implements AutoCloseable {
         }
 
         /**
-         * Allows guest languages to access the host language by loading new classes. Default is
-         * <code>false</code>.
+         * Allows guest languages to access the host language by loading new classes.
          *
          * @since 1.0
          */
         public Builder allowHostAccess(boolean enabled) {
             this.allowHostAccess = enabled;
-            return this;
-        }
-
-        /**
-         * Allows guest languages to create new threads. Default is <code>false</code>. Threads
-         * created by guest languages are closed when the context is {@link Context#close() closed}.
-         *
-         * @since 1.0
-         */
-        public Builder allowCreateThread(boolean enabled) {
-            this.allowCreateThread = enabled;
             return this;
         }
 
@@ -526,13 +491,13 @@ public final class Context implements AutoCloseable {
                 }
                 engineBuilder.setBoundEngine(true);
                 engine = engineBuilder.build();
-                return engine.impl.createContext(null, null, null, allowHostAccess, allowCreateThread,
-                                hostClassFilter,
-                                Collections.emptyMap(), arguments == null ? Collections.emptyMap() : arguments, onlyLanguages);
+                return engine.impl.createContext(null, null, null, allowHostAccess, hostClassFilter,
+                                Collections.emptyMap(),
+                                arguments == null ? Collections.emptyMap() : arguments, onlyLanguages);
             } else {
-                return engine.impl.createContext(out, err, in, allowHostAccess, allowCreateThread,
-                                hostClassFilter,
-                                options == null ? Collections.emptyMap() : options, arguments == null ? Collections.emptyMap() : arguments, onlyLanguages);
+                return engine.impl.createContext(out, err, in, allowHostAccess, hostClassFilter,
+                                options == null ? Collections.emptyMap() : options,
+                                arguments == null ? Collections.emptyMap() : arguments, onlyLanguages);
             }
         }
 
