@@ -24,10 +24,7 @@ package com.oracle.graal.hotspot.meta;
 
 import com.oracle.graal.api.code.*;
 
-/**
- * Special registers reserved by HotSpot for frequently used values.
- */
-public class HotSpotRegisters {
+public class HotSpotRegisters implements HotSpotRegistersProvider {
 
     private final Register threadRegister;
     private final Register heapBaseRegister;
@@ -39,24 +36,18 @@ public class HotSpotRegisters {
         this.stackPointerRegister = stackPointerRegister;
     }
 
-    /**
-     * Gets the register holding the current thread.
-     */
     public Register getThreadRegister() {
+        assert !threadRegister.equals(Register.None) : "thread register is not defined";
         return threadRegister;
     }
 
-    /**
-     * Gets the register holding the heap base address for compressed pointers.
-     */
     public Register getHeapBaseRegister() {
+        assert !heapBaseRegister.equals(Register.None) : "heap base register is not defined";
         return heapBaseRegister;
     }
 
-    /**
-     * Gets the stack pointer register.
-     */
     public Register getStackPointerRegister() {
+        assert !stackPointerRegister.equals(Register.None) : "stack pointer register is not defined";
         return stackPointerRegister;
     }
 }

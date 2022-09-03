@@ -23,6 +23,8 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
+import java.util.*;
+
 import org.junit.*;
 
 import com.oracle.graal.compiler.hsail.test.infra.*;
@@ -32,13 +34,13 @@ import com.oracle.graal.compiler.hsail.test.infra.*;
  */
 public class FloatSqrtTest extends GraalKernelTester {
 
-    static final int size = 64;
-    float[] input = new float[size];
-    @Result float[] output = new float[size];
+    static final int size = 128;
+    static final float[] input = new float[size];
+    @Result static final float[] output = new float[size];
+    static float[] seed = new float[size];
     {
-        for (int i = 0; i < size; i++) {
-            input[i] = i;
-            output[i] = -1.0f;
+        for (int i = 0; i < seed.length; i++) {
+            seed[i] = (float) Math.random();
         }
 
     }
@@ -49,7 +51,9 @@ public class FloatSqrtTest extends GraalKernelTester {
 
     @Override
     public void runTest() {
-        dispatchMethodKernel(size, input, output);
+        System.arraycopy(seed, 0, input, 0, seed.length);
+        Arrays.fill(output, 0f);
+        dispatchMethodKernel(64, input, output);
     }
 
     @Test
