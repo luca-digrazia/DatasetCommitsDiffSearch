@@ -599,9 +599,6 @@ class EscapeAnalysisIteration {
                         if (index < 0 || index >= arrayObj.fieldState.length) {
                             // out of bounds or not constant
                             replaceWithMaterialized(array, x, state, arrayObj);
-                            if (valueObj != null) {
-                                replaceWithMaterialized(value, x, state, valueObj);
-                            }
                         } else {
                             arrayObj.fieldState[index] = value;
                             if (changeGraph) {
@@ -734,11 +731,6 @@ class EscapeAnalysisIteration {
                                 }
                             }
                         });
-                        for (ObjectState obj : state.states()) {
-                            if (obj.lockCount > 0) {
-                                virtual.add(obj);
-                            }
-                        }
 
                         ArrayDeque<ObjectState> queue = new ArrayDeque<>(virtual);
                         while (!queue.isEmpty()) {
