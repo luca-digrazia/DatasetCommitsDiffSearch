@@ -40,9 +40,6 @@ public class LLVMLogger {
             System.err.println(warning);
             // Checkstyle: resume
         }
-        if (LLVMOptions.performanceWarningsAreFatal()) {
-            throw new AssertionError(warning);
-        }
     }
 
     public static void error(String error) {
@@ -54,17 +51,13 @@ public class LLVMLogger {
 
     public static void unconditionalInfo(String string) {
         CompilerAsserts.neverPartOfCompilation();
-        // Checkstyle: stop
         System.err.println(string);
-        // Checkstyle: resume
     }
 
     public static void info(String string) {
         CompilerAsserts.neverPartOfCompilation();
         if (LLVMOptions.debugEnabled()) {
-            // Checkstyle: stop
             System.err.println(string);
-            // Checkstyle: resume
         }
     }
 

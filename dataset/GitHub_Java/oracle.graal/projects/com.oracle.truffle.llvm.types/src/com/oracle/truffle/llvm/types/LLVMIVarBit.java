@@ -376,8 +376,8 @@ public abstract class LLVMIVarBit {
         @Override
         public LLVMIVarBit logicalRightShift(LLVMIVarBit right) {
             int shiftAmount = right.getIntValue();
-            BigInteger mask = BigInteger.valueOf(-1).shiftLeft(getBits() - shiftAmount).not();
-            BigInteger result = new BigInteger(arr).shiftRight(shiftAmount).and(mask);
+            long mask = BinaryHelper.getBitMask((long) getBits() - shiftAmount);
+            BigInteger result = new BigInteger(arr).shiftRight(shiftAmount).and(BigInteger.valueOf(mask));
             return asIVar(result);
         }
 

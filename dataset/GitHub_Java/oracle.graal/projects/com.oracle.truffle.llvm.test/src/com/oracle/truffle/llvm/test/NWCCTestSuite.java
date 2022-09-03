@@ -71,16 +71,10 @@ public class NWCCTestSuite extends RemoteTestSuiteBase {
             ProcessResult processResult = TestHelper.executeLLVMBinary(bitCodeFile);
             String expectedLines = processResult.getStdInput();
             int expectedReturnValue = processResult.getReturnValue();
-            boolean pass = expectedLines.equals(sulongLines);
-            boolean undefinedReturnCode = tuple.hasFlag(TestCaseFlag.UNDEFINED_RETURN_CODE);
-            if (!undefinedReturnCode) {
-                pass &= expectedReturnValue == sulongRetValue;
-            }
+            boolean pass = expectedLines.equals(sulongLines) && expectedReturnValue == sulongRetValue;
             recordTestCase(tuple, pass);
             assertEquals(bitCodeFile.getAbsolutePath(), expectedLines, sulongLines);
-            if (!undefinedReturnCode) {
-                assertEquals(bitCodeFile.getAbsolutePath(), expectedReturnValue, sulongRetValue);
-            }
+            assertEquals(bitCodeFile.getAbsolutePath(), expectedReturnValue, sulongRetValue);
         } catch (Throwable e) {
             recordError(tuple, e);
             throw e;
