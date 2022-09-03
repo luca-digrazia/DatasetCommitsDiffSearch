@@ -25,7 +25,6 @@ package com.oracle.graal.hotspot.sparc;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
-import static jdk.internal.jvmci.hotspot.HotSpotCompressedNullConstant.*;
 import static jdk.internal.jvmci.sparc.SPARC.*;
 
 import java.util.*;
@@ -221,7 +220,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(c)) {
             return true;
         } else if (c instanceof HotSpotObjectConstant) {
-            return false;
+            return ((HotSpotObjectConstant) c).isCompressed();
         } else {
             return super.canInlineConstant(c);
         }
@@ -262,13 +261,11 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     @Override
     protected SPARCLIRInstruction createMove(AllocatableValue dst, Value src) {
-        Value usedSource;
-        if (COMPRESSED_NULL.equals(src)) {
-            usedSource = INT_0;
+        if (src instanceof JavaConstant) {
+            return new SPARCHotSpotMove.HotSpotLoadConstantOp(dst, (JavaConstant) src);
         } else {
-            usedSource = src;
+            return super.createMove(dst, src);
         }
-        return super.createMove(dst, usedSource);
     }
 
     @Override
