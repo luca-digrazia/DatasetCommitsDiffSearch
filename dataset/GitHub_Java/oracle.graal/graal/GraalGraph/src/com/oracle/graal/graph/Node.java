@@ -24,9 +24,7 @@ package com.oracle.graal.graph;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public abstract class Node {
 
@@ -80,10 +78,6 @@ public abstract class Node {
         return graph;
     }
 
-    public <T extends Op> T lookup(Class<T> clazz) {
-        return null;
-    }
-
     public String shortName() {
         return getClass().getSimpleName();
     }
@@ -118,7 +112,7 @@ public abstract class Node {
 
     public void delete() {
         assert !isDeleted();
-        assert usages.size() == 0 && predecessors.size() == 0 : "usages: " + usages.size() + ", predecessors: " + predecessors().size();
+        assert usages.size() == 0 && predecessors.size() == 0;
         assert predecessorsIndex.size() == 0;
         for (int i = 0; i < inputs.size(); ++i) {
             inputs.set(i, Null);
@@ -158,19 +152,6 @@ public abstract class Node {
      */
     protected int successorCount() {
         return 0;
-    }
-
-    /**
-     * Provides a {@link Map} of properties of this node for use in debugging (e.g., to view in the ideal graph
-     * visualizer). Subclasses overriding this method should add to the map returned by their superclass.
-     */
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> map = new HashMap<Object, Object>();
-        map.put("inputCount", inputCount());
-        map.put("usageCount", usages.size());
-        map.put("successorCount", successorCount());
-        map.put("predecessorCount", predecessors.size());
-        return map;
     }
 
     @Override

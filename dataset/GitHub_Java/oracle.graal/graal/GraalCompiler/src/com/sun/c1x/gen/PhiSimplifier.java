@@ -45,7 +45,7 @@ public final class PhiSimplifier {
         }
         Phi phi = (Phi) x;
 
-        if (phi.valueCount() == 1 && !phi.checkFlag(Value.Flag.PhiCannotSimplify)) {
+        if (phi.valueCount() == 1) {
             return (Value) phi.replace(phi.valueAt(0));
         }
 
@@ -105,10 +105,6 @@ public final class PhiSimplifier {
             // successfully simplified the phi
             assert phiSubst != null : "illegal phi function";
             phi.clearFlag(Value.Flag.PhiVisited);
-
-            phi.replace(phiSubst);
-//            System.out.printf("replaced phi with %d inputs\n", max);
-
             return phiSubst;
         }
     }
