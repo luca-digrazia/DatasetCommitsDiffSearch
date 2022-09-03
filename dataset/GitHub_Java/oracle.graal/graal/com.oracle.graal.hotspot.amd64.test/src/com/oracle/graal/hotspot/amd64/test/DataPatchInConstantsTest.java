@@ -168,7 +168,7 @@ public class DataPatchInConstantsTest extends HotSpotGraalCompilerTest {
 
         @Input protected ValueNode input;
 
-        protected LoadThroughPatchNode(ValueNode input) {
+        public LoadThroughPatchNode(ValueNode input) {
             super(TYPE, input.stamp());
             this.input = input;
         }

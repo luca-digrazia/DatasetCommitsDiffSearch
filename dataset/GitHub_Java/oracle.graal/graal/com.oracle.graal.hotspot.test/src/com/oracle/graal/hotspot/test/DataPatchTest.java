@@ -27,6 +27,7 @@ import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 import jdk.vm.ci.hotspot.HotSpotVMConfig;
 
 import org.junit.Assume;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.graal.api.directives.GraalDirectives;
@@ -35,9 +36,6 @@ import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.compiler.test.GraalCompilerTest;
 import com.oracle.graal.hotspot.nodes.CompressionNode;
 import com.oracle.graal.hotspot.nodes.CompressionNode.CompressionOp;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
 
 public class DataPatchTest extends GraalCompilerTest {
 
@@ -74,13 +72,14 @@ public class DataPatchTest extends GraalCompilerTest {
     }
 
     private static final HotSpotVMConfig config = config();
+    private static boolean initReplacements = false;
 
-    @Override
-    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
-        InvocationPlugins invocationPlugins = conf.getPlugins().getInvocationPlugins();
-        Registration r = new Registration(invocationPlugins, DataPatchTest.class);
-        r.registerMethodSubstitution(DataPatchTestSubstitutions.class, "compressUncompress", Object.class);
-        return super.editGraphBuilderConfiguration(conf);
+    @Before
+    public void initReplacements() {
+        if (!initReplacements) {
+            getReplacements().registerSubstitutions(DataPatchTest.class, DataPatchTestSubstitutions.class);
+            initReplacements = true;
+        }
     }
 
     @ClassSubstitution(DataPatchTest.class)
