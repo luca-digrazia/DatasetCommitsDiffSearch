@@ -22,12 +22,15 @@
  */
 package com.oracle.truffle.object.basic;
 
-import com.oracle.truffle.api.object.*;
-import com.oracle.truffle.object.*;
+import com.oracle.truffle.api.object.Layout;
+import com.oracle.truffle.api.object.LayoutFactory;
+import com.oracle.truffle.api.object.Location;
+import com.oracle.truffle.api.object.Property;
+import com.oracle.truffle.object.PropertyImpl;
 
 public class DefaultLayoutFactory implements LayoutFactory {
     public Layout createLayout(Layout.Builder layoutBuilder) {
-        return BasicLayout.createLayoutImpl(layoutBuilder.getAllowedImplicitCasts(), new DefaultStrategy());
+        return BasicLayout.createLayoutImpl(layoutBuilder, new DefaultStrategy());
     }
 
     public Property createProperty(Object id, Location location) {
