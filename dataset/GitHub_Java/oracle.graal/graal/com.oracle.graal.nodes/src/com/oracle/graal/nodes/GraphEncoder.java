@@ -22,14 +22,29 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Objects;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.util.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.compiler.common.Fields;
+import com.oracle.graal.compiler.common.util.FrequencyEncoder;
+import com.oracle.graal.compiler.common.util.TypeConversion;
+import com.oracle.graal.compiler.common.util.TypeReader;
+import com.oracle.graal.compiler.common.util.TypeWriter;
+import com.oracle.graal.compiler.common.util.UnsafeArrayTypeWriter;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.graph.Edges;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeList;
+import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.java.ExceptionObjectNode;
+
+import jdk.vm.ci.code.Architecture;
 
 /**
  * Encodes a {@link StructuredGraph} to a compact byte[] array. All nodes of the graph and edges
@@ -51,8 +66,8 @@ import com.oracle.graal.nodes.java.*;
  * encoding-local.
  *
  * The encoded graph has the following structure: First, all nodes and their edges are serialized.
- * The start offset of every node is then known. The raw node data is followed by a
- * "table of contents" that lists the start offset for every node.
+ * The start offset of every node is then known. The raw node data is followed by a "table of
+ * contents" that lists the start offset for every node.
  *
  * The beginning of that table of contents is the return value of {@link #encode} and stored in
  * {@link EncodedGraph#getStartOffset()}. The order of nodes in the table of contents is the
@@ -86,8 +101,8 @@ import com.oracle.graal.nodes.java.*;
  * length -1) and empty lists (encoded as length 0). No reverse edges are written (predecessors,
  * usages) since that information can be easily restored during decoding.
  *
- * Some nodes have additional information written after the properties, successors, and inputs: <li>
- * <item>{@link AbstractEndNode}: the orderId of the merge node and then all {@link PhiNode phi
+ * Some nodes have additional information written after the properties, successors, and inputs:
+ * <li><item>{@link AbstractEndNode}: the orderId of the merge node and then all {@link PhiNode phi
  * mappings} from this end to the merge node are written. <item>{@link LoopExitNode}: the orderId of
  * all {@link ProxyNode proxy nodes} of the loop exit is written.</li>
  */
@@ -97,7 +112,9 @@ public class GraphEncoder {
     public static final int NULL_ORDER_ID = 0;
     /** The orderId of the {@link StructuredGraph#start() start node} of the encoded graph. */
     public static final int START_NODE_ORDER_ID = 1;
-    /** The orderId of the first actual node after the {@link StructuredGraph#start() start node}. */
+    /**
+     * The orderId of the first actual node after the {@link StructuredGraph#start() start node}.
+     */
     public static final int FIRST_NODE_ORDER_ID = 2;
 
     /**
@@ -105,6 +122,8 @@ public class GraphEncoder {
      * {@link AbstractBeginNode#next() successor}.
      */
     protected static final int BEGIN_NEXT_ORDER_ID_OFFSET = 1;
+
+    protected final Architecture architecture;
 
     /**
      * Collects all non-primitive data referenced from nodes. The encoding uses an index into an
@@ -128,18 +147,19 @@ public class GraphEncoder {
     /**
      * Utility method that does everything necessary to encode a single graph.
      */
-    public static EncodedGraph encodeSingleGraph(StructuredGraph graph) {
-        GraphEncoder encoder = new GraphEncoder();
+    public static EncodedGraph encodeSingleGraph(StructuredGraph graph, Architecture architecture) {
+        GraphEncoder encoder = new GraphEncoder(architecture);
         encoder.prepare(graph);
         encoder.finishPrepare();
         long startOffset = encoder.encode(graph);
-        return new EncodedGraph(encoder.getEncoding(), startOffset, encoder.getObjects(), encoder.getNodeClasses(), graph.getAssumptions(), graph.getInlinedMethods());
+        return new EncodedGraph(encoder.getEncoding(), startOffset, encoder.getObjects(), encoder.getNodeClasses(), graph.getAssumptions(), graph.getMethods());
     }
 
-    public GraphEncoder() {
+    public GraphEncoder(Architecture architecture) {
+        this.architecture = architecture;
         objects = FrequencyEncoder.createEqualityEncoder();
         nodeClasses = FrequencyEncoder.createIdentityEncoder();
-        writer = new UnsafeArrayTypeWriter();
+        writer = UnsafeArrayTypeWriter.create(architecture.supportsUnalignedMemoryAccess());
     }
 
     /**
@@ -150,6 +170,7 @@ public class GraphEncoder {
             nodeClasses.addObject(node.getNodeClass());
 
             NodeClass<?> nodeClass = node.getNodeClass();
+            objects.addObject(node.getNodeSourcePosition());
             for (int i = 0; i < nodeClass.getData().getCount(); i++) {
                 if (!nodeClass.getData().getType(i).isPrimitive()) {
                     objects.addObject(nodeClass.getData().get(node, i));
@@ -163,7 +184,7 @@ public class GraphEncoder {
 
     public void finishPrepare() {
         objectsArray = objects.encodeAll(new Object[objects.getLength()]);
-        nodeClassesArray = nodeClasses.encodeAll(new NodeClass[nodeClasses.getLength()]);
+        nodeClassesArray = nodeClasses.encodeAll(new NodeClass<?>[nodeClasses.getLength()]);
     }
 
     public Object[] getObjects() {
@@ -262,7 +283,7 @@ public class GraphEncoder {
         }
 
         /* Check that the decoding of the encode graph is the same as the input. */
-        assert verifyEncoding(graph, new EncodedGraph(getEncoding(), nodeTableStart, getObjects(), getNodeClasses(), graph.getAssumptions(), graph.getInlinedMethods()));
+        assert verifyEncoding(graph, new EncodedGraph(getEncoding(), nodeTableStart, getObjects(), getNodeClasses(), graph.getAssumptions(), graph.getMethods()), architecture);
 
         return nodeTableStart;
     }
@@ -275,7 +296,7 @@ public class GraphEncoder {
         protected final NodeMap<Integer> orderIds;
         protected int nextOrderId;
 
-        public NodeOrder(StructuredGraph graph) {
+        NodeOrder(StructuredGraph graph) {
             this.orderIds = new NodeMap<>(graph);
             this.nextOrderId = START_NODE_ORDER_ID;
 
@@ -329,6 +350,7 @@ public class GraphEncoder {
     }
 
     protected void writeProperties(Node node, Fields fields) {
+        writeObjectId(node.getNodeSourcePosition());
         for (int idx = 0; idx < fields.getCount(); idx++) {
             if (fields.getType(idx).isPrimitive()) {
                 long primitive = fields.getRawPrimitive(node, idx);
@@ -378,13 +400,22 @@ public class GraphEncoder {
      * Verification code that checks that the decoding of an encode graph is the same as the
      * original graph.
      */
-    public static boolean verifyEncoding(StructuredGraph originalGraph, EncodedGraph encodedGraph) {
-        StructuredGraph decodedGraph = new StructuredGraph(originalGraph.method(), AllowAssumptions.YES);
-        GraphDecoder decoder = new GraphDecoder();
+    @SuppressWarnings("try")
+    public static boolean verifyEncoding(StructuredGraph originalGraph, EncodedGraph encodedGraph, Architecture architecture) {
+        StructuredGraph decodedGraph = new StructuredGraph.Builder(AllowAssumptions.YES).method(originalGraph.method()).build();
+        GraphDecoder decoder = new GraphDecoder(architecture);
         decoder.decode(decodedGraph, encodedGraph);
 
         decodedGraph.verify();
-        GraphComparison.verifyGraphsEqual(originalGraph, decodedGraph);
+        try {
+            GraphComparison.verifyGraphsEqual(originalGraph, decodedGraph);
+        } catch (Throwable ex) {
+            try (Debug.Scope scope = Debug.scope("GraphEncoder")) {
+                Debug.dump(Debug.INFO_LOG_LEVEL, originalGraph, "Original Graph");
+                Debug.dump(Debug.INFO_LOG_LEVEL, decodedGraph, "Decoded Graph");
+            }
+            throw ex;
+        }
         return true;
     }
 }
@@ -438,9 +469,6 @@ class GraphComparison {
             }
         }
 
-        for (Node expectedNode : expectedGraph.getNodes()) {
-            assert nodeMapping.get(expectedNode) != null || (expectedNode.hasNoUsages() && !(expectedNode instanceof FixedNode)) : "expectedNode";
-        }
         return true;
     }
 
@@ -511,7 +539,7 @@ class Pair<F, S> {
     public final F first;
     public final S second;
 
-    public Pair(F first, S second) {
+    Pair(F first, S second) {
         this.first = first;
         this.second = second;
     }
