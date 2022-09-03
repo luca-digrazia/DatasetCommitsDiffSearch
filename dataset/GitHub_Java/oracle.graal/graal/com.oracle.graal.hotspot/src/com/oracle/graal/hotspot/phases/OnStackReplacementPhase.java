@@ -82,7 +82,8 @@ public class OnStackReplacementPhase extends Phase {
                 throw new BailoutException("No OnStackReplacementNode generated");
             }
             if (osrNodes.count() > 1) {
-                throw new GraalInternalError("Multiple OnStackReplacementNodes generated");
+                // this can happen with JSR inlining
+                throw new BailoutException("Multiple OnStackReplacementNodes generated");
             }
             if (osr.stateAfter().locksSize() != 0) {
                 throw new BailoutException("OSR with locks not supported");
