@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,8 +23,6 @@
 package com.oracle.svm.reflect.hosted;
 
 // Checkstyle: allow reflection
-
-import static com.oracle.svm.reflect.hosted.ReflectionSubstitution.getStableProxyName;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -64,8 +60,8 @@ import com.oracle.svm.hosted.annotation.CustomSubstitutionField;
 import com.oracle.svm.hosted.annotation.CustomSubstitutionMethod;
 import com.oracle.svm.hosted.annotation.CustomSubstitutionType;
 import com.oracle.svm.hosted.phases.HostedGraphKit;
-import com.oracle.svm.reflect.helpers.ExceptionHelpers;
 import com.oracle.svm.reflect.hosted.ReflectionSubstitutionType.ReflectionSubstitutionMethod;
+import com.oracle.svm.reflect.proxies.ExceptionHelpers;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -75,11 +71,9 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 
 public final class ReflectionSubstitutionType extends CustomSubstitutionType<CustomSubstitutionField, ReflectionSubstitutionMethod> {
 
-    private String stableName;
-
     public ReflectionSubstitutionType(ResolvedJavaType original, Member member) {
         super(original);
-        stableName = "L" + getStableProxyName(member).replace(".", "\\") + ";";
+
         for (ResolvedJavaMethod method : original.getDeclaredMethods()) {
             switch (method.getName()) {
                 case "invoke":
@@ -159,7 +153,7 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
 
     @Override
     public String getName() {
-        return stableName;
+        return original.getName();
     }
 
     public abstract static class ReflectionSubstitutionMethod extends CustomSubstitutionMethod {
