@@ -30,20 +30,23 @@ import com.sun.cri.ci.*;
  * The {@code Phi} instruction represents the merging of dataflow
  * in the instruction graph. It refers to a join block and a variable.
  */
-public final class Phi extends FloatingNode {
+public class Phi extends FloatingNode {
 
     private static final int DEFAULT_MAX_VALUES = 2;
 
     private static final int INPUT_COUNT = 1;
     private static final int INPUT_MERGE = 0;
 
+    private final int maxValues;
+
     private static final int SUCCESSOR_COUNT = 0;
 
+    private int usedInputCount;
     private boolean isDead;
 
     @Override
     protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+        return super.inputCount() + INPUT_COUNT + maxValues;
     }
 
     @Override
@@ -54,18 +57,29 @@ public final class Phi extends FloatingNode {
     /**
      * The merge node for this phi.
      */
-    public PhiPoint merge() {
-        return (PhiPoint) inputs().get(super.inputCount() + INPUT_MERGE);
+    public Merge merge() {
+        return (Merge) inputs().get(super.inputCount() + INPUT_MERGE);
     }
 
-    public void setMerge(Node n) {
-        assert n instanceof PhiPoint;
-        inputs().set(super.inputCount() + INPUT_MERGE, n);
+    public Value setMerge(Value n) {
+        return (Merge) inputs().set(super.inputCount() + INPUT_MERGE, n);
     }
 
-    public Phi(CiKind kind, PhiPoint merge, Graph graph) {
-        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-        setMerge(merge.asNode());
+    /**
+     * Create a new Phi for the specified join block and local variable (or operand stack) slot.
+     * @param kind the type of the variable
+     * @param merge the join point
+     * @param graph
+     */
+    public Phi(CiKind kind, Merge merge, Graph graph) {
+        this(kind, merge, DEFAULT_MAX_VALUES, graph);
+    }
+
+    public Phi(CiKind kind, Merge merge, int maxValues, Graph graph) {
+        super(kind, INPUT_COUNT + maxValues, SUCCESSOR_COUNT, graph);
+        this.maxValues = maxValues;
+        usedInputCount = 0;
+        setMerge(merge);
     }
 
     /**
@@ -75,11 +89,11 @@ public final class Phi extends FloatingNode {
      * @return the instruction that produced the value in the i'th predecessor
      */
     public Value valueAt(int i) {
-        return (Value) inputs().variablePart().get(i);
+        return (Value) inputs().get(INPUT_COUNT + i);
     }
 
-    public void setValueAt(int i, Value x) {
-        inputs().set(INPUT_COUNT + i, x);
+    public Value setValueAt(int i, Value x) {
+        return (Value) inputs().set(INPUT_COUNT + i, x);
     }
 
     /**
@@ -87,7 +101,7 @@ public final class Phi extends FloatingNode {
      * @return the number of inputs in this phi
      */
     public int valueCount() {
-        return inputs().variablePart().size();
+        return usedInputCount;
     }
 
     @Override
@@ -130,17 +144,36 @@ public final class Phi extends FloatingNode {
         return "Phi: (" + str + ")";
     }
 
-    public void addInput(Node y) {
-        inputs().variablePart().add(y);
+    public Phi addInput(Value y) {
+        assert !this.isDeleted() && !y.isDeleted();
+        Phi phi = this;
+        if (usedInputCount == maxValues) {
+            phi = new Phi(kind, merge(), maxValues * 2, graph());
+            for (int i = 0; i < valueCount(); ++i) {
+                phi.addInput(valueAt(i));
+            }
+            phi.addInput(y);
+            this.replace(phi);
+        } else {
+            setValueAt(usedInputCount++, y);
+        }
+        return phi;
     }
 
     public void removeInput(int index) {
-        inputs().variablePart().remove(index);
+        assert index < valueCount() : "index: " + index + ", valueCount: " + valueCount() + "@phi " + id();
+        setValueAt(index, null);
+        for (int i = index + 1; i < valueCount(); ++i) {
+            setValueAt(i - 1, valueAt(i));
+        }
+        setValueAt(valueCount() - 1, null);
+        usedInputCount--;
     }
 
     @Override
     public Node copy(Graph into) {
-        Phi x = new Phi(kind, null, into);
+        Phi x = new Phi(kind, null, maxValues, into);
+        x.usedInputCount = usedInputCount;
         x.isDead = isDead;
         return x;
     }

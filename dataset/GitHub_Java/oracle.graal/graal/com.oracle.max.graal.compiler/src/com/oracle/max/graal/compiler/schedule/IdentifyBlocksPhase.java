@@ -305,7 +305,7 @@ public class IdentifyBlocksPhase extends Phase {
                 if (n == counter.init()) {
                     LoopBegin loopBegin = counter.loopBegin();
                     Block mergeBlock = nodeToBlock.get(loopBegin);
-                    block = getCommonDominator(block, mergeBlock.dominator());
+                    block = getCommonDominator(block, mergeBlock.getPredecessors().get(0)); // TODO (gd) nasty 0 constant
                 }
             } else {
                 block = getCommonDominator(block, assignLatestPossibleBlockToNode(usage));

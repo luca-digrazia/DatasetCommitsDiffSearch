@@ -42,58 +42,24 @@ public class LoopPhase extends Phase {
     }
 
     private void doLoop(LoopBegin loopBegin) {
-        NodeBitMap loopNodes = computeLoopNodes(loopBegin);
-        List<LoopCounter> counters = findLoopCounters(loopBegin, loopNodes);
-        mergeLoopCounters(counters, loopBegin);
-    }
-
-    private void mergeLoopCounters(List<LoopCounter> counters, LoopBegin loopBegin) {
-        Graph graph = loopBegin.graph();
-        LoopCounter[] acounters = counters.toArray(new LoopCounter[counters.size()]);
-        for (int i = 0; i < acounters.length; i++) {
-            LoopCounter c1 = acounters[i];
-            if (c1 == null) {
-                continue;
-            }
-            for (int j = i + 1; j < acounters.length; j++) {
-                LoopCounter c2 = acounters[j];
-                if (c2 != null && c1.stride().valueEqual(c2.stride())) {
-                    acounters[j] = null;
-                    IntegerSub sub = new IntegerSub(c1.kind, c2.init(), c1.init(), graph);
-                    IntegerAdd add = new IntegerAdd(c1.kind, c1, sub, graph);
-                    Phi phi = new Phi(c1.kind, loopBegin, 2, graph); // TODO (gd) assumes order on loppBegin preds
-                    phi.addInput(c2.init());
-                    phi.addInput(add);
-                    c2.replace(phi);
-                    System.out.println("--> merged Loop Counters");
-                }
-            }
-        }
-    }
-
-    private List<LoopCounter> findLoopCounters(LoopBegin loopBegin, NodeBitMap loopNodes) {
         LoopEnd loopEnd = loopBegin.loopEnd();
+        NodeBitMap loopNodes = computeLoopNodes(loopBegin);
         List<Node> usages = new ArrayList<Node>(loopBegin.usages());
-        List<LoopCounter> counters = new LinkedList<LoopCounter>();
         for (Node usage : usages) {
             if (usage instanceof Phi) {
                 Phi phi = (Phi) usage;
-                if (phi.valueCount() == 2) {
-                    Value backEdge = phi.valueAt(1);
+                if (phi.valueCount() == 2) { // TODO (gd) remove predecessor order assumptions
+                    Value backEdge = phi.valueAt(1); //assumes backEdge with pred index 1
                     Value init = phi.valueAt(0);
-                    if (loopNodes.isMarked(init)) {
-                        // try to reverse init/backEdge order
-                        Value tmp = backEdge;
-                        backEdge = init;
-                        init = tmp;
-                    }
                     Value stride = null;
-                    boolean useCounterAfterAdd = false;
+                    boolean createAfterAddCounter = false;
                     if (!loopNodes.isMarked(init) && backEdge instanceof IntegerAdd && loopNodes.isMarked(backEdge)) {
                         IntegerAdd add = (IntegerAdd) backEdge;
                         int addUsageCount = 0;
+                        System.out.println("BackEdge usages :");
                         for (Node u : add.usages()) {
-                            if (u != loopEnd.stateBefore() && u != phi) {
+                            if (u != loopEnd.stateBefore()) {
+                                System.out.println(" - " + u);
                                 addUsageCount++;
                             }
                         }
@@ -102,20 +68,19 @@ public class LoopPhase extends Phase {
                         } else if (add.y() == phi) {
                             stride = add.x();
                         }
-                        if (addUsageCount > 0) {
-                            useCounterAfterAdd = true;
+                        if (addUsageCount > 1) {
+                            createAfterAddCounter = true;
                         }
                     }
                     if (stride != null && !loopNodes.isMarked(stride)) {
                         Graph graph = loopBegin.graph();
                         LoopCounter counter = new LoopCounter(init.kind, init, stride, loopBegin, graph);
-                        counters.add(counter);
                         phi.replace(counter);
                         loopEnd.stateBefore().inputs().replace(backEdge, counter);
-                        if (useCounterAfterAdd) {
-                            /*IntegerAdd otherInit = new IntegerAdd(init.kind, init, stride, graph); // would be nice to canonicalize
+                        if (createAfterAddCounter) {
+                            IntegerAdd otherInit = new IntegerAdd(init.kind, init, stride, graph); // would be nice to canonicalize
                             LoopCounter otherCounter = new LoopCounter(init.kind, otherInit, stride, loopBegin, graph);
-                            backEdge.replace(otherCounter);*/
+                            backEdge.replace(otherCounter);
                         } else {
                             backEdge.delete();
                         }
@@ -123,7 +88,6 @@ public class LoopPhase extends Phase {
                 }
             }
         }
-        return counters;
     }
 
     private NodeBitMap computeLoopNodes(LoopBegin loopBegin) {

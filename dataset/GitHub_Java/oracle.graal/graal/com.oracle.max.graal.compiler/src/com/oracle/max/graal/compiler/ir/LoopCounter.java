@@ -29,47 +29,52 @@ import com.sun.cri.ci.*;
 
 public final class LoopCounter extends FloatingNode {
 
-    @NodeInput
-    private Value init;
+    private static final int INPUT_COUNT = 3;
+    private static final int INPUT_MERGE = 0;
+    private static final int INPUT_INIT = 1;
+    private static final int INPUT_STRIDE = 2;
 
-    @NodeInput
-    private Value stride;
-
-    @NodeInput
-    private LoopBegin loopBegin;
-
-    public Value init() {
-        return init;
-    }
-
-    public void setInit(Value x) {
-        updateUsages(init, x);
-        init = x;
-    }
-
-    public Value stride() {
-        return stride;
-    }
-
-    public void setStride(Value x) {
-        updateUsages(stride, x);
-        stride = x;
-    }
-
-    public LoopBegin loopBegin() {
-        return loopBegin;
-    }
-
-    public void setLoopBegin(LoopBegin x) {
-        updateUsages(loopBegin, x);
-        loopBegin = x;
-    }
+    private static final int SUCCESSOR_COUNT = 0;
 
     public LoopCounter(CiKind kind, Value init, Value stride, LoopBegin loop, Graph graph) {
-        super(kind, graph);
+        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setInit(init);
         setStride(stride);
         setLoopBegin(loop);
+    }
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    public Value init() {
+        return (Value) inputs().get(super.inputCount() + INPUT_INIT);
+    }
+
+    public Value setInit(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_INIT, n);
+    }
+
+    public Value stride() {
+        return (Value) inputs().get(super.inputCount() + INPUT_STRIDE);
+    }
+
+    public Value setStride(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_STRIDE, n);
+    }
+
+    public LoopBegin loopBegin() {
+        return (LoopBegin) inputs().get(super.inputCount() + INPUT_MERGE);
+    }
+
+    public Value setLoopBegin(LoopBegin n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_MERGE, n);
     }
 
     @Override
