@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -131,7 +131,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
      */
     private HotSpotResolvedObjectType getHolder() {
         final long metaspaceKlass = unsafe.getAddress(metaspaceConstantPool + runtime().getConfig().constantPoolHolderOffset);
-        return HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
+        return (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
     }
 
     /**
@@ -383,13 +383,13 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
         final JVM_CONSTANT tag = getTagAt(cpi);
         switch (tag) {
             case Integer:
-                return JavaConstant.forInt(getIntAt(cpi));
+                return Constant.forInt(getIntAt(cpi));
             case Long:
-                return JavaConstant.forLong(getLongAt(cpi));
+                return Constant.forLong(getLongAt(cpi));
             case Float:
-                return JavaConstant.forFloat(getFloatAt(cpi));
+                return Constant.forFloat(getFloatAt(cpi));
             case Double:
-                return JavaConstant.forDouble(getDoubleAt(cpi));
+                return Constant.forDouble(getDoubleAt(cpi));
             case Class:
             case UnresolvedClass:
             case UnresolvedClassInError:
@@ -421,7 +421,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     }
 
     @Override
-    public JavaConstant lookupAppendix(int cpi, int opcode) {
+    public Constant lookupAppendix(int cpi, int opcode) {
         assert Bytecodes.isInvoke(opcode);
         final int index = toConstantPoolIndex(cpi, opcode);
         Object result = runtime().getCompilerToVM().lookupAppendixInPool(metaspaceConstantPool, index);
@@ -456,13 +456,13 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
         final int index = toConstantPoolIndex(cpi, opcode);
         final long metaspaceMethod = runtime().getCompilerToVM().lookupMethodInPool(metaspaceConstantPool, index, (byte) opcode);
         if (metaspaceMethod != 0L) {
-            return HotSpotResolvedJavaMethodImpl.fromMetaspace(metaspaceMethod);
+            return HotSpotResolvedJavaMethod.fromMetaspace(metaspaceMethod);
         } else {
             // Get the method's name and signature.
             String name = getNameRefAt(index);
             String signature = getSignatureRefAt(index);
             if (opcode == Bytecodes.INVOKEDYNAMIC) {
-                HotSpotResolvedObjectType holder = HotSpotResolvedObjectType.fromObjectClass(MethodHandle.class);
+                JavaType holder = HotSpotResolvedJavaType.fromClass(MethodHandle.class);
                 return new HotSpotMethodUnresolved(name, signature, holder);
             } else {
                 final int klassIndex = getKlassRefIndexAt(index);
@@ -504,7 +504,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
                  */
                 return new HotSpotUnresolvedField(holder, name, type);
             }
-            HotSpotResolvedObjectType resolvedHolder = HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
+            HotSpotResolvedObjectType resolvedHolder = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
             final int flags = (int) info[0];
             final long offset = info[1];
             return resolvedHolder.createField(name, type, offset, flags);
@@ -549,12 +549,12 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
                 index = getUncachedKlassRefIndexAt(index);
                 tag = getTagAt(index);
                 assert tag == JVM_CONSTANT.Class || tag == JVM_CONSTANT.UnresolvedClass || tag == JVM_CONSTANT.UnresolvedClassInError : tag;
-                // fall through
+                // fall-through
             case Class:
             case UnresolvedClass:
             case UnresolvedClassInError:
                 final long metaspaceKlass = runtime().getCompilerToVM().constantPoolKlassAt(metaspaceConstantPool, index);
-                HotSpotResolvedObjectType type = HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
+                HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
                 Class<?> klass = type.mirror();
                 if (!klass.isPrimitive() && !klass.isArray()) {
                     unsafe.ensureClassInitialized(klass);
