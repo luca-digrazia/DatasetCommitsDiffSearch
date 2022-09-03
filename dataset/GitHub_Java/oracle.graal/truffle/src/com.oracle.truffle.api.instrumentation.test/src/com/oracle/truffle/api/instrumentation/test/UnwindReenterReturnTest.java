@@ -24,11 +24,6 @@
  */
 package com.oracle.truffle.api.instrumentation.test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -40,8 +35,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.graalvm.polyglot.PolyglotException;
 import org.junit.After;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -61,6 +59,7 @@ import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.api.instrumentation.test.UnwindReenterReturnTest.TestControlFlow.CodeAction;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 
 /**
@@ -478,9 +477,8 @@ public class UnwindReenterReturnTest extends AbstractInstrumentationTest {
 
     @Test
     public void testParallelUnwindOneForAll() throws Exception {
-        cleanup();
-        context = newContext();
         // Throw a single UnwindException in multiple threads and test that it fails.
+        context = org.graalvm.polyglot.Context.newBuilder().engine(engine).allowCreateThread(true).out(out).err(out).build();
         UnwindParallel unwindParallel = engine.getInstruments().get("testUnwindParallel").lookup(UnwindParallel.class);
         int n = 5;
         StringBuilder codeBuilder = new StringBuilder("ROOT(");
@@ -500,7 +498,6 @@ public class UnwindReenterReturnTest extends AbstractInstrumentationTest {
         } catch (Exception ex) {
         }
         context.close(true);
-        context = null;
         String message = failure.get().getMessage();
         assertTrue(message, message.contains("A single instance of UnwindException thrown in two threads"));
     }
@@ -530,8 +527,7 @@ public class UnwindReenterReturnTest extends AbstractInstrumentationTest {
     }
 
     private void doParallelUnwind(boolean concurrent) throws Exception {
-        cleanup();
-        context = newContext();
+        context = org.graalvm.polyglot.Context.newBuilder().engine(engine).allowCreateThread(true).out(out).err(out).build();
         UnwindParallel unwindParallel = engine.getInstruments().get("testUnwindParallel").lookup(UnwindParallel.class);
         int n = 5;
         StringBuilder codeBuilder = new StringBuilder("ROOT(");
@@ -568,8 +564,6 @@ public class UnwindReenterReturnTest extends AbstractInstrumentationTest {
         }
         assertEquals(3, numUnwinds);
         assertEquals(5 * 3, numOnes);
-        context.close();
-        context = null;
     }
 
     @Registration(id = "testControlFlow", services = TestControlFlow.class)
