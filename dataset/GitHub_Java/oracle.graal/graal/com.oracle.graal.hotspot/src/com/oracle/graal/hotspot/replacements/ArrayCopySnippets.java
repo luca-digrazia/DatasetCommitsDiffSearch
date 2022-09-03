@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,33 +22,40 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
-import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.GuardingPiNode.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.Node.ConstantNodeParameter;
+import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.phases.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.*;
-import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
 
-@SuppressWarnings("unused")
 public class ArrayCopySnippets implements Snippets {
 
     private static final EnumMap<Kind, Method> arraycopyMethods = new EnumMap<>(Kind.class);
+    private static final EnumMap<Kind, Method> arraycopyCalls = new EnumMap<>(Kind.class);
+
     public static final Method genericArraycopySnippet;
 
     private static void addArraycopySnippetMethod(Kind kind, Class<?> arrayClass) throws NoSuchMethodException {
         arraycopyMethods.put(kind, ArrayCopySnippets.class.getDeclaredMethod("arraycopy", arrayClass, int.class, arrayClass, int.class, int.class));
+        if (CallArrayCopy.getValue()) {
+            if (kind == Kind.Object) {
+                arraycopyCalls.put(kind, ArrayCopySnippets.class.getDeclaredMethod("objectArraycopyUnchecked", arrayClass, int.class, arrayClass, int.class, int.class));
+            } else {
+                arraycopyCalls.put(kind, ArrayCopySnippets.class.getDeclaredMethod(kind + "Arraycopy", arrayClass, int.class, arrayClass, int.class, int.class));
+            }
+        }
     }
 
     static {
@@ -68,84 +75,50 @@ public class ArrayCopySnippets implements Snippets {
         }
     }
 
-    public static Method getSnippetForKind(Kind kind) {
+    public static Method getSnippetForKind(Kind kind, boolean shouldUnroll, boolean exact) {
+        Method m = null;
+        if (!shouldUnroll && exact) {
+            m = arraycopyCalls.get(kind);
+            if (m != null) {
+                return m;
+            }
+        }
         return arraycopyMethods.get(kind);
     }
 
-    private static final Kind VECTOR_KIND = Kind.Long;
-    private static final long VECTOR_SIZE = arrayIndexScale(Kind.Long);
-
-    public static void vectorizedCopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter("baseKind") Kind baseKind) {
-        checkNonNull(src);
-        checkNonNull(dest);
-        checkLimits(src, srcPos, dest, destPos, length);
-        int header = arrayBaseOffset(baseKind);
-        int elementSize = arrayIndexScale(baseKind);
-        long byteLength = (long) length * elementSize;
-        long nonVectorBytes = byteLength % VECTOR_SIZE;
-        long srcOffset = (long) srcPos * elementSize;
-        long destOffset = (long) destPos * elementSize;
-        if (src == dest && srcPos < destPos) { // bad aliased case
-            probability(NOT_FREQUENT_PROBABILITY);
-            for (long i = byteLength - elementSize; i >= byteLength - nonVectorBytes; i -= elementSize) {
-                UnsafeStoreNode.store(dest, header, i + destOffset, UnsafeLoadNode.load(src, header, i + srcOffset, baseKind), baseKind);
-            }
-            long vectorLength = byteLength - nonVectorBytes;
-            for (long i = vectorLength - VECTOR_SIZE; i >= 0; i -= VECTOR_SIZE) {
-                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
-                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
-            }
-        } else {
-            for (long i = 0; i < nonVectorBytes; i += elementSize) {
-                UnsafeStoreNode.store(dest, header, i + destOffset, UnsafeLoadNode.load(src, header, i + srcOffset, baseKind), baseKind);
-            }
-            for (long i = nonVectorBytes; i < byteLength; i += VECTOR_SIZE) {
-                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
-                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
-            }
-        }
+    private static void checkedCopy(Object src, int srcPos, Object dest, int destPos, int length, Kind baseKind) {
+        Object nonNullSrc = guardingNonNull(src);
+        Object nonNullDest = guardingNonNull(dest);
+        checkLimits(nonNullSrc, srcPos, nonNullDest, destPos, length);
+        UnsafeArrayCopyNode.arraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length, baseKind);
     }
 
-    public static void checkNonNull(Object obj) {
-        if (obj == null) {
-            probability(DEOPT_PATH_PROBABILITY);
-            checkNPECounter.inc();
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
-        }
-    }
-
-    public static int checkArrayType(Word hub) {
+    private static int checkArrayType(TypePointer hub) {
         int layoutHelper = readLayoutHelper(hub);
-        if (layoutHelper >= 0) {
-            probability(DEOPT_PATH_PROBABILITY);
+        if (probability(SLOW_PATH_PROBABILITY, layoutHelper >= 0)) {
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
         return layoutHelper;
     }
 
-    public static void checkLimits(Object src, int srcPos, Object dest, int destPos, int length) {
-        if (srcPos < 0) {
-            probability(DEOPT_PATH_PROBABILITY);
+    private static void checkLimits(Object src, int srcPos, Object dest, int destPos, int length) {
+        if (probability(SLOW_PATH_PROBABILITY, srcPos < 0)) {
             checkAIOOBECounter.inc();
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
-        if (destPos < 0) {
-            probability(DEOPT_PATH_PROBABILITY);
+        if (probability(SLOW_PATH_PROBABILITY, destPos < 0)) {
             checkAIOOBECounter.inc();
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
-        if (length < 0) {
-            probability(DEOPT_PATH_PROBABILITY);
+        if (probability(SLOW_PATH_PROBABILITY, length < 0)) {
             checkAIOOBECounter.inc();
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
-        if (srcPos + length > ArrayLengthNode.arrayLength(src)) {
-            probability(DEOPT_PATH_PROBABILITY);
+        if (probability(SLOW_PATH_PROBABILITY, srcPos + length > ArrayLengthNode.arrayLength(src))) {
             checkAIOOBECounter.inc();
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
-        if (destPos + length > ArrayLengthNode.arrayLength(dest)) {
-            probability(DEOPT_PATH_PROBABILITY);
+        if (probability(SLOW_PATH_PROBABILITY, destPos + length > ArrayLengthNode.arrayLength(dest))) {
             checkAIOOBECounter.inc();
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
@@ -155,194 +128,143 @@ public class ArrayCopySnippets implements Snippets {
     @Snippet
     public static void arraycopy(byte[] src, int srcPos, byte[] dest, int destPos, int length) {
         byteCounter.inc();
-        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Byte);
+        checkedCopy(src, srcPos, dest, destPos, length, Kind.Byte);
     }
 
     @Snippet
     public static void arraycopy(boolean[] src, int srcPos, boolean[] dest, int destPos, int length) {
         booleanCounter.inc();
-        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Byte);
+        checkedCopy(src, srcPos, dest, destPos, length, Kind.Boolean);
     }
 
     @Snippet
     public static void arraycopy(char[] src, int srcPos, char[] dest, int destPos, int length) {
         charCounter.inc();
-        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Char);
+        checkedCopy(src, srcPos, dest, destPos, length, Kind.Char);
     }
 
     @Snippet
     public static void arraycopy(short[] src, int srcPos, short[] dest, int destPos, int length) {
         shortCounter.inc();
-        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Short);
+        checkedCopy(src, srcPos, dest, destPos, length, Kind.Short);
     }
 
     @Snippet
     public static void arraycopy(int[] src, int srcPos, int[] dest, int destPos, int length) {
         intCounter.inc();
-        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Int);
+        checkedCopy(src, srcPos, dest, destPos, length, Kind.Int);
     }
 
     @Snippet
     public static void arraycopy(float[] src, int srcPos, float[] dest, int destPos, int length) {
         floatCounter.inc();
-        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Float);
+        checkedCopy(src, srcPos, dest, destPos, length, Kind.Float);
     }
 
     @Snippet
     public static void arraycopy(long[] src, int srcPos, long[] dest, int destPos, int length) {
         longCounter.inc();
-        checkNonNull(src);
-        checkNonNull(dest);
-        checkLimits(src, srcPos, dest, destPos, length);
-        Kind baseKind = Kind.Long;
-        int header = arrayBaseOffset(baseKind);
-        long byteLength = (long) length * arrayIndexScale(baseKind);
-        long srcOffset = (long) srcPos * arrayIndexScale(baseKind);
-        long destOffset = (long) destPos * arrayIndexScale(baseKind);
-        if (src == dest && srcPos < destPos) { // bad aliased case
-            for (long i = byteLength - VECTOR_SIZE; i >= 0; i -= VECTOR_SIZE) {
-                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
-                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
-            }
-        } else {
-            for (long i = 0; i < byteLength; i += VECTOR_SIZE) {
-                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
-                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
-            }
-        }
+        checkedCopy(src, srcPos, dest, destPos, length, Kind.Long);
     }
 
     @Snippet
     public static void arraycopy(double[] src, int srcPos, double[] dest, int destPos, int length) {
         doubleCounter.inc();
-        checkNonNull(src);
-        checkNonNull(dest);
-        checkLimits(src, srcPos, dest, destPos, length);
-        Kind baseKind = Kind.Double;
-        int header = arrayBaseOffset(baseKind);
-        long byteLength = (long) length * arrayIndexScale(baseKind);
-        long srcOffset = (long) srcPos * arrayIndexScale(baseKind);
-        long destOffset = (long) destPos * arrayIndexScale(baseKind);
-        if (src == dest && srcPos < destPos) { // bad aliased case
-            for (long i = byteLength - VECTOR_SIZE; i >= 0; i -= VECTOR_SIZE) {
-                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
-                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
-            }
-        } else {
-            for (long i = 0; i < byteLength; i += VECTOR_SIZE) {
-                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
-                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
-            }
-        }
+        checkedCopy(src, srcPos, dest, destPos, length, Kind.Double);
     }
 
-    // Does NOT perform store checks
     @Snippet
     public static void arraycopy(Object[] src, int srcPos, Object[] dest, int destPos, int length) {
         objectCounter.inc();
-        checkNonNull(src);
-        checkNonNull(dest);
-        checkLimits(src, srcPos, dest, destPos, length);
-        final int scale = arrayIndexScale(Kind.Object);
-        int header = arrayBaseOffset(Kind.Object);
-        if (src == dest && srcPos < destPos) { // bad aliased case
-            long start = (long) (length - 1) * scale;
-            for (long i = start; i >= 0; i -= scale) {
-                Object a = UnsafeLoadNode.load(src, header, i + (long) srcPos * scale, Kind.Object);
-                DirectObjectStoreNode.storeObject(dest, header, i + (long) destPos * scale, a);
-            }
-        } else {
-            long end = (long) length * scale;
-            for (long i = 0; i < end; i += scale) {
-                Object a = UnsafeLoadNode.load(src, header, i + (long) srcPos * scale, Kind.Object);
-                DirectObjectStoreNode.storeObject(dest, header, i + (long) destPos * scale, a);
-            }
-        }
-        if (length > 0) {
-            int cardShift = cardTableShift();
-            long cardStart = cardTableStart();
-            long dstAddr = GetObjectAddressNode.get(dest);
-            long start = (dstAddr + header + (long) destPos * scale) >>> cardShift;
-            long end = (dstAddr + header + ((long) destPos + length - 1) * scale) >>> cardShift;
-            long count = end - start + 1;
-            while (count-- > 0) {
-                DirectStoreNode.store((start + cardStart) + count, false, Kind.Boolean);
-            }
-        }
+        checkedCopy(src, srcPos, dest, destPos, length, Kind.Object);
     }
 
     @Snippet
     public static void arraycopy(Object src, int srcPos, Object dest, int destPos, int length) {
+        Object nonNullSrc = guardingNonNull(src);
+        Object nonNullDest = guardingNonNull(dest);
+        TypePointer srcHub = loadHub(nonNullSrc);
+        TypePointer destHub = loadHub(nonNullDest);
+        if (probability(FAST_PATH_PROBABILITY, Word.equal(srcHub, destHub)) && probability(FAST_PATH_PROBABILITY, nonNullSrc != nonNullDest)) {
+            int layoutHelper = checkArrayType(srcHub);
+            final boolean isObjectArray = ((layoutHelper & layoutHelperElementTypePrimitiveInPlace()) == 0);
 
-        // loading the hubs also checks for nullness
-        Word srcHub = loadHub(src);
-        Word destHub = loadHub(dest);
-
-        int layoutHelper = checkArrayType(srcHub);
-        if (srcHub.equal(destHub) && src != dest) {
-            probability(FAST_PATH_PROBABILITY);
-
-            checkLimits(src, srcPos, dest, destPos, length);
-
-            arraycopyInnerloop(src, srcPos, dest, destPos, length, layoutHelper);
+            checkLimits(nonNullSrc, srcPos, nonNullDest, destPos, length);
+            if (probability(FAST_PATH_PROBABILITY, isObjectArray)) {
+                genericObjectExactCallCounter.inc();
+                UnsafeArrayCopyNode.arraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length, Kind.Object);
+            } else {
+                genericPrimitiveCallCounter.inc();
+                UnsafeArrayCopyNode.arraycopyPrimitive(nonNullSrc, srcPos, nonNullDest, destPos, length, layoutHelper);
+            }
         } else {
             genericObjectCallCounter.inc();
-            System.arraycopy(src, srcPos, dest, destPos, length);
+            System.arraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length);
         }
     }
 
-    public static void arraycopyInnerloop(Object src, int srcPos, Object dest, int destPos, int length, int layoutHelper) {
-        int log2ElementSize = (layoutHelper >> layoutHelperLog2ElementSizeShift()) & layoutHelperLog2ElementSizeMask();
-        int headerSize = (layoutHelper >> layoutHelperHeaderSizeShift()) & layoutHelperHeaderSizeMask();
+    @NodeIntrinsic(ForeignCallNode.class)
+    public static native void callArraycopy(@ConstantNodeParameter ForeignCallDescriptor descriptor, Word src, Word dest, Word len);
 
-        Word memory = (Word) Word.fromObject(src);
-
-        Word srcOffset = (Word) Word.fromObject(src).add(headerSize).add(srcPos << log2ElementSize);
-        Word destOffset = (Word) Word.fromObject(dest).add(headerSize).add(destPos << log2ElementSize);
-        Word destStart = destOffset;
-        long sizeInBytes = ((long) length) << log2ElementSize;
-        Word destEnd = destOffset.add(Word.unsigned(length).shiftLeft(log2ElementSize));
-
-        int nonVectorBytes = (int) (sizeInBytes % VECTOR_SIZE);
-        Word destNonVectorEnd = destStart.add(nonVectorBytes);
-
-        while (destOffset.belowThan(destNonVectorEnd)) {
-            destOffset.writeByte(0, srcOffset.readByte(0, UNKNOWN_LOCATION), ANY_LOCATION);
-            destOffset = destOffset.add(1);
-            srcOffset = srcOffset.add(1);
-        }
-        while (destOffset.belowThan(destEnd)) {
-            destOffset.writeWord(0, srcOffset.readWord(0, UNKNOWN_LOCATION), ANY_LOCATION);
-            destOffset = destOffset.add(wordSize());
-            srcOffset = srcOffset.add(wordSize());
-        }
-
-        if ((layoutHelper & layoutHelperElementTypePrimitiveInPlace()) != 0) {
-            genericPrimitiveCallCounter.inc();
-
-        } else {
-            probability(LIKELY_PROBABILITY);
-            genericObjectExactCallCounter.inc();
-
-            if (length > 0) {
-                int cardShift = cardTableShift();
-                long cardStart = cardTableStart();
-                Word destCardOffset = destStart.unsignedShiftRight(cardShift).add(Word.unsigned(cardStart));
-                Word destCardEnd = destEnd.subtract(1).unsignedShiftRight(cardShift).add(Word.unsigned(cardStart));
-                while (destCardOffset.belowOrEqual(destCardEnd)) {
-                    DirectStoreNode.store(destCardOffset.rawValue(), false, Kind.Boolean);
-                    destCardOffset = destCardOffset.add(1);
-                }
-            }
-        }
+    private static void callArraycopyTemplate(SnippetCounter counter, Kind kind, boolean aligned, boolean disjoint, Object src, int srcPos, Object dest, int destPos, int length) {
+        counter.inc();
+        Object nonNullSrc = guardingNonNull(src);
+        Object nonNullDest = guardingNonNull(dest);
+        checkLimits(nonNullSrc, srcPos, nonNullDest, destPos, length);
+        ArrayCopyCallNode.arraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length, kind, aligned, disjoint);
     }
 
-    private static final SnippetCounter.Group checkCounters = GraalOptions.SnippetCounters ? new SnippetCounter.Group("System.arraycopy checkInputs") : null;
+    @Snippet
+    public static void objectArraycopyUnchecked(Object[] src, int srcPos, Object[] dest, int destPos, int length) {
+        callArraycopyTemplate(objectCallCounter, Kind.Object, false, false, src, srcPos, dest, destPos, length);
+    }
+
+    @Snippet
+    public static void byteArraycopy(byte[] src, int srcPos, byte[] dest, int destPos, int length) {
+        callArraycopyTemplate(byteCallCounter, Kind.Byte, false, false, src, srcPos, dest, destPos, length);
+    }
+
+    @Snippet
+    public static void booleanArraycopy(boolean[] src, int srcPos, boolean[] dest, int destPos, int length) {
+        callArraycopyTemplate(booleanCallCounter, Kind.Boolean, false, false, src, srcPos, dest, destPos, length);
+    }
+
+    @Snippet
+    public static void charArraycopy(char[] src, int srcPos, char[] dest, int destPos, int length) {
+        callArraycopyTemplate(charCallCounter, Kind.Char, false, false, src, srcPos, dest, destPos, length);
+    }
+
+    @Snippet
+    public static void shortArraycopy(short[] src, int srcPos, short[] dest, int destPos, int length) {
+        callArraycopyTemplate(shortCallCounter, Kind.Short, false, false, src, srcPos, dest, destPos, length);
+    }
+
+    @Snippet
+    public static void intArraycopy(int[] src, int srcPos, int[] dest, int destPos, int length) {
+        callArraycopyTemplate(intCallCounter, Kind.Int, false, false, src, srcPos, dest, destPos, length);
+    }
+
+    @Snippet
+    public static void floatArraycopy(float[] src, int srcPos, float[] dest, int destPos, int length) {
+        callArraycopyTemplate(floatCallCounter, Kind.Float, false, false, src, srcPos, dest, destPos, length);
+    }
+
+    @Snippet
+    public static void longArraycopy(long[] src, int srcPos, long[] dest, int destPos, int length) {
+        callArraycopyTemplate(longCallCounter, Kind.Long, false, false, src, srcPos, dest, destPos, length);
+    }
+
+    @Snippet
+    public static void doubleArraycopy(double[] src, int srcPos, double[] dest, int destPos, int length) {
+        callArraycopyTemplate(doubleCallCounter, Kind.Double, false, false, src, srcPos, dest, destPos, length);
+    }
+
+    private static final SnippetCounter.Group checkCounters = SnippetCounters.getValue() ? new SnippetCounter.Group("System.arraycopy checkInputs") : null;
     private static final SnippetCounter checkSuccessCounter = new SnippetCounter(checkCounters, "checkSuccess", "checkSuccess");
     private static final SnippetCounter checkNPECounter = new SnippetCounter(checkCounters, "checkNPE", "checkNPE");
     private static final SnippetCounter checkAIOOBECounter = new SnippetCounter(checkCounters, "checkAIOOBE", "checkAIOOBE");
 
-    private static final SnippetCounter.Group counters = GraalOptions.SnippetCounters ? new SnippetCounter.Group("System.arraycopy") : null;
+    private static final SnippetCounter.Group counters = SnippetCounters.getValue() ? new SnippetCounter.Group("System.arraycopy") : null;
     private static final SnippetCounter byteCounter = new SnippetCounter(counters, "byte[]", "arraycopy for byte[] arrays");
     private static final SnippetCounter charCounter = new SnippetCounter(counters, "char[]", "arraycopy for char[] arrays");
     private static final SnippetCounter shortCounter = new SnippetCounter(counters, "short[]", "arraycopy for short[] arrays");
@@ -352,8 +274,19 @@ public class ArrayCopySnippets implements Snippets {
     private static final SnippetCounter objectCounter = new SnippetCounter(counters, "Object[]", "arraycopy for Object[] arrays");
     private static final SnippetCounter floatCounter = new SnippetCounter(counters, "float[]", "arraycopy for float[] arrays");
     private static final SnippetCounter doubleCounter = new SnippetCounter(counters, "double[]", "arraycopy for double[] arrays");
+
+    private static final SnippetCounter objectCallCounter = new SnippetCounter(counters, "Object[]", "arraycopy call for Object[] arrays");
+
+    private static final SnippetCounter booleanCallCounter = new SnippetCounter(counters, "boolean[]", "arraycopy call for boolean[] arrays");
+    private static final SnippetCounter byteCallCounter = new SnippetCounter(counters, "byte[]", "arraycopy call for byte[] arrays");
+    private static final SnippetCounter charCallCounter = new SnippetCounter(counters, "char[]", "arraycopy call for char[] arrays");
+    private static final SnippetCounter doubleCallCounter = new SnippetCounter(counters, "double[]", "arraycopy call for double[] arrays");
+    private static final SnippetCounter floatCallCounter = new SnippetCounter(counters, "float[]", "arraycopy call for float[] arrays");
+    private static final SnippetCounter intCallCounter = new SnippetCounter(counters, "int[]", "arraycopy call for int[] arrays");
+    private static final SnippetCounter longCallCounter = new SnippetCounter(counters, "long[]", "arraycopy call for long[] arrays");
+    private static final SnippetCounter shortCallCounter = new SnippetCounter(counters, "short[]", "arraycopy call for short[] arrays");
+
     private static final SnippetCounter genericPrimitiveCallCounter = new SnippetCounter(counters, "genericPrimitive", "generic arraycopy snippet for primitive arrays");
     private static final SnippetCounter genericObjectExactCallCounter = new SnippetCounter(counters, "genericObjectExact", "generic arraycopy snippet for special object arrays");
     private static final SnippetCounter genericObjectCallCounter = new SnippetCounter(counters, "genericObject", "call to the generic, native arraycopy method");
-
 }

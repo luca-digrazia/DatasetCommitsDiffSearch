@@ -36,9 +36,7 @@ import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.Hints;
-import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
@@ -50,6 +48,7 @@ import com.oracle.graal.replacements.Snippet.VarargsParameter;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 import com.oracle.graal.replacements.nodes.*;
+import com.oracle.graal.word.*;
 
 /**
  * Snippets used for implementing the type test of an instanceof instruction. Since instanceof is a
@@ -81,7 +80,7 @@ public class InstanceOfSnippets implements Snippets {
      * @see #hintHitProbabilityThresholdForDeoptimizingSnippet()
      */
     @Snippet
-    public static Object instanceofWithProfile(Object object, @VarargsParameter KlassPointer[] hints, @VarargsParameter boolean[] hintIsPositive, Object trueValue, Object falseValue,
+    public static Object instanceofWithProfile(Object object, @VarargsParameter TypePointer[] hints, @VarargsParameter boolean[] hintIsPositive, Object trueValue, Object falseValue,
                     @ConstantParameter boolean nullSeen) {
         if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
@@ -93,13 +92,13 @@ public class InstanceOfSnippets implements Snippets {
             return falseValue;
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        KlassPointer objectHub = loadHubIntrinsic(object, anchorNode);
+        TypePointer objectHub = loadHubIntrinsic(object, anchorNode);
         // if we get an exact match: succeed immediately
         ExplodeLoopNode.explodeLoop();
         for (int i = 0; i < hints.length; i++) {
-            KlassPointer hintHub = hints[i];
+            TypePointer hintHub = hints[i];
             boolean positive = hintIsPositive[i];
-            if (probability(NOT_FREQUENT_PROBABILITY, hintHub.equal(objectHub))) {
+            if (probability(NOT_FREQUENT_PROBABILITY, Word.equal(hintHub, objectHub))) {
                 hintsHit.inc();
                 return positive ? trueValue : falseValue;
             }
@@ -116,14 +115,14 @@ public class InstanceOfSnippets implements Snippets {
      * A test against a final type.
      */
     @Snippet
-    public static Object instanceofExact(Object object, KlassPointer exactHub, Object trueValue, Object falseValue) {
+    public static Object instanceofExact(Object object, TypePointer exactHub, Object trueValue, Object falseValue) {
         if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
             return falseValue;
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        KlassPointer objectHub = loadHubIntrinsic(object, anchorNode);
-        if (probability(LIKELY_PROBABILITY, objectHub.notEqual(exactHub))) {
+        TypePointer objectHub = loadHubIntrinsic(object, anchorNode);
+        if (probability(LIKELY_PROBABILITY, Word.notEqual(objectHub, exactHub))) {
             exactMiss.inc();
             return falseValue;
         }
@@ -135,14 +134,14 @@ public class InstanceOfSnippets implements Snippets {
      * A test against a primary type.
      */
     @Snippet
-    public static Object instanceofPrimary(KlassPointer hub, Object object, @ConstantParameter int superCheckOffset, Object trueValue, Object falseValue) {
+    public static Object instanceofPrimary(TypePointer hub, Object object, @ConstantParameter int superCheckOffset, Object trueValue, Object falseValue) {
         if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
             return falseValue;
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        KlassPointer objectHub = loadHubIntrinsic(object, anchorNode);
-        if (probability(NOT_LIKELY_PROBABILITY, objectHub.readKlassPointer(superCheckOffset, PRIMARY_SUPERS_LOCATION).notEqual(hub))) {
+        Pointer objectHub = Word.fromTypePointer(loadHubIntrinsic(object, anchorNode));
+        if (probability(NOT_LIKELY_PROBABILITY, objectHub.readWord(superCheckOffset, PRIMARY_SUPERS_LOCATION).notEqual(Word.fromTypePointer(hub)))) {
             displayMiss.inc();
             return falseValue;
         }
@@ -154,24 +153,24 @@ public class InstanceOfSnippets implements Snippets {
      * A test against a restricted secondary type type.
      */
     @Snippet
-    public static Object instanceofSecondary(KlassPointer hub, Object object, @VarargsParameter KlassPointer[] hints, @VarargsParameter boolean[] hintIsPositive, Object trueValue, Object falseValue) {
+    public static Object instanceofSecondary(TypePointer hub, Object object, @VarargsParameter TypePointer[] hints, @VarargsParameter boolean[] hintIsPositive, Object trueValue, Object falseValue) {
         if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
             return falseValue;
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        KlassPointer objectHub = loadHubIntrinsic(object, anchorNode);
+        Pointer objectHub = Word.fromTypePointer(loadHubIntrinsic(object, anchorNode));
         // if we get an exact match: succeed immediately
         ExplodeLoopNode.explodeLoop();
         for (int i = 0; i < hints.length; i++) {
-            KlassPointer hintHub = hints[i];
+            Pointer hintHub = Word.fromTypePointer(hints[i]);
             boolean positive = hintIsPositive[i];
             if (probability(NOT_FREQUENT_PROBABILITY, hintHub.equal(objectHub))) {
                 hintsHit.inc();
                 return positive ? trueValue : falseValue;
             }
         }
-        if (!checkSecondarySubType(hub, objectHub)) {
+        if (!checkSecondarySubType(Word.fromTypePointer(hub), objectHub)) {
             return falseValue;
         }
         return trueValue;
@@ -187,9 +186,9 @@ public class InstanceOfSnippets implements Snippets {
             return falseValue;
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        KlassPointer hub = ClassGetHubNode.readClass(mirror, anchorNode);
-        KlassPointer objectHub = loadHubIntrinsic(object, anchorNode);
-        if (hub.isNull() || !checkUnknownSubType(hub, objectHub)) {
+        Pointer hub = Word.fromTypePointer(ClassGetHubNode.readClass(mirror, anchorNode));
+        Pointer objectHub = Word.fromTypePointer(loadHubIntrinsic(object, anchorNode));
+        if (hub.equal(0) || !checkUnknownSubType(hub, objectHub)) {
             return falseValue;
         }
         return trueValue;
@@ -227,7 +226,7 @@ public class InstanceOfSnippets implements Snippets {
                 ValueNode object = instanceOf.getValue();
                 TypeCheckHints hintInfo = new TypeCheckHints(instanceOf.type(), instanceOf.profile(), tool.assumptions(), TypeCheckMinProfileHitProbability.getValue(), TypeCheckMaxHints.getValue());
                 final HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) instanceOf.type();
-                ConstantNode hub = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), type.klass(), providers.getMetaAccess(), instanceOf.graph());
+                ConstantNode hub = ConstantNode.forConstant(StampFactory.forPointer(PointerType.Type), type.klass(), providers.getMetaAccess(), instanceOf.graph());
 
                 Arguments args;
 
@@ -236,12 +235,12 @@ public class InstanceOfSnippets implements Snippets {
                     Hints hints = createHints(hintInfo, providers.getMetaAccess(), false, graph);
                     args = new Arguments(instanceofWithProfile, graph.getGuardsStage(), tool.getLoweringStage());
                     args.add("object", object);
-                    args.addVarargs("hints", KlassPointer.class, KlassPointerStamp.klassNonNull(), hints.hubs);
+                    args.addVarargs("hints", TypePointer.class, StampFactory.forPointer(PointerType.Type), hints.hubs);
                     args.addVarargs("hintIsPositive", boolean.class, StampFactory.forKind(Kind.Boolean), hints.isPositive);
                 } else if (hintInfo.exact != null) {
                     args = new Arguments(instanceofExact, graph.getGuardsStage(), tool.getLoweringStage());
                     args.add("object", object);
-                    args.add("exactHub", ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), ((HotSpotResolvedObjectType) hintInfo.exact).klass(), providers.getMetaAccess(), graph));
+                    args.add("exactHub", ConstantNode.forConstant(StampFactory.forPointer(PointerType.Type), ((HotSpotResolvedObjectType) hintInfo.exact).klass(), providers.getMetaAccess(), graph));
                 } else if (type.isPrimaryType()) {
                     args = new Arguments(instanceofPrimary, graph.getGuardsStage(), tool.getLoweringStage());
                     args.add("hub", hub);
@@ -252,7 +251,7 @@ public class InstanceOfSnippets implements Snippets {
                     args = new Arguments(instanceofSecondary, graph.getGuardsStage(), tool.getLoweringStage());
                     args.add("hub", hub);
                     args.add("object", object);
-                    args.addVarargs("hints", KlassPointer.class, KlassPointerStamp.klassNonNull(), hints.hubs);
+                    args.addVarargs("hints", TypePointer.class, StampFactory.forPointer(PointerType.Type), hints.hubs);
                     args.addVarargs("hintIsPositive", boolean.class, StampFactory.forKind(Kind.Boolean), hints.isPositive);
                 }
                 args.add("trueValue", replacer.trueValue);

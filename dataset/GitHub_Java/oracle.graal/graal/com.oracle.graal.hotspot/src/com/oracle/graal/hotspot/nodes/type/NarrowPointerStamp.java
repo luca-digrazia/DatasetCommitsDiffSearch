@@ -33,7 +33,7 @@ public class NarrowPointerStamp extends AbstractPointerStamp {
     private final CompressEncoding encoding;
 
     public NarrowPointerStamp(PointerType type, CompressEncoding encoding) {
-        super(type, false, false);
+        super(type);
         assert type != PointerType.Object : "object pointers should use NarrowOopStamp";
         this.encoding = encoding;
     }

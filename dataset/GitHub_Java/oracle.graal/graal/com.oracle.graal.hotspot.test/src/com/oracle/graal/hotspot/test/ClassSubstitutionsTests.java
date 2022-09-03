@@ -108,10 +108,11 @@ public class ClassSubstitutionsTests extends GraalCompilerTest {
     }
 
     @Test
-    public void testFoldComponentType() {
+    public void testFoldComponenetType() {
         testConstantReturn("foldComponentType", 1);
     }
 
+    @Ignore("Can't constant fold LoadHubNode == 0 yet")
     @Test
     public void testFieldIsArray() {
         testConstantReturn("fieldIsArray", 1);
@@ -124,58 +125,6 @@ public class ClassSubstitutionsTests extends GraalCompilerTest {
             return arrayField.getClass().isArray();
         }
         return true;
-    }
-
-    private static class A {
-    }
-
-    private static class B extends A {
-    }
-
-    private static class C {
-    }
-
-    private static final A a = new A();
-    private static final B b = new B();
-    private static final C c = new C();
-
-    public boolean classIsAssignable1() {
-        return a.getClass().isAssignableFrom(a.getClass());
-    }
-
-    public boolean classIsAssignable2() {
-        return a.getClass().isAssignableFrom(b.getClass());
-    }
-
-    public boolean classIsAssignable3() {
-        return a.getClass().isAssignableFrom(c.getClass());
-    }
-
-    public boolean classIsAssignable4() {
-        return b.getClass().isAssignableFrom(a.getClass());
-    }
-
-    public boolean classIsAssignable5() {
-        return c.getClass().isAssignableFrom(b.getClass());
-    }
-
-    public boolean classIsAssignable6() {
-        return int.class.isAssignableFrom(b.getClass());
-    }
-
-    public boolean classIsAssignable7() {
-        return int.class.isAssignableFrom(int.class);
-    }
-
-    @Test
-    public void testClassIsAssignable() {
-        testConstantReturn("classIsAssignable1", 1);
-        testConstantReturn("classIsAssignable2", 1);
-        testConstantReturn("classIsAssignable3", 0);
-        testConstantReturn("classIsAssignable4", 0);
-        testConstantReturn("classIsAssignable5", 0);
-        testConstantReturn("classIsAssignable6", 0);
-        testConstantReturn("classIsAssignable7", 1);
     }
 
     private void testConstantReturn(String name, Object value) {

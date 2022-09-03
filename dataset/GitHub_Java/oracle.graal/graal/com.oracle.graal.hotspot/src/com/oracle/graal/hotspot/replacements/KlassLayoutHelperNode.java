@@ -93,8 +93,9 @@ public class KlassLayoutHelperNode extends FloatingGuardedNode implements Canoni
             return null;
         } else {
             if (klass.isConstant()) {
-                if (!klass.asConstant().isDefaultForKind()) {
-                    Constant constant = stamp().readConstant(tool.getConstantReflection().getMemoryAccessProvider(), klass.asJavaConstant(), runtime().getConfig().klassLayoutHelperOffset);
+                long base = klass.asJavaConstant().asLong();
+                if (base != 0L) {
+                    Constant constant = stamp().readConstant(tool.getConstantReflection(), klass.asJavaConstant(), runtime().getConfig().klassLayoutHelperOffset);
                     return ConstantNode.forConstant(stamp(), constant, tool.getMetaAccess());
                 }
             }
@@ -106,7 +107,7 @@ public class KlassLayoutHelperNode extends FloatingGuardedNode implements Canoni
                     HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) ostamp.type();
                     if (type != null && type.isArray() && !type.getComponentType().isPrimitive()) {
                         // The layout for all object arrays is the same.
-                        Constant constant = stamp().readConstant(tool.getConstantReflection().getMemoryAccessProvider(), type.klass(), runtime().getConfig().klassLayoutHelperOffset);
+                        Constant constant = stamp().readConstant(tool.getConstantReflection(), type.klass(), runtime().getConfig().klassLayoutHelperOffset);
                         return ConstantNode.forConstant(stamp(), constant, tool.getMetaAccess());
                     }
                 }
