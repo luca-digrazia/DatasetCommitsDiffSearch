@@ -28,7 +28,6 @@ import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.graal.lir.LIRValueUtil.*;
 import static com.oracle.graal.lir.sparc.SPARCMove.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
 import static jdk.internal.jvmci.sparc.SPARC.*;
@@ -220,13 +219,15 @@ public class SPARCControlFlow {
                 }
             }
             // Keep the constant on the right
-            if (isJavaConstant(actualX)) {
+            if (isConstant(actualX)) {
                 tmpValue = actualX;
                 actualX = actualY;
                 actualY = tmpValue;
                 actualConditionFlag = actualConditionFlag.mirror();
             }
-            emitCBCond(masm, actualX, actualY, actualTrueTarget, actualConditionFlag);
+            try (ScratchRegister scratch = masm.getScratchRegister()) {
+                emitCBCond(masm, actualX, actualY, actualTrueTarget, actualConditionFlag);
+            }
             if (needJump) {
                 masm.jmp(actualFalseTarget);
                 masm.nop();
@@ -237,25 +238,25 @@ public class SPARCControlFlow {
         private static void emitCBCond(SPARCMacroAssembler masm, Value actualX, Value actualY, Label actualTrueTarget, ConditionFlag conditionFlag) {
             switch ((Kind) actualX.getLIRKind().getPlatformKind()) {
                 case Int:
-                    if (isJavaConstant(actualY)) {
-                        int constantY = asJavaConstant(actualY).asInt();
+                    if (isConstant(actualY)) {
+                        int constantY = asConstant(actualY).asInt();
                         CBCOND.emit(masm, conditionFlag, false, asIntReg(actualX), constantY, actualTrueTarget);
                     } else {
                         CBCOND.emit(masm, conditionFlag, false, asIntReg(actualX), asIntReg(actualY), actualTrueTarget);
                     }
                     break;
                 case Long:
-                    if (isJavaConstant(actualY)) {
-                        int constantY = (int) asJavaConstant(actualY).asLong();
+                    if (isConstant(actualY)) {
+                        int constantY = (int) asConstant(actualY).asLong();
                         CBCOND.emit(masm, conditionFlag, true, asLongReg(actualX), constantY, actualTrueTarget);
                     } else {
                         CBCOND.emit(masm, conditionFlag, true, asLongReg(actualX), asLongReg(actualY), actualTrueTarget);
                     }
                     break;
                 case Object:
-                    if (isJavaConstant(actualY)) {
+                    if (isConstant(actualY)) {
                         // Object constant valid can only be null
-                        assert asJavaConstant(actualY).isNull();
+                        assert asConstant(actualY).isNull();
                         CBCOND.emit(masm, conditionFlag, true, asObjectReg(actualX), 0, actualTrueTarget);
                     } else { // this is already loaded
                         CBCOND.emit(masm, conditionFlag, true, asObjectReg(actualX), asObjectReg(actualY), actualTrueTarget);
@@ -281,7 +282,7 @@ public class SPARCControlFlow {
             // Do not use short branch, if the y value is a constant and does not fit into simm5 but
             // fits into simm13; this means the code with CBcond would be longer as the code without
             // CBcond.
-            if (isJavaConstant(y) && !isSimm5(asJavaConstant(y)) && isSimm13(asJavaConstant(y))) {
+            if (isConstant(y) && !isSimm5(asConstant(y)) && isSimm13(asConstant(y))) {
                 return false;
             }
             boolean hasShortJumpTarget = false;
@@ -397,7 +398,7 @@ public class SPARCControlFlow {
 
     public static final class StrategySwitchOp extends SPARCBlockEndOp {
         public static final LIRInstructionClass<StrategySwitchOp> TYPE = LIRInstructionClass.create(StrategySwitchOp.class);
-        protected JavaConstant[] keyConstants;
+        @Use({CONST}) protected JavaConstant[] keyConstants;
         private final LabelRef[] keyTargets;
         private LabelRef defaultTarget;
         @Alive({REG}) protected Value key;
@@ -485,11 +486,11 @@ public class SPARCControlFlow {
                     boolean canUseShortBranch = masm.hasFeature(CPUFeature.CBCOND) && isShortBranch(masm, cbCondPosition, hint, target);
                     if (bits != null && canUseShortBranch) {
                         if (isShortConstant) {
-                            CBCOND.emit(masm, conditionFlag, conditionCode == Xcc, keyRegister, (int) (long) bits, target);
+                            CBCOND.emit(masm, conditionFlag, conditionCode == Icc, keyRegister, (int) (long) bits, target);
                         } else {
                             Register scratchRegister = asRegister(scratch);
                             const2reg(crb, masm, scratch, constantBaseRegister, keyConstants[index], SPARCDelayedControlTransfer.DUMMY);
-                            CBCOND.emit(masm, conditionFlag, conditionCode == Xcc, keyRegister, scratchRegister, target);
+                            CBCOND.emit(masm, conditionFlag, conditionCode == Icc, keyRegister, scratchRegister, target);
                         }
                     } else {
                         if (bits != null && isSimm13(constant)) {
@@ -635,7 +636,7 @@ public class SPARCControlFlow {
                 ConditionFlag actualCondition = condition;
                 Value actualTrueValue = trueValue;
                 Value actualFalseValue = falseValue;
-                if (isJavaConstant(falseValue) && isSimm11(asJavaConstant(falseValue))) {
+                if (isConstant(falseValue) && isSimm11(asConstant(falseValue))) {
                     actualCondition = condition.negate();
                     actualTrueValue = falseValue;
                     actualFalseValue = trueValue;
@@ -648,10 +649,10 @@ public class SPARCControlFlow {
         @Override
         public SizeEstimate estimateSize() {
             int constantSize = 0;
-            if (isJavaConstant(trueValue) && !SPARCAssembler.isSimm13(asJavaConstant(trueValue))) {
+            if (isConstant(trueValue) && !SPARCAssembler.isSimm13(asConstant(trueValue))) {
                 constantSize += trueValue.getKind().getByteCount();
             }
-            if (isJavaConstant(falseValue) && !SPARCAssembler.isSimm13(asJavaConstant(falseValue))) {
+            if (isConstant(falseValue) && !SPARCAssembler.isSimm13(asConstant(falseValue))) {
                 constantSize += trueValue.getKind().getByteCount();
             }
             return SizeEstimate.create(3, constantSize);
@@ -665,12 +666,12 @@ public class SPARCControlFlow {
             case Short:
             case Char:
             case Int:
-                if (isJavaConstant(other)) {
+                if (isConstant(other)) {
                     int constant;
-                    if (asJavaConstant(other).isNull()) {
+                    if (asConstant(other).isNull()) {
                         constant = 0;
                     } else {
-                        constant = asJavaConstant(other).asInt();
+                        constant = asConstant(other).asInt();
                     }
                     masm.movcc(cond, cc, constant, asRegister(result));
                 } else {
@@ -679,12 +680,12 @@ public class SPARCControlFlow {
                 break;
             case Long:
             case Object:
-                if (isJavaConstant(other)) {
+                if (isConstant(other)) {
                     long constant;
-                    if (asJavaConstant(other).isNull()) {
+                    if (asConstant(other).isNull()) {
                         constant = 0;
                     } else {
-                        constant = asJavaConstant(other).asLong();
+                        constant = asConstant(other).asLong();
                     }
                     masm.movcc(cond, cc, (int) constant, asRegister(result));
                 } else {

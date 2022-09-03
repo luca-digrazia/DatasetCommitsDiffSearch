@@ -80,7 +80,7 @@ public enum SPARCArithmetic {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            emitUnary(crb, masm, opcode, result, x, null, getDelayedControlTransfer());
+            emitUnary(crb, masm, opcode, result, x, null, delayedControlTransfer);
         }
 
         @Override
@@ -128,7 +128,7 @@ public enum SPARCArithmetic {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            emitRegReg(crb, masm, opcode, result, x, y, state, getDelayedControlTransfer());
+            emitRegReg(crb, masm, opcode, result, x, y, state, delayedControlTransfer);
         }
 
         @Override
@@ -179,7 +179,7 @@ public enum SPARCArithmetic {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            emitRegConstant(crb, masm, opcode, result, x, y, null, getDelayedControlTransfer());
+            emitRegConstant(crb, masm, opcode, result, x, y, null, delayedControlTransfer);
         }
 
         @Override
@@ -217,7 +217,7 @@ public enum SPARCArithmetic {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            emitRem(crb, masm, opcode, result, x, y, scratch1, scratch2, state, getDelayedControlTransfer());
+            emitRem(crb, masm, opcode, result, x, y, scratch1, scratch2, state, delayedControlTransfer);
         }
 
         @Override

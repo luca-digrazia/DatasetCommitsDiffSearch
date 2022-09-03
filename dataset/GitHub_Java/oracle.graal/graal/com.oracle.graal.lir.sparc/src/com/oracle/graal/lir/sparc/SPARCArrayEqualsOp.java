@@ -22,39 +22,27 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.ANNUL;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.NOT_ANNUL;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_NOT_TAKEN;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_TAKEN;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Xcc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Always;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Equal;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Less;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.NotEqual;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static jdk.internal.jvmci.code.ValueUtil.asRegister;
-import static jdk.internal.jvmci.sparc.SPARC.g0;
-import static jdk.internal.jvmci.sparc.SPARCKind.WORD;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import static jdk.internal.jvmci.common.UnsafeAccess.*;
+import static jdk.internal.jvmci.sparc.SPARC.*;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
+import java.lang.reflect.*;
 
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.Value;
-import jdk.internal.jvmci.sparc.SPARCKind;
-import sun.misc.Unsafe;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.Label;
-import com.oracle.graal.asm.sparc.SPARCAddress;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.gen.*;
 
 /**
  * Emits code which compares two arrays of the same length.
@@ -64,7 +52,7 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
     public static final LIRInstructionClass<SPARCArrayEqualsOp> TYPE = LIRInstructionClass.create(SPARCArrayEqualsOp.class);
     public static final SizeEstimate SIZE = SizeEstimate.create(32);
 
-    private final JavaKind kind;
+    private final Kind kind;
     private final int arrayBaseOffset;
     private final int arrayIndexScale;
 
@@ -78,13 +66,13 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
     @Temp({REG}) protected Value temp4;
     @Temp({REG}) protected Value temp5;
 
-    public SPARCArrayEqualsOp(LIRGeneratorTool tool, JavaKind kind, Value result, Value array1, Value array2, Value length) {
+    public SPARCArrayEqualsOp(LIRGeneratorTool tool, Kind kind, Value result, Value array1, Value array2, Value length) {
         super(TYPE, SIZE);
         this.kind = kind;
 
         Class<?> arrayClass = Array.newInstance(kind.toJavaClass(), 0).getClass();
-        this.arrayBaseOffset = UNSAFE.arrayBaseOffset(arrayClass);
-        this.arrayIndexScale = UNSAFE.arrayIndexScale(arrayClass);
+        this.arrayBaseOffset = unsafe.arrayBaseOffset(arrayClass);
+        this.arrayIndexScale = unsafe.arrayIndexScale(arrayClass);
 
         this.resultValue = result;
         this.array1Value = array1;
@@ -92,11 +80,11 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         this.lengthValue = length;
 
         // Allocate some temporaries.
-        this.temp1 = tool.newVariable(LIRKind.unknownReference(tool.target().arch.getWordKind()));
-        this.temp2 = tool.newVariable(LIRKind.unknownReference(tool.target().arch.getWordKind()));
-        this.temp3 = tool.newVariable(LIRKind.value(tool.target().arch.getWordKind()));
-        this.temp4 = tool.newVariable(LIRKind.value(tool.target().arch.getWordKind()));
-        this.temp5 = tool.newVariable(LIRKind.value(tool.target().arch.getWordKind()));
+        this.temp1 = tool.newVariable(LIRKind.unknownReference(tool.target().wordKind));
+        this.temp2 = tool.newVariable(LIRKind.unknownReference(tool.target().wordKind));
+        this.temp3 = tool.newVariable(LIRKind.value(tool.target().wordKind));
+        this.temp4 = tool.newVariable(LIRKind.value(tool.target().wordKind));
+        this.temp5 = tool.newVariable(LIRKind.value(tool.target().wordKind));
     }
 
     @Override
@@ -111,11 +99,11 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         Label done = new Label();
 
         // Load array base addresses.
-        masm.add(asRegister(array1Value), arrayBaseOffset, array1);
-        masm.add(asRegister(array2Value), arrayBaseOffset, array2);
+        masm.add(asObjectReg(array1Value), arrayBaseOffset, array1);
+        masm.add(asObjectReg(array2Value), arrayBaseOffset, array2);
 
         // Get array length in bytes.
-        masm.mulx(asRegister(lengthValue, WORD), arrayIndexScale, length);
+        masm.mulx(asIntReg(lengthValue), arrayIndexScale, length);
         masm.mov(length, result); // copy
 
         emit8ByteCompare(masm, result, array1, array2, length, trueLabel, falseLabel);
@@ -144,7 +132,7 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
      * Emits code that uses 8-byte vector compares.
      */
     private void emit8ByteCompare(SPARCMacroAssembler masm, Register result, Register array1, Register array2, Register length, Label trueLabel, Label falseLabel) {
-        assert lengthValue.getPlatformKind().equals(SPARCKind.WORD);
+        assert lengthValue.getPlatformKind().equals(Kind.Int);
         Label loop = new Label();
         Label compareTail = new Label();
         Label compareTailCorrectVectorEnd = new Label();
@@ -244,22 +232,6 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                 }
             } else {
                 masm.bind(compare2Bytes);
-            }
-        }
-    }
-
-    private static final Unsafe UNSAFE = initUnsafe();
-
-    private static Unsafe initUnsafe() {
-        try {
-            return Unsafe.getUnsafe();
-        } catch (SecurityException se) {
-            try {
-                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
-                theUnsafe.setAccessible(true);
-                return (Unsafe) theUnsafe.get(Unsafe.class);
-            } catch (Exception e) {
-                throw new RuntimeException("exception while trying to get Unsafe", e);
             }
         }
     }
