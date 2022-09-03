@@ -22,14 +22,14 @@
  */
 package com.oracle.graal.replacements.test;
 
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
 import org.junit.Test;
 
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.replacements.StringSubstitutions;
 import com.oracle.graal.replacements.nodes.ArrayEqualsNode;
-
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Tests {@link StringSubstitutions}.
@@ -64,7 +64,7 @@ public class StringSubstitutionsTest extends MethodSubstitutionTest {
 
     @Test
     public void testEquals() {
-        if (!Java8OrEarlier) {
+        if (System.getProperty("java.specification.version").compareTo("1.9") >= 0) {
             // StringSubstitutions are disabled in 1.9
             return;
         }
