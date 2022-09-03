@@ -27,19 +27,20 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ri.*;
 
 
 public class SafeReadNode extends SafeAccessNode implements Lowerable {
 
-    public SafeReadNode(ValueNode object, LocationNode location, Stamp stamp, long leafGraphId) {
-        super(object, location, stamp, leafGraphId);
+    public SafeReadNode(ValueNode object, LocationNode location, Stamp stamp) {
+        super(object, location, stamp);
         assert object != null && location != null;
     }
 
     @Override
     public void lower(CiLoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) graph();
-        GuardNode guard = (GuardNode) tool.createGuard(graph.unique(new NullCheckNode(object(), false)), StructuredGraph.INVALID_GRAPH_ID);
+        GuardNode guard = (GuardNode) tool.createGuard(graph.unique(new NullCheckNode(object(), false)), RiDeoptReason.NullCheckException);
         ReadNode read = graph.add(new ReadNode(object(), location(), stamp()));
         read.setGuard(guard);
 
