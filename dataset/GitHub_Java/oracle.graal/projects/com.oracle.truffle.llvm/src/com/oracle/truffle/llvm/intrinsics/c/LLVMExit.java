@@ -27,28 +27,20 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm;
+package com.oracle.truffle.llvm.intrinsics.c;
 
-import com.oracle.truffle.api.dsl.GenerateNodeFactory;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.llvm.LLVMIntrinsic.LLVMVoidIntrinsic;
+import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
+import com.oracle.truffle.llvm.runtime.LLVMExitException;
 
-public interface LLVMIntrinsic {
+@NodeChild(type = LLVMI32Node.class)
+public abstract class LLVMExit extends LLVMVoidIntrinsic {
 
-    @GenerateNodeFactory
-    abstract class LLVMAddressIntrinsic extends LLVMAddressNode implements LLVMIntrinsic {
-
-    }
-
-    @GenerateNodeFactory
-    abstract class LLVMDoubleIntrinsic extends LLVMDoubleNode implements LLVMIntrinsic {
-
-    }
-
-    @GenerateNodeFactory
-    abstract class LLVMVoidIntrinsic extends LLVMNode implements LLVMIntrinsic {
-
+    @Specialization
+    public void execute(int value) {
+        throw new LLVMExitException(value);
     }
 
 }

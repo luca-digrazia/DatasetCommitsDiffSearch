@@ -38,26 +38,14 @@ import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
 import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
 import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 
-/**
- * This class is the entry point for every intrinsified (substituted) function.
- */
 public abstract class LLVMIntrinsicRootNode extends RootNode {
 
     LLVMIntrinsicRootNode() {
         super(LLVMLanguage.class, null, new FrameDescriptor());
-    }
-
-    public abstract LLVMNode getNode();
-
-    @Override
-    public String toString() {
-        return getNode().getClass().getSimpleName();
     }
 
     public static class LLVMIntrinsicVoidNode extends LLVMIntrinsicRootNode {
@@ -73,32 +61,9 @@ public abstract class LLVMIntrinsicRootNode extends RootNode {
             node.executeVoid(frame);
             return null;
         }
-
-        @Override
-        public LLVMNode getNode() {
-            return node;
-        }
     }
 
-    @NodeChild(type = LLVMI8Node.class, value = "node")
-    public abstract static class LLVMIntrinsicI8Node extends LLVMIntrinsicRootNode {
-
-        @Specialization
-        public Object execute(byte val) {
-            return val;
-        }
-    }
-
-    @NodeChild(type = LLVMI16Node.class, value = "node")
-    public abstract static class LLVMIntrinsicI16Node extends LLVMIntrinsicRootNode {
-
-        @Specialization
-        public Object execute(short val) {
-            return val;
-        }
-    }
-
-    @NodeChild(type = LLVMI32Node.class, value = "node")
+    @NodeChild(type = LLVMI32Node.class)
     public abstract static class LLVMIntrinsicI32Node extends LLVMIntrinsicRootNode {
 
         @Specialization
@@ -107,7 +72,7 @@ public abstract class LLVMIntrinsicRootNode extends RootNode {
         }
     }
 
-    @NodeChild(type = LLVMI64Node.class, value = "node")
+    @NodeChild(type = LLVMI64Node.class)
     public abstract static class LLVMIntrinsicI64Node extends LLVMIntrinsicRootNode {
 
         @Specialization
@@ -116,7 +81,7 @@ public abstract class LLVMIntrinsicRootNode extends RootNode {
         }
     }
 
-    @NodeChild(type = LLVMFloatNode.class, value = "node")
+    @NodeChild(type = LLVMFloatNode.class)
     public abstract static class LLVMIntrinsicFloatNode extends LLVMIntrinsicRootNode {
 
         @Specialization
@@ -125,7 +90,7 @@ public abstract class LLVMIntrinsicRootNode extends RootNode {
         }
     }
 
-    @NodeChild(type = LLVMDoubleNode.class, value = "node")
+    @NodeChild(type = LLVMDoubleNode.class)
     public abstract static class LLVMIntrinsicDoubleNode extends LLVMIntrinsicRootNode {
 
         @Specialization
@@ -134,14 +99,13 @@ public abstract class LLVMIntrinsicRootNode extends RootNode {
         }
     }
 
-    @NodeChild(type = LLVMAddressNode.class, value = "node")
+    @NodeChild(type = LLVMAddressNode.class)
     public abstract static class LLVMIntrinsicAddressNode extends LLVMIntrinsicRootNode {
 
         @Specialization
         public Object execute(LLVMAddress value) {
             return value;
         }
-
     }
 
 }

@@ -27,28 +27,19 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm;
+package com.oracle.truffle.llvm.intrinsics.c;
 
-import com.oracle.truffle.api.dsl.GenerateNodeFactory;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.llvm.LLVMIntrinsic.LLVMVoidIntrinsic;
+import com.oracle.truffle.llvm.runtime.LLVMExitException;
 
-public interface LLVMIntrinsic {
+public abstract class LLVMAbort extends LLVMVoidIntrinsic {
 
-    @GenerateNodeFactory
-    abstract class LLVMAddressIntrinsic extends LLVMAddressNode implements LLVMIntrinsic {
+    private static final int UNIX_SIGABORT = 134;
 
-    }
-
-    @GenerateNodeFactory
-    abstract class LLVMDoubleIntrinsic extends LLVMDoubleNode implements LLVMIntrinsic {
-
-    }
-
-    @GenerateNodeFactory
-    abstract class LLVMVoidIntrinsic extends LLVMNode implements LLVMIntrinsic {
-
+    @Specialization
+    public void execute() {
+        throw new LLVMExitException(UNIX_SIGABORT);
     }
 
 }
