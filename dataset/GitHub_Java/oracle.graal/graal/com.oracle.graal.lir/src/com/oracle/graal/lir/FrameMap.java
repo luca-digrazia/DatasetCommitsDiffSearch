@@ -96,15 +96,9 @@ public final class FrameMap {
 
     /**
      * Size of the area occupied by outgoing overflow arguments. This value is adjusted as calling
-     * conventions for outgoing calls are retrieved. On some platforms, there is a minimum outgoing
-     * size even if no overflow arguments are on the stack.
+     * conventions for outgoing calls are retrieved.
      */
     private int outgoingSize;
-
-    /**
-     * Determines if this frame has values on the stack for outgoing calls.
-     */
-    private boolean hasOutgoingStackArguments;
 
     /**
      * The list of stack areas allocated in this frame that are present in every reference map.
@@ -163,8 +157,8 @@ public final class FrameMap {
      * {@link Architecture#getReturnAddressSize() return address slot}.
      */
     public boolean frameNeedsAllocating() {
-        int unalignedFrameSize = spillSize - returnAddressSize();
-        return hasOutgoingStackArguments || unalignedFrameSize != 0;
+        int unalignedFrameSize = outgoingSize + spillSize - returnAddressSize();
+        return unalignedFrameSize != 0;
     }
 
     /**
@@ -253,7 +247,6 @@ public final class FrameMap {
     public void reserveOutgoing(int argsSize) {
         assert frameSize == -1 : "frame size must not yet be fixed";
         outgoingSize = Math.max(outgoingSize, argsSize);
-        hasOutgoingStackArguments = hasOutgoingStackArguments || argsSize > 0;
     }
 
     private StackSlot getSlot(Kind kind, int additionalOffset) {
