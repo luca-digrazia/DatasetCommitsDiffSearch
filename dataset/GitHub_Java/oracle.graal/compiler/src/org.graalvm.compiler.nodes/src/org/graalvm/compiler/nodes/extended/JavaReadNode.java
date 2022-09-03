@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,6 +38,7 @@ import org.graalvm.compiler.nodes.memory.FixedAccessNode;
 import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
+import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.meta.JavaKind;
@@ -64,6 +65,11 @@ public final class JavaReadNode extends FixedAccessNode implements Lowerable, Gu
     }
 
     @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
     public boolean canNullCheck() {
         return true;
     }
@@ -80,5 +86,4 @@ public final class JavaReadNode extends FixedAccessNode implements Lowerable, Gu
     public Node canonical(CanonicalizerTool tool) {
         return ReadNode.canonicalizeRead(this, getAddress(), getLocationIdentity(), tool);
     }
-
 }
