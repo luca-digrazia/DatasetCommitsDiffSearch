@@ -38,9 +38,10 @@ import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.java.*;
+import com.oracle.graal.java.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.java.GraphBuilderPlugin.LoadFieldPlugin;
+import com.oracle.graal.java.GraphBuilderPlugin.ParameterPlugin;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
@@ -62,6 +63,7 @@ import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.graal.truffle.nodes.frame.*;
 import com.oracle.graal.truffle.nodes.frame.NewFrameNode.VirtualOnlyInstanceNode;
 import com.oracle.graal.truffle.phases.*;
+import com.oracle.graal.truffle.substitutions.*;
 import com.oracle.graal.virtual.phases.ea.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -183,14 +185,14 @@ public class PartialEvaluator {
         }
     }
 
-    private class PEInlineInvokePlugin implements InlineInvokePlugin {
+    private class InlineInvokePlugin implements GraphBuilderPlugin.InlineInvokePlugin {
 
-        private Deque<TruffleInlining> inlining;
+        private Stack<TruffleInlining> inlining;
         private OptimizedDirectCallNode lastDirectCallNode;
         private final Replacements replacements;
 
-        public PEInlineInvokePlugin(TruffleInlining inlining, Replacements replacements) {
-            this.inlining = new ArrayDeque<>();
+        public InlineInvokePlugin(TruffleInlining inlining, Replacements replacements) {
+            this.inlining = new Stack<>();
             this.inlining.push(inlining);
             this.replacements = replacements;
         }
@@ -203,26 +205,24 @@ public class PartialEvaluator {
                 return null;
             }
             assert !builder.parsingReplacement();
-            if (TruffleCompilerOptions.TruffleFunctionInlining.getValue()) {
-                if (original.equals(callSiteProxyMethod)) {
-                    ValueNode arg1 = arguments[0];
-                    if (!arg1.isConstant()) {
-                        GraalInternalError.shouldNotReachHere("The direct call node does not resolve to a constant!");
-                    }
+            if (original.equals(callSiteProxyMethod)) {
+                ValueNode arg1 = arguments[0];
+                if (!arg1.isConstant()) {
+                    GraalInternalError.shouldNotReachHere("The direct call node does not resolve to a constant!");
+                }
 
-                    Object callNode = builder.getSnippetReflection().asObject(Object.class, (JavaConstant) arg1.asConstant());
-                    if (callNode instanceof OptimizedDirectCallNode) {
-                        OptimizedDirectCallNode directCallNode = (OptimizedDirectCallNode) callNode;
-                        lastDirectCallNode = directCallNode;
-                    }
-                } else if (original.equals(callDirectMethod)) {
-                    TruffleInliningDecision decision = getDecision(inlining.peek(), lastDirectCallNode);
-                    lastDirectCallNode = null;
-                    if (decision != null && decision.isInline()) {
-                        inlining.push(decision);
-                        builder.getAssumptions().record(new AssumptionValidAssumption((OptimizedAssumption) decision.getTarget().getNodeRewritingAssumption()));
-                        return new InlineInfo(callInlinedMethod, false, false);
-                    }
+                Object callNode = builder.getSnippetReflection().asObject(Object.class, (JavaConstant) arg1.asConstant());
+                if (callNode instanceof OptimizedDirectCallNode) {
+                    OptimizedDirectCallNode directCallNode = (OptimizedDirectCallNode) callNode;
+                    lastDirectCallNode = directCallNode;
+                }
+            } else if (original.equals(callDirectMethod)) {
+                TruffleInliningDecision decision = getDecision(inlining.peek(), lastDirectCallNode);
+                lastDirectCallNode = null;
+                if (decision != null && decision.isInline()) {
+                    inlining.push(decision);
+                    builder.getAssumptions().record(new AssumptionValidAssumption((OptimizedAssumption) decision.getTarget().getNodeRewritingAssumption()));
+                    return new InlineInfo(callInlinedMethod, false, false);
                 }
             }
             return new InlineInfo(original, false, false);
@@ -235,7 +235,7 @@ public class PartialEvaluator {
         }
     }
 
-    private class PELoopExplosionPlugin implements LoopExplosionPlugin {
+    private class LoopExplosionPlugin implements GraphBuilderPlugin.LoopExplosionPlugin {
 
         public boolean shouldExplodeLoops(ResolvedJavaMethod method) {
             return method.getAnnotation(ExplodeLoop.class) != null;
@@ -259,9 +259,9 @@ public class PartialEvaluator {
         plugins.setLoadFieldPlugin(new InterceptLoadFieldPlugin());
         plugins.setParameterPlugin(new InterceptReceiverPlugin(callTarget));
         callTarget.setInlining(new TruffleInlining(callTarget, new DefaultInliningPolicy()));
-        plugins.setInlineInvokePlugin(new PEInlineInvokePlugin(callTarget.getInlining(), providers.getReplacements()));
-        plugins.setLoopExplosionPlugin(new PELoopExplosionPlugin());
-        InvocationPlugins invocationPlugins = newConfig.getPlugins().getInvocationPlugins();
+        plugins.setInlineInvokePlugin(new InlineInvokePlugin(callTarget.getInlining(), providers.getReplacements()));
+        plugins.setLoopExplosionPlugin(new LoopExplosionPlugin());
+        TruffleGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), newConfig.getPlugins().getInvocationPlugins());
         new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), this.snippetReflection, providers.getConstantReflection(), newConfig,
                         TruffleCompilerImpl.Optimizations, null).apply(graph);
         Debug.dump(graph, "After FastPE");

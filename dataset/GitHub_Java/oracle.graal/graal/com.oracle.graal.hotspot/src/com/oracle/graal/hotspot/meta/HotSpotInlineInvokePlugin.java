@@ -48,10 +48,8 @@ public final class HotSpotInlineInvokePlugin implements InlineInvokePlugin {
     public InlineInfo getInlineInfo(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType) {
         ResolvedJavaMethod subst = replacements.getMethodSubstitutionMethod(method);
         if (subst != null) {
-            if (b.parsingReplacement() || InlineDuringParsing.getValue()) {
-                // Forced inlining of intrinsics
-                return new InlineInfo(subst, true, true);
-            }
+            // Forced inlining of intrinsics
+            return new InlineInfo(subst, true, true);
         }
         if (b.parsingReplacement()) {
             assert nodeIntrinsification.getIntrinsic(method) == null && method.getAnnotation(Word.Operation.class) == null && method.getAnnotation(HotSpotOperation.class) == null &&

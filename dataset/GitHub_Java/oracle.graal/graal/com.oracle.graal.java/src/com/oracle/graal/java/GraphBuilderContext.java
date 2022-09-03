@@ -24,6 +24,7 @@ package com.oracle.graal.java;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -33,6 +34,32 @@ import com.oracle.graal.nodes.spi.*;
  */
 public interface GraphBuilderContext {
 
+    /**
+     * Information about a snippet or method substitution currently being processed by the graph
+     * builder. When in the scope of a replacement, the graph builder does not check the value kinds
+     * flowing through the JVM state since replacements can employ non-Java kinds to represent
+     * values such as raw machine words and pointers.
+     */
+    public interface Replacement {
+
+        /**
+         * Gets the method being replaced.
+         */
+        ResolvedJavaMethod getOriginalMethod();
+
+        /**
+         * Gets the replacement method.
+         */
+        ResolvedJavaMethod getReplacementMethod();
+
+        /**
+         * Determines if this replacement is being inlined as a compiler intrinsic. A compiler
+         * intrinsic is atomic with respect to deoptimization. Deoptimization within a compiler
+         * intrinsic will restart the interpreter at the intrinsified call.
+         */
+        boolean isIntrinsic();
+    }
+
     <T extends ControlSinkNode> T append(T fixed);
 
     <T extends ControlSplitNode> T append(T fixed);
@@ -41,22 +68,73 @@ public interface GraphBuilderContext {
 
     <T extends FloatingNode> T append(T value);
 
+    <T extends ValueNode> T append(T value);
+
     StampProvider getStampProvider();
 
     MetaAccessProvider getMetaAccess();
 
     Assumptions getAssumptions();
 
+    ConstantReflectionProvider getConstantReflection();
+
+    SnippetReflectionProvider getSnippetReflection();
+
     void push(Kind kind, ValueNode value);
 
+    StructuredGraph getGraph();
+
     /**
-     * @see GuardingPiNode#makeNonNull(ValueNode)
+     * Gets the parsing context for the method that inlines the method being parsed by this context.
      */
-    static ValueNode makeNonNull(GraphBuilderContext builder, ValueNode value) {
-        ValueNode nonNullValue = GuardingPiNode.makeNonNull(value);
+    GraphBuilderContext getParent();
+
+    /**
+     * Gets the root method for the graph building process.
+     */
+    ResolvedJavaMethod getRootMethod();
+
+    /**
+     * Gets the method currently being parsed.
+     */
+    ResolvedJavaMethod getMethod();
+
+    /**
+     * Gets the index of the bytecode instruction currently being parsed.
+     */
+    int bci();
+
+    /**
+     * Gets the inline depth of this context. 0 implies this is the context for the
+     * {@linkplain #getRootMethod() root method}.
+     */
+    int getDepth();
+
+    /**
+     * Determines if the current parsing context is a snippet or method substitution.
+     */
+    default boolean parsingReplacement() {
+        return getReplacement() == null;
+    }
+
+    /**
+     * Gets the replacement of the current parsing context or {@code null} if not
+     * {@link #parsingReplacement() parsing a replacement}.
+     */
+    Replacement getReplacement();
+
+    /**
+     * @see GuardingPiNode#nullCheckedValue(ValueNode)
+     */
+    static ValueNode nullCheckedValue(GraphBuilderContext builder, ValueNode value) {
+        ValueNode nonNullValue = GuardingPiNode.nullCheckedValue(value);
         if (nonNullValue != value) {
             builder.append((FixedWithNextNode) nonNullValue);
         }
         return nonNullValue;
     }
+
+    boolean eagerResolving();
+
+    BailoutException bailout(String string);
 }

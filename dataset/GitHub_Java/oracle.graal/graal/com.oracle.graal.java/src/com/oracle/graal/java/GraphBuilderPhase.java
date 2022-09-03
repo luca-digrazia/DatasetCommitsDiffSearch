@@ -1135,7 +1135,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     invoke = createInvoke(callTarget, resultType);
                 } else {
                     invoke = createInvokeWithException(callTarget, resultType);
-                    AbstractBeginNode beginNode = currentGraph.add(new KillingBeginNode(LocationIdentity.any()));
+                    AbstractBeginNode beginNode = currentGraph.add(new KillingBeginNode(LocationIdentity.ANY_LOCATION));
                     invoke.setNext(beginNode);
                     lastInstr = beginNode;
                 }
@@ -1219,8 +1219,9 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         return false;
                     }
                 } else {
-                    if (context == null && !inlinedMethod.equals(targetMethod)) {
-                        if (inlineInfo.adoptBeforeCallFrameState) {
+                    if (context == null && inlineInfo.isReplacement) {
+                        assert !inlinedMethod.equals(targetMethod);
+                        if (inlineInfo.isIntrinsic) {
                             context = new IntrinsicContext(targetMethod, inlinedMethod, args, bci);
                         } else {
                             context = new ReplacementContext(targetMethod, inlinedMethod);
