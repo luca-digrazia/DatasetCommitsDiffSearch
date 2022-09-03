@@ -88,7 +88,7 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
         this.arrayBaseOffset = directPointers ? 0 : tool.getProviders().getMetaAccess().getArrayBaseOffset(kind);
         this.arrayIndexScale = tool.getProviders().getMetaAccess().getArrayIndexScale(kind);
 
-        if (constantLength >= 0 && arrayIndexScale > 1) {
+        if (arrayIndexScale > 1) {
             // scale length
             this.constantByteLength = constantLength << NumUtil.log2Ceil(arrayIndexScale);
         } else {
@@ -180,7 +180,7 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
         masm.bind(done);
     }
 
-    private static void emitArrayCompare(CompilationResultBuilder crb, AMD64MacroAssembler masm, JavaKind kind,
+    static void emitArrayCompare(CompilationResultBuilder crb, AMD64MacroAssembler masm, JavaKind kind,
                     Register result, Register array1, Register array2, Register length,
                     Value temp4, Value temp5, Value tempXMM, Value vectorTemp1, Value vectorTemp2,
                     Label trueLabel, Label falseLabel) {
@@ -587,7 +587,6 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
                     Label noMatch,
                     int nBytes,
                     int bytesPerVector) {
-        assert bytesPerVector >= 16;
         if (nBytes == 0) {
             // do nothing
             return;
@@ -615,10 +614,10 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
                 AMD64Assembler.VexMoveOp.VMOVDQU.emit(asm, AVXKind.AVXSize.XMM, tmpVectors[2], new AMD64Address(arrayPtr1, nBytes - bytesPerXMMVector));
                 AMD64Assembler.VexMoveOp.VMOVDQU.emit(asm, AVXKind.AVXSize.XMM, tmpVectors[3], new AMD64Address(arrayPtr2, nBytes - bytesPerXMMVector));
                 AMD64Assembler.VexRVMOp.VPXOR.emit(asm, AVXKind.AVXSize.XMM, tmpVectors[2], tmpVectors[2], tmpVectors[3]);
-                AMD64Assembler.VexRMOp.VPTEST.emit(asm, AVXKind.AVXSize.XMM, tmpVectors[2], tmpVectors[2]);
+                AMD64Assembler.VexRMOp.VPTEST.emit(asm, AVXKind.AVXSize.XMM, tmpVectors[2], tmpVectors[3]);
                 asm.jcc(AMD64Assembler.ConditionFlag.NotZero, noMatch);
             }
-            AMD64Assembler.VexRMOp.VPTEST.emit(asm, AVXKind.AVXSize.XMM, tmpVectors[0], tmpVectors[0]);
+            AMD64Assembler.VexRMOp.VPTEST.emit(asm, AVXKind.AVXSize.XMM, tmpVectors[0], tmpVectors[1]);
             asm.jcc(AMD64Assembler.ConditionFlag.NotZero, noMatch);
         } else if (bytesPerVector >= 32) {
             // AVX2 supported, use YMM vectors
@@ -696,6 +695,8 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
                     if (loopCount > 1) {
                         asm.movl(tmp1, loopCount);
                     }
+                    asm.movq(arrayPtr1, arrayPtr1);
+                    asm.movq(arrayPtr2, arrayPtr2);
                     Label loopBegin = new Label();
                     asm.bind(loopBegin);
                     asm.movdqu(tmpVectors[0], new AMD64Address(arrayPtr1));
@@ -744,7 +745,7 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
                     asm.ptest(tmpVectors[2], tmpVectors[2]);
                     asm.jcc(AMD64Assembler.ConditionFlag.NotZero, noMatch);
                 }
-                asm.ptest(tmpVectors[0], tmpVectors[0]);
+                asm.ptest(tmpVectors[0], tmpVectors[1]);
                 asm.jcc(AMD64Assembler.ConditionFlag.NotZero, noMatch);
             }
         }
