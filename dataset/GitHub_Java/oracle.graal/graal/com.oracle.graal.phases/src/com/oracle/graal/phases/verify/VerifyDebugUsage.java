@@ -23,7 +23,6 @@
 package com.oracle.graal.phases.verify;
 
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMethodMetrics;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeInputList;
 import com.oracle.graal.nodes.CallTargetNode;
@@ -56,8 +55,6 @@ public class VerifyDebugUsage extends VerifyPhase<PhaseContext> {
         ResolvedJavaType debugType = context.getMetaAccess().lookupJavaType(Debug.class);
         ResolvedJavaType nodeType = context.getMetaAccess().lookupJavaType(Node.class);
         ResolvedJavaType stringType = context.getMetaAccess().lookupJavaType(String.class);
-        ResolvedJavaType debugMethodMetricsType = context.getMetaAccess().lookupJavaType(DebugMethodMetrics.class);
-
         for (MethodCallTargetNode t : graph.getNodes(MethodCallTargetNode.TYPE)) {
             ResolvedJavaMethod callee = t.targetMethod();
             String calleeName = callee.getName();
@@ -68,11 +65,6 @@ public class VerifyDebugUsage extends VerifyPhase<PhaseContext> {
             }
             if (callee.getDeclaringClass().isAssignableFrom(nodeType)) {
                 if (calleeName.equals("assertTrue") || calleeName.equals("assertFalse")) {
-                    verifyParameters(graph, t.arguments(), stringType, 1);
-                }
-            }
-            if (callee.getDeclaringClass().equals(debugMethodMetricsType)) {
-                if (calleeName.equals("addToMetric") || calleeName.equals("getCurrentMetricValue") || calleeName.equals("incrementMetric")) {
                     verifyParameters(graph, t.arguments(), stringType, 1);
                 }
             }
@@ -102,17 +94,18 @@ public class VerifyDebugUsage extends VerifyPhase<PhaseContext> {
     private static void verifyStringConcat(StructuredGraph graph, int bci, int argIdx, ResolvedJavaMethod callee) {
         if (callee.getDeclaringClass().getName().equals("Ljava/lang/StringBuilder;") || callee.getDeclaringClass().getName().equals("Ljava/lang/StringBuffer;")) {
             StackTraceElement e = graph.method().asStackTraceElement(bci);
-            throw new VerificationError(
-                            "%s: parameter %d of call to %s appears to be a String concatenation expression.%n" + "    Use one of the multi-parameter Debug.log() methods or Debug.logv() instead.", e,
-                            argIdx, callee.format("%H.%n(%p)"));
+            throw new VerificationError(String.format("%s: parameter %d of call to %s appears to be a String concatenation expression.%n" +
+                            "    Use one of the multi-parameter Debug.log() methods or Debug.logv() instead.", e, argIdx, callee.format("%H.%n(%p)")));
         }
     }
 
     private static void verifyToStringCall(StructuredGraph graph, ResolvedJavaType stringType, ResolvedJavaMethod callee, int bci, int argIdx) {
         if (callee.getSignature().getParameterCount(false) == 0 && callee.getSignature().getReturnType(callee.getDeclaringClass()).equals(stringType)) {
             StackTraceElement e = graph.method().asStackTraceElement(bci);
-            throw new VerificationError("%s: parameter %d of call to %s is a call to toString() which is redundant (the callee will do it) and forces unnecessary eager evaluation.", e, argIdx,
-                            callee.format("%H.%n(%p)"));
+            throw new VerificationError(
+                            String.format("%s: parameter %d of call to %s is a call to toString() which is redundant (the callee will do it) and forces unnecessary eager evaluation.",
+                                            e,
+                                            argIdx, callee.format("%H.%n(%p)")));
         }
     }
 }
