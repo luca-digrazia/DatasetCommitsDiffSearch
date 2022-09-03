@@ -21,7 +21,7 @@
  * questions.
  */
 package com.oracle.graal.hotspot.snippets;
-
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
 import static com.oracle.graal.snippets.SnippetTemplate.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
@@ -36,7 +36,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
@@ -236,8 +235,8 @@ public class CheckCastSnippets implements SnippetsInterface {
         private final ResolvedJavaMethod secondary;
         private final ResolvedJavaMethod dynamic;
 
-        public Templates(CodeCacheProvider runtime, TargetDescription target) {
-            super(runtime, target, CheckCastSnippets.class);
+        public Templates(CodeCacheProvider runtime) {
+            super(runtime, CheckCastSnippets.class);
             exact = snippet("checkcastExact", Object.class, Word.class, boolean.class);
             primary = snippet("checkcastPrimary", Word.class, Object.class, boolean.class, int.class);
             secondary = snippet("checkcastSecondary", Word.class, Object.class, Word[].class, boolean.class);
@@ -268,7 +267,7 @@ public class CheckCastSnippets implements SnippetsInterface {
                 arguments = arguments("hub", hub).add("object", object);
             } else {
                 ConstantNode[] hints = createHints(hintInfo, runtime, graph);
-                key = new Key(secondary).add("hints", Varargs.vargargs(new Word[hints.length], StampFactory.forKind(wordKind()))).add("checkNull", checkNull);
+                key = new Key(secondary).add("hints", Varargs.vargargs(new Word[hints.length], wordStamp())).add("checkNull", checkNull);
                 arguments = arguments("hub", hub).add("object", object).add("hints", hints);
             }
 
@@ -297,7 +296,7 @@ public class CheckCastSnippets implements SnippetsInterface {
         static ConstantNode[] createHints(TypeCheckHints hints, MetaAccessProvider runtime, Graph graph) {
             ConstantNode[] hintHubs = new ConstantNode[hints.types.length];
             for (int i = 0; i < hintHubs.length; i++) {
-                hintHubs[i] = ConstantNode.forConstant(((HotSpotResolvedJavaType) hints.types[i]).klass(), runtime, graph);
+                hintHubs[i] = ConstantNode.forConstant(((HotSpotJavaType) hints.types[i]).klass(), runtime, graph);
             }
             return hintHubs;
         }

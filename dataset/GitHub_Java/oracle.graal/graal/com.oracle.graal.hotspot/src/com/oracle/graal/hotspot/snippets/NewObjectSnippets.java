@@ -23,9 +23,8 @@
 package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.api.code.UnsignedMath.*;
+import static com.oracle.graal.hotspot.nodes.CastFromHub.*;
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
-import static com.oracle.graal.nodes.extended.UnsafeArrayCastNode.*;
-import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 import static com.oracle.graal.snippets.Snippet.Varargs.*;
 import static com.oracle.graal.snippets.SnippetTemplate.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
@@ -79,19 +78,17 @@ public class NewObjectSnippets implements SnippetsInterface {
                     @ConstantParameter("fillContents") boolean fillContents,
                     @ConstantParameter("locked") boolean locked) {
 
-        Object result;
         if (memory == Word.zero()) {
             new_stub.inc();
-            result = NewInstanceStubCall.call(hub);
-        } else {
-            if (locked) {
-                formatObject(hub, size, memory, thread().or(biasedLockPattern()), fillContents);
-            } else {
-                formatObject(hub, size, memory, prototypeMarkWord, fillContents);
-            }
-            result = memory.toObject();
+            return NewInstanceStubCall.call(hub);
         }
-        return unsafeCast(verifyOop(result), StampFactory.forNodeIntrinsic());
+        if (locked) {
+            formatObject(hub, size, memory, thread().or(biasedLockPattern()), fillContents);
+        } else {
+            formatObject(hub, size, memory, prototypeMarkWord, fillContents);
+        }
+        Object instance = memory.toObject();
+        return castFromHub(verifyOop(instance), hub);
     }
 
     @Snippet
@@ -129,24 +126,22 @@ public class NewObjectSnippets implements SnippetsInterface {
     }
 
     private static Object initializeArray(Word memory, Word hub, int length, int size, Word prototypeMarkWord, int headerSize, boolean isObjectArray, boolean fillContents) {
-        Object result;
         if (memory == Word.zero()) {
             if (isObjectArray) {
                 anewarray_stub.inc();
             } else {
                 newarray_stub.inc();
             }
-            result = NewArrayStubCall.call(isObjectArray, hub, length);
-        } else {
-            if (isObjectArray) {
-                anewarray_loopInit.inc();
-            } else {
-                newarray_loopInit.inc();
-            }
-            formatArray(hub, size, length, headerSize, memory, prototypeMarkWord, fillContents);
-            result = memory.toObject();
+            return NewArrayStubCall.call(isObjectArray, hub, length);
         }
-        return unsafeArrayCast(verifyOop(result), length, StampFactory.forNodeIntrinsic());
+        if (isObjectArray) {
+            anewarray_loopInit.inc();
+        } else {
+            newarray_loopInit.inc();
+        }
+        formatArray(hub, size, length, headerSize, memory, prototypeMarkWord, fillContents);
+        Object instance = memory.toObject();
+        return castFromHub(verifyOop(instance), hub);
     }
 
     /**
@@ -247,8 +242,8 @@ public class NewObjectSnippets implements SnippetsInterface {
         private final TargetDescription target;
         private final boolean useTLAB;
 
-        public Templates(CodeCacheProvider runtime, Assumptions assumptions, TargetDescription target, boolean useTLAB) {
-            super(runtime, assumptions, target, NewObjectSnippets.class);
+        public Templates(CodeCacheProvider runtime, TargetDescription target, boolean useTLAB) {
+            super(runtime, NewObjectSnippets.class);
             this.target = target;
             this.useTLAB = useTLAB;
             allocate = snippet("allocate", int.class);
@@ -321,7 +316,7 @@ public class NewObjectSnippets implements SnippetsInterface {
                                 add("log2ElementSize", log2ElementSize).
                                 add("type", arrayType);
                 Arguments arguments = new Arguments().add("length", lengthNode);
-                SnippetTemplate template = cache.get(key, assumptions);
+                SnippetTemplate template = cache.get(key);
                 Debug.log("Lowering allocateArrayAndInitialize in %s: node=%s, template=%s, arguments=%s", graph, newArrayNode, template, arguments);
                 template.instantiate(runtime, newArrayNode, DEFAULT_REPLACER, arguments);
             }
@@ -333,7 +328,7 @@ public class NewObjectSnippets implements SnippetsInterface {
             ValueNode size = tlabAllocateNode.size();
             Key key = new Key(allocate);
             Arguments arguments = arguments("size", size);
-            SnippetTemplate template = cache.get(key, assumptions);
+            SnippetTemplate template = cache.get(key);
             Debug.log("Lowering fastAllocate in %s: node=%s, template=%s, arguments=%s", graph, tlabAllocateNode, template, arguments);
             template.instantiate(runtime, tlabAllocateNode, DEFAULT_REPLACER, arguments);
         }
@@ -350,7 +345,7 @@ public class NewObjectSnippets implements SnippetsInterface {
             Key key = new Key(initializeObject).add("size", size).add("fillContents", initializeNode.fillContents()).add("locked", initializeNode.locked());
             ValueNode memory = initializeNode.memory();
             Arguments arguments = arguments("memory", memory).add("hub", hub).add("prototypeMarkWord", type.prototypeMarkWord());
-            SnippetTemplate template = cache.get(key, assumptions);
+            SnippetTemplate template = cache.get(key);
             Debug.log("Lowering initializeObject in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
             template.instantiate(runtime, initializeNode, DEFAULT_REPLACER, arguments);
         }
@@ -367,7 +362,7 @@ public class NewObjectSnippets implements SnippetsInterface {
             Key key = new Key(elementKind.isObject() ? initializeObjectArray : initializePrimitiveArray).add("headerSize", headerSize).add("fillContents", initializeNode.fillContents()).add("locked", initializeNode.locked());
             ValueNode memory = initializeNode.memory();
             Arguments arguments = arguments("memory", memory).add("hub", hub).add("prototypeMarkWord", type.prototypeMarkWord()).add("size", initializeNode.size()).add("length", initializeNode.length());
-            SnippetTemplate template = cache.get(key, assumptions);
+            SnippetTemplate template = cache.get(key);
             Debug.log("Lowering initializeObjectArray in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
             template.instantiate(runtime, initializeNode, DEFAULT_REPLACER, arguments);
         }
@@ -384,7 +379,7 @@ public class NewObjectSnippets implements SnippetsInterface {
             ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, graph);
             Key key = new Key(newmultiarray).add("dimensions", vargargs(new int[rank], StampFactory.forKind(Kind.Int))).add("rank", rank);
             Arguments arguments = arguments("dimensions", dims).add("hub", hub);
-            SnippetTemplate template = cache.get(key, assumptions);
+            SnippetTemplate template = cache.get(key);
             template.instantiate(runtime, newmultiarrayNode, DEFAULT_REPLACER, arguments);
         }
     }

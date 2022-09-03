@@ -33,7 +33,6 @@ import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 
 /**
@@ -62,22 +61,10 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
     }
 
     private static Kind wordKind;
-    private static Stamp wordStamp;
 
-    /**
-     * Gets the kind of a word value.
-     */
     public static Kind wordKind() {
         assert wordKind != null;
         return wordKind;
-    }
-
-    /**
-     * Gets the stamp for a word value.
-     */
-    public static Stamp wordStamp() {
-        assert wordStamp != null;
-        return wordStamp;
     }
 
     protected final CompilerToVM compilerToVm;
@@ -119,13 +106,9 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
             printConfig(config);
         }
 
-        AddressMap.log(config.cardtableStartAddress, "CARDTABLE");
-        AddressMap.log(config.cardtableStartAddress, "SAFEPOINT_POLL_PAGE");
-
         target = createTarget();
         assert wordKind == null || wordKind.equals(target.wordKind);
         wordKind = target.wordKind;
-        wordStamp = StampFactory.forInteger(wordKind, wordKind.getMinValue(), wordKind.getMaxValue());
 
         runtime = createRuntime();
 

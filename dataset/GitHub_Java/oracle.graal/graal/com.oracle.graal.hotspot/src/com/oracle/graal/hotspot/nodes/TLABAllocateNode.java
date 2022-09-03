@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.snippets.*;
 
 /**
  * Allocates some uninitialized area. This is used for TLAB allocation
@@ -36,7 +36,7 @@ public final class TLABAllocateNode extends FixedWithNextNode implements Lowerab
     @Input private ValueNode size;
 
     public TLABAllocateNode(ValueNode size) {
-        super(StampFactory.forWord());
+        super(HotSpotGraalRuntime.wordStamp());
         this.size = size;
     }
 

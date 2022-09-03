@@ -33,54 +33,51 @@ import sun.misc.*;
  */
 public enum Kind {
     /** The primitive boolean kind, represented as an int on the stack. */
-    Boolean('z', "boolean", true, java.lang.Boolean.TYPE, java.lang.Boolean.class),
+    Boolean('z', "boolean", true, true),
 
     /** The primitive byte kind, represented as an int on the stack. */
-    Byte('b', "byte", true, java.lang.Byte.TYPE, java.lang.Byte.class),
+    Byte('b', "byte", true, true),
 
     /** The primitive short kind, represented as an int on the stack. */
-    Short('s', "short", true, java.lang.Short.TYPE, java.lang.Short.class),
+    Short('s', "short", true, true),
 
     /** The primitive char kind, represented as an int on the stack. */
-    Char('c', "char", true, java.lang.Character.TYPE, java.lang.Character.class),
+    Char('c', "char", true, true),
 
     /** The primitive int kind, represented as an int on the stack. */
-    Int('i', "int", true, java.lang.Integer.TYPE, java.lang.Integer.class),
+    Int('i', "int", true, true),
 
     /** The primitive float kind. */
-    Float('f', "float", false, java.lang.Float.TYPE, java.lang.Float.class),
+    Float('f', "float", true, false),
 
     /** The primitive long kind. */
-    Long('j', "long", false, java.lang.Long.TYPE, java.lang.Long.class),
+    Long('j', "long", true, false),
 
     /** The primitive double kind. */
-    Double('d', "double", false, java.lang.Double.TYPE, java.lang.Double.class),
+    Double('d', "double", true, false),
 
     /** The Object kind, also used for arrays. */
-    Object('a', "Object", false, null, null),
+    Object('a', "Object", false, false),
 
     /** The void float kind. */
-    Void('v', "void", false, java.lang.Void.TYPE, java.lang.Void.class),
+    Void('v', "void", false, false),
 
     /** Denote a bytecode address in a {@code JSR} bytecode. */
-    Jsr('r', "jsr", false, null, null),
+    Jsr('r', "jsr", false, false),
 
     /** The non-type. */
-    Illegal('-', "illegal", false, null, null);
+    Illegal('-', "illegal", false, false);
 
     private final char typeChar;
     private final String javaName;
     private final boolean isStackInt;
-    private final Class primitiveJavaClass;
-    private final Class boxedJavaClass;
+    private final boolean isPrimitive;
 
-    private Kind(char typeChar, String javaName, boolean isStackInt, Class primitiveJavaClass, Class boxedJavasClass) {
+    private Kind(char typeChar, String javaName, boolean isPrimitive, boolean isStackInt) {
         this.typeChar = typeChar;
         this.javaName = javaName;
+        this.isPrimitive = isPrimitive;
         this.isStackInt = isStackInt;
-        this.primitiveJavaClass = primitiveJavaClass;
-        this.boxedJavaClass = boxedJavasClass;
-        assert primitiveJavaClass == null || javaName.equals(primitiveJavaClass.getName());
     }
 
     /**
@@ -99,13 +96,22 @@ public enum Kind {
     }
 
     /**
+     * Checks whether this type is valid as an {@code int} on the Java operand stack.
+     *
+     * @return {@code true} if this type is represented by an {@code int} on the operand stack
+     */
+    public boolean isStackInt() {
+        return this.isStackInt;
+    }
+
+    /**
      * Checks whether this type is a Java primitive type.
      *
      * @return {@code true} if this is {@link #Boolean}, {@link #Byte}, {@link #Char}, {@link #Short}, {@link #Int},
-     *         {@link #Long}, {@link #Float}, {@link #Double}, or {@link #Void}.
+     *         {@link #Long}, {@link #Float} or {@link #Double}.
      */
     public boolean isPrimitive() {
-        return primitiveJavaClass != null;
+        return this.isPrimitive;
     }
 
     /**
@@ -114,7 +120,7 @@ public enum Kind {
      * @return the kind used on the operand stack
      */
     public Kind getStackKind() {
-        if (isStackInt) {
+        if (isStackInt()) {
             return Int;
         }
         return this;
@@ -172,23 +178,23 @@ public enum Kind {
      * @return the kind
      */
     public static Kind fromJavaClass(Class< ? > klass) {
-        if (klass == Boolean.primitiveJavaClass) {
+        if (klass == java.lang.Boolean.TYPE) {
             return Boolean;
-        } else if (klass == Byte.primitiveJavaClass) {
+        } else if (klass == java.lang.Byte.TYPE) {
             return Byte;
-        } else if (klass == Short.primitiveJavaClass) {
+        } else if (klass == java.lang.Short.TYPE) {
             return Short;
-        } else if (klass == Char.primitiveJavaClass) {
+        } else if (klass == java.lang.Character.TYPE) {
             return Char;
-        } else if (klass == Int.primitiveJavaClass) {
+        } else if (klass == java.lang.Integer.TYPE) {
             return Int;
-        } else if (klass == Long.primitiveJavaClass) {
+        } else if (klass == java.lang.Long.TYPE) {
             return Long;
-        } else if (klass == Float.primitiveJavaClass) {
+        } else if (klass == java.lang.Float.TYPE) {
             return Float;
-        } else if (klass == Double.primitiveJavaClass) {
+        } else if (klass == java.lang.Double.TYPE) {
             return Double;
-        } else if (klass == Void.primitiveJavaClass) {
+        } else if (klass == java.lang.Void.TYPE) {
             return Void;
         } else {
             return Object;
@@ -201,7 +207,28 @@ public enum Kind {
      * @return the Java class
      */
     public Class< ? > toJavaClass() {
-        return primitiveJavaClass;
+        switch (this) {
+            case Void:
+                return java.lang.Void.TYPE;
+            case Long:
+                return java.lang.Long.TYPE;
+            case Int:
+                return java.lang.Integer.TYPE;
+            case Byte:
+                return java.lang.Byte.TYPE;
+            case Char:
+                return java.lang.Character.TYPE;
+            case Double:
+                return java.lang.Double.TYPE;
+            case Float:
+                return java.lang.Float.TYPE;
+            case Short:
+                return java.lang.Short.TYPE;
+            case Boolean:
+                return java.lang.Boolean.TYPE;
+            default:
+                return null;
+        }
     }
 
     /**
@@ -210,7 +237,91 @@ public enum Kind {
      * @return the Java class
      */
     public Class< ? > toBoxedJavaClass() {
-        return boxedJavaClass;
+        switch (this) {
+            case Void:
+                return java.lang.Void.class;
+            case Long:
+                return java.lang.Long.class;
+            case Int:
+                return java.lang.Integer.class;
+            case Byte:
+                return java.lang.Byte.class;
+            case Char:
+                return java.lang.Character.class;
+            case Double:
+                return java.lang.Double.class;
+            case Float:
+                return java.lang.Float.class;
+            case Short:
+                return java.lang.Short.class;
+            case Boolean:
+                return java.lang.Boolean.class;
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Checks whether this value type is void.
+     *
+     * @return {@code true} if this type is void
+     */
+    public final boolean isVoid() {
+        return this == Kind.Void;
+    }
+
+    /**
+     * Checks whether this value type is long.
+     *
+     * @return {@code true} if this type is long
+     */
+    public final boolean isLong() {
+        return this == Kind.Long;
+    }
+
+    /**
+     * Checks whether this value type is float.
+     *
+     * @return {@code true} if this type is float
+     */
+    public final boolean isFloat() {
+        return this == Kind.Float;
+    }
+
+    /**
+     * Checks whether this value type is double.
+     *
+     * @return {@code true} if this type is double
+     */
+    public final boolean isDouble() {
+        return this == Kind.Double;
+    }
+
+    /**
+     * Checks whether this value type is float or double.
+     *
+     * @return {@code true} if this type is float or double
+     */
+    public final boolean isFloatOrDouble() {
+        return this == Kind.Double || this == Kind.Float;
+    }
+
+    /**
+     * Checks whether this value type is an object type.
+     *
+     * @return {@code true} if this type is an object
+     */
+    public final boolean isObject() {
+        return this == Kind.Object;
+    }
+
+    /**
+     * Checks whether this value type is an address type.
+     *
+     * @return {@code true} if this type is an address
+     */
+    public boolean isJsr() {
+        return this == Kind.Jsr;
     }
 
     /**
@@ -235,7 +346,7 @@ public enum Kind {
      * @return a formatted string for {@code value} based on this kind
      */
     public String format(Object value) {
-        if (this == Kind.Object) {
+        if (isObject()) {
             if (value == null) {
                 return "null";
             } else {

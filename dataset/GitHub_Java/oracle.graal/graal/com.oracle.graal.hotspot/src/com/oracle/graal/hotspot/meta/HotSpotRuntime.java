@@ -330,11 +330,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
 
     @Override
     public ResolvedJavaType lookupJavaType(Constant constant) {
-        if (!constant.getKind().isObject() || constant.isNull()) {
-            return null;
-        }
-        Object o = constant.asObject();
-        return HotSpotResolvedJavaType.fromClass(o.getClass());
+        return (ResolvedJavaType) graalRuntime.getCompilerToVM().getJavaType(constant);
     }
 
     @Override
@@ -367,10 +363,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
 
     @Override
     public int lookupArrayLength(Constant array) {
-        if (!array.getKind().isObject() || array.isNull() || !array.asObject().getClass().isArray()) {
-            throw new IllegalArgumentException(array + " is not an array");
-        }
-        return Array.getLength(array.asObject());
+        return graalRuntime.getCompilerToVM().getArrayLength(array);
     }
 
     @Override
@@ -520,8 +513,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
             assert load.kind() != Kind.Illegal;
             IndexedLocationNode location = IndexedLocationNode.create(LocationNode.ANY_LOCATION, load.loadKind(), load.displacement(), load.offset(), graph, false);
             ReadNode memoryRead = graph.add(new ReadNode(load.object(), location, load.stamp()));
-            // An unsafe read must not floating outside its block as may float above an explicit null check on its object.
-            memoryRead.dependencies().add(BeginNode.prevBegin(load));
             graph.replaceFixedWithFixed(load, memoryRead);
         } else if (n instanceof UnsafeStoreNode) {
             UnsafeStoreNode store = (UnsafeStoreNode) n;
@@ -741,9 +732,5 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
             case RuntimeConstraint: return 12;
             default: throw GraalInternalError.shouldNotReachHere();
         }
-    }
-
-    public boolean needsDataPatch(Constant constant) {
-        return constant.getPrimitiveAnnotation() instanceof HotSpotResolvedJavaType;
     }
 }

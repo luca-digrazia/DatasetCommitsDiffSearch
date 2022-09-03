@@ -26,9 +26,9 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.snippets.*;
 
 /**
@@ -43,7 +43,7 @@ public final class BeginLockScopeNode extends AbstractStateSplit implements LIRG
     private final boolean eliminated;
 
     public BeginLockScopeNode(boolean eliminated) {
-        super(StampFactory.forWord());
+        super(HotSpotGraalRuntime.wordStamp());
         this.eliminated = eliminated;
     }
 
@@ -56,11 +56,10 @@ public final class BeginLockScopeNode extends AbstractStateSplit implements LIRG
     public void generate(LIRGenerator gen) {
         gen.lock();
         StackSlot lockData = gen.peekLock();
-        assert stateAfter() != null;
-        if (!eliminated) {
-            Value result = gen.emitLea(lockData);
-            gen.setResult(this, result);
-        }
+        Value result = eliminated ? new Constant(gen.target().wordKind, 0L) : gen.emitLea(lockData);
+        FrameState stateAfter = stateAfter();
+        assert stateAfter != null;
+        gen.setResult(this, result);
     }
 
     @NodeIntrinsic

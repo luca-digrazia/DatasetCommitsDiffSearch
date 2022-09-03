@@ -155,8 +155,7 @@ public interface ResolvedJavaType extends JavaType {
     ResolvedJavaType getSuperclass();
 
     /**
-     * Gets the interfaces implemented or extended by this type. This method is analogous to {@link Class#getInterfaces()}
-     * and as such, only returns the interfaces directly implemented or extended by this type.
+     * Gets the interfaces that this type defines. This method is analogous to {@link Class#getInterfaces()}.
      */
     ResolvedJavaType[] getInterfaces();
 
@@ -222,11 +221,6 @@ public interface ResolvedJavaType extends JavaType {
      * @return this element's annotation for the specified annotation type if present on this class, else {@code null}
      */
     <T extends Annotation> T getAnnotation(Class<T> annotationClass);
-
-    /**
-     * Determines if this type is the same as that represented by a given {@link Class}.
-     */
-    boolean isClass(Class c);
 
     /**
      * Returns the {@link java.lang.Class} object representing this type.

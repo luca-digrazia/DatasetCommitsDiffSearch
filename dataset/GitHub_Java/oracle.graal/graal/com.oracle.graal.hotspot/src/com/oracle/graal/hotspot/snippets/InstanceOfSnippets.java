@@ -21,7 +21,7 @@
  * questions.
  */
 package com.oracle.graal.hotspot.snippets;
-
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.snippets.CheckCastSnippets.*;
 import static com.oracle.graal.hotspot.snippets.CheckCastSnippets.Templates.*;
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
@@ -33,7 +33,6 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
@@ -93,7 +92,7 @@ public class InstanceOfSnippets implements SnippetsInterface {
             return falseValue;
         }
         Word objectHub = loadHub(object);
-        if (objectHub.readWord(superCheckOffset) != hub) {
+        if (loadWordFromWord(objectHub, superCheckOffset) != hub) {
             displayMiss.inc();
             return falseValue;
         }
@@ -134,7 +133,7 @@ public class InstanceOfSnippets implements SnippetsInterface {
 
     static boolean checkSecondarySubType(Word t, Word s) {
         // if (S.cache == T) return true
-        if (s.readWord(secondarySuperCacheOffset()) == t) {
+        if (loadWordFromWord(s, secondarySuperCacheOffset()) == t) {
             cacheHit.inc();
             return true;
         }
@@ -146,8 +145,8 @@ public class InstanceOfSnippets implements SnippetsInterface {
         }
 
         // if (S.scan_s_s_array(T)) { S.cache = T; return true; }
-        Word secondarySupers = s.readWord(secondarySupersOffset());
-        int length = secondarySupers.readInt(metaspaceArrayLengthOffset());
+        Word secondarySupers = loadWordFromWord(s, secondarySupersOffset());
+        int length = loadIntFromWord(secondarySupers, metaspaceArrayLengthOffset());
         for (int i = 0; i < length; i++) {
             if (t == loadWordElement(secondarySupers, i)) {
                 DirectObjectStoreNode.storeObject(s, secondarySuperCacheOffset(), 0, t);
@@ -165,8 +164,8 @@ public class InstanceOfSnippets implements SnippetsInterface {
         private final ResolvedJavaMethod instanceofPrimary;
         private final ResolvedJavaMethod instanceofSecondary;
 
-        public Templates(CodeCacheProvider runtime, Assumptions assumptions, TargetDescription target) {
-            super(runtime, assumptions, target, InstanceOfSnippets.class);
+        public Templates(CodeCacheProvider runtime) {
+            super(runtime, InstanceOfSnippets.class);
             instanceofExact = snippet("instanceofExact", Object.class, Word.class, Object.class, Object.class, boolean.class);
             instanceofPrimary = snippet("instanceofPrimary", Word.class, Object.class, Object.class, Object.class, boolean.class, int.class);
             instanceofSecondary = snippet("instanceofSecondary", Word.class, Object.class, Object.class, Object.class, Word[].class, boolean.class);
@@ -179,7 +178,7 @@ public class InstanceOfSnippets implements SnippetsInterface {
             ValueNode falseValue = replacer.falseValue;
             ValueNode object = instanceOf.object();
             TypeCheckHints hintInfo = new TypeCheckHints(instanceOf.type(), instanceOf.profile(), tool.assumptions(), GraalOptions.InstanceOfMinHintHitProbability, GraalOptions.InstanceOfMaxHints);
-            final HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) instanceOf.type();
+            final HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) instanceOf.type();
             ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, instanceOf.graph());
             boolean checkNull = !object.stamp().nonNull();
             Arguments arguments;
@@ -194,7 +193,7 @@ public class InstanceOfSnippets implements SnippetsInterface {
                 arguments = arguments("hub", hub).add("object", object).add("trueValue", trueValue).add("falseValue", falseValue);
             } else {
                 ConstantNode[] hints = createHints(hintInfo, runtime, hub.graph());
-                key = new Key(instanceofSecondary).add("hints", Varargs.vargargs(new Word[hints.length], StampFactory.forKind(wordKind()))).add("checkNull", checkNull);
+                key = new Key(instanceofSecondary).add("hints", Varargs.vargargs(new Word[hints.length], wordStamp())).add("checkNull", checkNull);
                 arguments = arguments("hub", hub).add("object", object).add("hints", hints).add("trueValue", trueValue).add("falseValue", falseValue);
             }
             return new KeyAndArguments(key, arguments);

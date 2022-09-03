@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.snippets;
 
-import static com.oracle.graal.nodes.calc.CompareNode.*;
+import static com.oracle.graal.nodes.MaterializeNode.*;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -55,8 +54,8 @@ import com.oracle.graal.snippets.SnippetTemplate.UsageReplacer;
  */
 public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> extends AbstractTemplates<T> {
 
-    public InstanceOfSnippetsTemplates(MetaAccessProvider runtime, Assumptions assumptions, TargetDescription target, Class<T> snippetsClass) {
-        super(runtime, assumptions, target, snippetsClass);
+    public InstanceOfSnippetsTemplates(MetaAccessProvider runtime, Class<T> snippetsClass) {
+        super(runtime, snippetsClass);
     }
 
     /**
@@ -77,8 +76,7 @@ public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> e
      */
     protected abstract KeyAndArguments getKeyAndArguments(InstanceOfUsageReplacer replacer, LoweringTool tool);
 
-    public void lower(FloatingNode instanceOf, LoweringTool tool) {
-        assert instanceOf instanceof InstanceOfNode || instanceOf instanceof InstanceOfDynamicNode;
+    public void lower(InstanceOfNode instanceOf, LoweringTool tool) {
         List<Node> usages = instanceOf.usages().snapshot();
         int nUsages = usages.size();
 
@@ -93,7 +91,7 @@ public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> e
                 replacer.replaceUsingInstantiation();
             } else {
                 KeyAndArguments keyAndArguments = getKeyAndArguments(replacer, tool);
-                SnippetTemplate template = cache.get(keyAndArguments.key, assumptions);
+                SnippetTemplate template = cache.get(keyAndArguments.key);
                 template.instantiate(runtime, instanceOf, replacer, tool.lastFixedNode(), keyAndArguments.arguments);
             }
         }
@@ -108,7 +106,7 @@ public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> e
      * Gets the specific replacer object used to replace the usage of an instanceof node
      * with the result of an instantiated instanceof snippet.
      */
-    protected InstanceOfUsageReplacer createReplacer(FloatingNode instanceOf, LoweringTool tool, int nUsages, Instantiation instantiation, Node usage, final StructuredGraph graph) {
+    protected InstanceOfUsageReplacer createReplacer(InstanceOfNode instanceOf, LoweringTool tool, int nUsages, Instantiation instantiation, Node usage, final StructuredGraph graph) {
         InstanceOfUsageReplacer replacer;
         if (usage instanceof IfNode) {
             replacer = new IfUsageReplacer(instantiation, ConstantNode.forInt(1, graph), ConstantNode.forInt(0, graph), instanceOf, (IfNode) usage, nUsages == 1, tool);
@@ -176,16 +174,15 @@ public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> e
     }
 
     /**
-     * Replaces a usage of an {@link InstanceOfNode} or {@link InstanceOfDynamicNode}.
+     * Replaces a usage of an {@link InstanceOfNode}.
      */
     public abstract static class InstanceOfUsageReplacer implements UsageReplacer {
         public final Instantiation instantiation;
-        public final FloatingNode instanceOf;
+        public final InstanceOfNode instanceOf;
         public final ValueNode trueValue;
         public final ValueNode falseValue;
 
-        public InstanceOfUsageReplacer(Instantiation instantiation, FloatingNode instanceOf, ValueNode trueValue, ValueNode falseValue) {
-            assert instanceOf instanceof InstanceOfNode || instanceOf instanceof InstanceOfDynamicNode;
+        public InstanceOfUsageReplacer(Instantiation instantiation, InstanceOfNode instanceOf, ValueNode trueValue, ValueNode falseValue) {
             this.instantiation = instantiation;
             this.instanceOf = instanceOf;
             this.trueValue = trueValue;
@@ -199,7 +196,7 @@ public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> e
     }
 
     /**
-     * Replaces an {@link IfNode} usage of an {@link InstanceOfNode} or {@link InstanceOfDynamicNode}.
+     * Replaces an {@link IfNode} usage of an {@link InstanceOfNode}.
      */
     public static class IfUsageReplacer extends InstanceOfUsageReplacer {
 
@@ -207,7 +204,7 @@ public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> e
         private final IfNode usage;
         private final boolean sameBlock;
 
-        public IfUsageReplacer(Instantiation instantiation, ValueNode trueValue, ValueNode falseValue, FloatingNode instanceOf, IfNode usage, boolean solitaryUsage, LoweringTool tool) {
+        public IfUsageReplacer(Instantiation instantiation, ValueNode trueValue, ValueNode falseValue, InstanceOfNode instanceOf, IfNode usage, boolean solitaryUsage, LoweringTool tool) {
             super(instantiation, instanceOf, trueValue, falseValue);
             this.sameBlock = tool.getBlockFor(usage) == tool.getBlockFor(instanceOf);
             this.solitaryUsage = solitaryUsage;
@@ -296,13 +293,13 @@ public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> e
     }
 
     /**
-     * Replaces a {@link ConditionalNode} usage of an {@link InstanceOfNode} or {@link InstanceOfDynamicNode}.
+     * Replaces a {@link ConditionalNode} usage of an {@link InstanceOfNode}.
      */
     public static class ConditionalUsageReplacer extends InstanceOfUsageReplacer {
 
         public final ConditionalNode usage;
 
-        public ConditionalUsageReplacer(Instantiation instantiation, ValueNode trueValue, ValueNode falseValue, FloatingNode instanceOf, ConditionalNode usage) {
+        public ConditionalUsageReplacer(Instantiation instantiation, ValueNode trueValue, ValueNode falseValue, InstanceOfNode instanceOf, ConditionalNode usage) {
             super(instantiation, instanceOf, trueValue, falseValue);
             this.usage = usage;
         }

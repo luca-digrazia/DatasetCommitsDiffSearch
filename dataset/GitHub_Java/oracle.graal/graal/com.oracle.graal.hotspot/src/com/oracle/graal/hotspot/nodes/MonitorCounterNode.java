@@ -26,9 +26,9 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.snippets.*;
 
 /**
  * Node that is used to maintain a stack based counter of how many locks
@@ -37,7 +37,7 @@ import com.oracle.graal.word.*;
 public final class MonitorCounterNode extends FloatingNode implements LIRGenLowerable {
 
     public MonitorCounterNode() {
-        super(StampFactory.forWord());
+        super(HotSpotGraalRuntime.wordStamp());
     }
 
     @Override
