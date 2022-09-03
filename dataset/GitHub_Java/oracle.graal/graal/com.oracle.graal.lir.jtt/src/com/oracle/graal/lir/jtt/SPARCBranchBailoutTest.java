@@ -22,21 +22,22 @@
  */
 package com.oracle.graal.lir.jtt;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.sparc.SPARC;
-
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
 
 import com.oracle.graal.api.directives.GraalDirectives;
+import com.oracle.graal.common.PermanentBailoutException;
+import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.gen.LIRGeneratorTool;
+
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.sparc.SPARC;
 
 /**
  * Tests the {@link BailoutException} thrown, when trying to compile huge methods, which have branch
@@ -46,7 +47,7 @@ public class SPARCBranchBailoutTest extends LIRTest {
     private static class BranchSpec extends LIRTestSpecification {
         private final int n;
 
-        public BranchSpec(int n) {
+        BranchSpec(int n) {
             super();
             this.n = n;
         }
@@ -58,7 +59,7 @@ public class SPARCBranchBailoutTest extends LIRTest {
         }
     }
 
-    static final BranchSpec spec = new BranchSpec(1 << 20);
+    private static final BranchSpec spec = new BranchSpec(1 << 20);
 
     @LIRIntrinsic
     public static int branch(@SuppressWarnings("unused") BranchSpec s, int a) {
@@ -81,8 +82,8 @@ public class SPARCBranchBailoutTest extends LIRTest {
         ResolvedJavaMethod m = getResolvedJavaMethod("testBranch");
         try {
             compile(m, null);
-        } catch (JVMCIError e) {
-            Assert.assertEquals(BailoutException.class, e.getCause().getClass());
+        } catch (GraalError e) {
+            Assert.assertEquals(PermanentBailoutException.class, e.getCause().getClass());
         }
     }
 
