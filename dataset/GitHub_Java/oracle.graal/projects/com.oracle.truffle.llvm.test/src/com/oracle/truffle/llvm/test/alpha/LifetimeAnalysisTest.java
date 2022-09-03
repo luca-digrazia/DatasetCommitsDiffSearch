@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.test.alpha;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -47,11 +46,11 @@ import java.util.stream.Collectors;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.parser.api.model.blocks.InstructionBlock;
-import com.oracle.truffle.llvm.parser.api.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.api.model.visitors.ModelVisitor;
-import com.oracle.truffle.llvm.parser.bc.BitcodeParserResult;
-import com.oracle.truffle.llvm.parser.bc.LLVMLifetimeAnalysis;
+import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionBlock;
+import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
+import com.oracle.truffle.llvm.parser.base.model.visitors.ModelVisitor;
+import com.oracle.truffle.llvm.parser.bc.impl.BitcodeParserResult;
+import com.oracle.truffle.llvm.parser.bc.impl.LLVMLifetimeAnalysis;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.test.options.SulongTestOptions;
 import com.oracle.truffle.llvm.test.util.LifetimeFileFormat;
@@ -72,16 +71,7 @@ public final class LifetimeAnalysisTest {
         Map<String, LLVMLifetimeAnalysis> referenceResults = null;
         BufferedReader referenceFileReader;
         if (SulongTestOptions.TEST.generateLifetimeReferenceOutput()) {
-            final File ltaGenDirFile = ltaGenDir.toFile();
-            if (!ltaGenDirFile.exists()) {
-                // noinspection ResultOfMethodCallIgnored
-                ltaGenDirFile.getParentFile().mkdirs();
-                final boolean fileCreated = ltaGenDirFile.createNewFile();
-                if (!fileCreated) {
-                    throw new AssertionError();
-                }
-            }
-            fileWriter = new LifetimeFileFormat.Writer(new PrintStream(ltaGenDirFile));
+            fileWriter = new LifetimeFileFormat.Writer(new PrintStream(ltaGenDir.toFile()));
         } else {
             fileWriter = null;
             FileInputStream fis = new FileInputStream(ltaFile.toFile());

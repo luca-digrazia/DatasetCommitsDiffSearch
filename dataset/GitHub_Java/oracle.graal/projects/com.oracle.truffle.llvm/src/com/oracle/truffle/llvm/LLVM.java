@@ -154,16 +154,10 @@ public class LLVM {
             }
 
             private void parseDynamicBitcodeLibraries(LLVMContext context) throws IOException {
-                if (!context.haveLoadedDynamicBitcodeLibraries()) {
-                    context.setHaveLoadedDynamicBitcodeLibraries();
-                    visitBitcodeLibraries(source -> {
-                        try {
-                            getProvider().parse(source, null);
-                        } catch (Throwable t) {
-                            throw new RuntimeException("Error while trying to parse dynamic library " + source.getName(), t);
-                        }
-                    });
-                }
+                visitBitcodeLibraries(source -> {
+                    LLVMParserResult result = parseBitcodeFile(source, context);
+                    handleParserResult(context, result);
+                });
             }
 
             private void handleParserResult(LLVMContext context, LLVMParserResult result) {

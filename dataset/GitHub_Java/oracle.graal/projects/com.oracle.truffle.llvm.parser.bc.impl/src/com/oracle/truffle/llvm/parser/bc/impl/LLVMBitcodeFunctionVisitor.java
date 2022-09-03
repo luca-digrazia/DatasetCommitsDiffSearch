@@ -30,158 +30,117 @@
 package com.oracle.truffle.llvm.parser.bc.impl;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.*;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMBasicBlockNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMTerminatorNode;
+import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
+import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMPhiManager.Phi;
-import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
+import com.oracle.truffle.llvm.parser.bc.impl.nodes.LLVMSymbolResolver;
 
-import uk.ac.man.cs.llvm.ir.model.Block;
-import uk.ac.man.cs.llvm.ir.model.FunctionVisitor;
-import uk.ac.man.cs.llvm.ir.model.GlobalValueSymbol;
+import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMFrameIDs;
+import com.oracle.truffle.llvm.parser.base.model.visitors.FunctionVisitor;
+import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionBlock;
 
-public class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
+class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
 
     private final LLVMBitcodeVisitor module;
 
     private final FrameDescriptor frame;
 
-    private final Map<Block, List<FrameSlot>> slots;
-
-    private final List<LLVMStackFrameNuller[]> nullers = new ArrayList<>();
-
-    private final List<LLVMBasicBlockNode> blocks = new ArrayList<>();
-
-    private final Map<String, LLVMExpressionNode> map = new HashMap();
+    private final List<LLVMNode> blocks = new ArrayList<>();
 
     private final Map<String, Integer> labels;
 
-    private final Map<Block, List<Phi>> phis;
+    private final Map<InstructionBlock, List<Phi>> phis;
 
-    private final List<LLVMNode> block = new ArrayList<>();
+    private final List<LLVMNode> instructions = new ArrayList<>();
 
-    public LLVMBitcodeFunctionVisitor(LLVMBitcodeVisitor module, FrameDescriptor frame, Map<Block, List<FrameSlot>> slots, Map<String, Integer> labels, Map<Block, List<Phi>> phis) {
+    private final LLVMSymbolResolver symbolResolver;
+
+    private final NodeFactoryFacade factoryFacade;
+
+    private final int argCount;
+
+    private final FunctionDefinition function;
+
+    LLVMBitcodeFunctionVisitor(LLVMBitcodeVisitor module, FrameDescriptor frame, Map<String, Integer> labels,
+                    Map<InstructionBlock, List<Phi>> phis, NodeFactoryFacade factoryFacade, int argCount, LLVMSymbolResolver symbolResolver, FunctionDefinition functionDefinition) {
         this.module = module;
         this.frame = frame;
-        this.slots = slots;
         this.labels = labels;
         this.phis = phis;
+        this.symbolResolver = symbolResolver;
+        this.factoryFacade = factoryFacade;
+        this.argCount = argCount;
+        this.function = functionDefinition;
     }
 
-    public void addInstruction(LLVMNode node) {
-        block.add(node);
+    void addInstruction(LLVMNode node) {
+        instructions.add(node);
     }
 
-    public void addTerminatingInstruction(LLVMTerminatorNode node) {
-        blocks.add(new LLVMBasicBlockNode(getBlock(), node));
-        block.add(node);
+    void addTerminatingInstruction(LLVMNode node, int blockId, String blockName) {
+        blocks.add(factoryFacade.createBasicBlockNode(module, getBlock(), node, blockId, blockName));
+        instructions.add(node);
+    }
+
+    int getArgCount() {
+        return argCount;
     }
 
     public LLVMNode[] getBlock() {
-        return block.toArray(new LLVMNode[block.size()]);
+        return instructions.toArray(new LLVMNode[instructions.size()]);
     }
 
-    public LLVMBasicBlockNode[] getBlocks() {
-        return blocks.toArray(new LLVMBasicBlockNode[blocks.size()]);
+    public List<LLVMNode> getBlocks() {
+        return Collections.unmodifiableList(blocks);
     }
 
-    public int getBlockCount() {
-        return blocks.size();
+    public FunctionDefinition getFunction() {
+        return function;
     }
 
-    public LLVMContext getContext() {
-        return module.getContext();
+    public LLVMBitcodeVisitor getRuntime() {
+        return module;
     }
 
     public FrameDescriptor getFrame() {
         return frame;
     }
 
-    public FrameSlot getReturnSlot() {
-        return getSlot(LLVMBitcodeHelper.FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
+    FrameSlot getReturnSlot() {
+        return getSlot(LLVMFrameIDs.FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
     }
 
-    public FrameSlot getSlot(String name) {
+    FrameSlot getSlot(String name) {
         return frame.findFrameSlot(name);
     }
 
-    public FrameSlot getStackSlot() {
-        return getSlot(LLVMBitcodeHelper.STACK_ADDRESS_FRAME_SLOT_ID);
+    FrameSlot getStackSlot() {
+        return getSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID);
     }
 
-    public LLVMExpressionNode global(GlobalValueSymbol symbol) {
-        return module.getGlobalVariable(symbol);
+    LLVMSymbolResolver getSymbolResolver() {
+        return symbolResolver;
     }
 
     public Map<String, Integer> labels() {
         return labels;
     }
 
-    public LLVMStackFrameNuller[][] getNullers() {
-        return nullers.toArray(new LLVMStackFrameNuller[0][]);
-    }
-
-    public Map<Block, List<Phi>> getPhiManager() {
+    Map<InstructionBlock, List<Phi>> getPhiManager() {
         return phis;
     }
 
     @Override
-    public void visit(Block block) {
-        this.block.clear();
-
-        block.accept(new LLVMBitcodeInstructionVisitor(this, block));
-        nullers.add(createNullers(slots.get(block)));
+    public void visit(InstructionBlock block) {
+        this.instructions.clear();
+        block.accept(new LLVMBitcodeInstructionVisitor(this, block, factoryFacade));
     }
 
-    private LLVMStackFrameNuller[] createNullers(List<FrameSlot> slots) {
-        if (slots == null || slots.isEmpty()) {
-            return new LLVMStackFrameNuller[0];
-        }
-        LLVMStackFrameNuller[] nodes = new LLVMStackFrameNuller[slots.size()];
-        int i = 0;
-        for (FrameSlot slot : slots) {
-            switch (slot.getKind()) {
-                case Boolean:
-                    nodes[i++] = new LLVMBooleanNuller(slot);
-                    break;
-                case Byte:
-                    nodes[i++] = new LLVMStackFrameNuller.LLVMByteNuller(slot);
-                    break;
-                case Int:
-                    nodes[i++] = new LLVMIntNuller(slot);
-                    break;
-                case Long:
-                    nodes[i++] = new LLVMLongNuller(slot);
-                    break;
-                case Float:
-                    nodes[i++] = new LLVMFloatNuller(slot);
-                    break;
-                case Double:
-                    nodes[i++] = new LLVMDoubleNull(slot);
-                    break;
-                case Object:
-                    nodes[i++] = new LLVMObjectNuller(slot);
-                    break;
-                case Illegal:
-                    throw new AssertionError("illegal");
-                default:
-                    throw new AssertionError();
-            }
-        }
-        return nodes;
-    }
-
-    public LLVMOptimizationConfiguration getOptimizationConfiguration() {
-        return module.getOptimizationConfiguration();
-    }
 }
