@@ -143,11 +143,7 @@ public final class Phi extends FloatingNode {
             }
             str.append(valueAt(i) == null ? "-" : valueAt(i).id());
         }
-        if (isDead()) {
-            return "Phi: dead (" + str + ")";
-        } else {
-            return "Phi: (" + str + ")";
-        }
+        return "Phi: (" + str + ")";
     }
 
     public void addInput(Node y) {

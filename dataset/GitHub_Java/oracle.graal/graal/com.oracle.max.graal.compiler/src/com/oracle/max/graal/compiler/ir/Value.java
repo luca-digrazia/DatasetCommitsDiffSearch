@@ -26,6 +26,7 @@ import java.util.*;
 
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.gen.*;
+import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -101,7 +102,6 @@ public abstract class Value extends Node {
         assert this.operand.isIllegal() : "operand cannot be set twice";
         assert operand != null && operand.isLegal() : "operand must be legal";
         assert operand.kind.stackKind() == this.kind;
-        assert !(this instanceof VirtualObject);
         this.operand = operand;
     }
 

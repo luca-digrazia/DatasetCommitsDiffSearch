@@ -28,9 +28,10 @@ import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 
-public class LoopBegin extends Merge {
+public class LoopBegin extends Merge{
     public LoopBegin(Graph graph) {
         super(graph);
+        this.addEnd(new EndNode(graph));
     }
 
     public LoopEnd loopEnd() {
