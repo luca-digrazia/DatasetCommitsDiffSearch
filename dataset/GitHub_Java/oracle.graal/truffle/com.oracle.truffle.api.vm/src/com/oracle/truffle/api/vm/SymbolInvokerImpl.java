@@ -26,7 +26,6 @@ package com.oracle.truffle.api.vm;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.*;
 
@@ -41,27 +40,36 @@ final class SymbolInvokerImpl {
         }
         RootNode symbolNode;
         if ((symbol instanceof String) || (symbol instanceof Number) || (symbol instanceof Boolean) || (symbol instanceof Character)) {
-            symbolNode = RootNode.createConstantNode(symbol);
+            symbolNode = new ConstantRootNode(type, symbol);
         } else {
             Node executeMain = Message.createExecute(arr.length).createNode();
-            symbolNode = createTemporaryRoot(type, executeMain, (TruffleObject) symbol, arr.length);
+            symbolNode = new TemporaryRoot(type, executeMain, (TruffleObject) symbol, arr.length);
         }
         return Truffle.getRuntime().createCallTarget(symbolNode);
     }
 
-    @SuppressWarnings("rawtypes")
-    public static RootNode createTemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function, int argumentLength) {
-        return new TemporaryRoot(lang, foreignAccess, function, argumentLength);
+    private static final class ConstantRootNode extends RootNode {
+
+        private final Object value;
+
+        public ConstantRootNode(Class<? extends TruffleLanguage<?>> lang, Object value) {
+            super(lang, null, null);
+            this.value = value;
+        }
+
+        @Override
+        public Object execute(VirtualFrame vf) {
+            return value;
+        }
     }
 
-    static class TemporaryRoot extends RootNode {
+    private static class TemporaryRoot extends RootNode {
         @Child private Node foreignAccess;
         @Child private ConvertNode convert;
         private final int argumentLength;
         private final TruffleObject function;
 
-        @SuppressWarnings("rawtypes")
-        public TemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function, int argumentLength) {
+        public TemporaryRoot(Class<? extends TruffleLanguage<?>> lang, Node foreignAccess, TruffleObject function, int argumentLength) {
             super(lang, null, null);
             this.foreignAccess = foreignAccess;
             this.convert = new ConvertNode();
@@ -77,11 +85,6 @@ final class SymbolInvokerImpl {
             }
             Object tmp = ForeignAccess.execute(foreignAccess, frame, function, args);
             return convert.convert(frame, tmp);
-        }
-
-        @Override
-        public void applyInstrumentation() {
-            SymbolInvokerImpl.ACCESSOR_INTEROP.applyInstrumentation(foreignAccess);
         }
     }
 
@@ -126,14 +129,4 @@ final class SymbolInvokerImpl {
             return obj;
         }
     }
-
-    static final class AccessorInterop extends Accessor {
-
-        @Override
-        protected void applyInstrumentation(Node node) {
-            super.applyInstrumentation(node);
-        }
-    }
-
-    static final AccessorInterop ACCESSOR_INTEROP = new AccessorInterop();
 }
