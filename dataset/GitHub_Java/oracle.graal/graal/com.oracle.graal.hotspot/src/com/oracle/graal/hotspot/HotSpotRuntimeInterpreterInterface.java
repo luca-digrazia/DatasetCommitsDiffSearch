@@ -41,7 +41,7 @@ public class HotSpotRuntimeInterpreterInterface implements RuntimeInterpreterInt
     }
 
     public Class< ? > getMirror(ResolvedJavaType type) {
-        return ((HotSpotResolvedJavaType) type).mirror();
+        return ((HotSpotJavaType) type).mirror();
     }
 
     public native Object invoke(ResolvedJavaMethod method, Object... args);

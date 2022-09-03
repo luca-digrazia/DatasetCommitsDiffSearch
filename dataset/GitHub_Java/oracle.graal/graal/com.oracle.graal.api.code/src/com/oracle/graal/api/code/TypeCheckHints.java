@@ -22,13 +22,11 @@
  */
 package com.oracle.graal.api.code;
 
-import static com.oracle.graal.api.meta.MetaUtil.*;
-import static java.lang.reflect.Modifier.*;
-
+import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
+import com.oracle.graal.api.meta.JavaTypeProfile.*;
 
 /**
  * Utility for deriving hint types for a type check instruction (e.g. checkcast or instanceof)
@@ -60,14 +58,14 @@ public class TypeCheckHints {
      * @param maxHints the maximum length of {@link #types}
      */
     public TypeCheckHints(ResolvedJavaType type, JavaTypeProfile profile, Assumptions assumptions, double minHintHitProbability, int maxHints) {
-        if (type != null && canHaveSubtype(type)) {
+        if (type != null && isFinalClass(type)) {
             types = new ResolvedJavaType[] {type};
             exact = true;
         } else {
             ResolvedJavaType uniqueSubtype = type == null ? null : type.findUniqueConcreteSubtype();
             if (uniqueSubtype != null) {
                 types = new ResolvedJavaType[] {uniqueSubtype};
-                if (assumptions.useOptimisticAssumptions()) {
+                if (assumptions != null) {
                     assumptions.recordConcreteSubtype(type, uniqueSubtype);
                     exact = true;
                 } else {
@@ -107,12 +105,15 @@ public class TypeCheckHints {
     }
 
     /**
-     * Determines if a given type can have subtypes other than itself. This analysis is purely static; no
+     * Determines if a given type can have subtypes. This analysis is purely static; no
      * assumptions are made.
      *
      * @return true if {@code type} has no subtype(s)
      */
-    public static boolean canHaveSubtype(ResolvedJavaType type) {
-        return isFinal(getElementalType(type).getModifiers());
+    public static boolean isFinalClass(ResolvedJavaType type) {
+        if (type.isArray()) {
+            return isFinalClass(type.getComponentType());
+        }
+        return Modifier.isFinal(type.getModifiers());
     }
 }

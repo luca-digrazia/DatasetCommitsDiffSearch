@@ -27,7 +27,6 @@ import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
 
 /**
  * Implementation of {@link JavaType} for primitive HotSpot types.
@@ -35,54 +34,56 @@ import com.oracle.graal.hotspot.*;
 public final class HotSpotTypePrimitive extends HotSpotJavaType implements ResolvedJavaType {
 
     private static final long serialVersionUID = -6208552348908071473L;
-    private Kind kind;
-    private final HotSpotKlassOop klassOop;
+    private final Kind kind;
+    private final Class<?> javaMirror;
+    private final Class javaArrayMirror;
 
     public HotSpotTypePrimitive(Kind kind) {
+        super(String.valueOf(Character.toUpperCase(kind.getTypeChar())));
         this.kind = kind;
-        this.name = String.valueOf(Character.toUpperCase(kind.typeChar));
-        this.klassOop = new HotSpotKlassOop(this);
+        this.javaMirror = kind.toJavaClass();
+        this.javaArrayMirror = kind.isVoid() ? null : Array.newInstance(javaMirror, 0).getClass();
     }
 
     @Override
-    public int accessFlags() {
-        assert kind != null && kind.toJavaClass() != null;
+    public int getModifiers() {
         return Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC;
     }
 
     @Override
-    public ResolvedJavaType arrayOf() {
-        return (ResolvedJavaType) HotSpotGraalRuntime.getInstance().getCompilerToVM().getPrimitiveArrayType(kind);
+    public ResolvedJavaType getArrayClass() {
+        return HotSpotResolvedJavaType.fromClass(javaArrayMirror);
     }
 
     @Override
-    public ResolvedJavaType componentType() {
+    public ResolvedJavaType getComponentType() {
         return null;
     }
 
     @Override
-    public ResolvedJavaType exactType() {
+    public ResolvedJavaType asExactType() {
         return this;
     }
 
     @Override
-    public ResolvedJavaType superType() {
+    public ResolvedJavaType getSuperclass() {
+        assert javaMirror.getSuperclass() == null;
         return null;
     }
 
     @Override
-    public ResolvedJavaType leastCommonAncestor(ResolvedJavaType otherType) {
+    public ResolvedJavaType[] getInterfaces() {
+        return new ResolvedJavaType[0];
+    }
+
+    @Override
+    public ResolvedJavaType findLeastCommonAncestor(ResolvedJavaType otherType) {
         return null;
     }
 
     @Override
     public Constant getEncoding(Representation r) {
         throw GraalInternalError.unimplemented("HotSpotTypePrimitive.getEncoding");
-    }
-
-    @Override
-    public Kind getRepresentationKind(Representation r) {
-        return kind;
     }
 
     @Override
@@ -96,8 +97,13 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
     }
 
     @Override
-    public boolean isArrayClass() {
+    public boolean isArray() {
         return false;
+    }
+
+    @Override
+    public boolean isPrimitive() {
+        return true;
     }
 
     @Override
@@ -121,17 +127,17 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
     }
 
     @Override
-    public boolean isSubtypeOf(ResolvedJavaType other) {
-        return false;
+    public boolean isAssignableTo(ResolvedJavaType other) {
+        return other == this;
     }
 
     @Override
-    public Kind kind() {
+    public Kind getKind() {
         return kind;
     }
 
     @Override
-    public ResolvedJavaMethod resolveMethodImpl(ResolvedJavaMethod method) {
+    public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method) {
         return null;
     }
 
@@ -141,28 +147,28 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
     }
 
     @Override
-    public ResolvedJavaType uniqueConcreteSubtype() {
+    public ResolvedJavaType findUniqueConcreteSubtype() {
         return this;
     }
 
     @Override
-    public ResolvedJavaMethod uniqueConcreteMethod(ResolvedJavaMethod method) {
+    public ResolvedJavaMethod findUniqueConcreteMethod(ResolvedJavaMethod method) {
         return null;
     }
 
     @Override
-    public ResolvedJavaField[] declaredFields() {
-        return null;
+    public ResolvedJavaField[] getInstanceFields(boolean includeSuperclasses) {
+        return new ResolvedJavaField[0];
     }
 
     @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
-        return toJava().getAnnotation(annotationClass);
+        return javaMirror.getAnnotation(annotationClass);
     }
 
     @Override
-    public Class< ? > toJava() {
-        return kind.toJavaClass();
+    public boolean isClass(Class c) {
+        return c == javaMirror;
     }
 
     @Override
@@ -171,7 +177,16 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
     }
 
     @Override
-    public HotSpotKlassOop klassOop() {
-        return klassOop;
+    public void initialize() {
+    }
+
+    @Override
+    public ResolvedJavaField findInstanceFieldWithOffset(long offset) {
+        return null;
+    }
+
+    @Override
+    public Class<?> mirror() {
+        return javaMirror;
     }
 }

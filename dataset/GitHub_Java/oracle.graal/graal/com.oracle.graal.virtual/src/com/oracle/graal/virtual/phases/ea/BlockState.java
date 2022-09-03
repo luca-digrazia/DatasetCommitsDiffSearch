@@ -31,7 +31,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.Virtualizable.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.graph.ReentrantBlockIterator.MergeableBlockState;
 import com.oracle.graal.virtual.nodes.*;
@@ -76,16 +75,14 @@ class BlockState extends MergeableBlockState<BlockState> {
         return new BlockState(this);
     }
 
-    public void materializeBefore(FixedNode fixed, VirtualObjectNode virtual, EscapeState state, GraphEffectList materializeEffects) {
-        PartialEscapeClosure.METRIC_MATERIALIZATIONS.increment();
+    public void materializeBefore(FixedNode fixed, VirtualObjectNode virtual, GraphEffectList materializeEffects) {
         HashSet<VirtualObjectNode> deferred = new HashSet<>();
         GraphEffectList deferredStores = new GraphEffectList();
-        materializeChangedBefore(fixed, virtual, state, deferred, deferredStores, materializeEffects);
+        materializeChangedBefore(fixed, virtual, deferred, deferredStores, materializeEffects);
         materializeEffects.addAll(deferredStores);
     }
 
-    private void materializeChangedBefore(FixedNode fixed, VirtualObjectNode virtual, EscapeState state, HashSet<VirtualObjectNode> deferred, GraphEffectList deferredStores,
-                    GraphEffectList materializeEffects) {
+    private void materializeChangedBefore(FixedNode fixed, VirtualObjectNode virtual, HashSet<VirtualObjectNode> deferred, GraphEffectList deferredStores, GraphEffectList materializeEffects) {
         trace("materializing %s at %s", virtual, fixed);
         ObjectState obj = getObjectState(virtual);
         if (obj.getLockCount() > 0 && obj.virtual.type().isArray()) {
@@ -118,7 +115,7 @@ class BlockState extends MergeableBlockState<BlockState> {
                 }
             }
             newObject.setProbability(fixed.probability());
-            obj.escape(newObject, state);
+            obj.setMaterializedValue(newObject);
             materializeEffects.addFixedNodeBefore(newObject, fixed);
         } else {
             // some entries are not default constants - do the materialization
@@ -126,13 +123,13 @@ class BlockState extends MergeableBlockState<BlockState> {
             MaterializeObjectNode materialize = new MaterializeObjectNode(virtual, obj.getLockCount());
             ValueNode[] values = new ValueNode[obj.getEntries().length];
             materialize.setProbability(fixed.probability());
-            obj.escape(materialize, state);
+            obj.setMaterializedValue(materialize);
             deferred.add(virtual);
             for (int i = 0; i < fieldState.length; i++) {
                 ObjectState valueObj = getObjectState(fieldState[i]);
                 if (valueObj != null) {
                     if (valueObj.isVirtual()) {
-                        materializeChangedBefore(fixed, valueObj.virtual, state, deferred, deferredStores, materializeEffects);
+                        materializeChangedBefore(fixed, valueObj.virtual, deferred, deferredStores, materializeEffects);
                     }
                     if (deferred.contains(valueObj.virtual)) {
                         Kind fieldKind;

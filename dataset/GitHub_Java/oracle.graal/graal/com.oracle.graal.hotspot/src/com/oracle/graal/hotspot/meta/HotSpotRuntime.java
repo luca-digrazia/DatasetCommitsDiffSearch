@@ -491,7 +491,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
                 ResolvedJavaType arrayType = array.objectStamp().type();
                 if (arrayType != null && array.objectStamp().isExactType()) {
                     ResolvedJavaType elementType = arrayType.getComponentType();
-                    if (!elementType.isClass(Object.class)) {
+                    if (!MetaUtil.isJavaLangObject(elementType)) {
                         CheckCastNode checkcast = graph.add(new CheckCastNode(elementType, value, null));
                         graph.addBeforeFixed(storeIndexed, checkcast);
                         value = checkcast;

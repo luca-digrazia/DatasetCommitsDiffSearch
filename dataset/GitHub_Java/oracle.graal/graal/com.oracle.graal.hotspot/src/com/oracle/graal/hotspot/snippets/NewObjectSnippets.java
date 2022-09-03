@@ -247,8 +247,8 @@ public class NewObjectSnippets implements SnippetsInterface {
         private final TargetDescription target;
         private final boolean useTLAB;
 
-        public Templates(CodeCacheProvider runtime, Assumptions assumptions, TargetDescription target, boolean useTLAB) {
-            super(runtime, assumptions, target, NewObjectSnippets.class);
+        public Templates(CodeCacheProvider runtime, TargetDescription target, boolean useTLAB) {
+            super(runtime, target, NewObjectSnippets.class);
             this.target = target;
             this.useTLAB = useTLAB;
             allocate = snippet("allocate", int.class);
@@ -265,7 +265,7 @@ public class NewObjectSnippets implements SnippetsInterface {
         @SuppressWarnings("unused")
         public void lower(NewInstanceNode newInstanceNode, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) newInstanceNode.graph();
-            HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) newInstanceNode.instanceClass();
+            HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) newInstanceNode.instanceClass();
             ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, graph);
             int size = type.instanceSize();
             assert (size % wordSize()) == 0;
@@ -321,7 +321,7 @@ public class NewObjectSnippets implements SnippetsInterface {
                                 add("log2ElementSize", log2ElementSize).
                                 add("type", arrayType);
                 Arguments arguments = new Arguments().add("length", lengthNode);
-                SnippetTemplate template = cache.get(key, assumptions);
+                SnippetTemplate template = cache.get(key);
                 Debug.log("Lowering allocateArrayAndInitialize in %s: node=%s, template=%s, arguments=%s", graph, newArrayNode, template, arguments);
                 template.instantiate(runtime, newArrayNode, DEFAULT_REPLACER, arguments);
             }
@@ -333,7 +333,7 @@ public class NewObjectSnippets implements SnippetsInterface {
             ValueNode size = tlabAllocateNode.size();
             Key key = new Key(allocate);
             Arguments arguments = arguments("size", size);
-            SnippetTemplate template = cache.get(key, assumptions);
+            SnippetTemplate template = cache.get(key);
             Debug.log("Lowering fastAllocate in %s: node=%s, template=%s, arguments=%s", graph, tlabAllocateNode, template, arguments);
             template.instantiate(runtime, tlabAllocateNode, DEFAULT_REPLACER, arguments);
         }
@@ -341,7 +341,7 @@ public class NewObjectSnippets implements SnippetsInterface {
         @SuppressWarnings("unused")
         public void lower(InitializeObjectNode initializeNode, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) initializeNode.graph();
-            HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) initializeNode.type();
+            HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) initializeNode.type();
             assert !type.isArray();
             ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, graph);
             int size = type.instanceSize();
@@ -350,7 +350,7 @@ public class NewObjectSnippets implements SnippetsInterface {
             Key key = new Key(initializeObject).add("size", size).add("fillContents", initializeNode.fillContents()).add("locked", initializeNode.locked());
             ValueNode memory = initializeNode.memory();
             Arguments arguments = arguments("memory", memory).add("hub", hub).add("prototypeMarkWord", type.prototypeMarkWord());
-            SnippetTemplate template = cache.get(key, assumptions);
+            SnippetTemplate template = cache.get(key);
             Debug.log("Lowering initializeObject in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
             template.instantiate(runtime, initializeNode, DEFAULT_REPLACER, arguments);
         }
@@ -358,16 +358,16 @@ public class NewObjectSnippets implements SnippetsInterface {
         @SuppressWarnings("unused")
         public void lower(InitializeArrayNode initializeNode, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) initializeNode.graph();
-            HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) initializeNode.type();
+            HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) initializeNode.type();
             ResolvedJavaType elementType = type.getComponentType();
             assert elementType != null;
             ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, graph);
             Kind elementKind = elementType.getKind();
             final int headerSize = elementKind.getArrayBaseOffset();
-            Key key = new Key(elementKind == Kind.Object ? initializeObjectArray : initializePrimitiveArray).add("headerSize", headerSize).add("fillContents", initializeNode.fillContents()).add("locked", initializeNode.locked());
+            Key key = new Key(elementKind.isObject() ? initializeObjectArray : initializePrimitiveArray).add("headerSize", headerSize).add("fillContents", initializeNode.fillContents()).add("locked", initializeNode.locked());
             ValueNode memory = initializeNode.memory();
             Arguments arguments = arguments("memory", memory).add("hub", hub).add("prototypeMarkWord", type.prototypeMarkWord()).add("size", initializeNode.size()).add("length", initializeNode.length());
-            SnippetTemplate template = cache.get(key, assumptions);
+            SnippetTemplate template = cache.get(key);
             Debug.log("Lowering initializeObjectArray in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
             template.instantiate(runtime, initializeNode, DEFAULT_REPLACER, arguments);
         }
@@ -380,11 +380,11 @@ public class NewObjectSnippets implements SnippetsInterface {
             for (int i = 0; i < newmultiarrayNode.dimensionCount(); i++) {
                 dims[i] = newmultiarrayNode.dimension(i);
             }
-            HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) newmultiarrayNode.type();
+            HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) newmultiarrayNode.type();
             ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, graph);
             Key key = new Key(newmultiarray).add("dimensions", vargargs(new int[rank], StampFactory.forKind(Kind.Int))).add("rank", rank);
             Arguments arguments = arguments("dimensions", dims).add("hub", hub);
-            SnippetTemplate template = cache.get(key, assumptions);
+            SnippetTemplate template = cache.get(key);
             template.instantiate(runtime, newmultiarrayNode, DEFAULT_REPLACER, arguments);
         }
     }
