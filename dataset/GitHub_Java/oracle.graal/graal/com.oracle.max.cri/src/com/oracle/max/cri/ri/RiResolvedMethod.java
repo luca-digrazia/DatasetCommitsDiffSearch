@@ -224,4 +224,9 @@ public interface RiResolvedMethod extends RiMethod {
      * @return {@code true} if this method can be inlined
      */
     boolean canBeInlined();
+
+    /**
+     * Dumps the recorded profiling information to TTY.
+     */
+    void dumpProfile();
 }

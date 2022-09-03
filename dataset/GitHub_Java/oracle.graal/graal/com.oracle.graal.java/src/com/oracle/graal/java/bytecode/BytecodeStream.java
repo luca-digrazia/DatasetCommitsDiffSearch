@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.java.bytecode;
 
-
 /**
  * A utility class that makes iterating over bytecodes and reading operands
  * simpler and less error prone. For example, it handles the {@link Bytecodes#WIDE} instruction
