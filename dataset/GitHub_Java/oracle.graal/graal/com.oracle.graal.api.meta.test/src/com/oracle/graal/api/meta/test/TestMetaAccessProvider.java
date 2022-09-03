@@ -186,7 +186,7 @@ public class TestMetaAccessProvider {
             assertNotNull(type);
             assertTrue(type.isClass(c));
             assertEquals(c.getModifiers(), type.getModifiers());
-            if (!type.isArray()) {
+            if (!type.isArrayClass()) {
                 assertEquals(type.getName(), toInternalName(c.getName()));
                 assertEquals(toJavaName(type), c.getName());
             }
