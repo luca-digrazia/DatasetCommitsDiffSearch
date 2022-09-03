@@ -1931,6 +1931,15 @@ public class BytecodeParser implements GraphBuilderContext {
                 return inlineInfo;
             }
         }
+
+        // There was no inline plugin with a definite answer to whether or not
+        // to inline. If we're parsing an intrinsic, then we need to enforce the
+        // invariant here that methods are always force inlined in intrinsics/snippets.
+        if (parsingIntrinsic()) {
+            if (inline(targetMethod, targetMethod, this.bytecodeProvider, args)) {
+                return SUCCESSFULLY_INLINED;
+            }
+        }
         return null;
     }
 
@@ -3678,9 +3687,9 @@ public class BytecodeParser implements GraphBuilderContext {
         ResolvedJavaType resolvedType = (ResolvedJavaType) type;
 
         ClassInitializationPlugin classInitializationPlugin = this.graphBuilderConfig.getPlugins().getClassInitializationPlugin();
-        if (classInitializationPlugin != null && classInitializationPlugin.shouldApply(this, resolvedType)) {
+        if (classInitializationPlugin != null && classInitializationPlugin.shouldApply(this, resolvedType.getArrayClass())) {
             FrameState stateBefore = frameState.create(bci(), getNonIntrinsicAncestor(), false, null, null);
-            classInitializationPlugin.apply(this, resolvedType, stateBefore);
+            classInitializationPlugin.apply(this, resolvedType.getArrayClass(), stateBefore);
         }
 
         ValueNode length = frameState.pop(JavaKind.Int);
