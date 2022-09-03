@@ -818,6 +818,7 @@ public class AMD64Assembler extends Assembler {
             boolean isSimd = false;
             boolean noNds = false;
 
+            // TODO: add opcodes from the initializer here
             switch (op) {
                 case 0x2A:
                 case 0x2C:
@@ -896,6 +897,7 @@ public class AMD64Assembler extends Assembler {
             boolean isSimd = false;
             boolean noNds = false;
 
+            // TODO: add opcodes from the initializer here
             switch (op) {
                 case 0x10:
                 case 0x2A:
@@ -1135,6 +1137,7 @@ public class AMD64Assembler extends Assembler {
             boolean isSimd = false;
             boolean noNds = false;
 
+            // TODO: add opcodes from the initializer here
             switch (op) {
                 case 0x7E:
                     isSimd = true;
@@ -1197,6 +1200,7 @@ public class AMD64Assembler extends Assembler {
             assert verify(asm, size, null, src);
             boolean isSimd = false;
 
+            // TODO: add opcodes from the initializer here
             switch (op) {
                 case 0x7E:
                 case 0x11:
@@ -1364,6 +1368,7 @@ public class AMD64Assembler extends Assembler {
             boolean isSimd = false;
             boolean noNds = false;
 
+            // TODO: add opcodes from the initializer here
             switch (op) {
                 case 0x0A:
                 case 0x0B:
@@ -1427,6 +1432,7 @@ public class AMD64Assembler extends Assembler {
             boolean isSimd = false;
             boolean noNds = false;
 
+            // TODO: add opcodes from the initializer here
             switch (op) {
                 case 0x0A:
                 case 0x0B:
@@ -2654,6 +2660,9 @@ public class AMD64Assembler extends Assembler {
     }
 
     public final void ret(int imm16) {
+        if (supports(CPUFeature.AVX)) {
+            vzeroupper();
+        }
         if (imm16 == 0) {
             emitByte(0xC3);
         } else {
