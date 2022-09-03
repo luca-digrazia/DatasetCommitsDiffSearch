@@ -135,55 +135,6 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
         apply(graph, context, true);
     }
 
-    private BasePhase<?> getEnclosingPhase() {
-        for (Object c : Debug.context()) {
-            if (c != this && c instanceof BasePhase) {
-                if (!(c instanceof PhaseSuite)) {
-                    return (BasePhase<?>) c;
-                }
-            }
-        }
-        return null;
-    }
-
-    private BasePhase<?> dumpBefore(StructuredGraph graph) {
-        BasePhase<?> enclosingPhase = getEnclosingPhase();
-        boolean isTopLevel = enclosingPhase == null;
-        if (isTopLevel) {
-            if (Debug.isDumpEnabled(Debug.VERBOSE_LOG_LEVEL)) {
-                Debug.dump(Debug.VERBOSE_LOG_LEVEL, graph, "Before phase %s", getName());
-            }
-        } else {
-            if (Debug.isDumpEnabled(Debug.VERBOSE_LOG_LEVEL + 1)) {
-                Debug.dump(Debug.VERBOSE_LOG_LEVEL + 1, graph, "Before phase %s", getName());
-            }
-        }
-        return enclosingPhase;
-    }
-
-    protected boolean isInliningPhase() {
-        return false;
-    }
-
-    private void dumpAfter(BasePhase<?> enclosingPhase, StructuredGraph graph) {
-        boolean isTopLevel = enclosingPhase == null;
-        if (isTopLevel) {
-            if (isInliningPhase()) {
-                if (Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL)) {
-                    Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "After phase %s", getName());
-                }
-            } else {
-                if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL)) {
-                    Debug.dump(Debug.INFO_LOG_LEVEL, graph, "After phase %s", getName());
-                }
-            }
-        } else {
-            if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL + 1)) {
-                Debug.dump(Debug.INFO_LOG_LEVEL + 1, graph, "After phase %s", getName());
-            }
-        }
-    }
-
     @SuppressWarnings("try")
     protected final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
         graph.checkCancellation();
@@ -198,9 +149,8 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
                     before = graph.getMark();
                 }
             }
-            BasePhase<?> enclosingPhase = null;
-            if (dumpGraph && Debug.isEnabled()) {
-                enclosingPhase = dumpBefore(graph);
+            if (dumpGraph && Debug.isDumpEnabled(Debug.VERBOSE_LOG_LEVEL)) {
+                Debug.dump(Debug.VERBOSE_LOG_LEVEL, graph, "Before phase %s", getName());
             }
             inputNodesCount.add(graph.getNodeCount());
             this.run(graph, context);
@@ -213,9 +163,8 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
                     }
                 }
             }
-
-            if (dumpGraph && Debug.isEnabled()) {
-                dumpAfter(enclosingPhase, graph);
+            if (dumpGraph && Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL)) {
+                Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "%s", getName());
             }
             if (Fingerprint.ENABLED) {
                 String graphDesc = graph.method() == null ? graph.name : graph.method().format("%H.%n(%p)");
@@ -255,4 +204,5 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     public float codeSizeIncrease() {
         return 1.25f;
     }
+
 }

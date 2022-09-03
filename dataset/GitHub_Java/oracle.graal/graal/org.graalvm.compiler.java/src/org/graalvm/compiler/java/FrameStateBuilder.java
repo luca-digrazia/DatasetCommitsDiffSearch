@@ -42,7 +42,7 @@ import java.util.function.Function;
 
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecode;
-import org.graalvm.compiler.core.common.PermanentBailoutException;
+import org.graalvm.compiler.common.PermanentBailoutException;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
@@ -341,7 +341,7 @@ public final class FrameStateBuilder implements SideEffectsState {
             stackSize = stackSizeToRestore;
             return res;
         } else {
-            if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI || bci == BytecodeFrame.UNWIND_BCI) {
+            if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI) {
                 assert outerFrameState == null;
                 clearLocals();
             }
