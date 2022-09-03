@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.replacements.test;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.virtual.phases.ea.PartialEscapePhase;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.virtual.phases.ea.*;
 
 public class MonitorTest extends GraalCompilerTest {
 
@@ -165,11 +165,11 @@ public class MonitorTest extends GraalCompilerTest {
 
         final char[] data;
 
-        Chars(int size) {
+        public Chars(int size) {
             this.data = new char[size];
         }
 
-        Chars(char[] data) {
+        public Chars(char[] data) {
             this.data = data;
         }
     }
