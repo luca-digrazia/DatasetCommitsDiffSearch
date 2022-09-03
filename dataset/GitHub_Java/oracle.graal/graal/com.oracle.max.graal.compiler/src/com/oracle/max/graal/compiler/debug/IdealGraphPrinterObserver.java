@@ -30,7 +30,6 @@ import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.ri.*;
 
 /**
  * Observes compilation events and uses {@link IdealGraphPrinter} to generate a graph representation that can be
@@ -74,14 +73,14 @@ public class IdealGraphPrinterObserver implements CompilationObserver {
             name = name + "." + event.getMethod().name();
 
             if (host != null) {
-                openNetworkPrinter(name, event.getMethod());
+                openNetworkPrinter(name);
             } else {
-                openFilePrinter(name, event.getMethod());
+                openFilePrinter(name);
             }
         }
     }
 
-    private void openFilePrinter(String name, RiMethod method) {
+    private void openFilePrinter(String name) {
         String filename = name + ".igv.xml";
         filename = INVALID_CHAR.matcher(filename).replaceAll("_");
 
@@ -92,13 +91,13 @@ public class IdealGraphPrinterObserver implements CompilationObserver {
                 printer.addOmittedClass(FrameState.class);
             }
             printer.begin();
-            printer.beginGroup(name, name, method, -1);
+            printer.beginGroup(name, name, -1);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private void openNetworkPrinter(String name, RiMethod method) {
+    private void openNetworkPrinter(String name) {
         try {
             socket = new Socket(host, port);
             if (socket.getInputStream().read() == 'y') {
@@ -110,12 +109,12 @@ public class IdealGraphPrinterObserver implements CompilationObserver {
                 return;
             }
 
-            printer = new IdealGraphPrinter(new BufferedOutputStream(stream));
+            printer = new IdealGraphPrinter(stream);
             if (GraalOptions.OmitDOTFrameStates) {
                 printer.addOmittedClass(FrameState.class);
             }
             printer.begin();
-            printer.beginGroup(name, name, method, -1);
+            printer.beginGroup(name, name, -1);
             printer.flush();
             if (socket.getInputStream().read() != 'y') {
                 // server declines input for this method

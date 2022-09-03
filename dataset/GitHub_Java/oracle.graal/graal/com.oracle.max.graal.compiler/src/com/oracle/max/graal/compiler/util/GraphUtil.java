@@ -27,7 +27,6 @@ import java.util.Map.Entry;
 
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.ir.Phi.PhiType;
 import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
@@ -100,7 +99,7 @@ public class GraphUtil {
                     break;
                 }
                 colors.set(current, color);
-                if (current instanceof FixedNodeWithNext && !(current instanceof AbstractVectorNode) && !(current instanceof Invoke && ((Invoke) current).exceptionEdge() != null)) {
+                if (current instanceof FixedNodeWithNext && !(current instanceof Invoke && ((Invoke) current).exceptionEdge() != null)) {
                     current = ((FixedNodeWithNext) current).next();
                 } else if (current instanceof EndNode) {
                     current = ((EndNode) current).merge();
@@ -113,11 +112,6 @@ public class GraphUtil {
                         Invoke invoke = (Invoke) current;
                         work.add(invoke.next());
                         work.add(invoke.exceptionEdge());
-                    } else if (current instanceof AbstractVectorNode) {
-                        for (Node usage : current.usages()) {
-                            work.add(usage);
-                        }
-                        work.add(((AbstractVectorNode) current).next());
                     }
                     current = null;
                 }
@@ -238,7 +232,7 @@ public class GraphUtil {
                                     colorQueue.offer(color);
                                     continue;
                                 }
-                                Phi phi = new Phi(((Value) node).kind, lambda.merge(color), PhiType.Value, node.graph());
+                                Phi phi = new Phi(((Value) node).kind, lambda.merge(color), node.graph());
                                 for (T parentColor : parentColors) {
                                     Node input = newNodes.get(parentColor);
                                     phi.addInput(input);

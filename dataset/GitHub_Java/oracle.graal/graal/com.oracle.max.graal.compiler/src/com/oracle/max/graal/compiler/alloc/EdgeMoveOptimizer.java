@@ -24,6 +24,8 @@ package com.oracle.max.graal.compiler.alloc;
 
 import java.util.*;
 
+import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.lir.*;
 
 /**
@@ -45,6 +47,10 @@ import com.oracle.max.graal.compiler.lir.*;
  * stack->reg). Because this optimization works best when a block contains only
  * a few moves, it has a huge impact on the number of blocks that are totally
  * empty.
+ *
+ * @author Christian Wimmer (original HotSpot implementation)
+ * @author Thomas Wuerthinger
+ * @author Doug Simon
  */
 final class EdgeMoveOptimizer {
 
@@ -77,7 +83,7 @@ final class EdgeMoveOptimizer {
 
     /**
      * Determines if two operations are both {@linkplain LIROpcode#Move moves}
-     * that have the same {@linkplain LIRInstruction#operand() source} and {@linkplain LIRInstruction#result() destination}
+     * that have the same {@linkplain LIROp1#operand() source} and {@linkplain LIROp1#result() destination}
      * operands and they have the same {@linkplain LIRInstruction#info debug info}.
      *
      * @param op1 the first instruction to compare
@@ -88,8 +94,12 @@ final class EdgeMoveOptimizer {
         assert op1 != null;
         assert op2 != null;
 
-        if (op1.code == StandardOpcode.MOVE && op2.code == StandardOpcode.MOVE) {
-            if (op1.info == op2.info && op1.input(0).equals(op2.input(0)) && op1.result().equals(op2.result())) {
+        if (op1.code == LIROpcode.Move && op2.code == LIROpcode.Move) {
+            assert op1 instanceof LIROp1 : "move must be LIROp1";
+            assert op2 instanceof LIROp1 : "move must be LIROp1";
+            LIROp1 move1 = (LIROp1) op1;
+            LIROp1 move2 = (LIROp1) op2;
+            if (move1.info == move2.info && move1.operand().equals(move2.operand()) && move1.result().equals(move2.result())) {
                 // these moves are exactly equal and can be optimized
                 return true;
             }
@@ -118,7 +128,7 @@ final class EdgeMoveOptimizer {
             LIRBlock pred = block.predAt(i);
             assert pred != null;
             assert pred.lir() != null;
-            List<LIRInstruction> predInstructions = pred.lir();
+            List<LIRInstruction> predInstructions = pred.lir().instructionsList();
 
             if (pred.numberOfSux() != 1) {
                 // this can happen with switch-statements where multiple edges are between
@@ -126,12 +136,14 @@ final class EdgeMoveOptimizer {
                 return;
             }
 
-            if (predInstructions.get(predInstructions.size() - 1).code == StandardOpcode.XIR) {
+            if (predInstructions.get(predInstructions.size() - 1).code == LIROpcode.Xir) {
                 return;
             }
 
             assert pred.suxAt(0) == block : "invalid control flow";
-            assert predInstructions.get(predInstructions.size() - 1).code == StandardOpcode.JUMP : "block must end with unconditional jump";
+            assert predInstructions.get(predInstructions.size() - 1).code == LIROpcode.Branch : "block with successor must end with branch" + predInstructions.get(predInstructions.size() - 1);
+            assert predInstructions.get(predInstructions.size() - 1) instanceof LIRBranch : "branch must be LIROpBranch";
+            assert ((LIRBranch) predInstructions.get(predInstructions.size() - 1)).cond() == Condition.TRUE : "block must end with unconditional branch";
 
             if (predInstructions.get(predInstructions.size() - 1).info != null) {
                 // can not optimize instructions that have debug info
@@ -159,7 +171,7 @@ final class EdgeMoveOptimizer {
             }
 
             // insert the instruction at the beginning of the current block
-            block.lir().add(1, op);
+            block.lir().insertBefore(1, op);
 
             // delete the instruction at the end of all predecessors
             for (int i = 0; i < numPreds; i++) {
@@ -179,16 +191,18 @@ final class EdgeMoveOptimizer {
         edgeInstructionSeqences.clear();
         int numSux = block.numberOfSux();
 
-        List<LIRInstruction> instructions = block.lir();
+        List<LIRInstruction> instructions = block.lir().instructionsList();
 
         assert numSux == 2 : "method should not be called otherwise";
 
-        if (instructions.get(instructions.size() - 1).code == StandardOpcode.XIR) {
+        if (instructions.get(instructions.size() - 1).code == LIROpcode.Xir) {
             // cannot optimize when last instruction is Xir.
             return;
         }
 
-        assert instructions.get(instructions.size() - 1).code == StandardOpcode.JUMP : "block must end with unconditional jump";
+        assert instructions.get(instructions.size() - 1).code == LIROpcode.Branch : "block with successor must end with branch block=B" + block.blockID();
+        assert instructions.get(instructions.size() - 1) instanceof LIRBranch : "branch must be LIROpBranch";
+        assert ((LIRBranch) instructions.get(instructions.size() - 1)).cond() == Condition.TRUE : "block must end with unconditional branch";
 
         if (instructions.get(instructions.size() - 1).info != null) {
             // cannot optimize instructions when debug info is needed
@@ -196,7 +210,7 @@ final class EdgeMoveOptimizer {
         }
 
         LIRInstruction branch = instructions.get(instructions.size() - 2);
-        if (!(branch instanceof LIRBranch) || branch.info != null) {
+        if (branch.info != null || (branch.code != LIROpcode.Branch && branch.code != LIROpcode.CondFloatBranch)) {
             // not a valid case for optimization
             // currently, only blocks that end with two branches (conditional branch followed
             // by unconditional branch) are optimized
@@ -207,12 +221,21 @@ final class EdgeMoveOptimizer {
         // the instructions are inserted at the end of the block before these two branches
         int insertIdx = instructions.size() - 2;
 
+        if (GraalOptions.DetailedAsserts && false) { // not true anymore with guards
+            for (int i = insertIdx - 1; i >= 0; i--) {
+                LIRInstruction op = instructions.get(i);
+                if ((op.code == LIROpcode.Branch || op.code == LIROpcode.CondFloatBranch) && ((LIRBranch) op).block() != null) {
+                    throw new Error("block with two successors can have only two branch instructions : error in " + block);
+                }
+            }
+        }
+
         // setup a list with the lir-instructions of all successors
         for (int i = 0; i < numSux; i++) {
             LIRBlock sux = block.suxAt(i);
-            List<LIRInstruction> suxInstructions = sux.lir();
+            List<LIRInstruction> suxInstructions = sux.lir().instructionsList();
 
-            assert suxInstructions.get(0).code == StandardOpcode.LABEL : "block must start with label";
+            assert suxInstructions.get(0).code == LIROpcode.Label : "block must start with label";
 
             if (sux.numberOfPreds() != 1) {
                 // this can happen with switch-statements where multiple edges are between
@@ -244,7 +267,7 @@ final class EdgeMoveOptimizer {
             }
 
             // insert instruction at end of current block
-            block.lir().add(insertIdx, op);
+            block.lir().insertBefore(insertIdx, op);
             insertIdx++;
 
             // delete the instructions at the beginning of all successors

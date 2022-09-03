@@ -33,7 +33,6 @@ import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.util.LoopUtil.Loop;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.collections.*;
 
 /**
  * Generates a representation of {@link Graph Graphs} that can be visualized and inspected with the <a
@@ -124,7 +123,7 @@ public class IdealGraphPrinter {
         IdentifyBlocksPhase schedule = null;
         try {
             schedule = new IdentifyBlocksPhase(true);
-            schedule.apply(graph, false, false);
+            schedule.apply(graph, false);
         } catch (Throwable t) {
             // nothing to do here...
             //t.printStackTrace();
@@ -169,7 +168,6 @@ public class IdealGraphPrinter {
         }
 
         Map<Node, Set<Entry<String, Integer>>> colors = new HashMap<Node, Set<Entry<String, Integer>>>();
-        Map<Node, Set<Entry<String, String>>> colorsToString = new HashMap<Node, Set<Entry<String, String>>>();
         Map<Node, Set<String>> bits = new HashMap<Node, Set<String>>();
         if (debugObjects != null) {
             for (Entry<String, Object> entry : debugObjects.entrySet()) {
@@ -193,12 +191,6 @@ public class IdealGraphPrinter {
                             colors.put(node, nodeColors);
                         }
                         nodeColors.add(new SimpleImmutableEntry<String, Integer>(name + "Color", colorNumber));
-                        Set<Entry<String, String>> nodeColorStrings = colorsToString.get(node);
-                        if (nodeColorStrings == null) {
-                            nodeColorStrings = new HashSet<Entry<String, String>>();
-                            colorsToString.put(node, nodeColorStrings);
-                        }
-                        nodeColorStrings.add(new SimpleImmutableEntry<String, String>(name, color.toString()));
                     }
                 } else if (obj instanceof NodeBitMap) {
                     NodeBitMap bitmap = (NodeBitMap) obj;
@@ -269,14 +261,6 @@ public class IdealGraphPrinter {
                     stream.printf("    <p name='%s'>%d</p>%n", name, value);
                 }
             }
-            Set<Entry<String, String>> nodeColorStrings = colorsToString.get(node);
-            if (nodeColorStrings != null) {
-                for (Entry<String, String> color : nodeColorStrings) {
-                    String name = color.getKey();
-                    String value = color.getValue();
-                    stream.printf("    <p name='%s'>%s</p>%n", name, value);
-                }
-            }
             Set<String> nodeBits = bits.get(node);
             if (nodeBits != null) {
                 for (String bit : nodeBits) {
@@ -311,7 +295,7 @@ public class IdealGraphPrinter {
             int toIndex = 1;
             for (Node input : node.inputs()) {
                 if (input != Node.Null && !omittedClasses.contains(input.getClass())) {
-                    edges.add(new Edge(input.id(), input.successors().explicitCount(), node.id(), toIndex));
+                    edges.add(new Edge(input.id(), input.successors().size(), node.id(), toIndex));
                 }
                 toIndex++;
             }
