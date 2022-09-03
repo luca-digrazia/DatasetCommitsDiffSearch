@@ -26,14 +26,13 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-import com.oracle.graal.alloc.*;
+import com.oracle.graal.alloc.simple.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
-import com.oracle.graal.compiler.phases.ea.*;
 import com.oracle.graal.compiler.schedule.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
@@ -73,31 +72,26 @@ public class GraalCompiler {
         this.backend = backend;
     }
 
-    public CompilationResult compileMethod(final ResolvedJavaMethod method, final StructuredGraph graph, int osrBCI, final GraphCache cache, final PhasePlan plan,
-                    final OptimisticOptimizations optimisticOpts) {
+    public CompilationResult compileMethod(final ResolvedJavaMethod method, final StructuredGraph graph, int osrBCI, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts) {
         assert (method.accessFlags() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
         if (osrBCI != -1) {
             throw new BailoutException("No OSR supported");
         }
 
-        return Debug.scope("GraalCompiler", new Object[]{graph, method, this}, new Callable<CompilationResult>() {
-
+        return Debug.scope("GraalCompiler", new Object[] {graph, method, this}, new Callable<CompilationResult>() {
             public CompilationResult call() {
                 final Assumptions assumptions = GraalOptions.OptAssumptions ? new Assumptions() : null;
                 final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
-
                     public LIR call() {
                         return emitHIR(graph, assumptions, cache, plan, optimisticOpts);
                     }
                 });
                 final FrameMap frameMap = Debug.scope("BackEnd", lir, new Callable<FrameMap>() {
-
                     public FrameMap call() {
                         return emitLIR(lir, graph, method, assumptions);
                     }
                 });
                 return Debug.scope("CodeGen", frameMap, new Callable<CompilationResult>() {
-
                     public CompilationResult call() {
                         return emitCode(assumptions, method, lir, frameMap);
                     }
@@ -142,7 +136,7 @@ public class GraalCompiler {
             }
         }
 
-        // new ConvertUnreachedToGuardPhase(optimisticOpts).apply(graph);
+        //new ConvertUnreachedToGuardPhase(optimisticOpts).apply(graph);
 
         plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
 
@@ -154,10 +148,7 @@ public class GraalCompiler {
         }
 
         if (GraalOptions.EscapeAnalysis && !plan.isPhaseDisabled(EscapeAnalysisPhase.class)) {
-            new EscapeAnalysisPhase(target, runtime, assumptions).apply(graph);
-        }
-        if (GraalOptions.PartialEscapeAnalysis && !plan.isPhaseDisabled(PartialEscapeAnalysisPhase.class)) {
-            new PartialEscapeAnalysisPhase(target, runtime, assumptions).apply(graph);
+            new EscapeAnalysisPhase(target, runtime, assumptions, cache, plan, optimisticOpts).apply(graph);
         }
         if (GraalOptions.OptLoopTransform) {
             new LoopTransformHighPhase().apply(graph);
@@ -223,7 +214,7 @@ public class GraalCompiler {
 
             @Override
             public LIR call() {
-                ComputeBlockOrder clso = new ComputeBlockOrder(blocks.length, schedule.getCFG().getLoops().length, startBlock, GraalOptions.OptReorderLoops);
+                ComputeLinearScanOrder clso = new ComputeLinearScanOrder(blocks.length, schedule.getCFG().getLoops().length, startBlock);
                 List<Block> linearScanOrder = clso.linearScanOrder();
                 List<Block> codeEmittingOrder = clso.codeEmittingOrder();
 
@@ -245,7 +236,6 @@ public class GraalCompiler {
         final LIRGenerator lirGenerator = backend.newLIRGenerator(graph, frameMap, method, lir, xir, assumptions);
 
         Debug.scope("LIRGen", lirGenerator, new Runnable() {
-
             public void run() {
                 for (Block b : lir.linearScanOrder()) {
                     lirGenerator.doBlock(b);
@@ -256,9 +246,13 @@ public class GraalCompiler {
         });
 
         Debug.scope("Allocator", new Runnable() {
-
             public void run() {
-                new LinearScan(target, method, lir, lirGenerator, frameMap).allocate();
+                if (GraalOptions.AllocSSA) {
+                    new LinearScanAllocator(lir, frameMap).execute();
+                    // new SpillAllAllocator(context, lir, frameMap).execute();
+                } else {
+                    new LinearScan(target, method, lir, lirGenerator, frameMap).allocate();
+                }
             }
         });
         return frameMap;

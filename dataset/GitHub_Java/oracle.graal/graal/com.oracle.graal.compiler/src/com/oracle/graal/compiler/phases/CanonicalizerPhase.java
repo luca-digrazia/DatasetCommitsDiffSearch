@@ -180,7 +180,6 @@ public class CanonicalizerPhase extends Phase {
 
     public static boolean tryCanonicalize(final Node node, final StructuredGraph graph, final SimplifierTool tool) {
         if (node instanceof Canonicalizable) {
-            assert !(node instanceof Simplifiable);
             METRIC_CANONICALIZATION_CONSIDERED_NODES.increment();
             return Debug.scope("CanonicalizeNode", node, new Callable<Boolean>(){
                 public Boolean call() {
