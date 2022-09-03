@@ -158,10 +158,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                 int mark = graph.getMark();
                 if (!tryKillUnused(node)) {
                     if (!tryCanonicalize(node, graph)) {
-                        if (tryInferStamp(node, graph)) {
-                            // the improved stamp may enable additional canonicalization
-                            tryCanonicalize(node, graph);
-                        }
+                        tryInferStamp(node, graph);
                     }
                 }
 
@@ -299,7 +296,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
          * this method also checks if the stamp now describes a constant integer value, in which
          * case the node is replaced with a constant.
          */
-        private boolean tryInferStamp(Node node, StructuredGraph graph) {
+        private void tryInferStamp(Node node, StructuredGraph graph) {
             if (node.isAlive() && node instanceof ValueNode) {
                 ValueNode valueNode = (ValueNode) node;
                 METRIC_INFER_STAMP_CALLED.increment();
@@ -313,11 +310,9 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                         for (Node usage : valueNode.usages()) {
                             workList.addAgain(usage);
                         }
-                        return true;
                     }
                 }
             }
-            return false;
         }
 
         private final class Tool implements SimplifierTool {

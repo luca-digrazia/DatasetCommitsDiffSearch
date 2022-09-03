@@ -25,7 +25,6 @@ package com.oracle.graal.hotspot.phases;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * Checks for illegal object constants in a graph processed for AOT compilation. The only legal
@@ -34,10 +33,10 @@ import com.oracle.graal.phases.tiers.*;
  * 
  * @see LoadJavaMirrorWithKlassPhase
  */
-public class AheadOfTimeVerificationPhase extends VerifyPhase<PhaseContext> {
+public class AheadOfTimeVerificationPhase extends VerifyPhase {
 
     @Override
-    protected boolean verify(StructuredGraph graph, PhaseContext context) {
+    protected boolean verify(StructuredGraph graph) {
         for (ConstantNode node : graph.getNodes().filter(ConstantNode.class)) {
             assert !isObject(node) || isNullReference(node) || isInternedString(node) : "illegal object constant: " + node;
         }
