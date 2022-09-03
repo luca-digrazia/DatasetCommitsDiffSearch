@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "^")
-public final class XorNode extends BitLogicNode implements Canonicalizable {
+public final class XorNode extends LogicNode implements Canonicalizable, LIRLowerable {
 
     public XorNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
@@ -37,7 +37,7 @@ public final class XorNode extends BitLogicNode implements Canonicalizable {
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(StampTool.xor(x().stamp(), y().stamp()));
+        return updateStamp(StampTool.xor(x().integerStamp(), y().integerStamp()));
     }
 
     @Override
@@ -60,16 +60,12 @@ public final class XorNode extends BitLogicNode implements Canonicalizable {
                 int c = y().asConstant().asInt();
                 if (c == 0) {
                     return x();
-                } else if (c == -1) {
-                    return graph().unique(new NotNode(x()));
                 }
             } else {
                 assert kind() == Kind.Long;
                 long c = y().asConstant().asLong();
                 if (c == 0) {
                     return x();
-                } else if (c == -1) {
-                    return graph().unique(new NotNode(x()));
                 }
             }
             return BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
@@ -78,7 +74,7 @@ public final class XorNode extends BitLogicNode implements Canonicalizable {
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
+    public void generate(LIRGeneratorTool gen) {
         gen.setResult(this, gen.emitXor(gen.operand(x()), gen.operand(y())));
     }
 }
