@@ -65,7 +65,7 @@ final class SSIAndIntervalBuilder extends SSIBuilder {
     private final boolean neverSpillConstants;
     private final MoveFactory moveFactory;
 
-    SSIAndIntervalBuilder(LIR lir, TraceBuilderResult<?> traceBuilderResult, TargetDescription target, LIRGenerationResult res, RegisterAllocationConfig regAllocConfig,
+    public SSIAndIntervalBuilder(LIR lir, TraceBuilderResult<?> traceBuilderResult, TargetDescription target, LIRGenerationResult res, RegisterAllocationConfig regAllocConfig,
                     boolean neverSpillConstants, MoveFactory moveFactory) {
         super(lir);
         this.traceMap = new TraceIntervalMap(traceBuilderResult);
@@ -80,20 +80,15 @@ final class SSIAndIntervalBuilder extends SSIBuilder {
     public TraceIntervalMap buildSSIAndIntervals() {
         numberTraces();
         super.build();
-        finalizeFixedIntervals();
         if (Debug.isDumpEnabled(INTERVAL_DUMP_LEVEL)) {
             dumpIntervals();
         }
         return traceMap;
     }
 
-    private void finalizeFixedIntervals() {
-        for (Trace<?> trace : traceBuilderResult.getTraces()) {
-            if (process(trace)) {
-                IntervalData intervalData = getIntervalData(trace);
-                IntervalBuilderUtil.finalizeFixedIntervals(intervalData);
-            }
-        }
+    @Override
+    protected void dump() {
+        dumpIntervals();
     }
 
     private void dumpIntervals() {

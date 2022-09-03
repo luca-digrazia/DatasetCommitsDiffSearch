@@ -93,8 +93,12 @@ public class SSIBuilder {
     protected void build() {
         init();
         computeLocalLiveSets();
+        dump();
         computeGlobalLiveSets();
         finish();
+    }
+
+    protected void dump() {
     }
 
     /**
