@@ -42,6 +42,7 @@ import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
+import com.oracle.graal.phases.util.*;
 
 //JaCoCo Exclude
 
@@ -90,15 +91,18 @@ public abstract class Stub {
         return true;
     }
 
-    protected final HotSpotProviders providers;
+    protected final HotSpotRuntime runtime;
+
+    protected final Providers providers;
 
     /**
      * Creates a new stub.
      * 
      * @param linkage linkage details for a call to the stub
      */
-    public Stub(HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
+    public Stub(Providers providers, HotSpotForeignCallLinkage linkage) {
         this.linkage = linkage;
+        this.runtime = (HotSpotRuntime) providers.getMetaAccess();
         this.providers = providers;
     }
 
@@ -135,7 +139,7 @@ public abstract class Stub {
      */
     public synchronized InstalledCode getCode(final Backend backend) {
         if (code == null) {
-            Debug.sandbox("CompilingStub", new Object[]{providers.getCodeCache(), debugScopeContext()}, DebugScope.getConfig(), new Runnable() {
+            Debug.sandbox("CompilingStub", new Object[]{runtime, debugScopeContext()}, DebugScope.getConfig(), new Runnable() {
 
                 @Override
                 public void run() {
@@ -148,15 +152,12 @@ public abstract class Stub {
                     }
 
                     PhasePlan phasePlan = new PhasePlan();
-                    ForeignCallsProvider foreignCalls = providers.getForeignCalls();
-                    MetaAccessProvider metaAccess = providers.getMetaAccess();
-                    CodeCacheProvider codeCache = providers.getCodeCache();
-                    GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(metaAccess, foreignCalls, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
+                    GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
                     phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
                     // The stub itself needs the incoming calling convention.
                     CallingConvention incomingCc = linkage.getIncomingCallingConvention();
-                    final CompilationResult compResult = GraalCompiler.compileGraph(graph, incomingCc, getInstalledCodeOwner(), providers, backend, codeCache.getTarget(), null, phasePlan,
-                                    OptimisticOptimizations.ALL, new SpeculationLog(), providers.getSuites().getDefaultSuites(), new CompilationResult());
+                    final CompilationResult compResult = GraalCompiler.compileGraph(graph, incomingCc, getInstalledCodeOwner(), providers, backend, runtime.getTarget(), null, phasePlan,
+                                    OptimisticOptimizations.ALL, new SpeculationLog(), runtime.getDefaultSuites(), new CompilationResult());
 
                     assert destroyedRegisters != null;
                     code = Debug.scope("CodeInstall", new Callable<InstalledCode>() {
@@ -166,7 +167,7 @@ public abstract class Stub {
                             Stub stub = Stub.this;
                             HotSpotRuntimeStub installedCode = new HotSpotRuntimeStub(stub);
                             HotSpotCompiledCode hsCompResult = new HotSpotCompiledRuntimeStub(stub, compResult);
-                            CodeInstallResult result = runtime().getCompilerToVM().installCode(hsCompResult, installedCode, null);
+                            CodeInstallResult result = graalRuntime().getCompilerToVM().installCode(hsCompResult, installedCode, null);
                             if (result != CodeInstallResult.OK) {
                                 throw new GraalInternalError("Error installing stub %s: %s", Stub.this, result);
                             }
@@ -174,7 +175,7 @@ public abstract class Stub {
                                 Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
                             }
                             if (Debug.isLogEnabled()) {
-                                Debug.log("%s", providers.getDisassembler().disassemble(installedCode));
+                                Debug.log("%s", runtime.disassemble(installedCode));
                             }
                             return installedCode;
                         }

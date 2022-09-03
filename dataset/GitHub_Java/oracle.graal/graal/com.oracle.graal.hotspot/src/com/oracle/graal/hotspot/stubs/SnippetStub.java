@@ -26,9 +26,7 @@ import static com.oracle.graal.api.meta.MetaUtil.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
 import com.oracle.graal.phases.util.*;
@@ -67,7 +65,7 @@ public abstract class SnippetStub extends Stub implements Snippets {
      * 
      * @param linkage linkage details for a call to the stub
      */
-    public SnippetStub(HotSpotProviders providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
+    public SnippetStub(Providers providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
         super(providers, linkage);
         this.snippet = new Template(providers, target, getClass());
     }
@@ -83,19 +81,9 @@ public abstract class SnippetStub extends Stub implements Snippets {
     protected Arguments makeArguments(SnippetInfo stub) {
         Arguments args = new Arguments(stub, GuardsStage.FLOATING_GUARDS);
         for (int i = 0; i < stub.getParameterCount(); i++) {
-            String name = stub.getParameterName(i);
-            if (stub.isConstantParameter(i)) {
-                args.addConst(name, getConstantParameterValue(i, name));
-            } else {
-                assert !stub.isVarargsParameter(i);
-                args.add(name, null);
-            }
+            args.add(stub.getParameterName(i), null);
         }
         return args;
-    }
-
-    protected Object getConstantParameterValue(int index, String name) {
-        throw new GraalInternalError("%s must override getConstantParameterValue() to provide a value for parameter %d%s", getClass().getName(), index, name == null ? "" : " (" + name + ")");
     }
 
     @Override

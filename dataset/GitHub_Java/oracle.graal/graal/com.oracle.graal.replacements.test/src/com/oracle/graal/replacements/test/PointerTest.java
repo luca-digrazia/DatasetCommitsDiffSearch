@@ -28,6 +28,7 @@ import org.junit.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -51,8 +52,8 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     private final ReplacementsImpl installer;
 
     public PointerTest() {
-        target = getCodeCache().getTarget();
-        installer = new ReplacementsImpl(getProviders(), new Assumptions(false));
+        target = Graal.getRequiredCapability(CodeCacheProvider.class).getTarget();
+        installer = new ReplacementsImpl(getMetaAccess(), getConstantReflection(), getCodeCache(), getLowerer(), new Assumptions(false), target);
     }
 
     private static final ThreadLocal<SnippetInliningPolicy> inliningPolicy = new ThreadLocal<>();
@@ -122,8 +123,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
 
         if (indexConvert) {
             ConvertNode convert = (ConvertNode) location.getIndex();
-            Assert.assertEquals(Kind.Int, convert.getFromKind());
-            Assert.assertEquals(Kind.Long, convert.getToKind());
+            Assert.assertEquals(ConvertNode.Op.I2L, convert.opcode);
             Assert.assertEquals(graph.getLocal(1), convert.value());
         } else {
             Assert.assertEquals(graph.getLocal(1), location.getIndex());
@@ -152,8 +152,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
 
         if (indexConvert) {
             ConvertNode convert = (ConvertNode) location.getIndex();
-            Assert.assertEquals(Kind.Int, convert.getFromKind());
-            Assert.assertEquals(Kind.Long, convert.getToKind());
+            Assert.assertEquals(ConvertNode.Op.I2L, convert.opcode);
             Assert.assertEquals(graph.getLocal(1), convert.value());
         } else {
             Assert.assertEquals(graph.getLocal(1), location.getIndex());

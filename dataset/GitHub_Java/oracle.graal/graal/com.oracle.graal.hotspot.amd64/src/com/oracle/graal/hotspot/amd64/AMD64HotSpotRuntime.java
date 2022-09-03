@@ -22,16 +22,69 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.max.asm.amd64.AMD64.*;
+import static com.oracle.graal.amd64.AMD64.*;
+import static com.oracle.graal.api.code.CallingConvention.Type.*;
+import static com.oracle.graal.api.meta.LocationIdentity.*;
+import static com.oracle.graal.api.meta.Value.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
+import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.*;
+import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
+import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.*;
+import static com.oracle.graal.hotspot.replacements.AESCryptSubstitutions.*;
+import static com.oracle.graal.hotspot.replacements.CRC32Substitutions.*;
+import static com.oracle.graal.hotspot.replacements.CipherBlockChainingSubstitutions.*;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.util.*;
+import com.oracle.graal.replacements.amd64.*;
 
 public class AMD64HotSpotRuntime extends HotSpotRuntime {
 
     public AMD64HotSpotRuntime(HotSpotVMConfig config, HotSpotGraalRuntime graalRuntime) {
         super(config, graalRuntime);
+
+    }
+
+    private AMD64ConvertSnippets.Templates convertSnippets;
+
+    @Override
+    public void registerReplacements(Replacements replacements) {
+        Kind word = graalRuntime.getTarget().wordKind;
+
+        // The calling convention for the exception handler stub is (only?) defined in
+        // TemplateInterpreterGenerator::generate_throw_exception()
+        // in templateInterpreter_x86_64.cpp around line 1923
+        RegisterValue exception = rax.asValue(Kind.Object);
+        RegisterValue exceptionPc = rdx.asValue(word);
+        CallingConvention exceptionCc = new CallingConvention(0, ILLEGAL, exception, exceptionPc);
+        register(new HotSpotForeignCallLinkage(EXCEPTION_HANDLER, 0L, PRESERVES_REGISTERS, LEAF, null, exceptionCc, NOT_REEXECUTABLE, ANY_LOCATION));
+        register(new HotSpotForeignCallLinkage(EXCEPTION_HANDLER_IN_CALLER, JUMP_ADDRESS, PRESERVES_REGISTERS, LEAF, exceptionCc, null, NOT_REEXECUTABLE, ANY_LOCATION));
+
+        // These stubs do callee saving
+        registerForeignCall(ENCRYPT_BLOCK, config.aescryptEncryptBlockStub, NativeCall, PRESERVES_REGISTERS, LEAF, NOT_REEXECUTABLE, ANY_LOCATION);
+        registerForeignCall(DECRYPT_BLOCK, config.aescryptDecryptBlockStub, NativeCall, PRESERVES_REGISTERS, LEAF, NOT_REEXECUTABLE, ANY_LOCATION);
+        registerForeignCall(ENCRYPT, config.cipherBlockChainingEncryptAESCryptStub, NativeCall, PRESERVES_REGISTERS, LEAF, NOT_REEXECUTABLE, ANY_LOCATION);
+        registerForeignCall(DECRYPT, config.cipherBlockChainingDecryptAESCryptStub, NativeCall, PRESERVES_REGISTERS, LEAF, NOT_REEXECUTABLE, ANY_LOCATION);
+        registerForeignCall(UPDATE_BYTES_CRC32, config.updateBytesCRC32Stub, NativeCall, PRESERVES_REGISTERS, LEAF, NOT_REEXECUTABLE, ANY_LOCATION);
+
+        Providers providers = new Providers(this, this, this, this, replacements);
+        convertSnippets = new AMD64ConvertSnippets.Templates(providers, graalRuntime.getTarget());
+        super.registerReplacements(replacements);
+    }
+
+    @Override
+    public void lower(Node n, LoweringTool tool) {
+        if (n instanceof ConvertNode) {
+            convertSnippets.lower((ConvertNode) n, tool);
+        } else {
+            super.lower(n, tool);
+        }
     }
 
     @Override
@@ -45,8 +98,12 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
     }
 
     @Override
-    protected RegisterConfig createRegisterConfig(boolean globalStubConfig) {
-        return new AMD64HotSpotRegisterConfig(config, globalStubConfig);
+    public Register heapBaseRegister() {
+        return r12;
     }
 
+    @Override
+    protected RegisterConfig createRegisterConfig() {
+        return new AMD64HotSpotRegisterConfig(graalRuntime.getTarget().arch, config);
+    }
 }

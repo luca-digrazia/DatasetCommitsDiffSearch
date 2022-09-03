@@ -68,9 +68,9 @@ public class ReplacementsImpl implements Replacements {
     private final Set<ResolvedJavaMethod> forcedSubstitutions;
     private final Map<Class<? extends SnippetTemplateCache>, SnippetTemplateCache> snippetTemplateCache;
 
-    public ReplacementsImpl(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, LoweringProvider lowerer,
-                    Assumptions assumptions, TargetDescription target) {
-        this.providers = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, this);
+    public ReplacementsImpl(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, CodeCacheProvider codeCache, LoweringProvider lowerer, Assumptions assumptions,
+                    TargetDescription target) {
+        this.providers = new Providers(metaAccess, codeCache, constantReflection, lowerer, this);
         this.target = target;
         this.assumptions = assumptions;
         this.graphs = new ConcurrentHashMap<>();
@@ -289,7 +289,7 @@ public class ReplacementsImpl implements Replacements {
          * Does final processing of a snippet graph.
          */
         protected void finalizeGraph(StructuredGraph graph, boolean removeAllFrameStates) {
-            new NodeIntrinsificationPhase(providers).apply(graph);
+            new NodeIntrinsificationPhase(providers.getMetaAccess()).apply(graph);
             if (!SnippetTemplate.hasConstantParameter(method)) {
                 NodeIntrinsificationVerificationPhase.verify(graph);
             }
@@ -336,8 +336,7 @@ public class ReplacementsImpl implements Replacements {
                 @Override
                 public void run() {
                     MetaAccessProvider metaAccess = providers.getMetaAccess();
-                    ForeignCallsProvider foreignCalls = providers.getForeignCalls();
-                    new GraphBuilderPhase(metaAccess, foreignCalls, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(graph);
+                    new GraphBuilderPhase(metaAccess, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(graph);
                     new WordTypeVerificationPhase(metaAccess, target.wordKind).apply(graph);
                     new WordTypeRewriterPhase(metaAccess, target.wordKind).apply(graph);
 
@@ -370,7 +369,7 @@ public class ReplacementsImpl implements Replacements {
          * Called after all inlining for a given graph is complete.
          */
         protected void afterInlining(StructuredGraph graph) {
-            new NodeIntrinsificationPhase(providers).apply(graph);
+            new NodeIntrinsificationPhase(providers.getMetaAccess()).apply(graph);
             new DeadCodeEliminationPhase().apply(graph);
             if (OptCanonicalizer.getValue()) {
                 new CanonicalizerPhase(true).apply(graph, new PhaseContext(providers, assumptions));
@@ -389,8 +388,7 @@ public class ReplacementsImpl implements Replacements {
                         if (callee == method) {
                             final StructuredGraph originalGraph = new StructuredGraph(original);
                             MetaAccessProvider metaAccess = providers.getMetaAccess();
-                            ForeignCallsProvider foreignCalls = providers.getForeignCalls();
-                            new GraphBuilderPhase(metaAccess, foreignCalls, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(originalGraph);
+                            new GraphBuilderPhase(metaAccess, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(originalGraph);
                             new WordTypeVerificationPhase(metaAccess, target.wordKind).apply(graph);
                             new WordTypeRewriterPhase(metaAccess, target.wordKind).apply(graph);
 
@@ -402,7 +400,6 @@ public class ReplacementsImpl implements Replacements {
                         } else {
                             StructuredGraph intrinsicGraph = InliningUtil.getIntrinsicGraph(ReplacementsImpl.this, callee);
                             if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) &&
-                                            InliningUtil.getMacroNodeClass(ReplacementsImpl.this, callee) == null &&
                                             (policy.shouldInline(callee, methodToParse) || (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)))) {
                                 StructuredGraph targetGraph;
                                 if (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)) {

@@ -22,22 +22,30 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
+import java.util.concurrent.*;
+
 import org.junit.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.loop.phases.*;
+import com.oracle.graal.java.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.phases.ea.*;
 
 /**
  * The PartialEscapeAnalysisPhase is expected to remove all allocations and return the correct
  * values.
  */
-public class EscapeAnalysisTest extends EATestBase {
+public class EscapeAnalysisTest extends GraalCompilerTest {
 
     @Test
     public void test1() {
@@ -73,6 +81,8 @@ public class EscapeAnalysisTest extends EATestBase {
     public void testMonitor() {
         testEscapeAnalysis("testMonitorSnippet", Constant.forInt(0), false);
     }
+
+    private static native void notInlineable();
 
     public static int testMonitorSnippet() {
         Integer x = new Integer(0);
@@ -116,8 +126,19 @@ public class EscapeAnalysisTest extends EATestBase {
         testEscapeAnalysis("testMerge1Snippet", Constant.forInt(0), true);
     }
 
+    public static class TestObject {
+
+        int x;
+        int y;
+
+        public TestObject(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
     public static int testMerge1Snippet(int a) {
-        TestClassInt obj = new TestClassInt(1, 0);
+        TestObject obj = new TestObject(1, 0);
         if (a < 0) {
             obj.x = obj.x + 1;
         } else {
@@ -136,7 +157,7 @@ public class EscapeAnalysisTest extends EATestBase {
     }
 
     public int testSimpleLoopSnippet(int a) {
-        TestClassInt obj = new TestClassInt(1, 2);
+        TestObject obj = new TestObject(1, 2);
         for (int i = 0; i < a; i++) {
             notInlineable();
         }
@@ -149,7 +170,7 @@ public class EscapeAnalysisTest extends EATestBase {
     }
 
     public int testModifyingLoopSnippet(int a) {
-        TestClassInt obj = new TestClassInt(1, 2);
+        TestObject obj = new TestObject(1, 2);
         for (int i = 0; i < a; i++) {
             obj.x = 3;
             notInlineable();
@@ -157,112 +178,24 @@ public class EscapeAnalysisTest extends EATestBase {
         return obj.x <= 3 ? 1 : 0;
     }
 
-    @Test
-    public void testMergeAllocationsInt() {
-        testEscapeAnalysis("testMergeAllocationsIntSnippet", Constant.forInt(1), false);
-    }
+    public static class TestObject2 {
 
-    public int testMergeAllocationsIntSnippet(int a) {
-        TestClassInt obj;
-        if (a < 0) {
-            obj = new TestClassInt(1, 2);
-            notInlineable();
-        } else {
-            obj = new TestClassInt(1, 2);
-            notInlineable();
+        Object o;
+
+        public TestObject2(Object o) {
+            this.o = o;
         }
-        return obj.x <= 3 ? 1 : 0;
-    }
-
-    @Test
-    public void testMergeAllocationsObj() {
-        testEscapeAnalysis("testMergeAllocationsObjSnippet", Constant.forInt(1), false);
-    }
-
-    public int testMergeAllocationsObjSnippet(int a) {
-        TestClassObject obj;
-        Integer one = 1;
-        Integer two = 2;
-        Integer three = 3;
-        if (a < 0) {
-            obj = new TestClassObject(one, two);
-            notInlineable();
-        } else {
-            obj = new TestClassObject(one, three);
-            notInlineable();
-        }
-        return ((Integer) obj.x).intValue() <= 3 ? 1 : 0;
-    }
-
-    @Test
-    public void testMergeAllocationsObjCirc() {
-        testEscapeAnalysis("testMergeAllocationsObjCircSnippet", Constant.forInt(1), false);
-    }
-
-    public int testMergeAllocationsObjCircSnippet(int a) {
-        TestClassObject obj;
-        Integer one = 1;
-        Integer two = 2;
-        Integer three = 3;
-        if (a < 0) {
-            obj = new TestClassObject(one);
-            obj.y = obj;
-            obj.y = two;
-            notInlineable();
-        } else {
-            obj = new TestClassObject(one);
-            obj.y = obj;
-            obj.y = three;
-            notInlineable();
-        }
-        return ((Integer) obj.x).intValue() <= 3 ? 1 : 0;
-    }
-
-    static class MyException extends RuntimeException {
-
-        private static final long serialVersionUID = 0L;
-
-        protected Integer value;
-
-        public MyException(Integer value) {
-            super((Throwable) null);
-            this.value = value;
-        }
-
-        @SuppressWarnings("sync-override")
-        @Override
-        public final Throwable fillInStackTrace() {
-            return null;
-        }
-    }
-
-    @Test
-    public void testMergeAllocationsException() {
-        testEscapeAnalysis("testMergeAllocationsExceptionSnippet", Constant.forInt(1), false);
-    }
-
-    public int testMergeAllocationsExceptionSnippet(int a) {
-        MyException obj;
-        Integer one = 1;
-        if (a < 0) {
-            obj = new MyException(one);
-            notInlineable();
-        } else {
-            obj = new MyException(one);
-            notInlineable();
-        }
-        return obj.value <= 3 ? 1 : 0;
     }
 
     @Test
     public void testCheckCast() {
-        testEscapeAnalysis("testCheckCastSnippet", Constant.forObject(TestClassObject.class), false);
+        testEscapeAnalysis("testCheckCastSnippet", Constant.forObject(TestObject2.class), false);
     }
 
     public Object testCheckCastSnippet() {
-        TestClassObject obj = new TestClassObject(TestClassObject.class);
-        TestClassObject obj2 = new TestClassObject(obj);
-        return ((TestClassObject) obj2.x).x;
+        TestObject2 obj = new TestObject2(TestObject2.class);
+        TestObject2 obj2 = new TestObject2(obj);
+        return ((TestObject2) obj2.o).o;
     }
 
     @Test
@@ -271,9 +204,9 @@ public class EscapeAnalysisTest extends EATestBase {
     }
 
     public boolean testInstanceOfSnippet() {
-        TestClassObject obj = new TestClassObject(TestClassObject.class);
-        TestClassObject obj2 = new TestClassObject(obj);
-        return obj2.x instanceof TestClassObject;
+        TestObject2 obj = new TestObject2(TestObject2.class);
+        TestObject2 obj2 = new TestObject2(obj);
+        return obj2.o instanceof TestObject2;
     }
 
     @SuppressWarnings("unused")
@@ -290,80 +223,32 @@ public class EscapeAnalysisTest extends EATestBase {
         testEscapeAnalysis("testNewNodeSnippet", null, false);
     }
 
-    private static final TestClassObject staticObj = new TestClassObject();
+    private ReturnNode testEscapeAnalysis(String snippet, final Constant expectedConstantResult, final boolean iterativeEscapeAnalysis) {
+        ResolvedJavaMethod method = getMetaAccess().lookupJavaMethod(getMethod(snippet));
+        final StructuredGraph graph = new StructuredGraph(method);
 
-    public static Object testFullyUnrolledLoopSnippet() {
-        /*
-         * This tests a case that can appear if PEA is performed both before and after loop
-         * unrolling/peeling: If the VirtualInstanceNode is not duplicated correctly with the loop,
-         * the resulting object will reference itself, and not a second (different) object.
-         */
-        TestClassObject obj = staticObj;
-        for (int i = 0; i < 2; i++) {
-            obj = new TestClassObject(obj);
-        }
-        return obj.x;
-    }
+        return Debug.scope("GraalCompiler", new Object[]{graph, method, getCodeCache()}, new Callable<ReturnNode>() {
 
-    @Test
-    public void testFullyUnrolledLoop() {
-        prepareGraph("testFullyUnrolledLoopSnippet", false);
-        new LoopFullUnrollPhase(new CanonicalizerPhase(true)).apply(graph, context);
-        new PartialEscapePhase(false, new CanonicalizerPhase(true)).apply(graph, context);
-        Assert.assertEquals(1, returnNodes.size());
-        Assert.assertTrue(returnNodes.get(0).result() instanceof AllocatedObjectNode);
-        CommitAllocationNode commit = ((AllocatedObjectNode) returnNodes.get(0).result()).getCommit();
-        Assert.assertEquals(2, commit.getValues().size());
-        Assert.assertEquals(1, commit.getVirtualObjects().size());
-        Assert.assertTrue("non-cyclic data structure expected", commit.getVirtualObjects().get(0) != commit.getValues().get(0));
-    }
+            public ReturnNode call() {
+                new GraphBuilderPhase(getMetaAccess(), GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
 
-    @SuppressWarnings("unused") private static Object staticField;
-
-    private static TestClassObject inlinedPart(TestClassObject obj) {
-        TestClassObject ret = new TestClassObject(obj);
-        staticField = null;
-        return ret;
-    }
-
-    public static Object testPeeledLoopSnippet() {
-        TestClassObject obj = staticObj;
-        int i = 0;
-        do {
-            obj = inlinedPart(obj);
-        } while (i++ < 10);
-        staticField = obj;
-        return obj.x;
-    }
-
-    @Test
-    public void testPeeledLoop() {
-        prepareGraph("testPeeledLoopSnippet", false);
-        new LoopTransformHighPhase().apply(graph);
-        new LoopTransformLowPhase().apply(graph);
-        new SchedulePhase().apply(graph);
-    }
-
-    public static void testDeoptMonitorSnippetInner(Object o2, Object t, int i) {
-        staticField = null;
-        if (i == 0) {
-            staticField = o2;
-            Number n = (Number) t;
-            n.toString();
-        }
-    }
-
-    public static void testDeoptMonitorSnippet(Object t, int i) {
-        TestClassObject o = new TestClassObject();
-        TestClassObject o2 = new TestClassObject(o);
-
-        synchronized (o) {
-            testDeoptMonitorSnippetInner(o2, t, i);
-        }
-    }
-
-    @Test
-    public void testDeoptMonitor() {
-        test("testDeoptMonitorSnippet", new Object(), 0);
+                Assumptions assumptions = new Assumptions(false);
+                HighTierContext context = new HighTierContext(getProviders(), assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
+                new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
+                new DeadCodeEliminationPhase().apply(graph);
+                new CanonicalizerPhase(true).apply(graph, context);
+                new PartialEscapePhase(iterativeEscapeAnalysis, new CanonicalizerPhase(true)).apply(graph, context);
+                Assert.assertEquals(1, graph.getNodes().filter(ReturnNode.class).count());
+                ReturnNode returnNode = graph.getNodes().filter(ReturnNode.class).first();
+                if (expectedConstantResult != null) {
+                    Assert.assertTrue(returnNode.result().toString(), returnNode.result().isConstant());
+                    Assert.assertEquals(expectedConstantResult, returnNode.result().asConstant());
+                }
+                int newInstanceCount = graph.getNodes().filter(NewInstanceNode.class).count() + graph.getNodes().filter(NewArrayNode.class).count() +
+                                graph.getNodes().filter(CommitAllocationNode.class).count();
+                Assert.assertEquals(0, newInstanceCount);
+                return returnNode;
+            }
+        });
     }
 }

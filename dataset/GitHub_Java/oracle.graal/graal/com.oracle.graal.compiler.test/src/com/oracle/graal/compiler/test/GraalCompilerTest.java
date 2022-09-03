@@ -54,7 +54,6 @@ import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.printer.*;
-import com.oracle.graal.runtime.*;
 import com.oracle.graal.test.*;
 
 /**
@@ -78,33 +77,22 @@ import com.oracle.graal.test.*;
  */
 public abstract class GraalCompilerTest extends GraalTest {
 
-    private final Providers providers;
-    private final Backend backend;
-    private final Suites suites;
+    private final CodeCacheProvider codeCache;
+    private final MetaAccessProvider metaAccess;
+    private final ConstantReflectionProvider constantReflection;
+    private final LoweringProvider lowerer;
+    private final Replacements replacements;
+    protected final Backend backend;
+    protected final Suites suites;
 
     public GraalCompilerTest() {
-        this.backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
-        this.providers = getBackend().getProviders();
-        this.suites = backend.getSuites().createSuites();
-    }
-
-    /**
-     * Set up a test for a non-default backend. The test should check (via {@link #getBackend()} )
-     * whether the desired backend is available.
-     * 
-     * @param arch the name of the desired backend architecture
-     */
-    public GraalCompilerTest(Class<? extends Architecture> arch) {
-        RuntimeProvider runtime = Graal.getRequiredCapability(RuntimeProvider.class);
-        Backend b = runtime.getBackend(arch);
-        if (b != null) {
-            this.backend = b;
-        } else {
-            // Fall back to the default/host backend
-            this.backend = runtime.getHostBackend();
-        }
-        this.providers = backend.getProviders();
-        this.suites = backend.getSuites().createSuites();
+        this.replacements = Graal.getRequiredCapability(Replacements.class);
+        this.metaAccess = Graal.getRequiredCapability(MetaAccessProvider.class);
+        this.constantReflection = Graal.getRequiredCapability(ConstantReflectionProvider.class);
+        this.codeCache = Graal.getRequiredCapability(CodeCacheProvider.class);
+        this.lowerer = Graal.getRequiredCapability(LoweringProvider.class);
+        this.backend = Graal.getRequiredCapability(Backend.class);
+        this.suites = Graal.getRequiredCapability(SuitesProvider.class).createSuites();
     }
 
     @BeforeClass
@@ -177,36 +165,24 @@ public abstract class GraalCompilerTest extends GraalTest {
         return result.toString();
     }
 
-    protected Backend getBackend() {
-        return backend;
-    }
-
-    protected Suites getSuites() {
-        return suites;
-    }
-
     protected Providers getProviders() {
-        return providers;
+        return new Providers(metaAccess, codeCache, constantReflection, lowerer, getReplacements());
     }
 
     protected CodeCacheProvider getCodeCache() {
-        return getProviders().getCodeCache();
+        return codeCache;
     }
 
     protected ConstantReflectionProvider getConstantReflection() {
-        return getProviders().getConstantReflection();
-    }
-
-    protected ForeignCallsProvider getForeignCalls() {
-        return getProviders().getForeignCalls();
+        return constantReflection;
     }
 
     protected MetaAccessProvider getMetaAccess() {
-        return getProviders().getMetaAccess();
+        return metaAccess;
     }
 
     protected LoweringProvider getLowerer() {
-        return getProviders().getLowerer();
+        return lowerer;
     }
 
     /**
@@ -371,7 +347,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         before(method);
         Object[] executeArgs = argsWithReceiver(receiver, args);
 
-        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
+        ResolvedJavaMethod javaMethod = metaAccess.lookupJavaMethod(method);
         checkArgs(javaMethod, executeArgs);
 
         InstalledCode compiledMethod = getCode(javaMethod, parse(method));
@@ -394,7 +370,7 @@ public abstract class GraalCompilerTest extends GraalTest {
             if (kind == Kind.Object) {
                 if (arg != null && javaType instanceof ResolvedJavaType) {
                     ResolvedJavaType resolvedJavaType = (ResolvedJavaType) javaType;
-                    Assert.assertTrue(resolvedJavaType + " from " + getMetaAccess().lookupJavaType(arg.getClass()), resolvedJavaType.isAssignableFrom(getMetaAccess().lookupJavaType(arg.getClass())));
+                    Assert.assertTrue(resolvedJavaType + " from " + metaAccess.lookupJavaType(arg.getClass()), resolvedJavaType.isAssignableFrom(metaAccess.lookupJavaType(arg.getClass())));
                 }
             } else {
                 Assert.assertNotNull(arg);
@@ -443,7 +419,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     protected Result executeActualCheckDeopt(Method method, Set<DeoptimizationReason> shouldNotDeopt, Object receiver, Object... args) {
         Map<DeoptimizationReason, Integer> deoptCounts = new EnumMap<>(DeoptimizationReason.class);
-        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
+        ResolvedJavaMethod javaMethod = metaAccess.lookupJavaMethod(method);
         ProfilingInfo profile = javaMethod.getProfilingInfo();
         for (DeoptimizationReason reason : shouldNotDeopt) {
             deoptCounts.put(reason, profile.getDeoptimizationCount(reason));
@@ -512,11 +488,11 @@ public abstract class GraalCompilerTest extends GraalTest {
                 }
                 long start = System.currentTimeMillis();
                 PhasePlan phasePlan = new PhasePlan();
-                GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(getMetaAccess(), getForeignCalls(), GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
+                GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(metaAccess, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
                 phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
                 CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
-                final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), null, phasePlan,
-                                OptimisticOptimizations.ALL, new SpeculationLog(), getSuites(), new CompilationResult());
+                final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, method, getProviders(), backend, getCodeCache().getTarget(), null, phasePlan,
+                                OptimisticOptimizations.ALL, new SpeculationLog(), suites, new CompilationResult());
                 if (printCompilation) {
                     TTY.println(String.format("@%-6d Graal %-70s %-45s %-50s | %4dms %5dB", id, "", "", "", System.currentTimeMillis() - start, compResult.getTargetCodeSize()));
                 }
@@ -532,7 +508,7 @@ public abstract class GraalCompilerTest extends GraalTest {
                             Debug.dump(new Object[]{compResult, code}, "After code installation");
                         }
                         if (Debug.isLogEnabled()) {
-                            DisassemblerProvider dis = backend.getDisassembler();
+                            DisassemblerProvider dis = Graal.getRuntime().getCapability(DisassemblerProvider.class);
                             if (dis != null) {
                                 String text = dis.disassemble(code);
                                 if (text != null) {
@@ -591,9 +567,9 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     private StructuredGraph parse0(Method m, GraphBuilderConfiguration conf) {
         assert m.getAnnotation(Test.class) == null : "shouldn't parse method with @Test annotation: " + m;
-        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(m);
+        ResolvedJavaMethod javaMethod = metaAccess.lookupJavaMethod(m);
         StructuredGraph graph = new StructuredGraph(javaMethod);
-        new GraphBuilderPhase(getMetaAccess(), getForeignCalls(), conf, OptimisticOptimizations.ALL).apply(graph);
+        new GraphBuilderPhase(metaAccess, conf, OptimisticOptimizations.ALL).apply(graph);
         return graph;
     }
 
@@ -605,11 +581,11 @@ public abstract class GraalCompilerTest extends GraalTest {
         PhasePlan plan = new PhasePlan();
         GraphBuilderConfiguration gbConf = GraphBuilderConfiguration.getEagerDefault();
         gbConf.setEagerInfopointMode(eagerInfopointMode);
-        plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(getMetaAccess(), getForeignCalls(), gbConf, OptimisticOptimizations.ALL));
+        plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(metaAccess, gbConf, OptimisticOptimizations.ALL));
         return plan;
     }
 
     protected Replacements getReplacements() {
-        return getProviders().getReplacements();
+        return replacements;
     }
 }

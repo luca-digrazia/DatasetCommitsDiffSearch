@@ -25,6 +25,7 @@ package com.oracle.graal.compiler.test;
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 import org.junit.*;
 
@@ -66,7 +67,7 @@ public class FinalizableSubclassTest extends GraalCompilerTest {
         StructuredGraph graph = new StructuredGraph(javaMethod);
 
         GraphBuilderConfiguration conf = GraphBuilderConfiguration.getSnippetDefault();
-        new GraphBuilderPhase(getMetaAccess(), getForeignCalls(), conf, OptimisticOptimizations.ALL).apply(graph);
+        new GraphBuilderPhase(getMetaAccess(), conf, OptimisticOptimizations.ALL).apply(graph);
         HighTierContext context = new HighTierContext(getProviders(), assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
         new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
         new CanonicalizerPhase(true).apply(graph, context);
@@ -118,40 +119,46 @@ public class FinalizableSubclassTest extends GraalCompilerTest {
 
         @Override
         protected Class<?> findClass(final String name) throws ClassNotFoundException {
-            String nameReplaced = name.replaceAll("AAAA", replaceTo);
-            if (cache.containsKey(nameReplaced)) {
-                return cache.get(nameReplaced);
-            }
+            return Debug.scope("FinalizableSubclassTest", new Callable<Class<?>>() {
 
-            // copy classfile to byte array
-            byte[] classData = null;
-            try {
-                InputStream is = FinalizableSubclassTest.class.getResourceAsStream("FinalizableSubclassTest$" + name + ".class");
-                assert is != null;
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                @Override
+                public Class<?> call() throws Exception {
+                    String nameReplaced = name.replaceAll("AAAA", replaceTo);
+                    if (cache.containsKey(nameReplaced)) {
+                        return cache.get(nameReplaced);
+                    }
 
-                byte[] buf = new byte[1024];
-                int size;
-                while ((size = is.read(buf, 0, buf.length)) != -1) {
-                    baos.write(buf, 0, size);
+                    // copy classfile to byte array
+                    byte[] classData = null;
+                    try {
+                        InputStream is = FinalizableSubclassTest.class.getResourceAsStream("FinalizableSubclassTest$" + name + ".class");
+                        assert is != null;
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+                        byte[] buf = new byte[1024];
+                        int size;
+                        while ((size = is.read(buf, 0, buf.length)) != -1) {
+                            baos.write(buf, 0, size);
+                        }
+                        baos.flush();
+                        classData = baos.toByteArray();
+                    } catch (IOException e) {
+                        Assert.fail("can't access class: " + name);
+                    }
+                    dumpStringsInByteArray(classData);
+
+                    // replace all occurrences of "AAAA" in classfile
+                    int index = -1;
+                    while ((index = indexOfAAAA(classData, index + 1)) != -1) {
+                        replaceAAAA(classData, index, replaceTo);
+                    }
+                    dumpStringsInByteArray(classData);
+
+                    Class c = defineClass(null, classData, 0, classData.length);
+                    cache.put(nameReplaced, c);
+                    return c;
                 }
-                baos.flush();
-                classData = baos.toByteArray();
-            } catch (IOException e) {
-                Assert.fail("can't access class: " + name);
-            }
-            dumpStringsInByteArray(classData);
-
-            // replace all occurrences of "AAAA" in classfile
-            int index = -1;
-            while ((index = indexOfAAAA(classData, index + 1)) != -1) {
-                replaceAAAA(classData, index, replaceTo);
-            }
-            dumpStringsInByteArray(classData);
-
-            Class c = defineClass(null, classData, 0, classData.length);
-            cache.put(nameReplaced, c);
-            return c;
+            });
         }
 
         private static int indexOfAAAA(byte[] b, int index) {

@@ -27,40 +27,19 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.util.*;
 
-public class PhaseContext {
+public class PhaseContext extends Providers {
 
-    private final MetaAccessProvider metaAccess;
-    private final ConstantReflectionProvider constantReflection;
-    private final LoweringProvider lowerer;
-    private final Replacements replacements;
     private final Assumptions assumptions;
 
-    public PhaseContext(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, LoweringProvider lowerer, Replacements replacements, Assumptions assumptions) {
-        this.metaAccess = metaAccess;
-        this.constantReflection = constantReflection;
-        this.lowerer = lowerer;
-        this.replacements = replacements;
+    public PhaseContext(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, LoweringProvider lowerer, Assumptions assumptions,
+                    Replacements replacements) {
+        super(metaAccess, codeCache, constantReflection, lowerer, replacements);
         this.assumptions = assumptions;
     }
 
-    public PhaseContext(Providers providers, Assumptions assumptions) {
-        this(providers.getMetaAccess(), providers.getConstantReflection(), providers.getLowerer(), providers.getReplacements(), assumptions);
-    }
-
-    public MetaAccessProvider getMetaAccess() {
-        return metaAccess;
-    }
-
-    public ConstantReflectionProvider getConstantReflection() {
-        return constantReflection;
-    }
-
-    public LoweringProvider getLowerer() {
-        return lowerer;
-    }
-
-    public Replacements getReplacements() {
-        return replacements;
+    public PhaseContext(Providers copyFrom, Assumptions assumptions) {
+        super(copyFrom);
+        this.assumptions = assumptions;
     }
 
     public Assumptions getAssumptions() {

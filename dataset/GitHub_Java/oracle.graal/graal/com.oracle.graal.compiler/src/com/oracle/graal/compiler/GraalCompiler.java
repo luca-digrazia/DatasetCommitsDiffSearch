@@ -284,10 +284,6 @@ public class GraalCompiler {
         }
         result.setLeafGraphIds(leafGraphIds);
 
-        if (Debug.isLogEnabled()) {
-            Debug.log("%s", backend.getProviders().getCodeCache().disassemble(result, null));
-        }
-
         Debug.dump(result, "After code generation");
     }
 
@@ -298,9 +294,8 @@ public class GraalCompiler {
         MetaAccessProvider metaAccess = Graal.getRequiredCapability(MetaAccessProvider.class);
         CodeCacheProvider codeCache = Graal.getRequiredCapability(CodeCacheProvider.class);
         ConstantReflectionProvider constantReflection = Graal.getRequiredCapability(ConstantReflectionProvider.class);
-        ForeignCallsProvider foreignCalls = Graal.getRequiredCapability(ForeignCallsProvider.class);
         LoweringProvider lowerer = Graal.getRequiredCapability(LoweringProvider.class);
         Replacements replacements = Graal.getRequiredCapability(Replacements.class);
-        return new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements);
+        return new Providers(metaAccess, codeCache, constantReflection, lowerer, replacements);
     }
 }

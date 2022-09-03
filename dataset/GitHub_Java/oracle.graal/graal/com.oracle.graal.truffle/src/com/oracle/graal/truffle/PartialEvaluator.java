@@ -115,7 +115,7 @@ public class PartialEvaluator {
 
             @Override
             public void run() {
-                new GraphBuilderPhase(providers.getMetaAccess(), providers.getForeignCalls(), config, TruffleCompilerImpl.Optimizations).apply(graph);
+                new GraphBuilderPhase(providers.getMetaAccess(), config, TruffleCompilerImpl.Optimizations).apply(graph);
 
                 // Replace thisNode with constant.
                 LocalNode thisNode = graph.getLocal(0);
@@ -164,7 +164,7 @@ public class PartialEvaluator {
                 }
 
                 // EA frame and clean up.
-                new PartialEscapePhase(true, canonicalizer).apply(graph, tierContext);
+                new PartialEscapePhase(false, canonicalizer).apply(graph, tierContext);
                 new VerifyNoIntrinsicsLeftPhase().apply(graph, false);
                 for (MaterializeFrameNode materializeNode : graph.getNodes(MaterializeFrameNode.class).snapshot()) {
                     materializeNode.replaceAtUsages(materializeNode.getFrame());

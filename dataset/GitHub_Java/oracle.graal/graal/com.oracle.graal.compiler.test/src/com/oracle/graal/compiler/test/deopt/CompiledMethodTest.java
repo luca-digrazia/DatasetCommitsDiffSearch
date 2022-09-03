@@ -63,7 +63,7 @@ public class CompiledMethodTest extends GraalCompilerTest {
             if (node instanceof ConstantNode) {
                 ConstantNode constant = (ConstantNode) node;
                 if (constant.kind() == Kind.Object && " ".equals(constant.value.asObject())) {
-                    constant.replace(ConstantNode.forObject("-", getMetaAccess(), graph));
+                    graph.replaceFloating(constant, ConstantNode.forObject("-", getMetaAccess(), graph));
                 }
             }
         }

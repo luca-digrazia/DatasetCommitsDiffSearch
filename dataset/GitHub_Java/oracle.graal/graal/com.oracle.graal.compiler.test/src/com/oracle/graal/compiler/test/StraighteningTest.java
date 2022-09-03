@@ -76,6 +76,7 @@ public class StraighteningTest extends GraalCompilerTest {
         test("test1Snippet");
     }
 
+    @Test(expected = AssertionError.class)
     public void test2() {
         test("test2Snippet");
     }
@@ -87,10 +88,10 @@ public class StraighteningTest extends GraalCompilerTest {
 
     private void test(final String snippet) {
         // No debug scope to reduce console noise for @Test(expected = ...) tests
-        StructuredGraph graph = parseEager(snippet);
+        StructuredGraph graph = parse(snippet);
         Debug.dump(graph, "Graph");
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), new Assumptions(false)));
-        StructuredGraph referenceGraph = parseEager(REFERENCE_SNIPPET);
+        StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
         assertEquals(referenceGraph, graph);
     }
 }

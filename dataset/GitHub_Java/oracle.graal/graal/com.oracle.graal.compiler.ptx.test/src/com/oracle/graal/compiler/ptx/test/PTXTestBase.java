@@ -55,14 +55,14 @@ public abstract class PTXTestBase extends GraalCompilerTest {
     }
 
     protected CompilationResult compile(String test) {
-        if (getCodeCache() instanceof PTXHotSpotCodeCacheProvider) {
+        if (getCodeCache() instanceof PTXHotSpotRuntime) {
             StructuredGraph graph = parse(test);
             sg = graph;
             Debug.dump(graph, "Graph");
             TargetDescription target = new TargetDescription(new PTX(), true, 1, 0, true);
-            PTXBackend ptxBackend = new PTXBackend(getProviders());
+            PTXBackend ptxBackend = new PTXBackend(getMetaAccess(), getCodeCache(), target);
             PhasePlan phasePlan = new PhasePlan();
-            GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(getMetaAccess(), getForeignCalls(), GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.NONE);
+            GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(getMetaAccess(), GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.NONE);
             phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
             phasePlan.addPhase(PhasePosition.AFTER_PARSING, new PTXPhase());
             new PTXPhase().apply(graph);
@@ -76,8 +76,8 @@ public abstract class PTXTestBase extends GraalCompilerTest {
              * Ultimately we might want to have both the kernel and the code natively compiled for
              * GPU fallback to CPU in cases of ECC failure on kernel invocation.
              */
-            CompilationResult result = GraalCompiler.compileGraph(graph, cc, graph.method(), getProviders(), ptxBackend, target, null, phasePlan, OptimisticOptimizations.NONE, new SpeculationLog(),
-                            Suites.createDefaultSuites(), new ExternalCompilationResult());
+            CompilationResult result = GraalCompiler.compileGraph(graph, cc, graph.method(), getProviders(), ptxBackend, target, null, phasePlan, OptimisticOptimizations.NONE,
+                            new SpeculationLog(), Suites.createDefaultSuites(), new ExternalCompilationResult());
             return result;
         } else {
             return null;
@@ -102,8 +102,8 @@ public abstract class PTXTestBase extends GraalCompilerTest {
             HotSpotResolvedJavaMethod compiledMethod = (HotSpotResolvedJavaMethod) sg.method();
             boolean isStatic = Modifier.isStatic(compiledMethod.getModifiers());
             Object[] executeArgs = argsWithReceiver((isStatic ? null : this), args);
-            HotSpotCodeCacheProvider codeCache = (HotSpotCodeCacheProvider) getCodeCache();
-            InstalledCode installedCode = codeCache.addExternalMethod(compiledMethod, result);
+            HotSpotRuntime hsr = (HotSpotRuntime) getCodeCache();
+            InstalledCode installedCode = hsr.addExternalMethod(compiledMethod, result);
             Annotation[][] params = compiledMethod.getParameterAnnotations();
 
             int dimensionX = 1;

@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.nodes.ConstantNode.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import static org.junit.Assert.*;
 
@@ -145,9 +144,7 @@ public class ConditionalEliminationTest extends GraalCompilerTest {
         new ConditionalEliminationPhase(getMetaAccess()).apply(graph);
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), null));
         for (ConstantNode constant : graph.getNodes().filter(ConstantNode.class)) {
-            if (ConstantNodeRecordsUsages || !constant.gatherUsages().isEmpty()) {
-                assertTrue("unexpected constant: " + constant, constant.asConstant().isNull() || constant.asConstant().asInt() > 0);
-            }
+            assertTrue("unexpected constant: " + constant, constant.asConstant().isNull() || constant.asConstant().asInt() > 0);
         }
     }
 
@@ -179,9 +176,7 @@ public class ConditionalEliminationTest extends GraalCompilerTest {
         new ConditionalEliminationPhase(getMetaAccess()).apply(graph);
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), null));
         for (ConstantNode constant : graph.getNodes().filter(ConstantNode.class)) {
-            if (ConstantNodeRecordsUsages || !constant.gatherUsages().isEmpty()) {
-                assertTrue("unexpected constant: " + constant, constant.asConstant().isNull() || constant.asConstant().asInt() > 0);
-            }
+            assertTrue("unexpected constant: " + constant, constant.asConstant().isNull() || constant.asConstant().asInt() > 0);
         }
     }
 

@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.truffle.test;
 
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
+
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -42,6 +44,7 @@ import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.truffle.*;
+import com.oracle.graal.truffle.printer.*;
 import com.oracle.graal.virtual.phases.ea.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
@@ -56,7 +59,7 @@ public class PartialEvaluationTest extends GraalCompilerTest {
         // Make sure Truffle runtime is initialized.
         Assert.assertTrue(Truffle.getRuntime() instanceof GraalTruffleRuntime);
         Replacements truffleReplacements = ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements();
-        Providers providers = new Providers(getMetaAccess(), getCodeCache(), getConstantReflection(), getForeignCalls(), getLowerer(), truffleReplacements);
+        Providers providers = new Providers(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), truffleReplacements);
         TruffleCache truffleCache = new TruffleCache(providers, GraphBuilderConfiguration.getDefault(), TruffleCompilerImpl.Optimizations);
         this.partialEvaluator = new PartialEvaluator(providers, truffleCache);
 
@@ -133,6 +136,10 @@ public class PartialEvaluationTest extends GraalCompilerTest {
                 new DeadCodeEliminationPhase().apply(resultGraph);
                 new PartialEscapePhase(true, canonicalizer).apply(resultGraph, context);
 
+                if (TruffleInlinePrinter.getValue()) {
+                    InlinePrinterProcessor.printTree();
+                }
+
                 return resultGraph;
             }
 
@@ -175,7 +182,7 @@ public class PartialEvaluationTest extends GraalCompilerTest {
 
                 // Additional inlining.
                 final PhasePlan plan = new PhasePlan();
-                GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(getMetaAccess(), getForeignCalls(), GraphBuilderConfiguration.getEagerDefault(), TruffleCompilerImpl.Optimizations);
+                GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(getMetaAccess(), GraphBuilderConfiguration.getEagerDefault(), TruffleCompilerImpl.Optimizations);
                 plan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
                 canonicalizer.addToPhasePlan(plan, context);
                 plan.addPhase(PhasePosition.AFTER_PARSING, new DeadCodeEliminationPhase());
@@ -184,7 +191,8 @@ public class PartialEvaluationTest extends GraalCompilerTest {
                 canonicalizer.apply(graph, context);
                 new DeadCodeEliminationPhase().apply(graph);
 
-                HighTierContext highTierContext = new HighTierContext(getProviders(), assumptions, null, plan, OptimisticOptimizations.NONE);
+                HighTierContext highTierContext = new HighTierContext(getProviders(), assumptions, null, plan,
+                                OptimisticOptimizations.NONE);
                 InliningPhase inliningPhase = new InliningPhase(canonicalizer);
                 inliningPhase.apply(graph, highTierContext);
                 removeFrameStates(graph);

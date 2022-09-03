@@ -113,7 +113,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
     public void testParam() {
         ValueNode result = getReturn("testParamSnippet").result();
         assertTrue(graph.getNodes().filter(LoadFieldNode.class).isEmpty());
-        assertEquals(graph.getParameter(1), result);
+        assertEquals(graph.getLocal(1), result);
     }
 
     @SuppressWarnings("all")
@@ -127,7 +127,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
     public void testMaterialized() {
         ValueNode result = getReturn("testMaterializedSnippet").result();
         assertTrue(graph.getNodes().filter(LoadFieldNode.class).isEmpty());
-        assertEquals(graph.getParameter(0), result);
+        assertEquals(graph.getLocal(0), result);
     }
 
     @SuppressWarnings("all")
@@ -143,7 +143,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
     public void testSimpleLoop() {
         ValueNode result = getReturn("testSimpleLoopSnippet").result();
         assertTrue(graph.getNodes().filter(LoadFieldNode.class).isEmpty());
-        assertEquals(graph.getParameter(1), result);
+        assertEquals(graph.getLocal(1), result);
     }
 
     @SuppressWarnings("all")
@@ -243,7 +243,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
     protected void processMethod(final String snippet) {
         graph = parse(snippet);
         Assumptions assumptions = new Assumptions(false);
-        HighTierContext context = new HighTierContext(getProviders(), assumptions, null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+        HighTierContext context = new HighTierContext(getProviders(), assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
         new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
         new PartialEscapePhase(false, true, new CanonicalizerPhase(true)).apply(graph, context);
     }

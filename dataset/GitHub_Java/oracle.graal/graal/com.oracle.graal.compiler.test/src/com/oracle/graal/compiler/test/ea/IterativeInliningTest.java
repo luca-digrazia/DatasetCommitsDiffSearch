@@ -30,7 +30,6 @@ import org.junit.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.compiler.test.ea.EATestBase.TestClassInt;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
@@ -51,10 +50,14 @@ public class IterativeInliningTest extends GraalCompilerTest {
         }
     }
 
-    public static class TestInt extends TestClassInt implements Callable<Integer> {
+    public static class TestInt implements Callable<Integer> {
+
+        public int x;
+        public int y;
 
         public TestInt(int x, int y) {
-            super(x, y);
+            this.x = x;
+            this.y = y;
         }
 
         @Override
@@ -74,7 +77,7 @@ public class IterativeInliningTest extends GraalCompilerTest {
     public void testSimple() {
         ValueNode result = getReturn("testSimpleSnippet").result();
         assertTrue(graph.getNodes().filter(LoadFieldNode.class).isEmpty());
-        assertEquals(graph.getParameter(0), result);
+        assertEquals(graph.getLocal(0), result);
     }
 
     final ReturnNode getReturn(String snippet) {
@@ -85,7 +88,7 @@ public class IterativeInliningTest extends GraalCompilerTest {
 
     private void processMethod(final String snippet) {
         graph = parse(snippet);
-        HighTierContext context = new HighTierContext(getProviders(), new Assumptions(false), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+        HighTierContext context = new HighTierContext(getProviders(), new Assumptions(false), null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
         new IterativeInliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
     }
 }

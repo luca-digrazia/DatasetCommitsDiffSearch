@@ -25,7 +25,6 @@ package com.oracle.graal.phases.util;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * A set of providers, some of which may not be present (i.e., null).
@@ -36,25 +35,22 @@ public class Providers {
     private final CodeCacheProvider codeCache;
     private final LoweringProvider lowerer;
     private final ConstantReflectionProvider constantReflection;
-    private final ForeignCallsProvider foreignCalls;
     private final Replacements replacements;
 
-    public Providers(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, ForeignCallsProvider foreignCalls, LoweringProvider lowerer,
-                    Replacements replacements) {
+    public Providers(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, LoweringProvider lowerer, Replacements replacements) {
         this.metaAccess = metaAccess;
         this.codeCache = codeCache;
         this.constantReflection = constantReflection;
-        this.foreignCalls = foreignCalls;
         this.lowerer = lowerer;
         this.replacements = replacements;
     }
 
     public Providers(Providers copyFrom) {
-        this(copyFrom.getMetaAccess(), copyFrom.getCodeCache(), copyFrom.getConstantReflection(), copyFrom.getForeignCalls(), copyFrom.getLowerer(), copyFrom.getReplacements());
-    }
-
-    public Providers(PhaseContext copyFrom) {
-        this(copyFrom.getMetaAccess(), null, copyFrom.getConstantReflection(), null, copyFrom.getLowerer(), copyFrom.getReplacements());
+        this.metaAccess = copyFrom.metaAccess;
+        this.codeCache = copyFrom.codeCache;
+        this.constantReflection = copyFrom.constantReflection;
+        this.lowerer = copyFrom.lowerer;
+        this.replacements = copyFrom.replacements;
     }
 
     public MetaAccessProvider getMetaAccess() {
@@ -63,10 +59,6 @@ public class Providers {
 
     public CodeCacheProvider getCodeCache() {
         return codeCache;
-    }
-
-    public ForeignCallsProvider getForeignCalls() {
-        return foreignCalls;
     }
 
     public LoweringProvider getLowerer() {
@@ -79,29 +71,5 @@ public class Providers {
 
     public Replacements getReplacements() {
         return replacements;
-    }
-
-    public Providers copyWith(MetaAccessProvider substitution) {
-        return new Providers(substitution, codeCache, constantReflection, foreignCalls, lowerer, replacements);
-    }
-
-    public Providers copyWith(CodeCacheProvider substitution) {
-        return new Providers(metaAccess, substitution, constantReflection, foreignCalls, lowerer, replacements);
-    }
-
-    public Providers copyWith(ConstantReflectionProvider substitution) {
-        return new Providers(metaAccess, codeCache, substitution, foreignCalls, lowerer, replacements);
-    }
-
-    public Providers copyWith(ForeignCallsProvider substitution) {
-        return new Providers(metaAccess, codeCache, constantReflection, substitution, lowerer, replacements);
-    }
-
-    public Providers copyWith(LoweringProvider substitution) {
-        return new Providers(metaAccess, codeCache, constantReflection, foreignCalls, substitution, replacements);
-    }
-
-    public Providers copyWith(Replacements substitution) {
-        return new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, substitution);
     }
 }

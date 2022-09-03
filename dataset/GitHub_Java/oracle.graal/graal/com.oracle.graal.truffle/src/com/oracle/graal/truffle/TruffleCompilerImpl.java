@@ -59,7 +59,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
     private final PartialEvaluator partialEvaluator;
     private final Backend backend;
     private final ResolvedJavaType[] skippedExceptionTypes;
-    private final HotSpotGraalRuntime runtime;
+    private final HotSpotGraalRuntime graalRuntime;
     private final TruffleCache truffleCache;
 
     private static final Class[] SKIPPED_EXCEPTION_CLASSES = new Class[]{SlowPathException.class, UnexpectedResultException.class, ArithmeticException.class};
@@ -68,11 +68,12 @@ public class TruffleCompilerImpl implements TruffleCompiler {
                     OptimisticOptimizations.Optimization.RemoveNeverExecutedCode, OptimisticOptimizations.Optimization.UseTypeCheckedInlining, OptimisticOptimizations.Optimization.UseTypeCheckHints);
 
     public TruffleCompilerImpl() {
-        Replacements truffleReplacements = ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements();
-        this.providers = GraalCompiler.getGraalProviders().copyWith(truffleReplacements);
+        this.providers = new Providers(Graal.getRequiredCapability(MetaAccessProvider.class), Graal.getRequiredCapability(CodeCacheProvider.class),
+                        Graal.getRequiredCapability(ConstantReflectionProvider.class), Graal.getRequiredCapability(LoweringProvider.class),
+                        ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements());
         this.suites = Graal.getRequiredCapability(SuitesProvider.class).createSuites();
         this.backend = Graal.getRequiredCapability(Backend.class);
-        this.runtime = HotSpotGraalRuntime.runtime();
+        this.graalRuntime = HotSpotGraalRuntime.graalRuntime();
         this.skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
 
         final GraphBuilderConfiguration config = GraphBuilderConfiguration.getEagerDefault();
@@ -113,7 +114,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         final StructuredGraph graph;
         final GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault();
         config.setSkippedExceptionTypes(skippedExceptionTypes);
-        runtime.evictDeoptedGraphs();
+        graalRuntime.evictDeoptedGraphs();
 
         compilable.timeCompilationStarted = System.nanoTime();
         Assumptions assumptions = new Assumptions(true);
@@ -201,7 +202,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
     private PhasePlan createPhasePlan(final GraphBuilderConfiguration config) {
         final PhasePlan phasePlan = new PhasePlan();
-        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(providers.getMetaAccess(), providers.getForeignCalls(), config, TruffleCompilerImpl.Optimizations);
+        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(providers.getMetaAccess(), config, TruffleCompilerImpl.Optimizations);
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
         return phasePlan;
     }

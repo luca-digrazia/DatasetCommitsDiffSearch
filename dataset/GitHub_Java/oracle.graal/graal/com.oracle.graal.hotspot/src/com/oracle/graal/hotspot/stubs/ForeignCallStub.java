@@ -25,6 +25,8 @@ package com.oracle.graal.hotspot.stubs;
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.meta.MetaUtil.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
+import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.*;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -43,6 +45,7 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
@@ -54,8 +57,8 @@ import com.oracle.graal.word.phases.*;
  * deoptimization while the call is in progress. And since these are foreign/runtime calls on slow
  * paths, we don't want to force the register allocator to spill around the call. As such, this stub
  * saves and restores all allocatable registers. It also
- * {@linkplain StubUtil#handlePendingException(Word, boolean) handles} any exceptions raised during
- * the foreign call.
+ * {@linkplain StubUtil#handlePendingException(boolean) handles} any exceptions raised during the
+ * foreign call.
  */
 public class ForeignCallStub extends Stub {
 
@@ -82,15 +85,13 @@ public class ForeignCallStub extends Stub {
      *            be re-executed.
      * @param killedLocations the memory locations killed by the stub call
      */
-    public ForeignCallStub(HotSpotProviders providers, long address, ForeignCallDescriptor descriptor, boolean prependThread, Transition transition, boolean reexecutable,
+    public ForeignCallStub(Providers providers, long address, ForeignCallDescriptor descriptor, boolean prependThread, Transition transition, boolean reexecutable,
                     LocationIdentity... killedLocations) {
-        super(providers, HotSpotForeignCallLinkage.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getForeignCalls(), descriptor, 0L, PRESERVES_REGISTERS, JavaCall, JavaCallee,
-                        transition, reexecutable, killedLocations));
+        super(providers, HotSpotForeignCallLinkage.create(descriptor, 0L, PRESERVES_REGISTERS, JavaCall, JavaCallee, transition, reexecutable, killedLocations));
         this.prependThread = prependThread;
         Class[] targetParameterTypes = createTargetParameters(descriptor);
         ForeignCallDescriptor targetSig = new ForeignCallDescriptor(descriptor.getName() + ":C", descriptor.getResultType(), targetParameterTypes);
-        target = HotSpotForeignCallLinkage.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getForeignCalls(), targetSig, address, DESTROYS_REGISTERS, NativeCall, NativeCall,
-                        transition, reexecutable, killedLocations);
+        target = HotSpotForeignCallLinkage.create(targetSig, address, DESTROYS_REGISTERS, NativeCall, NativeCall, transition, reexecutable, killedLocations);
     }
 
     /**
@@ -122,13 +123,12 @@ public class ForeignCallStub extends Stub {
 
             public Signature getSignature() {
                 ForeignCallDescriptor d = linkage.getDescriptor();
-                MetaAccessProvider metaAccess = providers.getMetaAccess();
                 Class<?>[] arguments = d.getArgumentTypes();
                 JavaType[] parameters = new JavaType[arguments.length];
                 for (int i = 0; i < arguments.length; i++) {
-                    parameters[i] = metaAccess.lookupJavaType(arguments[i]);
+                    parameters[i] = runtime.lookupJavaType(arguments[i]);
                 }
-                return new HotSpotSignature(metaAccess.lookupJavaType(d.getResultType()), parameters);
+                return new HotSpotSignature(runtime.lookupJavaType(d.getResultType()), parameters);
             }
 
             public String getName() {
@@ -136,7 +136,7 @@ public class ForeignCallStub extends Stub {
             }
 
             public JavaType getDeclaringClass() {
-                return providers.getMetaAccess().lookupJavaType(ForeignCallStub.class);
+                return runtime.lookupJavaType(ForeignCallStub.class);
             }
 
             @Override
@@ -226,9 +226,9 @@ public class ForeignCallStub extends Stub {
         LocalNode[] locals = createLocals(builder, args);
         List<InvokeNode> invokes = new ArrayList<>(3);
 
-        ReadRegisterNode thread = builder.append(new ReadRegisterNode(providers.getRegisters().getThreadRegister(), true, false));
+        ReadRegisterNode thread = prependThread || isObjectResult ? builder.append(new ReadRegisterNode(runtime.threadRegister(), true, false)) : null;
         ValueNode result = createTargetCall(builder, locals, thread);
-        invokes.add(createInvoke(builder, StubUtil.class, "handlePendingException", thread, ConstantNode.forBoolean(isObjectResult, builder.graph)));
+        invokes.add(createInvoke(builder, StubUtil.class, "handlePendingException", ConstantNode.forBoolean(isObjectResult, builder.graph)));
         if (isObjectResult) {
             InvokeNode object = createInvoke(builder, HotSpotReplacementsUtil.class, "getAndClearObjectResult", thread);
             result = createInvoke(builder, StubUtil.class, "verifyObject", object);
@@ -242,7 +242,7 @@ public class ForeignCallStub extends Stub {
         }
 
         /* Rewrite all word types that can come in from the method argument types. */
-        new WordTypeRewriterPhase(providers.getMetaAccess(), providers.getCodeCache().getTarget().wordKind).apply(builder.graph);
+        new WordTypeRewriterPhase(runtime, wordKind()).apply(builder.graph);
         /* Inline all method calls that are create above. */
         for (InvokeNode invoke : invokes) {
             inline(invoke);
@@ -260,9 +260,9 @@ public class ForeignCallStub extends Stub {
 
     private LocalNode[] createLocals(GraphBuilder builder, Class<?>[] args) {
         LocalNode[] locals = new LocalNode[args.length];
-        ResolvedJavaType accessingClass = providers.getMetaAccess().lookupJavaType(getClass());
+        ResolvedJavaType accessingClass = runtime.lookupJavaType(getClass());
         for (int i = 0; i < args.length; i++) {
-            ResolvedJavaType type = providers.getMetaAccess().lookupJavaType(args[i]).resolve(accessingClass);
+            ResolvedJavaType type = runtime.lookupJavaType(args[i]).resolve(accessingClass);
             Kind kind = type.getKind().getStackKind();
             Stamp stamp;
             if (kind == Kind.Object) {
@@ -276,32 +276,19 @@ public class ForeignCallStub extends Stub {
         return locals;
     }
 
-    private InvokeNode createInvoke(GraphBuilder builder, Class<?> declaringClass, String name, ValueNode... args) {
+    private InvokeNode createInvoke(GraphBuilder builder, Class<?> declaringClass, String name, ValueNode... hpeArgs) {
         ResolvedJavaMethod method = null;
         for (Method m : declaringClass.getDeclaredMethods()) {
             if (Modifier.isStatic(m.getModifiers()) && m.getName().equals(name)) {
                 assert method == null : "found more than one method in " + declaringClass + " named " + name;
-                method = providers.getMetaAccess().lookupJavaMethod(m);
+                method = runtime.lookupJavaMethod(m);
             }
         }
         assert method != null : "did not find method in " + declaringClass + " named " + name;
-        Signature signature = method.getSignature();
-        JavaType returnType = signature.getReturnType(null);
-        assert checkArgs(method, args);
-        MethodCallTargetNode callTarget = builder.graph.add(new MethodCallTargetNode(InvokeKind.Static, method, args, returnType));
+        JavaType returnType = method.getSignature().getReturnType(null);
+        MethodCallTargetNode callTarget = builder.graph.add(new MethodCallTargetNode(InvokeKind.Static, method, hpeArgs, returnType));
         InvokeNode invoke = builder.append(new InvokeNode(callTarget, FrameState.UNKNOWN_BCI));
         return invoke;
-    }
-
-    private boolean checkArgs(ResolvedJavaMethod method, ValueNode... args) {
-        Signature signature = method.getSignature();
-        assert signature.getParameterCount(false) == args.length : target + ": wrong number of arguments to " + method;
-        for (int i = 0; i != args.length; i++) {
-            Kind expected = signature.getParameterKind(i).getStackKind();
-            Kind actual = args[i].stamp().kind();
-            assert expected == actual : target + ": wrong kind of value for argument " + i + " of calls to " + method + " [" + actual + " != " + expected + "]";
-        }
-        return true;
     }
 
     private StubForeignCallNode createTargetCall(GraphBuilder builder, LocalNode[] locals, ReadRegisterNode thread) {
@@ -309,15 +296,15 @@ public class ForeignCallStub extends Stub {
             ValueNode[] targetArguments = new ValueNode[1 + locals.length];
             targetArguments[0] = thread;
             System.arraycopy(locals, 0, targetArguments, 1, locals.length);
-            return builder.append(new StubForeignCallNode(providers.getForeignCalls(), target.getDescriptor(), targetArguments));
+            return builder.append(new StubForeignCallNode(runtime, target.getDescriptor(), targetArguments));
         } else {
-            return builder.append(new StubForeignCallNode(providers.getForeignCalls(), target.getDescriptor(), locals));
+            return builder.append(new StubForeignCallNode(runtime, target.getDescriptor(), locals));
         }
     }
 
     private void inline(InvokeNode invoke) {
         ResolvedJavaMethod method = ((MethodCallTargetNode) invoke.callTarget()).targetMethod();
-        ReplacementsImpl repl = new ReplacementsImpl(providers, new Assumptions(false));
+        ReplacementsImpl repl = new ReplacementsImpl(runtime, runtime, runtime, runtime, new Assumptions(false), runtime.getTarget());
         StructuredGraph calleeGraph = repl.makeGraph(method, null, null, false);
         InliningUtil.inline(invoke, calleeGraph, false);
     }
