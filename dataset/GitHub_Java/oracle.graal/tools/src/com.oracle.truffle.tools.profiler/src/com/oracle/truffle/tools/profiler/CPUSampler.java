@@ -210,7 +210,7 @@ public final class CPUSampler implements Closeable {
 
     private boolean gatherSelfHitTimes = false;
 
-    private volatile boolean nonInternalLanguageContextInitialized = false;
+    private boolean nonInternalLanguageContextInitialized = false;
 
     CPUSampler(Env env) {
         this.env = env;
