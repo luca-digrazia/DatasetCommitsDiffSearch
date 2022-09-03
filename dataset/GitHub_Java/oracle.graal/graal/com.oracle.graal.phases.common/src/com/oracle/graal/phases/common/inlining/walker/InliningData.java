@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,7 @@ package com.oracle.graal.phases.common.inlining.walker;
 import static com.oracle.graal.compiler.common.GraalOptions.Intrinsify;
 import static com.oracle.graal.compiler.common.GraalOptions.MaximumRecursiveInlining;
 import static com.oracle.graal.compiler.common.GraalOptions.MegamorphicInliningMinMethodProbability;
+import static com.oracle.graal.compiler.common.GraalOptions.OptCanonicalizer;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -387,14 +388,16 @@ public class InliningData {
                 counterInliningRuns.increment();
                 Debug.dump(Debug.INFO_LOG_LEVEL, callerGraph, "after %s", calleeInfo);
 
-                Graph.Mark markBeforeCanonicalization = callerGraph.getMark();
+                if (OptCanonicalizer.getValue()) {
+                    Graph.Mark markBeforeCanonicalization = callerGraph.getMark();
 
-                canonicalizer.applyIncremental(callerGraph, context, canonicalizedNodes);
+                    canonicalizer.applyIncremental(callerGraph, context, canonicalizedNodes);
 
-                // process invokes that are possibly created during canonicalization
-                for (Node newNode : callerGraph.getNewNodes(markBeforeCanonicalization)) {
-                    if (newNode instanceof Invoke) {
-                        callerCallsiteHolder.pushInvoke((Invoke) newNode);
+                    // process invokes that are possibly created during canonicalization
+                    for (Node newNode : callerGraph.getNewNodes(markBeforeCanonicalization)) {
+                        if (newNode instanceof Invoke) {
+                            callerCallsiteHolder.pushInvoke((Invoke) newNode);
+                        }
                     }
                 }
 
