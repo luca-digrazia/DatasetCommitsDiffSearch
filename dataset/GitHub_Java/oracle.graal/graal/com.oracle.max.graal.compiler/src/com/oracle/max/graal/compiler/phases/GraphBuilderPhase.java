@@ -201,7 +201,7 @@ public final class GraphBuilderPhase extends Phase {
         List<Loop> loops = LoopUtil.computeLoops(graph);
         NodeBitMap loopExits = graph.createNodeBitMap();
         for (Loop loop : loops) {
-            loopExits.setUnion(loop.exits());
+            loopExits.markAll(loop.exist());
         }
 
         // remove Placeholders
@@ -325,12 +325,12 @@ public final class GraphBuilderPhase extends Phase {
                     Merge merge = new Merge(graph);
                     assert p.predecessors().size() == 1 : "predecessors size: " + p.predecessors().size();
                     FixedNode next = p.next();
+                    p.setNext(null);
                     EndNode end = new EndNode(graph);
-                    p.setNext(end);
+                    p.replaceAndDelete(end);
                     merge.setNext(next);
                     merge.addEnd(end);
                     merge.setStateAfter(existingState);
-                    p.setStateAfter(existingState.duplicate(bci));
                     if (!(next instanceof LoopEnd)) {
                         target.firstInstruction = merge;
                     }
@@ -436,17 +436,12 @@ public final class GraphBuilderPhase extends Phase {
             p.setStateAfter(frameState.duplicateWithoutStack(bci));
 
             Value currentExceptionObject;
-            ExceptionObject newObj = null;
             if (exceptionObject == null) {
-                newObj = new ExceptionObject(graph);
-                currentExceptionObject = newObj;
+                currentExceptionObject = new ExceptionObject(graph);
             } else {
                 currentExceptionObject = exceptionObject;
             }
             FrameState stateWithException = frameState.duplicateWithException(bci, currentExceptionObject);
-            if (newObj != null) {
-                newObj.setStateAfter(stateWithException);
-            }
             FixedNode target = createTarget(dispatchBlock, stateWithException);
             if (exceptionObject == null) {
                 ExceptionObject eObj = (ExceptionObject) currentExceptionObject;
@@ -969,7 +964,7 @@ public final class GraphBuilderPhase extends Phase {
             append(deoptimize);
             frameState.pushReturn(resultType, Constant.defaultForKind(resultType, graph));
         } else {
-            Invoke invoke = new Invoke(bci(), opcode, resultType.stackKind(), args, target, target.signature().returnType(method.holder()), graph);
+            Invoke invoke = new Invoke(bci(), opcode, resultType.stackKind(), args, target, target.signature().returnType(method.holder()), method.typeProfile(bci()), graph);
             Value result = appendWithBCI(invoke);
             invoke.setExceptionEdge(handleException(null, bci()));
             frameState.pushReturn(resultType, result);
@@ -994,8 +989,42 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void callRegisterFinalizer() {
-        // append a call to the finalizer registration
-        append(new RegisterFinalizer(frameState.loadLocal(0), graph));
+        Value receiver = frameState.loadLocal(0);
+        RiType declaredType = receiver.declaredType();
+        RiType receiverType = declaredType;
+        RiType exactType = receiver.exactType();
+        if (exactType == null && declaredType != null) {
+            exactType = declaredType.exactType();
+        }
+        if (exactType == null && receiver instanceof Local && ((Local) receiver).index() == 0) {
+            // the exact type isn't known, but the receiver is parameter 0 => use holder
+            receiverType = method.holder();
+            exactType = receiverType.exactType();
+        }
+        boolean needsCheck = true;
+        if (exactType != null) {
+            // we have an exact type
+            needsCheck = exactType.hasFinalizer();
+        } else {
+            // if either the declared type of receiver or the holder can be assumed to have no finalizers
+            if (declaredType != null && !declaredType.hasFinalizableSubclass()) {
+                if (compilation.recordNoFinalizableSubclassAssumption(declaredType)) {
+                    needsCheck = false;
+                }
+            }
+
+            if (receiverType != null && !receiverType.hasFinalizableSubclass()) {
+                if (compilation.recordNoFinalizableSubclassAssumption(receiverType)) {
+                    needsCheck = false;
+                }
+            }
+        }
+
+        if (needsCheck) {
+            // append a call to the finalizer registration
+            append(new RegisterFinalizer(frameState.loadLocal(0), graph));
+            GraalMetrics.InlinedFinalizerChecks++;
+        }
     }
 
     private void genReturn(Value x) {
@@ -1172,7 +1201,6 @@ public final class GraphBuilderPhase extends Phase {
         if (block.firstInstruction == null) {
             if (block.isLoopHeader) {
                 LoopBegin loopBegin = new LoopBegin(graph);
-                loopBegin.addEnd(new EndNode(graph));
                 LoopEnd loopEnd = new LoopEnd(graph);
                 loopEnd.setLoopBegin(loopBegin);
                 Placeholder pBegin = new Placeholder(graph);
@@ -1203,14 +1231,7 @@ public final class GraphBuilderPhase extends Phase {
             } else {
                 EndNode end = new EndNode(graph);
                 ((Merge) result).addEnd(end);
-                Placeholder p = new Placeholder(graph);
-                int bci = block.startBci;
-                if (block instanceof ExceptionBlock) {
-                    bci = ((ExceptionBlock) block).deoptBci;
-                }
-                p.setStateAfter(stateAfter.duplicate(bci));
-                p.setNext(end);
-                result = p;
+                result = end;
             }
         }
         assert !(result instanceof LoopBegin || result instanceof Merge);
