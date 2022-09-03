@@ -22,12 +22,10 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -45,7 +43,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
 
     protected final NodeMap<ValueNode> aliases;
     protected final BlockMap<GraphEffectList> blockEffects;
-    private final IdentityHashMap<Loop<Block>, GraphEffectList> loopMergeEffects = new IdentityHashMap<>();
+    private final IdentityHashMap<Loop, GraphEffectList> loopMergeEffects = new IdentityHashMap<>();
     private final IdentityHashMap<LoopBeginNode, BlockT> loopEntryStates = new IdentityHashMap<>();
 
     private boolean changed;
@@ -107,7 +105,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
             }
 
             @Override
-            protected List<Void> processLoop(Loop<Block> loop, Void initialState) {
+            protected List<Void> processLoop(Loop loop, Void initialState) {
                 LoopInfo<Void> info = ReentrantBlockIterator.processLoop(this, loop, initialState);
                 apply(loopMergeEffects.get(loop), loop);
                 return info.exitStates;
@@ -152,10 +150,10 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
     }
 
     @Override
-    protected final List<BlockT> processLoop(Loop<Block> loop, BlockT initialState) {
+    protected final List<BlockT> processLoop(Loop loop, BlockT initialState) {
         BlockT loopEntryState = initialState;
         BlockT lastMergedState = cloneState(initialState);
-        MergeProcessor mergeProcessor = createMergeProcessor(loop.getHeader());
+        MergeProcessor mergeProcessor = createMergeProcessor(loop.header);
         for (int iteration = 0; iteration < 10; iteration++) {
             LoopInfo<BlockT> info = ReentrantBlockIterator.processLoop(this, loop, cloneState(lastMergedState));
 
@@ -164,7 +162,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
             states.addAll(info.endStates);
             mergeProcessor.merge(states);
 
-            Debug.log("================== %s", loop.getHeader());
+            Debug.log("================== %s", loop.header);
             Debug.log("%s", mergeProcessor.newState);
             Debug.log("===== vs.");
             Debug.log("%s", lastMergedState);
@@ -172,19 +170,19 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
             if (mergeProcessor.newState.equivalentTo(lastMergedState)) {
                 mergeProcessor.commitEnds(states);
 
-                blockEffects.get(loop.getHeader()).insertAll(mergeProcessor.mergeEffects, 0);
+                blockEffects.get(loop.header).insertAll(mergeProcessor.mergeEffects, 0);
                 loopMergeEffects.put(loop, mergeProcessor.afterMergeEffects);
 
-                assert info.exitStates.size() == loop.getExits().size();
-                loopEntryStates.put((LoopBeginNode) loop.getHeader().getBeginNode(), loopEntryState);
-                for (int i = 0; i < loop.getExits().size(); i++) {
-                    assert info.exitStates.get(i) != null : "no loop exit state at " + loop.getExits().get(i) + " / " + loop.getHeader();
+                assert info.exitStates.size() == loop.exits.size();
+                loopEntryStates.put(loop.loopBegin(), loopEntryState);
+                for (int i = 0; i < loop.exits.size(); i++) {
+                    assert info.exitStates.get(i) != null : "no loop exit state at " + loop.exits.get(i) + " / " + loop.header;
                 }
 
                 return info.exitStates;
             } else {
                 lastMergedState = mergeProcessor.newState;
-                for (Block block : loop.getBlocks()) {
+                for (Block block : loop.blocks) {
                     blockEffects.get(block).clear();
                 }
             }

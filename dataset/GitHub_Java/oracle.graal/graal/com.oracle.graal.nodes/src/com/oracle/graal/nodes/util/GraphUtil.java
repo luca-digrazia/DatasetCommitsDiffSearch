@@ -137,13 +137,6 @@ public class GraphUtil {
         }
     }
 
-    public static void removeFixedWithUnusedInputs(FixedWithNextNode fixed) {
-        FixedNode next = fixed.next();
-        fixed.setNext(null);
-        fixed.replaceAtPredecessor(next);
-        killWithUnusedFloatingInputs(fixed);
-    }
-
     public static void checkRedundantPhi(PhiNode phiNode) {
         if (phiNode.isDeleted() || phiNode.valueCount() == 1) {
             return;
