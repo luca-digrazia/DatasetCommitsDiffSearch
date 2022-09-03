@@ -171,10 +171,6 @@ public class LLVMBitcodeTypeHelper {
                     throw new RuntimeException("Unsupported type " + type);
             }
 
-        } else if (type == MetaType.OPAQUE) {
-            // named generic Type
-            return new LLVMType(LLVMBaseType.ADDRESS, new LLVMType(LLVMBaseType.VOID));
-
         } else {
             throw new RuntimeException("Unsupported type " + type);
         }
@@ -438,9 +434,6 @@ public class LLVMBitcodeTypeHelper {
         } else if (type == MetaType.X86_MMX || type == MetaType.OPAQUE) {
             return 0;
 
-        } else if (type instanceof MetaType) {
-            return type.sizeof();
-
         } else {
             throw new AssertionError("Cannot compute size of type: " + type);
         }
@@ -483,7 +476,7 @@ public class LLVMBitcodeTypeHelper {
         } else if (type instanceof VectorType) {
             return getAlignment(((VectorType) type).getElementType());
 
-        } else if (targetDataLayout != null && !(type instanceof MetaType)) {
+        } else if (targetDataLayout != null) {
             return targetDataLayout.getBitAlignment(getLLVMBaseType(type)) / Byte.SIZE;
 
         } else {
@@ -499,7 +492,7 @@ public class LLVMBitcodeTypeHelper {
         return largestAlignment;
     }
 
-    public static LLVMBaseType getLLVMBaseType(Type type) {
+    public LLVMBaseType getLLVMBaseType(Type type) {
         return toBaseType(type).getType();
     }
 

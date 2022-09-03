@@ -32,10 +32,10 @@ package com.oracle.truffle.llvm.parser.bc.impl;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
@@ -83,31 +83,51 @@ import com.oracle.truffle.llvm.nodes.impl.vars.StructLiteralNode.LLVMI32StructWr
 import com.oracle.truffle.llvm.nodes.impl.vars.StructLiteralNode.LLVMI64StructWriteNode;
 import com.oracle.truffle.llvm.nodes.impl.vars.StructLiteralNode.LLVMI8StructWriteNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.factories.LLVMArithmeticFactory;
+import com.oracle.truffle.llvm.parser.LLVMType;
+import com.oracle.truffle.llvm.parser.bc.impl.nodes.LLVMNodeGenerator;
+import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.parser.factories.LLVMCastsFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMComparisonFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMGetElementPtrFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMLiteralFactory;
-import com.oracle.truffle.llvm.parser.factories.LLVMLogicalFactory;
-import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
-import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
 import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
-import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
-import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
 
-import uk.ac.man.cs.llvm.ir.model.*;
-import uk.ac.man.cs.llvm.ir.model.constants.*;
-import uk.ac.man.cs.llvm.ir.model.enums.BinaryOperator;
-import uk.ac.man.cs.llvm.ir.model.enums.CastOperator;
+import uk.ac.man.cs.llvm.ir.model.FunctionDeclaration;
+import uk.ac.man.cs.llvm.ir.model.FunctionDefinition;
+import uk.ac.man.cs.llvm.ir.model.GlobalValueSymbol;
+import uk.ac.man.cs.llvm.ir.model.Symbol;
+import uk.ac.man.cs.llvm.ir.model.ValueSymbol;
+import uk.ac.man.cs.llvm.ir.model.constants.ArrayConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.BinaryOperationConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.CastConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.CompareConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.Constant;
+import uk.ac.man.cs.llvm.ir.model.constants.BlockAddressConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.FloatingPointConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.GetElementPointerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.NullConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.StringConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.StructureConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.UndefinedConstant;
 import uk.ac.man.cs.llvm.ir.model.enums.CompareOperator;
-import uk.ac.man.cs.llvm.ir.types.*;
+import uk.ac.man.cs.llvm.ir.model.InstructionBlock;
+import uk.ac.man.cs.llvm.ir.types.ArrayType;
+import uk.ac.man.cs.llvm.ir.types.FloatingPointType;
+import uk.ac.man.cs.llvm.ir.types.FunctionType;
+import uk.ac.man.cs.llvm.ir.types.IntegerType;
+import uk.ac.man.cs.llvm.ir.types.MetaType;
+import uk.ac.man.cs.llvm.ir.types.PointerType;
+import uk.ac.man.cs.llvm.ir.types.StructureType;
+import uk.ac.man.cs.llvm.ir.types.Type;
+import uk.ac.man.cs.llvm.ir.types.VectorType;
 
 public final class LLVMBitcodeHelper {
 
@@ -121,13 +141,13 @@ public final class LLVMBitcodeHelper {
     public static int getAlignment(Symbol symbol, int align) {
         return getAlignment(symbol.getType(), align);
     }
-        
+
     public static int getAlignment(Type type, int align) {
         int definedAlignment = type.getAlignment();
         int defaultAlignment = align == 0 ? Integer.MAX_VALUE : 1 << (align - 1);
         return Math.min(definedAlignment, defaultAlignment);
     }
-    
+
     public static int getPaddingSize(Symbol symbol, int align, int address) {
         return getPaddingSize(symbol.getType(), align, address);
     }
@@ -153,96 +173,73 @@ public final class LLVMBitcodeHelper {
         }
     }
 
-    public static LLVMArithmeticInstructionType toArithmeticInstructionType(BinaryOperator operator) {
-        switch (operator) {
-            case INT_ADD:
-            case FP_ADD:
-                return LLVMArithmeticInstructionType.ADDITION;
-            case INT_SUBTRACT:
-            case FP_SUBTRACT:
-                return LLVMArithmeticInstructionType.SUBTRACTION;
-            case INT_MULTIPLY:
-            case FP_MULTIPLY:
-                return LLVMArithmeticInstructionType.MULTIPLICATION;
-            case INT_UNSIGNED_DIVIDE:
-                return LLVMArithmeticInstructionType.UNSIGNED_DIVISION;
-            case INT_SIGNED_DIVIDE:
-            case FP_DIVIDE:
-                return LLVMArithmeticInstructionType.DIVISION;
-            case INT_UNSIGNED_REMAINDER:
-                return LLVMArithmeticInstructionType.UNSIGNED_REMAINDER;
-            case INT_SIGNED_REMAINDER:
-            case FP_REMAINDER:
-                return LLVMArithmeticInstructionType.REMAINDER;
-            default:
-                return null;
-        }
-    }
-
-    public static LLVMBaseType toBaseType(final Type type) {
+    public static LLVMType toBaseType(final Type type) {
         if (type == MetaType.VOID) {
-            return LLVMBaseType.VOID;
+            return new LLVMType(LLVMBaseType.VOID);
         }
         if (type instanceof IntegerType) {
             switch (((IntegerType) type).getBitCount()) {
                 case 1:
-                    return LLVMBaseType.I1;
-                case 8:
-                    return LLVMBaseType.I8;
-                case 16:
-                    return LLVMBaseType.I16;
-                case 32:
-                    return LLVMBaseType.I32;
-                case 64:
-                    return LLVMBaseType.I64;
+                    return new LLVMType(LLVMBaseType.I1);
+                case Byte.SIZE:
+                    return new LLVMType(LLVMBaseType.I8);
+                case Short.SIZE:
+                    return new LLVMType(LLVMBaseType.I16);
+                case Integer.SIZE:
+                    return new LLVMType(LLVMBaseType.I32);
+                case Long.SIZE:
+                    return new LLVMType(LLVMBaseType.I64);
                 default:
-                    return LLVMBaseType.I_VAR_BITWIDTH;
+                    return new LLVMType(LLVMBaseType.I_VAR_BITWIDTH);
             }
         }
         if (type instanceof FloatingPointType) {
             switch (((FloatingPointType) type)) {
-                case F16:
-                    return LLVMBaseType.HALF;
-                case F32:
-                    return LLVMBaseType.FLOAT;
-                case F64:
-                    return LLVMBaseType.DOUBLE;
+                case HALF:
+                    return new LLVMType(LLVMBaseType.HALF);
+                case FLOAT:
+                    return new LLVMType(LLVMBaseType.FLOAT);
+                case DOUBLE:
+                    return new LLVMType(LLVMBaseType.DOUBLE);
                 case X86_FP80:
-                    return LLVMBaseType.X86_FP80;
+                    return new LLVMType(LLVMBaseType.X86_FP80);
                 default:
                     throw new RuntimeException("Unsupported type " + type);
             }
         }
         if (type instanceof PointerType) {
             Type pointee = ((PointerType) type).getPointeeType();
-            return pointee instanceof FunctionType ? LLVMBaseType.FUNCTION_ADDRESS : LLVMBaseType.ADDRESS;
+            if (pointee instanceof FunctionType) {
+                return new LLVMType(LLVMBaseType.FUNCTION_ADDRESS);
+            }
+            return new LLVMType(LLVMBaseType.ADDRESS, toBaseType(pointee));
         }
         if (type instanceof StructureType) {
-            return LLVMBaseType.STRUCT;
+            return new LLVMType(LLVMBaseType.STRUCT);
         }
         if (type instanceof ArrayType) {
-            return LLVMBaseType.ARRAY;
+            return new LLVMType(LLVMBaseType.ARRAY);
         }
         if (type instanceof FunctionType) {
-            return LLVMBaseType.FUNCTION_ADDRESS;
+            return new LLVMType(LLVMBaseType.FUNCTION_ADDRESS);
         }
         if (type instanceof VectorType) {
             Type base = ((VectorType) type).getElementType();
-            switch (toBaseType(base)) {
+            switch (toBaseType(base).getType()) {
                 case I1:
-                    return LLVMBaseType.I1_VECTOR;
+                    return new LLVMType(LLVMBaseType.I1_VECTOR);
                 case I8:
-                    return LLVMBaseType.I8_VECTOR;
+                    return new LLVMType(LLVMBaseType.I8_VECTOR);
                 case I16:
-                    return LLVMBaseType.I16_VECTOR;
+                    return new LLVMType(LLVMBaseType.I16_VECTOR);
                 case I32:
-                    return LLVMBaseType.I32_VECTOR;
+                    return new LLVMType(LLVMBaseType.I32_VECTOR);
                 case I64:
-                    return LLVMBaseType.I64_VECTOR;
+                    return new LLVMType(LLVMBaseType.I64_VECTOR);
                 case FLOAT:
-                    return LLVMBaseType.FLOAT_VECTOR;
+                    return new LLVMType(LLVMBaseType.FLOAT_VECTOR);
                 case DOUBLE:
-                    return LLVMBaseType.DOUBLE_VECTOR;
+                    return new LLVMType(LLVMBaseType.DOUBLE_VECTOR);
                 default:
                     throw new RuntimeException("Unsupported type " + type);
             }
@@ -250,8 +247,8 @@ public final class LLVMBitcodeHelper {
         throw new RuntimeException("Unsupported type " + type);
     }
 
-    public static LLVMBaseType[] toBaseTypes(final Type[] types) {
-        LLVMBaseType[] llvmtypes = new LLVMBaseType[types.length];
+    public static LLVMType[] toBaseTypes(final Type[] types) {
+        LLVMType[] llvmtypes = new LLVMType[types.length];
 
         for (int i = 0; i < types.length; i++) {
             llvmtypes[i] = toBaseType(types[i]);
@@ -260,123 +257,109 @@ public final class LLVMBitcodeHelper {
         return llvmtypes;
     }
 
-    public static LLVMExpressionNode toBinaryOperatorNode(BinaryOperator operator, LLVMBaseType type, LLVMExpressionNode lhs , LLVMExpressionNode rhs) {
-        LLVMArithmeticInstructionType opA = LLVMBitcodeHelper.toArithmeticInstructionType(operator);
-        if (opA != null) {
-            return LLVMArithmeticFactory.createArithmeticOperation(lhs, rhs, opA, type, null);
-        }
-
-        LLVMLogicalInstructionType opL = toLogicalInstructionType(operator);
-        if (opL != null) {
-            return LLVMLogicalFactory.createLogicalOperation(lhs, rhs, opL, type, null);
-        }
-
-        throw new RuntimeException("Missed a binary operator");
-    }
-
     public static LLVMExpressionNode toCompareNode(CompareOperator operator, Type type, LLVMExpressionNode lhs, LLVMExpressionNode rhs) {
         return toCompareVectorNode(operator, type, null, lhs, rhs);
     }
 
     public static LLVMExpressionNode toCompareVectorNode(CompareOperator operator, Type type, LLVMAddressNode target, LLVMExpressionNode lhs, LLVMExpressionNode rhs) {
-            LLVMBaseType llvmtype = toBaseType(type);
+        LLVMBaseType llvmtype = toBaseType(type).getType();
 
-            switch (operator) {
-                case FP_FALSE:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.FALSE);
-                case FP_ORDERED_EQUAL:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_EQUALS);
-                case FP_ORDERED_GREATER_THAN:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_GREATER_THAN);
-                case FP_ORDERED_GREATER_OR_EQUAL:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_GREATER_EQUALS);
-                case FP_ORDERED_LESS_THAN:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_LESS_THAN);
-                case FP_ORDERED_LESS_OR_EQUAL:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_LESS_EQUALS);
-                case FP_ORDERED_NOT_EQUAL:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_NOT_EQUALS);
+        switch (operator) {
+            case FP_FALSE:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.FALSE);
+            case FP_ORDERED_EQUAL:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_EQUALS);
+            case FP_ORDERED_GREATER_THAN:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_GREATER_THAN);
+            case FP_ORDERED_GREATER_OR_EQUAL:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_GREATER_EQUALS);
+            case FP_ORDERED_LESS_THAN:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_LESS_THAN);
+            case FP_ORDERED_LESS_OR_EQUAL:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_LESS_EQUALS);
+            case FP_ORDERED_NOT_EQUAL:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED_AND_NOT_EQUALS);
 
-                case FP_ORDERED:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED);
-                case FP_UNORDERED:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED);
-                case FP_UNORDERED_EQUAL:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_EQUALS);
-                case FP_UNORDERED_GREATER_THAN:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_GREATER_THAN);
-                case FP_UNORDERED_GREATER_OR_EQUAL:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_GREATER_EQUALS);
-                case FP_UNORDERED_LESS_THAN:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_LESS_THAN);
-                case FP_UNORDERED_LESS_OR_EQUAL:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_LESS_EQUALS);
-                 case FP_UNORDERED_NOT_EQUAL:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_NOT_EQUALS);
-                case FP_TRUE:
-                    return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.TRUE);
-                default:
-                    break;
-            }
+            case FP_ORDERED:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.ORDERED);
+            case FP_UNORDERED:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED);
+            case FP_UNORDERED_EQUAL:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_EQUALS);
+            case FP_UNORDERED_GREATER_THAN:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_GREATER_THAN);
+            case FP_UNORDERED_GREATER_OR_EQUAL:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_GREATER_EQUALS);
+            case FP_UNORDERED_LESS_THAN:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_LESS_THAN);
+            case FP_UNORDERED_LESS_OR_EQUAL:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_LESS_EQUALS);
+            case FP_UNORDERED_NOT_EQUAL:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.UNORDERED_OR_NOT_EQUALS);
+            case FP_TRUE:
+                return LLVMComparisonFactory.createFloatComparison(lhs, rhs, llvmtype, LLVMFloatComparisonType.TRUE);
+            default:
+                break;
+        }
 
-            LLVMIntegerComparisonType comparison;
-            switch (operator) {
-                case INT_EQUAL:
-                    comparison = LLVMIntegerComparisonType.EQUALS;
-                    break;
-                case INT_NOT_EQUAL:
-                    comparison = LLVMIntegerComparisonType.NOT_EQUALS;
-                    break;
-                case INT_UNSIGNED_GREATER_THAN:
-                    comparison = LLVMIntegerComparisonType.UNSIGNED_GREATER_THAN;
-                    break;
-                case INT_UNSIGNED_GREATER_OR_EQUAL:
-                    comparison = LLVMIntegerComparisonType.UNSIGNED_GREATER_EQUALS;
-                    break;
-                case INT_UNSIGNED_LESS_THAN:
-                    comparison = LLVMIntegerComparisonType.UNSIGNED_LESS_THAN;
-                    break;
-                case INT_UNSIGNED_LESS_OR_EQUAL:
-                    comparison = LLVMIntegerComparisonType.UNSIGNED_LESS_EQUALS;
-                    break;
-                case INT_SIGNED_GREATER_THAN:
-                    comparison = LLVMIntegerComparisonType.SIGNED_GREATER_THAN;
-                    break;
-                case INT_SIGNED_GREATER_OR_EQUAL:
-                    comparison = LLVMIntegerComparisonType.SIGNED_GREATER_EQUALS;
-                    break;
-                case INT_SIGNED_LESS_THAN:
-                    comparison = LLVMIntegerComparisonType.SIGNED_LESS_THAN;
-                    break;
-                case INT_SIGNED_LESS_OR_EQUAL:
-                    comparison = LLVMIntegerComparisonType.SIGNED_LESS_EQUALS;
-                    break;
+        LLVMIntegerComparisonType comparison;
+        switch (operator) {
+            case INT_EQUAL:
+                comparison = LLVMIntegerComparisonType.EQUALS;
+                break;
+            case INT_NOT_EQUAL:
+                comparison = LLVMIntegerComparisonType.NOT_EQUALS;
+                break;
+            case INT_UNSIGNED_GREATER_THAN:
+                comparison = LLVMIntegerComparisonType.UNSIGNED_GREATER_THAN;
+                break;
+            case INT_UNSIGNED_GREATER_OR_EQUAL:
+                comparison = LLVMIntegerComparisonType.UNSIGNED_GREATER_EQUALS;
+                break;
+            case INT_UNSIGNED_LESS_THAN:
+                comparison = LLVMIntegerComparisonType.UNSIGNED_LESS_THAN;
+                break;
+            case INT_UNSIGNED_LESS_OR_EQUAL:
+                comparison = LLVMIntegerComparisonType.UNSIGNED_LESS_EQUALS;
+                break;
+            case INT_SIGNED_GREATER_THAN:
+                comparison = LLVMIntegerComparisonType.SIGNED_GREATER_THAN;
+                break;
+            case INT_SIGNED_GREATER_OR_EQUAL:
+                comparison = LLVMIntegerComparisonType.SIGNED_GREATER_EQUALS;
+                break;
+            case INT_SIGNED_LESS_THAN:
+                comparison = LLVMIntegerComparisonType.SIGNED_LESS_THAN;
+                break;
+            case INT_SIGNED_LESS_OR_EQUAL:
+                comparison = LLVMIntegerComparisonType.SIGNED_LESS_EQUALS;
+                break;
 
-                default:
-                    throw new RuntimeException("Missed a compare operator");
-            }
+            default:
+                throw new RuntimeException("Missed a compare operator");
+        }
 
-            if (LLVMTypeHelper.isVectorType(llvmtype)) {
-                return LLVMComparisonFactory.createVectorComparison(target, lhs, rhs, llvmtype, comparison);
-            } else {
-                return LLVMComparisonFactory.createIntegerComparison(lhs, rhs, llvmtype, comparison);
-            }
+        if (LLVMTypeHelper.isVectorType(llvmtype)) {
+            return LLVMComparisonFactory.createVectorComparison(target, lhs, rhs, llvmtype, comparison);
+        } else {
+            return LLVMComparisonFactory.createIntegerComparison(lhs, rhs, llvmtype, comparison);
+        }
     }
 
-    public static LLVMExpressionNode toConstantLiteralNode(Symbol value, int align) {
+    public static LLVMExpressionNode toConstantLiteralNode(Symbol value, @SuppressWarnings("unused") int align, LLVMLabelList labels) {
         if (value instanceof IntegerConstant) {
             IntegerConstant constant = (IntegerConstant) value;
             int bits = ((IntegerType) (constant).getType()).getBitCount();
             switch (bits) {
                 case 1:
                     return new LLVMI1LiteralNode(constant.getValue() != 0);
-                case 8:
+                case Byte.SIZE:
                     return new LLVMI8LiteralNode((byte) constant.getValue());
-                case 16:
+                case Short.SIZE:
                     return new LLVMI16LiteralNode((short) constant.getValue());
-                case 32:
+                case Integer.SIZE:
                     return new LLVMI32LiteralNode((int) constant.getValue());
-                case 64:
+                case Long.SIZE:
                     return new LLVMI64LiteralNode(constant.getValue());
                 default:
                     return new LLVMIVarBitLiteralNode(LLVMIVarBit.fromLong(bits, constant.getValue()));
@@ -385,18 +368,44 @@ public final class LLVMBitcodeHelper {
         if (value instanceof FloatingPointConstant) {
             FloatingPointConstant constant = (FloatingPointConstant) value;
             switch (((FloatingPointType) constant.getType())) {
-                case F32:
+                case FLOAT:
                     return new LLVMFloatLiteralNode(constant.toFloat());
-                case F64:
+                case DOUBLE:
                     return new LLVMDoubleLiteralNode(constant.toDouble());
                 default:
                     break;
             }
         }
+        if (value instanceof BlockAddressConstant) {
+            BlockAddressConstant blockAddressConstant = (BlockAddressConstant) value;
+
+            FunctionDefinition function = blockAddressConstant.getFunction();
+            Map<String, Integer> innerLabels = labels.labels(function.getName());
+            InstructionBlock b = null;
+            int label = -1;
+            outerLoop: for (Map.Entry<String, Integer> labelEntry : innerLabels.entrySet()) {
+                if (labelEntry.getValue().equals(blockAddressConstant.getBlock())) {
+                    String blockName = labelEntry.getKey();
+                    for (int i = 0; i < function.getBlockCount(); i++) {
+                        if (function.getBlock(i).getName().equals(blockName)) {
+                            label = i;
+                            b = function.getBlock(i);
+                            break outerLoop;
+                        }
+                    }
+                }
+            }
+            if (b == null) {
+                throw new IllegalStateException("No Block with label " + blockAddressConstant.getBlock());
+            }
+
+            return new LLVMAddressLiteralNode(LLVMAddress.fromLong(label));
+        }
+
         throw new RuntimeException("Unsupported literal constant " + value);
     }
 
-    public static LLVMExpressionNode toConstantNode(Symbol value, int align, Function<GlobalValueSymbol, LLVMExpressionNode> variables, LLVMContext context, FrameSlot stack) {
+    public static LLVMExpressionNode toConstantNode(Symbol value, int align, Function<GlobalValueSymbol, LLVMExpressionNode> variables, LLVMContext context, FrameSlot stack, LLVMLabelList labels) {
         if (value instanceof GlobalValueSymbol) {
             return variables.apply((GlobalValueSymbol) value);
         }
@@ -404,8 +413,8 @@ public final class LLVMBitcodeHelper {
             String name = ((ValueSymbol) value).getName();
             FunctionType type = (FunctionType) value;
 
-            LLVMRuntimeType returnType = LLVMBitcodeHelper.toRuntimeType(type.getReturnType());
-            LLVMRuntimeType[] argTypes = LLVMBitcodeHelper.toRuntimeTypes(type.getArgumentTypes());
+            LLVMRuntimeType returnType = LLVMBitcodeTypeHelper.toRuntimeType(type.getReturnType());
+            LLVMRuntimeType[] argTypes = LLVMBitcodeTypeHelper.toRuntimeTypes(type.getArgumentTypes());
 
             return LLVMFunctionLiteralNodeGen.create(context.getFunctionRegistry().createFunctionDescriptor(name, returnType, argTypes, type.isVarArg()));
         }
@@ -419,14 +428,14 @@ public final class LLVMBitcodeHelper {
             if (constant.isCString()) {
                 values.add(new LLVMI8LiteralNode((byte) 0));
             }
-            return toArray(new IntegerType(8), 1, values, context, stack);
+            return toArray(new IntegerType(Byte.SIZE), 1, values, context, stack);
         }
         if (value instanceof ArrayConstant) {
             ArrayConstant array = (ArrayConstant) value;
 
             Type subtype = array.getType().getElementType();
 
-            LLVMBaseType llvmsubtype = LLVMBitcodeHelper.toBaseType(subtype);
+            LLVMBaseType llvmsubtype = LLVMBitcodeHelper.toBaseType(subtype).getType();
             int stride = getSize(subtype, align);
 
             LLVMAllocaInstruction allocation = LLVMAllocaInstructionNodeGen.create(getSize(array, align), getAlignment(array, align), context, stack);
@@ -435,42 +444,42 @@ public final class LLVMBitcodeHelper {
                 case I8: {
                     LLVMI8Node[] elements = new LLVMI8Node[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMI8Node) toConstantNode(array.getElement(i), align, variables, context, stack);
+                        elements[i] = (LLVMI8Node) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
                     }
                     return LLVMI8ArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case I16: {
                     LLVMI16Node[] elements = new LLVMI16Node[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMI16Node) toConstantNode(array.getElement(i), align, variables, context, stack);
+                        elements[i] = (LLVMI16Node) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
                     }
                     return LLVMI16ArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case I32: {
                     LLVMI32Node[] elements = new LLVMI32Node[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMI32Node) toConstantNode(array.getElement(i), align, variables, context, stack);
+                        elements[i] = (LLVMI32Node) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
                     }
                     return LLVMI32ArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case I64: {
                     LLVMI64Node[] elements = new LLVMI64Node[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMI64Node) toConstantNode(array.getElement(i), align, variables, context, stack);
+                        elements[i] = (LLVMI64Node) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
                     }
                     return LLVMI64ArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case FLOAT: {
                     LLVMFloatNode[] elements = new LLVMFloatNode[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMFloatNode) toConstantNode(array.getElement(i), align, variables, context, stack);
+                        elements[i] = (LLVMFloatNode) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
                     }
                     return LLVMFloatArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case DOUBLE: {
                     LLVMDoubleNode[] elements = new LLVMDoubleNode[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMDoubleNode) toConstantNode(array.getElement(i), align, variables, context, stack);
+                        elements[i] = (LLVMDoubleNode) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
                     }
                     return LLVMDoubleArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
@@ -478,21 +487,21 @@ public final class LLVMBitcodeHelper {
                 case STRUCT: {
                     LLVMAddressNode[] elements = new LLVMAddressNode[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMAddressNode) toConstantNode(array.getElement(i), align, variables, context, stack);
+                        elements[i] = (LLVMAddressNode) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
                     }
                     return LLVMAddressArrayCopyNodeGen.create(elements, stride, allocation);
                 }
                 case ADDRESS: {
                     LLVMAddressNode[] elements = new LLVMAddressNode[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMAddressNode) toConstantNode(array.getElement(i), align, variables, context, stack);
+                        elements[i] = (LLVMAddressNode) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
                     }
                     return LLVMAddressArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case FUNCTION_ADDRESS: {
                     LLVMFunctionNode[] elements = new LLVMFunctionNode[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMFunctionNode) toConstantNode(array.getElement(i), align, variables, context, stack);
+                        elements[i] = (LLVMFunctionNode) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
                     }
                     return LLVMFunctionArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
@@ -517,8 +526,8 @@ public final class LLVMBitcodeHelper {
                 }
                 offsets[i] = offset;
 
-                LLVMExpressionNode elementNode = toConstantNode(element, align, variables, context, stack);
-                LLVMBaseType elementBaseType = toBaseType(element.getType());
+                LLVMExpressionNode elementNode = toConstantNode(element, align, variables, context, stack, labels);
+                LLVMBaseType elementBaseType = toBaseType(element.getType()).getType();
                 int elementSize = getSize(element, align);
 
                 offset += elementSize;
@@ -573,32 +582,32 @@ public final class LLVMBitcodeHelper {
         }
         if (value instanceof BinaryOperationConstant) {
             BinaryOperationConstant operation = (BinaryOperationConstant) value;
-            LLVMExpressionNode lhs = toConstantNode(operation.getLHS(), align, variables, context, stack);
-            LLVMExpressionNode rhs = toConstantNode(operation.getRHS(), align, variables, context, stack);
-            LLVMBaseType type = toBaseType(operation.getType());
+            LLVMExpressionNode lhs = toConstantNode(operation.getLHS(), align, variables, context, stack, labels);
+            LLVMExpressionNode rhs = toConstantNode(operation.getRHS(), align, variables, context, stack, labels);
+            LLVMBaseType type = toBaseType(operation.getType()).getType();
 
-            return toBinaryOperatorNode(operation.getOperator(), type, lhs, rhs);
+            return LLVMNodeGenerator.generateBinaryOperatorNode(operation.getOperator(), type, lhs, rhs);
         }
         if (value instanceof CastConstant) {
             CastConstant cast = (CastConstant) value;
-            LLVMConversionType type = toConversionType(cast.getOperator());
-            LLVMExpressionNode fromNode = toConstantNode(cast.getValue(), align, variables, context, stack);
-            LLVMBaseType from = toBaseType(cast.getValue().getType());
-            LLVMBaseType to = toBaseType(cast.getType());
+            LLVMConversionType type = LLVMBitcodeTypeHelper.toConversionType(cast.getOperator());
+            LLVMExpressionNode fromNode = toConstantNode(cast.getValue(), align, variables, context, stack, labels);
+            LLVMBaseType from = toBaseType(cast.getValue().getType()).getType();
+            LLVMBaseType to = toBaseType(cast.getType()).getType();
 
             return LLVMCastsFactory.cast(fromNode, to, from, type);
         }
         if (value instanceof CompareConstant) {
             CompareConstant compare = (CompareConstant) value;
-            LLVMExpressionNode lhs = toConstantNode(compare.getLHS(), align, variables, context, stack);
-            LLVMExpressionNode rhs = toConstantNode(compare.getRHS(), align, variables, context, stack);
+            LLVMExpressionNode lhs = toConstantNode(compare.getLHS(), align, variables, context, stack, labels);
+            LLVMExpressionNode rhs = toConstantNode(compare.getRHS(), align, variables, context, stack, labels);
 
             return toCompareNode(compare.getOperator(), compare.getLHS().getType(), lhs, rhs);
         }
         if (value instanceof GetElementPointerConstant) {
             GetElementPointerConstant ptr = (GetElementPointerConstant) value;
 
-            LLVMAddressNode baseNode = (LLVMAddressNode) toConstantNode(ptr.getBasePointer(), align, variables, context, stack);
+            LLVMAddressNode baseNode = (LLVMAddressNode) toConstantNode(ptr.getBasePointer(), align, variables, context, stack, labels);
             LLVMAddressNode currentAddress = baseNode;
 
             Type type = ptr.getBasePointer().getType();
@@ -615,35 +624,32 @@ public final class LLVMBitcodeHelper {
                     int offset = 0;
                     for (int j = 0; j < idx; j++) {
                         Type t = ((StructureType) type).getElementType(j);
-                        offset =
-                                offset
-                                + LLVMBitcodeHelper.getPaddingSize(t, align, offset)
-                                + LLVMBitcodeHelper.getSize(t, align);
+                        offset = offset + LLVMBitcodeHelper.getPaddingSize(t, align, offset) + LLVMBitcodeHelper.getSize(t, align);
                     }
                     type = ((StructureType) type).getElementType(idx);
                     offset += LLVMBitcodeHelper.getPaddingSize(type, align, offset);
                     if (offset != 0) {
                         currentAddress = LLVMGetElementPtrFactory.create(
-                                LLVMBaseType.I32,
-                                currentAddress,
-                                new LLVMI32LiteralNode(1),
-                                offset);
+                                        LLVMBaseType.I32,
+                                        currentAddress,
+                                        new LLVMI32LiteralNode(1),
+                                        offset);
                     }
                     continue;
                 }
 
                 if (idx != 0) {
                     currentAddress = LLVMGetElementPtrFactory.create(
-                            LLVMBaseType.I32,
-                            currentAddress,
-                            new LLVMI32LiteralNode((int) idx),
-                            LLVMBitcodeHelper.getSize(type, align));
+                                    LLVMBaseType.I32,
+                                    currentAddress,
+                                    new LLVMI32LiteralNode(idx),
+                                    LLVMBitcodeHelper.getSize(type, align));
                 }
             }
 
             return currentAddress;
         }
-        return toConstantLiteralNode(value, align);
+        return toConstantLiteralNode(value, align, labels);
     }
 
     public static LLVMExpressionNode toConstantZeroNode(Type value, int align, LLVMContext context, FrameSlot stack) {
@@ -652,13 +658,13 @@ public final class LLVMBitcodeHelper {
             switch (vbr) {
                 case 1:
                     return new LLVMI1LiteralNode(false);
-                case 8:
+                case Byte.SIZE:
                     return new LLVMI8LiteralNode((byte) 0);
-                case 16:
+                case Short.SIZE:
                     return new LLVMI16LiteralNode((short) 0);
-                case 32:
+                case Integer.SIZE:
                     return new LLVMI32LiteralNode(0);
-                case 64:
+                case Long.SIZE:
                     return new LLVMI64LiteralNode(0L);
                 default:
                     return new LLVMIVarBitLiteralNode(LLVMIVarBit.fromLong(vbr, 0L));
@@ -667,9 +673,9 @@ public final class LLVMBitcodeHelper {
         if (value instanceof FloatingPointType) {
             FloatingPointType type = (FloatingPointType) value;
             switch (type) {
-                case F32:
+                case FLOAT:
                     return new LLVMFloatLiteralNode(0.0f);
-                case F64:
+                case DOUBLE:
                     return new LLVMDoubleLiteralNode(0.0);
                 default:
                     break;
@@ -678,7 +684,7 @@ public final class LLVMBitcodeHelper {
         if (value instanceof PointerType) {
             PointerType pointer = (PointerType) value;
             if (pointer.getPointeeType() instanceof FunctionType) {
-                LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createFunctionDescriptor("<zero function>", LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
+                LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createZeroFunctionDescriptor();
                 return LLVMFunctionLiteralNodeGen.create(functionDescriptor);
             } else {
                 return new LLVMAddressLiteralNode(LLVMAddress.fromLong(0));
@@ -693,7 +699,7 @@ public final class LLVMBitcodeHelper {
             LLVMAddressNode target = LLVMAllocaInstructionNodeGen.create(getSize(value, align), getAlignment(value.getType(), align), context, stack);
             LLVMExpressionNode[] zeroes = new LLVMExpressionNode[vector.getElementCount()];
             Arrays.fill(zeroes, toConstantZeroNode(vector.getElementType(), align, context, stack));
-            return LLVMLiteralFactory.createVectorLiteralNode(Arrays.asList(zeroes), target, toBaseType(vector));
+            return LLVMLiteralFactory.createVectorLiteralNode(Arrays.asList(zeroes), target, toBaseType(vector).getType());
         }
         if (value instanceof FunctionType) {
             LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createFunctionDescriptor("<zero function>", LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
@@ -704,11 +710,11 @@ public final class LLVMBitcodeHelper {
 
             LLVMAllocaInstruction allocation = LLVMAllocaInstructionNodeGen.create(getSize(structure.getType(), align), getAlignment(structure.getType(), align), context, stack);
 
-            LLVMStructWriteNode[] nodes = new LLVMStructWriteNode[structure.getLength()];
-            int[] offsets = new int[structure.getLength()];
+            LLVMStructWriteNode[] nodes = new LLVMStructWriteNode[structure.getElementCount()];
+            int[] offsets = new int[structure.getElementCount()];
             int offset = 0;
 
-            for (int i = 0; i < structure.getLength(); i++) {
+            for (int i = 0; i < structure.getElementCount(); i++) {
                 Type element = structure.getElementType(i);
 
                 if (!structure.isPacked()) {
@@ -716,7 +722,7 @@ public final class LLVMBitcodeHelper {
                 }
                 offsets[i] = offset;
 
-                LLVMBaseType elementBaseType = toBaseType(element);
+                LLVMBaseType elementBaseType = toBaseType(element).getType();
                 int elementSize = getSize(element, align);
 
                 offset += elementSize;
@@ -750,7 +756,7 @@ public final class LLVMBitcodeHelper {
                         if (elementSize == 0) {
                             nodes[i] = new LLVMEmptyStructWriteNode();
                         } else {
-                            LLVMExpressionNode struct = toConstantZeroNode((StructureType) element, align, context, stack);
+                            LLVMExpressionNode struct = toConstantZeroNode(element, align, context, stack);
                             nodes[i] = new LLVMCompoundStructWriteNode((LLVMAddressNode) struct, elementSize);
                         }
                         break;
@@ -771,174 +777,8 @@ public final class LLVMBitcodeHelper {
         throw new RuntimeException("Unsupported zero constant " + value);
     }
 
-    public static LLVMConversionType toConversionType(CastOperator operator) {
-        switch (operator) {
-            case ZERO_EXTEND:
-            case FP_TO_UNSIGNED_INT:
-            case UNSIGNED_INT_TO_FP:
-            case INT_TO_PTR:
-                return LLVMConversionType.ZERO_EXTENSION;
-            case SIGN_EXTEND:
-            case FP_TO_SIGNED_INT:
-            case SIGNED_INT_TO_FP:
-            case FP_EXTEND:
-                return LLVMConversionType.SIGN_EXTENSION;
-            case TRUNCATE:
-            case PTR_TO_INT:
-            case FP_TRUNCATE:
-                return LLVMConversionType.TRUNC;
-            case BITCAST:
-                return LLVMConversionType.BITCAST;
-            case ADDRESS_SPACE_CAST:
-            default:
-                return null;
-        }
-    }
-
-    public static FrameSlotKind toFrameSlotKind(Type type) {
-        if (type == MetaType.VOID) {
-            throw new LLVMUnsupportedException(UnsupportedReason.PARSER_ERROR_VOID_SLOT);
-        }
-        if (type instanceof IntegerType) {
-            switch (((IntegerType) type).getBitCount()) {
-                case 1:
-                    return FrameSlotKind.Boolean;
-                case 8:
-                    return FrameSlotKind.Byte;
-                case 16:
-                case 32:
-                    return FrameSlotKind.Int;
-                case 64:
-                    return FrameSlotKind.Long;
-                default:
-                    break;
-            }
-        }
-        if (type instanceof FloatingPointType) {
-            switch (((FloatingPointType) type)) {
-                case F32:
-                    return FrameSlotKind.Float;
-                case F64:
-                    return FrameSlotKind.Double;
-                default:
-                    break;
-            }
-        }
-        return FrameSlotKind.Object;
-    }
-
-    public static LLVMLogicalInstructionType toLogicalInstructionType(BinaryOperator operator) {
-        switch (operator) {
-            case INT_SHIFT_LEFT:
-                return LLVMLogicalInstructionType.SHIFT_LEFT;
-            case INT_LOGICAL_SHIFT_RIGHT:
-                return LLVMLogicalInstructionType.LOGICAL_SHIFT_RIGHT;
-            case INT_ARITHMETIC_SHIFT_RIGHT:
-                return LLVMLogicalInstructionType.ARITHMETIC_SHIFT_RIGHT;
-            case INT_AND:
-                return LLVMLogicalInstructionType.AND;
-            case INT_OR:
-                return LLVMLogicalInstructionType.OR;
-            case INT_XOR:
-                return LLVMLogicalInstructionType.XOR;
-            default:
-                return null;
-        }
-    }
-
-    public static LLVMRuntimeType toRuntimeType(final Type type) {
-        if (type == MetaType.VOID) {
-            return LLVMRuntimeType.VOID;
-        }
-        if (type instanceof IntegerType) {
-            switch (((IntegerType) type).getBitCount()) {
-                case 1:
-                    return LLVMRuntimeType.I1;
-                case 8:
-                    return LLVMRuntimeType.I8;
-                case 16:
-                    return LLVMRuntimeType.I16;
-                case 32:
-                    return LLVMRuntimeType.I32;
-                case 64:
-                    return LLVMRuntimeType.I64;
-                default:
-                    return LLVMRuntimeType.I_VAR_BITWIDTH;
-            }
-        }
-        if (type instanceof FloatingPointType) {
-            switch (((FloatingPointType) type)) {
-                case F16:
-                    return LLVMRuntimeType.HALF;
-                case F32:
-                    return LLVMRuntimeType.FLOAT;
-                case F64:
-                    return LLVMRuntimeType.DOUBLE;
-                case X86_FP80:
-                    return LLVMRuntimeType.X86_FP80;
-                default:
-                    throw new RuntimeException("Unsupported type " + type);
-            }
-        }
-        if (type instanceof PointerType) {
-            Type pointee = ((PointerType) type).getPointeeType();
-            return pointee instanceof FunctionType ? LLVMRuntimeType.FUNCTION_ADDRESS : LLVMRuntimeType.ADDRESS;
-        }
-        if (type instanceof StructureType) {
-            return LLVMRuntimeType.STRUCT;
-        }
-        if (type instanceof ArrayType) {
-            return LLVMRuntimeType.ARRAY;
-        }
-        if (type instanceof FunctionType) {
-            return LLVMRuntimeType.FUNCTION_ADDRESS;
-        }
-        if (type instanceof VectorType) {
-            Type base = ((VectorType) type).getElementType();
-            switch (toRuntimeType(base)) {
-                case I1:
-                    return LLVMRuntimeType.I1_VECTOR;
-                case I8:
-                    return LLVMRuntimeType.I8_VECTOR;
-                case I16:
-                    return LLVMRuntimeType.I16_VECTOR;
-                case I32:
-                    return LLVMRuntimeType.I32_VECTOR;
-                case I64:
-                    return LLVMRuntimeType.I64_VECTOR;
-                case FLOAT:
-                    return LLVMRuntimeType.FLOAT_VECTOR;
-                case DOUBLE:
-                    return LLVMRuntimeType.DOUBLE_VECTOR;
-                default:
-                    throw new RuntimeException("Unsupported type " + type);
-            }
-        }
-        throw new RuntimeException("Unsupported type " + type);
-    }
-
-    public static LLVMRuntimeType[] toRuntimeTypes(Type[] types) {
-        LLVMRuntimeType[] llvmtypes = new LLVMRuntimeType[types.length];
-
-        for (int i = 0; i < types.length; i++) {
-            llvmtypes[i] = toRuntimeType(types[i].getType());
-        }
-
-        return llvmtypes;
-    }
-
-    public static LLVMRuntimeType[] toRuntimeTypes(List<? extends Type> types) {
-        LLVMRuntimeType[] llvmtypes = new LLVMRuntimeType[types.size()];
-
-        for (int i = 0; i < types.size(); i++) {
-            llvmtypes[i] = toRuntimeType(types.get(i).getType());
-        }
-
-        return llvmtypes;
-    }
-
     private static LLVMAddressNode toArray(Type type, int alignment, List<LLVMExpressionNode> values, LLVMContext context, FrameSlot stack) {
-        LLVMBaseType llvmElementType = toBaseType(type);
+        LLVMBaseType llvmElementType = toBaseType(type).getType();
         int baseTypeSize = type.sizeof();
         int nrElements = values.size();
         int size = nrElements * baseTypeSize;
@@ -959,15 +799,19 @@ public final class LLVMBitcodeHelper {
                 return LLVMStoreNodeFactory.LLVMFloatArrayLiteralNodeGen.create(values.toArray(new LLVMFloatNode[nrElements]), baseTypeSize, target);
             case DOUBLE:
                 return LLVMStoreNodeFactory.LLVMDoubleArrayLiteralNodeGen.create(values.toArray(new LLVMDoubleNode[nrElements]), baseTypeSize, target);
-//            case X86_FP80:
-//                return LLVM80BitFloatArrayLiteralNodeGen.create(values.toArray(new LLVM80BitFloatNode[nrElements]), baseTypeSize, arrayAlloc);
-//            case ARRAY:
-//            case STRUCT:
-//                return LLVMAddressArrayCopyNodeGen.create(arrayValues.toArray(new LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
-//            case ADDRESS:
-//                return LLVMAddressArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
-//            case FUNCTION_ADDRESS:
-//                return LLVMFunctionArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMFunctionNode[nrElements]), baseTypeSize, arrayAlloc);
+            // case X86_FP80:
+            // return LLVM80BitFloatArrayLiteralNodeGen.create(values.toArray(new
+            // LLVM80BitFloatNode[nrElements]), baseTypeSize, arrayAlloc);
+            // case ARRAY:
+            // case STRUCT:
+            // return LLVMAddressArrayCopyNodeGen.create(arrayValues.toArray(new
+            // LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
+            // case ADDRESS:
+            // return LLVMAddressArrayLiteralNodeGen.create(arrayValues.toArray(new
+            // LLVMAddressNode[nrElements]), baseTypeSize, arrayAlloc);
+            // case FUNCTION_ADDRESS:
+            // return LLVMFunctionArrayLiteralNodeGen.create(arrayValues.toArray(new
+            // LLVMFunctionNode[nrElements]), baseTypeSize, arrayAlloc);
             default:
                 throw new AssertionError(llvmElementType);
         }

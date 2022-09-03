@@ -43,7 +43,6 @@ import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMControlFlowAnalysis.LLVMControlFlow;
 
 import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMBitcodeTypeHelper;
-import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMFrameIDs;
 import uk.ac.man.cs.llvm.ir.model.InstructionBlock;
 import uk.ac.man.cs.llvm.ir.model.FunctionDeclaration;
 import uk.ac.man.cs.llvm.ir.model.FunctionDefinition;
@@ -154,9 +153,9 @@ public final class LLVMFrameDescriptors {
         public void visit(FunctionDefinition method) {
             FrameDescriptor frame = new FrameDescriptor();
             if (method.getReturnType() != MetaType.VOID) {
-                frame.addFrameSlot(LLVMFrameIDs.FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
+                frame.addFrameSlot(LLVMBitcodeHelper.FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
             }
-            frame.addFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID, FrameSlotKind.Object);
+            frame.addFrameSlot(LLVMBitcodeHelper.STACK_ADDRESS_FRAME_SLOT_ID, FrameSlotKind.Object);
 
             for (FunctionParameter parameter : method.getParameters()) {
                 frame.addFrameSlot(parameter.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(parameter.getType()));
@@ -165,7 +164,6 @@ public final class LLVMFrameDescriptors {
             LLVMFrameDescriptorsFunctionVisitor visitor = new LLVMFrameDescriptorsFunctionVisitor(frame, cfg.dependencies(method.getName()));
 
             method.accept(visitor);
-            visitor.finish();
 
             descriptors.put(method.getName(), frame);
             slots.put(method.getName(), visitor.getSlotMap());
@@ -186,20 +184,9 @@ public final class LLVMFrameDescriptors {
 
         private InstructionBlock entry = null;
 
-        private final List<InstructionBlock> unvisited = new ArrayList<>();
-
         LLVMFrameDescriptorsFunctionVisitor(FrameDescriptor frame, LLVMControlFlow cfg) {
             this.frame = frame;
             this.cfg = cfg;
-        }
-
-        void finish() {
-            // if a program terminates execution solely by invoking 'exit()' some blocks may
-            // otherwise never get visited, this is just a dirty fix for now since we will need to
-            // rewrite stack allocation for lifetime analysis later anyways
-            for (final InstructionBlock block : unvisited) {
-                block.accept(this);
-            }
         }
 
         private List<InstructionBlock> getNondominatingBlocks(InstructionBlock block) {
@@ -226,7 +213,6 @@ public final class LLVMFrameDescriptors {
         public List<FrameSlot> getSlots(InstructionBlock block) {
             int count = frame.getSize();
 
-            unvisited.remove(block);
             block.accept(this);
 
             return new ArrayList<>(frame.getSlots().subList(count, frame.getSize()));
@@ -244,7 +230,6 @@ public final class LLVMFrameDescriptors {
             if (entry == null) {
                 entry = block;
             }
-            unvisited.add(block);
             List<InstructionBlock> processed = new ArrayList<>();
             List<FrameSlot> slots = new ArrayList<>();
             Deque<InstructionBlock> currentQueue = new ArrayDeque<>();
