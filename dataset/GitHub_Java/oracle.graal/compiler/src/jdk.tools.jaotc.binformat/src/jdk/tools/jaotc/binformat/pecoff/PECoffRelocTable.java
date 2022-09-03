@@ -25,10 +25,12 @@
 
 package jdk.tools.jaotc.binformat.pecoff;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.nio.ByteBuffer;
 
 import jdk.tools.jaotc.binformat.pecoff.PECoff.IMAGE_RELOCATION;
+import jdk.tools.jaotc.binformat.pecoff.PECoffRelocEntry;
+import jdk.tools.jaotc.binformat.pecoff.PECoffByteBuffer;
 
 final class PECoffRelocTable {
     ArrayList<ArrayList<PECoffRelocEntry>> relocEntries;
@@ -49,14 +51,14 @@ final class PECoffRelocTable {
         return (4);
     }
 
-    int getNumRelocs(int sectionIndex) {
-        return relocEntries.get(sectionIndex).size();
+    int getNumRelocs(int section_index) {
+        return relocEntries.get(section_index).size();
     }
 
     // Return the relocation entries for a single section
     // or null if no entries added to section
-    byte[] getRelocData(int sectionIndex) {
-        ArrayList<PECoffRelocEntry> entryList = relocEntries.get(sectionIndex);
+    byte[] getRelocData(int section_index) {
+        ArrayList<PECoffRelocEntry> entryList = relocEntries.get(section_index);
         int entryCount = entryList.size();
         int allocCount = entryCount;
 

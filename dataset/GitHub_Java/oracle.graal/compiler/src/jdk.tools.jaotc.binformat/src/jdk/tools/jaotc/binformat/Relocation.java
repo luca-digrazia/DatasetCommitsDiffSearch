@@ -27,8 +27,8 @@ package jdk.tools.jaotc.binformat;
 
 public final class Relocation {
 
-    // @formatter:off (workaround for Eclipse formatting bug)
-    public enum RelocType {
+    public enum RelocType
+    {
         UNDEFINED,
         JAVA_CALL_INDIRECT,
         JAVA_CALL_DIRECT,
@@ -38,7 +38,6 @@ public final class Relocation {
         EXTERNAL_GOT_TO_PLT,
         EXTERNAL_PLT_TO_GOT
     }
-    // @formatter:on
 
     private final RelocType type;
 

@@ -28,6 +28,7 @@ package jdk.tools.jaotc.binformat.macho;
 import java.nio.ByteBuffer;
 
 import jdk.tools.jaotc.binformat.macho.MachO.version_min_command;
+import jdk.tools.jaotc.binformat.macho.MachOByteBuffer;
 
 final class MachOVersion {
     private final ByteBuffer version;

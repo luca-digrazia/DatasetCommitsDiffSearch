@@ -56,14 +56,19 @@ import jdk.tools.jaotc.binformat.Relocation;
 import jdk.tools.jaotc.binformat.Relocation.RelocType;
 import jdk.tools.jaotc.binformat.Symbol;
 import jdk.tools.jaotc.binformat.Symbol.Kind;
-import jdk.tools.jaotc.binformat.macho.MachO.dysymtab_command;
+
+import jdk.tools.jaotc.binformat.macho.MachO.section_64;
 import jdk.tools.jaotc.binformat.macho.MachO.mach_header_64;
+import jdk.tools.jaotc.binformat.macho.MachO.segment_command_64;
+import jdk.tools.jaotc.binformat.macho.MachO.version_min_command;
+import jdk.tools.jaotc.binformat.macho.MachO.symtab_command;
+import jdk.tools.jaotc.binformat.macho.MachO.dysymtab_command;
 import jdk.tools.jaotc.binformat.macho.MachO.nlist_64;
 import jdk.tools.jaotc.binformat.macho.MachO.reloc_info;
-import jdk.tools.jaotc.binformat.macho.MachO.section_64;
-import jdk.tools.jaotc.binformat.macho.MachO.segment_command_64;
-import jdk.tools.jaotc.binformat.macho.MachO.symtab_command;
-import jdk.tools.jaotc.binformat.macho.MachO.version_min_command;
+import jdk.tools.jaotc.binformat.macho.MachOContainer;
+import jdk.tools.jaotc.binformat.macho.MachOTargetInfo;
+import jdk.tools.jaotc.binformat.macho.MachOSymtab;
+import jdk.tools.jaotc.binformat.macho.MachORelocTable;
 
 public class JMachORelocObject {
 
@@ -118,7 +123,7 @@ public class JMachORelocObject {
     }
 
     /**
-     * Creates an MachO relocatable object.
+     * Create an MachO relocatable object
      *
      * @param relocationTable
      * @param symbols
@@ -165,30 +170,30 @@ public class JMachORelocObject {
                         dysymtab_command.totalsize);
 
         // Initialize file offset for data past commands
-        int fileOffset = mach_header_64.totalsize + mh.getCmdSize();
+        int file_offset = mach_header_64.totalsize + mh.getCmdSize();
         // and round it up
-        fileOffset = (fileOffset + (sections.get(0).getAlign() - 1)) & ~((sections.get(0).getAlign() - 1));
+        file_offset = (file_offset + (sections.get(0).getAlign() - 1)) & ~((sections.get(0).getAlign() - 1));
         long address = 0;
-        int segmentOffset = fileOffset;
+        int segment_offset = file_offset;
 
         for (int i = 0; i < sections.size(); i++) {
             MachOSection sect = sections.get(i);
-            fileOffset = (fileOffset + (sect.getAlign() - 1)) & ~((sect.getAlign() - 1));
+            file_offset = (file_offset + (sect.getAlign() - 1)) & ~((sect.getAlign() - 1));
             address = (address + (sect.getAlign() - 1)) & ~((sect.getAlign() - 1));
-            sect.setOffset(fileOffset);
+            sect.setOffset(file_offset);
             sect.setAddr(address);
-            fileOffset += sect.getSize();
+            file_offset += sect.getSize();
             address += sect.getSize();
         }
 
         // File size for Segment data
-        int segSize = fileOffset - segmentOffset;
+        int segment_size = file_offset - segment_offset;
 
         // Create the LC_SEGMENT_64 Segment which contains the MachOSections
         MachOSegment seg = new MachOSegment(segment_command_64.totalsize +
                         (section_64.totalsize * sections.size()),
-                        segmentOffset,
-                        segSize,
+                        segment_offset,
+                        segment_size,
                         sections.size());
 
         MachOVersion vers = new MachOVersion();
@@ -204,22 +209,22 @@ public class JMachORelocObject {
         // Create the Relocation Tables
         MachORelocTable machORelocs = createMachORelocTable(sections, relocationTable, symtab);
         // Calculate file offset for relocation data
-        fileOffset = (fileOffset + (MachORelocTable.getAlign() - 1)) & ~((MachORelocTable.getAlign() - 1));
+        file_offset = (file_offset + (MachORelocTable.getAlign() - 1)) & ~((MachORelocTable.getAlign() - 1));
 
         // Update relocation sizing information in each section
         for (int i = 0; i < sections.size(); i++) {
             MachOSection sect = sections.get(i);
             if (sect.hasRelocations()) {
                 int nreloc = machORelocs.getNumRelocs(i);
-                sect.setReloff(fileOffset);
+                sect.setReloff(file_offset);
                 sect.setRelcount(nreloc);
-                fileOffset += (nreloc * reloc_info.totalsize);
+                file_offset += (nreloc * reloc_info.totalsize);
             }
         }
 
         // Calculate and set file offset for symbol table data
-        fileOffset = (fileOffset + (MachOSymtab.getAlign() - 1)) & ~((MachOSymtab.getAlign() - 1));
-        symtab.setOffset(fileOffset);
+        file_offset = (file_offset + (MachOSymtab.getAlign() - 1)) & ~((MachOSymtab.getAlign() - 1));
+        symtab.setOffset(file_offset);
 
         // Write Out Header
         machoContainer.writeBytes(mh.getArray());
@@ -406,14 +411,14 @@ public class JMachORelocObject {
             case mach_header_64.CPU_TYPE_X86_64:
                 // Return X86_64_RELOC_* entries based on relocType
                 if (relocType == RelocType.JAVA_CALL_DIRECT ||
-                                relocType == RelocType.FOREIGN_CALL_INDIRECT_GOT) {
+                    relocType == RelocType.FOREIGN_CALL_INDIRECT_GOT) {
                     machORelocType = reloc_info.X86_64_RELOC_BRANCH;
                 } else if (relocType == RelocType.STUB_CALL_DIRECT) {
                     machORelocType = reloc_info.X86_64_RELOC_BRANCH;
                 } else if (relocType == RelocType.JAVA_CALL_INDIRECT) {
                     machORelocType = reloc_info.X86_64_RELOC_NONE;
                 } else if (relocType == RelocType.METASPACE_GOT_REFERENCE ||
-                                relocType == RelocType.EXTERNAL_PLT_TO_GOT) {
+                           relocType == RelocType.EXTERNAL_PLT_TO_GOT) {
                     machORelocType = reloc_info.X86_64_RELOC_BRANCH;
                 } else if (relocType == RelocType.EXTERNAL_GOT_TO_PLT) {
                     machORelocType = reloc_info.X86_64_RELOC_UNSIGNED;

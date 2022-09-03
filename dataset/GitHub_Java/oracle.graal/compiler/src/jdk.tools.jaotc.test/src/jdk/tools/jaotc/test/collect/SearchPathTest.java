@@ -36,22 +36,20 @@
 
 package jdk.tools.jaotc.test.collect;
 
-import static jdk.tools.jaotc.test.collect.Utils.mkpath;
-import static jdk.tools.jaotc.test.collect.Utils.mkpaths;
-import static jdk.tools.jaotc.test.collect.Utils.set;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import org.junit.Before;
-import org.junit.Test;
+import jdk.tools.jaotc.collect.*;
 
-import jdk.tools.jaotc.collect.SearchPath;
+import static jdk.tools.jaotc.test.collect.Utils.set;
+import static jdk.tools.jaotc.test.collect.Utils.mkpath;
+import static jdk.tools.jaotc.test.collect.Utils.mkpaths;
+import static org.junit.Assert.*;
 
 public class SearchPathTest {
     private FakeFileSupport fileSupport;

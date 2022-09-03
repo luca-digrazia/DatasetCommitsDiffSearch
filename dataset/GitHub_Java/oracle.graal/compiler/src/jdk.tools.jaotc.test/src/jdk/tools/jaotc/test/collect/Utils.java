@@ -33,7 +33,7 @@ import java.util.Set;
 public class Utils {
     @SafeVarargs
     public static <T> Set<T> set(T... entries) {
-        Set<T> set = new HashSet<>();
+        Set<T> set = new HashSet<T>();
         for (T entry : entries) {
             set.add(entry);
         }
@@ -45,7 +45,7 @@ public class Utils {
     }
 
     public static Set<String> mkpaths(String... paths) {
-        Set<String> set = new HashSet<>();
+        Set<String> set = new HashSet<String>();
         for (String entry : paths) {
             set.add(mkpath(entry));
         }
@@ -54,9 +54,8 @@ public class Utils {
 
     public static Path getpath(String path) {
         if (path.startsWith("/") && System.getProperty("os.name").startsWith("Windows")) {
-            return Paths.get(new File(path).getAbsolutePath());
-        } else {
-            return Paths.get(path);
+            path = new File(path).getAbsolutePath();
         }
+        return Paths.get(path);
     }
 }

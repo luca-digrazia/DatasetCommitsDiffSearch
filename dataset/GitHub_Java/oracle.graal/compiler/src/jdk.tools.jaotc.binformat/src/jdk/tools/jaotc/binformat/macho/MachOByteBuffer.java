@@ -27,6 +27,7 @@ package jdk.tools.jaotc.binformat.macho;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import jdk.tools.jaotc.binformat.macho.MachOTargetInfo;
 
 final class MachOByteBuffer {
 

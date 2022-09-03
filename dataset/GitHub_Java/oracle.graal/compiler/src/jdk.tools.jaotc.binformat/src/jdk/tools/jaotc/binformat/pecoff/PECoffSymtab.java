@@ -30,17 +30,19 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 
 import jdk.tools.jaotc.binformat.pecoff.PECoff.IMAGE_SYMBOL;
+import jdk.tools.jaotc.binformat.pecoff.PECoffSymbol;
+import jdk.tools.jaotc.binformat.pecoff.PECoffByteBuffer;
 
 final class PECoffSymtab {
     ArrayList<PECoffSymbol> symbols = new ArrayList<>();
 
     /**
-     * Number of symbols added.
+     * number of symbols added
      */
     private int symbolCount;
 
     /**
-     * String holding symbol table strings.
+     * String holding symbol table strings
      */
     private final StringBuilder strTabContent;
 
@@ -51,7 +53,7 @@ final class PECoffSymtab {
     private int strTabNrOfBytes;
 
     /**
-     * String holding Linker Directives.
+     * String holding Linker Directives
      */
     private final StringBuilder directives;
 
