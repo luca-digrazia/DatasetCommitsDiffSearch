@@ -73,7 +73,6 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 
-import com.oracle.graal.api.replacements.Snippet;
 import com.oracle.graal.bytecode.Bytecodes;
 import com.oracle.graal.compiler.CompilerThreadFactory;
 import com.oracle.graal.compiler.CompilerThreadFactory.DebugConfigAccess;
@@ -517,7 +516,7 @@ public final class CompileTheWorld {
             @Override
             public GraalDebugConfig getDebugConfig() {
                 if (Debug.isEnabled() && DebugScope.getConfig() == null) {
-                    return DebugEnvironment.initialize(System.out, compiler.getGraalRuntime().getHostProviders().getSnippetReflection());
+                    return DebugEnvironment.initialize(System.out);
                 }
                 return null;
             }
@@ -777,7 +776,7 @@ public final class CompileTheWorld {
         }
         // Skip @Snippets for now
         for (Annotation annotation : javaMethod.getAnnotations()) {
-            if (annotation.annotationType().equals(Snippet.class)) {
+            if (annotation.annotationType().getName().equals("com.oracle.graal.replacements.Snippet")) {
                 return false;
             }
         }
