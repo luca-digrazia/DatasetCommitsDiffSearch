@@ -65,19 +65,7 @@ public class StructuredGraph extends Graph {
          * introduced any more. {@link FrameState} nodes are now associated with
          * {@link DeoptimizingNode} nodes.
          */
-        AFTER_FSA;
-
-        public boolean allowsFloatingGuards() {
-            return this == FLOATING_GUARDS;
-        }
-
-        public boolean areFrameStatesAtDeopts() {
-            return this == AFTER_FSA;
-        }
-
-        public boolean areFrameStatesAtSideEffects() {
-            return !this.areFrameStatesAtDeopts();
-        }
+        AFTER_FSA
     }
 
     public static final int INVOCATION_ENTRY_BCI = -1;

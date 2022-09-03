@@ -24,6 +24,8 @@ package com.oracle.graal.graph;
 
 import static com.oracle.graal.graph.Edges.Type.*;
 
+import java.util.*;
+
 import com.oracle.graal.graph.Edges.*;
 
 public final class NodeSuccessorList<T extends Node> extends NodeList<T> {
@@ -38,7 +40,12 @@ public final class NodeSuccessorList<T extends Node> extends NodeList<T> {
 
     public NodeSuccessorList(Node self, T[] elements) {
         super(self, elements);
-        assert self.usages().isEmpty();
+        assert self.hasNoUsages();
+    }
+
+    public NodeSuccessorList(Node self, List<? extends T> elements) {
+        super(self, elements);
+        assert self.hasNoUsages();
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,23 +23,21 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Value, InputType.Anchor, InputType.Guard})
-public final class SnippetAnchorNode extends FixedWithNextNode implements Simplifiable, GuardingNode {
-    public static final NodeClass TYPE = NodeClass.get(SnippetAnchorNode.class);
+public class SnippetAnchorNode extends FixedWithNextNode implements Simplifiable, GuardingNode {
 
     public SnippetAnchorNode() {
-        super(TYPE, StampFactory.object());
+        super(StampFactory.object());
     }
 
     @Override
     public void simplify(SimplifierTool tool) {
-        AbstractBeginNode prevBegin = AbstractBeginNode.prevBegin(this);
+        BeginNode prevBegin = BeginNode.prevBegin(this);
         replaceAtUsages(InputType.Anchor, prevBegin);
         replaceAtUsages(InputType.Guard, prevBegin);
         if (hasNoUsages()) {

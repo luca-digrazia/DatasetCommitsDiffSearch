@@ -29,14 +29,14 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.alloc.*;
+import com.oracle.graal.compiler.alloc.Interval.UsePosList;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.java.*;
+import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.alloc.lsra.*;
-import com.oracle.graal.lir.alloc.lsra.Interval.*;
-import com.oracle.graal.lir.stackslotalloc.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -130,10 +130,10 @@ class CFGPrinter extends CompilationPrinter {
      * @param label A label describing the compilation phase that produced the control flow graph.
      * @param blocks The list of blocks to be printed.
      */
-    public void printCFG(String label, List<? extends AbstractBlockBase<?>> blocks, boolean printNodes) {
+    public void printCFG(String label, List<? extends AbstractBlock<?>> blocks, boolean printNodes) {
         if (lir == null) {
             latestScheduling = new NodeMap<>(cfg.getNodeToBlock());
-            for (AbstractBlockBase<?> abstractBlock : blocks) {
+            for (AbstractBlock<?> abstractBlock : blocks) {
                 Block block = (Block) abstractBlock;
                 Node cur = block.getBeginNode();
                 while (true) {
@@ -151,7 +151,7 @@ class CFGPrinter extends CompilationPrinter {
 
         begin("cfg");
         out.print("name \"").print(label).println('"');
-        for (AbstractBlockBase<?> block : blocks) {
+        for (AbstractBlock<?> block : blocks) {
             printBlock(block, printNodes);
         }
         end("cfg");
@@ -193,7 +193,7 @@ class CFGPrinter extends CompilationPrinter {
         }
     }
 
-    private void printBlock(AbstractBlockBase<?> block, boolean printNodes) {
+    private void printBlock(AbstractBlock<?> block, boolean printNodes) {
         printBlockProlog(block);
         if (printNodes) {
             assert block instanceof Block;
@@ -202,26 +202,31 @@ class CFGPrinter extends CompilationPrinter {
         printBlockEpilog(block);
     }
 
-    private void printBlockEpilog(AbstractBlockBase<?> block) {
+    private void printBlockEpilog(AbstractBlock<?> block) {
         printLIR(block);
         end("block");
     }
 
-    private void printBlockProlog(AbstractBlockBase<?> block) {
+    private void printBlockProlog(AbstractBlock<?> block) {
         begin("block");
 
         out.print("name \"").print(blockToString(block)).println('"');
-        out.println("from_bci -1");
-        out.println("to_bci -1");
+        if (block instanceof BciBlock) {
+            out.print("from_bci ").println(((BciBlock) block).startBci);
+            out.print("to_bci ").println(((BciBlock) block).endBci);
+        } else {
+            out.println("from_bci -1");
+            out.println("to_bci -1");
+        }
 
         out.print("predecessors ");
-        for (AbstractBlockBase<?> pred : block.getPredecessors()) {
+        for (AbstractBlock<?> pred : block.getPredecessors()) {
             out.print("\"").print(blockToString(pred)).print("\" ");
         }
         out.println();
 
         out.print("successors ");
-        for (AbstractBlockBase<?> succ : block.getSuccessors()) {
+        for (AbstractBlock<?> succ : block.getSuccessors()) {
             if (!succ.isExceptionEntry()) {
                 out.print("\"").print(blockToString(succ)).print("\" ");
             }
@@ -229,7 +234,7 @@ class CFGPrinter extends CompilationPrinter {
         out.println();
 
         out.print("xhandlers");
-        for (AbstractBlockBase<?> succ : block.getSuccessors()) {
+        for (AbstractBlock<?> succ : block.getSuccessors()) {
             if (succ.isExceptionEntry()) {
                 out.print("\"").print(blockToString(succ)).print("\" ");
             }
@@ -260,9 +265,9 @@ class CFGPrinter extends CompilationPrinter {
         out.println("HIR");
         out.disableIndentation();
 
-        if (block.getBeginNode() instanceof AbstractMergeNode) {
+        if (block.getBeginNode() instanceof MergeNode) {
             // Currently phi functions are not in the schedule, so print them separately here.
-            for (ValueNode phi : ((AbstractMergeNode) block.getBeginNode()).phis()) {
+            for (ValueNode phi : ((MergeNode) block.getBeginNode()).phis()) {
                 printNode(phi, false);
             }
         }
@@ -431,7 +436,7 @@ class CFGPrinter extends CompilationPrinter {
      *
      * @param block the block to print
      */
-    private void printLIR(AbstractBlockBase<?> block) {
+    private void printLIR(AbstractBlock<?> block) {
         if (lir == null) {
             return;
         }
@@ -479,7 +484,7 @@ class CFGPrinter extends CompilationPrinter {
             return "-";
         }
         String prefix;
-        if (node instanceof AbstractBeginNode && (lir == null && schedule == null)) {
+        if (node instanceof BeginNode && (lir == null && schedule == null)) {
             prefix = "B";
         } else if (node instanceof ValueNode) {
             ValueNode value = (ValueNode) node;
@@ -494,7 +499,7 @@ class CFGPrinter extends CompilationPrinter {
         return prefix + node.toString(Verbosity.Id);
     }
 
-    private String blockToString(AbstractBlockBase<?> block) {
+    private String blockToString(AbstractBlock<?> block) {
         if (lir == null && schedule == null && block instanceof Block) {
             // During all the front-end phases, the block schedule is built only for the debug
             // output.
@@ -555,36 +560,6 @@ class CFGPrinter extends CompilationPrinter {
         out.println();
     }
 
-    public void printStackIntervals(String label, StackInterval[] intervals) {
-        begin("intervals");
-        out.println(String.format("name \"%s\"", label));
-
-        for (StackInterval interval : intervals) {
-            if (interval != null) {
-                printStackInterval(interval);
-            }
-        }
-
-        end("intervals");
-    }
-
-    private void printStackInterval(StackInterval interval) {
-        out.printf("%s %s ", interval.getOperand(), interval.isFixed() ? "fixed" : interval.kind().getPlatformKind());
-        if (interval.location() != null) {
-            out.printf("\"[%s|%c]\"", interval.location(), interval.location().getKind().getTypeChar());
-        } else {
-            out.printf("\"[%s|%c]\"", interval.getOperand(), interval.getOperand().getKind().getTypeChar());
-        }
-
-        out.printf("%s -1 ", interval.getOperand());
-
-        out.printf("[%d, %d[", interval.from(), interval.to());
-
-        // print spill state
-        out.printf(" \"NOT_SUPPORTED\"");
-        out.println();
-    }
-
     public void printSchedule(String message, SchedulePhase theSchedule) {
         schedule = theSchedule;
         cfg = schedule.getCFG();
@@ -604,15 +579,15 @@ class CFGPrinter extends CompilationPrinter {
         printedNodes = null;
     }
 
-    private void printScheduledBlock(Block block, List<ValueNode> nodesFor) {
+    private void printScheduledBlock(Block block, List<ScheduledNode> nodesFor) {
         printBlockProlog(block);
         begin("IR");
         out.println("HIR");
         out.disableIndentation();
 
-        if (block.getBeginNode() instanceof AbstractMergeNode) {
+        if (block.getBeginNode() instanceof MergeNode) {
             // Currently phi functions are not in the schedule, so print them separately here.
-            for (ValueNode phi : ((AbstractMergeNode) block.getBeginNode()).phis()) {
+            for (ValueNode phi : ((MergeNode) block.getBeginNode()).phis()) {
                 printNode(phi, false);
             }
         }

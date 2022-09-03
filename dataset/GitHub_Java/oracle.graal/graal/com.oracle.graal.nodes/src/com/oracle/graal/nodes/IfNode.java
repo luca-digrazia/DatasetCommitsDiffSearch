@@ -657,7 +657,7 @@ public class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerab
         }
 
         CompareNode compare = (CompareNode) condition();
-        if (compare.getUsageCount() != 1) {
+        if (compare.usages().count() != 1) {
             return false;
         }
 

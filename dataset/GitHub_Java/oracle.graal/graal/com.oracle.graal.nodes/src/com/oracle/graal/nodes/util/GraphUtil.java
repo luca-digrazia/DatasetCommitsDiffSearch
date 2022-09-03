@@ -71,7 +71,7 @@ public class GraphUtil {
     }
 
     private static void killEnd(AbstractEndNode end, SimplifierTool tool) {
-        AbstractMergeNode merge = end.merge();
+        MergeNode merge = end.merge();
         if (merge != null) {
             merge.removeEnd(end);
             StructuredGraph graph = end.graph();
@@ -158,7 +158,7 @@ public class GraphUtil {
     }
 
     public static void unlinkFixedNode(FixedWithNextNode fixed) {
-        assert fixed.next() != null && fixed.predecessor() != null && fixed.isAlive() : fixed;
+        assert fixed.next() != null && fixed.predecessor() != null && fixed.isAlive();
         FixedNode next = fixed.next();
         fixed.setNext(null);
         fixed.replaceAtPredecessor(next);
@@ -187,7 +187,7 @@ public class GraphUtil {
         if (vpn.isDeleted()) {
             return;
         }
-        AbstractBeginNode proxyPoint = vpn.proxyPoint();
+        BeginNode proxyPoint = vpn.proxyPoint();
         if (proxyPoint instanceof LoopExitNode) {
             LoopExitNode exit = (LoopExitNode) proxyPoint;
             LoopBeginNode loopBegin = exit.loopBegin();

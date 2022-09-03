@@ -22,19 +22,13 @@
  */
 package com.oracle.graal.phases.common;
 
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.StartNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.ValueAnchorNode;
-import com.oracle.graal.phases.Phase;
-import com.oracle.graal.phases.graph.MergeableState;
-import com.oracle.graal.phases.graph.SinglePassNodeIterator;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.graph.*;
 
 /**
  * This phase performs a bit of hygiene on {@link ValueAnchorNode} by removing inputs that have
@@ -47,16 +41,16 @@ public class ValueAnchorCleanupPhase extends Phase {
 
         private final Set<Node> anchoredValues;
 
-        State() {
+        public State() {
             anchoredValues = Node.newSet();
         }
 
-        State(State other) {
+        public State(State other) {
             anchoredValues = Node.newSet(other.anchoredValues);
         }
 
         @Override
-        public boolean merge(AbstractMergeNode merge, List<State> withStates) {
+        public boolean merge(MergeNode merge, List<State> withStates) {
             for (State other : withStates) {
                 anchoredValues.retainAll(other.anchoredValues);
             }
@@ -71,7 +65,7 @@ public class ValueAnchorCleanupPhase extends Phase {
 
     private static class CleanupValueAnchorsClosure extends SinglePassNodeIterator<State> {
 
-        CleanupValueAnchorsClosure(StartNode start) {
+        public CleanupValueAnchorsClosure(StartNode start) {
             super(start, new State());
         }
 

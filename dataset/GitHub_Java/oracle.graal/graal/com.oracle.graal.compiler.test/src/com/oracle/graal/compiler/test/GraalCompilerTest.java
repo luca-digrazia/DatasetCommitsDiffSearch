@@ -142,21 +142,21 @@ public abstract class GraalCompilerTest extends GraalTest {
 
             @Override
             protected void run(StructuredGraph graph) {
-                assert checkHighTierGraph(graph) : "failed HighTier graph check";
+                assert checkHighTierGraph(graph);
             }
         });
         ret.getMidTier().appendPhase(new Phase("CheckGraphPhase") {
 
             @Override
             protected void run(StructuredGraph graph) {
-                assert checkMidTierGraph(graph) : "failed MidTier graph check";
+                assert checkMidTierGraph(graph);
             }
         });
         ret.getLowTier().appendPhase(new Phase("CheckGraphPhase") {
 
             @Override
             protected void run(StructuredGraph graph) {
-                assert checkLowTierGraph(graph) : "failed LowTier graph check";
+                assert checkLowTierGraph(graph);
             }
         });
         return ret;

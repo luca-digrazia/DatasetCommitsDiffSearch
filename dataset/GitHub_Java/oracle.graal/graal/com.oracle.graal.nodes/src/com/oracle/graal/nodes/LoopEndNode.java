@@ -28,10 +28,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
-/**
- * LoopEnd nodes represent a loop back-edge. When a LoopEnd is reached, execution continues at the
- * {@linkplain #loopBegin() loop header}.
- */
 @NodeInfo
 public class LoopEndNode extends AbstractEndNode {
 
@@ -48,7 +44,7 @@ public class LoopEndNode extends AbstractEndNode {
     }
 
     @Override
-    public AbstractMergeNode merge() {
+    public MergeNode merge() {
         return loopBegin();
     }
 
@@ -83,18 +79,17 @@ public class LoopEndNode extends AbstractEndNode {
     }
 
     /**
-     * Returns the index of this loop end amongst its {@link LoopBeginNode}'s loop ends.<br>
+     * Returns the 0-based index of this loop end. This is <b>not</b> the index into {@link PhiNode}
+     * values at the loop begin. Use {@link MergeNode#phiPredecessorIndex(AbstractEndNode)} for this
+     * purpose.
      *
-     * Since a LoopBeginNode also has {@linkplain LoopBeginNode#forwardEnds() forward ends}, this is
-     * <b>not</b> the index into {@link PhiNode} values at the loop begin. Use
-     * {@link LoopBeginNode#phiPredecessorIndex(AbstractEndNode)} for this purpose.
-     *
+     * @return The 0-based index of this loop end.
      */
-    int endIndex() {
+    public int endIndex() {
         return endIndex;
     }
 
-    void setEndIndex(int idx) {
+    public void setEndIndex(int idx) {
         this.endIndex = idx;
     }
 

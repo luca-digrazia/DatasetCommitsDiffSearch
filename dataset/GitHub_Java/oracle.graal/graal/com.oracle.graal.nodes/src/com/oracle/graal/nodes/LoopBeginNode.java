@@ -37,7 +37,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo
-public class LoopBeginNode extends AbstractMergeNode implements IterableNodeType, LIRLowerable {
+public class LoopBeginNode extends MergeNode implements IterableNodeType, LIRLowerable {
 
     protected double loopFrequency;
     protected int nextEndIndex;
@@ -78,19 +78,9 @@ public class LoopBeginNode extends AbstractMergeNode implements IterableNodeType
     }
 
     /**
-     * Returns the set of {@link LoopEndNode} that correspond to back-edges for this loop, in
-     * increasing {@link #phiPredecessorIndex} order. This method is suited to create new loop
-     * {@link PhiNode}.<br>
-     *
-     * For example a new PhiNode may be added as follow:
-     *
-     * <pre>
-     * PhiNode phi = new ValuePhiNode(stamp, loop);
-     * phi.addInput(forwardEdgeValue);
-     * for (LoopEndNode loopEnd : loop.orderedLoopEnds()) {
-     *     phi.addInput(backEdgeValue(loopEnd));
-     * }
-     * </pre>
+     * Returns the set of {@link LoopEndNode} that correspond to back-edges for this loop, ordered
+     * in increasing {@link #phiPredecessorIndex}. This method is suited to create new loop
+     * {@link PhiNode}.
      *
      * @return the set of {@code LoopEndNode} that correspond to back-edges for this loop
      */
@@ -175,7 +165,7 @@ public class LoopBeginNode extends AbstractMergeNode implements IterableNodeType
         return super.verify();
     }
 
-    int nextEndIndex() {
+    public int nextEndIndex() {
         return nextEndIndex++;
     }
 
@@ -193,7 +183,7 @@ public class LoopBeginNode extends AbstractMergeNode implements IterableNodeType
         canonicalizePhis(tool);
     }
 
-    public boolean isLoopExit(AbstractBeginNode begin) {
+    public boolean isLoopExit(BeginNode begin) {
         return begin instanceof LoopExitNode && ((LoopExitNode) begin).loopBegin() == this;
     }
 

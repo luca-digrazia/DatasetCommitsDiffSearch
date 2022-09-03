@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,13 +33,12 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(nameTemplate = "Invoke!#{p#targetMethod/s}", allowedUsageTypes = {InputType.Memory})
-public final class InvokeWithExceptionNode extends ControlSplitNode implements Invoke, MemoryCheckpoint.Single, LIRLowerable {
-    public static final NodeClass TYPE = NodeClass.get(InvokeWithExceptionNode.class);
+public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke, MemoryCheckpoint.Single, LIRLowerable {
 
     private static final double EXCEPTION_PROBA = 1e-5;
 
-    @Successor AbstractBeginNode next;
-    @Successor AbstractBeginNode exceptionEdge;
+    @Successor BeginNode next;
+    @Successor BeginNode exceptionEdge;
     @Input(InputType.Extension) CallTargetNode callTarget;
     @OptionalInput(InputType.State) FrameState stateDuring;
     @OptionalInput(InputType.State) FrameState stateAfter;
@@ -49,8 +48,8 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
     protected boolean useForInlining;
     protected double exceptionProbability;
 
-    public InvokeWithExceptionNode(CallTargetNode callTarget, AbstractBeginNode exceptionEdge, int bci) {
-        super(TYPE, callTarget.returnStamp());
+    public InvokeWithExceptionNode(CallTargetNode callTarget, BeginNode exceptionEdge, int bci) {
+        super(callTarget.returnStamp());
         this.exceptionEdge = exceptionEdge;
         this.bci = bci;
         this.callTarget = callTarget;
@@ -59,20 +58,20 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
         this.exceptionProbability = EXCEPTION_PROBA;
     }
 
-    public AbstractBeginNode exceptionEdge() {
+    public BeginNode exceptionEdge() {
         return exceptionEdge;
     }
 
-    public void setExceptionEdge(AbstractBeginNode x) {
+    public void setExceptionEdge(BeginNode x) {
         updatePredecessor(exceptionEdge, x);
         exceptionEdge = x;
     }
 
-    public AbstractBeginNode next() {
+    public BeginNode next() {
         return next;
     }
 
-    public void setNext(AbstractBeginNode x) {
+    public void setNext(BeginNode x) {
         updatePredecessor(next, x);
         next = x;
     }
@@ -165,7 +164,7 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
     }
 
     public void killExceptionEdge() {
-        AbstractBeginNode edge = exceptionEdge();
+        BeginNode edge = exceptionEdge();
         setExceptionEdge(null);
         GraphUtil.killCFG(edge);
     }
@@ -202,7 +201,7 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
     }
 
     @Override
-    public double probability(AbstractBeginNode successor) {
+    public double probability(BeginNode successor) {
         return successor == next ? 1 - exceptionProbability : exceptionProbability;
     }
 

@@ -675,7 +675,7 @@ public class SnippetTemplate {
 
         GuardsStage guardsStage = args.cacheKey.guardsStage;
         // Perform lowering on the snippet
-        if (!guardsStage.allowsFloatingGuards()) {
+        if (guardsStage.ordinal() >= GuardsStage.FIXED_DEOPTS.ordinal()) {
             new GuardLoweringPhase().apply(snippetCopy, null);
         }
         snippetCopy.setGuardsStage(guardsStage);
@@ -993,7 +993,7 @@ public class SnippetTemplate {
         }
     };
 
-    private boolean assertSnippetKills(ValueNode replacee) {
+    private boolean assertSnippetKills(ScheduledNode replacee) {
         if (!replacee.graph().isAfterFloatingReadPhase()) {
             // no floating reads yet, ignore locations created while lowering
             return true;

@@ -89,13 +89,13 @@ public class LoopFragmentInside extends LoopFragment {
 
         patchNodes(dataFixBefore);
 
-        AbstractBeginNode end = mergeEnds();
+        BeginNode end = mergeEnds();
 
         mergeEarlyExits();
 
         original().patchPeeling(this);
 
-        AbstractBeginNode entry = getDuplicatedNode(loop.loopBegin());
+        BeginNode entry = getDuplicatedNode(loop.loopBegin());
         loop.entryPoint().replaceAtPredecessor(entry);
         end.setNext(loop.entryPoint());
     }
@@ -152,7 +152,7 @@ public class LoopFragmentInside extends LoopFragment {
                     if (value != null) {
                         return value;
                     }
-                    AbstractBeginNode newValue = graph.add(new BeginNode());
+                    BeginNode newValue = graph.add(new BeginNode());
                     seenNode.put(original, newValue);
                     return newValue;
                 }
@@ -161,7 +161,7 @@ public class LoopFragmentInside extends LoopFragment {
                     if (value != null) {
                         return value;
                     }
-                    AbstractBeginNode newValue = graph.add(new BeginNode());
+                    BeginNode newValue = graph.add(new BeginNode());
                     seenNode.put(original, newValue);
                     return newValue;
                 }
@@ -184,7 +184,7 @@ public class LoopFragmentInside extends LoopFragment {
         // TODO (gd) ?
     }
 
-    private static PhiNode patchPhi(StructuredGraph graph, PhiNode phi, AbstractMergeNode merge) {
+    private static PhiNode patchPhi(StructuredGraph graph, PhiNode phi, MergeNode merge) {
         PhiNode ret;
         if (phi instanceof ValuePhiNode) {
             ret = new ValuePhiNode(phi.stamp(), merge);
@@ -291,7 +291,7 @@ public class LoopFragmentInside extends LoopFragment {
         }
     }
 
-    private AbstractBeginNode mergeEnds() {
+    private BeginNode mergeEnds() {
         assert isDuplicate();
         List<AbstractEndNode> endsToMerge = new LinkedList<>();
         // map peel exits to the corresponding loop exits
@@ -305,7 +305,7 @@ public class LoopFragmentInside extends LoopFragment {
             }
         }
         mergedInitializers = Node.newIdentityMap();
-        AbstractBeginNode newExit;
+        BeginNode newExit;
         StructuredGraph graph = graph();
         if (endsToMerge.size() == 1) {
             AbstractEndNode end = endsToMerge.get(0);
@@ -315,7 +315,7 @@ public class LoopFragmentInside extends LoopFragment {
             end.safeDelete();
         } else {
             assert endsToMerge.size() > 1;
-            AbstractMergeNode newExitMerge = graph.add(new AbstractMergeNode());
+            MergeNode newExitMerge = graph.add(new MergeNode());
             newExit = newExitMerge;
             FrameState state = loopBegin.stateAfter();
             FrameState duplicateState = null;

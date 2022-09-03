@@ -68,11 +68,11 @@ public class CollapseFrameForSingleSideEffectPhase extends Phase {
             return new IterationState(this, sideEffect.asNode(), null, true);
         }
 
-        public IterationState addBranch(AbstractBeginNode begin) {
+        public IterationState addBranch(BeginNode begin) {
             return new IterationState(this, begin, null, this.invalid);
         }
 
-        public static IterationState merge(AbstractMergeNode merge, Collection<IterationState> before, boolean invalid) {
+        public static IterationState merge(MergeNode merge, Collection<IterationState> before, boolean invalid) {
             return new IterationState(null, merge, before, invalid);
         }
 
@@ -135,8 +135,6 @@ public class CollapseFrameForSingleSideEffectPhase extends Phase {
                         state = state.addSideEffect(stateSplit);
                     } else if (currentState.invalid) {
                         setStateAfter(node.graph(), stateSplit, INVALID_FRAMESTATE_BCI, false);
-                    } else if (stateSplit instanceof StartNode) {
-                        setStateAfter(node.graph(), stateSplit, BEFORE_BCI, false);
                     } else {
                         stateSplit.setStateAfter(null);
                         if (frameState.hasNoUsages()) {
@@ -154,7 +152,7 @@ public class CollapseFrameForSingleSideEffectPhase extends Phase {
         }
 
         @Override
-        protected IterationState merge(AbstractMergeNode merge, List<IterationState> states) {
+        protected IterationState merge(MergeNode merge, List<IterationState> states) {
             boolean invalid = false;
             for (IterationState state : states) {
                 if (state.invalid) {
@@ -193,7 +191,7 @@ public class CollapseFrameForSingleSideEffectPhase extends Phase {
         }
 
         @Override
-        protected IterationState afterSplit(AbstractBeginNode node, IterationState oldState) {
+        protected IterationState afterSplit(BeginNode node, IterationState oldState) {
             return oldState.addBranch(node);
         }
 
@@ -221,13 +219,13 @@ public class CollapseFrameForSingleSideEffectPhase extends Phase {
          *
          * @param graph the graph context
          * @param node the node whose frame state is updated
-         * @param bci {@link BytecodeFrame#BEFORE_BCI}, {@link BytecodeFrame#AFTER_EXCEPTION_BCI} or
+         * @param bci {@link BytecodeFrame#AFTER_BCI}, {@link BytecodeFrame#AFTER_EXCEPTION_BCI} or
          *            {@link BytecodeFrame#INVALID_FRAMESTATE_BCI}
          * @param replaceOnly only perform the update if the node currently has a non-null frame
          *            state
          */
         private static void setStateAfter(StructuredGraph graph, StateSplit node, int bci, boolean replaceOnly) {
-            assert (bci == BEFORE_BCI && node instanceof StartNode) || bci == AFTER_BCI || bci == AFTER_EXCEPTION_BCI || bci == INVALID_FRAMESTATE_BCI;
+            assert bci == AFTER_BCI || bci == AFTER_EXCEPTION_BCI || bci == INVALID_FRAMESTATE_BCI;
             FrameState currentStateAfter = node.stateAfter();
             if (currentStateAfter != null || !replaceOnly) {
                 node.setStateAfter(graph.add(new FrameState(bci)));

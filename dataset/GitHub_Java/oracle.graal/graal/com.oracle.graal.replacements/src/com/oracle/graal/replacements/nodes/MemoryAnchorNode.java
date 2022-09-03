@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,12 +31,10 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
-public final class MemoryAnchorNode extends FixedWithNextNode implements LIRLowerable, MemoryNode, Canonicalizable {
-
-    public static final NodeClass TYPE = NodeClass.get(MemoryAnchorNode.class);
+public class MemoryAnchorNode extends FixedWithNextNode implements LIRLowerable, MemoryNode, Canonicalizable {
 
     public MemoryAnchorNode() {
-        super(TYPE, StampFactory.forVoid());
+        super(StampFactory.forVoid());
     }
 
     public void generate(NodeLIRBuilderTool generator) {

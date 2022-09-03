@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,9 +38,8 @@ import com.oracle.graal.nodes.spi.*;
  * information in {@code klass}.
  */
 @NodeInfo
-public final class KlassLayoutHelperNode extends FloatingGuardedNode implements Canonicalizable, Lowerable {
+public class KlassLayoutHelperNode extends FloatingGuardedNode implements Canonicalizable, Lowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(KlassLayoutHelperNode.class);
     @Input protected ValueNode klass;
     protected final HotSpotVMConfig config;
 
@@ -49,7 +48,7 @@ public final class KlassLayoutHelperNode extends FloatingGuardedNode implements 
     }
 
     public KlassLayoutHelperNode(@InjectedNodeParameter HotSpotVMConfig config, ValueNode klass, ValueNode guard) {
-        super(TYPE, StampFactory.forKind(Kind.Int), (GuardingNode) guard);
+        super(StampFactory.forKind(Kind.Int), (GuardingNode) guard);
         this.klass = klass;
         this.config = config;
     }

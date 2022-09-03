@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,8 +37,7 @@ import com.oracle.graal.nodes.util.*;
  * The {@code InvokeNode} represents all kinds of method calls.
  */
 @NodeInfo(nameTemplate = "Invoke#{p#targetMethod/s}", allowedUsageTypes = {InputType.Memory})
-public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRLowerable, MemoryCheckpoint.Single {
-    public static final NodeClass TYPE = NodeClass.get(InvokeNode.class);
+public class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRLowerable, MemoryCheckpoint.Single {
 
     @Input(InputType.Extension) CallTargetNode callTarget;
     @OptionalInput(InputType.State) FrameState stateDuring;
@@ -52,7 +51,7 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     }
 
     public InvokeNode(CallTargetNode callTarget, int bci, Stamp stamp) {
-        super(TYPE, stamp);
+        super(stamp);
         this.callTarget = callTarget;
         this.bci = bci;
         this.polymorphic = false;
