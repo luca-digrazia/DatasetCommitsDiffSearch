@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,7 +23,9 @@
 package com.oracle.truffle.object.dsl.processor;
 
 import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
 
+import com.oracle.truffle.api.object.Layout;
 import com.oracle.truffle.object.dsl.processor.model.LayoutModel;
 import com.oracle.truffle.object.dsl.processor.model.NameUtils;
 import com.oracle.truffle.object.dsl.processor.model.PropertyModel;
@@ -36,9 +36,6 @@ import java.util.List;
 
 public class LayoutGenerator {
 
-    private static final boolean GENERATE_SHAPE_BOUNDARY_CONSTANT_CHECKS = Boolean.valueOf(
-                    System.getProperty("org.jruby.truffle.om.dsl.processor.layout.LayoutGenerator.GENERATE_SHAPE_BOUNDARY_CONSTANT_CHECKS", Boolean.FALSE.toString()));
-
     private final LayoutModel layout;
 
     public LayoutGenerator(LayoutModel layout) {
@@ -48,18 +45,11 @@ public class LayoutGenerator {
     public void generate(final PrintStream stream) {
         stream.printf("package %s;%n", layout.getPackageName());
         stream.println();
-        stream.println("import java.util.EnumSet;");
-        stream.println("import com.oracle.truffle.api.object.*;");
-        stream.println("import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;");
-        stream.println("import com.oracle.truffle.api.CompilerAsserts;");
-        stream.println("import java.util.concurrent.atomic.*;");
-        stream.printf("import %s;%n", layout.getInterfaceFullName());
 
-        if (layout.getSuperLayout() != null) {
-            stream.printf("import %s.%sLayoutImpl;%n", layout.getSuperLayout().getPackageName(), layout.getSuperLayout().getName());
-        }
+        generateImports(stream);
 
         stream.println();
+        stream.printf("@GeneratedBy(%s.class)%n", layout.getInterfaceFullName());
         stream.printf("public class %sLayoutImpl", layout.getName());
 
         if (layout.getSuperLayout() != null) {
@@ -72,6 +62,134 @@ public class LayoutGenerator {
         stream.printf("    public static final %sLayout INSTANCE = new %sLayoutImpl();%n", layout.getName(), layout.getName());
         stream.println("    ");
 
+        generateObjectType(stream);
+
+        if (!layout.hasShapeProperties()) {
+            stream.printf("    protected static final %sType %s_TYPE = new %sType();%n", layout.getName(),
+                            NameUtils.identifierToConstant(layout.getName()), layout.getName());
+            stream.println("    ");
+        }
+
+        generateAllocator(stream);
+        generateProperties(stream);
+
+        if (!layout.hasShapeProperties()) {
+            stream.printf("    private static final DynamicObjectFactory %s_FACTORY = create%sShape();%n",
+                            NameUtils.identifierToConstant(layout.getName()), layout.getName());
+            stream.println("    ");
+        }
+
+        stream.printf("    protected %sLayoutImpl() {%n", layout.getName());
+        stream.println("    }");
+        stream.println("    ");
+
+        generateShapeFactory(stream);
+        generateFactory(stream);
+        generateGuards(stream);
+        generateAccessors(stream);
+
+        stream.println("}");
+    }
+
+    private void generateImports(PrintStream stream) {
+        boolean needsAtomicInteger = false;
+        boolean needsAtomicBoolean = false;
+        boolean needsAtomicReference = false;
+        boolean needsIncompatibleLocationException = false;
+        boolean needsFinalLocationException = false;
+        boolean needsHiddenKey = false;
+        boolean needsBoundary = false;
+
+        for (PropertyModel property : layout.getProperties()) {
+            if (!property.isShapeProperty() && !property.hasIdentifier()) {
+                needsHiddenKey = true;
+            }
+
+            if (property.isVolatile()) {
+                if (property.getType().getKind() == TypeKind.INT) {
+                    needsAtomicInteger = true;
+                } else if (property.getType().getKind() == TypeKind.BOOLEAN) {
+                    needsAtomicBoolean = true;
+                } else {
+                    needsAtomicReference = true;
+                }
+            } else {
+                if (property.hasSetter()) {
+                    if (!property.isShapeProperty()) {
+                        needsIncompatibleLocationException = true;
+                        needsFinalLocationException = true;
+                    }
+                }
+            }
+
+            if (property.isShapeProperty() && (property.hasSetter() || property.hasShapeSetter())) {
+                needsBoundary = true;
+            }
+        }
+
+        if (layout.hasFinalInstanceProperties() || layout.hasNonNullableInstanceProperties()) {
+            stream.println("import java.util.EnumSet;");
+        }
+
+        if (needsAtomicBoolean) {
+            stream.println("import java.util.concurrent.atomic.AtomicBoolean;");
+        }
+
+        if (needsAtomicInteger) {
+            stream.println("import java.util.concurrent.atomic.AtomicInteger;");
+        }
+
+        if (needsAtomicReference) {
+            stream.println("import java.util.concurrent.atomic.AtomicReference;");
+        }
+
+        if (!layout.hasBuilder()) {
+            stream.println("import com.oracle.truffle.api.CompilerAsserts;");
+        }
+        stream.println("import com.oracle.truffle.api.dsl.GeneratedBy;");
+
+        if (needsBoundary) {
+            stream.println("import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;");
+        }
+
+        stream.println("import com.oracle.truffle.api.object.DynamicObject;");
+        stream.println("import com.oracle.truffle.api.object.DynamicObjectFactory;");
+
+        if (needsFinalLocationException) {
+            stream.println("import com.oracle.truffle.api.object.FinalLocationException;");
+        }
+
+        if (needsHiddenKey) {
+            stream.println("import com.oracle.truffle.api.object.HiddenKey;");
+        }
+
+        if (needsIncompatibleLocationException) {
+            stream.println("import com.oracle.truffle.api.object.IncompatibleLocationException;");
+        }
+
+        if (layout.getSuperLayout() == null) {
+            stream.println("import com.oracle.truffle.api.object.Layout;");
+        }
+
+        if (layout.hasFinalInstanceProperties() || layout.hasNonNullableInstanceProperties()) {
+            stream.println("import com.oracle.truffle.api.object.LocationModifier;");
+        }
+
+        stream.println("import com.oracle.truffle.api.object.ObjectType;");
+
+        if (!layout.getInstanceProperties().isEmpty()) {
+            stream.println("import com.oracle.truffle.api.object.Property;");
+        }
+
+        stream.println("import com.oracle.truffle.api.object.Shape;");
+        stream.printf("import %s;%n", layout.getInterfaceFullName());
+
+        if (layout.getSuperLayout() != null) {
+            stream.printf("import %s.%sLayoutImpl;%n", layout.getSuperLayout().getPackageName(), layout.getSuperLayout().getName());
+        }
+    }
+
+    private void generateObjectType(final PrintStream stream) {
         final String typeSuperclass;
 
         if (layout.getSuperLayout() == null) {
@@ -80,7 +198,7 @@ public class LayoutGenerator {
             typeSuperclass = layout.getSuperLayout().getName() + "LayoutImpl." + layout.getSuperLayout().getName() + "Type";
         }
 
-        stream.printf("    protected static class %sType extends %s {%n", layout.getName(), typeSuperclass);
+        stream.printf("    public static class %sType extends %s {%n", layout.getName(), typeSuperclass);
 
         if (layout.hasShapeProperties()) {
             stream.println("        ");
@@ -161,8 +279,8 @@ public class LayoutGenerator {
                 iterateProperties(layout.getAllShapeProperties(), new PropertyIteratorAction() {
 
                     @Override
-                    public void run(PropertyModel property, boolean last) {
-                        stream.printf("                %s", property.getName());
+                    public void run(PropertyModel p, boolean last) {
+                        stream.printf("                %s", p.getName());
 
                         if (last) {
                             stream.println(");");
@@ -182,14 +300,20 @@ public class LayoutGenerator {
 
         stream.println("    }");
         stream.println("    ");
+    }
 
-        if (!layout.hasShapeProperties()) {
-            stream.printf("    protected static final %sType %s_TYPE = new %sType();%n", layout.getName(), NameUtils.identifierToConstant(layout.getName()), layout.getName());
-            stream.println("    ");
-        }
-
+    private void generateAllocator(final PrintStream stream) {
         if (layout.getSuperLayout() == null) {
-            stream.println("    protected static final Layout LAYOUT = Layout.newLayout().addAllowedImplicitCast(Layout.ImplicitCast.IntToLong).build();");
+            stream.print("    protected static final Layout LAYOUT = Layout.newLayout()");
+
+            for (Layout.ImplicitCast implicitCast : layout.getImplicitCasts()) {
+                stream.print(".addAllowedImplicitCast(Layout.ImplicitCast.");
+                stream.print(implicitCast.name());
+                stream.print(")");
+            }
+
+            stream.println(".build();");
+
             stream.printf("    protected static final Shape.Allocator %S_ALLOCATOR = LAYOUT.createAllocator();%n", NameUtils.identifierToConstant(layout.getName()));
         } else {
             stream.printf("    protected static final Shape.Allocator %S_ALLOCATOR = LAYOUT.createAllocator();%n", NameUtils.identifierToConstant(layout.getName()));
@@ -218,7 +342,7 @@ public class LayoutGenerator {
                         modifiersExpressionBuilder.append(", EnumSet.of(");
 
                         for (String modifier : modifiers) {
-                            if (modifier != modifiers.get(0)) {
+                            if (!modifier.equals(modifiers.get(0))) {
                                 modifiersExpressionBuilder.append(", ");
                             }
 
@@ -253,7 +377,9 @@ public class LayoutGenerator {
                 stream.println("    ");
             }
         }
+    }
 
+    private void generateProperties(final PrintStream stream) {
         for (PropertyModel property : layout.getInstanceProperties()) {
             if (!property.hasIdentifier()) {
                 stream.printf("    protected static final HiddenKey %s_IDENTIFIER = new HiddenKey(\"%s\");%n", NameUtils.identifierToConstant(property.getName()), property.getName());
@@ -278,7 +404,7 @@ public class LayoutGenerator {
                 modifiersExpressionBuilder.append(", EnumSet.of(");
 
                 for (String modifier : modifiers) {
-                    if (modifier != modifiers.get(0)) {
+                    if (!modifier.equals(modifiers.get(0))) {
                         modifiersExpressionBuilder.append(", ");
                     }
 
@@ -312,16 +438,9 @@ public class LayoutGenerator {
 
             stream.println("    ");
         }
+    }
 
-        if (!layout.hasShapeProperties()) {
-            stream.printf("    private static final DynamicObjectFactory %s_FACTORY = create%sShape();%n", NameUtils.identifierToConstant(layout.getName()), layout.getName());
-            stream.println("    ");
-        }
-
-        stream.printf("    protected %sLayoutImpl() {%n", layout.getName());
-        stream.println("    }");
-        stream.println("    ");
-
+    private void generateShapeFactory(final PrintStream stream) {
         if (layout.hasShapeProperties()) {
             stream.println("    @Override");
             stream.print("    public");
@@ -345,12 +464,6 @@ public class LayoutGenerator {
             }
         } else {
             stream.println(") {");
-        }
-
-        for (PropertyModel property : layout.getAllShapeProperties()) {
-            if (!property.getType().getKind().isPrimitive() && !property.isNullable()) {
-                stream.printf("        assert %s != null;%n", property.getName());
-            }
         }
 
         stream.printf("        return LAYOUT.createShape(new %sType(", layout.getName());
@@ -389,7 +502,10 @@ public class LayoutGenerator {
 
         stream.println("    }");
         stream.println("    ");
+    }
 
+    private void generateFactory(final PrintStream stream) {
+        // The shortcut factory when there are no shape properties
         if (!layout.hasShapeProperties()) {
             stream.println("    @Override");
             stream.printf("    public DynamicObject create%s(", layout.getName());
@@ -432,18 +548,27 @@ public class LayoutGenerator {
             stream.println("    ");
         }
 
+        // The full factory
+        final boolean builder = layout.hasBuilder();
+        final String methodName = builder ? "build" : "create" + layout.getName();
+        final String returnType = builder ? "Object[]" : "DynamicObject";
+
         if (layout.hasShapeProperties()) {
             stream.println("    @Override");
             stream.print("    public");
         } else {
             stream.print("    private");
+
+            if (!layout.hasObjectTypeGuard()) {
+                stream.printf(" static");
+            }
         }
 
         if (layout.hasInstanceProperties()) {
-            stream.printf(" DynamicObject create%s(%n", layout.getName());
-            stream.println("            DynamicObjectFactory factory,");
-
-            stream.println();
+            stream.printf(" %s %s(%n", returnType, methodName);
+            if (!builder) {
+                stream.println("            DynamicObjectFactory factory,");
+            }
 
             for (PropertyModel property : layout.getAllInstanceProperties()) {
                 stream.printf("            %s %s", property.getType().toString(), property.getName());
@@ -455,15 +580,18 @@ public class LayoutGenerator {
                 }
             }
         } else {
-            stream.printf(" DynamicObject create%s(DynamicObjectFactory factory) {%n", layout.getName());
+            String factoryArg = builder ? "" : "DynamicObjectFactory factory";
+            stream.printf(" %s %s(%s) {%n", returnType, methodName, factoryArg);
         }
 
-        stream.println("        assert factory != null;");
-        stream.println("        CompilerAsserts.partialEvaluationConstant(factory);");
-        stream.printf("        assert creates%s(factory);%n", layout.getName());
+        if (!builder) {
+            stream.println("        assert factory != null;");
+            stream.println("        CompilerAsserts.partialEvaluationConstant(factory);");
+            stream.printf("        assert creates%s(factory);%n", layout.getName());
 
-        for (PropertyModel property : layout.getAllInstanceProperties()) {
-            stream.printf("        assert factory.getShape().hasProperty(%s_IDENTIFIER);%n", NameUtils.identifierToConstant(property.getName()));
+            for (PropertyModel property : layout.getAllInstanceProperties()) {
+                stream.printf("        assert factory.getShape().hasProperty(%s_IDENTIFIER);%n", NameUtils.identifierToConstant(property.getName()));
+            }
         }
 
         for (PropertyModel property : layout.getAllInstanceProperties()) {
@@ -472,45 +600,35 @@ public class LayoutGenerator {
             }
         }
 
-        if (GENERATE_SHAPE_BOUNDARY_CONSTANT_CHECKS) {
-            if (layout.hasInstanceProperties()) {
-                stream.printf("        return create%sBoundary(factory,%n", layout.getName());
-
-                for (PropertyModel property : layout.getAllInstanceProperties()) {
-                    stream.printf("            %s", property.getName());
-
-                    if (property == layout.getAllProperties().get(layout.getAllProperties().size() - 1)) {
-                        stream.println(");");
-                    } else {
-                        stream.println(",");
-                    }
-                }
+        if (layout.hasInstanceProperties()) {
+            if (builder) {
+                stream.println("        return new Object[] { ");
             } else {
-                stream.printf("        return create%sBoundary(factory);%n", layout.getName());
+                stream.println("        return factory.newInstance(");
+            }
+
+            for (PropertyModel property : layout.getAllInstanceProperties()) {
+                if (property.isVolatile()) {
+                    if (property.getType().getKind() == TypeKind.INT) {
+                        stream.printf("            new AtomicInteger(%s)", property.getName());
+                    } else if (property.getType().getKind() == TypeKind.BOOLEAN) {
+                        stream.printf("            new AtomicBoolean(%s)", property.getName());
+                    } else {
+                        stream.printf("            new AtomicReference<%s>(%s)", property.getType(), property.getName());
+                    }
+                } else {
+                    stream.printf("            %s", property.getName());
+                }
+
+                if (property == layout.getAllProperties().get(layout.getAllProperties().size() - 1)) {
+                    stream.println(builder ? " };" : ");");
+                } else {
+                    stream.println(",");
+                }
             }
         } else {
-            if (layout.hasInstanceProperties()) {
-                stream.println("        return factory.newInstance(");
-
-                for (PropertyModel property : layout.getAllInstanceProperties()) {
-                    if (property.isVolatile()) {
-                        if (property.getType().getKind() == TypeKind.INT) {
-                            stream.printf("            new AtomicInteger(%s)", property.getName());
-                        } else if (property.getType().getKind() == TypeKind.BOOLEAN) {
-                            stream.printf("            new AtomicBoolean(%s)", property.getName());
-                        } else {
-                            stream.printf("            new AtomicReference<%s>(%s)", property.getType(), property.getName());
-                        }
-                    } else {
-                        stream.printf("            %s", property.getName());
-                    }
-
-                    if (property == layout.getAllProperties().get(layout.getAllProperties().size() - 1)) {
-                        stream.println(");");
-                    } else {
-                        stream.println(",");
-                    }
-                }
+            if (builder) {
+                stream.println("        return new Object[0];");
             } else {
                 stream.println("        return factory.newInstance();");
             }
@@ -518,71 +636,9 @@ public class LayoutGenerator {
 
         stream.println("    }");
         stream.println("    ");
+    }
 
-        if (GENERATE_SHAPE_BOUNDARY_CONSTANT_CHECKS) {
-            stream.println("    @TruffleBoundary");
-
-            if (layout.hasInstanceProperties()) {
-                stream.printf("    private DynamicObject create%sBoundary(%n", layout.getName());
-                stream.println("            DynamicObjectFactory factory,");
-
-                for (PropertyModel property : layout.getAllInstanceProperties()) {
-                    stream.printf("            %s %s", property.getType().toString(), property.getName());
-
-                    if (property == layout.getAllProperties().get(layout.getAllProperties().size() - 1)) {
-                        stream.println(") {");
-                    } else {
-                        stream.println(",");
-                    }
-                }
-            } else {
-                stream.printf(" DynamicObject create%sBoundary(DynamicObjectFactory factory) {%n", layout.getName());
-            }
-
-            stream.println("        assert factory != null;");
-            stream.println("        CompilerAsserts.partialEvaluationConstant(factory);");
-            stream.printf("        assert creates%s(factory);%n", layout.getName());
-
-            for (PropertyModel property : layout.getAllInstanceProperties()) {
-                stream.printf("        assert factory.getShape().hasProperty(%s_IDENTIFIER);%n", NameUtils.identifierToConstant(property.getName()));
-            }
-
-            for (PropertyModel property : layout.getAllInstanceProperties()) {
-                if (!property.getType().getKind().isPrimitive() && !property.isNullable()) {
-                    stream.printf("        assert %s != null;%n", property.getName());
-                }
-            }
-
-            if (layout.hasInstanceProperties()) {
-                stream.println("        return factory.newInstance(");
-
-                for (PropertyModel property : layout.getAllInstanceProperties()) {
-                    if (property.isVolatile()) {
-                        if (property.getType().getKind() == TypeKind.INT) {
-                            stream.printf("            new AtomicInteger(%s)", property.getName());
-                        } else if (property.getType().getKind() == TypeKind.BOOLEAN) {
-                            stream.printf("            new AtomicBoolean(%s)", property.getName());
-                        } else {
-                            stream.printf("            new AtomicReference<%s>(%s)", property.getType(), property.getName());
-                        }
-                    } else {
-                        stream.printf("            %s", property.getName());
-                    }
-
-                    if (property == layout.getAllProperties().get(layout.getAllProperties().size() - 1)) {
-                        stream.println(");");
-                    } else {
-                        stream.println(",");
-                    }
-                }
-            } else {
-                stream.println("        return factory.newInstance();");
-            }
-
-            stream.println("    }");
-            stream.println("    ");
-        }
-
+    private void generateGuards(final PrintStream stream) {
         if (layout.hasObjectGuard()) {
             stream.println("    @Override");
             stream.printf("    public boolean is%s(Object object) {%n", layout.getName());
@@ -591,35 +647,51 @@ public class LayoutGenerator {
             stream.println("    ");
         }
 
-        if (layout.hasDynamicObjectGuard()) {
-            stream.println("    @Override");
-            stream.print("    public");
-        } else {
-            stream.print("    private");
-        }
+        if (layout.hasDynamicObjectGuard() || layout.hasGettersOrSetters()) {
+            if (layout.hasDynamicObjectGuard()) {
+                stream.println("    @Override");
+                stream.print("    public");
+            } else {
+                stream.print("    private");
+            }
 
-        stream.printf(" boolean is%s(DynamicObject object) {%n", layout.getName());
-        stream.printf("        return is%s(object.getShape().getObjectType());%n", layout.getName());
-        stream.println("    }");
-        stream.println("    ");
+            if (!layout.hasDynamicObjectGuard() && !layout.hasObjectTypeGuard()) {
+                stream.printf(" static");
+            }
+
+            stream.printf(" boolean is%s(DynamicObject object) {%n", layout.getName());
+            stream.printf("        return is%s(object.getShape().getObjectType());%n", layout.getName());
+            stream.println("    }");
+            stream.println("    ");
+        }
 
         if (layout.hasObjectTypeGuard()) {
             stream.println("    @Override");
             stream.print("    public");
         } else {
-            stream.print("    private");
+            stream.print("    private static");
         }
 
         stream.printf(" boolean is%s(ObjectType objectType) {%n", layout.getName());
         stream.printf("        return objectType instanceof %sType;%n", layout.getName());
         stream.println("    }");
-        stream.println("    ");
 
-        stream.printf("    private boolean creates%s(DynamicObjectFactory factory) {%n", layout.getName());
-        stream.printf("        return is%s(factory.getShape().getObjectType());%n", layout.getName());
-        stream.println("    }");
-        stream.println("    ");
+        if (!layout.hasBuilder()) {
+            stream.println("    ");
+            stream.printf("    private");
 
+            if (!layout.hasObjectTypeGuard()) {
+                stream.printf(" static");
+            }
+
+            stream.printf(" boolean creates%s(DynamicObjectFactory factory) {%n", layout.getName());
+            stream.printf("        return is%s(factory.getShape().getObjectType());%n", layout.getName());
+            stream.println("    }");
+        }
+        stream.println("    ");
+    }
+
+    private void generateAccessors(final PrintStream stream) {
         for (PropertyModel property : layout.getProperties()) {
             if (property.hasObjectTypeGetter()) {
                 stream.println("    @Override");
@@ -661,7 +733,7 @@ public class LayoutGenerator {
                                             NameUtils.identifierToConstant(property.getName()), layout.getName());
                         }
                     } else {
-                        stream.printf("        return (%s) %s_PROPERTY.get(object, is%s(object));%n", property.getType(), NameUtils.identifierToConstant(property.getName()), layout.getName());
+                        stream.printf("        return %s%s_PROPERTY.get(object, is%s(object));%n", cast(property.getType()), NameUtils.identifierToConstant(property.getName()), layout.getName());
                     }
                 }
 
@@ -679,8 +751,6 @@ public class LayoutGenerator {
                 stream.println("    }");
                 stream.println("    ");
             }
-
-            // assert !(property.hasSetter() && property.hasUnsafeSetter());
 
             if (property.hasSetter() || property.hasUnsafeSetter()) {
                 addUncheckedCastWarning(stream, property);
@@ -703,7 +773,7 @@ public class LayoutGenerator {
 
                 if (property.isShapeProperty()) {
                     stream.println("        final Shape shape = object.getShape();");
-                    stream.printf("        object.setShapeAndResize(shape, shape.changeType(getObjectType(object).%s(value)));%n", NameUtils.asSetter(property.getName()));
+                    stream.printf("        object.setShapeAndGrow(shape, shape.changeType(getObjectType(object).%s(value)));%n", NameUtils.asSetter(property.getName()));
                 } else {
                     stream.printf("        assert object.getShape().hasProperty(%s_IDENTIFIER);%n", NameUtils.identifierToConstant(property.getName()));
 
@@ -721,7 +791,8 @@ public class LayoutGenerator {
                         } else if (property.getType().getKind() == TypeKind.BOOLEAN) {
                             stream.printf("        ((AtomicBoolean) %s_PROPERTY.get(object, is%s(object))).set(value);%n", NameUtils.identifierToConstant(property.getName()), layout.getName());
                         } else {
-                            stream.printf("        ((AtomicReference<%s>) %s_PROPERTY.get(object, is%s(object))).set(value);%n", property.getType(), NameUtils.identifierToConstant(property.getName()),
+                            stream.printf("        ((AtomicReference<%s>) %s_PROPERTY.get(object, is%s(object))).set(value);%n", property.getType(),
+                                            NameUtils.identifierToConstant(property.getName()),
                                             layout.getName());
                         }
                     } else {
@@ -808,27 +879,39 @@ public class LayoutGenerator {
             }
         }
 
-        if (layout.hasShapeProperties() && (layout.getSuperLayout() == null || !layout.getSuperLayout().hasShapeProperties())) {
-            stream.printf("    private %sType getObjectType(DynamicObject object) {%n", layout.getName());
+        if (!layout.getShapeProperties().isEmpty()) {
+            stream.print("    private");
+
+            if (!layout.hasObjectTypeGuard()) {
+                stream.print(" static");
+            }
+
+            stream.printf(" %sType getObjectType(DynamicObject object) {%n", layout.getName());
             stream.printf("        assert is%s(object);%n", layout.getName());
             stream.printf("        return (%sType) object.getShape().getObjectType();%n", layout.getName());
             stream.println("    }");
             stream.println("    ");
         }
-
-        stream.println("}");
     }
 
-    private void addUncheckedCastWarning(final PrintStream stream, PropertyModel property) {
+    private static void addUncheckedCastWarning(final PrintStream stream, PropertyModel property) {
         if (property.getType().toString().indexOf('<') != -1 ||
                         (property.isVolatile() && !property.getType().getKind().isPrimitive())) {
             stream.println("    @SuppressWarnings(\"unchecked\")");
         }
     }
 
-    private void iterateProperties(List<PropertyModel> properties, PropertyIteratorAction action) {
+    private static void iterateProperties(List<PropertyModel> properties, PropertyIteratorAction action) {
         for (int n = 0; n < properties.size(); n++) {
             action.run(properties.get(n), n == properties.size() - 1);
+        }
+    }
+
+    private static String cast(TypeMirror type) {
+        if (type.toString().equals(Object.class.getName())) {
+            return "";
+        } else {
+            return String.format("(%s) ", type.toString());
         }
     }
 

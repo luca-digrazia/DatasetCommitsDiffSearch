@@ -41,7 +41,6 @@ import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
 import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.nodes.CompressionNode;
-import com.oracle.graal.hotspot.nodes.ComputeObjectAddressNode;
 import com.oracle.graal.hotspot.nodes.SnippetAnchorNode;
 import com.oracle.graal.hotspot.word.KlassPointer;
 import com.oracle.graal.nodes.CanonicalizableLocation;
@@ -542,10 +541,6 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int arrayIndexScale(JavaKind elementKind) {
         return getArrayIndexScale(elementKind);
-    }
-
-    public static Word arrayStart(int[] a) {
-        return Word.unsigned(ComputeObjectAddressNode.get(a, getArrayBaseOffset(JavaKind.Int)));
     }
 
     @Fold
