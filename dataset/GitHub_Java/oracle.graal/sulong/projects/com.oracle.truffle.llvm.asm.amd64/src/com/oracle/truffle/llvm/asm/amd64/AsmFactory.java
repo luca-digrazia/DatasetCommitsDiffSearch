@@ -210,8 +210,6 @@ import com.oracle.truffle.llvm.nodes.cast.LLVMToAddressNodeGen;
 import com.oracle.truffle.llvm.nodes.func.LLVMArgNodeGen;
 import com.oracle.truffle.llvm.nodes.func.LLVMInlineAssemblyRootNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug.LLVMDebugTrapNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNodeFactory;
 import com.oracle.truffle.llvm.nodes.memory.LLVMFenceNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMPointerDirectLoadNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.load.LLVMI16LoadNodeGen;
@@ -227,7 +225,6 @@ import com.oracle.truffle.llvm.nodes.others.LLVMUnsupportedInlineAssemblerNode;
 import com.oracle.truffle.llvm.nodes.vars.LLVMReadNodeFactory.LLVMAddressReadNodeGen;
 import com.oracle.truffle.llvm.nodes.vars.LLVMReadNodeFactory.LLVMI1ReadNodeGen;
 import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNode.LLVMWritePointerNode;
-import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory;
 import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWriteI1NodeGen;
 import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWriteI64NodeGen;
 import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWritePointerNodeGen;
@@ -244,7 +241,6 @@ import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType.PrimitiveKind;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.runtime.types.VectorType;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 class AsmFactory {
@@ -253,7 +249,6 @@ class AsmFactory {
 
     private static final String CONSTRAINT_REG = "r";
     private static final String CONSTRAINT_REG_L = "q";
-    private static final String CONSTRAINT_REG_XMM = "x";
 
     private final FrameDescriptor frameDescriptor;
     private final List<LLVMStatementNode> statements;
@@ -352,7 +347,7 @@ class AsmFactory {
             int end = source.lastIndexOf('}');
             if (start != -1 && end != -1) {
                 registerName = source.substring(start + 1, end);
-            } else if (CONSTRAINT_REG.equals(source) || CONSTRAINT_REG_L.equals(source) || CONSTRAINT_REG_XMM.equals(source)) {
+            } else if (CONSTRAINT_REG.equals(source) || CONSTRAINT_REG_L.equals(source)) {
                 registerName = TEMP_REGISTER_PREFIX + argInfo.size();
                 isAnonymous = true;
             } else if (source.length() == 1 && Character.isDigit(source.charAt(0))) {
@@ -1206,11 +1201,6 @@ class AsmFactory {
                         throw invalidOperandType(dstType);
                 }
                 break;
-            case "pmovmskb":
-                srcA = getOperandLoad(getType(a), a);
-                LLVMX86_ConversionNode.LLVMX86_Pmovmskb128 pmovmskb128 = LLVMX86_ConversionNodeFactory.LLVMX86_Pmovmskb128NodeGen.create(srcA, sourceLocation);
-                out = pmovmskb128;
-                break;
             default:
                 statements.add(new LLVMUnsupportedInlineAssemblerNode(sourceLocation, operation));
                 return;
@@ -1660,8 +1650,8 @@ class AsmFactory {
     }
 
     private void getArguments() {
-        LLVMStoreNode[] writeNodes = LLVMStoreNode.NO_STORES;
-        LLVMExpressionNode[] valueNodes = LLVMExpressionNode.NO_EXPRESSIONS;
+        LLVMStoreNode[] writeNodes = null;
+        LLVMExpressionNode[] valueNodes = null;
         if (retType instanceof StructureType) {
             writeNodes = new LLVMStoreNode[retTypes.length];
             valueNodes = new LLVMExpressionNode[retTypes.length];
@@ -1724,8 +1714,6 @@ class AsmFactory {
                     LLVMExpressionNode argnode = LLVMArgNodeGen.create(arg.getInIndex());
                     if (argTypes[arg.getInIndex()] instanceof PointerType) {
                         arguments.add(LLVMWritePointerNodeGen.create(slot, null, argnode));
-                    } else if (argTypes[arg.getInIndex()] instanceof VectorType) {
-                        arguments.add(LLVMWriteNodeFactory.LLVMWriteVectorNodeGen.create(slot, null, argnode));
                     } else {
                         LLVMExpressionNode node = nodeFactory.createSignedCast(argnode, PrimitiveType.I64);
                         arguments.add(LLVMWriteI64NodeGen.create(slot, null, node));
@@ -1736,8 +1724,6 @@ class AsmFactory {
                 if (arg.getType() instanceof PrimitiveType) {
                     LLVMExpressionNode node = nodeFactory.createSignedCast(argnode, PrimitiveType.I64);
                     arguments.add(LLVMWriteI64NodeGen.create(slot, null, node));
-                } else if (arg.getType() instanceof VectorType) {
-                    arguments.add(LLVMWriteNodeFactory.LLVMWriteVectorNodeGen.create(slot, null, argnode));
                 } else if (arg.getType() instanceof PointerType) {
                     arguments.add(LLVMWritePointerNodeGen.create(slot, null, argnode));
                 } else {
