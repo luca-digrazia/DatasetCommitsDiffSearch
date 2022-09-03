@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -48,7 +46,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Test;
 
 import com.oracle.truffle.api.source.Source;
@@ -174,8 +171,6 @@ public class SourceInternalizationTest {
 
     @Test
     public void testSourceInterning() {
-        Assume.assumeFalse("This test is too slow in fastdebug.", System.getProperty("java.vm.version").contains("fastdebug"));
-
         byte[] bytes = new byte[16 * 1024 * 1024];
         byte byteValue = (byte) 'a';
         Arrays.fill(bytes, byteValue);
@@ -183,7 +178,7 @@ public class SourceInternalizationTest {
 
         ReferenceQueue<Object> queue = new ReferenceQueue<>();
         List<WeakReference<Object>> sources = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 200; i++) {
             sources.add(new WeakReference<>(createTestSource(testString, i), queue));
             System.gc();
         }
