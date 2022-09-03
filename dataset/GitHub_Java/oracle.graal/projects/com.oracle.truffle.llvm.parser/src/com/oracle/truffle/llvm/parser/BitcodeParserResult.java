@@ -30,52 +30,40 @@
 package com.oracle.truffle.llvm.parser;
 
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.parser.datalayout.DataLayoutConverter;
-import com.oracle.truffle.llvm.parser.listeners.IRVersionController;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
-import com.oracle.truffle.llvm.parser.model.target.TargetDataLayout;
 import com.oracle.truffle.llvm.parser.scanner.LLVMScanner;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.List;
 
 public final class BitcodeParserResult {
     private final ModelModule model;
-    private final LLVMPhiManager phis;
-    private final StackAllocation stackAllocation;
-    private final LLVMLabelList labels;
 
-    private BitcodeParserResult(ModelModule model, LLVMPhiManager phis, StackAllocation stackAllocation, LLVMLabelList labels) {
+    private BitcodeParserResult(ModelModule model) {
         this.model = model;
-        this.phis = phis;
-        this.stackAllocation = stackAllocation;
-        this.labels = labels;
     }
 
     public ModelModule getModel() {
         return model;
     }
 
-    public LLVMPhiManager getPhis() {
-        return phis;
+    public List<String> getLibraries() {
+        return model.getLibraries();
     }
 
-    public StackAllocation getStackAllocation() {
-        return stackAllocation;
+    public List<String> getLibraryPaths() {
+        return model.getLibraryPaths();
     }
 
-    public LLVMLabelList getLabels() {
-        return labels;
-    }
+    public static BitcodeParserResult getFromSource(Source source, ByteBuffer bytes) throws IOException {
+        assert bytes != null;
+        if (!LLVMScanner.isSupportedFile(bytes)) {
+            throw new IOException("Unsupported file: " + source.getName());
+        }
 
-    public static BitcodeParserResult getFromSource(Source source) {
-        final ModelModule model = LLVMScanner.parse(new IRVersionController(), source);
+        final ModelModule model = LLVMScanner.parse(source, bytes);
 
-        final LLVMPhiManager phis = LLVMPhiManager.generate(model);
-        final StackAllocation stackAllocation = StackAllocation.generate(model);
-        final LLVMLabelList labels = LLVMLabelList.generate(model);
-
-        final TargetDataLayout layout = model.getTargetDataLayout();
-        final DataLayoutConverter.DataSpecConverterImpl targetDataLayout = layout != null ? DataLayoutConverter.getConverter(layout.getDataLayout()) : null;
-        LLVMMetadata.generate(model, targetDataLayout);
-
-        return new BitcodeParserResult(model, phis, stackAllocation, labels);
+        return new BitcodeParserResult(model);
     }
 }
