@@ -916,7 +916,6 @@ abstract class DataHandler extends LitePalBase {
 			}
 		} else if (isSaving()) {
             Object value = takeGetMethodValueByField(baseObj, field);
-            // put content value only when value is not null. this allows to use defaultValue declared in annotation.
             if (value != null) {
                 putContentValues(baseObj, field, values);
             }
@@ -1076,7 +1075,8 @@ abstract class DataHandler extends LitePalBase {
 	 *            model's table.
 	 * @return Customized columns with id column always.
 	 */
-	private String[] getCustomizedColumns(String[] columns, List<AssociationsInfo> foreignKeyAssociations) {
+	private String[] getCustomizedColumns(String[] columns,
+			List<AssociationsInfo> foreignKeyAssociations) {
 		if (columns != null) {
 			if (foreignKeyAssociations != null && foreignKeyAssociations.size() > 0) {
 				String[] tempColumns = new String[columns.length + foreignKeyAssociations.size()];
