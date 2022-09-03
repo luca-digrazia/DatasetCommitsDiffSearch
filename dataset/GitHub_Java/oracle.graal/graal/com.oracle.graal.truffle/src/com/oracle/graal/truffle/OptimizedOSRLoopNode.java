@@ -34,13 +34,11 @@ import com.oracle.truffle.api.nodes.RootNode;
 
 public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObserver {
 
-    private CompilationProfile cachedProfile;
+    private int interpreterLoopCount;
     private int lastLoopCount;
     private OptimizedCallTarget compiledTarget;
 
     @Child private RepeatingNode repeatableNode;
-
-    private boolean disabled;
 
     private OptimizedOSRLoopNode(RepeatingNode repeatableNode) {
         this.repeatableNode = repeatableNode;
@@ -50,6 +48,7 @@ public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObser
     public Node copy() {
         OptimizedOSRLoopNode copy = (OptimizedOSRLoopNode) super.copy();
         copy.compiledTarget = null;
+        copy.interpreterLoopCount = 0;
         return copy;
     }
 
@@ -81,38 +80,21 @@ public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObser
     }
 
     private boolean profilingLoop(VirtualFrame frame) {
-        CompilationProfile profile = getProfile(getCallTarget());
-        int loopCount = 0;
-        boolean localDisabled = this.disabled;
+        int osrThreshold = TruffleCompilerOptions.TruffleOSRCompilationThreshold.getValue();
+        int overflowLoopCount = Integer.MAX_VALUE - osrThreshold + interpreterLoopCount;
         try {
             while (repeatableNode.executeRepeating(frame)) {
-                loopCount++;
-                if (!localDisabled) {
-                    try {
-                        profile.reportOSR();
-                    } catch (ArithmeticException e) {
-                        compileLoop(frame);
-                        return false;
-                    }
+                try {
+                    overflowLoopCount = Math.incrementExact(overflowLoopCount);
+                } catch (ArithmeticException e) {
+                    compileLoop(frame);
+                    return false;
                 }
             }
         } finally {
-            reportLoopCount(loopCount);
+            reportLoopCount(overflowLoopCount - Integer.MAX_VALUE + osrThreshold - interpreterLoopCount);
         }
         return true;
-    }
-
-    private CompilationProfile getProfile(OptimizedCallTarget target) {
-        CompilationProfile profile = this.cachedProfile;
-        if (profile == null) {
-            profile = target.getCompilationProfile();
-            this.cachedProfile = profile;
-        }
-        return profile;
-    }
-
-    private OptimizedCallTarget getCallTarget() {
-        return (OptimizedCallTarget) getRootNode().getCallTarget();
     }
 
     private boolean compilingLoop(VirtualFrame frame) {
@@ -136,6 +118,7 @@ public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObser
                     invalidate(this, "OSR compilation failed or cancelled");
                     return false;
                 }
+                iterations++;
             } while (repeatableNode.executeRepeating(frame));
         } finally {
             reportLoopCount(iterations);
@@ -153,36 +136,31 @@ public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObser
                  */
                 if (compiledTarget == null) {
                     compiledTarget = compileImpl(frame);
+                    if (compiledTarget == null) {
+                        interpreterLoopCount = 0;
+                    }
                 }
             }
         });
     }
 
     private OptimizedCallTarget compileImpl(VirtualFrame frame) {
-        OptimizedCallTarget parentTarget = getCallTarget();
-        CompilationProfile profile = getProfile(parentTarget);
-        profile.reportOSRCompiledLoop();
-
-        if (parentTarget.isValid() || parentTarget.isCompiling()) {
-            disabled = true;
-            return null;
-        } else {
-            Node parent = getParent();
-            OptimizedCallTarget osrTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(new OSRRootNode(this));
-            // to avoid a deopt on first call we provide some profiling information
-            osrTarget.profileReturnType(Boolean.TRUE);
-            osrTarget.profileReturnType(Boolean.FALSE);
-            osrTarget.profileArguments(new Object[]{frame});
-            // let the old parent re-adopt the children
-            parent.adoptChildren();
-            osrTarget.compile();
-            return osrTarget;
-        }
+        Node parent = getParent();
+        OptimizedCallTarget target = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(new OSRRootNode(this));
+        // to avoid a deopt on first call we provide some profiling information
+        target.profileReturnType(Boolean.TRUE);
+        target.profileReturnType(Boolean.FALSE);
+        target.profileArguments(new Object[]{frame});
+        // let the old parent re-adopt the children
+        parent.adoptChildren();
+        target.compile();
+        return target;
     }
 
     private void reportLoopCount(int reportIterations) {
         if (reportIterations != 0) {
             lastLoopCount = reportIterations;
+            interpreterLoopCount += reportIterations;
             getRootNode().reportLoopCount(reportIterations);
         }
     }
@@ -197,6 +175,7 @@ public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObser
         if (target != null) {
             target.invalidate(source, reason);
             compiledTarget = null;
+            interpreterLoopCount = 0;
         }
     }
 
