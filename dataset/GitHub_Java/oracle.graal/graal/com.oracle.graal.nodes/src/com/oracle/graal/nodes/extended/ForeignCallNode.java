@@ -137,16 +137,11 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
         this.stateDuring = stateDuring;
     }
 
-    public int getBci() {
-        return bci;
-    }
-
     /**
      * Set the {@code bci} of the invoke bytecode for use when converting a stateAfter into a
      * stateDuring.
      */
     public void setBci(int bci) {
-        assert this.bci == BytecodeFrame.UNKNOWN_BCI || this.bci == bci;
         this.bci = bci;
     }
 
