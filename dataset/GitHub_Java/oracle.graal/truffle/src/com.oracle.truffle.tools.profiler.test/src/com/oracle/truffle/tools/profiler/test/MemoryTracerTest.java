@@ -24,9 +24,8 @@
  */
 package com.oracle.truffle.tools.profiler.test;
 
-import com.oracle.truffle.tools.profiler.ProfilerNode;
+import com.oracle.truffle.tools.profiler.CallTreeNode;
 import com.oracle.truffle.tools.profiler.MemoryTracer;
-import com.oracle.truffle.tools.profiler.impl.MemoryTracerInstrument;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -39,7 +38,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
 
     @Before
     public void setupTracer() {
-        tracer = engine.getRuntime().getInstruments().get(MemoryTracerInstrument.ID).lookup(MemoryTracer.class);
+        tracer = engine.getRuntime().getInstruments().get(MemoryTracer.Instrument.ID).lookup(MemoryTracer.class);
         Assert.assertNotNull(tracer);
     }
 
@@ -57,7 +56,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
 
-        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
+        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
         Assert.assertEquals("More allocations found", 0, rootNodes.size());
     }
 
@@ -75,7 +74,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
 
-        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
+        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
         Assert.assertEquals("More allocations found", 0, rootNodes.size());
     }
 
@@ -96,9 +95,9 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertTrue(tracer.hasData());
 
-        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
+        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
         Assert.assertEquals("More allocations found", 1, rootNodes.size());
-        ProfilerNode<MemoryTracer.Payload> node = rootNodes.iterator().next();
+        CallTreeNode<MemoryTracer.AllocationPayload> node = rootNodes.iterator().next();
         if (node.getChildren() != null) {
             Assert.assertEquals("Nested allocations found!", 0, node.getChildren().size());
         }
@@ -127,9 +126,9 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertTrue(tracer.hasData());
 
-        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
+        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
         Assert.assertEquals("More allocations found", 1, rootNodes.size());
-        ProfilerNode<MemoryTracer.Payload> node = rootNodes.iterator().next();
+        CallTreeNode<MemoryTracer.AllocationPayload> node = rootNodes.iterator().next();
         if (node.getChildren() != null) {
             Assert.assertEquals("Nested allocations found!", 0, node.getChildren().size());
         }
@@ -159,8 +158,8 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.hasData());
 
         // ROOT
-        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
-        ProfilerNode<MemoryTracer.Payload> node = rootNodes.iterator().next();
+        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
+        CallTreeNode<MemoryTracer.AllocationPayload> node = rootNodes.iterator().next();
         Assert.assertEquals("Incorrect number of allocations found", 123, node.getPayload().getTotalAllocations());
         Assert.assertEquals("Incorrect number of events found", 1, node.getPayload().getEvents().size());
 
@@ -207,8 +206,8 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         final int totalAllocationsExpected = 112;
 
         // ROOT
-        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
-        ProfilerNode<MemoryTracer.Payload> node = rootNodes.iterator().next();
+        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
+        CallTreeNode<MemoryTracer.AllocationPayload> node = rootNodes.iterator().next();
         Assert.assertEquals("Incorrect number of allocations found",
                         totalAllocationsExpected, node.getPayload().getTotalAllocations());
         Assert.assertEquals("Incorrect number of events found", 1, node.getPayload().getEvents().size());

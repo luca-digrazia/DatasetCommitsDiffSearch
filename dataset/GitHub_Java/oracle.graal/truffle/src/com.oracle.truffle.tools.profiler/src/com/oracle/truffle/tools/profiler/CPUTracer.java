@@ -75,7 +75,7 @@ public final class CPUTracer implements Closeable {
 
     private EventBinding<?> activeBinding;
 
-    private final Map<SourceSection, Payload> payloadMap = new ConcurrentHashMap<>();
+    private final Map<SourceSection, Counter> counters = new ConcurrentHashMap<>();
 
     /**
      * Controls whether the tracer is collecting data or not.
@@ -122,11 +122,11 @@ public final class CPUTracer implements Closeable {
     }
 
     /**
-     * @return All the payloads the tracer has gathered as an unmodifiable collection
+     * @return All the counters the tracer has gathered as an unmodifiable collection
      * @since 0.29
      */
-    public synchronized Collection<Payload> getPayloads() {
-        return Collections.unmodifiableCollection(payloadMap.values());
+    public synchronized Collection<Counter> getCounters() {
+        return Collections.unmodifiableCollection(counters.values());
     }
 
     /**
@@ -135,20 +135,20 @@ public final class CPUTracer implements Closeable {
      * @since 0.29
      */
     public synchronized void clearData() {
-        payloadMap.clear();
+        counters.clear();
     }
 
-    private synchronized Payload getCounter(EventContext context) {
+    private synchronized Counter getCounter(EventContext context) {
         SourceSection sourceSection = context.getInstrumentedSourceSection();
-        Payload payload = payloadMap.get(sourceSection);
-        if (payload == null) {
-            payload = new Payload(new SourceLocation(env.getInstrumenter(), context));
-            Payload otherPayload = payloadMap.putIfAbsent(sourceSection, payload);
-            if (otherPayload != null) {
-                payload = otherPayload;
+        Counter counter = counters.get(sourceSection);
+        if (counter == null) {
+            counter = new Counter(new SourceLocation(env.getInstrumenter(), context));
+            Counter otherCounter = counters.putIfAbsent(sourceSection, counter);
+            if (otherCounter != null) {
+                counter = otherCounter;
             }
         }
-        return payload;
+        return counter;
     }
 
     private synchronized void verifyConfigAllowed() {
@@ -199,19 +199,19 @@ public final class CPUTracer implements Closeable {
      *
      * @since 0.29
      */
-    public static final class Payload {
+    public static final class Counter {
 
         private final SourceLocation location;
 
         private long countInterpreted;
         private long countCompiled;
 
-        Payload(SourceLocation location) {
+        Counter(SourceLocation location) {
             this.location = location;
         }
 
         /**
-         * @return The name of the root not in which the source section associated with this payload
+         * @return The name of the root not in which the source section associated with this counter
          *         appears
          * @since 0.29
          */
@@ -229,7 +229,7 @@ public final class CPUTracer implements Closeable {
         }
 
         /**
-         * @return The source section for which this {@link Payload} is counting executions
+         * @return The source section for which this {@link Counter} is counting executions
          * @since 0.29
          */
         public SourceSection getSourceSection() {
@@ -263,18 +263,18 @@ public final class CPUTracer implements Closeable {
 
     private static class CounterNode extends ExecutionEventNode {
 
-        private final Payload payload;
+        private final Counter counter;
 
-        CounterNode(Payload payload) {
-            this.payload = payload;
+        CounterNode(Counter counter) {
+            this.counter = counter;
         }
 
         @Override
         protected void onEnter(VirtualFrame frame) {
             if (CompilerDirectives.inInterpreter()) {
-                payload.countInterpreted++;
+                counter.countInterpreted++;
             } else {
-                payload.countCompiled++;
+                counter.countCompiled++;
             }
         }
 
