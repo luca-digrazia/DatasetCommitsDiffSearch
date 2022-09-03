@@ -612,7 +612,7 @@ public class ReplacementsImpl implements Replacements {
             final StructuredGraph graph = new StructuredGraph(methodToParse, AllowAssumptions.NO);
 
             // They will also never be never be evolved or have breakpoints set in them
-            graph.disableInlinedMethodRecording();
+            graph.disableMethodRecording();
 
             try (Scope s = Debug.scope("buildInitialGraph", graph)) {
                 MetaAccessProvider metaAccess = replacements.providers.getMetaAccess();

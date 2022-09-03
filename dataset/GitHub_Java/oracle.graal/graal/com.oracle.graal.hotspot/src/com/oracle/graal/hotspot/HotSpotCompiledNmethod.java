@@ -34,18 +34,18 @@ public final class HotSpotCompiledNmethod extends HotSpotCompiledCode {
     public final HotSpotResolvedJavaMethod method;
     public final int entryBCI;
     public final int id;
-    public final long graalEnv;
+    public final long ctask;
 
     public HotSpotCompiledNmethod(HotSpotResolvedJavaMethod method, CompilationResult compResult) {
         this(method, compResult, 0L);
     }
 
-    public HotSpotCompiledNmethod(HotSpotResolvedJavaMethod method, CompilationResult compResult, long graalEnv) {
+    public HotSpotCompiledNmethod(HotSpotResolvedJavaMethod method, CompilationResult compResult, long ctask) {
         super(compResult);
         this.method = method;
         this.entryBCI = compResult.getEntryBCI();
         this.id = compResult.getId();
-        this.graalEnv = graalEnv;
+        this.ctask = ctask;
     }
 
     @Override

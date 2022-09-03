@@ -566,8 +566,8 @@ public class SnippetTemplate {
 
         // Copy snippet graph, replacing constant parameters with given arguments
         final StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method(), AllowAssumptions.NO);
-        if (!snippetGraph.isInlinedMethodRecordingEnabled()) {
-            snippetCopy.disableInlinedMethodRecording();
+        if (!snippetGraph.isMethodRecordingEnabled()) {
+            snippetCopy.disableMethodRecording();
         }
 
         Map<Node, Node> nodeReplacements = Node.newIdentityMap();
