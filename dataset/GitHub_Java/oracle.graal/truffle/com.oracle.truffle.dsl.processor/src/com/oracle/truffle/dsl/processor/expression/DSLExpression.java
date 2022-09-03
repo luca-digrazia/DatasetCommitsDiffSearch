@@ -600,7 +600,7 @@ public abstract class DSLExpression {
 
     }
 
-    public abstract static class AbstractDSLExpressionReducer implements DSLExpressionReducer {
+    public static abstract class AbstractDSLExpressionReducer implements DSLExpressionReducer {
 
         @Override
         public DSLExpression visitBinary(Binary binary) {
