@@ -312,9 +312,6 @@ final class BreakpointFactory {
 
         @Override
         public void setEnabled(boolean enabled) {
-            if (getState() == DISPOSED) {
-                throw new IllegalStateException("Attempt to modify a disposed breakpoint");
-            }
             if (enabled != isEnabled) {
                 switch (getState()) {
                     case ENABLED:
@@ -379,9 +376,6 @@ final class BreakpointFactory {
 
         @Override
         public void setIgnoreCount(int ignoreCount) {
-            if (getState() == DISPOSED) {
-                throw new IllegalStateException("Attempt to modify a disposed breakpoint");
-            }
             this.ignoreCount = ignoreCount;
         }
 
