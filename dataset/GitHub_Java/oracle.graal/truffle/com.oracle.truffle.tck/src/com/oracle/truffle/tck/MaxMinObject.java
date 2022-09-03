@@ -27,7 +27,6 @@ package com.oracle.truffle.tck;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -47,10 +46,16 @@ final class MaxMinObject implements TruffleObject {
 
     @Override
     public ForeignAccess getForeignAccess() {
-        return ForeignAccess.create(MaxMinObject.class, new AF());
+        return ForeignAccess.create(MaxMinObject.class, new AF(max));
     }
 
     static final class AF implements ForeignAccess.Factory10 {
+        private final boolean max;
+
+        public AF(boolean max) {
+            this.max = max;
+        }
+
         @Override
         public CallTarget accessIsNull() {
             return null;
@@ -94,7 +99,7 @@ final class MaxMinObject implements TruffleObject {
         @Override
         public CallTarget accessExecute(int argumentsLength) {
             if (argumentsLength == 2) {
-                MaxMinNode maxNode = MaxMinObjectFactory.MaxMinNodeGen.create(new ReadReceiverNode(), MaxMinObjectFactory.UnboxNodeGen.create(new ReadArgNode(0)),
+                MaxMinNode maxNode = MaxMinObjectFactory.MaxMinNodeGen.create(max, MaxMinObjectFactory.UnboxNodeGen.create(new ReadArgNode(0)),
                                 MaxMinObjectFactory.UnboxNodeGen.create(new ReadArgNode(1)));
                 return Truffle.getRuntime().createCallTarget(maxNode);
             }
@@ -121,12 +126,6 @@ final class MaxMinObject implements TruffleObject {
 
         public Object execute(VirtualFrame frame) {
             return ForeignAccess.getArguments(frame).get(argIndex);
-        }
-    }
-
-    static class ReadReceiverNode extends Node {
-        public Object execute(VirtualFrame frame) {
-            return ForeignAccess.getReceiver(frame);
         }
     }
 
@@ -171,29 +170,28 @@ final class MaxMinObject implements TruffleObject {
 
     }
 
-    @NodeChildren({@NodeChild(value = "receiver", type = ReadReceiverNode.class), @NodeChild(value = "firstNode", type = UnboxNode.class), @NodeChild(value = "secondNode", type = UnboxNode.class)})
+    @NodeChildren({@NodeChild(value = "firstNode", type = UnboxNode.class), @NodeChild(value = "secondNode", type = UnboxNode.class)})
     abstract static class MaxMinNode extends RootNode {
+        private final boolean max;
 
-        MaxMinNode() {
-            super(MMLanguage.class, null, null);
+        MaxMinNode(boolean max) {
+            this.max = max;
         }
 
         @Specialization
-        public int execute(MaxMinObject receiver, int first, int second) {
-            return receiver.max ? Math.max(first, second) : Math.min(first, second);
+        public int execute(int first, int second) {
+            return max ? Math.max(first, second) : Math.min(first, second);
         }
 
         @Specialization
-        public long execute(MaxMinObject receiver, long first, long second) {
-            return receiver.max ? Math.max(first, second) : Math.min(first, second);
+        public long execute(long first, long second) {
+            return max ? Math.max(first, second) : Math.min(first, second);
         }
 
         @Specialization
-        public double execute(MaxMinObject receiver, double first, double second) {
-            return receiver.max ? Math.max(first, second) : Math.min(first, second);
+        public double execute(double first, double second) {
+            return max ? Math.max(first, second) : Math.min(first, second);
         }
     }
 
-    private abstract class MMLanguage extends TruffleLanguage<Object> {
-    }
 }
