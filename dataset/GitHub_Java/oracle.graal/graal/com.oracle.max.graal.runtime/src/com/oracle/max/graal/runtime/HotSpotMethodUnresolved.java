@@ -22,7 +22,6 @@
  */
 package com.oracle.max.graal.runtime;
 
-import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
@@ -115,7 +114,7 @@ public final class HotSpotMethodUnresolved extends HotSpotMethod {
     }
 
     @Override
-    public BitMap[] livenessMap() {
+    public CiBitMap[] livenessMap() {
         return null;
     }
 
@@ -176,15 +175,5 @@ public final class HotSpotMethodUnresolved extends HotSpotMethod {
 
     public int branchProbability(int bci) {
         return -1;
-    }
-
-    @Override
-    public Graph intrinsicGraph(Node[] parameters) {
-        return null;
-    }
-
-    @Override
-    public boolean hasIntrinsicGraph() {
-        return false;
     }
 }

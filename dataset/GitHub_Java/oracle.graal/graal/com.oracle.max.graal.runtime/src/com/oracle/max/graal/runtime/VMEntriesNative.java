@@ -141,8 +141,5 @@ public class VMEntriesNative implements VMEntries, Remote {
         return getType(o.getClass());
     }
 
-    @Override
-    public native RiField[] RiType_fields(HotSpotTypeResolved klass);
-
     // Checkstyle: resume
 }
