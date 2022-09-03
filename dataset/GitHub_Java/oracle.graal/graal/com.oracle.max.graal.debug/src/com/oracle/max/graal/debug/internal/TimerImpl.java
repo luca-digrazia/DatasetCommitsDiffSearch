@@ -24,19 +24,31 @@ package com.oracle.max.graal.debug.internal;
 
 import com.oracle.max.graal.debug.*;
 
-public final class MetricImpl extends DebugValue implements DebugMetric {
+public final class TimerImpl extends DebugValue implements DebugTimer {
 
-    public MetricImpl(String name) {
+    public static final TimerCloseable VOID_CLOSEABLE = new TimerCloseable() {
+        @Override
+        public void close() {
+        }
+    };
+
+    public TimerImpl(String name) {
         super(name);
     }
 
-    public void increment() {
-        add(1);
-    }
-
-    public void add(int value) {
-        if (Debug.isMeterEnabled()) {
-            super.addToCurrentValue(value);
+    @Override
+    public TimerCloseable start() {
+        if (Debug.isTimeEnabled()) {
+            final long startTime = System.currentTimeMillis();
+            return new TimerCloseable() {
+                @Override
+                public void close() {
+                    long timeSpan = System.currentTimeMillis() - startTime;
+                    TimerImpl.this.addToCurrentValue(timeSpan);
+                }
+            };
+        } else {
+            return VOID_CLOSEABLE;
         }
     }
 }
