@@ -278,7 +278,21 @@ public abstract class Source {
         return builder.toString();
     }
 
-    abstract Source copy();
+    /**
+     * {@inheritDoc}
+     *
+     * @since 1.0
+     */
+    @Override
+    protected Source clone() {
+        Source copy;
+        try {
+            copy = (Source) super.clone();
+        } catch (CloneNotSupportedException e) {
+            throw new AssertionError();
+        }
+        return copy;
+    }
 
     /**
      * Returns the code sequence as {@link CharSequence}. Causes the contents of this source to be
