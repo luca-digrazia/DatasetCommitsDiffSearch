@@ -47,30 +47,178 @@
  )
  */
 /**
- * <h1>The Truffle Tutorial</h1>
+ * <a href="https://github.com/graalvm/truffle">Truffle</a>
+ * is a framework for implementing languages as simple interpreters.
+ * Together with the <a href="https://github.com/graalvm/graal-core/">Graal compiler</a>,
+ * Truffle interpreters are automatically just-in-time compiled and programs running on
+ * top of them can reach performance of normal Java.
+ * <p>
+ * Truffle is developed and maintained by Oracle Labs and the
+ * Institute for System Software of the Johannes Kepler University Linz.
  *
+ * <h1>Contents</h1>
+ * 
+ * <div id="toc"></div>
  * <div id="contents">
  *
- * Welcome to <a href="https://github.com/graalvm/truffle">Truffle</a>:
- * the Open Source framework for implementing programming languages with very high performance, Java embedding,
- * language interoperation, debugging, and general tooling support.  Truffle is part of the
- * <a href="https://github.com/graalvm/truffle">Graal Project</a>, developed and maintained by
- * <a href="http://labs.oracle.com/">Oracle Labs</a>
- * and the
- * <a href="http://www.jku.at/isse/content">Institute for System Software</a> of the
- * Johannes Kepler University Linz.
- * <p>
- * This document contains tutorial information specialized for different interests,
- * for example whether you want to run Truffle languages inside a Java application ("Embedding...")
- * or implement your own language using Truffle ("Implementing..").  We expect this collection to grow.
- * <p>
- * Tutorial Topics:
- * <ul>
- * <li>{@linkplain com.oracle.truffle.tutorial.background Truffle Background}</li>
- * <li>{@linkplain com.oracle.truffle.tutorial.embedding Embedding Truffle in Java}</li>
- * <li>{@linkplain com.oracle.truffle.tutorial.newlanguage Implementing a Language with Truffle}</li>
- * <li>{@linkplain com.oracle.truffle.tutorial.graal The Graal Compiler}</li>
- * </ul>
+ * <h1>Embedding Truffle</h1>
+ *
+ * In case you want to embedded Truffle into your Java application,
+ * start by downloading 
+ * <a href="http://www.oracle.com/technetwork/oracle-labs/program-languages/overview/">GraalVM</a>
+ * which contains all the necessary pre-built components.
+ * Truffle bits are <a href="http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.oracle.truffle%22%20AND%20a%3A%22truffle-api%22">
+ * uploaded to Maven central</a>. You can use them from your <em>pom.xml</em>
+ * file as:
+ * <pre>
+&lt;dependency&gt;
+    &lt;groupId&gt;<b>com.oracle.truffle</b>&lt;/groupId&gt;
+    &lt;artifactId&gt;<b>truffle-api</b>&lt;/artifactId&gt;
+    &lt;version&gt;0.23&lt;/version&gt; <em>&lt;!-- or any later version --&gt;</em>
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;<b>com.oracle.truffle</b>&lt;/groupId&gt;
+    &lt;artifactId&gt;<b>truffle-dsl-processor</b>&lt;/artifactId&gt;
+    &lt;version&gt;0.23&lt;/version&gt; <em>&lt;!-- same version as above --&gt;</em>
+    &lt;scope&gt;provided&lt;/scope&gt;
+&lt;/dependency&gt;
+ * </pre>
+ *
+ * <h2>Getting Started</h2>
+ *
+ * <h3>Simple Hello World!</h3>
+ *
+ * Integrating Truffle into your Java application starts with building
+ * an instance of {@link com.oracle.truffle.api.vm.PolyglotEngine} - a
+ * gate way into the polyglot world of languages. Once you have an instance
+ * of the engine, you can {@link com.oracle.truffle.api.source.Source build sources}
+ * and {@link com.oracle.truffle.api.vm.PolyglotEngine#eval evaluate them}.
+ * The following example create a <code>hello.js</code> JavaScript source,
+ * executees it and checks result of the evaluation:
+ *
+ * {@codesnippet com.oracle.truffle.tutorial.HelloWorld#helloWorldInJavaScript}
+ *
+ * <h3>It's a Polyglot World</h3>
+ *
+ * How to list all available languages?
+ *
+ * <h3>Adding additional Language</h3>
+ *
+ * Put its JAR on classpath.
+ *
+ * <h3>Hello World in Ruby and JavaScript</h3>
+ *
+ * Mixing languages
+ *
+ * <h2>Calling Functions</h2>
+ *
+ * <h3>Define and call JavaScript function</h3>
+ *
+ * To use a function written in a dynamic language from Java one needs to give
+ * it a type. The following sample defines {@code Mul} interface with a single
+ * method. Then it evaluates the dynamic code to define the function and
+ * {@link com.oracle.truffle.api.vm.PolyglotEngine.Value#as(java.lang.Class) uses the result as} the {@code Mul}
+ * interface:
+ *
+ * {@codesnippet com.oracle.truffle.tck.impl.PolyglotEngineWithJavaScript#defineJavaScriptFunctionAndUseItFromJava}
+ *
+ * In case of JavaScript, it is adviced to wrap the function into parenthesis,
+ * as then the function doesn't polute the global scope - the only reference to
+ * it is via implementation of the {@code Mul} interface.
+ *
+ * <h3>Define and call Ruby function</h3>
+ * <h3>Define and call R function</h3>
+ *
+ * <h2>Multiple functions with a state</h2>
+ *
+ * Often it is necessary to expose multiple dynamic language functions that work
+ * in orchestration - for example when they share some common variables. This
+ * can be done by typing these functions via Java interface as well. Just the
+ * interface needs to have more than a single method:
+ *
+ * {@codesnippet com.oracle.truffle.tck.impl.PolyglotEngineWithJavaScript#defineMultipleJavaScriptFunctionsAndUseItFromJava}
+ *
+ * The previous example defines an object with two functions:
+ * <code>addTime</code> and <code>timeInSeconds</code>. The Java interface
+ * <code>Times</code> wraps this dynamic object and gives it a type: for example
+ * the <code>addTime</code> method is known to take three integer arguments.
+ * Both functions in the dynamic language are defined in a single, encapsulating
+ * function - as such they can share variable <code>seconds</code>. Because of
+ * using parenthesis when defining the encapsulating function, nothing is
+ * visible in a global JavaScript scope - the only reference to the system is
+ * from Java via the implementation of <code>Times</code> interface.
+ *
+ * <h2>Accessing Dynamic Structures from Java</h2>
+ * 
+ * <h3>Type-safe View of an Array</h3>
+ *
+ * The following example defines a {@link java.lang.FunctionalInterface} which's method returns a
+ * {@link java.util.List} of points:
+ *
+ * {@codesnippet com.oracle.truffle.tck.impl.PolyglotEngineWithJavaScript#arrayWithTypedElements}
+ *
+ * <h3>Accessing JavaScript Classes</h3>
+ *
+ * Version six of JavaScript added a concept of typeless
+ * classes. With Java interop one can give the classes types. Here is an example
+ * that defines <code>class Incrementor</code> with two functions and one field
+ * and "types it" with Java interface:
+ *
+ * {@codesnippet com.oracle.truffle.tck.impl.PolyglotEngineWithJavaScript#incrementor}
+ *
+ *
+ * <h3>Accessing JSON Structure</h3>
+ *
+ * Imagine a need to safely access complex JSON-like structure. The next example uses one
+ * modeled after JSON response returned by a GitHub API. It contains a list of repository
+ * objects. Each repository has an id, name, list of URLs and a nested structure describing
+ * owner. Let's start by defining the structure with Java interfaces:
+ *
+ * {@codesnippet com.oracle.truffle.tck.impl.PolyglotEngineWithJavaScript#accessJSONObjectProperties}
+ *
+ * The example defines a parser that somehow obtains object representing the JSON data and
+ * converts it into {@link java.util.List} of {@code Repository} instances. After calling the method
+ * we can safely use the interfaces ({@link java.util.List}, {@code Repository}, {@code Owner}) and
+ * inspect the JSON structure in a type-safe way.
+ *
+ * <h2>Accessing Java from Dynamic Languages</h2>
+ *
+ * <h3>Access Fields and Methods of Java Objects</h3>
+ *
+ * This method allows one to easily expose <b>public</b> members of Java objects to scripts
+ * written in dynamic languages. For example the next code defines class <code>Moment</code>
+ * and allows dynamic language access its fields:
+ *
+ * {@codesnippet com.oracle.truffle.tck.impl.PolyglotEngineWithJavaScript#accessFieldsOfJavaObject}
+ *
+ * Of course, the {@link com.oracle.truffle.api.vm.PolyglotEngine.Value#as(java.lang.Class) manual conversion} to {@link java.lang.Number} is
+ * annoying. Should it be performed frequently, it is better to define a
+ * <code>MomentConvertor</code> interface:
+ *
+ * {@codesnippet com.oracle.truffle.tck.impl.PolyglotEngineWithJavaScript#accessFieldsOfJavaObjectWithConvertor}
+ *
+ * then one gets completely type-safe view of the dynamic function including its parameters
+ * and return type.
+ *
+ * <h3>Accessing Static Methods</h3>
+ *
+ * Dynamic languages can also access <b>public</b> static methods and <b>public</b>
+ * constructors of Java classes, if they can get reference to them. Luckily
+ * {@linkplain com.oracle.truffle.api.vm.PolyglotEngine.Value#execute(java.lang.Object...) there is a support}
+ * for wrapping instances of
+ * {@link java.lang.Class} to appropriate objects:
+ *
+ * {@codesnippet com.oracle.truffle.tck.impl.PolyglotEngineWithJavaScript#createNewMoment}
+ *
+ * In the above example the <code>Moment.class</code> is passed into the JavaScript function
+ * as first argument and can be used by the dynamic language as a constructor in
+ * <code>new Moment(h, m, s)</code> - that creates new instances of the Java class. Static
+ * methods of the passed in <code>Moment</code> object could be invoked as well.
+ *
+ * <h1>Writing Own Language</h1>
+ *
+ * Expert topic: see {@link com.oracle.truffle.api.TruffleLanguage other tutorial}.
+ * 
  * </div>
 <script>
 
@@ -128,7 +276,7 @@ window.onload = function () {
     document.getElementById("toc").innerHTML += toc;
 };
 </script>
- *
+ * 
  * @since 0.23
  */
 package com.oracle.truffle.tutorial;
