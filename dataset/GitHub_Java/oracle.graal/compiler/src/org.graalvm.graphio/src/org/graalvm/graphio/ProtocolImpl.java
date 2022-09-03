@@ -22,9 +22,7 @@
  */
 package org.graalvm.graphio;
 
-import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
 import java.util.Map;
@@ -299,8 +297,7 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
 
     @Override
     protected String findLocationFile(Location loc) {
-        URI u = locations.locationURI(loc);
-        return u == null || !"file".equals(u.getScheme()) ? null : new File(u).getPath();
+        return locations.locationFileName(loc);
     }
 
     @Override
