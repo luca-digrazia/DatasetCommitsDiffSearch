@@ -38,21 +38,21 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 @NodeChild(value = "address", type = LLVMExpressionNode.class)
 public abstract class LLVMStructArrayLiteralNode extends LLVMExpressionNode {
 
     @Children private final LLVMExpressionNode[] values;
-    private final long stride;
+    private final int stride;
     @Child private LLVMMemMoveNode memMove;
     private final Type elementType;
 
-    public LLVMStructArrayLiteralNode(LLVMExpressionNode[] values, LLVMMemMoveNode memMove, long stride, Type elementType) {
+    public LLVMStructArrayLiteralNode(LLVMExpressionNode[] values, LLVMMemMoveNode memMove, int stride, Type elementType) {
         this.values = values;
         this.stride = stride;
         this.memMove = memMove;
@@ -60,9 +60,8 @@ public abstract class LLVMStructArrayLiteralNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    protected LLVMAddress write(VirtualFrame frame, LLVMGlobal global,
-                    @Cached(value = "toNative()") LLVMToNativeNode globalAccess) {
-        return writeDouble(frame, globalAccess.executeWithTarget(frame, global));
+    protected LLVMAddress write(VirtualFrame frame, LLVMGlobalVariable global, @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+        return writeDouble(frame, globalAccess.getNativeLocation(global));
     }
 
     @Specialization
@@ -88,7 +87,7 @@ public abstract class LLVMStructArrayLiteralNode extends LLVMExpressionNode {
 
     @Specialization(guards = {"noOffset(addr)"})
     @ExplodeLoop
-    protected Object doVoid(VirtualFrame frame, LLVMTruffleObject addr) {
+    public Object executeVoid(VirtualFrame frame, LLVMTruffleObject addr) {
         LLVMTruffleObject currentPtr = addr;
         for (int i = 0; i < values.length; i++) {
             LLVMTruffleObject currentValue = (LLVMTruffleObject) values[i].executeGeneric(frame);
@@ -97,4 +96,5 @@ public abstract class LLVMStructArrayLiteralNode extends LLVMExpressionNode {
         }
         return addr;
     }
+
 }
