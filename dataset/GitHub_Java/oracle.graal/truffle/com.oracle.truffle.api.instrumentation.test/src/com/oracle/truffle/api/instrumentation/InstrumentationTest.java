@@ -30,6 +30,8 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.KillException;
+import com.oracle.truffle.api.QuitException;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.MaterializedFrame;
@@ -47,90 +49,90 @@ import com.oracle.truffle.api.vm.PolyglotEngine.Instrument;
 public class InstrumentationTest extends AbstractInstrumentationTest {
 
     /*
-     * Test that metadata is properly propagated to Instrument handles.
+     * Test that metadata is properly propagated to InstrumenationDescriptor objects.
      */
     @Test
     public void testMetadata() {
-        Instrument instrumentHandle1 = engine.getInstruments().get("testMetadataType1");
+        Instrument descriptor1 = engine.getInstruments().get("testMetadataType1");
 
-        Assert.assertEquals("name", instrumentHandle1.getName());
-        Assert.assertEquals("version", instrumentHandle1.getVersion());
-        Assert.assertEquals("testMetadataType1", instrumentHandle1.getId());
-        Assert.assertFalse(instrumentHandle1.isEnabled());
+        Assert.assertEquals("name", descriptor1.getName());
+        Assert.assertEquals("version", descriptor1.getVersion());
+        Assert.assertEquals("testMetadataType1", descriptor1.getId());
+        Assert.assertFalse(descriptor1.isEnabled());
     }
 
     @Registration(name = "name", version = "version", id = "testMetadataType1")
-    public static class MetadataInstrument extends TruffleInstrument {
+    public static class MetadataInstrumentation extends TruffleInstrument {
         @Override
         protected void onCreate(Env env) {
         }
     }
 
     /*
-     * Test that metadata is properly propagated to Instrument handles.
+     * Test that metadata is properly propagated to InstrumenationDescriptor objects.
      */
     @Test
     public void testDefaultId() {
-        Instrument descriptor1 = engine.getInstruments().get(MetadataInstrument2.class.getName());
+        Instrument descriptor1 = engine.getInstruments().get(MetadataInstrumentation2.class.getName());
         Assert.assertEquals("", descriptor1.getName());
         Assert.assertEquals("", descriptor1.getVersion());
-        Assert.assertEquals(MetadataInstrument2.class.getName(), descriptor1.getId());
+        Assert.assertEquals(MetadataInstrumentation2.class.getName(), descriptor1.getId());
         Assert.assertFalse(descriptor1.isEnabled());
     }
 
     @Registration
-    public static class MetadataInstrument2 extends TruffleInstrument {
+    public static class MetadataInstrumentation2 extends TruffleInstrument {
         @Override
         protected void onCreate(Env env) {
         }
     }
 
     /*
-     * Test onCreate and onDispose invocations for multiple instrument instances.
+     * Test onCreate and onDispose invocations for multiple instrumentation instances.
      */
     @Test
     public void testMultipleInstruments() throws IOException {
         run(""); // initialize
 
-        MultipleInstanceInstrument.onCreateCounter = 0;
-        MultipleInstanceInstrument.onDisposeCounter = 0;
-        MultipleInstanceInstrument.constructor = 0;
+        MultipleInstrumentsInstrumentation.onCreateCounter = 0;
+        MultipleInstrumentsInstrumentation.onDisposeCounter = 0;
+        MultipleInstrumentsInstrumentation.constructor = 0;
         Instrument instrument1 = engine.getInstruments().get("testMultipleInstruments");
         instrument1.setEnabled(true);
-        Assert.assertEquals(1, MultipleInstanceInstrument.constructor);
-        Assert.assertEquals(1, MultipleInstanceInstrument.onCreateCounter);
-        Assert.assertEquals(0, MultipleInstanceInstrument.onDisposeCounter);
+        Assert.assertEquals(1, MultipleInstrumentsInstrumentation.constructor);
+        Assert.assertEquals(1, MultipleInstrumentsInstrumentation.onCreateCounter);
+        Assert.assertEquals(0, MultipleInstrumentsInstrumentation.onDisposeCounter);
 
         Instrument instrument = engine.getInstruments().get("testMultipleInstruments");
         instrument.setEnabled(true);
-        Assert.assertEquals(1, MultipleInstanceInstrument.constructor);
-        Assert.assertEquals(1, MultipleInstanceInstrument.onCreateCounter);
-        Assert.assertEquals(0, MultipleInstanceInstrument.onDisposeCounter);
+        Assert.assertEquals(1, MultipleInstrumentsInstrumentation.constructor);
+        Assert.assertEquals(1, MultipleInstrumentsInstrumentation.onCreateCounter);
+        Assert.assertEquals(0, MultipleInstrumentsInstrumentation.onDisposeCounter);
 
         instrument.setEnabled(false);
-        Assert.assertEquals(1, MultipleInstanceInstrument.constructor);
-        Assert.assertEquals(1, MultipleInstanceInstrument.onCreateCounter);
-        Assert.assertEquals(1, MultipleInstanceInstrument.onDisposeCounter);
+        Assert.assertEquals(1, MultipleInstrumentsInstrumentation.constructor);
+        Assert.assertEquals(1, MultipleInstrumentsInstrumentation.onCreateCounter);
+        Assert.assertEquals(1, MultipleInstrumentsInstrumentation.onDisposeCounter);
 
         instrument.setEnabled(true);
-        Assert.assertEquals(2, MultipleInstanceInstrument.constructor);
-        Assert.assertEquals(2, MultipleInstanceInstrument.onCreateCounter);
-        Assert.assertEquals(1, MultipleInstanceInstrument.onDisposeCounter);
+        Assert.assertEquals(2, MultipleInstrumentsInstrumentation.constructor);
+        Assert.assertEquals(2, MultipleInstrumentsInstrumentation.onCreateCounter);
+        Assert.assertEquals(1, MultipleInstrumentsInstrumentation.onDisposeCounter);
 
         instrument.setEnabled(false);
-        Assert.assertEquals(2, MultipleInstanceInstrument.constructor);
-        Assert.assertEquals(2, MultipleInstanceInstrument.onCreateCounter);
-        Assert.assertEquals(2, MultipleInstanceInstrument.onDisposeCounter);
+        Assert.assertEquals(2, MultipleInstrumentsInstrumentation.constructor);
+        Assert.assertEquals(2, MultipleInstrumentsInstrumentation.onCreateCounter);
+        Assert.assertEquals(2, MultipleInstrumentsInstrumentation.onDisposeCounter);
     }
 
     @Registration(id = "testMultipleInstruments")
-    public static class MultipleInstanceInstrument extends TruffleInstrument {
+    public static class MultipleInstrumentsInstrumentation extends TruffleInstrument {
 
         private static int onCreateCounter = 0;
         private static int onDisposeCounter = 0;
         private static int constructor = 0;
 
-        public MultipleInstanceInstrument() {
+        public MultipleInstrumentsInstrumentation() {
             constructor++;
         }
 
@@ -146,12 +148,12 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     }
 
     /*
-     * Test exceptions from language instrumentation are not wrapped into InstrumentationExceptions.
-     * Test that one language cannot instrument another.
+     * Test exceptions from language instrumentations are not wrapped into
+     * InstrumentationExceptions. Test that one language cannot instrument another.
      */
     @Test
     public void testLanguageInstrumentationAndExceptions() throws IOException {
-        TestLanguageInstrumentationLanguage.installInstrumentsCounter = 0;
+        TestLanguageInstrumentationLanguage.installInstrumentationsCounter = 0;
         TestLanguageInstrumentationLanguage.createContextCounter = 0;
         try {
             engine.eval(Source.fromText("ROOT(EXPRESSION)", null).withMimeType("testLanguageInstrumentation"));
@@ -163,10 +165,10 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
                 Assert.fail(String.format("expected MyLanguageException but was %s in %s", e.getCause(), e));
             }
         }
-        Assert.assertEquals(1, TestLanguageInstrumentationLanguage.installInstrumentsCounter);
+        Assert.assertEquals(1, TestLanguageInstrumentationLanguage.installInstrumentationsCounter);
         Assert.assertEquals(1, TestLanguageInstrumentationLanguage.createContextCounter);
 
-        // this should run isolated from the language instrumentation.
+        // this should run isolated from the language instrumentations.
         run("STATEMENT");
     }
 
@@ -180,11 +182,11 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
         public static final TestLanguageInstrumentationLanguage INSTANCE = new TestLanguageInstrumentationLanguage();
 
-        static int installInstrumentsCounter = 0;
+        static int installInstrumentationsCounter = 0;
         static int createContextCounter = 0;
 
-        private static void installInstruments(Instrumenter instrumenter) {
-            installInstrumentsCounter++;
+        private static void installInstrumentations(Instrumenter instrumenter) {
+            installInstrumentationsCounter++;
             instrumenter.attachListener(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION).build(), new ExecutionEventListener() {
                 public void onReturnValue(EventContext context, VirtualFrame frame, Object result) {
                 }
@@ -219,7 +221,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
             createContextCounter++;
             Instrumenter instrumenter = env.lookup(Instrumenter.class);
             Assert.assertNotNull("Instrumenter found", instrumenter);
-            installInstruments(instrumenter);
+            installInstrumentations(instrumenter);
             return null;
         }
 
@@ -275,16 +277,16 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     }
 
     @Test
-    public void testInstrumentException1() throws IOException {
-        engine.getInstruments().get("testInstrumentException1").setEnabled(true);
+    public void testInstrumentationException1() throws IOException {
+        engine.getInstruments().get("testInstrumentationException1").setEnabled(true);
         run("");
 
         Assert.assertTrue(getErr().contains("MyLanguageException"));
 
     }
 
-    @Registration(name = "", version = "", id = "testInstrumentException1")
-    public static class TestInstrumentException1 extends TruffleInstrument {
+    @Registration(name = "", version = "", id = "testInstrumentationException1")
+    public static class TestInstrumentationException1 extends TruffleInstrument {
 
         @Override
         protected void onCreate(Env env) {
@@ -301,19 +303,19 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
      * and not onReturnValue,
      */
     @Test
-    public void testInstrumentException2() throws IOException {
-        TestInstrumentException2.returnedExceptional = 0;
-        TestInstrumentException2.returnedValue = 0;
-        engine.getInstruments().get("testInstrumentException2").setEnabled(true);
+    public void testInstrumentationException2() throws IOException {
+        TestInstrumentationException2.returnedExceptional = 0;
+        TestInstrumentationException2.returnedValue = 0;
+        engine.getInstruments().get("testInstrumentationException2").setEnabled(true);
         run("ROOT(EXPRESSION)");
         Assert.assertTrue(getErr().contains("MyLanguageException"));
 
-        Assert.assertEquals(0, TestInstrumentException2.returnedExceptional);
-        Assert.assertEquals(1, TestInstrumentException2.returnedValue);
+        Assert.assertEquals(0, TestInstrumentationException2.returnedExceptional);
+        Assert.assertEquals(1, TestInstrumentationException2.returnedValue);
     }
 
-    @Registration(name = "", version = "", id = "testInstrumentException2")
-    public static class TestInstrumentException2 extends TruffleInstrument {
+    @Registration(name = "", version = "", id = "testInstrumentationException2")
+    public static class TestInstrumentationException2 extends TruffleInstrument {
 
         static int returnedExceptional = 0;
         static int returnedValue = 0;
@@ -346,18 +348,18 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
      * exceptions.
      */
     @Test
-    public void testInstrumentException3() throws IOException {
-        TestInstrumentException3.returnedExceptional = 0;
-        TestInstrumentException3.onEnter = 0;
-        engine.getInstruments().get("testInstrumentException3").setEnabled(true);
+    public void testInstrumentationException3() throws IOException {
+        TestInstrumentationException3.returnedExceptional = 0;
+        TestInstrumentationException3.onEnter = 0;
+        engine.getInstruments().get("testInstrumentationException3").setEnabled(true);
         run("ROOT(EXPRESSION)");
         Assert.assertTrue(getErr().contains("MyLanguageException"));
-        Assert.assertEquals(0, TestInstrumentException3.returnedExceptional);
-        Assert.assertEquals(1, TestInstrumentException3.onEnter);
+        Assert.assertEquals(0, TestInstrumentationException3.returnedExceptional);
+        Assert.assertEquals(1, TestInstrumentationException3.onEnter);
     }
 
-    @Registration(name = "", version = "", id = "testInstrumentException3")
-    public static class TestInstrumentException3 extends TruffleInstrument {
+    @Registration(name = "", version = "", id = "testInstrumentationException3")
+    public static class TestInstrumentationException3 extends TruffleInstrument {
 
         static int returnedExceptional = 0;
         static int onEnter = 0;
@@ -663,6 +665,96 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
                 public void onReturnValue(EventContext context, VirtualFrame frame, Object result) {
                 }
+            });
+        }
+    }
+
+    /*
+     * Tests for debugger or any other clients that cancel execution while halted
+     */
+
+    @Test
+    public void testKillExceptionOnEnter() throws IOException {
+        engine.getInstruments().get("testKillQuitException").setEnabled(true);
+        TestKillQuitException.exceptionOnEnter = new KillException();
+        TestKillQuitException.exceptionOnReturnValue = null;
+        TestKillQuitException.returnExceptionalCount = 0;
+        try {
+            run("STATEMENT");
+            Assert.fail("KillException in onEnter() cancels engine execution");
+        } catch (KillException ex) {
+        }
+        Assert.assertEquals("KillException is not an execution event", 0, TestKillQuitException.returnExceptionalCount);
+    }
+
+    @Test
+    public void testQuitExceptionOnEnter() throws IOException {
+        engine.getInstruments().get("testKillQuitException").setEnabled(true);
+        TestKillQuitException.exceptionOnEnter = new QuitException();
+        TestKillQuitException.exceptionOnReturnValue = null;
+        TestKillQuitException.returnExceptionalCount = 0;
+        try {
+            run("STATEMENT");
+            Assert.fail("QuitException in onEnter() cancels engine execution");
+        } catch (QuitException ex) {
+        }
+        Assert.assertEquals("QuitException is not an execution event", 0, TestKillQuitException.returnExceptionalCount);
+    }
+
+    @Test
+    public void testKillExceptionOnReturnValue() throws IOException {
+        engine.getInstruments().get("testKillQuitException").setEnabled(true);
+        TestKillQuitException.exceptionOnEnter = null;
+        TestKillQuitException.exceptionOnReturnValue = new KillException();
+        TestKillQuitException.returnExceptionalCount = 0;
+        try {
+            run("STATEMENT");
+            Assert.fail("KillException in onReturnValue() cancels engine execution");
+        } catch (KillException ex) {
+        }
+        Assert.assertEquals("KillException is not an execution event", 0, TestKillQuitException.returnExceptionalCount);
+    }
+
+    @Test
+    public void testQuitExceptionOnReturnValue() throws IOException {
+        engine.getInstruments().get("testKillQuitException").setEnabled(true);
+        TestKillQuitException.exceptionOnEnter = null;
+        TestKillQuitException.exceptionOnReturnValue = new QuitException();
+        TestKillQuitException.returnExceptionalCount = 0;
+        try {
+            run("STATEMENT");
+            Assert.fail("QuitException in onReturnValue() cancels engine execution");
+        } catch (QuitException ex) {
+        }
+        Assert.assertEquals("QuitException is not an execution event", 0, TestKillQuitException.returnExceptionalCount);
+    }
+
+    @Registration(id = "testKillQuitException")
+    public static class TestKillQuitException extends TruffleInstrument {
+
+        static RuntimeException exceptionOnEnter = null;
+        static RuntimeException exceptionOnReturnValue = null;
+        static int returnExceptionalCount = 0;
+
+        @Override
+        protected void onCreate(final Env env) {
+            env.getInstrumenter().attachListener(SourceSectionFilter.newBuilder().build(), new ExecutionEventListener() {
+                public void onEnter(EventContext context, VirtualFrame frame) {
+                    if (exceptionOnEnter != null) {
+                        throw exceptionOnEnter;
+                    }
+                }
+
+                public void onReturnValue(EventContext context, VirtualFrame frame, Object result) {
+                    if (exceptionOnReturnValue != null) {
+                        throw exceptionOnReturnValue;
+                    }
+                }
+
+                public void onReturnExceptional(EventContext context, VirtualFrame frame, Throwable exception) {
+                    returnExceptionalCount++;
+                }
+
             });
         }
     }
