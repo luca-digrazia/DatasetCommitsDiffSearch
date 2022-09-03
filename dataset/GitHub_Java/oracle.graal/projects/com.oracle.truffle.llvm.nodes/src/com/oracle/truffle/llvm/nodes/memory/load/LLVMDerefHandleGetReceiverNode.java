@@ -33,19 +33,15 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
+import com.oracle.truffle.llvm.runtime.memory.LLVMNativeMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public class LLVMDerefHandleGetReceiverNode extends LLVMNode {
 
-    protected final long mask;
     @CompilationFinal private ContextReference<LLVMContext> context;
-
-    protected LLVMDerefHandleGetReceiverNode(long mask) {
-        this.mask = mask;
-    }
 
     protected LLVMContext getContext() {
         if (context == null) {
@@ -55,15 +51,19 @@ public class LLVMDerefHandleGetReceiverNode extends LLVMNode {
         return context.get();
     }
 
-    public LLVMTruffleObject execute(LLVMAddress addr) {
-        LLVMAddress objectBaseAddr = LLVMAddress.fromLong(addr.getVal() & ~mask);
+    public LLVMManagedPointer execute(LLVMNativePointer addr) {
+        return execute(addr.asNative());
+    }
+
+    public LLVMManagedPointer execute(long addr) {
+        long mask = LLVMNativeMemory.getDerefHandleObjectMask();
+        LLVMNativePointer objectBaseAddr = LLVMNativePointer.create(addr & ~mask);
         TruffleObject receiver = getContext().getManagedObjectForHandle(objectBaseAddr);
-        LLVMTruffleObject pointerToForeign = new LLVMTruffleObject(receiver);
-        return pointerToForeign.increment(addr.getVal() & mask);
+        LLVMManagedPointer pointerToForeign = LLVMManagedPointer.create(receiver);
+        return pointerToForeign.increment(addr & mask);
     }
 
-    public static LLVMDerefHandleGetReceiverNode create(long bitmask) {
-        return new LLVMDerefHandleGetReceiverNode(bitmask);
+    public static LLVMDerefHandleGetReceiverNode create() {
+        return new LLVMDerefHandleGetReceiverNode();
     }
-
 }

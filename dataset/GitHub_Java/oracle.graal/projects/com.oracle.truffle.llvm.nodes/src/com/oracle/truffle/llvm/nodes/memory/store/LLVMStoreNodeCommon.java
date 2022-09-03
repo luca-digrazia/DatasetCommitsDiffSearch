@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,26 +29,61 @@
  */
 package com.oracle.truffle.llvm.nodes.memory.store;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.llvm.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
-import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public abstract class LLVMStoreNodeCommon extends LLVMStoreNode {
 
     private final LLVMSourceLocation source;
-    protected final Type valueType;
+    @CompilationFinal private LLVMMemory llvmMemory;
+    @Child private LLVMForeignWriteNode foreignWriteNode;
 
-    public LLVMStoreNodeCommon(LLVMSourceLocation source, Type valueType) {
+    @Child private LLVMDerefHandleGetReceiverNode derefHandleGetReceiverNode;
+
+    public LLVMStoreNodeCommon(LLVMSourceLocation source) {
         this.source = source;
-        this.valueType = valueType;
-    }
-
-    protected LLVMForeignWriteNode createForeignWrite() {
-        return LLVMForeignWriteNodeGen.create(valueType);
     }
 
     @Override
     public LLVMSourceLocation getSourceLocation() {
         return source;
+    }
+
+    protected LLVMDerefHandleGetReceiverNode getDerefHandleGetReceiverNode() {
+        if (derefHandleGetReceiverNode == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            derefHandleGetReceiverNode = insert(LLVMDerefHandleGetReceiverNode.create());
+        }
+        return derefHandleGetReceiverNode;
+    }
+
+    protected LLVMForeignWriteNode getForeignWriteNode(ForeignToLLVMType type) {
+        if (foreignWriteNode == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            foreignWriteNode = insert(LLVMForeignWriteNodeGen.create(type));
+        }
+        return foreignWriteNode;
+    }
+
+    protected boolean isAutoDerefHandle(LLVMNativePointer addr) {
+        return getLLVMMemoryCached().isDerefMemory(addr);
+    }
+
+    protected boolean isAutoDerefHandle(long addr) {
+        return getLLVMMemoryCached().isDerefMemory(addr);
+    }
+
+    protected final LLVMMemory getLLVMMemoryCached() {
+        if (llvmMemory == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            llvmMemory = getLLVMMemory();
+        }
+        return llvmMemory;
     }
 }
