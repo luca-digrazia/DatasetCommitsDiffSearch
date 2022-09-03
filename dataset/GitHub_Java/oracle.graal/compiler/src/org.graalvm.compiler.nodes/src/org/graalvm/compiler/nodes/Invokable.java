@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -32,15 +30,10 @@ import org.graalvm.compiler.graph.Node;
 /**
  * A marker interface for nodes that represent calls to other methods.
  */
-public interface Invokable extends DeoptBciSupplier {
+public interface Invokable {
     ResolvedJavaMethod getTargetMethod();
 
-    /**
-     * Returns the {@linkplain ResolvedJavaMethod method} from which the call is executed.
-     *
-     * @return the method from which the call is executed.
-     */
-    ResolvedJavaMethod getContextMethod();
+    int bci();
 
     default boolean isAlive() {
         return asFixedNode().isAlive();

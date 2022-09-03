@@ -88,8 +88,7 @@ public class InliningLog {
 
         @Override
         public String toString() {
-            return String.format("<%s> %s: %s, %s", phase, target != null ? target.format("%H.%n(%p)") : "", positive ? "yes" : "no",
-                            reason);
+            return String.format("<%s> %s: %s", phase, target != null ? target.format("%H.%n(%p)") : "", reason);
         }
     }
 
