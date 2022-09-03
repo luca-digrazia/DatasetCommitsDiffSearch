@@ -44,16 +44,16 @@ public class FrameState extends VirtualState implements IterableNodeType {
 
     private static final DebugMetric METRIC_FRAMESTATE_COUNT = Debug.metric("FrameStateCount");
 
-    protected int localsSize;
+    protected final int localsSize;
 
-    protected int stackSize;
+    protected final int stackSize;
 
     /**
      * @see BytecodeFrame#rethrowException
      */
-    protected boolean rethrowException;
+    private boolean rethrowException;
 
-    protected boolean duringCall;
+    private boolean duringCall;
 
     @OptionalInput(value = InputType.State) FrameState outerFrameState;
 
@@ -69,9 +69,9 @@ public class FrameState extends VirtualState implements IterableNodeType {
     /**
      * The bytecode index to which this frame state applies.
      */
-    protected int bci;
+    public final int bci;
 
-    protected ResolvedJavaMethod method;
+    private final ResolvedJavaMethod method;
 
     /**
      * Creates a {@code FrameState} with the given locals, stack expressions and locked monitors.
@@ -155,10 +155,6 @@ public class FrameState extends VirtualState implements IterableNodeType {
 
     public NodeInputList<ValueNode> values() {
         return values;
-    }
-
-    public int bci() {
-        return bci;
     }
 
     public NodeInputList<MonitorIdNode> monitorIds() {

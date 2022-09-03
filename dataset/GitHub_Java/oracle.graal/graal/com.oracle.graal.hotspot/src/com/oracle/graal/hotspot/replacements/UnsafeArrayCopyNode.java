@@ -42,14 +42,14 @@ public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerabl
     @Input ValueNode length;
     @OptionalInput ValueNode layoutHelper;
 
-    protected Kind elementKind;
+    private Kind elementKind;
 
     public static UnsafeArrayCopyNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
         return USE_GENERATED_NODES ? new UnsafeArrayCopyNodeGen(src, srcPos, dest, destPos, length, layoutHelper, elementKind) : new UnsafeArrayCopyNode(src, srcPos, dest, destPos, length,
                         layoutHelper, elementKind);
     }
 
-    protected UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
+    UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
         super(StampFactory.forVoid());
         assert layoutHelper == null || elementKind == null;
         this.src = src;
@@ -65,7 +65,7 @@ public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerabl
         return USE_GENERATED_NODES ? new UnsafeArrayCopyNodeGen(src, srcPos, dest, destPos, length, elementKind) : new UnsafeArrayCopyNode(src, srcPos, dest, destPos, length, elementKind);
     }
 
-    protected UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind) {
+    UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind) {
         this(src, srcPos, dest, destPos, length, null, elementKind);
     }
 
@@ -73,7 +73,7 @@ public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerabl
         return USE_GENERATED_NODES ? new UnsafeArrayCopyNodeGen(src, srcPos, dest, destPos, length, layoutHelper) : new UnsafeArrayCopyNode(src, srcPos, dest, destPos, length, layoutHelper);
     }
 
-    protected UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper) {
+    UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper) {
         this(src, srcPos, dest, destPos, length, layoutHelper, null);
     }
 

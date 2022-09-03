@@ -40,8 +40,8 @@ import com.oracle.graal.nodes.spi.*;
 public class SelfReplacingMethodCallTargetNode extends MethodCallTargetNode implements Lowerable {
 
     // Replacement method data
-    protected final ResolvedJavaMethod replacementTargetMethod;
-    protected final JavaType replacementReturnType;
+    private final ResolvedJavaMethod replacementTargetMethod;
+    private final JavaType replacementReturnType;
     @Input NodeInputList<ValueNode> replacementArguments;
 
     public static SelfReplacingMethodCallTargetNode create(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType,
@@ -50,7 +50,7 @@ public class SelfReplacingMethodCallTargetNode extends MethodCallTargetNode impl
                         : new SelfReplacingMethodCallTargetNode(invokeKind, targetMethod, arguments, returnType, replacementTargetMethod, replacementArguments, replacementReturnType);
     }
 
-    protected SelfReplacingMethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType, ResolvedJavaMethod replacementTargetMethod,
+    SelfReplacingMethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType, ResolvedJavaMethod replacementTargetMethod,
                     ValueNode[] replacementArguments, JavaType replacementReturnType) {
         super(invokeKind, targetMethod, arguments, returnType);
         this.replacementTargetMethod = replacementTargetMethod;
@@ -72,9 +72,9 @@ public class SelfReplacingMethodCallTargetNode extends MethodCallTargetNode impl
 
     @Override
     public void lower(LoweringTool tool) {
-        InvokeKind replacementInvokeKind = replacementTargetMethod.isStatic() ? InvokeKind.Static : InvokeKind.Special;
+        InvokeKind invokeKind = replacementTargetMethod.isStatic() ? InvokeKind.Static : InvokeKind.Special;
         MethodCallTargetNode replacement = graph().add(
-                        MethodCallTargetNode.create(replacementInvokeKind, replacementTargetMethod, replacementArguments.toArray(new ValueNode[replacementArguments.size()]), replacementReturnType));
+                        MethodCallTargetNode.create(invokeKind, replacementTargetMethod, replacementArguments.toArray(new ValueNode[replacementArguments.size()]), replacementReturnType));
 
         // Replace myself...
         this.replaceAndDelete(replacement);
