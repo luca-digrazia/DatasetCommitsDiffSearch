@@ -33,34 +33,34 @@ import java.util.*;
  * comparing two {@link LocationIdentity} values for equality. Likewise, they must not use
  * {@link IdentityHashMap}s with {@link LocationIdentity} values as keys.
  */
-public abstract class LocationIdentity {
+public interface LocationIdentity extends TrustedInterface {
 
     /**
      * Denotes any location. A write to such a location kills all values in a memory map during an
      * analysis of memory accesses. A read from this location cannot be moved or coalesced with
      * other reads because its interaction with other reads is not known.
      */
-    public static final LocationIdentity ANY_LOCATION = NamedLocationIdentity.mutable("ANY_LOCATION");
+    LocationIdentity ANY_LOCATION = NamedLocationIdentity.mutable("ANY_LOCATION");
 
     /**
      * Denotes the location of a value that is guaranteed to be unchanging.
      */
-    public static final LocationIdentity FINAL_LOCATION = NamedLocationIdentity.immutable("FINAL_LOCATION");
+    LocationIdentity FINAL_LOCATION = NamedLocationIdentity.immutable("FINAL_LOCATION");
 
     /**
      * Denotes the location of the length field of a Java array.
      */
-    public static final LocationIdentity ARRAY_LENGTH_LOCATION = NamedLocationIdentity.immutable("[].length");
+    LocationIdentity ARRAY_LENGTH_LOCATION = NamedLocationIdentity.immutable("[].length");
 
     /**
      * Denotes a location is unchanging in all cases. Not that this is different than the Java
      * notion of final which only requires definite assignment.
      */
-    public boolean isImmutable() {
+    default boolean isImmutable() {
         return false;
     }
 
-    public boolean isMutable() {
+    default boolean isMutable() {
         return !isImmutable();
     }
 }

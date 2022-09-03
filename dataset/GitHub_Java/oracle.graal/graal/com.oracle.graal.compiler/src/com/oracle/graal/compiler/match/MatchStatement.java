@@ -22,16 +22,15 @@
  */
 package com.oracle.graal.compiler.match;
 
-import static com.oracle.graal.debug.GraalDebugConfig.*;
+import static com.oracle.graal.compiler.GraalDebugConfig.*;
 
 import java.util.*;
 
-import com.oracle.graal.debug.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.match.MatchPattern.MatchResultCode;
 import com.oracle.graal.compiler.match.MatchPattern.Result;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 
@@ -125,7 +124,7 @@ public class MatchStatement {
             } else {
                 result[i] = context.namedNode(arguments[i]);
                 if (result[i] == null) {
-                    throw new GraalGraphJVMCIError("Can't find named node %s", arguments[i]);
+                    throw new GraalGraphInternalError("Can't find named node %s", arguments[i]);
                 }
             }
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,50 +22,22 @@
  */
 package com.oracle.graal.phases.common;
 
-import java.util.Collection;
-import java.util.HashSet;
+import java.util.*;
+import java.util.function.*;
 
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.CallTargetNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.SafepointNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
-import com.oracle.graal.nodes.UnwindNode;
-import com.oracle.graal.nodes.VirtualState;
-import com.oracle.graal.nodes.calc.BinaryNode;
-import com.oracle.graal.nodes.calc.ConvertNode;
-import com.oracle.graal.nodes.calc.DivNode;
-import com.oracle.graal.nodes.calc.IntegerDivNode;
-import com.oracle.graal.nodes.calc.IntegerRemNode;
-import com.oracle.graal.nodes.calc.MulNode;
-import com.oracle.graal.nodes.calc.NotNode;
-import com.oracle.graal.nodes.calc.ReinterpretNode;
-import com.oracle.graal.nodes.calc.RemNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.nodes.debug.DynamicCounterNode;
-import com.oracle.graal.nodes.extended.SwitchNode;
-import com.oracle.graal.nodes.java.AbstractNewObjectNode;
-import com.oracle.graal.nodes.java.AccessMonitorNode;
-import com.oracle.graal.nodes.java.MonitorIdNode;
-import com.oracle.graal.nodes.memory.Access;
-import com.oracle.graal.nodes.spi.ValueProxy;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-import com.oracle.graal.phases.Phase;
-import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.debug.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.graph.*;
+import com.oracle.graal.phases.schedule.*;
 
 /**
  * This phase add counters for the dynamically executed number of nodes. Incrementing the counter
@@ -91,14 +63,15 @@ public class ProfileCompiledMethodsPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
+        ToDoubleFunction<FixedNode> probabilities = new FixedNodeProbabilityCache();
         SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph, false);
 
         ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, true, true);
         for (Loop<Block> loop : cfg.getLoops()) {
-            double loopProbability = cfg.blockFor(loop.getHeader().getBeginNode()).probability();
+            double loopProbability = probabilities.applyAsDouble(loop.getHeader().getBeginNode());
             if (loopProbability > (1D / Integer.MAX_VALUE)) {
-                addSectionCounters(loop.getHeader().getBeginNode(), loop.getBlocks(), loop.getChildren(), graph.getLastSchedule(), cfg);
+                addSectionCounters(loop.getHeader().getBeginNode(), loop.getBlocks(), loop.getChildren(), schedule, probabilities);
             }
         }
         // don't put the counter increase directly after the start (problems with OSR)
@@ -106,7 +79,7 @@ public class ProfileCompiledMethodsPhase extends Phase {
         while (current.next() instanceof FixedWithNextNode) {
             current = (FixedWithNextNode) current.next();
         }
-        addSectionCounters(current, cfg.getBlocks(), cfg.getLoops(), graph.getLastSchedule(), cfg);
+        addSectionCounters(current, cfg.getBlocks(), cfg.getLoops(), schedule, probabilities);
 
         if (WITH_INVOKES) {
             for (Node node : graph.getNodes()) {
@@ -119,12 +92,13 @@ public class ProfileCompiledMethodsPhase extends Phase {
         }
     }
 
-    private static void addSectionCounters(FixedWithNextNode start, Collection<Block> sectionBlocks, Collection<Loop<Block>> childLoops, ScheduleResult schedule, ControlFlowGraph cfg) {
+    private static void addSectionCounters(FixedWithNextNode start, Collection<Block> sectionBlocks, Collection<Loop<Block>> childLoops, SchedulePhase schedule,
+                    ToDoubleFunction<FixedNode> probabilities) {
         HashSet<Block> blocks = new HashSet<>(sectionBlocks);
         for (Loop<?> loop : childLoops) {
             blocks.removeAll(loop.getBlocks());
         }
-        double weight = getSectionWeight(schedule, blocks) / cfg.blockFor(start).probability();
+        double weight = getSectionWeight(schedule, probabilities, blocks) / probabilities.applyAsDouble(start);
         DynamicCounterNode.addCounterBefore(GROUP_NAME, sectionHead(start), (long) weight, true, start.next());
         if (WITH_INVOKE_FREE_SECTIONS && !hasInvoke(blocks)) {
             DynamicCounterNode.addCounterBefore(GROUP_NAME_WITHOUT, sectionHead(start), (long) weight, true, start.next());
@@ -139,10 +113,10 @@ public class ProfileCompiledMethodsPhase extends Phase {
         }
     }
 
-    private static double getSectionWeight(ScheduleResult schedule, Collection<Block> blocks) {
+    private static double getSectionWeight(SchedulePhase schedule, ToDoubleFunction<FixedNode> probabilities, Collection<Block> blocks) {
         double count = 0;
         for (Block block : blocks) {
-            double blockProbability = block.probability();
+            double blockProbability = probabilities.applyAsDouble(block.getBeginNode());
             for (Node node : schedule.getBlockToNodesMap().get(block)) {
                 count += blockProbability * getNodeWeight(node);
             }

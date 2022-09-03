@@ -30,7 +30,6 @@ import static com.oracle.graal.nodes.ConstantNode.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.atomic.*;
-import java.util.function.*;
 
 import org.junit.*;
 import org.junit.internal.*;
@@ -48,9 +47,6 @@ import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.graphbuilderconf.MethodIdMap.Receiver;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.phases.*;
@@ -64,7 +60,7 @@ import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
+import com.oracle.graal.phases.schedule.SchedulePhase.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.printer.*;
@@ -124,6 +120,15 @@ public abstract class GraalCompilerTest extends GraalTest {
         return true;
     }
 
+    private static boolean substitutionsInstalled;
+
+    private void installSubstitutions() {
+        if (!substitutionsInstalled) {
+            this.providers.getReplacements().registerSubstitutions(GraalCompilerTest.class, GraalCompilerTestSubstitutions.class);
+            substitutionsInstalled = true;
+        }
+    }
+
     protected static void breakpoint() {
     }
 
@@ -172,6 +177,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         this.providers = getBackend().getProviders();
         this.suites = new DerivedOptionValue<>(this::createSuites);
         this.lirSuites = new DerivedOptionValue<>(this::createLIRSuites);
+        installSubstitutions();
     }
 
     /**
@@ -192,6 +198,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         this.providers = backend.getProviders();
         this.suites = new DerivedOptionValue<>(this::createSuites);
         this.lirSuites = new DerivedOptionValue<>(this::createLIRSuites);
+        installSubstitutions();
     }
 
     @BeforeClass
@@ -297,6 +304,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     protected static String getCanonicalGraphString(StructuredGraph graph, boolean excludeVirtual, boolean checkConstants) {
         SchedulePhase schedule = new SchedulePhase(SchedulingStrategy.EARLIEST);
+        schedule.setScheduleConstants(true);
         schedule.apply(graph);
 
         NodeMap<Integer> canonicalId = graph.createNodeMap();
@@ -364,10 +372,6 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     protected Providers getProviders() {
         return providers;
-    }
-
-    protected HighTierContext getDefaultHighTierContext() {
-        return new HighTierContext(getProviders(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
     }
 
     protected SnippetReflectionProvider getSnippetReflection() {
@@ -524,7 +528,7 @@ public abstract class GraalCompilerTest extends GraalTest {
                 executeArgs[i + 1] = args[i];
             }
         }
-        return applyArgSuppliers(executeArgs);
+        return executeArgs;
     }
 
     protected void test(String name, Object... args) {
@@ -538,45 +542,12 @@ public abstract class GraalCompilerTest extends GraalTest {
         }
     }
 
-    /**
-     * Type denoting a lambda that supplies a fresh value each time it is called. This is useful
-     * when supplying an argument to {@link GraalCompilerTest#test(String, Object...)} where the
-     * test modifies the state of the argument (e.g., updates a field).
-     */
-    @FunctionalInterface
-    public interface ArgSupplier extends Supplier<Object> {
-    }
-
-    /**
-     * Convenience method for using an {@link ArgSupplier} lambda in a varargs list.
-     */
-    public static Object supply(ArgSupplier supplier) {
-        return supplier;
-    }
-
     protected void test(ResolvedJavaMethod method, Object receiver, Object... args) {
         Result expect = executeExpected(method, receiver, args);
         if (getCodeCache() == null) {
             return;
         }
         testAgainstExpected(method, expect, receiver, args);
-    }
-
-    /**
-     * Process a given set of arguments, converting any {@link ArgSupplier} argument to the argument
-     * it supplies.
-     */
-    protected Object[] applyArgSuppliers(Object... args) {
-        Object[] res = args;
-        for (int i = 0; i < args.length; i++) {
-            if (args[i] instanceof ArgSupplier) {
-                if (res == args) {
-                    res = args.clone();
-                }
-                res[i] = ((ArgSupplier) args[i]).get();
-            }
-        }
-        return res;
     }
 
     protected void testAgainstExpected(ResolvedJavaMethod method, Result expect, Object receiver, Object... args) {
@@ -712,7 +683,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         StructuredGraph graphToCompile = graph == null ? parseForCompile(installedCodeOwner) : graph;
         lastCompiledGraph = graphToCompile;
         CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graphToCompile.method(), false);
-        Request<CompilationResult> request = new Request<>(graphToCompile, cc, installedCodeOwner, getProviders(), getBackend(), getCodeCache().getTarget(), getDefaultGraphBuilderSuite(),
+        Request<CompilationResult> request = new Request<>(graphToCompile, cc, installedCodeOwner, getProviders(), getBackend(), getCodeCache().getTarget(), null, getDefaultGraphBuilderSuite(),
                         OptimisticOptimizations.ALL, getProfilingInfo(graphToCompile), getSpeculationLog(), getSuites(), getLIRSuites(), new CompilationResult(),
                         CompilationResultBuilderFactory.Default);
         return GraalCompiler.compile(request);
@@ -765,11 +736,11 @@ public abstract class GraalCompilerTest extends GraalTest {
         if (!method.isAccessible()) {
             method.setAccessible(true);
         }
-        return method.invoke(receiver, applyArgSuppliers(args));
+        return method.invoke(receiver, args);
     }
 
     /**
-     * Parses a Java method in {@linkplain GraphBuilderConfiguration#getDefault default} mode to
+     * Parses a Java method in {@linkplain GraphBuilderConfiguration#getDefault() default} mode to
      * produce a graph.
      *
      * @param methodName the name of the method in {@code this.getClass()} to be parsed
@@ -779,7 +750,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     /**
-     * Parses a Java method in {@linkplain GraphBuilderConfiguration#getDefault default} mode to
+     * Parses a Java method in {@linkplain GraphBuilderConfiguration#getDefault() default} mode to
      * produce a graph.
      */
     protected StructuredGraph parseProfiled(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
@@ -787,8 +758,8 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     /**
-     * Parses a Java method in {@linkplain GraphBuilderConfiguration#getEagerDefault eager} mode to
-     * produce a graph.
+     * Parses a Java method in {@linkplain GraphBuilderConfiguration#getEagerDefault() eager} mode
+     * to produce a graph.
      *
      * @param methodName the name of the method in {@code this.getClass()} to be parsed
      */
@@ -797,37 +768,30 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     /**
-     * Parses a Java method in {@linkplain GraphBuilderConfiguration#getEagerDefault eager} mode to
-     * produce a graph.
+     * Parses a Java method in {@linkplain GraphBuilderConfiguration#getEagerDefault() eager} mode
+     * to produce a graph.
      */
     protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
-        return parse1(m, getCustomGraphBuilderSuite(GraphBuilderConfiguration.getEagerDefault(getDefaultGraphBuilderPlugins())), allowAssumptions);
+        return parse1(m, getCustomGraphBuilderSuite(GraphBuilderConfiguration.getEagerDefault()), allowAssumptions);
     }
 
     /**
-     * Parses a Java method in {@linkplain GraphBuilderConfiguration#getFullDebugDefault full debug}
-     * mode to produce a graph.
+     * Parses a Java method in {@linkplain GraphBuilderConfiguration#getFullDebugDefault() full
+     * debug} mode to produce a graph.
      */
     protected StructuredGraph parseDebug(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
-        return parse1(m, getCustomGraphBuilderSuite(GraphBuilderConfiguration.getFullDebugDefault(getDefaultGraphBuilderPlugins())), allowAssumptions);
+        return parse1(m, getCustomGraphBuilderSuite(GraphBuilderConfiguration.getFullDebugDefault()), allowAssumptions);
     }
 
     private StructuredGraph parse1(ResolvedJavaMethod javaMethod, PhaseSuite<HighTierContext> graphBuilderSuite, AllowAssumptions allowAssumptions) {
         assert javaMethod.getAnnotation(Test.class) == null : "shouldn't parse method with @Test annotation: " + javaMethod;
         try (Scope ds = Debug.scope("Parsing", javaMethod)) {
             StructuredGraph graph = new StructuredGraph(javaMethod, allowAssumptions);
-            graphBuilderSuite.apply(graph, getDefaultHighTierContext());
+            graphBuilderSuite.apply(graph, new HighTierContext(providers, null, graphBuilderSuite, OptimisticOptimizations.ALL));
             return graph;
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
-    }
-
-    protected Plugins getDefaultGraphBuilderPlugins() {
-        PhaseSuite<HighTierContext> suite = backend.getSuites().getDefaultGraphBuilderSuite();
-        Plugins defaultPlugins = ((GraphBuilderPhase) suite.findPhase(GraphBuilderPhase.class).previous()).getGraphBuilderConfig().getPlugins();
-        // defensive copying
-        return new Plugins(defaultPlugins);
     }
 
     protected PhaseSuite<HighTierContext> getDefaultGraphBuilderSuite() {
@@ -836,23 +800,13 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected PhaseSuite<HighTierContext> getCustomGraphBuilderSuite(GraphBuilderConfiguration gbConf) {
-        PhaseSuite<HighTierContext> suite = getDefaultGraphBuilderSuite();
+        PhaseSuite<HighTierContext> suite = getDefaultGraphBuilderSuite().copy();
         ListIterator<BasePhase<? super HighTierContext>> iterator = suite.findPhase(GraphBuilderPhase.class);
-        GraphBuilderConfiguration gbConfCopy = editGraphBuilderConfiguration(gbConf.copy());
+        GraphBuilderPhase graphBuilderPhase = (GraphBuilderPhase) iterator.previous();
+        GraphBuilderConfiguration gbConfCopy = gbConf.copy().copyPluginsFrom(graphBuilderPhase.getGraphBuilderConfig());
         iterator.remove();
         iterator.add(new GraphBuilderPhase(gbConfCopy));
         return suite;
-    }
-
-    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
-        InvocationPlugins invocationPlugins = conf.getPlugins().getInvocationPlugins();
-        invocationPlugins.register(new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.add(new BreakpointNode());
-                return true;
-            }
-        }, GraalCompilerTest.class, "breakpoint");
-        return conf;
     }
 
     protected Replacements getReplacements() {

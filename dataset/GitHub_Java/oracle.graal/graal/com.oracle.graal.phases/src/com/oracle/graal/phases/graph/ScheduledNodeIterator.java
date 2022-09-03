@@ -22,17 +22,16 @@
  */
 package com.oracle.graal.phases.graph;
 
-import java.util.ListIterator;
+import java.util.*;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
-import com.oracle.graal.nodes.cfg.Block;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.phases.schedule.*;
 
 /**
  * Iterates over a list of nodes, which usually comes from
- * {@link ScheduleResult#getBlockToNodesMap()}.
+ * {@link SchedulePhase#getBlockToNodesMap()}.
  *
  * While iterating, it is possible to {@link #insert(FixedNode, FixedWithNextNode) insert} and
  * {@link #replaceCurrent(FixedWithNextNode) replace} nodes.
@@ -43,11 +42,11 @@ public abstract class ScheduledNodeIterator {
     private FixedWithNextNode reconnect;
     private ListIterator<Node> iterator;
 
-    public void processNodes(Block block, ScheduleResult schedule) {
+    public void processNodes(Block block, SchedulePhase shedule) {
         lastFixed = block.getBeginNode();
         assert lastFixed != null;
         reconnect = null;
-        iterator = schedule.nodesFor(block).listIterator();
+        iterator = shedule.nodesFor(block).listIterator();
 
         while (iterator.hasNext()) {
             Node node = iterator.next();

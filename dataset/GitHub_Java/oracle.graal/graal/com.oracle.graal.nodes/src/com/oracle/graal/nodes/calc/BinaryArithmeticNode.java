@@ -25,11 +25,10 @@ package com.oracle.graal.nodes.calc;
 import java.io.*;
 import java.util.function.*;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
@@ -119,7 +118,7 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
                 case y:
                     return binary.getY();
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         }
 
@@ -130,7 +129,7 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
                 case y:
                     return binary.getX();
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         }
     }
@@ -241,13 +240,13 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
         } else if (node instanceof XorNode) {
             return new XorNode(a, new XorNode(m1, m2));
         } else {
-            throw JVMCIError.shouldNotReachHere();
+            throw GraalInternalError.shouldNotReachHere();
         }
     }
 
-    protected static boolean livesLonger(ValueNode after, ValueNode value, NodeValueMap nodeValueMap) {
+    protected static boolean livesLonger(ValueNode after, ValueNode value, NodeMappableLIRBuilder builder) {
         for (Node usage : value.usages()) {
-            if (usage != after && usage instanceof ValueNode && nodeValueMap.hasOperand(usage)) {
+            if (usage != after && usage instanceof ValueNode && builder.hasOperand(usage)) {
                 return true;
             }
         }

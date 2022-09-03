@@ -24,9 +24,8 @@ package com.oracle.graal.nodes.spi;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -37,7 +36,7 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
 
-public interface NodeLIRBuilderTool extends NodeValueMap {
+public interface NodeLIRBuilderTool extends NodeMappableLIRBuilder {
 
     // TODO (je) remove and move into the Node
     LIRFrameState state(DeoptimizingNode deopt);

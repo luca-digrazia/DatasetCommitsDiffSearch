@@ -22,26 +22,24 @@
  */
 package com.oracle.graal.compiler.test;
 
-import java.util.List;
+import java.util.*;
 
-import org.junit.Assert;
+import org.junit.*;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.phases.schedule.*;
 
 public class GraphScheduleTest extends GraalCompilerTest {
 
     protected void assertOrderedAfterSchedule(StructuredGraph graph, Node a, Node b) {
         SchedulePhase ibp = new SchedulePhase(SchedulePhase.SchedulingStrategy.LATEST);
         ibp.apply(graph);
-        assertOrderedAfterSchedule(graph.getLastSchedule(), a, b);
+        assertOrderedAfterSchedule(ibp, a, b);
     }
 
-    protected void assertOrderedAfterSchedule(ScheduleResult ibp, Node a, Node b) {
+    protected void assertOrderedAfterSchedule(SchedulePhase ibp, Node a, Node b) {
         NodeMap<Block> nodeToBlock = ibp.getCFG().getNodeToBlock();
         Block bBlock = nodeToBlock.get(b);
         Block aBlock = nodeToBlock.get(a);
