@@ -22,37 +22,20 @@
  */
 package com.oracle.graal.compiler.gen;
 
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 
-import jdk.internal.jvmci.code.BytecodeFrame;
-import jdk.internal.jvmci.code.VirtualObject;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.meta.JavaConstant;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.JavaType;
-import jdk.internal.jvmci.meta.JavaValue;
-import jdk.internal.jvmci.meta.ResolvedJavaField;
-import jdk.internal.jvmci.meta.ResolvedJavaType;
-import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LabelRef;
-import com.oracle.graal.lir.Variable;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.NodeValueMap;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.nodes.virtual.EscapeObjectState;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-import com.oracle.graal.virtual.nodes.MaterializedObjectState;
-import com.oracle.graal.virtual.nodes.VirtualObjectState;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.virtual.nodes.*;
 
 /**
  * Builds {@link LIRFrameState}s from {@link FrameState}s.
@@ -101,19 +84,19 @@ public class DebugInfoBuilder {
                 assert vobjValue.getValues() == null;
 
                 JavaValue[] values = new JavaValue[vobjNode.entryCount()];
-                JavaKind[] slotKinds = new JavaKind[vobjNode.entryCount()];
+                Kind[] slotKinds = new Kind[vobjNode.entryCount()];
                 if (values.length > 0) {
                     VirtualObjectState currentField = (VirtualObjectState) objectStates.get(vobjNode);
                     assert currentField != null;
                     int pos = 0;
                     for (int i = 0; i < vobjNode.entryCount(); i++) {
-                        if (!currentField.values().get(i).isConstant() || currentField.values().get(i).asJavaConstant().getJavaKind() != JavaKind.Illegal) {
+                        if (!currentField.values().get(i).isConstant() || currentField.values().get(i).asJavaConstant().getKind() != Kind.Illegal) {
                             ValueNode value = currentField.values().get(i);
                             values[pos] = toJavaValue(value);
                             slotKinds[pos] = toSlotKind(value);
                             pos++;
                         } else {
-                            assert currentField.values().get(i - 1).getStackKind() == JavaKind.Double || currentField.values().get(i - 1).getStackKind() == JavaKind.Long : vobjNode + " " + i + " " +
+                            assert currentField.values().get(i - 1).getStackKind() == Kind.Double || currentField.values().get(i - 1).getStackKind() == Kind.Long : vobjNode + " " + i + " " +
                                             currentField.values().get(i - 1);
                         }
                     }
@@ -122,7 +105,6 @@ public class DebugInfoBuilder {
                         slotKinds = Arrays.copyOf(slotKinds, pos);
                     }
                 }
-                assert checkValues(vobjValue.getType(), values, slotKinds);
                 vobjValue.setValues(values, slotKinds);
             }
 
@@ -132,55 +114,6 @@ public class DebugInfoBuilder {
         objectStates.clear();
 
         return newLIRFrameState(exceptionEdge, frame, virtualObjectsArray);
-    }
-
-    private boolean checkValues(ResolvedJavaType type, JavaValue[] values, JavaKind[] slotKinds) {
-        assert (values == null) == (slotKinds == null);
-        if (values != null) {
-            assert values.length == slotKinds.length;
-            if (!type.isArray()) {
-                ResolvedJavaField[] fields = type.getInstanceFields(true);
-                int fieldIndex = 0;
-                for (int i = 0; i < values.length; i++) {
-                    ResolvedJavaField field = fields[fieldIndex++];
-                    JavaKind valKind = slotKinds[i].getStackKind();
-                    JavaKind fieldKind = storageKind(field.getType());
-                    if (fieldKind == JavaKind.Object) {
-                        assert valKind.isObject() : field + ": " + valKind + " != " + fieldKind;
-                    } else {
-                        if ((valKind == JavaKind.Double || valKind == JavaKind.Long) && fieldKind == JavaKind.Int) {
-                            assert storageKind(fields[fieldIndex].getType()) == JavaKind.Int;
-                            fieldIndex++;
-                        } else {
-                            assert valKind == fieldKind.getStackKind() : field + ": " + valKind + " != " + fieldKind;
-                        }
-                    }
-                }
-                assert fields.length == fieldIndex : type + ": fields=" + Arrays.toString(fields) + ", field values=" + Arrays.toString(values);
-            } else {
-                JavaKind componentKind = storageKind(type.getComponentType()).getStackKind();
-                if (componentKind == JavaKind.Object) {
-                    for (int i = 0; i < values.length; i++) {
-                        assert slotKinds[i].isObject() : slotKinds[i] + " != " + componentKind;
-                    }
-                } else {
-                    for (int i = 0; i < values.length; i++) {
-                        assert slotKinds[i] == componentKind || componentKind.getBitCount() >= slotKinds[i].getBitCount() ||
-                                        (componentKind == JavaKind.Int && slotKinds[i].getBitCount() >= JavaKind.Int.getBitCount()) : slotKinds[i] + " != " + componentKind;
-                    }
-                }
-            }
-        }
-        return true;
-    }
-
-    /*
-     * Customization point for subclasses. For example, Word types have a kind Object, but are
-     * internally stored as a primitive value. We do not know about Word types here, but subclasses
-     * do know.
-     */
-    protected JavaKind storageKind(JavaType type) {
-        return type.getJavaKind();
     }
 
     protected LIRFrameState newLIRFrameState(LabelRef exceptionEdge, BytecodeFrame frame, VirtualObject[] virtualObjectsArray) {
@@ -203,7 +136,7 @@ public class DebugInfoBuilder {
             int numLocks = state.locksSize();
 
             JavaValue[] values = new JavaValue[numLocals + numStack + numLocks];
-            JavaKind[] slotKinds = new JavaKind[numLocals + numStack];
+            Kind[] slotKinds = new Kind[numLocals + numStack];
             computeLocals(state, numLocals, values, slotKinds);
             computeStack(state, numLocals, numStack, values, slotKinds);
             computeLocks(state, values);
@@ -218,7 +151,7 @@ public class DebugInfoBuilder {
         }
     }
 
-    protected void computeLocals(FrameState state, int numLocals, JavaValue[] values, JavaKind[] slotKinds) {
+    protected void computeLocals(FrameState state, int numLocals, JavaValue[] values, Kind[] slotKinds) {
         for (int i = 0; i < numLocals; i++) {
             ValueNode local = state.localAt(i);
             values[i] = toJavaValue(local);
@@ -226,7 +159,7 @@ public class DebugInfoBuilder {
         }
     }
 
-    protected void computeStack(FrameState state, int numLocals, int numStack, JavaValue[] values, JavaKind[] slotKinds) {
+    protected void computeStack(FrameState state, int numLocals, int numStack, JavaValue[] values, Kind[] slotKinds) {
         for (int i = 0; i < numStack; i++) {
             ValueNode stack = state.stackAt(i);
             values[numLocals + i] = toJavaValue(stack);
@@ -249,9 +182,9 @@ public class DebugInfoBuilder {
     private static final DebugMetric STATE_VARIABLES = Debug.metric("StateVariables");
     private static final DebugMetric STATE_CONSTANTS = Debug.metric("StateConstants");
 
-    private static JavaKind toSlotKind(ValueNode value) {
+    private static Kind toSlotKind(ValueNode value) {
         if (value == null) {
-            return JavaKind.Illegal;
+            return Kind.Illegal;
         } else {
             return value.getStackKind();
         }
