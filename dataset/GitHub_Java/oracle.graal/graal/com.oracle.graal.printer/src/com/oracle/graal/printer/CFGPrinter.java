@@ -38,9 +38,9 @@ import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.graph.NodeClass.Position;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.cfg.*;
 
 /**
  * Utility for printing Graal IR at various compilation phases.
@@ -241,7 +241,7 @@ class CFGPrinter extends CompilationPrinter {
         out.println("HIR");
         out.disableIndentation();
 
-        if (block.getPredecessorCount() == 0) {
+        if (block.getPredecessors().size() == 0) {
             // Currently method parameters are not in the schedule, so print them separately here.
             for (ValueNode param : block.getBeginNode().graph().getNodes(LocalNode.class)) {
                 printNode(param, false);
@@ -476,7 +476,7 @@ class CFGPrinter extends CompilationPrinter {
             if (value.kind() == Kind.Illegal) {
                 prefix = "v";
             } else {
-                prefix = String.valueOf(value.kind().getTypeChar());
+                prefix = String.valueOf(value.kind().typeChar);
             }
         } else {
             prefix = "?";
@@ -512,10 +512,10 @@ class CFGPrinter extends CompilationPrinter {
     private void printInterval(Interval interval) {
         out.printf("%s %s ", interval.operand, (isRegister(interval.operand) ? "fixed" : interval.kind().name()));
         if (isRegister(interval.operand)) {
-            out.printf("\"[%s|%c]\"", interval.operand, interval.operand.getKind().getTypeChar());
+            out.printf("\"[%s|%c]\"", interval.operand, interval.operand.getKind().typeChar);
         } else {
             if (interval.location() != null) {
-                out.printf("\"[%s|%c]\"", interval.location(), interval.location().getKind().getTypeChar());
+                out.printf("\"[%s|%c]\"", interval.location(), interval.location().getKind().typeChar);
             }
         }
 

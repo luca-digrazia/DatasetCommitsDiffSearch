@@ -26,9 +26,9 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.snippets.*;
 
 /**
@@ -42,8 +42,8 @@ public final class BeginLockScopeNode extends AbstractStateSplit implements LIRG
 
     private final boolean eliminated;
 
-    public BeginLockScopeNode(boolean eliminated) {
-        super(HotSpotGraalRuntime.wordStamp());
+    public BeginLockScopeNode(boolean eliminated, Kind wordKind) {
+        super(StampFactory.forWord(wordKind, true));
         this.eliminated = eliminated;
     }
 
@@ -62,6 +62,9 @@ public final class BeginLockScopeNode extends AbstractStateSplit implements LIRG
         gen.setResult(this, result);
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native Word beginLockScope(@ConstantNodeParameter boolean eliminated);
+    public static Word beginLockScope(@ConstantNodeParameter boolean eliminated, @ConstantNodeParameter Kind wordKind) {
+        throw new UnsupportedOperationException();
+    }
 }

@@ -32,7 +32,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.virtual.*;
-import com.oracle.graal.virtual.nodes.*;
 
 public class DebugInfoBuilder {
     private final NodeMap<Value> nodeOperands;
@@ -76,7 +75,7 @@ public class DebugInfoBuilder {
                 changed = false;
                 IdentityHashMap<VirtualObjectNode, VirtualObject> virtualObjectsCopy = new IdentityHashMap<>(virtualObjects);
                 for (Entry<VirtualObjectNode, VirtualObject> entry : virtualObjectsCopy.entrySet()) {
-                    if (entry.getValue().getValues() == null) {
+                    if (entry.getValue().values() == null) {
                         VirtualObjectNode vobj = entry.getKey();
                         if (vobj instanceof BoxedVirtualObjectNode) {
                             BoxedVirtualObjectNode boxedVirtualObjectNode = (BoxedVirtualObjectNode) vobj;
@@ -118,14 +117,14 @@ public class DebugInfoBuilder {
             values[numLocals + i] = toValue(state.stackAt(i));
         }
         for (int i = 0; i < numLocks; i++) {
-            // frames are traversed from the outside in, so the locks for the current frame are at the end of the lockDataSlots list
+            // frames are traversed from the outside in, so the locks for the current frame are at the end of the lockDataSlot list
             StackSlot lockData = lockDataSlots.get(lockDataSlots.size() - numLocks + i);
             values[numLocals + numStack + i] = new MonitorValue(toValue(state.lockAt(i)), lockData, state.lockAt(i) instanceof VirtualObjectNode);
         }
 
         BytecodeFrame caller = null;
         if (state.outerFrameState() != null) {
-            // remove the locks that were used for this frame from the lockDataSlots list
+            // remove the locks that were used for this frame from the list
             List<StackSlot> nextLockDataSlots = lockDataSlots.subList(0, lockDataSlots.size() - numLocks);
             caller = computeFrameForState(state.outerFrameState(), nextLockDataSlots, -1);
         } else {
@@ -141,14 +140,14 @@ public class DebugInfoBuilder {
         if (value instanceof VirtualObjectNode) {
             VirtualObjectNode obj = (VirtualObjectNode) value;
             EscapeObjectState state = objectStates.get(obj);
-            if (state == null && obj.entryCount() > 0 && !(obj instanceof BoxedVirtualObjectNode)) {
+            if (state == null && obj.entryCount() > 0) {
                 // null states occur for objects with 0 fields
                 throw new GraalInternalError("no mapping found for virtual object %s", obj);
             }
             if (state instanceof MaterializedObjectState) {
                 return toValue(((MaterializedObjectState) state).materializedValue());
             } else {
-                assert obj.entryCount() == 0 || state instanceof VirtualObjectState || obj instanceof BoxedVirtualObjectNode;
+                assert obj.entryCount() == 0 || state instanceof VirtualObjectState;
                 VirtualObject ciObj = virtualObjects.get(value);
                 if (ciObj == null) {
                     ciObj = VirtualObject.get(obj.type(), null, virtualObjects.size());
@@ -170,7 +169,7 @@ public class DebugInfoBuilder {
         } else {
             // return a dummy value because real value not needed
             Debug.metric("StateIllegals").increment();
-            return Value.ILLEGAL;
+            return Value.IllegalValue;
         }
     }
 }
