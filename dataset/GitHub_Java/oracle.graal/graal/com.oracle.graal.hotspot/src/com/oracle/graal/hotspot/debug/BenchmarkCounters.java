@@ -28,16 +28,15 @@ import java.util.Map.Entry;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.debug.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.options.*;
+import com.oracle.graal.options.*;
 
 import edu.umd.cs.findbugs.annotations.*;
-
-//JaCoCo Exclude
 
 /**
  * This class contains infrastructure to maintain counters based on {@link DynamicCounterNode}s. The
@@ -125,9 +124,9 @@ public class BenchmarkCounters {
     }
 
     @SuppressFBWarnings(value = "AT_OPERATION_SEQUENCE_ON_CONCURRENT_ABSTRACTION", justification = "concurrent abstraction calls are in synchronized block")
-    private static Counter getCounter(String name, String group, HotSpotVMConfig config) throws JVMCIError {
+    private static Counter getCounter(String name, String group, HotSpotVMConfig config) throws GraalInternalError {
         if (!enabled) {
-            throw new JVMCIError("cannot access count index when counters are not enabled: " + group + ", " + name);
+            throw new GraalInternalError("cannot access count index when counters are not enabled: " + group + ", " + name);
         }
         String nameGroup = name + "#" + group;
         Counter counter = counterMap.get(nameGroup);
@@ -141,9 +140,9 @@ public class BenchmarkCounters {
             }
         }
         assert counter.group.equals(group) : "mismatching groups: " + counter.group + " vs. " + group;
-        int countersSize = config.jvmciCountersSize;
+        int countersSize = config.graalCountersSize;
         if (counter.index >= countersSize) {
-            throw new JVMCIError("too many counters, reduce number of counters or increase -XX:GraalCounterSize=... (current value: " + countersSize + ")");
+            throw new GraalInternalError("too many counters, reduce number of counters or increase -XX:GraalCounterSize=... (current value: " + countersSize + ")");
         }
         return counter;
     }
@@ -359,7 +358,7 @@ public class BenchmarkCounters {
         if (Options.BenchmarkDynamicCounters.getValue() != null) {
             String[] arguments = Options.BenchmarkDynamicCounters.getValue().split(",");
             if (arguments.length == 0 || (arguments.length % 3) != 0) {
-                throw new JVMCIError("invalid arguments to BenchmarkDynamicCounters: (err|out),start,end,(err|out),start,end,... (~ matches multiple digits)");
+                throw new GraalInternalError("invalid arguments to BenchmarkDynamicCounters: (err|out),start,end,(err|out),start,end,... (~ matches multiple digits)");
             }
             for (int i = 0; i < arguments.length; i += 3) {
                 if (arguments[i].equals("err")) {
@@ -367,7 +366,7 @@ public class BenchmarkCounters {
                 } else if (arguments[i].equals("out")) {
                     System.setOut(new PrintStream(new BenchmarkCountersOutputStream(System.out, arguments[i + 1], arguments[i + 2])));
                 } else {
-                    throw new JVMCIError("invalid arguments to BenchmarkDynamicCounters: err|out");
+                    throw new GraalInternalError("invalid arguments to BenchmarkDynamicCounters: err|out");
                 }
             }
             enabled = true;
@@ -378,7 +377,7 @@ public class BenchmarkCounters {
         if (Options.TimedDynamicCounters.getValue() > 0) {
             Thread thread = new Thread() {
                 long lastTime = System.nanoTime();
-                PrintStream out = TTY.out;
+                PrintStream out = TTY.cachedOut;
 
                 @Override
                 public void run() {
@@ -405,7 +404,7 @@ public class BenchmarkCounters {
 
     public static void shutdown(CompilerToVM compilerToVM, long compilerStartTime) {
         if (Options.GenericDynamicCounters.getValue()) {
-            dump(TTY.out, (System.nanoTime() - compilerStartTime) / 1000000000d, compilerToVM.collectCounters(), 100);
+            dump(TTY.cachedOut, (System.nanoTime() - compilerStartTime) / 1000000000d, compilerToVM.collectCounters(), 100);
         }
     }
 }
