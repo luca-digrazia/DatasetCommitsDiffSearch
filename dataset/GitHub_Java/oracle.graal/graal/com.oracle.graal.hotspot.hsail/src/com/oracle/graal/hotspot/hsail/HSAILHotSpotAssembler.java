@@ -28,7 +28,6 @@ import com.amd.okra.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.hsail.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.hotspot.meta.*;
 
 /**
@@ -40,22 +39,6 @@ public class HSAILHotSpotAssembler extends HSAILAssembler {
         super(target);
     }
 
-    // This means the HSAIL backend cannot (currently) be executed
-    // in remote/replay compilation mode.
-    private static Field objectField;
-
-    private static Object getObject(JavaConstant src) {
-        try {
-            if (objectField == null) {
-                objectField = HotSpotObjectConstantImpl.class.getDeclaredField("object");
-            }
-            return objectField.get(src);
-        } catch (Exception e) {
-            throw new GraalInternalError(e);
-        }
-
-    }
-
     @Override
     public final void mov(Register a, JavaConstant src) {
         String regName = "$d" + a.encoding();
@@ -63,8 +46,7 @@ public class HSAILHotSpotAssembler extends HSAILAssembler {
         if (src.isNull()) {
             emitString("mov_b64 " + regName + ", 0x0;  // null object");
         } else {
-            assert src instanceof HotSpotObjectConstantImpl;
-            Object obj = getObject(src);
+            Object obj = HotSpotObjectConstantImpl.asObject(src);
             // Get a JNI reference handle to the object.
             long refHandle = OkraUtil.getRefHandle(obj);
             // Get the clasname of the object for emitting a comment.

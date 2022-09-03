@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
+import java.lang.invoke.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
@@ -49,11 +51,15 @@ public class CallSiteTargetNode extends MacroStateSplitNode implements Canonical
 
     private ConstantNode getConstantCallTarget(MetaAccessProvider metaAccess, Assumptions assumptions) {
         if (getCallSite().isConstant() && !getCallSite().isNullConstant()) {
-            HotSpotObjectConstant c = (HotSpotObjectConstant) getCallSite().asConstant();
-            JavaConstant target = c.getCallSiteTarget(assumptions);
-            if (target != null) {
-                return ConstantNode.forConstant(target, metaAccess);
+            CallSite callSite = (CallSite) HotSpotObjectConstantImpl.asObject(getCallSite().asJavaConstant());
+            MethodHandle target = callSite.getTarget();
+            if (!(callSite instanceof ConstantCallSite)) {
+                if (assumptions == null || !assumptions.useOptimisticAssumptions()) {
+                    return null;
+                }
+                assumptions.record(new Assumptions.CallSiteTargetValue(callSite, target));
             }
+            return ConstantNode.forConstant(HotSpotObjectConstantImpl.forObject(target), metaAccess, graph());
         }
         return null;
     }

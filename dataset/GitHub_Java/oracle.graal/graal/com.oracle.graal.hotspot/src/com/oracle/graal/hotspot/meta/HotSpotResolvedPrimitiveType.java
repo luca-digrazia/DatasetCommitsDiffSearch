@@ -34,7 +34,7 @@ import com.oracle.graal.compiler.common.*;
 /**
  * Implementation of {@link JavaType} for primitive HotSpot types.
  */
-public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType implements Remote {
+public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType {
 
     private static final long serialVersionUID = -6208552348908071473L;
     private final Kind kind;
@@ -114,13 +114,8 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public JavaConstant getObjectHub() {
-        throw GraalInternalError.unimplemented("HotSpotResolvedPrimitiveType.getObjectHub");
-    }
-
-    @Override
-    public JavaConstant getJavaClass() {
-        throw GraalInternalError.unimplemented("HotSpotResolvedPrimitiveType.getJavaClass");
+    public JavaConstant getEncoding(Representation r) {
+        throw GraalInternalError.unimplemented("HotSpotResolvedPrimitiveType.getEncoding");
     }
 
     @Override

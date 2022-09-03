@@ -111,7 +111,7 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
                 if (baseConstant.getKind() == Kind.Object) {
                     o = unsafe.getObject(base, displacement);
                 } else if (baseConstant instanceof HotSpotMetaspaceConstant) {
-                    Object metaspaceObject = HotSpotMetaspaceConstantImpl.getMetaspaceObject(baseConstant);
+                    Object metaspaceObject = HotSpotMetaspaceConstant.getMetaspaceObject(baseConstant);
                     if (metaspaceObject instanceof HotSpotResolvedObjectTypeImpl && initialDisplacement == runtime.getConfig().classMirrorOffset) {
                         o = ((HotSpotResolvedObjectTypeImpl) metaspaceObject).mirror();
                     } else {
@@ -171,10 +171,10 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
                 assert bits == 32 && kind == Kind.Int;
                 long klassPointer = config().getKlassEncoding().uncompress((int) rawValue);
                 assert klassPointer == runtime.getCompilerToVM().readUnsafeKlassPointer(base);
-                return HotSpotMetaspaceConstantImpl.forMetaspaceObject(kind, rawValue, HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(klassPointer), true);
+                return HotSpotMetaspaceConstant.forMetaspaceObject(kind, rawValue, HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(klassPointer), true);
             } else {
                 assert bits == 64 && kind == Kind.Long;
-                return HotSpotMetaspaceConstantImpl.forMetaspaceObject(kind, rawValue, HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(rawValue), false);
+                return HotSpotMetaspaceConstant.forMetaspaceObject(kind, rawValue, HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(rawValue), false);
             }
         } else {
             switch (kind) {
@@ -235,7 +235,7 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
             }
         }
         if (constant instanceof HotSpotMetaspaceConstant) {
-            Object obj = HotSpotMetaspaceConstantImpl.getMetaspaceObject(constant);
+            Object obj = HotSpotMetaspaceConstant.getMetaspaceObject(constant);
             if (obj instanceof HotSpotResolvedObjectTypeImpl) {
                 return (ResolvedJavaType) obj;
             }

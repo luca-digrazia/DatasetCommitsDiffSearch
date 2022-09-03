@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,29 +20,16 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot.replacements;
+package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.replacements.nodes.*;
 
-@NodeInfo
-public class SystemIdentityHashCodeNode extends PureFunctionMacroNode {
-
-    public static SystemIdentityHashCodeNode create(Invoke invoke) {
-        return new SystemIdentityHashCodeNode(invoke);
-    }
-
-    protected SystemIdentityHashCodeNode(Invoke invoke) {
-        super(invoke);
-    }
+public class HotSpotSpeculationLog extends SpeculationLog {
 
     @Override
-    protected JavaConstant evaluate(JavaConstant param, MetaAccessProvider metaAccess) {
-        return ImmutableCode.getValue() || param.isNull() ? null : JavaConstant.forInt(System.identityHashCode(HotSpotObjectConstantImpl.asObject(param)));
+    public JavaConstant speculate(Object reason) {
+        addSpeculation(reason);
+        return HotSpotObjectConstantImpl.forObject(reason);
     }
 }

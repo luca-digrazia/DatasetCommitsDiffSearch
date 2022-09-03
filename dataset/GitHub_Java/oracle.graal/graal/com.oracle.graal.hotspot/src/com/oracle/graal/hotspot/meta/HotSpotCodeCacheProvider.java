@@ -267,7 +267,7 @@ public class HotSpotCodeCacheProvider implements CodeCacheProvider {
                 compressed = HotSpotObjectConstantImpl.isCompressed(constant);
                 raw = 0xDEADDEADDEADDEADL;
             } else if (constant instanceof HotSpotMetaspaceConstant) {
-                HotSpotMetaspaceConstantImpl meta = (HotSpotMetaspaceConstantImpl) constant;
+                HotSpotMetaspaceConstant meta = (HotSpotMetaspaceConstant) constant;
                 compressed = meta.getKind() != target.wordKind;
                 raw = meta.asLong();
             } else {

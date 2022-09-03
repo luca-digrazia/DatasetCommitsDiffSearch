@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -56,10 +55,14 @@ public class ClassGetClassLoader0Node extends MacroStateSplitNode implements Can
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            HotSpotObjectConstant c = (HotSpotObjectConstant) javaClass.asJavaConstant();
-            JavaConstant classLoader = c.getClassLoader();
-            if (classLoader != null) {
-                return ConstantNode.forConstant(classLoader, tool.getMetaAccess());
+            Class<?> c = (Class<?>) HotSpotObjectConstantImpl.asObject(javaClass.asJavaConstant());
+            if (c != null) {
+                /*
+                 * This is an intrinsic for getClassLoader0, which occurs after any security checks.
+                 * We can't call that directly so just call getClassLoader.
+                 */
+                ClassLoader classLoader = c.getClassLoader();
+                return ConstantNode.forConstant(HotSpotObjectConstantImpl.forObject(classLoader), tool.getMetaAccess());
             }
         }
         return this;
