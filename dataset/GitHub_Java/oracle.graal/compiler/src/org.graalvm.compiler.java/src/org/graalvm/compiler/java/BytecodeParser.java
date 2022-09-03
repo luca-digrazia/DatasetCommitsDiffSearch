@@ -3369,25 +3369,29 @@ public class BytecodeParser implements GraphBuilderContext {
 
             NodeSourcePosition currentPosition = graph.currentNodeSourcePosition();
             if (isNeverExecutedCode(probability)) {
-                NodeSourcePosition survivingSuccessorPosition = graph.trackNodeSourcePosition()
-                                ? new NodeSourcePosition(currentPosition.getCaller(), currentPosition.getMethod(), falseBlock.startBci)
-                                : null;
-                append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, true, survivingSuccessorPosition));
-                if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
-                    profilingPlugin.profileGoto(this, method, bci(), falseBlock.startBci, stateBefore);
+                if (!graph.isOSR() || getParent() != null || graph.getEntryBCI() != trueBlock.startBci) {
+                    NodeSourcePosition survivingSuccessorPosition = graph.trackNodeSourcePosition()
+                                    ? new NodeSourcePosition(currentPosition.getCaller(), currentPosition.getMethod(), falseBlock.startBci)
+                                    : null;
+                    append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, true, survivingSuccessorPosition));
+                    if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
+                        profilingPlugin.profileGoto(this, method, bci(), falseBlock.startBci, stateBefore);
+                    }
+                    appendGoto(falseBlock);
+                    return;
                 }
-                appendGoto(falseBlock);
-                return;
             } else if (isNeverExecutedCode(1 - probability)) {
-                NodeSourcePosition survivingSuccessorPosition = graph.trackNodeSourcePosition()
-                                ? new NodeSourcePosition(currentPosition.getCaller(), currentPosition.getMethod(), trueBlock.startBci)
-                                : null;
-                append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, false, survivingSuccessorPosition));
-                if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
-                    profilingPlugin.profileGoto(this, method, bci(), trueBlock.startBci, stateBefore);
+                if (!graph.isOSR() || getParent() != null || graph.getEntryBCI() != falseBlock.startBci) {
+                    NodeSourcePosition survivingSuccessorPosition = graph.trackNodeSourcePosition()
+                                    ? new NodeSourcePosition(currentPosition.getCaller(), currentPosition.getMethod(), trueBlock.startBci)
+                                    : null;
+                    append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, false, survivingSuccessorPosition));
+                    if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
+                        profilingPlugin.profileGoto(this, method, bci(), trueBlock.startBci, stateBefore);
+                    }
+                    appendGoto(trueBlock);
+                    return;
                 }
-                appendGoto(trueBlock);
-                return;
             }
 
             if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
@@ -4484,7 +4488,6 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected void genPutStatic(JavaField field) {
-        int stackSizeBefore = frameState.stackSize();
         ValueNode value = frameState.pop(field.getJavaKind());
         ResolvedJavaField resolvedField = resolveStaticFieldAccess(field, value);
         if (resolvedField == null) {
@@ -4497,10 +4500,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
         ClassInitializationPlugin classInitializationPlugin = this.graphBuilderConfig.getPlugins().getClassInitializationPlugin();
         if (classInitializationPlugin != null && classInitializationPlugin.shouldApply(this, resolvedField.getDeclaringClass())) {
-            JavaKind[] pushedSlotKinds = new JavaKind[] {field.getJavaKind()};
-            ValueNode[] pushedValues = new ValueNode[] {value};
-            FrameState stateBefore = frameState.create(bci(), getNonIntrinsicAncestor(), false, pushedSlotKinds, pushedValues);
-            assert stackSizeBefore == stateBefore.stackSize();
+            FrameState stateBefore = frameState.create(bci(), getNonIntrinsicAncestor(), false, null, null);
             classInitializationPlugin.apply(this, resolvedField.getDeclaringClass(), stateBefore);
         }
 
