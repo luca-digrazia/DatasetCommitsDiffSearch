@@ -38,15 +38,7 @@ import com.oracle.graal.nodes.calc.*;
 public interface GraphBuilderPlugins {
 
     public interface LoadFieldPlugin extends GraphBuilderPlugin {
-        @SuppressWarnings("unused")
-        default boolean apply(GraphBuilderContext builder, ValueNode receiver, ResolvedJavaField field) {
-            return false;
-        }
-
-        @SuppressWarnings("unused")
-        default boolean apply(GraphBuilderContext graphBuilderContext, ResolvedJavaField staticField) {
-            return false;
-        }
+        boolean apply(GraphBuilderContext builder, ValueNode receiver, ResolvedJavaField field);
     }
 
     public interface ParameterPlugin extends GraphBuilderPlugin {

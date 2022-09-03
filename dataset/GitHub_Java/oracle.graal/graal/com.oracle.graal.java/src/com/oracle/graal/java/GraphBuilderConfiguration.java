@@ -26,10 +26,6 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.java.GraphBuilderPlugin.InlineInvokePlugin;
-import com.oracle.graal.java.GraphBuilderPlugin.LoadFieldPlugin;
-import com.oracle.graal.java.GraphBuilderPlugin.LoopExplosionPlugin;
-import com.oracle.graal.java.GraphBuilderPlugin.ParameterPlugin;
 import com.oracle.graal.nodes.*;
 
 public class GraphBuilderConfiguration {
@@ -40,11 +36,10 @@ public class GraphBuilderConfiguration {
     private final ResolvedJavaType[] skippedExceptionTypes;
     private final DebugInfoMode debugInfoMode;
     private final boolean doLivenessAnalysis;
-    private final InvocationPlugins invocationPlugins = new InvocationPlugins();
-    private LoadFieldPlugin loadFieldPlugin;
-    private ParameterPlugin parameterPlugin;
-    private InlineInvokePlugin inlineInvokePlugin;
-    private LoopExplosionPlugin loopExplosionPlugin;
+    private GraphBuilderPlugins.LoadFieldPlugin loadFieldPlugin;
+    private GraphBuilderPlugins.ParameterPlugin parameterPlugin;
+    private GraphBuilderPlugins.InlineInvokePlugin inlineInvokePlugin;
+    private GraphBuilderPlugins.LoopExplosionPlugin loopExplosionPlugin;
 
     public static enum DebugInfoMode {
         SafePointsOnly,
@@ -80,7 +75,7 @@ public class GraphBuilderConfiguration {
 
     public GraphBuilderConfiguration copy() {
         GraphBuilderConfiguration result = new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, debugInfoMode, skippedExceptionTypes, doLivenessAnalysis);
-        result.copyPluginsFrom(this);
+        result.loadFieldPlugin = loadFieldPlugin;
         return result;
     }
 
@@ -101,15 +96,11 @@ public class GraphBuilderConfiguration {
         return new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, debugInfoMode, skippedExceptionTypes, newLivenessAnalysis);
     }
 
-    public InvocationPlugins getInvocationPlugins() {
-        return invocationPlugins;
-    }
-
-    public LoadFieldPlugin getLoadFieldPlugin() {
+    public GraphBuilderPlugins.LoadFieldPlugin getLoadFieldPlugin() {
         return loadFieldPlugin;
     }
 
-    public void setLoadFieldPlugin(LoadFieldPlugin loadFieldPlugin) {
+    public void setLoadFieldPlugin(GraphBuilderPlugins.LoadFieldPlugin loadFieldPlugin) {
         this.loadFieldPlugin = loadFieldPlugin;
     }
 
@@ -162,36 +153,27 @@ public class GraphBuilderConfiguration {
         return eagerResolving;
     }
 
-    public ParameterPlugin getParameterPlugin() {
+    public GraphBuilderPlugins.ParameterPlugin getParameterPlugin() {
         return parameterPlugin;
     }
 
-    public void setParameterPlugin(ParameterPlugin parameterPlugin) {
+    public void setParameterPlugin(GraphBuilderPlugins.ParameterPlugin parameterPlugin) {
         this.parameterPlugin = parameterPlugin;
     }
 
-    public InlineInvokePlugin getInlineInvokePlugin() {
+    public GraphBuilderPlugins.InlineInvokePlugin getInlineInvokePlugin() {
         return inlineInvokePlugin;
     }
 
-    public void setInlineInvokePlugin(InlineInvokePlugin inlineInvokePlugin) {
+    public void setInlineInvokePlugin(GraphBuilderPlugins.InlineInvokePlugin inlineInvokePlugin) {
         this.inlineInvokePlugin = inlineInvokePlugin;
     }
 
-    public LoopExplosionPlugin getLoopExplosionPlugin() {
+    public GraphBuilderPlugins.LoopExplosionPlugin getLoopExplosionPlugin() {
         return loopExplosionPlugin;
     }
 
-    public void setLoopExplosionPlugin(LoopExplosionPlugin loopExplosionPlugin) {
+    public void setLoopExplosionPlugin(GraphBuilderPlugins.LoopExplosionPlugin loopExplosionPlugin) {
         this.loopExplosionPlugin = loopExplosionPlugin;
-    }
-
-    public GraphBuilderConfiguration copyPluginsFrom(GraphBuilderConfiguration other) {
-        this.invocationPlugins.updateFrom(other.getInvocationPlugins());
-        this.parameterPlugin = other.parameterPlugin;
-        this.loadFieldPlugin = other.loadFieldPlugin;
-        this.inlineInvokePlugin = other.inlineInvokePlugin;
-        this.loopExplosionPlugin = other.loopExplosionPlugin;
-        return this;
     }
 }
