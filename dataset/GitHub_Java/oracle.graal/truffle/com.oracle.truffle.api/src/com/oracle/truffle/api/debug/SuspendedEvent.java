@@ -24,94 +24,91 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.frame.FrameInstance;
-import com.oracle.truffle.api.frame.FrameInstanceVisitor;
-import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.vm.TruffleVM;
-import com.oracle.truffle.api.vm.TruffleVM.Builder;
-
-import java.util.ArrayList;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.util.Collections;
 import java.util.List;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.FrameInstance;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrument.StandardSyntaxTag;
+import com.oracle.truffle.api.nodes.Node;
+
 /**
- * This event is delivered to all {@link Builder#onEvent(com.oracle.truffle.api.vm.EventConsumer)
+ * This event is delivered to all
+ * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#onEvent(com.oracle.truffle.api.vm.EventConsumer)
  * registered event handlers} when an execution is suspended on a
  * {@link Debugger#setLineBreakpoint(int, com.oracle.truffle.api.source.LineLocation, boolean)
  * breakpoint} or during {@link #prepareStepInto(int) stepping}. Methods in this event can only be
  * used while the handlers process the event. Then the state of the event becomes invalid and
- * subsequent calls to the event methods yield {@link IllegalStateException}.
- *
+ * subsequent calls to the event methods yield {@link IllegalStateException}. One can call
+ * {@link #getDebugger()} and keep reference to it for as long as necessary.
  */
+@SuppressWarnings("javadoc")
 public final class SuspendedEvent {
-    private final List<String> recentWarnings;
-    private final MaterializedFrame mFrame;
-    private final Node astNode;
-    private final List<FrameInstance> frames;
+
+    private static boolean TRACE = false;
+    private static final String TRACE_PREFIX = "EVENT: ";
+    private static final PrintStream OUT = System.out;
+
+    private static void trace(String format, Object... args) {
+        if (TRACE) {
+            OUT.println(TRACE_PREFIX + String.format(format, args));
+        }
+    }
+
     private final Debugger debugger;
+    private final Node haltedNode;
+    private final MaterializedFrame haltedFrame;
+    private final List<FrameInstance> stack;
+    private final List<String> warnings;
 
-    SuspendedEvent(Debugger prepares, Node astNode, MaterializedFrame mFrame, List<String> recentWarnings, final int stackDepth) {
-        this.debugger = prepares;
-        this.astNode = astNode;
-        this.mFrame = mFrame;
-        this.recentWarnings = recentWarnings;
-
-        this.frames = new ArrayList<>();
-        // Map the Truffle stack for this execution, ignore nested executions
-        // The top (current) frame is not produced by the iterator.
-        frames.add(Truffle.getRuntime().getCurrentFrame());
-        Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<FrameInstance>() {
-            int frameCount = 1;
-
-            @Override
-            public FrameInstance visitFrame(FrameInstance frameInstance) {
-                if (frameCount < stackDepth) {
-                    frames.add(frameInstance);
-                    frameCount++;
-                    return null;
-                }
-                return frameInstance;
-            }
-        });
-
+    SuspendedEvent(Debugger debugger, Node haltedNode, MaterializedFrame haltedFrame, List<FrameInstance> stack, List<String> warnings) {
+        this.debugger = debugger;
+        this.haltedNode = haltedNode;
+        this.haltedFrame = haltedFrame;
+        this.stack = stack;
+        this.warnings = warnings;
+        if (TRACE) {
+            trace("Execution suspended at Node=" + haltedNode);
+        }
     }
 
     /**
-     * Debugger associated with the just suspended execution. This debuger remains valid after the
+     * Debugger associated with the just suspended execution. This debugger remains valid after the
      * event is processed, it is possible and suggested to keep a reference to it and use it any
-     * time later when evaluating sources in the {@link TruffleVM}.
+     * time later when evaluating sources in the {@link com.oracle.truffle.api.vm.PolyglotEngine}.
      *
      * @return instance of debugger associated with the just suspended execution and any subsequent
-     *         ones in the same {@link TruffleVM}.
+     *         ones in the same {@link com.oracle.truffle.api.vm.PolyglotEngine}.
      */
     public Debugger getDebugger() {
         return debugger;
     }
 
     public Node getNode() {
-        return astNode;
+        return haltedNode;
     }
 
     public MaterializedFrame getFrame() {
-        return mFrame;
+        return haltedFrame;
     }
 
     public List<String> getRecentWarnings() {
-        return Collections.unmodifiableList(recentWarnings);
+        return Collections.unmodifiableList(warnings);
     }
 
     /**
-     * Gets the stack frames from the currently halted {@link TruffleVM} execution.
+     * Gets the stack frames from the currently halted
+     * {@link com.oracle.truffle.api.vm.PolyglotEngine} execution, not counting the Node and Frame
+     * where halted.
      *
      * @return list of stack frames
      */
     @CompilerDirectives.TruffleBoundary
     public List<FrameInstance> getStack() {
-        return Collections.unmodifiableList(frames);
+        return stack;
     }
 
     /**
@@ -127,7 +124,7 @@ public final class SuspendedEvent {
      * </ul>
      */
     public void prepareContinue() {
-        debugger.prepareContinue();
+        debugger.prepareContinue(-1);
     }
 
     /**
@@ -191,5 +188,18 @@ public final class SuspendedEvent {
      */
     public void prepareStepOver(int stepCount) {
         debugger.prepareStepOver(stepCount);
+    }
+
+    /**
+     * Evaluates given code snippet in the context of currently suspended execution.
+     *
+     * @param code the snippet to evaluate
+     * @param frame the frame in which to evaluate the code; { means the current frame at the halted
+     *            location.
+     * @return the computed value
+     * @throws IOException in case an evaluation goes wrong
+     */
+    public Object eval(String code, FrameInstance frame) throws IOException {
+        return debugger.evalInContext(this, code, frame);
     }
 }
