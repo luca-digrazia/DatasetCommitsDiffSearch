@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.common.Fields;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Graph;
@@ -241,12 +240,12 @@ public class CanonicalStringGraphPrinter implements GraphPrinter {
     }
 
     @Override
-    public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci, Map<Object, Object> properties, SnippetReflectionProvider snippetReflection) throws IOException {
+    public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci, Map<Object, Object> properties) throws IOException {
         currentDirectory = currentDirectory.resolve(escapeFileName(name));
     }
 
     @Override
-    public void print(Graph graph, String title, Map<Object, Object> properties, SnippetReflectionProvider snippetReflection) throws IOException {
+    public void print(Graph graph, String title, Map<Object, Object> properties) throws IOException {
         if (graph instanceof StructuredGraph) {
             StructuredGraph structuredGraph = (StructuredGraph) graph;
             currentDirectory.toFile().mkdirs();

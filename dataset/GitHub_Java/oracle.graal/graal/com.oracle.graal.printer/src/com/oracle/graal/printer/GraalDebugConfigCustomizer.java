@@ -31,15 +31,16 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugConfig;
 import com.oracle.graal.debug.DebugConfigCustomizer;
 import com.oracle.graal.debug.DebugDumpHandler;
-import com.oracle.graal.debug.GraalDebugConfig.Options;
 import com.oracle.graal.debug.TTY;
+import com.oracle.graal.debug.GraalDebugConfig.Options;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.nodeinfo.Verbosity;
 import com.oracle.graal.nodes.util.GraphUtil;
@@ -47,19 +48,18 @@ import com.oracle.graal.serviceprovider.ServiceProvider;
 
 @ServiceProvider(DebugConfigCustomizer.class)
 public class GraalDebugConfigCustomizer implements DebugConfigCustomizer {
-
-    private SnippetReflectionProvider snippetReflection;
+    private static long dumpIgvTimestamp;
+    private static final AtomicInteger dumpIgvId = new AtomicInteger();
 
     @Override
-    public void customize(DebugConfig config, Object... extraArgs) {
-        snippetReflection = DebugConfigCustomizer.lookupArg(SnippetReflectionProvider.class, extraArgs);
+    public void customize(DebugConfig config) {
         if (Options.PrintIdealGraphFile.getValue()) {
-            config.dumpHandlers().add(new GraphPrinterDumpHandler(this::createFilePrinter));
+            config.dumpHandlers().add(new GraphPrinterDumpHandler(GraalDebugConfigCustomizer::createFilePrinter));
         } else {
-            config.dumpHandlers().add(new GraphPrinterDumpHandler(this::createNetworkPrinter));
+            config.dumpHandlers().add(new GraphPrinterDumpHandler(GraalDebugConfigCustomizer::createNetworkPrinter));
         }
         if (Options.PrintCanonicalGraphStrings.getValue()) {
-            config.dumpHandlers().add(new GraphPrinterDumpHandler(this::createStringPrinter));
+            config.dumpHandlers().add(new GraphPrinterDumpHandler(GraalDebugConfigCustomizer::createStringPrinter));
         }
         config.dumpHandlers().add(new NodeDumper());
         if (Options.PrintCFG.getValue() || Options.PrintBackendCFG.getValue()) {
@@ -90,21 +90,26 @@ public class GraalDebugConfigCustomizer implements DebugConfigCustomizer {
         }
     }
 
-    private CanonicalStringGraphPrinter createStringPrinter() {
+    private static CanonicalStringGraphPrinter createStringPrinter() {
+        // If this is the first time I have constructed a FilePrinterPath,
+        // get a time stamp in a (weak) attempt to make unique file names.
+        if (dumpIgvTimestamp == 0) {
+            dumpIgvTimestamp = System.currentTimeMillis();
+        }
         // Construct the path to the directory.
-        Path path = Options.PrintCanonicalGraphStringsDirectory.getPath();
-        return new CanonicalStringGraphPrinter(path, snippetReflection);
+        Path path = Paths.get(Options.DumpPath.getValue(), "graph-strings-" + dumpIgvTimestamp + "_" + dumpIgvId.incrementAndGet());
+        return new CanonicalStringGraphPrinter(path);
     }
 
-    private GraphPrinter createNetworkPrinter() throws IOException {
+    private static GraphPrinter createNetworkPrinter() throws IOException {
         String host = Options.PrintIdealGraphAddress.getValue();
         int port = Options.PrintBinaryGraphs.getValue() ? Options.PrintBinaryGraphPort.getValue() : Options.PrintIdealGraphPort.getValue();
         try {
             GraphPrinter printer;
             if (Options.PrintBinaryGraphs.getValue()) {
-                printer = new BinaryGraphPrinter(SocketChannel.open(new InetSocketAddress(host, port)), snippetReflection);
+                printer = new BinaryGraphPrinter(SocketChannel.open(new InetSocketAddress(host, port)));
             } else {
-                printer = new IdealGraphPrinter(new Socket(host, port).getOutputStream(), true, snippetReflection);
+                printer = new IdealGraphPrinter(new Socket(host, port).getOutputStream(), true);
             }
             TTY.println("Connected to the IGV on %s:%d", host, port);
             return printer;
@@ -121,18 +126,25 @@ public class GraalDebugConfigCustomizer implements DebugConfigCustomizer {
     }
 
     private static Path getFilePrinterPath() {
+        // If this is the first time I have constructed a FilePrinterPath,
+        // get a time stamp in a (weak) attempt to make unique file names.
+        if (dumpIgvTimestamp == 0) {
+            dumpIgvTimestamp = System.currentTimeMillis();
+        }
+        // Encode the kind of the file in the extension.
+        final String ext = (Options.PrintBinaryGraphs.getValue() ? ".bgv" : ".gv.xml");
         // Construct the path to the file.
-        return Options.PrintIdealGraphFileName.getPath();
+        return Paths.get(Options.DumpPath.getValue(), "runtime-graphs-" + dumpIgvTimestamp + "_" + dumpIgvId.incrementAndGet() + ext);
     }
 
-    private GraphPrinter createFilePrinter() throws IOException {
+    private static GraphPrinter createFilePrinter() throws IOException {
         Path path = getFilePrinterPath();
         try {
             GraphPrinter printer;
             if (Options.PrintBinaryGraphs.getValue()) {
-                printer = new BinaryGraphPrinter(FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW), snippetReflection);
+                printer = new BinaryGraphPrinter(FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW));
             } else {
-                printer = new IdealGraphPrinter(Files.newOutputStream(path), true, snippetReflection);
+                printer = new IdealGraphPrinter(Files.newOutputStream(path), true);
             }
             TTY.println("Dumping IGV graphs to %s", path.toString());
             return printer;
