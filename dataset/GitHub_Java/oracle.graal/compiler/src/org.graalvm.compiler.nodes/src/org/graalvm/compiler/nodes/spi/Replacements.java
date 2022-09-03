@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,6 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.options.OptionValues;
 
@@ -51,11 +50,6 @@ public interface Replacements {
      * bytecode into a graph.
      */
     GraphBuilderConfiguration.Plugins getGraphBuilderPlugins();
-
-    /**
-     * Gets the plugin type that intrinsifies calls to {@code method}.
-     */
-    Class<? extends GraphBuilderPlugin> getIntrinsifyingPlugin(ResolvedJavaMethod method);
 
     /**
      * Gets the snippet graph derived from a given method.
@@ -81,7 +75,7 @@ public interface Replacements {
     /**
      * Registers a method as snippet.
      */
-    void registerSnippet(ResolvedJavaMethod method, ResolvedJavaMethod original, Object receiver, boolean trackNodeSourcePosition);
+    void registerSnippet(ResolvedJavaMethod method, boolean trackNodeSourcePosition);
 
     /**
      * Gets a graph that is a substitution for a given method.
@@ -144,21 +138,4 @@ public interface Replacements {
      * {@link Replacements#registerSnippetTemplateCache(SnippetTemplateCache)}.
      */
     <T extends SnippetTemplateCache> T getSnippetTemplateCache(Class<T> templatesClass);
-
-    /**
-     * Notifies this method that no further snippets will be registered via {@link #registerSnippet}
-     * or {@link #registerSnippetTemplateCache}.
-     *
-     * This is a hook for an implementation to check for or forbid late registration.
-     */
-    default void closeSnippetRegistration() {
-    }
-
-    /**
-     * Allow late registration of snippets. Should only be used in tests.
-     *
-     * This is a hook for an implementation to check for or forbid late registration.
-     */
-    default void reopenSnippetRegistration() {
-    }
 }

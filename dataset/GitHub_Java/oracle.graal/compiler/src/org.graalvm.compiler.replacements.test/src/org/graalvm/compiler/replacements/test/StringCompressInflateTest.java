@@ -299,7 +299,7 @@ public final class StringCompressInflateTest extends MethodSubstitutionTest {
         TestMethods(String testmname, Class<?> javaclass, Class<?> intrinsicClass, String javamname, Class<?>... params) {
             javamethod = getResolvedJavaMethod(javaclass, javamname, params);
             testmethod = getResolvedJavaMethod(testmname);
-            testgraph = getReplacements().getIntrinsicGraph(javamethod, CompilationIdentifier.INVALID_COMPILATION_ID, getDebugContext());
+            testgraph = testGraph(testmname, javamname);
             assertInGraph(testgraph, intrinsicClass);
 
             assert javamethod != null;
