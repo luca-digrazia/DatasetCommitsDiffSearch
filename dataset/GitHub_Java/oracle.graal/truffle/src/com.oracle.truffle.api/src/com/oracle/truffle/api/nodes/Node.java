@@ -173,10 +173,9 @@ public abstract class Node implements NodeInterface, Cloneable {
      */
     protected final <T extends Node> T[] insert(final T[] newChildren) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        if (newChildren != null) {
-            for (Node newChild : newChildren) {
-                adoptHelper(newChild);
-            }
+        assert newChildren != null;
+        for (Node newChild : newChildren) {
+            adoptHelper(newChild);
         }
         return newChildren;
     }
@@ -192,9 +191,8 @@ public abstract class Node implements NodeInterface, Cloneable {
      */
     protected final <T extends Node> T insert(final T newChild) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        if (newChild != null) {
-            adoptHelper(newChild);
-        }
+        assert newChild != null;
+        adoptHelper(newChild);
         return newChild;
     }
 
