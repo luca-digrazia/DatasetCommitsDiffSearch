@@ -68,7 +68,6 @@ import com.oracle.svm.core.heap.FeebleReferenceList;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.jdk.JDK9OrLater;
-import com.oracle.svm.core.jdk.Package_jdk_internal_misc;
 import com.oracle.svm.core.jdk.StackTraceBuilder;
 import com.oracle.svm.core.jdk.Target_jdk_internal_misc_VM;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicReference;
@@ -216,7 +215,6 @@ public abstract class JavaThreads {
         }
     }
 
-    @NeverInline("Truffle compilation must not inline this method")
     private static Thread createThread(IsolateThread isolateThread) {
         /*
          * Either the main thread, or VMThread was started a different way. Create a new Thread
@@ -266,6 +264,7 @@ public abstract class JavaThreads {
         return assignJavaThread(CEntryPointContext.getCurrentIsolateThread(), thread, manuallyStarted);
     }
 
+    @NeverInline("Truffle compilation must not inline this method")
     private static boolean assignJavaThread(IsolateThread isolateThread, Thread thread, boolean manuallyStarted) {
         if (!currentThread.compareAndSet(isolateThread, null, thread)) {
             return false;
@@ -1011,9 +1010,9 @@ final class SleepSupport {
     }
 }
 
-@TargetClass(classNameProvider = Package_jdk_internal_misc.class, className = "Unsafe")
+@TargetClass(sun.misc.Unsafe.class)
 @SuppressWarnings({"static-method"})
-final class Target_jdk_internal_misc_Unsafe {
+final class Target_sun_misc_Unsafe {
 
     /**
      * Block current thread, returning when a balancing <tt>unpark</tt> occurs, or a balancing
