@@ -32,6 +32,7 @@ import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.meta.PlatformKind;
 
 import com.oracle.graal.compiler.common.GraalOptions;
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.AllocatableRegisters;
 
 /**
  * Configuration for register allocation. This is different to {@link RegisterConfig} as it only

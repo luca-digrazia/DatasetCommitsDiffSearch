@@ -56,11 +56,10 @@ import static jdk.vm.ci.amd64.AMD64.xmm9;
 import java.util.ArrayList;
 import java.util.BitSet;
 
-import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
-
 import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterArray;
 import jdk.vm.ci.code.RegisterConfig;
+
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 
 class AMD64HotSpotRegisterAllocationConfig extends RegisterAllocationConfig {
     /**
@@ -81,24 +80,24 @@ class AMD64HotSpotRegisterAllocationConfig extends RegisterAllocationConfig {
     };
     // @formatter:on
 
-    AMD64HotSpotRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo) {
-        super(registerConfig, allocationRestrictedTo);
+    AMD64HotSpotRegisterAllocationConfig(RegisterConfig registerConfig) {
+        super(registerConfig);
     }
 
     @Override
-    protected RegisterArray initAllocatable(RegisterArray registers) {
-        BitSet regMap = new BitSet(registerConfig.getAllocatableRegisters().size());
+    protected Register[] initAllocatable(Register[] registers) {
+        BitSet regMap = new BitSet(registerConfig.getAllocatableRegisters().length);
         for (Register reg : registers) {
             regMap.set(reg.number);
         }
 
-        ArrayList<Register> allocatableRegisters = new ArrayList<>(registers.size());
+        ArrayList<Register> allocatableRegisters = new ArrayList<>(registers.length);
         for (Register reg : registerAllocationOrder) {
             if (regMap.get(reg.number)) {
                 allocatableRegisters.add(reg);
             }
         }
 
-        return super.initAllocatable(new RegisterArray(allocatableRegisters));
+        return super.initAllocatable(allocatableRegisters.toArray(new Register[allocatableRegisters.size()]));
     }
 }
