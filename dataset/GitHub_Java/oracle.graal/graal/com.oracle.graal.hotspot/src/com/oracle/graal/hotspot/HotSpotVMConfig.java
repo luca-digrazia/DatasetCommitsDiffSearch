@@ -33,7 +33,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     }
 
     // os information, register layout, code generation, ...
-    public boolean cAssertions;
     public boolean windowsOs;
     public int codeEntryAlignment;
     public boolean verifyOops;
