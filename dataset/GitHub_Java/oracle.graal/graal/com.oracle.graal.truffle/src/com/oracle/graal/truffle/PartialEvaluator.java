@@ -51,6 +51,7 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.CanonicalizerPhase.CustomCanonicalizer;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.graal.runtime.*;
 import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.graal.truffle.nodes.frame.*;
 import com.oracle.graal.truffle.nodes.frame.NewFrameNode.VirtualOnlyInstanceNode;
@@ -70,14 +71,16 @@ public class PartialEvaluator {
     private final CanonicalizerPhase canonicalizer;
     private final GraphBuilderConfiguration config;
     private Set<Constant> constantReceivers;
+    private final GraphCache cache;
     private final TruffleCache truffleCache;
     private final ResolvedJavaType frameType;
 
-    public PartialEvaluator(Providers providers, TruffleCache truffleCache, GraphBuilderConfiguration config) {
+    public PartialEvaluator(RuntimeProvider runtime, Providers providers, TruffleCache truffleCache, GraphBuilderConfiguration config) {
         this.providers = providers;
         CustomCanonicalizer customCanonicalizer = new PartialEvaluatorCanonicalizer(providers.getMetaAccess(), providers.getConstantReflection());
         this.canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue(), customCanonicalizer);
         this.config = config;
+        this.cache = runtime.getGraphCache();
         this.truffleCache = truffleCache;
         this.frameType = providers.getMetaAccess().lookupJavaType(FrameWithoutBoxing.class);
         try {
@@ -139,11 +142,7 @@ public class PartialEvaluator {
             }
 
             canonicalizer.apply(graph, baseContext);
-            Map<ResolvedJavaMethod, StructuredGraph> graphCache = null;
-            if (CacheGraphs.getValue()) {
-                graphCache = new HashMap<>();
-            }
-            HighTierContext tierContext = new HighTierContext(providers, assumptions, graphCache, new PhaseSuite<HighTierContext>(), OptimisticOptimizations.NONE);
+            HighTierContext tierContext = new HighTierContext(providers, assumptions, cache, new PhaseSuite<HighTierContext>(), OptimisticOptimizations.NONE);
 
             for (NeverPartOfCompilationNode neverPartOfCompilationNode : graph.getNodes(NeverPartOfCompilationNode.class)) {
                 Throwable exception = new VerificationError(neverPartOfCompilationNode.getMessage());
@@ -242,7 +241,7 @@ public class PartialEvaluator {
     }
 
     private boolean isFrame(ValueNode receiver) {
-        return receiver instanceof NewFrameNode || Objects.equals(ObjectStamp.typeOrNull(receiver.stamp()), frameType);
+        return receiver instanceof NewFrameNode || ObjectStamp.typeOrNull(receiver.stamp()) == frameType;
     }
 
     private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final PhaseContext phaseContext) {
@@ -250,7 +249,7 @@ public class PartialEvaluator {
         StructuredGraph graph = truffleCache.lookup(targetMethod, arguments, assumptions, canonicalizer);
 
         if (targetMethod.getAnnotation(ExplodeLoop.class) != null) {
-            assert graph.hasLoops() : graph + " does not contain a loop";
+            assert graph.hasLoops();
             final StructuredGraph graphCopy = graph.copy();
             final List<Node> modifiedNodes = new ArrayList<>();
             for (ParameterNode param : graphCopy.getNodes(ParameterNode.class)) {
