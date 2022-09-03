@@ -22,24 +22,21 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.framemap.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.meta.*;
 
 final class SSAMoveResolver extends MoveResolver {
 
     private int[] stackBlocked;
-    private final int firstVirtualStackIndex;
 
     SSAMoveResolver(LinearScan allocator) {
         super(allocator);
         this.stackBlocked = new int[((FrameMapBuilderTool) allocator.frameMapBuilder).getNumberOfStackSlots()];
-        this.firstVirtualStackIndex = 0;
     }
 
     @Override
@@ -80,12 +77,14 @@ final class SSAMoveResolver extends MoveResolver {
     protected void setValueBlocked(Value location, int direction) {
         assert direction == 1 || direction == -1 : "out of bounds";
         if (isVirtualStackSlot(location)) {
-            int stackIdx = getStackArrayIndex(asVirtualStackSlot(location));
-            if (stackIdx >= stackBlocked.length) {
-                stackBlocked = Arrays.copyOf(stackBlocked, stackIdx + 1);
+            assert LinearScanPhase.SSA_LSRA.getValue() : "should only happen if SSA LSRA is used!";
+            int stack = asVirtualStackSlot(location).getId();
+            if (stack >= stackBlocked.length) {
+                stackBlocked = Arrays.copyOf(stackBlocked, stack + 1);
             }
-            stackBlocked[stackIdx] += direction;
+            stackBlocked[stack] += direction;
         } else if (isStackSlot(location)) {
+            assert LinearScanPhase.SSA_LSRA.getValue() : "should only happen if SSA LSRA is used!";
             assert asStackSlot(location).isInCallerFrame() : "Unexpected stack slot: " + location;
             // incoming stack arguments can be ignored
         } else {
@@ -96,22 +95,20 @@ final class SSAMoveResolver extends MoveResolver {
     @Override
     protected int valueBlocked(Value location) {
         if (isVirtualStackSlot(location)) {
-            int stackIdx = getStackArrayIndex(asVirtualStackSlot(location));
-            if (stackIdx >= stackBlocked.length) {
+            assert LinearScanPhase.SSA_LSRA.getValue() : "should only happen if SSA LSRA is used!";
+            int stack = asVirtualStackSlot(location).getId();
+            if (stack >= stackBlocked.length) {
                 return 0;
             }
-            return stackBlocked[stackIdx];
+            return stackBlocked[stack];
         }
         if (isStackSlot(location)) {
+            assert LinearScanPhase.SSA_LSRA.getValue() : "should only happen if SSA LSRA is used!";
             assert asStackSlot(location).isInCallerFrame() : "Unexpected stack slot: " + location;
             // incoming stack arguments are always blocked (aka they can not be written)
             return 1;
         }
         return super.valueBlocked(location);
-    }
-
-    private int getStackArrayIndex(VirtualStackSlot virtualStackSlot) {
-        return firstVirtualStackIndex + virtualStackSlot.getId();
     }
 
     @Override
