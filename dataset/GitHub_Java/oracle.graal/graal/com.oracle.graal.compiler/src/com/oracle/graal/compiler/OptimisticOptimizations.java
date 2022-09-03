@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler;
 
-import java.util.*;
-
 import com.oracle.graal.debug.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
@@ -32,86 +30,62 @@ import com.oracle.max.criutils.*;
 
 
 public final class OptimisticOptimizations {
-    public static final OptimisticOptimizations ALL = new OptimisticOptimizations(EnumSet.allOf(Optimization.class));
-    public static final OptimisticOptimizations NONE = new OptimisticOptimizations(EnumSet.noneOf(Optimization.class));
+    public static OptimisticOptimizations ALL = new OptimisticOptimizations(true, true, true, true);
+    public static OptimisticOptimizations NONE = new OptimisticOptimizations(false, false, false, false);
     private static final DebugMetric disabledOptimisticOptsMetric = Debug.metric("DisabledOptimisticOpts");
 
-    private static enum Optimization {
-        RemoveNeverExecutedCode,
-        UseTypeCheckedInlining,
-        UseTypeCheckHints,
-        UseExceptionProbability
-    }
-
-    private final Set<Optimization> enabledOpts;
+    private final boolean removeNeverExecutedCode;
+    private final boolean useTypeCheckedInlining;
+    private final boolean useTypeCheckHints;
+    private final boolean useExceptionProbability;
 
     public OptimisticOptimizations(RiResolvedMethod method) {
-        this.enabledOpts = EnumSet.noneOf(Optimization.class);
-
         RiProfilingInfo profilingInfo = method.profilingInfo();
-        if (checkDeoptimizations(profilingInfo, RiDeoptReason.UnreachedCode)) {
-            enabledOpts.add(Optimization.RemoveNeverExecutedCode);
-        }
-        if (checkDeoptimizations(profilingInfo, RiDeoptReason.TypeCheckedInliningViolated)) {
-            enabledOpts.add(Optimization.UseTypeCheckedInlining);
-        }
-        if (checkDeoptimizations(profilingInfo, RiDeoptReason.OptimizedTypeCheckViolated)) {
-            enabledOpts.add(Optimization.UseTypeCheckHints);
-        }
-        if (checkDeoptimizations(profilingInfo, RiDeoptReason.NotCompiledExceptionHandler)) {
-            enabledOpts.add(Optimization.UseExceptionProbability);
-        }
+        removeNeverExecutedCode = checkDeoptimization(method, profilingInfo, RiDeoptReason.UnreachedCode);
+        useTypeCheckedInlining = checkDeoptimization(method, profilingInfo, RiDeoptReason.TypeCheckedInliningViolated);
+        useTypeCheckHints = checkDeoptimization(method, profilingInfo, RiDeoptReason.OptimizedTypeCheckViolated);
+        useExceptionProbability = checkDeoptimization(method, profilingInfo, RiDeoptReason.NotCompiledExceptionHandler);
     }
 
-    private OptimisticOptimizations(Set<Optimization> enabledOpts) {
-        this.enabledOpts = enabledOpts;
-    }
-
-    public void log(RiMethod method) {
-        for (Optimization opt: Optimization.values()) {
-            if (!enabledOpts.contains(opt)) {
-                if (GraalOptions.PrintDisabledOptimisticOptimizations) {
-                    TTY.println("WARN: deactivated optimistic optimization %s for %s", opt.name(), CiUtil.format("%H.%n(%p)", method));
-                }
-                disabledOptimisticOptsMetric.increment();
+    private static boolean checkDeoptimization(RiResolvedMethod method, RiProfilingInfo profilingInfo, RiDeoptReason reason) {
+        boolean result = profilingInfo.getDeoptimizationCount(reason) < GraalOptions.DeoptsToDisableOptimisticOptimization;
+        if (!result) {
+            if (GraalOptions.PrintDisabledOptimisticOptimizations) {
+                TTY.println("WARN: deactivated optimistic optimizations for %s because of %s", CiUtil.format("%H.%n(%p)", method), reason.name());
             }
+            disabledOptimisticOptsMetric.increment();
         }
+        return result;
+    }
+
+    public OptimisticOptimizations(boolean removeNeverExecutedCode, boolean useTypeCheckedInlining, boolean useTypeCheckHints, boolean useExceptionProbability) {
+        this.removeNeverExecutedCode = removeNeverExecutedCode;
+        this.useTypeCheckedInlining = useTypeCheckedInlining;
+        this.useTypeCheckHints = useTypeCheckHints;
+        this.useExceptionProbability = useExceptionProbability;
     }
 
     public boolean removeNeverExecutedCode() {
-        return GraalOptions.RemoveNeverExecutedCode && enabledOpts.contains(Optimization.RemoveNeverExecutedCode);
+        return GraalOptions.RemoveNeverExecutedCode && removeNeverExecutedCode;
     }
 
     public boolean useUseTypeCheckHints() {
-        return GraalOptions.UseTypeCheckHints && enabledOpts.contains(Optimization.UseTypeCheckHints);
+        return GraalOptions.UseTypeCheckHints && useTypeCheckHints;
     }
 
     public boolean inlineMonomorphicCalls() {
-        return GraalOptions.InlineMonomorphicCalls && enabledOpts.contains(Optimization.UseTypeCheckedInlining);
+        return GraalOptions.InlineMonomorphicCalls && useTypeCheckedInlining;
     }
 
     public boolean inlinePolymorphicCalls() {
-        return GraalOptions.InlinePolymorphicCalls && enabledOpts.contains(Optimization.UseTypeCheckedInlining);
+        return GraalOptions.InlinePolymorphicCalls && useTypeCheckedInlining;
     }
 
     public boolean inlineMegamorphicCalls() {
-        return GraalOptions.InlineMegamorphicCalls && enabledOpts.contains(Optimization.UseTypeCheckedInlining);
+        return GraalOptions.InlineMegamorphicCalls && useTypeCheckedInlining;
     }
 
     public boolean useExceptionProbability() {
-        return GraalOptions.UseExceptionProbability && enabledOpts.contains(Optimization.UseExceptionProbability);
-    }
-
-    public boolean lessOptimisticThan(OptimisticOptimizations other) {
-        for (Optimization opt: Optimization.values()) {
-            if (!enabledOpts.contains(opt) && other.enabledOpts.contains(opt)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean checkDeoptimizations(RiProfilingInfo profilingInfo, RiDeoptReason reason) {
-        return profilingInfo.getDeoptimizationCount(reason) < GraalOptions.DeoptsToDisableOptimisticOptimization;
+        return useExceptionProbability;
     }
 }
