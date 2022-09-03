@@ -22,14 +22,10 @@
  */
 package com.oracle.graal.graph;
 
-import static com.oracle.graal.compiler.common.Fields.*;
-import static com.oracle.graal.graph.Edges.*;
-import static com.oracle.graal.graph.InputEdges.*;
 import static com.oracle.graal.graph.Node.*;
 import static com.oracle.graal.graph.util.CollectionsAccess.*;
 import static java.lang.reflect.Modifier.*;
 
-import java.lang.annotation.*;
 import java.lang.reflect.*;
 import java.util.*;
 
@@ -58,19 +54,11 @@ public final class NodeClass extends FieldIntrospection {
     // Timers for creation of a NodeClass instance
     private static final DebugTimer Init = Debug.timer("NodeClass.Init");
     private static final DebugTimer Init_FieldScanning = Debug.timer("NodeClass.Init.FieldScanning");
-    private static final DebugTimer Init_FieldScanningInner = Debug.timer("NodeClass.Init.FieldScanning.Inner");
-    private static final DebugTimer Init_AnnotationParsing = Debug.timer("NodeClass.Init.AnnotationParsing");
     private static final DebugTimer Init_Edges = Debug.timer("NodeClass.Init.Edges");
     private static final DebugTimer Init_Data = Debug.timer("NodeClass.Init.Data");
     private static final DebugTimer Init_Naming = Debug.timer("NodeClass.Init.Naming");
     private static final DebugTimer Init_AllowedUsages = Debug.timer("NodeClass.Init.AllowedUsages");
     private static final DebugTimer Init_IterableIds = Debug.timer("NodeClass.Init.IterableIds");
-
-    private static <T extends Annotation> T getAnnotation(AnnotatedElement e, Class<T> annotationClass) {
-        try (TimerCloseable s = Init_AnnotationParsing.start()) {
-            return e.getAnnotation(annotationClass);
-        }
-    }
 
     /**
      * Gets the {@link NodeClass} associated with a given {@link Class}.
@@ -89,7 +77,7 @@ public final class NodeClass extends FieldIntrospection {
                 try (TimerCloseable t = Init.start()) {
                     value = (NodeClass) allClasses.get(key);
                     if (value == null) {
-                        GeneratedNode gen = getAnnotation(c, GeneratedNode.class);
+                        GeneratedNode gen = c.getAnnotation(GeneratedNode.class);
                         if (gen != null) {
                             Class<? extends Node> originalNodeClass = (Class<? extends Node>) gen.value();
                             value = (NodeClass) allClasses.get(originalNodeClass);
@@ -101,12 +89,11 @@ public final class NodeClass extends FieldIntrospection {
                             }
                         } else {
                             Class<?> superclass = c.getSuperclass();
-                            NodeClass superNodeClass = null;
                             if (superclass != NODE_CLASS) {
                                 // Ensure NodeClass for superclass exists
-                                superNodeClass = get(superclass);
+                                get(superclass);
                             }
-                            value = new NodeClass(key, superNodeClass);
+                            value = new NodeClass(key);
                         }
                         Object old = allClasses.putIfAbsent(key, value);
                         assert old == null : old + "   " + key;
@@ -123,9 +110,8 @@ public final class NodeClass extends FieldIntrospection {
 
     private static int nextIterableId = 0;
 
-    private final InputEdges inputs;
-    private final SuccessorEdges successors;
-    private final NodeClass superNodeClass;
+    private final Edges inputs;
+    private final Edges successors;
 
     private final boolean canGVN;
     private final int startGVNNumber;
@@ -156,13 +142,12 @@ public final class NodeClass extends FieldIntrospection {
     private final boolean isSimplifiable;
     private final boolean isLeafNode;
 
-    public NodeClass(Class<?> clazz, NodeClass superNodeClass) {
-        this(clazz, superNodeClass, new DefaultCalcOffset(), null, 0);
+    public NodeClass(Class<?> clazz) {
+        this(clazz, new DefaultCalcOffset(), null, 0);
     }
 
-    public NodeClass(Class<?> clazz, NodeClass superNodeClass, CalcOffset calcOffset, int[] presetIterableIds, int presetIterableId) {
+    public NodeClass(Class<?> clazz, CalcOffset calcOffset, int[] presetIterableIds, int presetIterableId) {
         super(clazz);
-        this.superNodeClass = superNodeClass;
         assert NODE_CLASS.isAssignableFrom(clazz);
 
         this.isCanonicalizable = Canonicalizable.class.isAssignableFrom(clazz);
@@ -172,9 +157,9 @@ public final class NodeClass extends FieldIntrospection {
 
         this.isSimplifiable = Simplifiable.class.isAssignableFrom(clazz);
 
-        FieldScanner fs = new FieldScanner(calcOffset, superNodeClass);
+        FieldScanner fs = new FieldScanner(calcOffset);
         try (TimerCloseable t = Init_FieldScanning.start()) {
-            fs.scan(clazz, false);
+            fs.scan(clazz);
         }
 
         try (TimerCloseable t1 = Init_Edges.start()) {
@@ -190,13 +175,14 @@ public final class NodeClass extends FieldIntrospection {
         canGVN = Node.ValueNumberable.class.isAssignableFrom(clazz);
         startGVNNumber = clazz.hashCode();
 
-        NodeInfo info = getAnnotation(clazz, NodeInfo.class);
+        String newNameTemplate = null;
+        String newShortName;
         try (TimerCloseable t1 = Init_Naming.start()) {
-            String newNameTemplate = null;
-            String newShortName = clazz.getSimpleName();
+            newShortName = clazz.getSimpleName();
             if (newShortName.endsWith("Node") && !newShortName.equals("StartNode") && !newShortName.equals("EndNode")) {
                 newShortName = newShortName.substring(0, newShortName.length() - 4);
             }
+            NodeInfo info = clazz.getAnnotation(NodeInfo.class);
             assert info != null : "missing " + NodeInfo.class.getSimpleName() + " annotation on " + clazz;
             if (!info.shortName().isEmpty()) {
                 newShortName = info.shortName();
@@ -204,14 +190,23 @@ public final class NodeClass extends FieldIntrospection {
             if (!info.nameTemplate().isEmpty()) {
                 newNameTemplate = info.nameTemplate();
             }
-            this.nameTemplate = newNameTemplate == null ? newShortName : newNameTemplate;
-            this.shortName = newShortName;
         }
+        EnumSet<InputType> newAllowedUsageTypes = EnumSet.noneOf(InputType.class);
         try (TimerCloseable t1 = Init_AllowedUsages.start()) {
-            allowedUsageTypes = superNodeClass == null ? EnumSet.noneOf(InputType.class) : superNodeClass.allowedUsageTypes.clone();
-            allowedUsageTypes.addAll(Arrays.asList(info.allowedUsageTypes()));
+            Class<?> current = clazz;
+            do {
+                NodeInfo currentInfo = current.getAnnotation(NodeInfo.class);
+                if (currentInfo != null) {
+                    if (currentInfo.allowedUsageTypes().length > 0) {
+                        newAllowedUsageTypes.addAll(Arrays.asList(currentInfo.allowedUsageTypes()));
+                    }
+                }
+                current = current.getSuperclass();
+            } while (current != Node.class);
         }
-
+        this.nameTemplate = newNameTemplate == null ? newShortName : newNameTemplate;
+        this.allowedUsageTypes = newAllowedUsageTypes;
+        this.shortName = newShortName;
         if (presetIterableIds != null) {
             this.iterableIds = presetIterableIds;
             this.iterableId = presetIterableId;
@@ -220,12 +215,15 @@ public final class NodeClass extends FieldIntrospection {
             try (TimerCloseable t1 = Init_IterableIds.start()) {
                 this.iterableId = nextIterableId++;
 
-                NodeClass snc = superNodeClass;
-                while (snc != null && IterableNodeType.class.isAssignableFrom(snc.getClazz())) {
-                    assert !containsId(this.iterableId, snc.iterableIds);
-                    snc.iterableIds = Arrays.copyOf(snc.iterableIds, snc.iterableIds.length + 1);
-                    snc.iterableIds[snc.iterableIds.length - 1] = this.iterableId;
-                    snc = snc.superNodeClass;
+                Class<?> superclass = clazz.getSuperclass();
+                while (superclass != NODE_CLASS) {
+                    if (IterableNodeType.class.isAssignableFrom(superclass)) {
+                        NodeClass superNodeClass = NodeClass.get(superclass);
+                        assert !containsId(this.iterableId, superNodeClass.iterableIds);
+                        superNodeClass.iterableIds = Arrays.copyOf(superNodeClass.iterableIds, superNodeClass.iterableIds.length + 1);
+                        superNodeClass.iterableIds[superNodeClass.iterableIds.length - 1] = this.iterableId;
+                    }
+                    superclass = superclass.getSuperclass();
                 }
 
                 this.iterableIds = new int[]{iterableId};
@@ -277,7 +275,7 @@ public final class NodeClass extends FieldIntrospection {
      *
      * <pre>
      *     if (node.getNodeClass().is(BeginNode.class)) { ... }
-     *
+     * 
      *     // Due to generated Node classes, the test below
      *     // is *not* the same as the test above:
      *     if (node.getClass() == BeginNode.class) { ... }
@@ -286,7 +284,7 @@ public final class NodeClass extends FieldIntrospection {
      * @param nodeClass a {@linkplain GeneratedNode non-generated} {@link Node} class
      */
     public boolean is(Class<? extends Node> nodeClass) {
-        assert getAnnotation(nodeClass, GeneratedNode.class) == null : "cannot test NodeClas against generated " + nodeClass;
+        assert nodeClass.getAnnotation(GeneratedNode.class) == null : "cannot test NodeClas against generated " + nodeClass;
         return nodeClass == getClazz();
     }
 
@@ -332,9 +330,9 @@ public final class NodeClass extends FieldIntrospection {
     /**
      * Describes a field representing an input or successor edge in a node.
      */
-    protected static class EdgeInfo extends FieldInfo {
+    protected static class EdgeFieldInfo extends FieldInfo {
 
-        public EdgeInfo(long offset, String name, Class<?> type) {
+        public EdgeFieldInfo(long offset, String name, Class<?> type) {
             super(offset, name, type);
         }
 
@@ -359,11 +357,11 @@ public final class NodeClass extends FieldIntrospection {
     /**
      * Describes a field representing an {@linkplain Type#Inputs input} edge in a node.
      */
-    protected static class InputInfo extends EdgeInfo {
+    protected static class InputFieldInfo extends EdgeFieldInfo {
         final InputType inputType;
         final boolean optional;
 
-        public InputInfo(long offset, String name, Class<?> type, InputType inputType, boolean optional) {
+        public InputFieldInfo(long offset, String name, Class<?> type, InputType inputType, boolean optional) {
             super(offset, name, type);
             this.inputType = inputType;
             this.optional = optional;
@@ -377,69 +375,55 @@ public final class NodeClass extends FieldIntrospection {
 
     protected static class FieldScanner extends BaseFieldScanner {
 
-        public final ArrayList<InputInfo> inputs = new ArrayList<>();
-        public final ArrayList<EdgeInfo> successors = new ArrayList<>();
+        public final ArrayList<InputFieldInfo> inputs = new ArrayList<>();
+        public final ArrayList<FieldInfo> successors = new ArrayList<>();
         int directInputs;
         int directSuccessors;
 
-        protected FieldScanner(CalcOffset calc, NodeClass superNodeClass) {
+        protected FieldScanner(CalcOffset calc) {
             super(calc);
-            if (superNodeClass != null) {
-                translateInto(superNodeClass.inputs, inputs);
-                translateInto(superNodeClass.successors, successors);
-                translateInto(superNodeClass.data, data);
-                directInputs = superNodeClass.inputs.getDirectCount();
-                directSuccessors = superNodeClass.successors.getDirectCount();
-            }
         }
 
         @Override
         protected void scanField(Field field, long offset) {
-            Input inputAnnotation = getAnnotation(field, Node.Input.class);
-            OptionalInput optionalInputAnnotation = getAnnotation(field, Node.OptionalInput.class);
-            Successor successorAnnotation = getAnnotation(field, Successor.class);
-            try (TimerCloseable s = Init_FieldScanningInner.start()) {
-                Class<?> type = field.getType();
-                int modifiers = field.getModifiers();
-
-                if (inputAnnotation != null || optionalInputAnnotation != null) {
-                    assert successorAnnotation == null : "field cannot be both input and successor";
-                    if (INPUT_LIST_CLASS.isAssignableFrom(type)) {
-                        // NodeInputList fields should not be final since they are
-                        // written (via Unsafe) in clearInputs()
-                        GraalInternalError.guarantee(!Modifier.isFinal(modifiers), "NodeInputList input field %s should not be final", field);
-                        GraalInternalError.guarantee(!Modifier.isPublic(modifiers), "NodeInputList input field %s should not be public", field);
-                    } else {
-                        GraalInternalError.guarantee(NODE_CLASS.isAssignableFrom(type) || type.isInterface(), "invalid input type: %s", type);
-                        GraalInternalError.guarantee(!Modifier.isFinal(modifiers), "Node input field %s should not be final", field);
-                        directInputs++;
-                    }
-                    InputType inputType;
-                    if (inputAnnotation != null) {
-                        assert optionalInputAnnotation == null : "inputs can either be optional or non-optional";
-                        inputType = inputAnnotation.value();
-                    } else {
-                        inputType = optionalInputAnnotation.value();
-                    }
-                    inputs.add(new InputInfo(offset, field.getName(), type, inputType, field.isAnnotationPresent(Node.OptionalInput.class)));
-                } else if (successorAnnotation != null) {
-                    if (SUCCESSOR_LIST_CLASS.isAssignableFrom(type)) {
-                        // NodeSuccessorList fields should not be final since they are
-                        // written (via Unsafe) in clearSuccessors()
-                        GraalInternalError.guarantee(!Modifier.isFinal(modifiers), "NodeSuccessorList successor field % should not be final", field);
-                        GraalInternalError.guarantee(!Modifier.isPublic(modifiers), "NodeSuccessorList successor field %s should not be public", field);
-                    } else {
-                        GraalInternalError.guarantee(NODE_CLASS.isAssignableFrom(type), "invalid successor type: %s", type);
-                        GraalInternalError.guarantee(!Modifier.isFinal(modifiers), "Node successor field %s should not be final", field);
-                        directSuccessors++;
-                    }
-                    successors.add(new EdgeInfo(offset, field.getName(), type));
+            Class<?> type = field.getType();
+            if (field.isAnnotationPresent(Node.Input.class) || field.isAnnotationPresent(Node.OptionalInput.class)) {
+                assert !field.isAnnotationPresent(Node.Successor.class) : "field cannot be both input and successor";
+                assert field.isAnnotationPresent(Node.Input.class) ^ field.isAnnotationPresent(Node.OptionalInput.class) : "inputs can either be optional or non-optional";
+                if (INPUT_LIST_CLASS.isAssignableFrom(type)) {
+                    // NodeInputList fields should not be final since they are
+                    // written (via Unsafe) in clearInputs()
+                    GraalInternalError.guarantee(!Modifier.isFinal(field.getModifiers()), "NodeInputList input field %s should not be final", field);
+                    GraalInternalError.guarantee(!Modifier.isPublic(field.getModifiers()), "NodeInputList input field %s should not be public", field);
                 } else {
-                    GraalInternalError.guarantee(!NODE_CLASS.isAssignableFrom(type) || field.getName().equals("Null"), "suspicious node field: %s", field);
-                    GraalInternalError.guarantee(!INPUT_LIST_CLASS.isAssignableFrom(type), "suspicious node input list field: %s", field);
-                    GraalInternalError.guarantee(!SUCCESSOR_LIST_CLASS.isAssignableFrom(type), "suspicious node successor list field: %s", field);
-                    data.add(new FieldInfo(offset, field.getName(), type));
+                    GraalInternalError.guarantee(NODE_CLASS.isAssignableFrom(type) || type.isInterface(), "invalid input type: %s", type);
+                    GraalInternalError.guarantee(!Modifier.isFinal(field.getModifiers()), "Node input field %s should not be final", field);
+                    directInputs++;
                 }
+                InputType inputType;
+                if (field.isAnnotationPresent(Node.Input.class)) {
+                    inputType = field.getAnnotation(Node.Input.class).value();
+                } else {
+                    inputType = field.getAnnotation(Node.OptionalInput.class).value();
+                }
+                inputs.add(new InputFieldInfo(offset, field.getName(), type, inputType, field.isAnnotationPresent(Node.OptionalInput.class)));
+            } else if (field.isAnnotationPresent(Node.Successor.class)) {
+                if (SUCCESSOR_LIST_CLASS.isAssignableFrom(type)) {
+                    // NodeSuccessorList fields should not be final since they are
+                    // written (via Unsafe) in clearSuccessors()
+                    GraalInternalError.guarantee(!Modifier.isFinal(field.getModifiers()), "NodeSuccessorList successor field % should not be final", field);
+                    GraalInternalError.guarantee(!Modifier.isPublic(field.getModifiers()), "NodeSuccessorList successor field %s should not be public", field);
+                } else {
+                    GraalInternalError.guarantee(NODE_CLASS.isAssignableFrom(type), "invalid successor type: %s", type);
+                    GraalInternalError.guarantee(!Modifier.isFinal(field.getModifiers()), "Node successor field %s should not be final", field);
+                    directSuccessors++;
+                }
+                successors.add(new FieldInfo(offset, field.getName(), type));
+            } else {
+                GraalInternalError.guarantee(!NODE_CLASS.isAssignableFrom(type) || field.getName().equals("Null"), "suspicious node field: %s", field);
+                GraalInternalError.guarantee(!INPUT_LIST_CLASS.isAssignableFrom(type), "suspicious node input list field: %s", field);
+                GraalInternalError.guarantee(!SUCCESSOR_LIST_CLASS.isAssignableFrom(type), "suspicious node successor list field: %s", field);
+                data.add(new FieldInfo(offset, field.getName(), type));
             }
         }
     }

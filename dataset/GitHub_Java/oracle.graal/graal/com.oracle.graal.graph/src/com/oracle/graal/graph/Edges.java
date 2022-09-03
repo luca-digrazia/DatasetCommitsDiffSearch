@@ -28,9 +28,8 @@ import static com.oracle.graal.graph.Node.*;
 
 import java.util.*;
 
-import com.oracle.graal.compiler.common.FieldIntrospection.FieldInfo;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.graph.NodeClass.EdgeInfo;
+import com.oracle.graal.compiler.common.FieldIntrospection.*;
 
 /**
  * Describes {@link Node} fields representing the set of inputs for the node or the set of the
@@ -49,16 +48,10 @@ public abstract class Edges extends Fields {
     private final int directCount;
     private final Type type;
 
-    public Edges(Type type, int directCount, ArrayList<? extends FieldInfo> edges) {
-        super(edges);
+    public Edges(Type type, int directCount, ArrayList<? extends FieldInfo> fields) {
+        super(fields);
         this.type = type;
         this.directCount = directCount;
-    }
-
-    public static void translateInto(Edges edges, ArrayList<EdgeInfo> infos) {
-        for (int index = 0; index < edges.getCount(); index++) {
-            infos.add(new EdgeInfo(edges.offsets[index], edges.getName(index), edges.getType(index)));
-        }
     }
 
     private static Node getNode(Node node, long offset) {
