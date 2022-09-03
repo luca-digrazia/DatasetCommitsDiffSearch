@@ -160,7 +160,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
      * in AOT mode, some fields should never be embedded even for snippets/replacements.
      */
     private boolean isEmbeddable() {
-        if (ImmutableCode.getValue() && notEmbeddable.contains(this)) {
+        if (AOTCompilation.getValue() && notEmbeddable.contains(this)) {
             return false;
         }
         return true;
@@ -176,7 +176,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
      */
     @Override
     public Constant readConstantValue(Constant receiver) {
-        assert !ImmutableCode.getValue() || isCalledForSnippets() : receiver;
+        assert !AOTCompilation.getValue() || isCalledForSnippets() : receiver;
 
         if (receiver == null) {
             assert Modifier.isStatic(modifiers);
