@@ -31,6 +31,7 @@ import static org.graalvm.compiler.core.common.type.StampFactory.objectNonNull;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.core.common.type.AbstractPointerStamp;
+import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
@@ -91,15 +92,32 @@ public interface GraphBuilderContext extends GraphBuilderTool {
     }
 
     /**
-     * Adds a node and all its inputs to the graph. If the node is in the graph, returns
-     * immediately. If the node is a {@link StateSplit} with a null
-     * {@linkplain StateSplit#stateAfter() frame state} , the frame state is initialized.
+     * Adds a node to the graph. If the node is in the graph, returns immediately. If the node is a
+     * {@link StateSplit} with a null {@linkplain StateSplit#stateAfter() frame state}, the frame
+     * state is initialized.
      *
      * @param value the value to add to the graph and push to the stack. The
      *            {@code value.getJavaKind()} kind is used when type checking this operation.
      * @return a node equivalent to {@code value} in the graph
      */
     default <T extends ValueNode> T add(T value) {
+        if (value.graph() != null) {
+            assert !(value instanceof StateSplit) || ((StateSplit) value).stateAfter() != null;
+            return value;
+        }
+        return GraphBuilderContextUtil.setStateAfterIfNecessary(this, append(value));
+    }
+
+    /**
+     * Adds a node and its inputs to the graph. If the node is in the graph, returns immediately. If
+     * the node is a {@link StateSplit} with a null {@linkplain StateSplit#stateAfter() frame state}
+     * , the frame state is initialized.
+     *
+     * @param value the value to add to the graph and push to the stack. The
+     *            {@code value.getJavaKind()} kind is used when type checking this operation.
+     * @return a node equivalent to {@code value} in the graph
+     */
+    default <T extends ValueNode> T addWithInputs(T value) {
         if (value.graph() != null) {
             assert !(value instanceof StateSplit) || ((StateSplit) value).stateAfter() != null;
             return value;
@@ -261,8 +279,10 @@ public interface GraphBuilderContext extends GraphBuilderTool {
     default ValueNode nullCheckedValue(ValueNode value, DeoptimizationAction action) {
         if (!StampTool.isPointerNonNull(value)) {
             LogicNode condition = getGraph().unique(IsNullNode.create(value));
+            ObjectStamp receiverStamp = (ObjectStamp) value.stamp(NodeView.DEFAULT);
+            Stamp stamp = receiverStamp.join(objectNonNull());
             FixedGuardNode fixedGuard = append(new FixedGuardNode(condition, NullCheckException, action, true));
-            ValueNode nonNullReceiver = getGraph().addOrUniqueWithInputs(PiNode.create(value, objectNonNull(), fixedGuard));
+            ValueNode nonNullReceiver = getGraph().addOrUniqueWithInputs(PiNode.create(value, stamp, fixedGuard));
             // TODO: Propogating the non-null into the frame state would
             // remove subsequent null-checks on the same value. However,
             // it currently causes an assertion failure when merging states.
