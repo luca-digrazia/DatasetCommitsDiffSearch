@@ -89,7 +89,7 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
         try {
             Assert.assertEquals(testName, referenceResult, candidateResult);
         } catch (AssertionError e) {
-            throw fail(getTestName(), e);
+            fail(getTestName(), e);
         }
     }
 
@@ -98,7 +98,7 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
             return;
         }
         if (!candidateBinary.toAbsolutePath().toFile().exists()) {
-            throw fail(getTestName(), new AssertionError("File " + candidateBinary.toAbsolutePath().toFile() + " does not exist."));
+            fail(getTestName(), new AssertionError("File " + candidateBinary.toAbsolutePath().toFile() + " does not exist."));
         }
 
         String[] inputArgs = getInputArgs(candidateBinary);
@@ -106,12 +106,14 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
         try {
             result = ProcessUtil.executeSulongTestMain(candidateBinary.toAbsolutePath().toFile(), inputArgs, getContextOptions(), getCaptureOutput());
         } catch (Exception e) {
-            throw fail(getTestName(), e);
+            fail(getTestName(), e);
+            // Returning here to suppress uninitialized result warning below
+            return;
         }
 
         int sulongRet = result.getReturnValue();
         if (sulongRet != (sulongRet & 0xFF)) {
-            throw fail(getTestName(), new AssertionError("Broken unittest " + getTestDirectory() + ". Test exits with invalid value: " + sulongRet));
+            fail(getTestName(), new AssertionError("Broken unittest " + getTestDirectory() + ". Test exits with invalid value: " + sulongRet));
         }
 
         validateResults(referenceBinary, referenceResult, candidateBinary, result);
@@ -147,12 +149,12 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
         return isSulong;
     }
 
-    protected static AssertionError fail(String testName, AssertionError error) {
+    protected static void fail(String testName, AssertionError error) {
         failingTests.add(Paths.get(testName));
         throw error;
     }
 
-    protected static RuntimeException fail(String testName, Exception e) {
+    protected static void fail(String testName, Exception e) {
         failingTests.add(Paths.get(testName));
         throw new RuntimeException(e);
     }
