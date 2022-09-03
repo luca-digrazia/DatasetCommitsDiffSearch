@@ -192,13 +192,11 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     private Object[] mainArgs;
 
     private Source sourceFile;
-    private Source mainSourceFile;
 
-    public LLVMVisitor(LLVMOptimizationConfiguration optimizationConfiguration, Object[] mainArgs, Source sourceFile, Source mainSourceFile) {
+    public LLVMVisitor(LLVMOptimizationConfiguration optimizationConfiguration, Object[] mainArgs, Source sourceFile) {
         this.optimizationConfiguration = optimizationConfiguration;
         this.mainArgs = mainArgs;
         this.sourceFile = sourceFile;
-        this.mainSourceFile = mainSourceFile;
         LLVMTypeHelper.setParserRuntime(this);
     }
 
@@ -257,7 +255,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             return new ParserResult(null, staticInitsTarget, staticDestructorsTarget, parsedFunctions);
         }
         RootCallTarget mainCallTarget = parsedFunctions.get(mainFunction);
-        RootNode globalFunction = factoryFacade.createGlobalRootNode(mainCallTarget, mainArgs, mainSourceFile, mainFunction.getParameterTypes());
+        RootNode globalFunction = factoryFacade.createGlobalRootNode(mainCallTarget, mainArgs, sourceFile, mainFunction.getParameterTypes());
         RootCallTarget globalFunctionRoot = Truffle.getRuntime().createCallTarget(globalFunction);
         RootNode globalRootNode = factoryFacade.createGlobalRootNodeWrapping(globalFunctionRoot, mainFunction.getReturnType());
         RootCallTarget wrappedCallTarget = Truffle.getRuntime().createCallTarget(globalRootNode);
@@ -495,7 +493,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         String functionName = def.getHeader().getName();
         LLVMNode[] beforeFunction = formalParameters.toArray(new LLVMNode[formalParameters.size()]);
         LLVMNode[] afterFunction = functionEpilogue.toArray(new LLVMNode[functionEpilogue.size()]);
-        RootNode rootNode = factoryFacade.createFunctionStartNode(block, beforeFunction, afterFunction, sourceFile.createSection(functionName, 1), frameDescriptor, functionName);
+        RootNode rootNode = factoryFacade.createFunctionStartNode(block, beforeFunction, afterFunction, frameDescriptor, functionName);
         if (LLVMBaseOptionFacade.printFunctionASTs()) {
             NodeUtil.printTree(System.out, rootNode);
         }
@@ -647,9 +645,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         System.arraycopy(statements.toArray(new LLVMNode[statementNodes.length]), 0, statementNodes, 0, statementNodes.length);
         LLVMParserAsserts.assertNoNullElement(statementNodes);
         LLVMNode terminatorNode = statements.get(statements.size() - 1);
-        int basicBlockIndex = getIndexFromBasicBlock(basicBlock);
-        LLVMNode basicBlockNode = factoryFacade.createBasicBlockNode(statementNodes, terminatorNode, basicBlockIndex);
-        return basicBlockNode;
+        return factoryFacade.createBasicBlockNode(statementNodes, terminatorNode, getIndexFromBasicBlock(basicBlock));
     }
 
     private List<LLVMNode> visitInstruction(Instruction instr) {

@@ -106,9 +106,23 @@ import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI8ToI32N
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI8ToI32ZeroExtNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMIVarBitToI32NodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMIVarBitToI32ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMAnyToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVM80BitFloatToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMAddressToI64NodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMDoubleToI64BitCastNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMToI64ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMDoubleToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMFloatToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMFloatVectorToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMFunctionToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI16ToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI16ToI64ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI1ToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI1ToI64ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI32ToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI32ToI64ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI8ToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI8ToI64ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMIVarToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMIVarToI64ZeroExtNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVM80BitFloatToI8NodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMAddressToI8NodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMDoubleToI8NodeGen;
@@ -212,7 +226,7 @@ public final class LLVMCastsFactory {
     private LLVMExpressionNode castFromFloatVector(LLVMFloatVectorNode fromNode) {
         switch (targetType) {
             case I64:
-                return LLVMAnyToI64NodeGen.create(fromNode);
+                return LLVMFloatVectorToI64NodeGen.create(fromNode);
             default:
                 throw new AssertionError(targetType + " " + conv);
         }
@@ -246,7 +260,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMIVarBitToI32NodeGen.create(fromNode);
                 case I64:
-                    return LLVMAnyToI64NodeGen.create(fromNode);
+                    return LLVMIVarToI64NodeGen.create(fromNode);
                 case I_VAR_BITWIDTH:
                     return LLVMIVarToIVarNodeGen.create(fromNode, bits == 0 ? resolvedType.getBits().intValue() : bits);
                 default:
@@ -257,7 +271,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMIVarBitToI32ZeroExtNodeGen.create(fromNode);
                 case I64:
-                    return LLVMToI64ZeroExtNodeGen.create(fromNode);
+                    return LLVMIVarToI64ZeroExtNodeGen.create(fromNode);
                 default:
                     throw new AssertionError(targetType + " " + conv);
             }
@@ -274,7 +288,7 @@ public final class LLVMCastsFactory {
             case I32:
                 return LLVM80BitFloatToI32NodeGen.create(fromNode);
             case I64:
-                return LLVMAnyToI64NodeGen.create(fromNode);
+                return LLVM80BitFloatToI64NodeGen.create(fromNode);
             case DOUBLE:
                 return LLVM80BitFloatToDoubleNodeGen.create(fromNode);
             case FLOAT:
@@ -316,7 +330,7 @@ public final class LLVMCastsFactory {
             case I32:
                 return LLVMFunctionToI32NodeGen.create(fromNode);
             case I64:
-                return LLVMAnyToI64NodeGen.create(fromNode);
+                return LLVMFunctionToI64NodeGen.create(fromNode);
             case ADDRESS:
                 return LLVMFunctionToAddressNodeGen.create(fromNode);
             default:
@@ -337,7 +351,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMFloatToI32NodeGen.create(fromNode);
                 case I64:
-                    return LLVMAnyToI64NodeGen.create(fromNode);
+                    return LLVMFloatToI64NodeGen.create(fromNode);
                 case DOUBLE:
                     return LLVMFloatToDoubleNodeGen.create(fromNode);
                 case X86_FP80:
@@ -372,7 +386,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMI16ToI32NodeGen.create(fromNode);
                 case I64:
-                    return LLVMAnyToI64NodeGen.create(fromNode);
+                    return LLVMI16ToI64NodeGen.create(fromNode);
                 case I_VAR_BITWIDTH:
                     return LLVMI16ToIVarNodeGen.create(fromNode, bits == 0 ? resolvedType.getBits().intValue() : bits);
                 case FLOAT:
@@ -387,7 +401,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMI16ToI32ZeroExtNodeGen.create(fromNode);
                 case I64:
-                    return LLVMToI64ZeroExtNodeGen.create(fromNode);
+                    return LLVMI16ToI64ZeroExtNodeGen.create(fromNode);
                 case FLOAT:
                     return LLVMI16ToFloatZeroExtNodeGen.create(fromNode);
                 case DOUBLE:
@@ -414,7 +428,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMAddressToI32NodeGen.create(fromNode);
                 case I64:
-                    return LLVMAnyToI64NodeGen.create(fromNode);
+                    return LLVMAddressToI64NodeGen.create(fromNode);
                 case ADDRESS:
                     // at the moment we still can directly cast from pointer to pointer (e.g. from
                     // I32* to I32Vector*)
@@ -494,7 +508,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMI8ToI32NodeGen.create(fromNode);
                 case I64:
-                    return LLVMAnyToI64NodeGen.create(fromNode);
+                    return LLVMI8ToI64NodeGen.create(fromNode);
                 case I_VAR_BITWIDTH:
                     return LLVMI8ToIVarNodeGen.create(fromNode, bits == 0 ? resolvedType.getBits().intValue() : bits);
                 case FLOAT:
@@ -513,7 +527,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMI8ToI32ZeroExtNodeGen.create(fromNode);
                 case I64:
-                    return LLVMToI64ZeroExtNodeGen.create(fromNode);
+                    return LLVMI8ToI64ZeroExtNodeGen.create(fromNode);
                 case FLOAT:
                     return LLVMI8ToFloatZeroExtNodeGen.create(fromNode);
                 case DOUBLE:
@@ -538,7 +552,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMDoubleToI32NodeGen.create(fromNode);
                 case I64:
-                    return LLVMAnyToI64NodeGen.create(fromNode);
+                    return LLVMDoubleToI64NodeGen.create(fromNode);
                 case FLOAT:
                     return LLVMDoubleToFloatNodeGen.create(fromNode);
                 case X86_FP80:
@@ -562,7 +576,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMDoubleToUnsignedI32NodeGen.create(fromNode);
                 case I64:
-                    return LLVMAnyToI64NodeGen.create(fromNode);
+                    return LLVMDoubleToI64NodeGen.create(fromNode);
                 case X86_FP80: // TODO fix the unsigned case, see the I32 case
                     return LLVMDoubleToLLVM80BitFloatNodeGen.create(fromNode);
                 default:
@@ -585,7 +599,7 @@ public final class LLVMCastsFactory {
                 case I16:
                     return LLVMI32ToI16NodeGen.create(fromNode);
                 case I64:
-                    return LLVMAnyToI64NodeGen.create(fromNode);
+                    return LLVMI32ToI64NodeGen.create(fromNode);
                 case I_VAR_BITWIDTH:
                     return LLVMI32ToIVarNodeGen.create(fromNode, bits == 0 ? resolvedType.getBits().intValue() : bits);
                 case FLOAT:
@@ -602,7 +616,7 @@ public final class LLVMCastsFactory {
                 case I_VAR_BITWIDTH:
                     return LLVMI32ToIVarZeroExtNodeGen.create(fromNode, bits == 0 ? resolvedType.getBits().intValue() : bits);
                 case I64:
-                    return LLVMToI64ZeroExtNodeGen.create(fromNode);
+                    return LLVMI32ToI64ZeroExtNodeGen.create(fromNode);
                 case FLOAT:
                     return LLVMI32ToFloatUnsignedNodeGen.create(fromNode);
                 case DOUBLE:
@@ -636,7 +650,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMI1ToI32NodeGen.create(fromNode);
                 case I64:
-                    return LLVMAnyToI64NodeGen.create(fromNode);
+                    return LLVMI1ToI64NodeGen.create(fromNode);
                 default:
                     throw new AssertionError(targetType + " " + conv);
             }
@@ -649,7 +663,7 @@ public final class LLVMCastsFactory {
                 case I32:
                     return LLVMI1ToI32ZeroExtNodeGen.create(fromNode);
                 case I64:
-                    return LLVMToI64ZeroExtNodeGen.create(fromNode);
+                    return LLVMI1ToI64ZeroExtNodeGen.create(fromNode);
                 default:
                     throw new AssertionError(targetType + " " + conv);
             }

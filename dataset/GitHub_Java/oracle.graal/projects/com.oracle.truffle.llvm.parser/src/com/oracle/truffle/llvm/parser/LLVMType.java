@@ -53,13 +53,4 @@ public class LLVMType {
     public LLVMType getPointee() {
         return pointee;
     }
-
-    @Override
-    public String toString() {
-        if (isPointer()) {
-            return String.format("&%s", pointee);
-        } else {
-            return type.toString();
-        }
-    }
 }

@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.parser.bc.impl;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Function;
 
 import com.oracle.truffle.api.frame.FrameSlot;
@@ -104,9 +103,23 @@ import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
 
-import uk.ac.man.cs.llvm.bc.blocks.Block;
-import uk.ac.man.cs.llvm.ir.model.*;
-import uk.ac.man.cs.llvm.ir.model.constants.*;
+import uk.ac.man.cs.llvm.ir.model.FunctionDeclaration;
+import uk.ac.man.cs.llvm.ir.model.FunctionDefinition;
+import uk.ac.man.cs.llvm.ir.model.GlobalValueSymbol;
+import uk.ac.man.cs.llvm.ir.model.Symbol;
+import uk.ac.man.cs.llvm.ir.model.ValueSymbol;
+import uk.ac.man.cs.llvm.ir.model.constants.ArrayConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.BinaryOperationConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.CastConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.CompareConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.Constant;
+import uk.ac.man.cs.llvm.ir.model.constants.FloatingPointConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.GetElementPointerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.NullConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.StringConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.StructureConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.UndefinedConstant;
 import uk.ac.man.cs.llvm.ir.model.enums.BinaryOperator;
 import uk.ac.man.cs.llvm.ir.model.enums.CastOperator;
 import uk.ac.man.cs.llvm.ir.model.enums.CompareOperator;
@@ -377,7 +390,7 @@ public final class LLVMBitcodeHelper {
         }
     }
 
-    public static LLVMExpressionNode toConstantLiteralNode(Symbol value, @SuppressWarnings("unused") int align, LLVMLabelList labels) {
+    public static LLVMExpressionNode toConstantLiteralNode(Symbol value, @SuppressWarnings("unused") int align) {
         if (value instanceof IntegerConstant) {
             IntegerConstant constant = (IntegerConstant) value;
             int bits = ((IntegerType) (constant).getType()).getBitCount();
@@ -407,36 +420,10 @@ public final class LLVMBitcodeHelper {
                     break;
             }
         }
-        if (value instanceof DeferredBlockAddressConstant) {
-            DeferredBlockAddressConstant blockAddressConstant = (DeferredBlockAddressConstant) value;
-
-            FunctionDefinition function = (FunctionDefinition) blockAddressConstant.getFunction();
-            Map<String, Integer> innerLabels = labels.labels(function.getName());
-            InstructionBlock b = null;
-            int label = -1;
-            outerLoop: for (Map.Entry<String, Integer> labelEntry : innerLabels.entrySet()) {
-                if (labelEntry.getValue().equals(blockAddressConstant.getBlock())) {
-                    String blockName = labelEntry.getKey();
-                    for (int i = 0; i < function.getBlockCount(); i++) {
-                        if (function.getBlock(i).getName().equals(blockName)) {
-                            label = i;
-                            b = function.getBlock(i);
-                            break outerLoop;
-                        }
-                    }
-                }
-            }
-            if (b == null) {
-                throw new IllegalStateException("No Block with label " + blockAddressConstant.getBlock());
-            }
-
-            return new LLVMAddressLiteralNode(LLVMAddress.fromLong(label));
-        }
-
         throw new RuntimeException("Unsupported literal constant " + value);
     }
 
-    public static LLVMExpressionNode toConstantNode(Symbol value, int align, Function<GlobalValueSymbol, LLVMExpressionNode> variables, LLVMContext context, FrameSlot stack, LLVMLabelList labels) {
+    public static LLVMExpressionNode toConstantNode(Symbol value, int align, Function<GlobalValueSymbol, LLVMExpressionNode> variables, LLVMContext context, FrameSlot stack) {
         if (value instanceof GlobalValueSymbol) {
             return variables.apply((GlobalValueSymbol) value);
         }
@@ -475,42 +462,42 @@ public final class LLVMBitcodeHelper {
                 case I8: {
                     LLVMI8Node[] elements = new LLVMI8Node[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMI8Node) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
+                        elements[i] = (LLVMI8Node) toConstantNode(array.getElement(i), align, variables, context, stack);
                     }
                     return LLVMI8ArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case I16: {
                     LLVMI16Node[] elements = new LLVMI16Node[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMI16Node) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
+                        elements[i] = (LLVMI16Node) toConstantNode(array.getElement(i), align, variables, context, stack);
                     }
                     return LLVMI16ArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case I32: {
                     LLVMI32Node[] elements = new LLVMI32Node[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMI32Node) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
+                        elements[i] = (LLVMI32Node) toConstantNode(array.getElement(i), align, variables, context, stack);
                     }
                     return LLVMI32ArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case I64: {
                     LLVMI64Node[] elements = new LLVMI64Node[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMI64Node) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
+                        elements[i] = (LLVMI64Node) toConstantNode(array.getElement(i), align, variables, context, stack);
                     }
                     return LLVMI64ArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case FLOAT: {
                     LLVMFloatNode[] elements = new LLVMFloatNode[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMFloatNode) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
+                        elements[i] = (LLVMFloatNode) toConstantNode(array.getElement(i), align, variables, context, stack);
                     }
                     return LLVMFloatArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case DOUBLE: {
                     LLVMDoubleNode[] elements = new LLVMDoubleNode[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMDoubleNode) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
+                        elements[i] = (LLVMDoubleNode) toConstantNode(array.getElement(i), align, variables, context, stack);
                     }
                     return LLVMDoubleArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
@@ -518,21 +505,21 @@ public final class LLVMBitcodeHelper {
                 case STRUCT: {
                     LLVMAddressNode[] elements = new LLVMAddressNode[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMAddressNode) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
+                        elements[i] = (LLVMAddressNode) toConstantNode(array.getElement(i), align, variables, context, stack);
                     }
                     return LLVMAddressArrayCopyNodeGen.create(elements, stride, allocation);
                 }
                 case ADDRESS: {
                     LLVMAddressNode[] elements = new LLVMAddressNode[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMAddressNode) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
+                        elements[i] = (LLVMAddressNode) toConstantNode(array.getElement(i), align, variables, context, stack);
                     }
                     return LLVMAddressArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
                 case FUNCTION_ADDRESS: {
                     LLVMFunctionNode[] elements = new LLVMFunctionNode[array.getElementCount()];
                     for (int i = 0; i < elements.length; i++) {
-                        elements[i] = (LLVMFunctionNode) toConstantNode(array.getElement(i), align, variables, context, stack, labels);
+                        elements[i] = (LLVMFunctionNode) toConstantNode(array.getElement(i), align, variables, context, stack);
                     }
                     return LLVMFunctionArrayLiteralNodeGen.create(elements, stride, allocation);
                 }
@@ -557,7 +544,7 @@ public final class LLVMBitcodeHelper {
                 }
                 offsets[i] = offset;
 
-                LLVMExpressionNode elementNode = toConstantNode(element, align, variables, context, stack, labels);
+                LLVMExpressionNode elementNode = toConstantNode(element, align, variables, context, stack);
                 LLVMBaseType elementBaseType = toBaseType(element.getType()).getType();
                 int elementSize = getSize(element, align);
 
@@ -613,8 +600,8 @@ public final class LLVMBitcodeHelper {
         }
         if (value instanceof BinaryOperationConstant) {
             BinaryOperationConstant operation = (BinaryOperationConstant) value;
-            LLVMExpressionNode lhs = toConstantNode(operation.getLHS(), align, variables, context, stack, labels);
-            LLVMExpressionNode rhs = toConstantNode(operation.getRHS(), align, variables, context, stack, labels);
+            LLVMExpressionNode lhs = toConstantNode(operation.getLHS(), align, variables, context, stack);
+            LLVMExpressionNode rhs = toConstantNode(operation.getRHS(), align, variables, context, stack);
             LLVMBaseType type = toBaseType(operation.getType()).getType();
 
             return toBinaryOperatorNode(operation.getOperator(), type, lhs, rhs);
@@ -622,7 +609,7 @@ public final class LLVMBitcodeHelper {
         if (value instanceof CastConstant) {
             CastConstant cast = (CastConstant) value;
             LLVMConversionType type = toConversionType(cast.getOperator());
-            LLVMExpressionNode fromNode = toConstantNode(cast.getValue(), align, variables, context, stack, labels);
+            LLVMExpressionNode fromNode = toConstantNode(cast.getValue(), align, variables, context, stack);
             LLVMBaseType from = toBaseType(cast.getValue().getType()).getType();
             LLVMBaseType to = toBaseType(cast.getType()).getType();
 
@@ -630,15 +617,15 @@ public final class LLVMBitcodeHelper {
         }
         if (value instanceof CompareConstant) {
             CompareConstant compare = (CompareConstant) value;
-            LLVMExpressionNode lhs = toConstantNode(compare.getLHS(), align, variables, context, stack, labels);
-            LLVMExpressionNode rhs = toConstantNode(compare.getRHS(), align, variables, context, stack, labels);
+            LLVMExpressionNode lhs = toConstantNode(compare.getLHS(), align, variables, context, stack);
+            LLVMExpressionNode rhs = toConstantNode(compare.getRHS(), align, variables, context, stack);
 
             return toCompareNode(compare.getOperator(), compare.getLHS().getType(), lhs, rhs);
         }
         if (value instanceof GetElementPointerConstant) {
             GetElementPointerConstant ptr = (GetElementPointerConstant) value;
 
-            LLVMAddressNode baseNode = (LLVMAddressNode) toConstantNode(ptr.getBasePointer(), align, variables, context, stack, labels);
+            LLVMAddressNode baseNode = (LLVMAddressNode) toConstantNode(ptr.getBasePointer(), align, variables, context, stack);
             LLVMAddressNode currentAddress = baseNode;
 
             Type type = ptr.getBasePointer().getType();
@@ -680,7 +667,7 @@ public final class LLVMBitcodeHelper {
 
             return currentAddress;
         }
-        return toConstantLiteralNode(value, align, labels);
+        return toConstantLiteralNode(value, align);
     }
 
     public static LLVMExpressionNode toConstantZeroNode(Type value, int align, LLVMContext context, FrameSlot stack) {
