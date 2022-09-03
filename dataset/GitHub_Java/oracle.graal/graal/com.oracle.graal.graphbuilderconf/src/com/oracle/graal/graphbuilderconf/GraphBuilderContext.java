@@ -22,18 +22,12 @@
  */
 package com.oracle.graal.graphbuilderconf;
 
-import com.oracle.jvmci.code.BailoutException;
-import com.oracle.jvmci.meta.ResolvedJavaType;
-import com.oracle.jvmci.meta.Assumptions;
-import com.oracle.jvmci.meta.ResolvedJavaMethod;
-import com.oracle.jvmci.meta.ConstantReflectionProvider;
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.MetaAccessProvider;
-import com.oracle.jvmci.meta.JavaType;
-import static com.oracle.jvmci.meta.DeoptimizationAction.*;
-import static com.oracle.jvmci.meta.DeoptimizationReason.*;
+import static com.oracle.graal.api.meta.DeoptimizationAction.*;
+import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.compiler.common.type.StampFactory.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
@@ -42,14 +36,13 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * Used by a {@link GraphBuilderPlugin} to interface with an object that parses the bytecode of a
- * single {@linkplain #getMethod() method} as part of building a {@linkplain #getGraph() graph} .
+ * Used by a {@link GraphBuilderPlugin} to interface with a graph builder object.
  */
 public interface GraphBuilderContext {
 
     /**
-     * Raw operation for adding a node to the graph when neither {@link #add} nor
-     * {@link #addPush(Kind, ValueNode)} can be used.
+     * Raw operation for adding a node to the graph when neither {@link #add},
+     * {@link #addPush(ValueNode)} nor {@link #addPush(Kind, ValueNode)} can be used.
      *
      * @return either the node added or an equivalent node
      */
@@ -102,13 +95,26 @@ public interface GraphBuilderContext {
      * is a {@link StateSplit} with a null {@linkplain StateSplit#stateAfter() frame state}, the
      * frame state is initialized.
      *
+     * @param value the value to add to the graph and push to the stack. The {@code value.getKind()}
+     *            kind is used when type checking this operation.
+     * @return a node equivalent to {@code value} in the graph
+     */
+    default <T extends ValueNode> T addPush(T value) {
+        return addPush(value.getKind().getStackKind(), value);
+    }
+
+    /**
+     * Adds a node with a non-void kind to the graph, pushes it to the stack. If the returned node
+     * is a {@link StateSplit} with a null {@linkplain StateSplit#stateAfter() frame state}, the
+     * frame state is initialized.
+     *
      * @param kind the kind to use when type checking this operation
      * @param value the value to add to the graph and push to the stack
      * @return a node equivalent to {@code value} in the graph
      */
     default <T extends ValueNode> T addPush(Kind kind, T value) {
         T equivalentValue = value.graph() != null ? value : append(value);
-        push(kind, equivalentValue);
+        push(kind.getStackKind(), equivalentValue);
         if (equivalentValue instanceof StateSplit) {
             StateSplit stateSplit = (StateSplit) equivalentValue;
             if (stateSplit.stateAfter() == null && stateSplit.hasSideEffect()) {
@@ -172,7 +178,7 @@ public interface GraphBuilderContext {
      * Gets the first ancestor parsing context that is not parsing a
      * {@linkplain #parsingIntrinsic() intrinsic}.
      */
-    default GraphBuilderContext getNonIntrinsicAncestor() {
+    default GraphBuilderContext getNonReplacementAncestor() {
         GraphBuilderContext ancestor = getParent();
         while (ancestor != null && ancestor.parsingIntrinsic()) {
             ancestor = ancestor.getParent();
@@ -181,7 +187,7 @@ public interface GraphBuilderContext {
     }
 
     /**
-     * Gets the method being parsed by this context.
+     * Gets the method currently being parsed.
      */
     ResolvedJavaMethod getMethod();
 
@@ -200,18 +206,9 @@ public interface GraphBuilderContext {
      */
     JavaType getInvokeReturnType();
 
-    default Stamp getInvokeReturnStamp() {
-        JavaType returnType = getInvokeReturnType();
-        if (returnType.getKind() == Kind.Object && returnType instanceof ResolvedJavaType) {
-            return StampFactory.declared((ResolvedJavaType) returnType);
-        } else {
-            return StampFactory.forKind(returnType.getKind());
-        }
-    }
-
     /**
-     * Gets the inline depth of this context. A return value of 0 implies that this is the context
-     * for the parse root.
+     * Gets the inline depth of this context. 0 implies this is the context for the compilation root
+     * method.
      */
     default int getDepth() {
         GraphBuilderContext parent = getParent();
@@ -219,8 +216,7 @@ public interface GraphBuilderContext {
     }
 
     /**
-     * Determines if this parsing context is within the bytecode of an intrinsic or a method inlined
-     * by an intrinsic.
+     * Determines if the current parsing context is a snippet or method substitution.
      */
     default boolean parsingIntrinsic() {
         return getIntrinsic() != null;
