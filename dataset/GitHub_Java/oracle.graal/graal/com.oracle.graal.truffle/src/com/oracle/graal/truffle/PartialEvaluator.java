@@ -51,7 +51,6 @@ import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.common.inlining.info.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
-import com.oracle.graal.truffle.nodes.*;
 import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.graal.truffle.nodes.frame.*;
 import com.oracle.graal.truffle.nodes.frame.NewFrameNode.VirtualOnlyInstanceNode;
@@ -245,7 +244,7 @@ public class PartialEvaluator {
 
                         ResolvedJavaMethod targetMethod = methodCallTargetNode.targetMethod();
                         if (inlineGraph == null && !targetMethod.isNative() && targetMethod.canBeInlined()) {
-                            inlineGraph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), phaseContext);
+                            inlineGraph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, phaseContext);
                         }
 
                         if (inlineGraph != null) {
@@ -286,8 +285,9 @@ public class PartialEvaluator {
         }
     }
 
-    private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final PhaseContext phaseContext) {
-        StructuredGraph graph = truffleCache.lookup(targetMethod, arguments, canonicalizer);
+    private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final PhaseContext phaseContext) {
+
+        StructuredGraph graph = truffleCache.lookup(targetMethod, arguments, assumptions, canonicalizer);
 
         if (graph != null && targetMethod.getAnnotation(ExplodeLoop.class) != null) {
             assert graph.hasLoops() : graph + " does not contain a loop";
@@ -395,11 +395,9 @@ public class PartialEvaluator {
                 graph = inliningCache.getCachedGraph(phaseContext, assumptions, decision);
             }
             decision.getProfile().setGraalDeepNodeCount(graph.getNodeCount());
-
-            assumptions.record(new AssumptionValidAssumption((OptimizedAssumption) decision.getTarget().getNodeRewritingAssumption()));
         } else {
             // we continue expansion of callDirect until we reach the callBoundary.
-            graph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), phaseContext);
+            graph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, phaseContext);
         }
 
         return graph;
