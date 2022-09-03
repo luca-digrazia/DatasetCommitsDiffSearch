@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,36 +22,294 @@
  */
 package com.oracle.graal.truffle.phases;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentBranchesCount;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentBranchesFilter;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite;
 
-import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.regex.Pattern;
-
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import java.util.stream.Collectors;
 
 import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.debug.MethodFilter;
+import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeSourcePosition;
 import com.oracle.graal.nodes.AbstractBeginNode;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.IfNode;
 import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.AddNode;
+import com.oracle.graal.nodes.java.LoadIndexedNode;
 import com.oracle.graal.nodes.java.StoreIndexedNode;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.truffle.TruffleCompilerOptions;
 
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaUtil;
+import jdk.vm.ci.meta.ResolvedJavaField;
+
+/**
+ * Instruments {@link IfNode}s in the graph, by adding execution counters to the true and the false
+ * branch of each {@link IfNode}. If this phase is enabled, the runtime outputs a summary of all the
+ * compiled {@link IfNode}s and the execution count of their branches, when the program exits.
+ *
+ * The phase is enabled with the following flag:
+ *
+ * <pre>
+ * -Dgraal.TruffleInstrumentBranches
+ * </pre>
+ *
+ * The phase can be configured to only instrument the {@link IfNode}s in specific methods, by
+ * providing the following method filter flag:
+ *
+ * <pre>
+ * -Dgraal.TruffleInstrumentBranchesFilter
+ * </pre>
+ *
+ * The flag:
+ *
+ * <pre>
+ * -Dgraal.TruffleInstrumentBranchesPerInlineSite
+ * </pre>
+ *
+ * decides whether to treat different inlining sites separately when tracking the execution counts
+ * of an {@link IfNode}.
+ */
 public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
-    public static final Pattern METHOD_REGEX_FILTER = Pattern.compile(TruffleInstrumentBranchesFilter.getValue());
-    public static final int TABLE_SIZE = TruffleInstrumentBranchesCount.getValue();
-    public static final boolean[] TABLE = new boolean[TABLE_SIZE];
+    private static final String[] OMITTED_STACK_PATTERNS = new String[]{
+                    "com.oracle.graal.truffle.OptimizedCallTarget.callProxy",
+                    "com.oracle.graal.truffle.OptimizedCallTarget.callRoot",
+                    "com.oracle.graal.truffle.OptimizedCallTarget.callInlined",
+                    "com.oracle.graal.truffle.OptimizedDirectCallNode.callProxy",
+                    "com.oracle.graal.truffle.OptimizedDirectCallNode.call"
+    };
+    private static final String ACCESS_TABLE_FIELD_NAME = "ACCESS_TABLE";
+    static final int ACCESS_TABLE_SIZE = TruffleInstrumentBranchesCount.getValue();
+    public static final long[] ACCESS_TABLE = new long[ACCESS_TABLE_SIZE];
+    public static BranchInstrumentation instrumentation = new BranchInstrumentation();
+
+    private final MethodFilter[] methodFilter;
+
+    public InstrumentBranchesPhase() {
+        String filterValue = TruffleInstrumentBranchesFilter.getValue();
+        if (filterValue != null) {
+            methodFilter = MethodFilter.parse(filterValue);
+        } else {
+            methodFilter = new MethodFilter[0];
+        }
+    }
+
+    @Override
+    public float codeSizeIncrease() {
+        return 2.5f;
+    }
+
+    @Override
+    protected void run(StructuredGraph graph, HighTierContext context) {
+        JavaConstant tableConstant = lookupTableContant(context);
+        try {
+            for (IfNode n : graph.getNodes().filter(IfNode.class)) {
+                BranchInstrumentation.Point p = instrumentation.getOrCreatePoint(methodFilter, n);
+                if (p != null) {
+                    insertCounter(graph, context, tableConstant, n, p, true);
+                    insertCounter(graph, context, tableConstant, n, p, false);
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    protected JavaConstant lookupTableContant(HighTierContext context) {
+        ResolvedJavaField[] fields = context.getMetaAccess().lookupJavaType(InstrumentBranchesPhase.class).getStaticFields();
+        ResolvedJavaField tableField = null;
+        for (ResolvedJavaField field : fields) {
+            if (field.getName().equals(ACCESS_TABLE_FIELD_NAME)) {
+                tableField = field;
+                break;
+            }
+        }
+        JavaConstant tableConstant = context.getConstantReflection().readFieldValue(tableField, null);
+        return tableConstant;
+    }
+
+    private static void insertCounter(StructuredGraph graph, HighTierContext context, JavaConstant tableConstant,
+                    IfNode ifNode, BranchInstrumentation.Point p, boolean isTrue) {
+        assert (tableConstant != null);
+        AbstractBeginNode beginNode = (isTrue) ? ifNode.trueSuccessor() : ifNode.falseSuccessor();
+        TypeReference typeRef = TypeReference.createExactTrusted(context.getMetaAccess().lookupJavaType(tableConstant));
+        ConstantNode table = graph.unique(new ConstantNode(tableConstant, StampFactory.object(typeRef, true)));
+        ConstantNode rawIndex = graph.unique(ConstantNode.forInt(p.getRawIndex(isTrue)));
+        LoadIndexedNode load = graph.add(new LoadIndexedNode(null, table, rawIndex, JavaKind.Long));
+        ConstantNode one = graph.unique(ConstantNode.forLong(1L));
+        ValueNode add = graph.unique(new AddNode(load, one));
+        StoreIndexedNode store = graph.add(new StoreIndexedNode(table, rawIndex, JavaKind.Long, add));
+
+        graph.addAfterFixed(beginNode, load);
+        graph.addAfterFixed(load, store);
+    }
 
     public static class BranchInstrumentation {
+
+        private Comparator<Map.Entry<String, Point>> entriesComparator = new Comparator<Map.Entry<String, Point>>() {
+            @Override
+            public int compare(Map.Entry<String, Point> x, Map.Entry<String, Point> y) {
+                long diff = y.getValue().getHotness() - x.getValue().getHotness();
+                if (diff < 0) {
+                    return -1;
+                } else if (diff == 0) {
+                    return 0;
+                } else {
+                    return 1;
+                }
+            }
+        };
+        public Map<String, Point> pointMap = new LinkedHashMap<>();
+        public int tableCount = 0;
+
+        /*
+         * Node source location is determined by its inlining chain. A flag value controls whether
+         * we discriminate nodes by their inlining site, or only by the method in which they were
+         * defined.
+         */
+        private static String filterAndEncode(MethodFilter[] methodFilter, Node ifNode) {
+            NodeSourcePosition pos = ifNode.getNodeSourcePosition();
+            if (pos != null) {
+                if (!MethodFilter.matches(methodFilter, pos.getMethod())) {
+                    return null;
+                }
+                if (TruffleInstrumentBranchesPerInlineSite.getValue()) {
+                    StringBuilder sb = new StringBuilder();
+                    while (pos != null) {
+                        MetaUtil.appendLocation(sb.append("at "), pos.getMethod(), pos.getBCI());
+                        pos = pos.getCaller();
+                        if (pos != null) {
+                            sb.append(CodeUtil.NEW_LINE);
+                        }
+                    }
+                    return sb.toString();
+                } else {
+                    return MetaUtil.appendLocation(new StringBuilder(), pos.getMethod(), pos.getBCI()).toString();
+                }
+            } else {
+                // IfNode has no position information, and is probably synthetic, so we do not
+                // instrument it.
+                return null;
+            }
+        }
+
+        private static String prettify(String key, Point p) {
+            if (TruffleCompilerOptions.TruffleInstrumentBranchesPretty.getValue() && TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue()) {
+                StringBuilder sb = new StringBuilder();
+                NodeSourcePosition pos = p.getPosition();
+                NodeSourcePosition lastPos = null;
+                int repetitions = 1;
+
+                callerChainLoop: while (pos != null) {
+                    // Skip stack frame if it is a known pattern.
+                    for (String pattern : OMITTED_STACK_PATTERNS) {
+                        if (pos.getMethod().format("%H.%n(%p)").contains(pattern)) {
+                            pos = pos.getCaller();
+                            continue callerChainLoop;
+                        }
+                    }
+
+                    if (lastPos == null) {
+                        // Always output first method.
+                        lastPos = pos;
+                        MetaUtil.appendLocation(sb, pos.getMethod(), pos.getBCI());
+                    } else if (!lastPos.getMethod().equals(pos.getMethod())) {
+                        // Output count for identical BCI outputs, and output next method.
+                        if (repetitions > 1) {
+                            sb.append(" x" + repetitions);
+                            repetitions = 1;
+                        }
+                        sb.append(CodeUtil.NEW_LINE);
+                        lastPos = pos;
+                        MetaUtil.appendLocation(sb, pos.getMethod(), pos.getBCI());
+                    } else if (lastPos.getBCI() != pos.getBCI()) {
+                        // Conflate identical BCI outputs.
+                        if (repetitions > 1) {
+                            sb.append(" x" + repetitions);
+                            repetitions = 1;
+                        }
+                        lastPos = pos;
+                        sb.append(" [bci: " + pos.getBCI() + "]");
+                    } else {
+                        // Identical BCI to the one seen previously.
+                        repetitions++;
+                    }
+                    pos = pos.getCaller();
+                }
+                if (repetitions > 1) {
+                    sb.append(" x" + repetitions);
+                    repetitions = 1;
+                }
+                return sb.toString();
+            } else {
+                return key;
+            }
+        }
+
+        public synchronized ArrayList<String> accessTableToList() {
+            return pointMap.entrySet().stream().sorted(entriesComparator).map(entry -> prettify(entry.getKey(), entry.getValue()) + CodeUtil.NEW_LINE + entry.getValue()).collect(
+                            Collectors.toCollection(ArrayList::new));
+        }
+
+        public synchronized ArrayList<String> accessTableToHistogram() {
+            long totalExecutions = pointMap.values().stream().mapToLong(v -> v.getHotness()).sum();
+            return pointMap.entrySet().stream().sorted(entriesComparator).map(entry -> {
+                int length = (int) ((1.0 * entry.getValue().getHotness() / totalExecutions) * 80);
+                String bar = String.join("", Collections.nCopies(length, "*"));
+                return String.format("%3d: %s", entry.getValue().getIndex(), bar);
+            }).collect(Collectors.toCollection(ArrayList::new));
+        }
+
+        public synchronized void dumpAccessTable() {
+            // Dump accumulated profiling information.
+            TTY.println("Branch execution profile (sorted by hotness)");
+            TTY.println("============================================");
+            for (String line : accessTableToHistogram()) {
+                TTY.println(line);
+            }
+            TTY.println();
+            for (String line : accessTableToList()) {
+                TTY.println(line);
+                TTY.println();
+            }
+        }
+
+        public synchronized Point getOrCreatePoint(MethodFilter[] methodFilter, IfNode n) {
+            String key = filterAndEncode(methodFilter, n);
+            if (key == null) {
+                return null;
+            }
+            Point existing = pointMap.get(key);
+            if (existing != null) {
+                return existing;
+            } else if (tableCount < ACCESS_TABLE.length) {
+                int index = tableCount++;
+                Point p = new Point(index, n.getNodeSourcePosition());
+                pointMap.put(key, p);
+                return p;
+            } else {
+                if (tableCount == ACCESS_TABLE.length) {
+                    TTY.println("Maximum number of branch instrumentation counters exceeded.");
+                    tableCount += 1;
+                }
+                return null;
+            }
+        }
 
         public enum BranchState {
             NONE,
@@ -60,152 +318,68 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
             BOTH;
 
             public static BranchState from(boolean ifVisited, boolean elseVisited) {
-                if (ifVisited && elseVisited)
+                if (ifVisited && elseVisited) {
                     return BOTH;
-                else if (ifVisited && !elseVisited)
+                } else if (ifVisited && !elseVisited) {
                     return IF;
-                else if (!ifVisited && elseVisited)
+                } else if (!ifVisited && elseVisited) {
                     return ELSE;
-                else
+                } else {
                     return NONE;
+                }
             }
         }
 
-        private class Point {
+        private static class Point {
             private int index;
+            private NodeSourcePosition position;
 
-            public Point(int index) {
+            Point(int index, NodeSourcePosition position) {
                 this.index = index;
+                this.position = position;
+            }
+
+            public long ifVisits() {
+                return ACCESS_TABLE[index * 2];
+            }
+
+            public long elseVisits() {
+                return ACCESS_TABLE[index * 2 + 1];
+            }
+
+            public NodeSourcePosition getPosition() {
+                return position;
+            }
+
+            public BranchState getBranchState() {
+                return BranchState.from(ifVisits() > 0, elseVisits() > 0);
+            }
+
+            public String getCounts() {
+                return "if=" + ifVisits() + "#, else=" + elseVisits() + "#";
+            }
+
+            public long getHotness() {
+                return ifVisits() + elseVisits();
             }
 
             public int getIndex() {
                 return index;
             }
 
-            public BranchState getBranchState() {
-                int rawIndex = index * 2;
-                boolean ifVisited = TABLE[rawIndex];
-                boolean elseVisited = TABLE[rawIndex + 1];
-                return BranchState.from(ifVisited, elseVisited);
-            }
-
             public int getRawIndex(boolean isTrue) {
                 int rawIndex = index * 2;
-                if (!isTrue)
+                if (!isTrue) {
                     rawIndex += 1;
+                }
                 return rawIndex;
             }
 
             @Override
             public String toString() {
-                return "[" + index + "] state = " + getBranchState();
+                return "[" + index + "] state = " + getBranchState() + "(" + getCounts() + ")";
             }
         }
 
-        public Map<String, Point> pointMap = new LinkedHashMap<>();
-        public int tableCount = 0;
-
-        public BranchInstrumentation() {
-            // Dump profiling information when exiting.
-            Runtime.getRuntime().addShutdownHook(new Thread() {
-                @Override
-                public void run() {
-                    if (TruffleInstrumentBranches.getValue()) {
-                        System.out.println("Branch execution profile");
-                        System.out.println("========================");
-                        for (Map.Entry<String, Point> entry : pointMap.entrySet()) {
-                            System.out.println(entry.getKey() + ": " + entry.getValue() + "\n");
-                        }
-                    }
-                }
-            });
-        }
-
-        /*
-         * Node source location is determined by its inlining chain. The first location in the chain
-         * refers to the location in the original method, so we use that to determine the unique
-         * source location key.
-         */
-        private String encode(Node ifNode) {
-            SourceLocation loc = ifNode.getNodeContext(SourceLocation.class);
-            if (loc != null) {
-                return loc.getPosition().toString().replace("\n", ",");
-            } else {
-                // IfNode has no position information, and is probably synthetic, so we do not
-                // instrument it.
-                return null;
-            }
-        }
-
-        public synchronized Point getOrCreatePoint(IfNode n) {
-            String key = encode(n);
-            if (key == null)
-                return null;
-            Point existing = pointMap.get(key);
-            if (existing != null)
-                return existing;
-            else {
-                int index = tableCount++;
-                Point p = new Point(index);
-                pointMap.put(key, p);
-                return p;
-            }
-        }
-
-    }
-
-    public static BranchInstrumentation instrumentation = new BranchInstrumentation();
-
-    public static class SourceLocation {
-        private BytecodePosition position;
-
-        public SourceLocation(BytecodePosition position) {
-            this.position = position;
-        }
-
-        public BytecodePosition getPosition() {
-            return position;
-        }
-    }
-
-    private void insertCounter(StructuredGraph graph, HighTierContext context, IfNode ifNode,
-                    BranchInstrumentation.Point p, boolean isTrue) {
-        Field javaField = null;
-        try {
-            javaField = InstrumentBranchesPhase.class.getField("TABLE");
-        } catch (Exception e) {
-            return;
-        }
-        AbstractBeginNode beginNode = (isTrue) ? ifNode.trueSuccessor() : ifNode.falseSuccessor();
-        ResolvedJavaField tableField = context.getMetaAccess().lookupJavaField(javaField);
-        JavaConstant tableConstant = context.getConstantReflection().readConstantFieldValue(tableField, null);
-        assert (tableConstant != null);
-        ConstantNode table = graph.unique(new ConstantNode(tableConstant, StampFactory.exactNonNull((ResolvedJavaType) tableField.getType())));
-        ConstantNode rawIndex = graph.unique(ConstantNode.forInt(p.getRawIndex(isTrue)));
-        ConstantNode v = graph.unique(ConstantNode.forBoolean(true));
-        StoreIndexedNode store = graph.add(new StoreIndexedNode(table, rawIndex, JavaKind.Boolean, v));
-
-        graph.addAfterFixed(beginNode, store);
-    }
-
-    public static void addNodeSourceLocation(Node node, BytecodePosition pos) {
-        node.setNodeContext(new SourceLocation(pos));
-    }
-
-    @Override
-    protected void run(StructuredGraph graph, HighTierContext context) {
-        if (METHOD_REGEX_FILTER.matcher(graph.method().getName()).matches()) {
-            try {
-                for (IfNode n : graph.getNodes().filter(IfNode.class)) {
-                    BranchInstrumentation.Point p = instrumentation.getOrCreatePoint(n);
-                    if (p != null) {
-                        insertCounter(graph, context, n, p, true);
-                        insertCounter(graph, context, n, p, false);
-                    }
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
     }
 }

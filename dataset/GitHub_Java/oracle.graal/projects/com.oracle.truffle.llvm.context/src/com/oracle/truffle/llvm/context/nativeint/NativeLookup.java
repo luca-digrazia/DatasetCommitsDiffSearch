@@ -36,29 +36,26 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.WeakHashMap;
 
+import com.oracle.graal.truffle.hotspot.nfi.HotSpotNativeFunctionInterface;
+import com.oracle.graal.truffle.hotspot.nfi.HotSpotNativeFunctionPointer;
+import com.oracle.graal.truffle.hotspot.nfi.HotSpotNativeLibraryHandle;
 import com.oracle.nfi.NativeFunctionInterfaceRuntime;
 import com.oracle.nfi.api.NativeFunctionHandle;
 import com.oracle.nfi.api.NativeFunctionInterface;
 import com.oracle.nfi.api.NativeLibraryHandle;
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.llvm.runtime.LLVMFunction;
+import com.oracle.truffle.llvm.parser.api.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.api.LLVMType;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
-import com.oracle.truffle.llvm.runtime.types.LLVMBaseType;
-import com.oracle.truffle.llvm.runtime.types.LLVMType;
-
-import org.graalvm.compiler.truffle.hotspot.nfi.HotSpotNativeFunctionInterface;
-import org.graalvm.compiler.truffle.hotspot.nfi.HotSpotNativeFunctionPointer;
-import org.graalvm.compiler.truffle.hotspot.nfi.HotSpotNativeLibraryHandle;
+import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 
 public class NativeLookup {
 
     static final int LOOKUP_FAILURE = 0;
-
-    private static final boolean printNativeCallStats = !LLVMLogger.TARGET_NONE.equals(LLVMOptions.DEBUG.printNativeCallStatistics());
 
     private static NativeFunctionInterface nfi;
 
@@ -103,7 +100,7 @@ public class NativeLookup {
     }
 
     public NativeLookup() {
-        if (printNativeCallStats) {
+        if (LLVMOptions.DEBUG.printNativeCallStatistics()) {
             nativeFunctionLookupStats = new TreeMap<>();
         } else {
             nativeFunctionLookupStats = null;
@@ -180,7 +177,7 @@ public class NativeLookup {
         } else {
             functionHandle = getNFI().getFunctionHandle(getLibraryHandlesArray(), functionName, retType, paramTypes);
         }
-        if (printNativeCallStats && functionHandle != null) {
+        if (LLVMOptions.DEBUG.printNativeCallStatistics() && functionHandle != null) {
             recordNativeFunctionCallSite(function);
         }
         return functionHandle;
