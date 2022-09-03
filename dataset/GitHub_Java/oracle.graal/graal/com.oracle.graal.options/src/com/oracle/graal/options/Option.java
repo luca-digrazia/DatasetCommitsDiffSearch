@@ -36,8 +36,7 @@ import java.lang.annotation.*;
 public @interface Option {
 
     /**
-     * Gets a help message for the option. New lines can be embedded in the message with
-     * {@code "%n"}.
+     * Gets a help message for the option.
      */
     String help();
 

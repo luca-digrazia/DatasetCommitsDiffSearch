@@ -35,7 +35,7 @@ import com.oracle.graal.nodes.virtual.*;
  * stack) at a particular point in the abstract interpretation.
  */
 @NodeInfo(nameTemplate = "FrameState@{p#method/s}:{p#bci}")
-public final class FrameState extends VirtualState implements IterableNodeType {
+public final class FrameState extends VirtualState implements Node.IterableNodeType {
 
     protected final int localsSize;
 
@@ -381,7 +381,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
     public boolean verify() {
         for (ValueNode value : values) {
             assert assertTrue(value == null || !value.isDeleted(), "frame state must not contain deleted nodes");
-            assert assertTrue(value == null || value instanceof VirtualObjectNode || (value.kind() != Kind.Void), "unexpected value: %s", value);
+            assert assertTrue(value == null || value instanceof VirtualObjectNode || (value.kind() != Kind.Void && value.kind() != Kind.Illegal), "unexpected value: %s", value);
         }
         return super.verify();
     }

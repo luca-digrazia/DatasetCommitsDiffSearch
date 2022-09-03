@@ -39,7 +39,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * An array of values representing how to reconstruct the state of the Java frame. This is array
      * is partitioned as follows:
      * <p>
-     * <table summary="" border="1" cellpadding="5" frame="void" rules="all">
+     * <table border="1" cellpadding="5" frame="void", rules="all">
      * <tr>
      * <th>Start index (inclusive)</th>
      * <th>End index (exclusive)</th>
@@ -95,7 +95,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
 
     /**
      * Creates a new frame object.
-     *
+     * 
      * @param caller the caller frame (which may be {@code null})
      * @param method the method
      * @param bci a BCI within the method
@@ -119,26 +119,8 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
     }
 
     /**
-     * Ensure that the frame state is formatted as expected by the JVM, with null or Illegal in the
-     * slot following a double word item. This should really be checked in FrameState itself but
-     * because of Word type rewriting and alternative backends that can't be done.
-     */
-    public boolean validateFormat() {
-        for (int i = 0; i < numLocals + numStack; i++) {
-            if (values[i] != null) {
-                Kind kind = values[i].getKind();
-                if (kind == Kind.Long || kind == Kind.Double) {
-                    assert values.length > i + 1 : String.format("missing second word %s", this);
-                    assert values[i + 1] == null || values[i + 1].getKind() == Kind.Illegal;
-                }
-            }
-        }
-        return true;
-    }
-
-    /**
      * Gets the value representing the specified local variable.
-     *
+     * 
      * @param i the local variable index
      * @return the value that can be used to reconstruct the local's current value
      */
@@ -148,7 +130,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
 
     /**
      * Gets the value representing the specified stack slot.
-     *
+     * 
      * @param i the stack index
      * @return the value that can be used to reconstruct the stack slot's current value
      */
@@ -158,7 +140,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
 
     /**
      * Gets the value representing the specified lock.
-     *
+     * 
      * @param i the lock index
      * @return the value that can be used to reconstruct the lock's current value
      */
@@ -168,7 +150,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
 
     /**
      * Gets the caller of this frame.
-     *
+     * 
      * @return {@code null} if this frame has no caller
      */
     public BytecodeFrame caller() {
