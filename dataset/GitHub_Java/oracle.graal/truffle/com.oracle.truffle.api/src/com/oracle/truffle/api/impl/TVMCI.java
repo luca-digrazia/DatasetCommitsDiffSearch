@@ -119,7 +119,7 @@ public abstract class TVMCI {
      * @since 0.24
      */
     protected boolean isCloneUninitializedSupported(RootNode root) {
-        return Accessor.nodesAccess().isCloneUninitializedSupported(root);
+        return Accessor.nodesAccess().isCopyUninitializedSupported(root);
     }
 
     /**
@@ -128,6 +128,6 @@ public abstract class TVMCI {
      * @since 0.24
      */
     protected RootNode cloneUnitialized(RootNode root) {
-        return Accessor.nodesAccess().cloneUninitialized(root);
+        return Accessor.nodesAccess().copyUninitialized(root);
     }
 }

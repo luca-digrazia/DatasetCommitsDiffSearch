@@ -603,12 +603,12 @@ public abstract class Node implements NodeInterface, Cloneable {
             }
 
             @Override
-            public boolean isCloneUninitializedSupported(RootNode rootNode) {
+            public boolean isCopyUninitializedSupported(RootNode rootNode) {
                 return rootNode.isCloneUninitializedSupported();
             }
 
             @Override
-            public RootNode cloneUninitialized(RootNode rootNode) {
+            public RootNode copyUninitialized(RootNode rootNode) {
                 return rootNode.cloneUninitialized();
             }
         }
