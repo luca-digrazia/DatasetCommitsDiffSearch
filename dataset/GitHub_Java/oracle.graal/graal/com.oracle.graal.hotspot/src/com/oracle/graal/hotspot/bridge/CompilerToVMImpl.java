@@ -89,6 +89,15 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native JavaMethod resolveMethod(HotSpotResolvedJavaType klass, String name, String signature);
 
     @Override
+    public native boolean isSubtypeOf(HotSpotResolvedJavaType klass, JavaType other);
+
+    @Override
+    public native JavaType getLeastCommonAncestor(HotSpotResolvedJavaType thisType, HotSpotResolvedJavaType otherType);
+
+    @Override
+    public native JavaType getUniqueConcreteSubtype(HotSpotResolvedJavaType klass);
+
+    @Override
     public native boolean isTypeInitialized(HotSpotResolvedJavaType klass);
 
     @Override
