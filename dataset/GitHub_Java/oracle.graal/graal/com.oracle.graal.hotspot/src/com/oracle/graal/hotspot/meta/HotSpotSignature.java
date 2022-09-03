@@ -25,7 +25,6 @@ package com.oracle.graal.hotspot.meta;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.java.*;
 
@@ -87,7 +86,7 @@ public class HotSpotSignature extends CompilerObject implements Signature {
             case 'Z':
                 break;
             default:
-                throw new GraalInternalError("Invalid character at index " + cur + " in signature: " + signature);
+                assert false;
         }
         return cur;
     }
@@ -125,7 +124,7 @@ public class HotSpotSignature extends CompilerObject implements Signature {
     }
 
     @Override
-    public String getMethodDescriptor() {
+    public String getString() {
         return originalString;
     }
 
