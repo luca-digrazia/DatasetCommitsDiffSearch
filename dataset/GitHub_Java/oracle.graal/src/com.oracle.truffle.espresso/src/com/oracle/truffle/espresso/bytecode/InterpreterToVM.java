@@ -66,7 +66,6 @@ import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
-import com.oracle.truffle.espresso.runtime.Utils;
 
 public class InterpreterToVM {
 
@@ -486,9 +485,6 @@ public class InterpreterToVM {
 
     @CompilerDirectives.TruffleBoundary
     public StaticObject newArray(Klass componentType, int length) {
-        if (length < 0) {
-            throw componentType.getContext().getMeta().throwEx(NegativeArraySizeException.class);
-        }
         assert !componentType.isPrimitive() : "use allocatePrimitiveArray for primitives";
         assert length >= 0;
         Object[] arr = new Object[length];
@@ -518,11 +514,6 @@ public class InterpreterToVM {
     // TODO(peterssen): Move to InterpreterToVm.
     public static Object allocateNativeArray(byte jvmPrimitiveType, int length) {
         // the constants for the cpi are loosely defined and no real cpi indices.
-
-        if (length < 0) {
-            throw Utils.getContext().getMeta().throwEx(NegativeArraySizeException.class);
-        }
-
         switch (jvmPrimitiveType) {
             case 4:
                 return new boolean[length];
@@ -572,7 +563,7 @@ public class InterpreterToVM {
         instanceOf(instance, klass);
         Meta meta = klass.getContext().getMeta();
         StaticObject ex = meta.exceptionKlass(ClassCastException.class).allocateInstance();
-        meta(ex).method("<init>", void.class).invokeDirect();
+        meta(ex).method("<init>", void.class).invoke();
         throw new EspressoException(ex);
     }
 
