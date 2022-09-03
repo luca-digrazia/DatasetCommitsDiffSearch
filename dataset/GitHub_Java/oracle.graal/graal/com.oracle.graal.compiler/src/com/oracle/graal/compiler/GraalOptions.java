@@ -85,13 +85,13 @@ public final class GraalOptions {
 
     // comilation queue
     public static int     TimedBootstrap                     = -1;
-    public static boolean PriorityCompileQueue               = ____;
+    public static boolean PriorityCompileQueue               = true;
     public static int     SlowQueueCutoff                    = 100000;
     public static boolean SlowCompileThreads                 = ____;
     public static boolean DynamicCompilePriority             = ____;
 
     // graph caching
-    public static boolean CacheGraphs                        = ____;
+    public static boolean CacheGraphs                        = true;
     public static int     GraphCacheSize                     = 1000;
     public static boolean PrintGraphCache                    = ____;
 
@@ -207,15 +207,6 @@ public final class GraalOptions {
     public static boolean OptSafepointElimination            = true;
 
     /**
-     * Insert a counter in the method prologue to track the most frequently called methods that were compiled by Graal.
-     */
-    public static boolean MethodEntryCounters               = false;
-    /**
-     * Number of caller program counters to distinguish when counting methods.
-     */
-    public static int     MethodEntryCountersCallers        = 20;
-
-    /**
      * Flag to turn on SSA-based register allocation, which is currently under development.
      */
     public static boolean AllocSSA                           = false;
@@ -224,14 +215,6 @@ public final class GraalOptions {
      * Prints all the available GraalOptions.
      */
     public static boolean PrintFlags                           = false;
-
-    /**
-     * Counts the various paths taken through a compiled checkcast.
-     */
-    public static boolean CheckcastCounters = false;
-
-    public static int CheckcastMaxHints = 2;
-    public static int InstanceOfMaxHints = 1;
 
     static {
         // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)
