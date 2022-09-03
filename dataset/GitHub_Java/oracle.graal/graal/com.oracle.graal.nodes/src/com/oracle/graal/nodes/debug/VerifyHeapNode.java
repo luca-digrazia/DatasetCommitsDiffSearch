@@ -34,7 +34,11 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class VerifyHeapNode extends FixedWithNextNode implements Lowerable {
 
-    public VerifyHeapNode() {
+    public static VerifyHeapNode create() {
+        return new VerifyHeapNode();
+    }
+
+    protected VerifyHeapNode() {
         super(StampFactory.forVoid());
     }
 
@@ -45,12 +49,12 @@ public class VerifyHeapNode extends FixedWithNextNode implements Lowerable {
 
     public static void addBefore(FixedNode position) {
         StructuredGraph graph = position.graph();
-        graph.addBeforeFixed(position, graph.add(new VerifyHeapNode()));
+        graph.addBeforeFixed(position, graph.add(VerifyHeapNode.create()));
     }
 
     public static void addAfter(FixedWithNextNode position) {
         StructuredGraph graph = position.graph();
-        graph.addAfterFixed(position, graph.add(new VerifyHeapNode()));
+        graph.addAfterFixed(position, graph.add(VerifyHeapNode.create()));
     }
 
 }

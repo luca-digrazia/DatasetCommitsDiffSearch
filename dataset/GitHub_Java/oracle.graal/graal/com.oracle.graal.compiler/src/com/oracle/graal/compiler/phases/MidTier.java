@@ -89,10 +89,6 @@ public class MidTier extends PhaseSuite<MidTierContext> {
 
         appendPhase(new FrameStateAssignmentPhase());
 
-        if (ReassociateInvariants.getValue()) {
-            appendPhase(new ReassociateInvariantPhase());
-        }
-
         if (OptDeoptimizationGrouping.getValue()) {
             appendPhase(new DeoptimizationGroupingPhase());
         }
