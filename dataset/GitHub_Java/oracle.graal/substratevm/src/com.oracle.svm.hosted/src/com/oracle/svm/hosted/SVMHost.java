@@ -196,8 +196,7 @@ public final class SVMHost implements HostVM {
             componentHub = dynamicHub(type.getComponentType());
         }
         boolean isStatic = Modifier.isStatic(type.getJavaClass().getModifiers());
-        boolean isSynthetic = type.getJavaClass().isSynthetic();
-        return new DynamicHub(type.toClassName(), type.isLocal(), superHub, componentHub, type.getSourceFileName(), isStatic, isSynthetic);
+        return new DynamicHub(type.toClassName(), type.isLocal(), superHub, componentHub, type.getSourceFileName(), isStatic);
     }
 
     public static boolean isUnknownClass(ResolvedJavaType resolvedJavaType) {

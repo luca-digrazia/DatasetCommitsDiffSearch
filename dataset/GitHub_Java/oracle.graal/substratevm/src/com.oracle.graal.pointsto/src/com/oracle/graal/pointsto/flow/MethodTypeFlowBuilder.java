@@ -1011,7 +1011,7 @@ public class MethodTypeFlowBuilder {
                     AnalysisType objectType = (AnalysisType) StampTool.typeOrNull(node.object());
                     TypeFlowBuilder<?> objectBuilder = state.lookup(node.object());
                     TypeFlowBuilder<?> loadBuilder;
-                    if (objectType != null && objectType.isArray() && objectType.getComponentType().getJavaKind() == JavaKind.Object) {
+                    if (objectType.isArray() && objectType.getComponentType().getJavaKind() == JavaKind.Object) {
                         /*
                          * Unsafe load from an array object is essentially an array load since we
                          * don't have separate type flows for different array elements.
@@ -1045,7 +1045,7 @@ public class MethodTypeFlowBuilder {
                     TypeFlowBuilder<?> objectBuilder = state.lookup(node.object());
                     TypeFlowBuilder<?> valueBuilder = state.lookup(node.value());
                     TypeFlowBuilder<?> storeBuilder;
-                    if (objectType != null && objectType.isArray() && objectType.getComponentType().getJavaKind() == JavaKind.Object) {
+                    if (objectType.isArray() && objectType.getComponentType().getJavaKind() == JavaKind.Object) {
                         /*
                          * Unsafe store to an array object is essentially an array store since we
                          * don't have separate type flows for different array elements.
@@ -1078,7 +1078,7 @@ public class MethodTypeFlowBuilder {
                     TypeFlowBuilder<?> objectBuilder = state.lookup(node.object());
                     TypeFlowBuilder<?> newValueBuilder = state.lookup(node.newValue());
                     TypeFlowBuilder<?> storeBuilder;
-                    if (objectType != null && objectType.isArray() && objectType.getComponentType().getJavaKind() == JavaKind.Object) {
+                    if (objectType.isArray() && objectType.getComponentType().getJavaKind() == JavaKind.Object) {
                         /*
                          * Unsafe compare and swap is essentially unsafe store and unsafe store to
                          * an array object is essentially an array store since we don't have
@@ -1117,7 +1117,7 @@ public class MethodTypeFlowBuilder {
                     TypeFlowBuilder<?> storeBuilder;
                     TypeFlowBuilder<?> loadBuilder;
 
-                    if (objectType != null && objectType.isArray() && objectType.getComponentType().getJavaKind() == JavaKind.Object) {
+                    if (objectType.isArray() && objectType.getComponentType().getJavaKind() == JavaKind.Object) {
                         /*
                          * Atomic read and write is essentially unsafe store and unsafe store to an
                          * array object is essentially an array store since we don't have separate
@@ -1167,26 +1167,19 @@ public class MethodTypeFlowBuilder {
 
                 TypeFlowBuilder<?> srcBuilder = state.lookup(node.getSource());
                 TypeFlowBuilder<?> dstBuilder = state.lookup(node.getDestination());
+                AnalysisType type = (AnalysisType) StampTool.typeOrNull(node);
 
-                /*
-                 * Shuffling elements around in the same array (source and target are the same) does
-                 * not need a type flow. We do not track individual array elements.
-                 */
-                if (srcBuilder != dstBuilder) {
-                    AnalysisType type = (AnalysisType) StampTool.typeOrNull(node);
+                TypeFlowBuilder<?> arrayCopyBuilder = TypeFlowBuilder.create(bb, node, ArrayCopyTypeFlow.class, () -> {
+                    ArrayCopyTypeFlow arrayCopyFlow = new ArrayCopyTypeFlow(node, type, srcBuilder.get(), dstBuilder.get());
+                    methodFlow.addMiscEntry(arrayCopyFlow);
+                    return arrayCopyFlow;
+                });
 
-                    TypeFlowBuilder<?> arrayCopyBuilder = TypeFlowBuilder.create(bb, node, ArrayCopyTypeFlow.class, () -> {
-                        ArrayCopyTypeFlow arrayCopyFlow = new ArrayCopyTypeFlow(node, type, srcBuilder.get(), dstBuilder.get());
-                        methodFlow.addMiscEntry(arrayCopyFlow);
-                        return arrayCopyFlow;
-                    });
+                arrayCopyBuilder.addObserverDependency(srcBuilder);
+                arrayCopyBuilder.addObserverDependency(dstBuilder);
 
-                    arrayCopyBuilder.addObserverDependency(srcBuilder);
-                    arrayCopyBuilder.addObserverDependency(dstBuilder);
-
-                    /* Array copies must not be removed. */
-                    typeFlowGraphBuilder.registerSinkBuilder(arrayCopyBuilder);
-                }
+                /* Array copies must not be removed. */
+                typeFlowGraphBuilder.registerSinkBuilder(arrayCopyBuilder);
 
             } else if (n instanceof WordCastNode) {
                 WordCastNode node = (WordCastNode) n;

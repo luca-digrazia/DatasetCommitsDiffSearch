@@ -39,9 +39,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.graalvm.nativeimage.Feature.DuringAnalysisAccess;
-import org.graalvm.nativeimage.impl.RuntimeReflectionSupport;
 
 import com.oracle.graal.pointsto.meta.AnalysisType;
+import com.oracle.svm.core.RuntimeReflection.RuntimeReflectionSupport;
 import com.oracle.svm.core.hub.ClassForNameSupport;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.util.UserError;
@@ -136,17 +136,7 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
         }
 
         for (Class<?> clazz : allClasses) {
-            AnalysisType type = access.getMetaAccess().lookupJavaType(clazz);
-            DynamicHub hub = access.getHostVM().dynamicHub(type);
-
-            if (type.isArray()) {
-                /*
-                 * Array types allocated reflectively need to be registered as instantiated.
-                 * Otherwise the isInstantiated check in AllocationSnippets.checkDynamicHub() will
-                 * fail at runtime when the array is *only* allocated through Array.newInstance().
-                 */
-                type.registerAsInHeap();
-            }
+            DynamicHub hub = access.getHostVM().dynamicHub(access.getMetaAccess().lookupJavaType(clazz));
 
             if (reflectionClasses.contains(clazz)) {
                 ClassForNameSupport.registerClass(clazz);
