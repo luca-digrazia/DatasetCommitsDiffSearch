@@ -2,6 +2,7 @@ package com.oracle.truffle.espresso.runtime;
 
 import java.io.File;
 
+import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.Engine;
 
@@ -22,7 +23,7 @@ public interface EspressoProperties {
     String getEspressoLibraryPath();
 
     static EspressoProperties getDefault() {
-        if (EspressoOptions.RUNNING_ON_SVM) {
+        if (ImageInfo.inImageCode()) {
             return new EspressoPropertiesSVM();
         }
         return new EspressoPropertiesHotSpot();

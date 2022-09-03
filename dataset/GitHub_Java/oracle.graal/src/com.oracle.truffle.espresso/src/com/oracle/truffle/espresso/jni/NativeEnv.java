@@ -77,7 +77,7 @@ public class NativeEnv {
     }
 
     private final static Constructor<? extends ByteBuffer> constructor;
-    private final static Field addressField;
+    private final static Field address;
     static {
         try {
             @SuppressWarnings("unchecked")
@@ -85,8 +85,8 @@ public class NativeEnv {
             @SuppressWarnings("unchecked")
             Class<? extends ByteBuffer> bufferClazz = (Class<? extends ByteBuffer>) Class.forName("java.nio.Buffer");
             constructor = clazz.getDeclaredConstructor(long.class, int.class);
-            addressField = bufferClazz.getDeclaredField("address");
-            addressField.setAccessible(true);
+            address = bufferClazz.getDeclaredField("address");
+            address.setAccessible(true);
             constructor.setAccessible(true);
         } catch (ClassNotFoundException | NoSuchMethodException | NoSuchFieldException e) {
             throw EspressoError.shouldNotReachHere(e);
@@ -106,7 +106,7 @@ public class NativeEnv {
 
     protected static long byteBufferAddress(ByteBuffer byteBuffer) {
         try {
-            return (long) addressField.get(byteBuffer);
+            return (long) address.get(byteBuffer);
         } catch (IllegalAccessException e) {
             throw EspressoError.shouldNotReachHere(e);
         }
