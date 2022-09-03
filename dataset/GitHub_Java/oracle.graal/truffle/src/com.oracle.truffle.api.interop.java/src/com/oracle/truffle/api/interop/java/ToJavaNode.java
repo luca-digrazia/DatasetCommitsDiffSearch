@@ -91,8 +91,6 @@ abstract class ToJavaNode extends Node {
                         return (char) v;
                     }
                 }
-            } else if (targetType == String.class && JavaInterop.isPrimitive(value)) {
-                return convertToString(value);
             }
         }
         if (targetType == Value.class && languageContext != null) {
@@ -114,7 +112,7 @@ abstract class ToJavaNode extends Node {
         return convertedValue;
     }
 
-    boolean canConvertToPrimitive(Object value, Class<?> targetType, boolean strict) {
+    boolean canConvertStrict(Object value, Class<?> targetType) {
         if (isAssignableFromTrufflePrimitiveType(targetType)) {
             Object convertedValue = primitive.toPrimitive(value, targetType);
             if (convertedValue != null) {
@@ -124,26 +122,12 @@ abstract class ToJavaNode extends Node {
         if (JavaObject.isJavaInstance(targetType, value)) {
             return true;
         }
-        if (strict) {
-            return false;
-        }
-        if (targetType == char.class || targetType == Character.class) {
-            Integer safeChar = primitive.toInteger(value);
-            if (safeChar != null) {
-                int v = safeChar;
-                if (v >= 0 && v < 65536) {
-                    return true;
-                }
-            }
-        } else if (targetType == String.class && JavaInterop.isPrimitive(value)) {
-            return true;
-        }
         return false;
     }
 
     @SuppressWarnings({"unused"})
     boolean canConvert(Object value, Class<?> targetType, Type genericType, Object languageContext, boolean strict) {
-        if (canConvertToPrimitive(value, targetType, strict)) {
+        if (canConvertStrict(value, targetType)) {
             return true;
         }
         if (strict) {
@@ -371,11 +355,6 @@ abstract class ToJavaNode extends Node {
             Array.set(array, i, list.get(i));
         }
         return array;
-    }
-
-    @TruffleBoundary
-    private static String convertToString(Object value) {
-        return value.toString();
     }
 
     public static ToJavaNode create() {
