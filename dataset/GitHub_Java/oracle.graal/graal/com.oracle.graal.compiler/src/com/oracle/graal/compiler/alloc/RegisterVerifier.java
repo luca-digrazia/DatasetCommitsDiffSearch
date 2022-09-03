@@ -106,7 +106,7 @@ final class RegisterVerifier {
             }
 
             // process all operations of the block
-            processOperations(allocator.ir.getLIRforBlock(block), inputState);
+            processOperations(allocator.ir.lir(block), inputState);
 
             // iterate all successors
             for (AbstractBlock<?> succ : block.getSuccessors()) {

@@ -55,6 +55,4 @@ public interface AbstractBlock<T extends AbstractBlock<?>> {
     boolean isAligned();
 
     void setAlign(boolean align);
-
-    T getDominator();
 }

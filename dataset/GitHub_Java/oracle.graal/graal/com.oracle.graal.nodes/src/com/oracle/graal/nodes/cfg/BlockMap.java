@@ -27,7 +27,7 @@ public class BlockMap<T> {
     private final T[] data;
 
     @SuppressWarnings("unchecked")
-    public BlockMap(AbstractControlFlowGraph<?> cfg) {
+    public BlockMap(ControlFlowGraph cfg) {
         data = (T[]) new Object[cfg.getBlocks().length];
     }
 
