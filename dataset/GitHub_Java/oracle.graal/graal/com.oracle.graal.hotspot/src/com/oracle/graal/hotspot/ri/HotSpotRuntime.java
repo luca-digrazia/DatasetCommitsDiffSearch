@@ -30,13 +30,11 @@ import java.util.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
-import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.Compiler;
 import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.hotspot.target.amd64.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -46,7 +44,6 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ci.CiTargetMethod.Call;
 import com.oracle.max.cri.ci.CiTargetMethod.DataPatch;
-import com.oracle.max.cri.ci.CiTargetMethod.Mark;
 import com.oracle.max.cri.ci.CiTargetMethod.Safepoint;
 import com.oracle.max.cri.ci.CiUtil.RefMapFormatter;
 import com.oracle.max.cri.ri.*;
@@ -57,7 +54,7 @@ import com.oracle.max.criutils.*;
  * CRI runtime implementation for the HotSpot VM.
  */
 public class HotSpotRuntime implements GraalRuntime {
-    public final HotSpotVMConfig config;
+    final HotSpotVMConfig config;
     final HotSpotRegisterConfig regConfig;
     private final HotSpotRegisterConfig globalStubRegConfig;
     private final Compiler compiler;
@@ -67,8 +64,6 @@ public class HotSpotRuntime implements GraalRuntime {
         this.compiler = compiler;
         regConfig = new HotSpotRegisterConfig(config, false);
         globalStubRegConfig = new HotSpotRegisterConfig(config, true);
-
-        System.setProperty(Backend.BACKEND_CLASS_PROPERTY, HotSpotAMD64Backend.class.getName());
     }
 
     @Override
@@ -82,76 +77,37 @@ public class HotSpotRuntime implements GraalRuntime {
     }
 
     @Override
-    public String disassemble(RiCodeInfo info) {
-        byte[] code = info.code();
+    public String disassemble(byte[] code, long address) {
+        return compiler.getVMEntries().disassembleNative(code, address);
+    }
+
+    @Override
+    public String disassemble(CiTargetMethod tm) {
+        byte[] code = Arrays.copyOf(tm.targetCode(), tm.targetCodeSize());
         CiTarget target = compiler.getTarget();
-        HexCodeFile hcf = new HexCodeFile(code, info.start(), target.arch.name, target.wordSize * 8);
-        CiTargetMethod tm = info.targetMethod();
-        if (tm != null) {
-            HexCodeFile.addAnnotations(hcf, tm.annotations());
-            addExceptionHandlersComment(tm, hcf);
-            CiRegister fp = regConfig.getFrameRegister();
-            RefMapFormatter slotFormatter = new RefMapFormatter(target.arch, target.wordSize, fp, 0);
-            for (Safepoint safepoint : tm.safepoints) {
-                if (safepoint instanceof Call) {
-                    Call call = (Call) safepoint;
-                    if (call.debugInfo != null) {
-                        hcf.addComment(call.pcOffset + call.size, CiUtil.append(new StringBuilder(100), call.debugInfo, slotFormatter).toString());
-                    }
-                    addOperandComment(hcf, call.pcOffset, "{" + getTargetName(call) + "}");
-                } else {
-                    if (safepoint.debugInfo != null) {
-                        hcf.addComment(safepoint.pcOffset, CiUtil.append(new StringBuilder(100), safepoint.debugInfo, slotFormatter).toString());
-                    }
-                    addOperandComment(hcf, safepoint.pcOffset, "{safepoint}");
+        HexCodeFile hcf = new HexCodeFile(code, 0L, target.arch.name, target.wordSize * 8);
+        HexCodeFile.addAnnotations(hcf, tm.annotations());
+        addExceptionHandlersComment(tm, hcf);
+        CiRegister fp = regConfig.getFrameRegister();
+        RefMapFormatter slotFormatter = new RefMapFormatter(target.arch, target.wordSize, fp, 0);
+        for (Safepoint safepoint : tm.safepoints) {
+            if (safepoint instanceof Call) {
+                Call call = (Call) safepoint;
+                if (call.debugInfo != null) {
+                    hcf.addComment(call.pcOffset + call.size, CiUtil.append(new StringBuilder(100), call.debugInfo, slotFormatter).toString());
                 }
+                addOperandComment(hcf, call.pcOffset, "{" + call.target + "}");
+            } else {
+                if (safepoint.debugInfo != null) {
+                    hcf.addComment(safepoint.pcOffset, CiUtil.append(new StringBuilder(100), safepoint.debugInfo, slotFormatter).toString());
+                }
+                addOperandComment(hcf, safepoint.pcOffset, "{safepoint}");
             }
-            for (DataPatch site : tm.dataReferences) {
-                hcf.addOperandComment(site.pcOffset, "{" + site.constant + "}");
-            }
-            for (Mark mark : tm.marks) {
-                hcf.addComment(mark.pcOffset, getMarkName(mark));
-            }
+        }
+        for (DataPatch site : tm.dataReferences) {
+            hcf.addOperandComment(site.pcOffset, "{" + site.constant + "}");
         }
         return hcf.toEmbeddedString();
-    }
-
-    /**
-     * Decodes a call target to a mnemonic if possible.
-     */
-    private String getTargetName(Call call) {
-        Field[] fields = config.getClass().getDeclaredFields();
-        for (Field f : fields) {
-            if (f.getName().endsWith("Stub")) {
-                f.setAccessible(true);
-                try {
-                    if (f.get(config).equals(call.target)) {
-                        return f.getName();
-                    }
-                } catch (Exception e) {
-                }
-            }
-        }
-        return String.valueOf(call.target);
-    }
-
-    /**
-     * Decodes a mark to a mnemonic if possible.
-     */
-    private static String getMarkName(Mark mark) {
-        Field[] fields = HotSpotXirGenerator.class.getDeclaredFields();
-        for (Field f : fields) {
-            if (Modifier.isStatic(f.getModifiers()) && f.getName().startsWith("MARK_")) {
-                f.setAccessible(true);
-                try {
-                    if (f.get(null).equals(mark.id)) {
-                        return f.getName();
-                    }
-                } catch (Exception e) {
-                }
-            }
-        }
-        return "MARK:" + mark.id;
     }
 
     private static void addExceptionHandlersComment(CiTargetMethod tm, HexCodeFile hcf) {
@@ -163,8 +119,6 @@ public class HotSpotRuntime implements GraalRuntime {
                     append(e.pcOffset).append(" -> ").
                     append(e.handlerPos).
                     append(nl);
-                hcf.addComment(e.pcOffset, "[exception -> " + e.handlerPos + "]");
-                hcf.addComment(e.handlerPos, "[exception handler for " + e.pcOffset + "]");
             }
             hcf.addComment(0, buf.toString());
         }
@@ -196,8 +150,8 @@ public class HotSpotRuntime implements GraalRuntime {
     }
 
     @Override
-    public Object registerCompilerStub(CiTargetMethod targetMethod, String name, RiCodeInfo info) {
-        return HotSpotTargetMethod.installStub(compiler, targetMethod, name, (HotSpotCodeInfo) info);
+    public Object registerCompilerStub(CiTargetMethod targetMethod, String name) {
+        return HotSpotTargetMethod.installStub(compiler, targetMethod, name);
     }
 
     @Override
@@ -390,8 +344,6 @@ public class HotSpotRuntime implements GraalRuntime {
             ReadNode memoryRead = graph.add(new ReadNode(objectClassNode.object(), location, StampFactory.objectNonNull()));
             memoryRead.setGuard((GuardNode) tool.createGuard(graph.unique(new NullCheckNode(objectClassNode.object(), false)), RiDeoptReason.NullCheckException, RiDeoptAction.InvalidateReprofile, StructuredGraph.INVALID_GRAPH_ID));
             graph.replaceFixed(objectClassNode, memoryRead);
-        } else {
-            assert false : "Node implementing Lowerable not handled: " + n;
         }
     }
 
@@ -479,13 +431,13 @@ public class HotSpotRuntime implements GraalRuntime {
     }
 
     @Override
-    public void installMethod(RiResolvedMethod method, CiTargetMethod code, RiCodeInfo info) {
-        compiler.getVMEntries().installMethod(new HotSpotTargetMethod(compiler, (HotSpotMethodResolved) method, code), true, (HotSpotCodeInfo) info);
+    public void installMethod(RiResolvedMethod method, CiTargetMethod code) {
+        compiler.getVMEntries().installMethod(new HotSpotTargetMethod(compiler, (HotSpotMethodResolved) method, code), true);
     }
 
     @Override
     public RiCompiledMethod addMethod(RiResolvedMethod method, CiTargetMethod code) {
-        return compiler.getVMEntries().installMethod(new HotSpotTargetMethod(compiler, (HotSpotMethodResolved) method, code), false, null);
+        return compiler.getVMEntries().installMethod(new HotSpotTargetMethod(compiler, (HotSpotMethodResolved) method, code), false);
     }
 
     @Override
