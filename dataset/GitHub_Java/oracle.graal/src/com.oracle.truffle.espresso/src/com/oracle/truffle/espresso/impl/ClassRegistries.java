@@ -23,6 +23,8 @@
 
 package com.oracle.truffle.espresso.impl;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
@@ -33,8 +35,6 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
-
-import java.util.concurrent.ConcurrentHashMap;
 
 public class ClassRegistries {
 

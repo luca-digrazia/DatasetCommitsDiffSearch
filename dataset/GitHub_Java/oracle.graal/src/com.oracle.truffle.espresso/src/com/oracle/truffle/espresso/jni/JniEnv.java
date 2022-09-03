@@ -25,7 +25,6 @@ package com.oracle.truffle.espresso.jni;
 import static com.oracle.truffle.espresso.meta.Meta.meta;
 import static com.oracle.truffle.espresso.meta.Meta.toHost;
 
-import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -64,7 +63,6 @@ import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.nodes.VmNativeNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
-import com.oracle.truffle.espresso.runtime.EspressoProperties;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectClass;
@@ -86,7 +84,7 @@ public class JniEnv extends NativeEnv {
     private long jniEnvPtr;
 
     // Load native library nespresso.dll (Windows) or libnespresso.so (Unixes) at runtime.
-    private final TruffleObject nespressoLibrary;
+    private final TruffleObject nespressoLibrary = NativeLibrary.loadLibrary(System.getProperty("nespresso.library", "nespresso"));
 
     private final TruffleObject initializeNativeContext;
     private final TruffleObject disposeNativeContext;
@@ -359,8 +357,6 @@ public class JniEnv extends NativeEnv {
 
     private JniEnv() {
         try {
-            EspressoProperties props = EspressoLanguage.getCurrentContext().getVmProperties();
-            nespressoLibrary = loadLibrary(props.getEspressoLibraryPath().split(File.pathSeparator), "nespresso");
             dupClosureRef = NativeLibrary.lookup(nespressoLibrary, "dupClosureRef");
 
             initializeNativeContext = NativeLibrary.lookupAndBind(nespressoLibrary,
