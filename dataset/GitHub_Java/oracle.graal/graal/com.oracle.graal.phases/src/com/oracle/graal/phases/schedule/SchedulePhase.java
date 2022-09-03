@@ -24,8 +24,7 @@ package com.oracle.graal.phases.schedule;
 
 import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.compiler.common.cfg.AbstractBlock.*;
-import static com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph.*;
+import static com.oracle.graal.nodes.cfg.ControlFlowGraph.*;
 
 import java.util.*;
 
@@ -236,17 +235,18 @@ public final class SchedulePhase extends Phase {
             if (!foundExcludeNode && node == excludeNode) {
                 foundExcludeNode = true;
             }
-            if (node != startNode) {
-                if (node instanceof MemoryCheckpoint.Single) {
-                    LocationIdentity identity = ((MemoryCheckpoint.Single) node).getLocationIdentity();
-                    accm.add(identity);
-                } else if (node instanceof MemoryCheckpoint.Multi) {
-                    for (LocationIdentity identity : ((MemoryCheckpoint.Multi) node).getLocationIdentities()) {
-                        accm.add(identity);
-                    }
-                }
-                assert MemoryCheckpoint.TypeAssertion.correctType(node);
+            if (node == startNode) {
+                continue;
             }
+            if (node instanceof MemoryCheckpoint.Single) {
+                LocationIdentity identity = ((MemoryCheckpoint.Single) node).getLocationIdentity();
+                accm.add(identity);
+            } else if (node instanceof MemoryCheckpoint.Multi) {
+                for (LocationIdentity identity : ((MemoryCheckpoint.Multi) node).getLocationIdentities()) {
+                    accm.add(identity);
+                }
+            }
+            assert MemoryCheckpoint.TypeAssertion.correctType(node);
 
             if (foundExcludeNode) {
                 accm = set;
@@ -443,7 +443,7 @@ public final class SchedulePhase extends Phase {
                     FloatingReadNode read = (FloatingReadNode) node;
                     block = optimalBlock(read, strategy);
                     Debug.log("schedule for %s: %s", read, block);
-                    assert dominates(earliestBlock, block) : String.format("%s (%s) cannot be scheduled before earliest schedule (%s). location: %s", read, block, earliestBlock,
+                    assert earliestBlock.dominates(block) : String.format("%s (%s) cannot be scheduled before earliest schedule (%s). location: %s", read, block, earliestBlock,
                                     read.getLocationIdentity());
                 } else {
                     block = latestBlock(node, strategy);
@@ -462,7 +462,7 @@ public final class SchedulePhase extends Phase {
                         FloatingReadNode read = (FloatingReadNode) node;
                         MemoryNode lastLocationAccess = read.getLastLocationAccess();
                         Block upperBound = blockForMemoryNode(lastLocationAccess);
-                        assert dominates(upperBound, block) : String.format(
+                        assert upperBound.dominates(block) : String.format(
                                         "out of loop movement voilated memory semantics for %s (location %s). moved to %s but upper bound is %s (earliest: %s, latest: %s)", read,
                                         read.getLocationIdentity(), block, upperBound, earliestBlock, latest);
                     }
@@ -471,7 +471,7 @@ public final class SchedulePhase extends Phase {
             default:
                 throw new GraalInternalError("unknown scheduling strategy");
         }
-        if (!dominates(earliestBlock, block)) {
+        if (!earliestBlock.dominates(block)) {
             throw new SchedulingError("%s: Graph cannot be scheduled : inconsistent for %s, %d usages, (%s needs to dominate %s)", node.graph(), node, node.usages().count(), earliestBlock, block);
         }
         cfg.getNodeToBlock().set(node, block);
@@ -513,10 +513,10 @@ public final class SchedulePhase extends Phase {
 
         Block upperBoundBlock = blockForMemoryNode(n.getLastLocationAccess());
         Block earliestBlock = earliestBlock(n);
-        assert dominates(upperBoundBlock, earliestBlock) : "upper bound (" + upperBoundBlock + ") should dominate earliest (" + earliestBlock + ")";
+        assert upperBoundBlock.dominates(earliestBlock) : "upper bound (" + upperBoundBlock + ") should dominate earliest (" + earliestBlock + ")";
 
         Block latestBlock = latestBlock(n, strategy);
-        assert latestBlock != null && dominates(earliestBlock, latestBlock) : "earliest (" + earliestBlock + ") should dominate latest block (" + latestBlock + ")";
+        assert latestBlock != null && earliestBlock.dominates(latestBlock) : "earliest (" + earliestBlock + ") should dominate latest block (" + latestBlock + ")";
 
         Debug.log("processing %s (accessing %s): latest %s, earliest %s, upper bound %s (%s)", n, locid, latestBlock, earliestBlock, upperBoundBlock, n.getLastLocationAccess());
         if (earliestBlock == latestBlock) {
@@ -578,7 +578,7 @@ public final class SchedulePhase extends Phase {
     private static Deque<Block> computePathInDominatorTree(Block earliestBlock, Block latestBlock) {
         Deque<Block> path = new LinkedList<>();
         Block currentBlock = latestBlock;
-        while (currentBlock != null && dominates(earliestBlock, currentBlock)) {
+        while (currentBlock != null && earliestBlock.dominates(currentBlock)) {
             path.push(currentBlock);
             currentBlock = currentBlock.getDominator();
         }
@@ -633,7 +633,7 @@ public final class SchedulePhase extends Phase {
         }
 
         if (assertionEnabled()) {
-            if (cdbc.block != null && !dominates(earliestBlock(node), cdbc.block)) {
+            if (cdbc.block != null && !earliestBlock(node).dominates(cdbc.block)) {
                 throw new SchedulingError("failed to find correct latest schedule for %s. cdbc: %s, earliest: %s", node, cdbc.block, earliestBlock(node));
             }
         }
@@ -654,7 +654,7 @@ public final class SchedulePhase extends Phase {
 
         @Override
         public void apply(Block newBlock) {
-            this.block = commonDominatorTyped(this.block, newBlock);
+            this.block = commonDominator(this.block, newBlock);
         }
     }
 
@@ -1050,7 +1050,7 @@ public final class SchedulePhase extends Phase {
             LocationIdentity readLocation = frn.location().getLocationIdentity();
             assert readLocation != FINAL_LOCATION;
             if (frn.getLastLocationAccess() == node) {
-                assert identity == ANY_LOCATION || readLocation == identity || node instanceof MemoryCheckpoint.Multi : "location doesn't match: " + readLocation + ", " + identity;
+                assert identity == ANY_LOCATION || readLocation == identity : "location doesn't match: " + readLocation + ", " + identity;
                 state.clearBeforeLastLocation(frn);
             } else if (!state.isBeforeLastLocation(frn) && (readLocation == identity || (node != getCFG().graph.start() && ANY_LOCATION == identity))) {
                 state.removeRead(frn);
