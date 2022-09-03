@@ -43,8 +43,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 import org.graalvm.nativeimage.RuntimeOptions;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
@@ -61,7 +59,7 @@ public abstract class Launcher {
 
     private Engine tempEngine;
 
-    enum VMType {
+    protected enum VMType {
         Native,
         JVM
     }
@@ -95,10 +93,6 @@ public abstract class Launcher {
 
     final boolean isPolyglot() {
         return seenPolyglot;
-    }
-
-    final void setPolyglot(boolean polyglot) {
-        seenPolyglot = polyglot;
     }
 
     private Engine getTempEngine() {
@@ -369,7 +363,7 @@ public abstract class Launcher {
 
     private static final Path FORCE_GRAAL_HOME;
     static {
-        String forcedHome = System.getProperty("org.graalvm.launcher.home");
+        String forcedHome = System.getProperty("com.oracle.graalvm.launcher.home");
         if (forcedHome != null) {
             FORCE_GRAAL_HOME = Paths.get(forcedHome);
         } else {
@@ -386,14 +380,12 @@ public abstract class Launcher {
      * return MyLauncher.class.getName();
      * </pre>
      */
-    protected String getMainClass() {
-        return this.getClass().getName();
-    }
+    protected abstract String getMainClass();
 
     /**
      * Returns true if the current launcher was compiled ahead-of-time to native code.
      */
-    protected final boolean isAOT() {
+    protected boolean isAOT() {
         return IS_AOT;
     }
 
@@ -764,7 +756,7 @@ public abstract class Launcher {
         }
     }
 
-    enum OS {
+    protected enum OS {
         Darwin,
         Linux,
         Solaris;
@@ -849,7 +841,7 @@ public abstract class Launcher {
         }
     }
 
-    private static final String CLASSPATH = System.getProperty("org.graalvm.launcher.classpath");
+    private static final String CLASSPATH = System.getProperty("com.oracle.graalvm.launcher.classpath");
     private static final String GRAALVM_VERSION_PROPERTY = "graalvm.version";
     private static final String GRAALVM_VERSION = System.getProperty(GRAALVM_VERSION_PROPERTY);
 
@@ -929,9 +921,6 @@ public abstract class Launcher {
                 vmType = defaultVmType;
             }
             if (vmType == VMType.JVM) {
-                if (!isPolyglot && polyglot) {
-                    remainingArgs.add(0, "--polyglot");
-                }
                 execJVM(jvmArgs, remainingArgs, polyglotOptions);
             } else if (!isPolyglot && polyglot) {
                 assert jvmArgs.isEmpty();
@@ -945,13 +934,12 @@ public abstract class Launcher {
 
         private void printNativeHelp() {
             System.out.println("Native VM options:");
-            OptionDescriptors options = RuntimeOptions.getOptions();
-            SortedMap<String, OptionDescriptor> sortedOptions = new TreeMap<>();
-            for (OptionDescriptor descriptor : options) {
-                sortedOptions.put(descriptor.getName(), descriptor);
-            }
-            for (Entry<String, OptionDescriptor> entry : sortedOptions.entrySet()) {
-                printOption("--native." + entry.getKey(), entry.getValue().getHelp());
+            Map<String, OptionDescriptor> options = RuntimeOptions.getOptions();
+            List<String> optionNames = new ArrayList<>(options.keySet());
+            Collections.sort(optionNames);
+            for (String optionName : optionNames) {
+                OptionDescriptor descriptor = options.get(optionName);
+                printOption("--native." + optionName, descriptor.getHelp());
             }
         }
 
