@@ -74,7 +74,6 @@ import com.oracle.graal.nodes.extended.LoadHubNode;
 import com.oracle.graal.nodes.extended.MembarNode;
 import com.oracle.graal.nodes.extended.UnboxNode;
 import com.oracle.graal.nodes.extended.UnsafeLoadNode;
-import com.oracle.graal.nodes.extended.UnsafeMemoryStoreNode;
 import com.oracle.graal.nodes.extended.UnsafeStoreNode;
 import com.oracle.graal.nodes.java.AbstractNewArrayNode;
 import com.oracle.graal.nodes.java.AbstractNewObjectNode;
@@ -174,8 +173,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             lowerUnsafeLoadNode((UnsafeLoadNode) n, tool);
         } else if (n instanceof UnsafeStoreNode) {
             lowerUnsafeStoreNode((UnsafeStoreNode) n);
-        } else if (n instanceof UnsafeMemoryStoreNode) {
-            lowerUnsafeMemoryStoreNode((UnsafeMemoryStoreNode) n);
         } else if (n instanceof JavaReadNode) {
             lowerJavaReadNode((JavaReadNode) n);
         } else if (n instanceof JavaWriteNode) {
@@ -465,17 +462,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ValueNode value = implicitStoreConvert(graph, valueKind, store.value(), compressible);
         AddressNode address = createUnsafeAddress(graph, store.object(), store.offset());
         WriteNode write = graph.add(new WriteNode(address, store.getLocationIdentity(), value, unsafeStoreBarrierType(store)));
-        write.setStateAfter(store.stateAfter());
-        graph.replaceFixedWithFixed(store, write);
-    }
-
-    protected void lowerUnsafeMemoryStoreNode(UnsafeMemoryStoreNode store) {
-        StructuredGraph graph = store.graph();
-        assert store.getValue().getStackKind() != JavaKind.Object;
-        JavaKind valueKind = store.getKind();
-        ValueNode value = implicitStoreConvert(graph, valueKind, store.getValue(), false);
-        AddressNode address = graph.unique(new RawAddressNode(store.getAddress()));
-        WriteNode write = graph.add(new WriteNode(address, store.getLocationIdentity(), value, BarrierType.NONE));
         write.setStateAfter(store.stateAfter());
         graph.replaceFixedWithFixed(store, write);
     }

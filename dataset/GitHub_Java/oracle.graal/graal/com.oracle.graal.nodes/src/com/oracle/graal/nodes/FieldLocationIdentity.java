@@ -64,6 +64,6 @@ public class FieldLocationIdentity extends LocationIdentity implements FormatWit
 
     @Override
     public String toString() {
-        return inner.format("%h.%n") + (isImmutable() ? ":immutable" : "");
+        return inner.getName() + (isImmutable() ? ":immutable" : "");
     }
 }
