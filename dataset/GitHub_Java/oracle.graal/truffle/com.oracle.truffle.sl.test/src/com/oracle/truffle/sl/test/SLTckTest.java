@@ -99,10 +99,6 @@ public class SLTckTest extends TruffleTCK {
                 "}\n" +
                 "function returnsNull() {\n" +
                 "}\n" +
-                "function complexAdd(a, b) {\n" +
-                "  a.real = a.real + b.real;\n" +
-                "  a.imaginary = a.imaginary + b.imaginary;\n" +
-                "}\n" +
                 "function compoundObject() {\n" +
                 "  obj = new();\n" +
                 "  obj.fourtyTwo = fourtyTwo;\n" +
@@ -163,11 +159,6 @@ public class SLTckTest extends TruffleTCK {
     }
 
     @Override
-    protected String complexAdd() {
-        return "complexAdd";
-    }
-
-    @Override
     protected String multiplyCode(String firstName, String secondName) {
         // @formatter:off
         return
@@ -189,7 +180,7 @@ public class SLTckTest extends TruffleTCK {
 
     @Override
     protected String evaluateSource() {
-        return "eval";
+        return "interopEval";
     }
 
     //
