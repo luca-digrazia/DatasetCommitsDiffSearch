@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,361 +23,439 @@
 
 package com.oracle.graal.compiler.sparc;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.sparc.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.calc.ConvertNode.Op;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.java.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.FMOVDCC;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.FMOVSCC;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.MOVicc;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Fcc0;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Subcc;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fcmpd;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fcmps;
+import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
+import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
+import static jdk.vm.ci.sparc.SPARCKind.SINGLE;
+import static jdk.vm.ci.sparc.SPARCKind.WORD;
+import static jdk.vm.ci.sparc.SPARCKind.XWORD;
+
+import com.oracle.graal.asm.sparc.SPARCAssembler;
+import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
+import com.oracle.graal.asm.sparc.SPARCAssembler.CMOV;
+import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Op3s;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Opfs;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.calc.Condition;
+import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.compiler.common.spi.LIRKindTool;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LIRValueUtil;
+import com.oracle.graal.lir.LabelRef;
+import com.oracle.graal.lir.StandardOp.NoOp;
+import com.oracle.graal.lir.SwitchStrategy;
+import com.oracle.graal.lir.Variable;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.LIRGenerator;
+import com.oracle.graal.lir.sparc.SPARCAddressValue;
+import com.oracle.graal.lir.sparc.SPARCArrayEqualsOp;
+import com.oracle.graal.lir.sparc.SPARCByteSwapOp;
+import com.oracle.graal.lir.sparc.SPARCCall;
+import com.oracle.graal.lir.sparc.SPARCControlFlow;
+import com.oracle.graal.lir.sparc.SPARCControlFlow.BranchOp;
+import com.oracle.graal.lir.sparc.SPARCControlFlow.CondMoveOp;
+import com.oracle.graal.lir.sparc.SPARCControlFlow.ReturnOp;
+import com.oracle.graal.lir.sparc.SPARCControlFlow.StrategySwitchOp;
+import com.oracle.graal.lir.sparc.SPARCControlFlow.TableSwitchOp;
+import com.oracle.graal.lir.sparc.SPARCFloatCompareOp;
+import com.oracle.graal.lir.sparc.SPARCImmediateAddressValue;
+import com.oracle.graal.lir.sparc.SPARCJumpOp;
+import com.oracle.graal.lir.sparc.SPARCLoadConstantTableBaseOp;
+import com.oracle.graal.lir.sparc.SPARCMove.LoadOp;
+import com.oracle.graal.lir.sparc.SPARCMove.MembarOp;
+import com.oracle.graal.lir.sparc.SPARCMove.NullCheckOp;
+import com.oracle.graal.lir.sparc.SPARCMove.StackLoadAddressOp;
+import com.oracle.graal.lir.sparc.SPARCOP3Op;
+import com.oracle.graal.lir.sparc.SPARCPauseOp;
+import com.oracle.graal.phases.util.Providers;
+
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.meta.ValueKind;
+import jdk.vm.ci.sparc.SPARC;
+import jdk.vm.ci.sparc.SPARCKind;
 
 /**
  * This class implements the SPARC specific portion of the LIR generator.
  */
-public class SPARCLIRGenerator extends LIRGenerator {
+public abstract class SPARCLIRGenerator extends LIRGenerator {
 
-    public SPARCLIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, LIR lir) {
-        super(graph, runtime, target, frameMap, method, lir);
-        // SPARC: Implement lir generator.
+    private SPARCLoadConstantTableBaseOp loadConstantTableBaseOp;
+    private final ConstantTableBaseProvider constantTableBaseProvider;
+
+    public static final class ConstantTableBaseProvider {
+        private Variable constantTableBase;
+        private boolean useConstantTableBase = false;
+
+        public Variable getConstantTableBase() {
+            useConstantTableBase = true;
+            return constantTableBase;
+        }
+    }
+
+    public SPARCLIRGenerator(LIRKindTool lirKindTool, SPARCArithmeticLIRGenerator arithmeticLIRGen, MoveFactory moveFactory, Providers providers, LIRGenerationResult lirGenRes,
+                    ConstantTableBaseProvider constantTableBaseProvider) {
+        super(lirKindTool, arithmeticLIRGen, moveFactory, providers, lirGenRes);
+        this.constantTableBaseProvider = constantTableBaseProvider;
     }
 
     @Override
-    public Variable emitMove(Value input) {
-        // SPARC: Auto-generated method stub
-        return null;
+    protected JavaConstant zapValueForKind(PlatformKind kind) {
+        long dead = 0xDEADDEADDEADDEADL;
+        switch ((SPARCKind) kind) {
+            case BYTE:
+                return JavaConstant.forByte((byte) dead);
+            case HWORD:
+                return JavaConstant.forShort((short) dead);
+            case WORD:
+                return JavaConstant.forInt((int) dead);
+            case XWORD:
+                return JavaConstant.forLong(dead);
+            case SINGLE:
+            case V32_BYTE:
+            case V32_HWORD:
+                return JavaConstant.forFloat(Float.intBitsToFloat((int) dead));
+            case DOUBLE:
+            case V64_BYTE:
+            case V64_HWORD:
+            case V64_WORD:
+                return JavaConstant.forDouble(Double.longBitsToDouble(dead));
+            default:
+                throw new IllegalArgumentException(kind.toString());
+        }
+    }
+
+    /**
+     * The SPARC backend only uses WORD and DWORD values in registers because except to the ld/st
+     * instructions no instruction deals either with 32 or 64 bits. This function converts small
+     * integer kinds to WORD.
+     */
+    @Override
+    public <K extends ValueKind<K>> K toRegisterKind(K kind) {
+        switch ((SPARCKind) kind.getPlatformKind()) {
+            case BYTE:
+            case HWORD:
+                return kind.changeType(SPARCKind.WORD);
+            default:
+                return kind;
+        }
+    }
+
+    public SPARCAddressValue asAddressValue(Value address) {
+        if (address instanceof SPARCAddressValue) {
+            return (SPARCAddressValue) address;
+        } else {
+            ValueKind<?> kind = address.getValueKind();
+            if (address instanceof JavaConstant) {
+                long displacement = ((JavaConstant) address).asLong();
+                if (SPARCAssembler.isSimm13(displacement)) {
+                    return new SPARCImmediateAddressValue(kind, SPARC.g0.asValue(kind), (int) displacement);
+                }
+            }
+            return new SPARCImmediateAddressValue(kind, asAllocatable(address), 0);
+        }
     }
 
     @Override
-    protected boolean peephole(ValueNode valueNode) {
-        // SPARC: Auto-generated method stub
-        return false;
+    public Variable emitAddress(AllocatableValue stackslot) {
+        Variable result = newVariable(LIRKind.value(target().arch.getWordKind()));
+        append(new StackLoadAddressOp(result, stackslot));
+        return result;
     }
 
     @Override
-    protected void emitReturn(Value input) {
-        // SPARC: Auto-generated method stub
-
+    public void emitReturn(JavaKind javaKind, Value input) {
+        AllocatableValue operand = Value.ILLEGAL;
+        if (input != null) {
+            operand = resultOperandFor(javaKind, input.getValueKind());
+            emitMove(operand, input);
+        }
+        append(new ReturnOp(operand));
     }
 
     @Override
-    protected void emitNullCheckGuard(ValueNode object) {
-        // SPARC: Auto-generated method stub
-
+    public void emitJump(LabelRef label) {
+        append(new SPARCJumpOp(label));
     }
 
     @Override
-    public void emitJump(LabelRef label, LIRFrameState info) {
-        @SuppressWarnings("unused")
-        SPARCLIRInstruction instruction = null;
-        // SPARC: Auto-generated method stub
-
+    public void emitCompareBranch(PlatformKind cmpKind, Value x, Value y, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
+                    double trueDestinationProbability) {
+        Value left;
+        Value right;
+        Condition actualCondition;
+        if (isJavaConstant(x)) {
+            left = load(y);
+            right = loadNonConst(x);
+            actualCondition = cond.mirror();
+        } else {
+            left = load(x);
+            right = loadNonConst(y);
+            actualCondition = cond;
+        }
+        SPARCKind actualCmpKind = (SPARCKind) cmpKind;
+        if (actualCmpKind.isInteger()) {
+            assert actualCmpKind.equals(XWORD) || actualCmpKind.equals(WORD) : "SPARC does not support compare of: " + actualCmpKind;
+            append(new SPARCControlFlow.CompareBranchOp(left, right, actualCondition, trueDestination, falseDestination, actualCmpKind, unorderedIsTrue, trueDestinationProbability));
+        } else if (actualCmpKind.isFloat()) {
+            emitFloatCompare(actualCmpKind, x, y, Fcc0);
+            ConditionFlag cf = SPARCControlFlow.fromCondition(false, cond, unorderedIsTrue);
+            append(new SPARCControlFlow.BranchOp(cf, trueDestination, falseDestination, actualCmpKind, trueDestinationProbability));
+        } else {
+            throw GraalError.shouldNotReachHere();
+        }
     }
 
     @Override
-    public void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label, LIRFrameState info) {
-        // SPARC: Auto-generated method stub
-
+    public void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, LIRKind cmpLIRKind, double overflowProbability) {
+        SPARCKind cmpKind = (SPARCKind) cmpLIRKind.getPlatformKind();
+        append(new BranchOp(ConditionFlag.OverflowSet, overflow, noOverflow, cmpKind, overflowProbability));
     }
 
     @Override
-    public void emitIntegerTestBranch(Value left, Value right, boolean negated, LabelRef label, LIRFrameState info) {
-        // SPARC: Auto-generated method stub
+    public void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
+        emitIntegerTest(left, right);
+        append(new BranchOp(ConditionFlag.Equal, trueDestination, falseDestination, (SPARCKind) left.getPlatformKind(), trueDestinationProbability));
+    }
 
+    private void emitIntegerTest(Value a, Value b) {
+        assert ((SPARCKind) a.getPlatformKind()).isInteger();
+        if (LIRValueUtil.isVariable(b)) {
+            append(SPARCOP3Op.newBinaryVoid(Op3s.Andcc, load(b), loadNonConst(a)));
+        } else {
+            append(SPARCOP3Op.newBinaryVoid(Op3s.Andcc, load(a), loadNonConst(b)));
+        }
+    }
+
+    private Value loadSimm11(Value value) {
+        if (isJavaConstant(value)) {
+            JavaConstant c = asJavaConstant(value);
+            if (c.isNull() || SPARCAssembler.isSimm11(c)) {
+                return value;
+            }
+        }
+        return load(value);
     }
 
     @Override
-    public Variable emitConditionalMove(Value leftVal, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
-        // SPARC: Auto-generated method stub
-        return null;
+    public Variable emitConditionalMove(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
+        // Emit compare
+        SPARCKind cmpSPARCKind = (SPARCKind) cmpKind;
+        boolean mirrored = emitCompare(cmpSPARCKind, left, right);
+
+        // Emit move
+        Value actualTrueValue = trueValue;
+        Value actualFalseValue = falseValue;
+        SPARCKind valueKind = (SPARCKind) trueValue.getPlatformKind();
+        CMOV cmove;
+        if (valueKind.isFloat()) {
+            actualTrueValue = load(trueValue); // Floats cannot be immediate at all
+            actualFalseValue = load(falseValue);
+            cmove = valueKind.equals(SINGLE) ? FMOVSCC : FMOVDCC;
+        } else if (valueKind.isInteger()) {
+            actualTrueValue = loadSimm11(trueValue);
+            actualFalseValue = loadSimm11(falseValue);
+            cmove = MOVicc;
+        } else {
+            throw GraalError.shouldNotReachHere();
+        }
+        Variable result = newVariable(trueValue.getValueKind());
+        ConditionFlag finalCondition = SPARCControlFlow.fromCondition(cmpSPARCKind.isInteger(), mirrored ? cond.mirror() : cond, unorderedIsTrue);
+        CC cc = CC.forKind(cmpSPARCKind);
+        append(new CondMoveOp(cmove, cc, finalCondition, actualTrueValue, actualFalseValue, result));
+        return result;
+    }
+
+    /**
+     * This method emits the compare instruction, and may reorder the operands. It returns true if
+     * it did so.
+     *
+     * @param cmpKind Kind how a and b have to be compared
+     * @param a the left operand of the comparison
+     * @param b the right operand of the comparison
+     * @return true if the left and right operands were switched, false otherwise
+     */
+    protected boolean emitCompare(SPARCKind cmpKind, Value a, Value b) {
+        boolean mirrored;
+        if (cmpKind.isInteger()) { // Integer case
+            mirrored = emitIntegerCompare(cmpKind, a, b);
+        } else if (cmpKind.isFloat()) { // Float case
+            mirrored = false; // No mirroring done on floats
+            emitFloatCompare(cmpKind, a, b, Fcc0);
+        } else {
+            throw GraalError.shouldNotReachHere();
+        }
+        return mirrored;
+    }
+
+    private boolean emitIntegerCompare(SPARCKind cmpKind, Value a, Value b) {
+        boolean mirrored;
+        assert cmpKind.isInteger();
+        Value left;
+        Value right;
+        if (LIRValueUtil.isVariable(b)) {
+            left = load(b);
+            right = loadNonConst(a);
+            mirrored = true;
+        } else {
+            left = load(a);
+            right = loadNonConst(b);
+            mirrored = false;
+        }
+        int compareBytes = cmpKind.getSizeInBytes();
+        // SPARC compares 32 or 64 bits
+        if (compareBytes < left.getPlatformKind().getSizeInBytes()) {
+            left = arithmeticLIRGen.emitSignExtend(left, compareBytes * 8, XWORD.getSizeInBytes() * 8);
+        }
+        if (compareBytes < right.getPlatformKind().getSizeInBytes()) {
+            right = arithmeticLIRGen.emitSignExtend(right, compareBytes * 8, XWORD.getSizeInBytes() * 8);
+        }
+        append(SPARCOP3Op.newBinaryVoid(Subcc, left, right));
+        return mirrored;
+    }
+
+    private void emitFloatCompare(SPARCKind cmpJavaKind, Value a, Value b, CC cc) {
+        Opfs floatCompareOpcode;
+        assert cmpJavaKind.isFloat();
+        switch (cmpJavaKind) {
+            case DOUBLE:
+                floatCompareOpcode = Fcmpd;
+                break;
+            case SINGLE:
+                floatCompareOpcode = Fcmps;
+                break;
+            default:
+                throw GraalError.shouldNotReachHere();
+        }
+        append(new SPARCFloatCompareOp(floatCompareOpcode, cc, load(a), load(b)));
     }
 
     @Override
-    public Variable emitIntegerTestMove(Value leftVal, Value right, Value trueValue, Value falseValue) {
-        // SPARC: Auto-generated method stub
-        return null;
+    public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
+        emitIntegerTest(left, right);
+        Variable result = newVariable(trueValue.getValueKind());
+        ConditionFlag flag = SPARCControlFlow.fromCondition(true, Condition.EQ, false);
+        CC cc = CC.forKind(left.getPlatformKind());
+        append(new CondMoveOp(MOVicc, cc, flag, loadSimm11(trueValue), loadSimm11(falseValue), result));
+        return result;
     }
 
     @Override
-    protected void emitDirectCall(DirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-        // SPARC: Auto-generated method stub
-
+    protected void emitForeignCallOp(ForeignCallLinkage linkage, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
+        long maxOffset = linkage.getMaxCallTargetOffset();
+        if (SPARCAssembler.isWordDisp30(maxOffset)) {
+            append(new SPARCCall.DirectNearForeignCallOp(linkage, result, arguments, temps, info));
+        } else {
+            append(new SPARCCall.DirectFarForeignCallOp(linkage, result, arguments, temps, info));
+        }
     }
 
     @Override
-    protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-        // SPARC: Auto-generated method stub
-
+    public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
+        AllocatableValue scratchValue = newVariable(key.getValueKind());
+        AllocatableValue base = AllocatableValue.ILLEGAL;
+        for (Constant c : strategy.getKeyConstants()) {
+            if (!(c instanceof JavaConstant) || !getMoveFactory().canInlineConstant((JavaConstant) c)) {
+                base = constantTableBaseProvider.getConstantTableBase();
+                break;
+            }
+        }
+        append(createStrategySwitchOp(base, strategy, keyTargets, defaultTarget, key, scratchValue));
     }
 
-    @Override
-    protected void emitCall(RuntimeCallTarget callTarget, Value result, Value[] arguments, Value[] temps, Value targetAddress, LIRFrameState info) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info, Object deoptInfo) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    protected void emitSequentialSwitch(Constant[] keyConstants, LabelRef[] keyTargets, LabelRef defaultTarget, Value key) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    protected void emitSwitchRanges(int[] lowKeys, int[] highKeys, LabelRef[] targets, LabelRef defaultTarget, Value key) {
-        // SPARC: Auto-generated method stub
-
+    protected StrategySwitchOp createStrategySwitchOp(AllocatableValue base, SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Variable key, AllocatableValue scratchValue) {
+        return new StrategySwitchOp(base, strategy, keyTargets, defaultTarget, key, scratchValue);
     }
 
     @Override
     protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key) {
-        // SPARC: Auto-generated method stub
+        // Making a copy of the switch value is necessary because jump table destroys the input
+        // value
+        Variable tmp = newVariable(key.getValueKind());
+        emitMove(tmp, key);
+        append(new TableSwitchOp(lowKey, defaultTarget, targets, tmp, newVariable(LIRKind.value(target().arch.getWordKind()))));
+    }
 
+    protected SPARC getArchitecture() {
+        return (SPARC) target().arch;
     }
 
     @Override
-    public void emitBitCount(Variable result, Value operand) {
-        // SPARC: Auto-generated method stub
-
+    public Variable emitByteSwap(Value input) {
+        Variable result = newVariable(LIRKind.combine(input));
+        append(new SPARCByteSwapOp(this, result, input));
+        return result;
     }
 
     @Override
-    public void emitBitScanForward(Variable result, Value operand) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void emitBitScanReverse(Variable result, Value operand) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void emitMathAbs(Variable result, Variable input) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void emitMathSqrt(Variable result, Variable input) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void emitMathLog(Variable result, Variable input, boolean base10) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void emitMathCos(Variable result, Variable input) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void emitMathSin(Variable result, Variable input) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void emitMathTan(Variable result, Variable input) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void emitByteSwap(Variable result, Value operand) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public boolean canInlineConstant(Constant c) {
-        // SPARC: Auto-generated method stub
-        return false;
-    }
-
-    @Override
-    public boolean canStoreConstant(Constant c) {
-        // SPARC: Auto-generated method stub
-        return false;
-    }
-
-    @Override
-    public Address makeAddress(Kind kind, Value base, int displacement) {
-        return null;
-    }
-
-    @Override
-    public Address makeAddress(LocationNode location, ValueNode object) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public void emitMove(Value src, Value dst) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public Value emitLoad(Value loadAddress, boolean canTrap) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public void emitStore(Value storeAddress, Value input, boolean canTrap) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public Value emitLea(Value address) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitNegate(Value input) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitAdd(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitSub(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitMul(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitDiv(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitRem(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitUDiv(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitURem(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitAnd(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitOr(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitXor(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitShl(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitShr(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitUShr(Value a, Value b) {
-        // SPARC: Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Value emitConvert(Op opcode, Value inputVal) {
-        // SPARC: Auto-generated method stub
-        return null;
+    public Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length) {
+        Variable result = newVariable(LIRKind.value(SPARCKind.WORD));
+        append(new SPARCArrayEqualsOp(this, kind, result, load(array1), load(array2), asAllocatable(length)));
+        return result;
     }
 
     @Override
     public void emitMembar(int barriers) {
-        // SPARC: Auto-generated method stub
-
+        int necessaryBarriers = target().arch.requiredBarriers(barriers);
+        if (target().isMP && necessaryBarriers != 0) {
+            append(new MembarOp(necessaryBarriers));
+        }
     }
 
     @Override
-    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
-        // SPARC: Auto-generated method stub
+    public void emitDeoptimize(Value actionAndReason, Value speculation, LIRFrameState state) {
+        append(new ReturnOp(Value.ILLEGAL));
+    }
 
+    public Value emitSignExtendLoad(LIRKind kind, LIRKind resultKind, Value address, LIRFrameState state) {
+        SPARCAddressValue loadAddress = asAddressValue(address);
+        Variable result = newVariable(resultKind);
+        append(new LoadOp(kind.getPlatformKind(), result, loadAddress, state, true));
+        return result;
+    }
+
+    public Value emitZeroExtendLoad(LIRKind kind, LIRKind resultKind, Value address, LIRFrameState state) {
+        SPARCAddressValue loadAddress = asAddressValue(address);
+        Variable result = newVariable(resultKind);
+        append(new LoadOp(kind.getPlatformKind(), result, loadAddress, state));
+        return result;
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
-        // SPARC: Auto-generated method stub
+    public void emitNullCheck(Value address, LIRFrameState state) {
+        PlatformKind kind = address.getPlatformKind();
+        assert kind == XWORD : address + " - " + kind + " not an object!";
+        append(new NullCheckOp(asAddressValue(address), state));
+    }
 
+    public void emitLoadConstantTableBase() {
+        constantTableBaseProvider.constantTableBase = newVariable(LIRKind.value(XWORD));
+        int nextPosition = getResult().getLIR().getLIRforBlock(getCurrentBlock()).size();
+        NoOp placeHolder = append(new NoOp(getCurrentBlock(), nextPosition));
+        loadConstantTableBaseOp = new SPARCLoadConstantTableBaseOp(constantTableBaseProvider.constantTableBase, placeHolder);
     }
 
     @Override
-    public void visitCompareAndSwap(CompareAndSwapNode i) {
-        // SPARC: Auto-generated method stub
-
+    public void beforeRegisterAllocation() {
+        LIR lir = getResult().getLIR();
+        loadConstantTableBaseOp.setAlive(lir, constantTableBaseProvider.useConstantTableBase);
     }
 
     @Override
-    public void visitExceptionObject(ExceptionObjectNode i) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void visitSafepointNode(SafepointNode i) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void visitBreakpointNode(BreakpointNode i) {
-        // SPARC: Auto-generated method stub
-
+    public void emitPause() {
+        append(new SPARCPauseOp());
     }
 }
