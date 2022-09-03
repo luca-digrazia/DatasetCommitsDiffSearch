@@ -25,9 +25,7 @@
 package com.oracle.svm.hosted.substitute;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
 
-import com.oracle.graal.pointsto.infrastructure.OriginalFieldProvider;
 import com.oracle.svm.core.meta.ReadableJavaField;
 import com.oracle.svm.hosted.c.GraalAccess;
 
@@ -36,25 +34,14 @@ import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-public class SubstitutionField implements ReadableJavaField, OriginalFieldProvider {
+public class SubstitutionField implements ReadableJavaField {
 
     private final ResolvedJavaField original;
     private final ResolvedJavaField annotated;
 
-    /**
-     * This field is used in the {@link com.oracle.svm.hosted.SubstitutionReportFeature} class to
-     * determine {@link SubstitutionMethod} objects which correspond to annotated substitutions.
-     */
-    private final boolean isUserSubstitution;
-
     public SubstitutionField(ResolvedJavaField original, ResolvedJavaField annotated) {
-        this(original, annotated, false);
-    }
-
-    public SubstitutionField(ResolvedJavaField original, ResolvedJavaField annotated, boolean isUserSubstitution) {
         this.original = original;
         this.annotated = annotated;
-        this.isUserSubstitution = isUserSubstitution;
     }
 
     @Override
@@ -79,18 +66,6 @@ public class SubstitutionField implements ReadableJavaField, OriginalFieldProvid
             value = ReadableJavaField.readFieldValue(GraalAccess.getOriginalProviders().getConstantReflection(), annotated, receiver);
         }
         return value;
-    }
-
-    public boolean isUserSubstitution() {
-        return isUserSubstitution;
-    }
-
-    public ResolvedJavaField getOriginal() {
-        return original;
-    }
-
-    public ResolvedJavaField getAnnotated() {
-        return annotated;
     }
 
     @Override
@@ -141,10 +116,5 @@ public class SubstitutionField implements ReadableJavaField, OriginalFieldProvid
     @Override
     public Annotation[] getDeclaredAnnotations() {
         return annotated.getDeclaredAnnotations();
-    }
-
-    @Override
-    public Field getJavaField() {
-        return OriginalFieldProvider.getJavaField(GraalAccess.getOriginalSnippetReflection(), original);
     }
 }
