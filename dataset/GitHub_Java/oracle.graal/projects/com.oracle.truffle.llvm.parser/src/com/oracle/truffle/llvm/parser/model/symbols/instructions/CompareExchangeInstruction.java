@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,18 +29,18 @@
  */
 package com.oracle.truffle.llvm.parser.model.symbols.instructions;
 
+import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.SymbolTable;
 import com.oracle.truffle.llvm.parser.model.enums.AtomicOrdering;
 import com.oracle.truffle.llvm.parser.model.enums.SynchronizationScope;
 import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
-import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.parser.model.Symbol;
+import com.oracle.truffle.llvm.runtime.types.AggregateType;
 
 public final class CompareExchangeInstruction extends ValueInstruction {
 
-    private Symbol ptr;
-    private Symbol cmp;
-    private Symbol replace;
+    private SymbolImpl ptr;
+    private SymbolImpl cmp;
+    private SymbolImpl replace;
 
     private final AtomicOrdering successOrdering;
     private final AtomicOrdering failureOrdering;
@@ -49,7 +49,8 @@ public final class CompareExchangeInstruction extends ValueInstruction {
     private final boolean isWeak;
     private final boolean isVolatile;
 
-    private CompareExchangeInstruction(Type type, AtomicOrdering successOrdering, AtomicOrdering failureOrdering, SynchronizationScope synchronizationScope, boolean isWeak, boolean isVolatile) {
+    private CompareExchangeInstruction(AggregateType type, AtomicOrdering successOrdering, AtomicOrdering failureOrdering, SynchronizationScope synchronizationScope, boolean isWeak,
+                    boolean isVolatile) {
         super(type);
         this.successOrdering = successOrdering;
         this.failureOrdering = failureOrdering;
@@ -58,16 +59,21 @@ public final class CompareExchangeInstruction extends ValueInstruction {
         this.isVolatile = isVolatile;
     }
 
-    public Symbol getPtr() {
+    public SymbolImpl getPtr() {
         return ptr;
     }
 
-    public Symbol getCmp() {
+    public SymbolImpl getCmp() {
         return cmp;
     }
 
-    public Symbol getReplace() {
+    public SymbolImpl getReplace() {
         return replace;
+    }
+
+    @Override
+    public AggregateType getType() {
+        return (AggregateType) super.getType();
     }
 
     public AtomicOrdering getSuccessOrdering() {
@@ -91,7 +97,7 @@ public final class CompareExchangeInstruction extends ValueInstruction {
     }
 
     @Override
-    public void replace(Symbol original, Symbol replacement) {
+    public void replace(SymbolImpl original, SymbolImpl replacement) {
         if (original == ptr) {
             ptr = replacement;
         }
@@ -108,8 +114,8 @@ public final class CompareExchangeInstruction extends ValueInstruction {
         visitor.visit(this);
     }
 
-    public static CompareExchangeInstruction fromSymbols(SymbolTable symbols, Type type, int ptr, int cmp, int replace, boolean isVolatile, long successOrderingId, long synchronizationScopeId,
-                    long failureOrderingId, boolean isWeak) {
+    public static CompareExchangeInstruction fromSymbols(SymbolTable symbols, AggregateType type, int ptr, int cmp, int replace, boolean isVolatile, long successOrderingId,
+                    long synchronizationScopeId, long failureOrderingId, boolean isWeak) {
         final AtomicOrdering successOrdering = AtomicOrdering.decode(successOrderingId);
         final SynchronizationScope synchronizationScope = SynchronizationScope.decode(synchronizationScopeId);
         final AtomicOrdering failureOrdering = AtomicOrdering.getOrStrongestFailureOrdering(failureOrderingId, successOrdering);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,195 +32,304 @@ package com.oracle.truffle.llvm.nodes.control;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
+import com.oracle.truffle.api.instrumentation.GenerateWrapper;
+import com.oracle.truffle.api.instrumentation.InstrumentableNode;
+import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMBasicBlockNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMFunctionNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMTerminatorNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVM80BitFloatNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMIVarBitNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMVectorNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.types.LLVMIVarBit;
-import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.types.memory.LLVMHeap;
-import com.oracle.truffle.llvm.types.vector.LLVMVector;
+import com.oracle.truffle.llvm.nodes.func.LLVMArgNode;
+import com.oracle.truffle.llvm.nodes.func.LLVMArgNodeGen;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
-@NodeField(name = "retSlot", type = FrameSlot.class)
-public abstract class LLVMRetNode extends LLVMTerminatorNode {
+@GenerateWrapper
+public abstract class LLVMRetNode extends LLVMControlFlowNode implements InstrumentableNode {
 
-    public static final int RETURN_FROM_FUNCTION = -1;
-
-    public LLVMRetNode() {
-        super(RETURN_FROM_FUNCTION);
+    public LLVMRetNode(LLVMSourceLocation sourceSection) {
+        super(sourceSection);
     }
 
-    public abstract FrameSlot getRetSlot();
+    protected LLVMRetNode(LLVMRetNode delegate) {
+        super(delegate.getSourceLocation());
+    }
 
-    @NodeChild(value = "retResult", type = LLVMI1Node.class)
+    @Override
+    public WrapperNode createWrapper(ProbeNode probe) {
+        return new LLVMRetNodeWrapper(this, this, probe);
+    }
+
+    @GenerateWrapper.OutgoingConverter
+    Object convertOutgoing(@SuppressWarnings("unused") Object object) {
+        return null;
+    }
+
+    @Override
+    public boolean isInstrumentable() {
+        return getSourceLocation() != null;
+    }
+
+    @Override
+    public int getSuccessorCount() {
+        return 1;
+    }
+
+    public int getSuccessor() {
+        return LLVMBasicBlockNode.RETURN_FROM_FUNCTION;
+    }
+
+    @Override
+    public LLVMStatementNode getPhiNode(int successorIndex) {
+        assert successorIndex == 0;
+        return null;
+    }
+
+    public abstract Object execute(VirtualFrame frame);
+
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVMI1RetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, boolean retResult) {
-            frame.setBoolean(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMI1RetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(boolean retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVMI8Node.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVMI8RetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, byte retResult) {
-            frame.setByte(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMI8RetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(byte retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVMI16Node.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVMI16RetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, short retResult) {
-            frame.setInt(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMI16RetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(short retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVMI32Node.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVMI32RetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, int retResult) {
-            frame.setInt(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMI32RetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(int retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVMI64Node.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVMI64RetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, long retResult) {
-            frame.setLong(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMI64RetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(long retResult) {
+            return retResult;
+        }
+
+        @Specialization
+        protected Object doOp(LLVMPointer retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVMIVarBitNode.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVMIVarBitRetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, LLVMIVarBit retResult) {
-            frame.setObject(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMIVarBitRetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(LLVMIVarBit retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVMFloatNode.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVMFloatRetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, float retResult) {
-            frame.setFloat(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMFloatRetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(float retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVMDoubleNode.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVMDoubleRetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, double retResult) {
-            frame.setDouble(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMDoubleRetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(double retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVM80BitFloatNode.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVM80BitFloatRetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, LLVM80BitFloat retResult) {
-            frame.setObject(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVM80BitFloatRetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(LLVM80BitFloat retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVMAddressNode.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVMAddressRetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, Object retResult) {
-            frame.setObject(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMAddressRetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(Object retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVMFunctionNode.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVMFunctionRetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, LLVMFunctionDescriptor retResult) {
-            frame.setObject(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMFunctionRetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(LLVMPointer retResult) {
+            return retResult;
+        }
+
+        @Specialization
+        protected Object doOp(LLVMFunctionDescriptor retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVMVectorNode.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
     public abstract static class LLVMVectorRetNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, LLVMVector<?> retResult) {
-            frame.setObject(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMVectorRetNode(LLVMSourceLocation sourceSection) {
+            super(sourceSection);
         }
 
+        @Specialization
+        protected Object doOp(LLVMDoubleVector retResult) {
+            return retResult;
+        }
+
+        @Specialization
+        protected Object doOp(LLVMFloatVector retResult) {
+            return retResult;
+        }
+
+        @Specialization
+        protected Object doOp(LLVMI16Vector retResult) {
+            return retResult;
+        }
+
+        @Specialization
+        protected Object doOp(LLVMI1Vector retResult) {
+            return retResult;
+        }
+
+        @Specialization
+        protected Object doOp(LLVMI32Vector retResult) {
+            return retResult;
+        }
+
+        @Specialization
+        protected Object doOp(LLVMI64Vector retResult) {
+            return retResult;
+        }
+
+        @Specialization
+        protected Object doOp(LLVMI8Vector retResult) {
+            return retResult;
+        }
     }
 
-    @NodeChild(value = "retResult", type = LLVMAddressNode.class)
-    @NodeField(name = "structSize", type = int.class)
+    @NodeChild(value = "retResult", type = LLVMExpressionNode.class)
+    @NodeField(name = "structSize", type = long.class)
     public abstract static class LLVMStructRetNode extends LLVMRetNode {
 
-        public abstract int getStructSize();
+        @Child private LLVMArgNode argIdx1 = LLVMArgNodeGen.create(1);
+        @Child private LLVMMemMoveNode memMove;
 
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, LLVMAddress retResult) {
-            LLVMAddress retStructAddress = (LLVMAddress) FrameUtil.getObjectSafe(frame, getRetSlot());
-            LLVMHeap.memCopy(retStructAddress, retResult, getStructSize());
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public abstract long getStructSize();
+
+        public LLVMStructRetNode(LLVMSourceLocation source, LLVMMemMoveNode memMove) {
+            super(source);
+            this.memMove = memMove;
         }
 
+        @Specialization
+        protected Object doOp(VirtualFrame frame, LLVMPointer retResult) {
+            return returnStruct(frame, retResult);
+        }
+
+        private Object returnStruct(VirtualFrame frame, Object retResult) {
+            Object retStructAddress = argIdx1.executeGeneric(frame);
+            memMove.executeWithTarget(retStructAddress, retResult, getStructSize());
+            return retStructAddress;
+        }
     }
 
     public abstract static class LLVMVoidReturnNode extends LLVMRetNode {
 
-        @Specialization
-        public int executeGetSuccessorIndex() {
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
+        public LLVMVoidReturnNode(LLVMSourceLocation source) {
+            super(source);
         }
 
+        @Specialization
+        protected Object doOp() {
+            return null;
+        }
     }
-
 }
