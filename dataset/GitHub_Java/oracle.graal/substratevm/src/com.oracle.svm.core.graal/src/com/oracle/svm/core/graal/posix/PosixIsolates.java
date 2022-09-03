@@ -30,10 +30,10 @@ import static com.oracle.svm.core.posix.headers.Mman.PROT_WRITE;
 
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Isolate;
+import org.graalvm.nativeimage.c.function.CEntryPointContext;
 import org.graalvm.nativeimage.c.type.WordPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
-import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Uninterruptible;
@@ -97,7 +97,7 @@ public class PosixIsolates {
          * another isolate unmaps a chunk at that location.
          */
         long pageSize = Unistd.NoTransitions.sysconf(Unistd._SC_PAGE_SIZE());
-        Pointer heap = Mman.NoTransitions.mmap(WordFactory.pointer(pageSize), size, PROT_READ() | PROT_WRITE(), MAP_ANON() | MAP_PRIVATE(), -1, 0);
+        Pointer heap = Mman.NoTransitions.mmap(Word.pointer(pageSize), size, PROT_READ() | PROT_WRITE(), MAP_ANON() | MAP_PRIVATE(), -1, 0);
         if (heap.equal(MAP_FAILED())) {
             return Errors.HEAP_CLONE_FAILED;
         }
@@ -112,5 +112,17 @@ public class PosixIsolates {
             return IMAGE_HEAP_BEGIN.get();
         }
         return isolate;
+    }
+
+    @Uninterruptible(reason = "Tear-down in progress.")
+    public static int tearDownCurrent() {
+        if (SubstrateOptions.SpawnIsolates.getValue()) {
+            PointerBase heapBase = getHeapBase(CEntryPointContext.getCurrentIsolate());
+            Word size = IMAGE_HEAP_END.get().subtract(IMAGE_HEAP_BEGIN.get());
+            if (Mman.NoTransitions.munmap(heapBase, size) != 0) {
+                return Errors.UNSPECIFIED;
+            }
+        }
+        return Errors.NO_ERROR;
     }
 }

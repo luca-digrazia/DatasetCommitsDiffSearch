@@ -159,7 +159,7 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
     @Uninterruptible(reason = "Called by an uninterruptible method.")
     private static void setHeapBase(PointerBase heapBase) {
         assert UseHeapBaseRegister.getValue();
-        writeCurrentVMHeapBase(hasHeapBase() ? heapBase : WordFactory.nullPointer());
+        writeCurrentVMHeapBase(hasHeapBase() ? heapBase : Word.nullPointer());
     }
 
     @Snippet
@@ -174,7 +174,7 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
     @SubstrateForeignCallTarget
     private static int createIsolate(CEntryPointCreateIsolateParameters parameters, int vmThreadSize) {
         WordPointer isolate = StackValue.get(SizeOf.get(WordPointer.class));
-        isolate.write(WordFactory.nullPointer());
+        isolate.write(Word.nullPointer());
         int error = PosixIsolates.create(isolate, parameters);
         if (error != Errors.NO_ERROR) {
             return error;
@@ -283,7 +283,12 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
 
     @SubstrateForeignCallTarget
     private static int tearDownIsolate() {
-        return JavaThreads.singleton().tearDownVM() ? Errors.NO_ERROR : Errors.UNSPECIFIED;
+        boolean success = JavaThreads.singleton().tearDownVM();
+        if (!success) {
+            return Errors.UNSPECIFIED;
+        }
+        PosixVMThreads.finishTearDown();
+        return PosixIsolates.tearDownCurrent();
     }
 
     @Snippet
