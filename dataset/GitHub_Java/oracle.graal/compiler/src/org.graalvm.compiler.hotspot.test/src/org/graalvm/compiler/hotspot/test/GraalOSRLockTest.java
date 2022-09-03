@@ -56,13 +56,16 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
     private static boolean TestInSeparateThread = false;
     private static final String COMPILE_ONLY_FLAG = "-Xcomp";
 
-    @BeforeClass
-    public static void checkVMArguments() {
+    public GraalOSRLockTest() {
         try {
             Class.forName("java.lang.management.ManagementFactory");
         } catch (ClassNotFoundException ex) {
             Assume.assumeNoException("cannot check for monitors without java.management JDK9 module", ex);
         }
+    }
+
+    @BeforeClass
+    public static void checkVMArguments() {
         /*
          * Note: The -Xcomp execution mode of the VM will stop most of the OSR test cases from
          * working as every method is compiled at level3 (followed by level4 on the second
