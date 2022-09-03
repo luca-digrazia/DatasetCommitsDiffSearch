@@ -24,6 +24,8 @@ package com.oracle.graal.truffle;
 
 import java.util.Objects;
 
+import jdk.vm.ci.meta.SpeculationLog;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.ReplaceObserver;
@@ -38,8 +40,6 @@ import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.nodes.RootNode;
-
-import jdk.vm.ci.meta.SpeculationLog;
 
 /**
  * Loop node implementation that supports on-stack-replacement with compiled code.
@@ -383,8 +383,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
     private static final class OptimizedVirtualizingOSRLoopNode extends OptimizedOSRLoopNode {
 
         private final int invalidationBackoff;
-        @CompilationFinal(dimensions = 1) private final FrameSlot[] readFrameSlots;
-        @CompilationFinal(dimensions = 1) private final FrameSlot[] writtenFrameSlots;
+        @CompilationFinal private final FrameSlot[] readFrameSlots;
+        @CompilationFinal private final FrameSlot[] writtenFrameSlots;
 
         private VirtualizingOSRRootNode previousRoot;
 
@@ -462,11 +462,11 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
     private static final class VirtualizingOSRRootNode extends OSRRootNode {
 
-        @CompilationFinal(dimensions = 1) private final FrameSlot[] readFrameSlots;
-        @CompilationFinal(dimensions = 1) private final FrameSlot[] writtenFrameSlots;
+        @CompilationFinal private final FrameSlot[] readFrameSlots;
+        @CompilationFinal private final FrameSlot[] writtenFrameSlots;
 
-        @CompilationFinal(dimensions = 1) private final byte[] readFrameSlotsTags;
-        @CompilationFinal(dimensions = 1) private final byte[] writtenFrameSlotsTags;
+        @CompilationFinal private final byte[] readFrameSlotsTags;
+        @CompilationFinal private final byte[] writtenFrameSlotsTags;
         private final int maxTagsLength;
 
         VirtualizingOSRRootNode(VirtualizingOSRRootNode previousRoot, OptimizedOSRLoopNode loop, @SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> truffleLanguage,
