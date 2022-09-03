@@ -122,8 +122,8 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     }
 
     public void setTrueSuccessorProbability(double prob) {
-        assert prob >= -0.000000001 && prob <= 1.000000001 : "Probability out of bounds: " + prob;
-        trueSuccessorProbability = Math.min(1.0, Math.max(0.0, prob));
+        assert prob >= 0.0 && prob <= 1.0 : "Probability out of bounds: " + prob;
+        trueSuccessorProbability = prob;
     }
 
     @Override
@@ -151,12 +151,12 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             if (c.getValue()) {
                 tool.deleteBranch(falseSuccessor());
                 tool.addToWorkList(trueSuccessor());
-                graph().removeSplit(this, trueSuccessor());
+                ((StructuredGraph) graph()).removeSplit(this, trueSuccessor());
                 return;
             } else {
                 tool.deleteBranch(trueSuccessor());
                 tool.addToWorkList(falseSuccessor());
-                graph().removeSplit(this, falseSuccessor());
+                ((StructuredGraph) graph()).removeSplit(this, falseSuccessor());
                 return;
             }
         } else if (trueSuccessor().usages().isEmpty() && falseSuccessor().usages().isEmpty()) {
@@ -354,7 +354,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                         }
                         if (trueValue.isConstant() && falseValue.isConstant()) {
                             ConditionalNode materialize = graph().unique(new ConditionalNode(condition(), trueValue, falseValue));
-                            graph().replaceFloating(singlePhi, materialize);
+                            ((StructuredGraph) graph()).replaceFloating(singlePhi, materialize);
                             removeEmptyIf(tool);
                             return true;
                         }
