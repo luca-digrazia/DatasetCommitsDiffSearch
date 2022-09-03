@@ -158,7 +158,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
                 try (Scope s = Debug.scope("Allocator")) {
 
                     if (backend.shouldAllocateRegisters()) {
-                        GraalCompiler.runLinearScan(target, lir, frameMap);
+                        new LinearScan(target, lir, frameMap).allocate();
                     }
                 } catch (Throwable e) {
                     throw Debug.handle(e);
