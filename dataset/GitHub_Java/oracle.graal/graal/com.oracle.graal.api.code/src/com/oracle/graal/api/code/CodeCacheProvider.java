@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.api.code;
 
-import com.oracle.graal.api.code.CompilationResult.DataPatch;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
+import com.oracle.graal.api.code.RuntimeCall.Descriptor;
 import com.oracle.graal.api.meta.*;
 
 /**
@@ -39,7 +38,7 @@ public interface CodeCacheProvider extends MetaAccessProvider {
      * @param compResult the compilation result to be added
      * @param info the object into which details of the installed code will be written. Ignored if null, otherwise the
      *            info is written to index 0 of this array.
-     * @return a reference to the compiled and ready-to-run code or null if the code installation failed
+     * @return a reference to the compiled and ready-to-run code
      */
     InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, CodeInfo[] info);
 
@@ -61,7 +60,7 @@ public interface CodeCacheProvider extends MetaAccessProvider {
      *
      * @param method the top level method of a compilation
      */
-    RegisterConfig lookupRegisterConfig(ResolvedJavaMethod method);
+    RegisterConfig lookupRegisterConfig(JavaMethod method);
 
     /**
      * Custom area on the stack of each compiled method that the VM can use for its own purposes.
@@ -81,12 +80,12 @@ public interface CodeCacheProvider extends MetaAccessProvider {
     /**
      * Performs any runtime-specific conversion on the object used to describe the target of a call.
      */
-    Object lookupCallTarget(Object callTarget);
+    Object lookupCallTarget(Object target);
 
     /**
      * Gets the signature and linkage information for a runtime call.
      */
-    RuntimeCallTarget lookupRuntimeCall(Descriptor descriptor);
+    RuntimeCall lookupRuntimeCall(Descriptor descriptor);
 
     /**
      * Encodes a deoptimization action and a deoptimization reason in an integer value.
@@ -94,11 +93,4 @@ public interface CodeCacheProvider extends MetaAccessProvider {
      * @return the encoded value as an integer
      */
     int encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason);
-
-    /**
-     * Determines if a {@link DataPatch} should be created for a given {@linkplain Constant#getPrimitiveAnnotation() annotated}
-     * primitive constant that part of a {@link CompilationResult}. A data patch is always
-     * created for an object constant.
-     */
-    boolean needsDataPatch(Constant constant);
 }
