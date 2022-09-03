@@ -42,41 +42,28 @@ public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
 
     private IdealGraphPrinter printer;
     private List<RiResolvedMethod> previousInlineContext = new ArrayList<>();
-    private String fileName;
-    private String host;
-    private int port;
-    private boolean initialized;
 
     /**
      * Creates a new {@link IdealGraphPrinterDumpHandler} that writes output to a file named after the compiled method.
      */
     public IdealGraphPrinterDumpHandler() {
-        this.fileName = DEFAULT_FILE_NAME;
+        initializeFilePrinter(DEFAULT_FILE_NAME);
+        begin();
     }
 
     /**
      * Creates a new {@link IdealGraphPrinterDumpHandler} that sends output to a remote IdealGraphVisualizer instance.
      */
     public IdealGraphPrinterDumpHandler(String host, int port) {
-        this.host = host;
-        this.port = port;
+        initializeNetworkPrinter(host, port);
+        begin();
     }
 
-
-
-    private void ensureInitialized() {
-        if (!initialized) {
-            initialized = true;
-            if (fileName != null) {
-                initializeFilePrinter();
-            } else {
-                initializeNetworkPrinter();
-            }
-            printer.begin();
-        }
+    private void begin() {
+        printer.begin();
     }
 
-    private void initializeFilePrinter() {
+    private void initializeFilePrinter(String fileName) {
         try {
             FileOutputStream stream = new FileOutputStream(fileName);
             printer = new IdealGraphPrinter(stream);
@@ -85,7 +72,7 @@ public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
         }
     }
 
-    private void initializeNetworkPrinter() {
+    private void initializeNetworkPrinter(String host, int port) {
         try  {
             Socket socket = new Socket(host, port);
             BufferedOutputStream stream = new BufferedOutputStream(socket.getOutputStream(), 0x4000);
@@ -99,7 +86,6 @@ public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
     @Override
     public void dump(Object object, final String message) {
         if (object instanceof Graph) {
-            ensureInitialized();
             final Graph graph = (Graph) object;
 
             if (printer.isValid()) {

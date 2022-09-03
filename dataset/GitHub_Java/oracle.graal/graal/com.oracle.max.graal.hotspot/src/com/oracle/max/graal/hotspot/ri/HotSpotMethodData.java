@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.hotspot.ri;
 
-import java.util.*;
-
 import sun.misc.*;
 
 import com.oracle.max.cri.ri.*;
@@ -72,12 +70,6 @@ public final class HotSpotMethodData extends CompilerObject {
     }
 
     public boolean isMature() {
-        // TODO (ch) maturity of profiling information is an issue in general. Not all optimizations require mature data as long as the code
-        // does deoptimize/recompile on violations (might decrease startup and increase peak performance).
-        // Maturity is currently used on several levels:
-        // 1) whole method data
-        // 2) individual branch/switch profiling data
-        // 3) MatureInvocationCount for eliminating exception edges
         if (!mature) {
             mature = compiler.getVMEntries().HotSpotMethodData_isMature(this);
         }
@@ -163,7 +155,7 @@ public final class HotSpotMethodData extends CompilerObject {
     }
 
     private abstract static class AbstractMethodData implements HotSpotMethodDataAccessor {
-        private static final int EXCEPTIONS_MASK = 0x80;
+        private static final int IMPLICIT_EXCEPTIONS_MASK = 0x0E;
 
         private final int tag;
         private final int staticSize;
@@ -192,8 +184,9 @@ public final class HotSpotMethodData extends CompilerObject {
         }
 
         @Override
-        public boolean getExceptionSeen(HotSpotMethodData data, int position) {
-            return (getFlags(data, position) & EXCEPTIONS_MASK) != 0;
+        public boolean getImplicitExceptionSeen(HotSpotMethodData data, int position) {
+            // TODO (ch) might return true too often because flags are also used for deoptimization reasons
+            return (getFlags(data, position) & IMPLICIT_EXCEPTIONS_MASK) != 0;
         }
 
         @Override
@@ -240,7 +233,7 @@ public final class HotSpotMethodData extends CompilerObject {
 
 
         @Override
-        public boolean getExceptionSeen(HotSpotMethodData data, int position) {
+        public boolean getImplicitExceptionSeen(HotSpotMethodData data, int position) {
             return false;
         }
     }
@@ -317,7 +310,7 @@ public final class HotSpotMethodData extends CompilerObject {
         }
     }
 
-    private abstract static class AbstractTypeData extends CounterData {
+    private static class AbstractTypeData extends CounterData {
         private static final int RECEIVER_TYPE_DATA_ROW_SIZE = cellsToBytes(2);
         private static final int RECEIVER_TYPE_DATA_SIZE = cellIndexToOffset(1) + RECEIVER_TYPE_DATA_ROW_SIZE * config.typeProfileWidth;
         private static final int RECEIVER_TYPE_DATA_FIRST_RECEIVER_OFFSET = cellIndexToOffset(1);
@@ -329,6 +322,8 @@ public final class HotSpotMethodData extends CompilerObject {
 
         @Override
         public RiTypeProfile getTypeProfile(HotSpotMethodData data, int position) {
+            // TODO (ch) detect polymorphic case and return null and document interface accordingly
+            // is it really the best solution to return null?
             int typeProfileWidth = config.typeProfileWidth;
 
             RiResolvedType[] sparseTypes = new RiResolvedType[typeProfileWidth];
@@ -355,11 +350,8 @@ public final class HotSpotMethodData extends CompilerObject {
                 }
             }
 
-            totalCount += getTypesNotRecordedExecutionCount(data, position);
             return createRiTypeProfile(sparseTypes, counts, totalCount, entries);
         }
-
-        protected abstract long getTypesNotRecordedExecutionCount(HotSpotMethodData data, int position);
 
         private static RiTypeProfile createRiTypeProfile(RiResolvedType[] sparseTypes, double[] counts, long totalCount, int entries) {
             RiResolvedType[] types;
@@ -368,22 +360,19 @@ public final class HotSpotMethodData extends CompilerObject {
             if (entries <= 0) {
                 return null;
             } else if (entries < sparseTypes.length) {
-                types = Arrays.copyOf(sparseTypes, entries);
+                RiResolvedType[] compactedTypes = new RiResolvedType[entries];
+                System.arraycopy(sparseTypes, 0, compactedTypes, 0, entries);
+                types = compactedTypes;
                 probabilities = new double[entries];
             } else {
                 types = sparseTypes;
                 probabilities = counts;
             }
 
-            double totalProbability = 0.0;
             for (int i = 0; i < entries; i++) {
-                double p = counts[i] / totalCount;
-                probabilities[i] = p;
-                totalProbability += p;
+                probabilities[i] = counts[i] / totalCount;
             }
-
-            double notRecordedTypeProbability = entries < config.typeProfileWidth ? 0.0 : Math.min(1.0, Math.max(0.0, 1.0 - totalProbability));
-            return new RiTypeProfile(types, notRecordedTypeProbability, probabilities);
+            return new RiTypeProfile(types, probabilities);
         }
 
         private static int getReceiverOffset(int row) {
@@ -406,12 +395,6 @@ public final class HotSpotMethodData extends CompilerObject {
         public int getExecutionCount(HotSpotMethodData data, int position) {
             return -1;
         }
-
-        @Override
-        protected long getTypesNotRecordedExecutionCount(HotSpotMethodData data, int position) {
-            // TODO (ch) if types do not fit, profiling is skipped for typechecks
-            return 0;
-        }
     }
 
     private static class VirtualCallData extends AbstractTypeData {
@@ -432,11 +415,6 @@ public final class HotSpotMethodData extends CompilerObject {
 
             total += getCounterValue(data, position);
             return truncateLongToInt(total);
-        }
-
-        @Override
-        protected long getTypesNotRecordedExecutionCount(HotSpotMethodData data, int position) {
-            return getCounterValue(data, position);
         }
     }
 

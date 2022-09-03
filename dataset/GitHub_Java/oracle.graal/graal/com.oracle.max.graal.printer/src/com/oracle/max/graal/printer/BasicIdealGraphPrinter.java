@@ -84,11 +84,7 @@ class BasicIdealGraphPrinter {
      * Creates a new {@link IdealGraphPrinter} that writes to the specified output stream.
      */
     protected BasicIdealGraphPrinter(OutputStream stream) {
-        try {
-            this.stream = new PrintStream(stream, false, "US-ASCII");
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException(e);
-        }
+        this.stream = new PrintStream(stream);
     }
 
     /**

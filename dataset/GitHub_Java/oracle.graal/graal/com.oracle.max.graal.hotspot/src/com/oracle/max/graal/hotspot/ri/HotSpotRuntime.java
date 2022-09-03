@@ -34,15 +34,12 @@ import com.oracle.max.cri.ri.*;
 import com.oracle.max.cri.ri.RiType.Representation;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.cri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.hotspot.*;
 import com.oracle.max.graal.hotspot.Compiler;
 import com.oracle.max.graal.hotspot.nodes.*;
-import com.oracle.max.graal.java.*;
 import com.oracle.max.graal.nodes.*;
-import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
 import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.java.*;
@@ -52,12 +49,14 @@ import com.oracle.max.graal.snippets.nodes.*;
  * CRI runtime implementation for the HotSpot VM.
  */
 public class HotSpotRuntime implements GraalRuntime {
+    final GraalContext context;
     final HotSpotVMConfig config;
     final HotSpotRegisterConfig regConfig;
     private final HotSpotRegisterConfig globalStubRegConfig;
     private final Compiler compiler;
 
-    public HotSpotRuntime(HotSpotVMConfig config, Compiler compiler) {
+    public HotSpotRuntime(GraalContext context, HotSpotVMConfig config, Compiler compiler) {
+        this.context = context;
         this.config = config;
         this.compiler = compiler;
         regConfig = new HotSpotRegisterConfig(config, false);
@@ -314,8 +313,8 @@ public class HotSpotRuntime implements GraalRuntime {
         } else if (n instanceof ArrayHeaderSizeNode) {
             ArrayHeaderSizeNode arrayHeaderSize = (ArrayHeaderSizeNode) n;
             graph.replaceFloating(arrayHeaderSize, ConstantNode.forLong(config.getArrayOffset(arrayHeaderSize.elementKind()), n.graph()));
-        } else if (n instanceof ReadHubNode) {
-            ReadHubNode objectClassNode = (ReadHubNode) n;
+        } else if (n instanceof ReadClassNode) {
+            ReadClassNode objectClassNode = (ReadClassNode) n;
             LocationNode location = LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Object, config.hubOffset, graph);
             ReadNode memoryRead = graph.add(new ReadNode(CiKind.Object, objectClassNode.object(), location));
             memoryRead.setGuard((GuardNode) tool.createGuard(graph.unique(new NullCheckNode(objectClassNode.object(), false))));
@@ -406,82 +405,18 @@ public class HotSpotRuntime implements GraalRuntime {
         return (RiResolvedMethod) compiler.getVMEntries().getRiMethod(reflectionMethod);
     }
 
-    @Override
-    public void installMethod(RiResolvedMethod method, CiTargetMethod code) {
-        synchronized (method) {
-            if (((HotSpotMethodResolvedImpl) method).callback() == null) {
-                compiler.getVMEntries().installMethod(new HotSpotTargetMethod(compiler, (HotSpotMethodResolved) method, code), true);
-            } else {
-                // callback stub is installed.
-            }
-        }
+    public void installMethod(RiMethod method, CiTargetMethod code) {
+        HotSpotTargetMethod.installMethod(CompilerImpl.getInstance(), (HotSpotMethodResolved) method, code, true);
     }
 
     @Override
     public RiCompiledMethod addMethod(RiResolvedMethod method, CiTargetMethod code) {
-        return compiler.getVMEntries().installMethod(new HotSpotTargetMethod(compiler, (HotSpotMethodResolved) method, code), false);
-    }
-
-    public void installMethodCallback(RiResolvedMethod method, CiGenericCallback callback) {
-        synchronized (method) {
-            ((HotSpotMethodResolvedImpl) method).setCallback(callback);
-            CiTargetMethod callbackStub = createCallbackStub(method, callback);
-            compiler.getVMEntries().installMethod(new HotSpotTargetMethod(compiler, (HotSpotMethodResolved) method, callbackStub), true);
-        }
+        Compiler compilerInstance = CompilerImpl.getInstance();
+        return HotSpotTargetMethod.installMethod(compilerInstance, (HotSpotMethodResolved) method, code, false);
     }
 
     @Override
     public RiRegisterConfig getGlobalStubRegisterConfig() {
         return globalStubRegConfig;
-    }
-
-    private CiTargetMethod createCallbackStub(RiResolvedMethod method, CiGenericCallback callback) {
-        StructuredGraph graph = new StructuredGraph();
-        FrameStateBuilder frameState = new FrameStateBuilder(method, method.maxLocals(), method.maxStackSize(), graph, false);
-        ValueNode local0 = frameState.loadLocal(0);
-
-        FrameState initialFrameState = frameState.create(0);
-        graph.start().setStateAfter(initialFrameState);
-
-        ConstantNode callbackNode = ConstantNode.forObject(callback, this, graph);
-
-        RuntimeCallNode runtimeCall = graph.add(new RuntimeCallNode(CiRuntimeCall.GenericCallback, new ValueNode[] {callbackNode, local0}));
-        runtimeCall.setStateAfter(initialFrameState.duplicateModified(0, false, CiKind.Void, runtimeCall));
-
-        @SuppressWarnings("unused")
-        HotSpotCompiledMethod hotSpotCompiledMethod = new HotSpotCompiledMethod(null); // initialize class...
-        RiResolvedType compiledMethodClass = getType(HotSpotCompiledMethod.class);
-        RiResolvedField nmethodField = null;
-        for (RiResolvedField field : compiledMethodClass.declaredFields()) {
-            if (field.name().equals("nmethod")) {
-                nmethodField = field;
-                break;
-            }
-        }
-        assert nmethodField != null;
-        LoadFieldNode loadField = graph.add(new LoadFieldNode(runtimeCall, nmethodField));
-
-        CompareNode compare = graph.unique(new CompareNode(loadField, Condition.EQ, ConstantNode.forLong(0, graph)));
-
-        IfNode ifNull = graph.add(new IfNode(compare, 0.01));
-
-        BeginNode beginInvalidated = graph.add(new BeginNode());
-        DeoptimizeNode deoptInvalidated = graph.add(new DeoptimizeNode(DeoptAction.None));
-
-        BeginNode beginTailcall = graph.add(new BeginNode());
-        TailcallNode tailcall = graph.add(new TailcallNode(loadField, initialFrameState));
-        DeoptimizeNode deoptEnd = graph.add(new DeoptimizeNode(DeoptAction.InvalidateRecompile));
-
-        graph.start().setNext(runtimeCall);
-        runtimeCall.setNext(loadField);
-        loadField.setNext(ifNull);
-        ifNull.setTrueSuccessor(beginInvalidated);
-        ifNull.setFalseSuccessor(beginTailcall);
-        beginInvalidated.setNext(deoptInvalidated);
-        beginTailcall.setNext(tailcall);
-        tailcall.setNext(deoptEnd);
-
-        CiTargetMethod result = compiler.getCompiler().compileMethod(method, graph, -1, PhasePlan.DEFAULT);
-        return result;
     }
 }
