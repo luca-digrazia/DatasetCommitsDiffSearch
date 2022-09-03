@@ -50,7 +50,6 @@ import com.oracle.graal.nodes.java.StoreIndexedNode;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.tiers.HighTierContext;
 
-import com.oracle.graal.truffle.TruffleCompilerOptions;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -165,16 +164,8 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
             }
         }
 
-        private String prettify(String key, Point p) {
-            if (TruffleCompilerOptions.TruffleInstrumentBranchesPretty.getValue()) {
-                return key;
-            } else {
-                return key;
-            }
-        }
-
         public synchronized ArrayList<String> accessTableToList() {
-            return pointMap.entrySet().stream().sorted(entriesComparator).map(entry -> prettify(entry.getKey(), entry.getValue()) + "\n" + entry.getValue()).collect(Collectors.toCollection(ArrayList::new));
+            return pointMap.entrySet().stream().sorted(entriesComparator).map(entry -> entry.getKey() + "\n" + entry.getValue()).collect(Collectors.toCollection(ArrayList::new));
         }
 
         public synchronized ArrayList<String> accessTableToHistogram() {
@@ -210,7 +201,7 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
                 return existing;
             } else if (tableCount < ACCESS_TABLE.length) {
                 int index = tableCount++;
-                Point p = new Point(index, n.getNodeSourcePosition());
+                Point p = new Point(index);
                 pointMap.put(key, p);
                 return p;
             } else {
@@ -243,11 +234,9 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
         private static class Point {
             private int index;
-            private NodeSourcePosition position;
 
-            Point(int index, NodeSourcePosition position) {
+            Point(int index) {
                 this.index = index;
-                this.position = position;
             }
 
             public long ifVisits() {
