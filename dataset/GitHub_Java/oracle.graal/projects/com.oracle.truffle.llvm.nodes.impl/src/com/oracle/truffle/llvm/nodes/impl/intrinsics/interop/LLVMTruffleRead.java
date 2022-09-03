@@ -49,8 +49,34 @@ import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsic.LLVMI32I
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsic.LLVMI64Intrinsic;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsic.LLVMI8Intrinsic;
 import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.types.LLVMTruffleObject;
 
 public final class LLVMTruffleRead {
+
+    private static Object doRead(VirtualFrame frame, Node foreignRead, LLVMTruffleObject value, LLVMAddress id, ToLLVMNode toLLVM, Class<?> expectedType) {
+        String name = LLVMTruffleIntrinsicUtil.readString(id);
+        try {
+            if (value.getOffset() != 0 || value.getName() != null) {
+                throw new IllegalAccessError("Pointee must be unmodified");
+            }
+            Object rawValue = ForeignAccess.sendRead(foreignRead, frame, value.getObject(), name);
+            return toLLVM.convert(frame, rawValue, expectedType);
+        } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static Object doReadIdx(VirtualFrame frame, Node foreignRead, LLVMTruffleObject value, int id, ToLLVMNode toLLVM, Class<?> expectedType) {
+        try {
+            if (value.getOffset() != 0 || value.getName() != null) {
+                throw new IllegalAccessError("Pointee must be unmodified");
+            }
+            Object rawValue = ForeignAccess.sendRead(foreignRead, frame, value.getObject(), id);
+            return toLLVM.convert(frame, rawValue, expectedType);
+        } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 
     private static Object doRead(VirtualFrame frame, Node foreignRead, TruffleObject value, LLVMAddress id, ToLLVMNode toLLVM, Class<?> expectedType) {
         String name = LLVMTruffleIntrinsicUtil.readString(id);
@@ -80,6 +106,11 @@ public final class LLVMTruffleRead {
         private static final Class<?> expectedType = TruffleObject.class;
 
         @Specialization
+        public Object executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, LLVMAddress id) {
+            return doRead(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
+
+        @Specialization
         public Object executeIntrinsic(VirtualFrame frame, TruffleObject value, LLVMAddress id) {
             return doRead(frame, foreignRead, value, id, toLLVM, expectedType);
         }
@@ -92,6 +123,11 @@ public final class LLVMTruffleRead {
         @Child private ToLLVMNode toLLVM = new ToLLVMNode();
 
         private static final Class<?> expectedType = int.class;
+
+        @Specialization
+        public int executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, LLVMAddress id) {
+            return (int) doRead(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
 
         @Specialization
         public int executeIntrinsic(VirtualFrame frame, TruffleObject value, LLVMAddress id) {
@@ -108,6 +144,11 @@ public final class LLVMTruffleRead {
         private static final Class<?> expectedType = long.class;
 
         @Specialization
+        public long executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, LLVMAddress id) {
+            return (long) doRead(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
+
+        @Specialization
         public long executeIntrinsic(VirtualFrame frame, TruffleObject value, LLVMAddress id) {
             return (long) doRead(frame, foreignRead, value, id, toLLVM, expectedType);
         }
@@ -120,6 +161,11 @@ public final class LLVMTruffleRead {
         @Child private ToLLVMNode toLLVM = new ToLLVMNode();
 
         private static final Class<?> expectedType = byte.class;
+
+        @Specialization
+        public byte executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, LLVMAddress id) {
+            return (byte) doRead(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
 
         @Specialization
         public byte executeIntrinsic(VirtualFrame frame, TruffleObject value, LLVMAddress id) {
@@ -136,6 +182,11 @@ public final class LLVMTruffleRead {
         private static final Class<?> expectedType = float.class;
 
         @Specialization
+        public float executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, LLVMAddress id) {
+            return (float) doRead(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
+
+        @Specialization
         public float executeIntrinsic(VirtualFrame frame, TruffleObject value, LLVMAddress id) {
             return (float) doRead(frame, foreignRead, value, id, toLLVM, expectedType);
         }
@@ -150,6 +201,11 @@ public final class LLVMTruffleRead {
         private static final Class<?> expectedType = double.class;
 
         @Specialization
+        public double executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, LLVMAddress id) {
+            return (double) doRead(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
+
+        @Specialization
         public double executeIntrinsic(VirtualFrame frame, TruffleObject value, LLVMAddress id) {
             return (double) doRead(frame, foreignRead, value, id, toLLVM, expectedType);
         }
@@ -162,6 +218,11 @@ public final class LLVMTruffleRead {
         @Child private ToLLVMNode toLLVM = new ToLLVMNode();
 
         private static final Class<?> expectedType = boolean.class;
+
+        @Specialization
+        public boolean executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, LLVMAddress id) {
+            return (boolean) doRead(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
 
         @Specialization
         public boolean executeIntrinsic(VirtualFrame frame, TruffleObject value, LLVMAddress id) {
@@ -180,6 +241,11 @@ public final class LLVMTruffleRead {
         private static final Class<?> expectedType = TruffleObject.class;
 
         @Specialization
+        public Object executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, int id) {
+            return doReadIdx(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
+
+        @Specialization
         public Object executeIntrinsic(VirtualFrame frame, TruffleObject value, int id) {
             return doReadIdx(frame, foreignRead, value, id, toLLVM, expectedType);
         }
@@ -192,6 +258,11 @@ public final class LLVMTruffleRead {
         @Child private ToLLVMNode toLLVM = new ToLLVMNode();
 
         private static final Class<?> expectedType = int.class;
+
+        @Specialization
+        public int executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, int id) {
+            return (int) doReadIdx(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
 
         @Specialization
         public int executeIntrinsic(VirtualFrame frame, TruffleObject value, int id) {
@@ -208,6 +279,11 @@ public final class LLVMTruffleRead {
         private static final Class<?> expectedType = long.class;
 
         @Specialization
+        public long executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, int id) {
+            return (long) doReadIdx(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
+
+        @Specialization
         public long executeIntrinsic(VirtualFrame frame, TruffleObject value, int id) {
             return (long) doReadIdx(frame, foreignRead, value, id, toLLVM, expectedType);
         }
@@ -220,6 +296,11 @@ public final class LLVMTruffleRead {
         @Child private ToLLVMNode toLLVM = new ToLLVMNode();
 
         private static final Class<?> expectedType = byte.class;
+
+        @Specialization
+        public byte executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, int id) {
+            return (byte) doReadIdx(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
 
         @Specialization
         public byte executeIntrinsic(VirtualFrame frame, TruffleObject value, int id) {
@@ -236,6 +317,11 @@ public final class LLVMTruffleRead {
         private static final Class<?> expectedType = float.class;
 
         @Specialization
+        public float executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, int id) {
+            return (float) doReadIdx(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
+
+        @Specialization
         public float executeIntrinsic(VirtualFrame frame, TruffleObject value, int id) {
             return (float) doReadIdx(frame, foreignRead, value, id, toLLVM, expectedType);
         }
@@ -250,6 +336,11 @@ public final class LLVMTruffleRead {
         private static final Class<?> expectedType = double.class;
 
         @Specialization
+        public double executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, int id) {
+            return (double) doReadIdx(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
+
+        @Specialization
         public double executeIntrinsic(VirtualFrame frame, TruffleObject value, int id) {
             return (double) doReadIdx(frame, foreignRead, value, id, toLLVM, expectedType);
         }
@@ -262,6 +353,11 @@ public final class LLVMTruffleRead {
         @Child private ToLLVMNode toLLVM = new ToLLVMNode();
 
         private static final Class<?> expectedType = boolean.class;
+
+        @Specialization
+        public boolean executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, int id) {
+            return (boolean) doReadIdx(frame, foreignRead, value, id, toLLVM, expectedType);
+        }
 
         @Specialization
         public boolean executeIntrinsic(VirtualFrame frame, TruffleObject value, int id) {
