@@ -85,14 +85,16 @@ public abstract class LIRGeneratorTool {
     public abstract void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo, long leafGraphId);
     public abstract Value emitCall(Object target, Kind result, Kind[] arguments, boolean canTrap, Value... args);
     public final Value emitCall(RuntimeCall runtimeCall, boolean canTrap, Value... args) {
-        return emitCall(runtimeCall, runtimeCall.getResultKind(), runtimeCall.getArgumentKinds(), canTrap, args);
+        return emitCall(runtimeCall, runtimeCall.resultKind, runtimeCall.arguments, canTrap, args);
     }
 
     public abstract void emitIf(IfNode i);
     public abstract void emitConditional(ConditionalNode i);
     public abstract void emitGuardCheck(BooleanNode comp, DeoptimizationReason deoptReason, DeoptimizationAction deoptAction, boolean negated, long leafGraphId);
 
-    public abstract void emitSwitch(SwitchNode i);
+    public abstract void emitLookupSwitch(LookupSwitchNode i);
+    public abstract void emitTableSwitch(TableSwitchNode i);
+    public abstract void emitTypeSwitch(TypeSwitchNode i);
 
     public abstract void emitInvoke(Invoke i);
     public abstract void emitRuntimeCall(RuntimeCallNode i);
@@ -102,7 +104,6 @@ public abstract class LIRGeneratorTool {
     public abstract void visitEndNode(EndNode i);
     public abstract void visitLoopEnd(LoopEndNode i);
     public abstract void visitSafepointNode(SafepointNode i);
-    public abstract void visitBreakpointNode(BreakpointNode i);
 
     public abstract void visitCompareAndSwap(CompareAndSwapNode i);
 
@@ -113,7 +114,7 @@ public abstract class LIRGeneratorTool {
     public abstract void visitMonitorEnter(MonitorEnterNode i);
     public abstract void visitMonitorExit(MonitorExitNode i);
     public abstract void visitNewInstance(NewInstanceNode i);
-    public abstract void visitNewPrimitiveArray(NewPrimitiveArrayNode i);
+    public abstract void visitNewTypeArray(NewTypeArrayNode i);
     public abstract void visitNewObjectArray(NewObjectArrayNode i);
     public abstract void visitNewMultiArray(NewMultiArrayNode i);
     public abstract void visitExceptionObject(ExceptionObjectNode i);
