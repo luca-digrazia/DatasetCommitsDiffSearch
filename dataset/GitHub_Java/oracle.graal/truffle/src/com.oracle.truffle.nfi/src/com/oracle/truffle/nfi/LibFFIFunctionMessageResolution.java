@@ -26,21 +26,31 @@ package com.oracle.truffle.nfi;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.CanResolve;
+import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.nfi.BindableNativeObject.BindSignatureNode;
+import com.oracle.truffle.nfi.BindableNativeObjectFactory.ReBindSignatureNodeGen;
 import com.oracle.truffle.nfi.LibFFIFunctionMessageResolutionFactory.CachedExecuteNodeGen;
+import com.oracle.truffle.nfi.TypeConversion.AsStringNode;
+import com.oracle.truffle.nfi.TypeConversionFactory.AsStringNodeGen;
 
 @MessageResolution(receiverType = LibFFIFunction.class)
 class LibFFIFunctionMessageResolution {
 
     abstract static class CachedExecuteNode extends Node {
+
+        private final ContextReference<NFIContext> ctxRef = NFILanguage.getCurrentContextReference();
 
         public abstract Object execute(LibFFIFunction receiver, Object[] args);
 
@@ -48,16 +58,22 @@ class LibFFIFunctionMessageResolution {
         @Specialization(guards = "checkSignature(receiver, signature)")
         protected Object cachedSignature(LibFFIFunction receiver, Object[] args, @Cached("receiver.getSignature()") LibFFISignature signature,
                         @Cached(value = "getSerializeArgumentNodes(signature)") SerializeArgumentNode[] serializeArgs) {
-            if (args.length != serializeArgs.length) {
+            if (args.length != signature.getRealArgCount()) {
                 throw ArityException.raise(serializeArgs.length, args.length);
             }
 
             NativeArgumentBuffer.Array buffer = signature.prepareBuffer();
-            for (int i = 0; i < serializeArgs.length; i++) {
-                serializeArgs[i].execute(buffer, args[i]);
+            int argIdx = 0;
+            for (SerializeArgumentNode serializeArg : serializeArgs) {
+                Object arg = argIdx < args.length ? args[argIdx] : null;
+                if (serializeArg.execute(buffer, arg)) {
+                    argIdx++;
+                }
             }
+            assert argIdx == args.length : "SerializeArgumentNodes didn't consume all arguments";
+
             CompilerDirectives.ensureVirtualized(buffer);
-            return signature.execute(receiver.getAddress(), buffer);
+            return signature.execute(ctxRef.get(), receiver.getAddress(), buffer);
         }
 
         protected static boolean checkSignature(LibFFIFunction receiver, LibFFISignature signature) {
@@ -77,18 +93,39 @@ class LibFFIFunctionMessageResolution {
         @Specialization(replaces = "cachedSignature", guards = "receiver.getSignature().getArgTypes().length == serializeArgs.length")
         protected Object cachedArgCount(LibFFIFunction receiver, Object[] args,
                         @Cached("getSlowPathSerializeArgumentNodes(receiver)") SlowPathSerializeArgumentNode[] serializeArgs) {
-            if (args.length != serializeArgs.length) {
-                throw ArityException.raise(serializeArgs.length, args.length);
-            }
-
             LibFFISignature signature = receiver.getSignature();
             LibFFIType[] argTypes = signature.getArgTypes();
 
             NativeArgumentBuffer.Array buffer = signature.prepareBuffer();
+            int argIdx = 0;
             for (int i = 0; i < serializeArgs.length; i++) {
-                serializeArgs[i].execute(buffer, argTypes[i], args[i]);
+                if (argIdx >= args.length) {
+                    raiseArityException(argTypes, args.length);
+                }
+
+                if (argTypes[i].injectedArgument) {
+                    serializeArgs[i].execute(buffer, argTypes[i], null);
+                } else {
+                    serializeArgs[i].execute(buffer, argTypes[i], args[argIdx++]);
+                }
             }
+
+            if (argIdx != args.length) {
+                throw ArityException.raise(argIdx, args.length);
+            }
+
             return slowPathExecute(signature, receiver.getAddress(), buffer);
+        }
+
+        private static void raiseArityException(LibFFIType[] argTypes, int actualArgCount) {
+            CompilerDirectives.transferToInterpreter();
+            int expectedArgCount = 0;
+            for (LibFFIType argType : argTypes) {
+                if (!argType.injectedArgument) {
+                    expectedArgCount++;
+                }
+            }
+            throw ArityException.raise(expectedArgCount, actualArgCount);
         }
 
         protected static SlowPathSerializeArgumentNode[] getSlowPathSerializeArgumentNodes(LibFFIFunction receiver) {
@@ -106,14 +143,24 @@ class LibFFIFunctionMessageResolution {
             LibFFISignature signature = receiver.getSignature();
             LibFFIType[] argTypes = signature.getArgTypes();
 
-            if (argTypes.length != args.length) {
-                throw ArityException.raise(argTypes.length, args.length);
+            NativeArgumentBuffer.Array buffer = signature.prepareBuffer();
+            int argIdx = 0;
+            for (int i = 0; i < argTypes.length; i++) {
+                if (argIdx >= args.length) {
+                    raiseArityException(argTypes, args.length);
+                }
+
+                if (argTypes[i].injectedArgument) {
+                    serializeArgs.execute(buffer, argTypes[i], null);
+                } else {
+                    serializeArgs.execute(buffer, argTypes[i], args[argIdx++]);
+                }
             }
 
-            NativeArgumentBuffer.Array buffer = signature.prepareBuffer();
-            for (int i = 0; i < argTypes.length; i++) {
-                serializeArgs.execute(buffer, argTypes[i], args[i]);
+            if (argIdx != args.length) {
+                throw ArityException.raise(argIdx, args.length);
             }
+
             return slowPathExecute(signature, receiver.getAddress(), buffer);
         }
 
@@ -123,7 +170,7 @@ class LibFFIFunctionMessageResolution {
 
         @TruffleBoundary
         protected Object slowPathExecute(LibFFISignature signature, long functionPointer, NativeArgumentBuffer.Array buffer) {
-            return signature.execute(functionPointer, buffer);
+            return signature.execute(ctxRef.get(), functionPointer, buffer);
         }
     }
 
@@ -143,6 +190,50 @@ class LibFFIFunctionMessageResolution {
         @SuppressWarnings("unused")
         public boolean access(LibFFIFunction receiver) {
             return true;
+        }
+    }
+
+    @Resolve(message = "INVOKE")
+    abstract static class ReBindNode extends Node {
+
+        @Child private BindSignatureNode bind = ReBindSignatureNodeGen.create();
+
+        public TruffleObject access(LibFFIFunction receiver, String identifier, Object[] args) {
+            if (!"bind".equals(identifier)) {
+                throw UnknownIdentifierException.raise(identifier);
+            }
+            if (args.length != 1) {
+                throw ArityException.raise(1, args.length);
+            }
+
+            return bind.execute(receiver, args[0]);
+        }
+    }
+
+    @Resolve(message = "KEYS")
+    abstract static class LibFFIFunctionKeysNode extends Node {
+
+        @SuppressWarnings("unused")
+        public TruffleObject access(LibFFIFunction receiver) {
+            return JavaInterop.asTruffleObject(new String[]{"bind"});
+        }
+    }
+
+    @Resolve(message = "KEY_INFO")
+    abstract static class LibFFIFunctionKeyInfoNode extends Node {
+
+        private static final int INVOCABLE = KeyInfo.newBuilder().setInvocable(true).build();
+        private static final int NOT_EXISTING = 0;
+
+        @Child AsStringNode asString = AsStringNodeGen.create(true);
+
+        @SuppressWarnings("unused")
+        public int access(LibFFIFunction receiver, Object identifier) {
+            if ("bind".equals(asString.execute(identifier))) {
+                return INVOCABLE;
+            } else {
+                return NOT_EXISTING;
+            }
         }
     }
 
