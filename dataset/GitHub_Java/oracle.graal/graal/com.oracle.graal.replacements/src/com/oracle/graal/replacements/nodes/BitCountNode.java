@@ -23,27 +23,31 @@
 package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-public class BitCountNode extends UnaryNode implements LIRLowerable, Canonicalizable {
+public class BitCountNode extends FloatingNode implements LIRGenLowerable, Canonicalizable {
+
+    @Input private ValueNode value;
 
     public BitCountNode(ValueNode value) {
-        super(StampFactory.forInteger(Kind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
+        super(StampFactory.forInteger(Kind.Int, 0, value.kind().getBitCount()));
+        this.value = value;
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
-        if (getValue().isConstant()) {
-            Constant c = getValue().asConstant();
-            if (c.getKind() == Kind.Int) {
-                return ConstantNode.forInt(Integer.bitCount(c.asInt()), graph());
-            } else if (c.getKind() == Kind.Long) {
-                return ConstantNode.forInt(Long.bitCount(c.asLong()), graph());
+    public ValueNode canonical(CanonicalizerTool tool) {
+        if (value.isConstant()) {
+            long v = value.asConstant().asLong();
+            if (value.kind().getStackKind() == Kind.Int) {
+                return ConstantNode.forInt(Integer.bitCount((int) v), graph());
+            } else if (value.kind() == Kind.Long) {
+                return ConstantNode.forInt(Long.bitCount(v), graph());
             }
         }
         return this;
@@ -60,8 +64,9 @@ public class BitCountNode extends UnaryNode implements LIRLowerable, Canonicaliz
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        Value result = gen.getLIRGeneratorTool().emitBitCount(gen.operand(getValue()));
+    public void generate(LIRGenerator gen) {
+        Variable result = gen.newVariable(Kind.Int);
+        gen.emitBitCount(result, gen.operand(value));
         gen.setResult(this, result);
     }
 }

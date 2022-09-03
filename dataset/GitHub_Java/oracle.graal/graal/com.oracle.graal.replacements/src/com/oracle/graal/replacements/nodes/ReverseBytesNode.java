@@ -25,11 +25,10 @@ package com.oracle.graal.replacements.nodes;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 public class ReverseBytesNode extends FloatingNode implements LIRGenLowerable, Canonicalizable {
@@ -38,12 +37,12 @@ public class ReverseBytesNode extends FloatingNode implements LIRGenLowerable, C
 
     public ReverseBytesNode(ValueNode value) {
         super(StampFactory.forKind(value.kind()));
-        assert kind().isNumericInteger();
+        assert kind().getStackKind() == Kind.Int || kind() == Kind.Long;
         this.value = value;
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (value.isConstant()) {
             long v = value.asConstant().asLong();
             if (kind().getStackKind() == Kind.Int) {

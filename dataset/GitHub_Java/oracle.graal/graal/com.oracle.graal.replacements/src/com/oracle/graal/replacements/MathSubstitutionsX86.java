@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.replacements;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
@@ -36,7 +36,7 @@ import com.oracle.graal.replacements.nodes.MathIntrinsicNode.Operation;
 @ClassSubstitution(java.lang.Math.class)
 public class MathSubstitutionsX86 {
 
-    private static final double PI_4 = Math.PI / 4;
+    private static final double PI_4 = 0.7853981633974483;
 
     @MethodSubstitution
     public static double abs(double x) {
@@ -56,49 +56,6 @@ public class MathSubstitutionsX86 {
     @MethodSubstitution
     public static double log10(double x) {
         return MathIntrinsicNode.compute(x, Operation.LOG10);
-    }
-
-    /**
-     * Special cases from {@link Math#pow} and __ieee754_pow (in sharedRuntimeTrans.cpp).
-     */
-    @MethodSubstitution
-    public static double pow(double x, double y) {
-        // If the second argument is positive or negative zero, then the result is 1.0.
-        if (y == 0) {
-            return 1;
-        }
-
-        // If the second argument is 1.0, then the result is the same as the first argument.
-        if (y == 1) {
-            return x;
-        }
-
-        // If the second argument is NaN, then the result is NaN.
-        if (Double.isNaN(y)) {
-            return Double.NaN;
-        }
-
-        // If the first argument is NaN and the second argument is nonzero, then the result is NaN.
-        if (Double.isNaN(x) && y != 0) {
-            return Double.NaN;
-        }
-
-        // x**-1 = 1/x
-        if (y == -1) {
-            return 1 / x;
-        }
-
-        // x**2 = x*x
-        if (y == 2) {
-            return x * x;
-        }
-
-        // x**0.5 = sqrt(x)
-        if (y == 0.5 && x >= 0) {
-            return sqrt(x);
-        }
-
-        return pow(x, y);
     }
 
     // NOTE on snippets below:
@@ -134,12 +91,12 @@ public class MathSubstitutionsX86 {
         }
     }
 
-    public static final ForeignCallDescriptor ARITHMETIC_SIN = new ForeignCallDescriptor("arithmeticSin", double.class, double.class);
-    public static final ForeignCallDescriptor ARITHMETIC_COS = new ForeignCallDescriptor("arithmeticCos", double.class, double.class);
-    public static final ForeignCallDescriptor ARITHMETIC_TAN = new ForeignCallDescriptor("arithmeticTan", double.class, double.class);
+    public static final Descriptor ARITHMETIC_SIN = new Descriptor("arithmeticSin", false, double.class, double.class);
+    public static final Descriptor ARITHMETIC_COS = new Descriptor("arithmeticCos", false, double.class, double.class);
+    public static final Descriptor ARITHMETIC_TAN = new Descriptor("arithmeticTan", false, double.class, double.class);
 
-    @NodeIntrinsic(value = ForeignCallNode.class, setStampFromReturnType = true)
-    public static double callDouble(@ConstantNodeParameter ForeignCallDescriptor descriptor, double value) {
+    @NodeIntrinsic(value = RuntimeCallNode.class, setStampFromReturnType = true)
+    public static double callDouble(@ConstantNodeParameter Descriptor descriptor, double value) {
         if (descriptor == ARITHMETIC_SIN) {
             return Math.sin(value);
         }

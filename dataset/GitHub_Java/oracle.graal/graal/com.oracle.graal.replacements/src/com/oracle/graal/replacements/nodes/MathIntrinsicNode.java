@@ -107,8 +107,6 @@ public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, 
                     return ConstantNode.forDouble(Math.cos(value), graph());
                 case TAN:
                     return ConstantNode.forDouble(Math.tan(value), graph());
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
             }
         }
         return this;

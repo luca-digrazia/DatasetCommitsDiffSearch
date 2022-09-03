@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,27 +23,31 @@
 package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-public class BitScanForwardNode extends UnaryNode implements LIRLowerable, Canonicalizable {
+public class BitScanForwardNode extends FloatingNode implements LIRGenLowerable, Canonicalizable {
+
+    @Input private ValueNode value;
 
     public BitScanForwardNode(ValueNode value) {
-        super(StampFactory.forInteger(Kind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
+        super(StampFactory.forInteger(Kind.Int, 0, value.kind().getBitCount()));
+        this.value = value;
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
-        if (getValue().isConstant()) {
-            Constant c = getValue().asConstant();
-            if (c.getKind() == Kind.Int) {
-                return ConstantNode.forInt(Integer.numberOfTrailingZeros(c.asInt()), graph());
-            } else if (c.getKind() == Kind.Long) {
-                return ConstantNode.forInt(Long.numberOfTrailingZeros(c.asLong()), graph());
+    public ValueNode canonical(CanonicalizerTool tool) {
+        if (value.isConstant()) {
+            long v = value.asConstant().asLong();
+            if (value.kind().getStackKind() == Kind.Int) {
+                return ConstantNode.forInt(Integer.numberOfTrailingZeros((int) v), graph());
+            } else if (value.kind() == Kind.Long) {
+                return ConstantNode.forInt(Long.numberOfTrailingZeros(v), graph());
             }
         }
         return this;
@@ -61,14 +65,10 @@ public class BitScanForwardNode extends UnaryNode implements LIRLowerable, Canon
         return index;
     }
 
-    @NodeIntrinsic
-    public static int scan(int v) {
-        return scan(v & 0xFFFFFFFFL);
-    }
-
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        Value result = gen.getLIRGeneratorTool().emitBitScanForward(gen.operand(getValue()));
+    public void generate(LIRGenerator gen) {
+        Variable result = gen.newVariable(Kind.Int);
+        gen.emitBitScanForward(result, gen.operand(value));
         gen.setResult(this, result);
     }
 }
