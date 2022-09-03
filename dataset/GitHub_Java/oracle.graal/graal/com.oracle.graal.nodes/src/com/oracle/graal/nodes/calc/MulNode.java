@@ -25,7 +25,6 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -40,7 +39,7 @@ public class MulNode extends BinaryArithmeticNode implements NarrowableArithmeti
     }
 
     protected MulNode(ValueNode x, ValueNode y) {
-        super(ArithmeticOpTable::getMul, x, y);
+        super(ArithmeticOpTable.forStamp(x.stamp()).getMul(), x, y);
     }
 
     @Override
@@ -54,9 +53,8 @@ public class MulNode extends BinaryArithmeticNode implements NarrowableArithmeti
             return MulNode.create(forY, forX);
         }
         if (forY.isConstant()) {
-            BinaryOp op = getOp(forX, forY);
             Constant c = forY.asConstant();
-            if (op.isNeutral(c)) {
+            if (getOp().isNeutral(c)) {
                 return forX;
             }
 
@@ -92,7 +90,7 @@ public class MulNode extends BinaryArithmeticNode implements NarrowableArithmeti
                 }
             }
 
-            if (op.isAssociative()) {
+            if (getOp().isAssociative()) {
                 // canonicalize expressions like "(a * 1) * 2"
                 return reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
             }
@@ -105,9 +103,9 @@ public class MulNode extends BinaryArithmeticNode implements NarrowableArithmeti
         Value op1 = builder.operand(getX());
         Value op2 = builder.operand(getY());
         if (!getY().isConstant() && !BinaryArithmeticNode.livesLonger(this, getY(), builder)) {
-            Value tmp = op1;
+            Value op = op1;
             op1 = op2;
-            op2 = tmp;
+            op2 = op;
         }
         builder.setResult(this, gen.emitMul(op1, op2));
     }
