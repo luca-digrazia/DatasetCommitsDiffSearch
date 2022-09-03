@@ -32,6 +32,7 @@ import java.lang.ref.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -181,7 +182,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             NodeInputList<ValueNode> parameters = callTarget.arguments();
             ValueNode receiver = parameters.size() <= 0 ? null : parameters.get(0);
             GuardingNode receiverNullCheck = null;
-            if (!callTarget.isStatic() && receiver.stamp() instanceof ObjectStamp && !StampTool.isPointerNonNull(receiver)) {
+            if (!callTarget.isStatic() && receiver.stamp() instanceof ObjectStamp && !StampTool.isObjectNonNull(receiver)) {
                 receiverNullCheck = createNullCheck(receiver, invoke.asNode(), tool);
                 invoke.setGuard(receiverNullCheck);
             }
@@ -238,7 +239,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     @Override
     protected ValueNode staticFieldBase(StructuredGraph graph, ResolvedJavaField f) {
         HotSpotResolvedJavaField field = (HotSpotResolvedJavaField) f;
-        JavaConstant base = field.getDeclaringClass().getJavaClass();
+        JavaConstant base = field.getDeclaringClass().getEncoding(Representation.JavaClass);
         return ConstantNode.forConstant(base, metaAccess, graph);
     }
 
@@ -258,7 +259,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
          * Anchor the read of the element klass to the cfg, because it is only valid when arrayClass
          * is an object class, which might not be the case in other parts of the compiled method.
          */
-        return graph.unique(FloatingReadNode.create(arrayHub, location, null, KlassPointerStamp.klassNonNull(), BeginNode.prevBegin(anchor)));
+        return graph.unique(FloatingReadNode.create(arrayHub, location, null, StampFactory.forKind(wordKind), BeginNode.prevBegin(anchor)));
     }
 
     @Override
@@ -379,7 +380,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
 
     private static boolean addReadBarrier(UnsafeLoadNode load) {
         if (useG1GC() && load.graph().getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS && load.object().getKind() == Kind.Object && load.accessKind() == Kind.Object &&
-                        !StampTool.isPointerAlwaysNull(load.object())) {
+                        !StampTool.isObjectAlwaysNull(load.object())) {
             ResolvedJavaType type = StampTool.typeOrNull(load.object());
             if (type != null && !type.isArray()) {
                 return true;
@@ -396,8 +397,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         assert vtableEntryOffset > 0;
         // We use LocationNode.ANY_LOCATION for the reads that access the vtable
         // entry as HotSpot does not guarantee that this is a final value.
-        Stamp methodStamp = MethodPointerStamp.method();
-        ReadNode metaspaceMethod = graph.add(ReadNode.create(hub, ConstantLocationNode.create(ANY_LOCATION, wordKind, vtableEntryOffset, graph), methodStamp, BarrierType.NONE));
+        ReadNode metaspaceMethod = graph.add(ReadNode.create(hub, ConstantLocationNode.create(ANY_LOCATION, wordKind, vtableEntryOffset, graph), StampFactory.forKind(wordKind), BarrierType.NONE));
         return metaspaceMethod;
     }
 
@@ -406,11 +406,13 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         Kind wordKind = target.wordKind;
         HotSpotVMConfig config = runtime.getConfig();
         LocationNode location = ConstantLocationNode.create(HUB_LOCATION, wordKind, config.hubOffset, graph);
-        assert !object.isConstant() || object.isNullConstant();
+        assert !object.isConstant() || object.asJavaConstant().isNull();
 
-        KlassPointerStamp hubStamp = KlassPointerStamp.klassNonNull();
+        Stamp hubStamp;
         if (config.useCompressedClassPointers) {
-            hubStamp = hubStamp.compressed(config.getKlassEncoding());
+            hubStamp = StampFactory.forInteger(32);
+        } else {
+            hubStamp = StampFactory.forKind(wordKind);
         }
 
         FloatingReadNode memoryRead = graph.unique(FloatingReadNode.create(object, location, null, hubStamp, guard, BarrierType.NONE));
@@ -424,7 +426,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     private WriteNode createWriteHub(StructuredGraph graph, Kind wordKind, ValueNode object, ValueNode value) {
         HotSpotVMConfig config = runtime.getConfig();
         LocationNode location = ConstantLocationNode.create(HUB_WRITE_LOCATION, wordKind, config.hubOffset, graph);
-        assert !object.isConstant() || object.isNullConstant();
+        assert !object.isConstant() || object.asJavaConstant().isNull();
 
         ValueNode writeValue = value;
         if (config.useCompressedClassPointers) {

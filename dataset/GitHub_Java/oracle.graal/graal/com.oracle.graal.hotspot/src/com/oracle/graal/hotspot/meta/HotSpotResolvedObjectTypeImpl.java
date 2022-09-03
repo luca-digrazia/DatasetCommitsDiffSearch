@@ -776,7 +776,7 @@ public final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType
      * Gets the metaspace Klass boxed in a {@link JavaConstant}.
      */
     public JavaConstant klass() {
-        return HotSpotMetaspaceConstantImpl.forMetaspaceObject(runtime().getTarget().wordKind, getMetaspaceKlass(), this, false);
+        return HotSpotMetaspaceConstant.forMetaspaceObject(runtime().getTarget().wordKind, getMetaspaceKlass(), this, false);
     }
 
     public boolean isPrimaryType() {
