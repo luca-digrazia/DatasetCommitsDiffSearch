@@ -147,10 +147,6 @@ public final class CPUSampler implements Closeable {
         public List<Long> getSelfHitTimes() {
             return Collections.unmodifiableList(selfHitTimes);
         }
-
-        void addSelfHitTime(Long time) {
-            selfHitTimes.add(time);
-        }
     }
 
     /**
@@ -424,50 +420,11 @@ public final class CPUSampler implements Closeable {
      */
     @Deprecated
     public Collection<ProfilerNode<Payload>> getRootNodes() {
-        ProfilerNode<Payload> mergedRoot = new ProfilerNode<>(this, new Payload());
+        Collection<ProfilerNode<Payload>> actualRoots = new ArrayList<>();
         for (ProfilerNode<Payload> node : rootNodes.values()) {
-            merge(mergedRoot, node);
+            actualRoots.addAll(node.getChildren());
         }
-        return mergedRoot.getChildren();
-    }
-
-    private static void merge(ProfilerNode<Payload> destination, ProfilerNode<Payload> node) {
-        for (ProfilerNode<Payload> child : node.getChildren()) {
-            final SourceLocation childSourceLocation = child.getSourceLocation();
-            final Payload childPayload = child.getPayload();
-            ProfilerNode<Payload> destinationChild = findBySourceLocation(destination.getChildren(), childSourceLocation);
-            if (destinationChild == null) {
-                Payload destinationPayload = new Payload();
-                updatePayload(childPayload, destinationPayload);
-                destinationChild = new ProfilerNode<>(destination, childSourceLocation, destinationPayload);
-                if (destination.children == null) {
-                    destination.children = new HashMap<>();
-                }
-                destination.children.put(childSourceLocation, destinationChild);
-            } else {
-                updatePayload(childPayload, destinationChild.getPayload());
-            }
-            merge(destinationChild, child);
-        }
-    }
-
-    private static void updatePayload(Payload sourcePayload, Payload destinationPayload) {
-        destinationPayload.selfCompiledHitCount += sourcePayload.selfCompiledHitCount;
-        destinationPayload.selfInterpretedHitCount += sourcePayload.selfInterpretedHitCount;
-        destinationPayload.compiledHitCount += sourcePayload.compiledHitCount;
-        destinationPayload.interpretedHitCount += sourcePayload.interpretedHitCount;
-        for (Long timestamp : sourcePayload.getSelfHitTimes()) {
-            destinationPayload.addSelfHitTime(timestamp);
-        }
-    }
-
-    private static ProfilerNode<Payload> findBySourceLocation(Collection<ProfilerNode<Payload>> children, SourceLocation sourceLocation) {
-        for (ProfilerNode<Payload> child : children) {
-            if (child.getSourceLocation().equals(sourceLocation)) {
-                return child;
-            }
-        }
-        return null;
+        return actualRoots;
     }
 
     /**
@@ -476,10 +433,10 @@ public final class CPUSampler implements Closeable {
      */
     public Map<Thread, Collection<ProfilerNode<Payload>>> getThreadToNodesMap() {
         Map<Thread, Collection<ProfilerNode<Payload>>> returnValue = new HashMap<>();
-        for (Map.Entry<Thread, ProfilerNode<Payload>> entry : rootNodes.entrySet()) {
-            returnValue.put(entry.getKey(), entry.getValue().getChildren());
+        for(Map.Entry<Thread, ProfilerNode<Payload>> entry : rootNodes.entrySet()) {
+           returnValue.put(entry.getKey(), entry.getValue().getChildren());
         }
-        return Collections.unmodifiableMap(returnValue);
+        return returnValue;
     }
 
     /**
