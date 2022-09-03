@@ -37,45 +37,25 @@ import com.oracle.graal.options.*;
  */
 public class GenGraalRuntimeInlineHpp {
 
-    public static class GraalJars implements Iterable<ZipEntry> {
-        private final List<ZipFile> jars = new ArrayList<>(2);
+    private static final ZipFile graalJar;
 
-        public GraalJars() {
-            String classPath = System.getProperty("java.class.path");
-            for (String e : classPath.split(File.pathSeparator)) {
-                if (e.endsWith(File.separatorChar + "graal.jar") || e.endsWith(File.separatorChar + "graal-truffle.jar")) {
-                    try {
-                        jars.add(new ZipFile(e));
-                    } catch (IOException ioe) {
-                        throw new InternalError(ioe);
-                    }
-                }
-            }
-            if (jars.size() != 2) {
-                throw new InternalError("Could not find graal.jar or graal-truffle.jar on class path: " + classPath);
+    static {
+        String path = null;
+        String classPath = System.getProperty("java.class.path");
+        for (String e : classPath.split(File.pathSeparator)) {
+            if (e.endsWith("graal.jar")) {
+                path = e;
+                break;
             }
         }
-
-        public Iterator<ZipEntry> iterator() {
-            List<ZipEntry> entries = new ArrayList<>();
-            for (ZipFile jar : jars) {
-                entries.addAll(Collections.list(jar.entries()));
-            }
-            return entries.iterator();
+        ZipFile zipFile = null;
+        try {
+            zipFile = new ZipFile(Objects.requireNonNull(path, "Could not find graal.jar on class path: " + classPath));
+        } catch (IOException e) {
+            throw new InternalError(e);
         }
-
-        public InputStream getInputStream(String classFilePath) throws IOException {
-            for (ZipFile jar : jars) {
-                ZipEntry entry = jar.getEntry(classFilePath);
-                if (entry != null) {
-                    return jar.getInputStream(entry);
-                }
-            }
-            return null;
-        }
+        graalJar = zipFile;
     }
-
-    private static final GraalJars graalJars = new GraalJars();
 
     public static void main(String[] args) {
         PrintStream out = System.out;
@@ -93,7 +73,8 @@ public class GenGraalRuntimeInlineHpp {
      */
     private static void genGetServiceImpls(PrintStream out) throws Exception {
         final List<Class<? extends Service>> services = new ArrayList<>();
-        for (ZipEntry zipEntry : graalJars) {
+        for (final Enumeration<? extends ZipEntry> e = graalJar.entries(); e.hasMoreElements();) {
+            final ZipEntry zipEntry = e.nextElement();
             String name = zipEntry.getName();
             if (name.startsWith("META-INF/services/")) {
                 String serviceName = name.substring("META-INF/services/".length());
@@ -185,7 +166,7 @@ public class GenGraalRuntimeInlineHpp {
                 out.printf("      if (strncmp(name, \"PrintFlags\", %d) == 0) {%n", len);
                 out.println("        if (value[0] == '+') {");
                 out.println("          if (check_only) {");
-                out.println("            TempNewSymbol name = SymbolTable::new_symbol(\"Lcom/oracle/graal/hotspot/HotSpotOptions;\", CHECK_(true));");
+                out.println("            TempNewSymbol name = SymbolTable::new_symbol(\"Lcom/oracle/graal/hotspot/HotSpotOptions;\", THREAD);");
                 out.println("            hotSpotOptionsClass = SystemDictionary::resolve_or_fail(name, true, CHECK_(true));");
                 out.println("          }");
                 out.println("          set_option_helper(hotSpotOptionsClass, name, name_len, Handle(), '?', Handle(), 0L);");
@@ -242,7 +223,7 @@ public class GenGraalRuntimeInlineHpp {
         Set<Class<?>> checked = new HashSet<>();
         for (final OptionDescriptor option : options.values()) {
             Class<?> cls = option.getDeclaringClass();
-            OptionsVerifier.checkClass(cls, option, checked, graalJars);
+            OptionsVerifier.checkClass(cls, option, checked, graalJar);
         }
         return options;
     }
