@@ -22,6 +22,7 @@
  */
 package com.oracle.truffle.espresso.types;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.meta.JavaKind;
 
 /**
