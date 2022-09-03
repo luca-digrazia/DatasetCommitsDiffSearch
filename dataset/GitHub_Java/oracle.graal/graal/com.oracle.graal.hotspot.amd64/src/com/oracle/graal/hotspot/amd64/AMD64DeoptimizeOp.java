@@ -26,12 +26,11 @@ import static com.oracle.graal.hotspot.HotSpotBackend.*;
 
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
 
 @Opcode("DEOPT")
-final class AMD64DeoptimizeOp extends AMD64LIRInstruction implements BlockEndOp {
+final class AMD64DeoptimizeOp extends AMD64LIRInstruction {
 
     @State private LIRFrameState info;
 
@@ -40,7 +39,7 @@ final class AMD64DeoptimizeOp extends AMD64LIRInstruction implements BlockEndOp 
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-        AMD64Call.directCall(crb, masm, crb.foreignCalls.lookupForeignCall(UNCOMMON_TRAP), null, false, info);
+    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+        AMD64Call.directCall(tasm, masm, tasm.runtime.lookupForeignCall(UNCOMMON_TRAP), null, false, info);
     }
 }

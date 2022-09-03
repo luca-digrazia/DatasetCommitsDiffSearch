@@ -376,8 +376,8 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, DeoptimizingNode deopting) {
-        moveDeoptimizationActionAndReasonToThread(action, reason);
+    public void emitDeoptimize(DeoptimizationAction action, DeoptimizingNode deopting) {
+        moveDeoptimizationActionAndReasonToThread(action, deopting.getDeoptimizationReason());
         append(new AMD64DeoptimizeOp(state(deopting)));
     }
 
