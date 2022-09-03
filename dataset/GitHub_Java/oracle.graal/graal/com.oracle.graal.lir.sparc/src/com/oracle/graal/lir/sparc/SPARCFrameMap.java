@@ -94,7 +94,7 @@ public final class SPARCFrameMap extends FrameMap {
 
     @Override
     protected int alignFrameSize(int size) {
-        return NumUtil.roundUp(size, getTarget().stackAlignment);
+        return NumUtil.roundUp(size, target.stackAlignment);
     }
 
     @Override
@@ -112,7 +112,7 @@ public final class SPARCFrameMap extends FrameMap {
      */
     @Override
     public int spillSlotSize(LIRKind kind) {
-        return SPARC.spillSlotSize(getTarget(), kind.getPlatformKind());
+        return SPARC.spillSlotSize(target, kind.getPlatformKind());
     }
 
     /**
