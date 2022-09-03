@@ -248,6 +248,7 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
                 builder.delete(builder.length() - 2, builder.length());
                 return builder.toString();
             }
+
         }
 
         protected static class NameScanner {
@@ -290,6 +291,7 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
                     return -1;
                 }
             }
+
         }
     }
 
@@ -612,7 +614,7 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
             @Override
             protected RootCallTarget generate(FunctionType type) {
                 return wrap("@truffle_invoke",
-                                LLVMTruffleInvokeNodeGen.create(ForeignToLLVM.create(ForeignToLLVMType.POINTER), argumentsArray(3, type.getArgumentTypes().length - 3),
+                                LLVMTruffleInvokeNodeGen.create(LLVMArgNodeGen.create(0), ForeignToLLVM.create(ForeignToLLVMType.POINTER), argumentsArray(3, type.getArgumentTypes().length - 3),
                                                 argumentsTypes(3, type.getArgumentTypes()),
                                                 LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2)));
             }
@@ -623,7 +625,7 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
             @Override
             protected RootCallTarget generate(FunctionType type) {
                 return wrap("@truffle_invoke_i",
-                                LLVMTruffleInvokeNodeGen.create(ForeignToLLVM.create(ForeignToLLVMType.I32), argumentsArray(3, type.getArgumentTypes().length - 3),
+                                LLVMTruffleInvokeNodeGen.create(LLVMArgNodeGen.create(0), ForeignToLLVM.create(ForeignToLLVMType.I32), argumentsArray(3, type.getArgumentTypes().length - 3),
                                                 argumentsTypes(3, type.getArgumentTypes()),
                                                 LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2)));
             }
@@ -634,7 +636,7 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
             @Override
             protected RootCallTarget generate(FunctionType type) {
                 return wrap("@truffle_invoke_l",
-                                LLVMTruffleInvokeNodeGen.create(ForeignToLLVM.create(ForeignToLLVMType.I64), argumentsArray(3, type.getArgumentTypes().length - 3),
+                                LLVMTruffleInvokeNodeGen.create(LLVMArgNodeGen.create(0), ForeignToLLVM.create(ForeignToLLVMType.I64), argumentsArray(3, type.getArgumentTypes().length - 3),
                                                 argumentsTypes(3, type.getArgumentTypes()),
                                                 LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2)));
             }
@@ -645,7 +647,7 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
             @Override
             protected RootCallTarget generate(FunctionType type) {
                 return wrap("@truffle_invoke_c",
-                                LLVMTruffleInvokeNodeGen.create(ForeignToLLVM.create(ForeignToLLVMType.I8), argumentsArray(3, type.getArgumentTypes().length - 3),
+                                LLVMTruffleInvokeNodeGen.create(LLVMArgNodeGen.create(0), ForeignToLLVM.create(ForeignToLLVMType.I8), argumentsArray(3, type.getArgumentTypes().length - 3),
                                                 argumentsTypes(3, type.getArgumentTypes()),
                                                 LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2)));
             }
@@ -656,7 +658,7 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
             @Override
             protected RootCallTarget generate(FunctionType type) {
                 return wrap("@truffle_invoke_f",
-                                LLVMTruffleInvokeNodeGen.create(ForeignToLLVM.create(ForeignToLLVMType.FLOAT), argumentsArray(3, type.getArgumentTypes().length - 3),
+                                LLVMTruffleInvokeNodeGen.create(LLVMArgNodeGen.create(0), ForeignToLLVM.create(ForeignToLLVMType.FLOAT), argumentsArray(3, type.getArgumentTypes().length - 3),
                                                 argumentsTypes(3, type.getArgumentTypes()),
                                                 LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2)));
             }
@@ -667,7 +669,7 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
             @Override
             protected RootCallTarget generate(FunctionType type) {
                 return wrap("@truffle_invoke_d",
-                                LLVMTruffleInvokeNodeGen.create(ForeignToLLVM.create(ForeignToLLVMType.DOUBLE), argumentsArray(3, type.getArgumentTypes().length - 3),
+                                LLVMTruffleInvokeNodeGen.create(LLVMArgNodeGen.create(0), ForeignToLLVM.create(ForeignToLLVMType.DOUBLE), argumentsArray(3, type.getArgumentTypes().length - 3),
                                                 argumentsTypes(3, type.getArgumentTypes()),
                                                 LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2)));
             }
@@ -678,7 +680,7 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
             @Override
             protected RootCallTarget generate(FunctionType type) {
                 return wrap("@truffle_invoke_b",
-                                LLVMTruffleInvokeNodeGen.create(ForeignToLLVM.create(ForeignToLLVMType.I1), argumentsArray(3, type.getArgumentTypes().length - 3),
+                                LLVMTruffleInvokeNodeGen.create(LLVMArgNodeGen.create(0), ForeignToLLVM.create(ForeignToLLVMType.I1), argumentsArray(3, type.getArgumentTypes().length - 3),
                                                 argumentsTypes(3, type.getArgumentTypes()),
                                                 LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2)));
             }
