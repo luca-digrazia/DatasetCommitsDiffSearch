@@ -173,7 +173,7 @@ public class InliningPhase extends AbstractInliningPhase {
         if (inliningPolicy.isWorthInlining(context.getReplacements(), callee, inliningDepth, calleeInfo.probability(), calleeInfo.relevance(), true)) {
             doInline(callerGraphInfo, calleeInfo, callerAssumptions, context);
         } else if (context.getOptimisticOptimizations().devirtualizeInvokes()) {
-            callee.tryToDevirtualizeInvoke(context.getMetaAccess(), callerAssumptions);
+            callee.tryToDevirtualizeInvoke(context.getRuntime(), callerAssumptions);
         }
         metricInliningConsidered.increment();
     }
@@ -184,7 +184,7 @@ public class InliningPhase extends AbstractInliningPhase {
         InlineInfo callee = calleeInfo.callee();
         try {
             List<Node> invokeUsages = callee.invoke().asNode().usages().snapshot();
-            callee.inline(context.getMetaAccess(), context.getConstantReflection(), context.getCodeCache(), callerAssumptions, context.getReplacements());
+            callee.inline(context.getRuntime(), callerAssumptions, context.getReplacements());
             callerAssumptions.record(calleeInfo.assumptions());
             metricInliningRuns.increment();
             Debug.dump(callerGraph, "after %s", callee);
@@ -258,7 +258,7 @@ public class InliningPhase extends AbstractInliningPhase {
                     ValueNode arg = args.get(localNode.index());
                     if (arg.isConstant()) {
                         Constant constant = arg.asConstant();
-                        newGraph.replaceFloating(localNode, ConstantNode.forConstant(constant, context.getMetaAccess(), newGraph));
+                        newGraph.replaceFloating(localNode, ConstantNode.forConstant(constant, context.getRuntime(), newGraph));
                         callerHasMoreInformationAboutArguments = true;
                     } else {
                         Stamp joinedStamp = localNode.stamp().join(arg.stamp());
@@ -637,15 +637,10 @@ public class InliningPhase extends AbstractInliningPhase {
             }
         }
 
-        private static final Object[] NO_CONTEXT = {};
-
         /**
-         * Gets the call hierarchy of this inlining from outer most call to inner most callee.
+         * Gets the call hierarchy of this inling from outer most call to inner most callee.
          */
         public Object[] inliningContext() {
-            if (!Debug.isDumpEnabled()) {
-                return NO_CONTEXT;
-            }
             Object[] result = new Object[graphQueue.size()];
             int i = 0;
             for (GraphInfo g : graphQueue) {
