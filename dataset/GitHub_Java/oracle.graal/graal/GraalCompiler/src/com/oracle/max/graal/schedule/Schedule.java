@@ -81,12 +81,8 @@ public class Schedule {
         return b;
     }
 
-    private static boolean isCFG(Node n) {
+    private boolean isCFG(Node n) {
         return n != null && ((n instanceof Instruction) || n == n.graph().start());
-    }
-
-    public static boolean isBlockEnd(Node n) {
-        return trueSuccessorCount(n) > 1 || n instanceof Anchor || n instanceof Return || n instanceof Unwind;
     }
 
     private void identifyBlocks() {
@@ -126,8 +122,29 @@ public class Schedule {
                     blockBeginNodes.add(n);
                 } else {
                     // We have a single predecessor => check its successor count.
-                    if (isBlockEnd(singlePred)) {
+                    int successorCount = 0;
+                    for (Node succ : singlePred.successors()) {
+                        if (isCFG(succ)) {
+                            successorCount++;
+                            if (successorCount > 1) {
+                                // Our predecessor is a split => we need a new block.
+                                if (singlePred instanceof ExceptionEdgeInstruction) {
+                                    ExceptionEdgeInstruction e = (ExceptionEdgeInstruction) singlePred;
+                                    if (e.exceptionEdge() != n) {
+                                        break;
+                                    }
+                                }
+                                Block b = assignBlock(n);
+                                b.setExceptionEntry(singlePred instanceof ExceptionEdgeInstruction);
+                                blockBeginNodes.add(n);
+                                return true;
+                            }
+                        }
+                    }
+
+                    if (singlePred instanceof BlockEnd) {
                         Block b = assignBlock(n);
+                        b.setExceptionEntry(singlePred instanceof Throw);
                         blockBeginNodes.add(n);
                     } else {
                         assignBlock(n, nodeToBlock.get(singlePred));
@@ -394,6 +411,9 @@ public class Schedule {
         for (Block b : blocks) {
            TTY.println();
            TTY.print(b.toString());
+           if (b.isExceptionEntry()) {
+               TTY.print(" (ex)");
+           }
 
            TTY.print(" succs=");
            for (Block succ : b.getSuccessors()) {
@@ -429,15 +449,5 @@ public class Schedule {
                 TTY.println();
             }
         }*/
-    }
-
-    public static int trueSuccessorCount(Node n) {
-        int i = 0;
-        for (Node s : n.successors()) {
-            if (isCFG(s)) {
-                i++;
-            }
-        }
-        return i;
     }
 }
