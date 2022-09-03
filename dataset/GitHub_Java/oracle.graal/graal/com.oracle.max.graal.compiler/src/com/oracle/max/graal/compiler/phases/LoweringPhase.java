@@ -25,55 +25,73 @@ package com.oracle.max.graal.compiler.phases;
 import java.util.*;
 
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.graph.*;
 
 public class LoweringPhase extends Phase {
     @Override
-    protected void run(final Graph graph) {
-        final IdentifyBlocksPhase s = new IdentifyBlocksPhase(false);
-        s.apply(graph);
-
-//        for (Block b : s.getBlocks()) {
-//            TTY.println("Java block for block " + b.blockID() + " is " + b.javaBlock().blockID());
-//        }
-
-
-        for (final Node n : graph.getNodes()) {
+    protected void run(Graph graph) {
+        NodeMap<Node> javaBlockNodes = graph.createNodeMap();
+        for (Node n : graph.getNodes()) {
             if (n instanceof FixedNode) {
                 LoweringOp op = n.lookup(LoweringOp.class);
                 if (op != null) {
-                    op.lower(n, new LoweringTool() {
-                        @Override
-                        public Node createStructuredBlockAnchor() {
-                            Block block = s.getNodeToBlock().get(n);
-                            Block javaBlock = block.javaBlock();
-                            Node first = javaBlock.firstNode();
-                            if (!(first instanceof Anchor) && !(first instanceof Merge)) {
-                                Anchor a = new Anchor(graph);
-                                assert first.predecessors().size() == 1;
-                                Node pred = first.predecessors().get(0);
-                                int predIndex = first.predecessorsIndex().get(0);
-                                a.successors().setAndClear(Instruction.SUCCESSOR_NEXT, pred, predIndex);
-                                pred.successors().set(predIndex, a);
-                                javaBlock.setFirstNode(a);
-                            }
-                            return javaBlock.firstNode();
-                        }
-                    });
+                    Node javaBlockNode = getJavaBlockNode(javaBlockNodes, n);
                 }
             }
 
         }
     }
 
-    public interface LoweringTool {
-        Node createStructuredBlockAnchor();
+    private Node getJavaBlockNode(NodeMap<Node> javaBlockNodes, Node n) {
+        assert n instanceof FixedNode;
+        if (javaBlockNodes.get(n) == null) {
+
+            Node truePred = null;
+            int count = 0;
+            for (Node pred : n.predecessors()) {
+                if (pred instanceof FixedNode) {
+                    truePred = pred;
+                    count++;
+                }
+            }
+
+            assert count > 0;
+            if (count == 1) {
+                if (Schedule.trueSuccessorCount(truePred) == 1) {
+                    javaBlockNodes.set(n, getJavaBlockNode(javaBlockNodes, truePred));
+                } else {
+                    // Single predecessor is a split => we are our own Java block node.
+                    javaBlockNodes.set(n, n);
+                }
+            } else {
+                Node dominator = null;
+                for (Node pred : n.predecessors()) {
+                    if (pred instanceof FixedNode) {
+                       dominator = getCommonDominator(javaBlockNodes, dominator, pred);
+                    }
+                }
+            }
+        }
+
+        assert Schedule.truePredecessorCount(javaBlockNodes.get(n)) == 1;
+        return javaBlockNodes.get(n);
+    }
+
+    private Node getCommonDominator(NodeMap<Node> javaBlockNodes, Node a, Node b) {
+        if (a == null) {
+            return b;
+        }
+
+        if (b == null) {
+            return a;
+        }
+
+        Node cur = getJavaBlockNode(javaBlockNodes, a);
     }
 
     public interface LoweringOp extends Op {
-        void lower(Node n, LoweringTool tool);
+        Node lower(Node node);
     }
 }

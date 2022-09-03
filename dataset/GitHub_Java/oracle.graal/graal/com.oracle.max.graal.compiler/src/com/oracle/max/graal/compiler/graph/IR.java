@@ -70,7 +70,7 @@ public class IR {
     public void build() {
         new GraphBuilderPhase(compilation, compilation.method, false, false).apply(compilation.graph);
         printGraph("After GraphBuilding", compilation.graph);
-        //new DuplicationPhase().apply(compilation.graph);
+        new DuplicationPhase().apply(compilation.graph);
         new DeadCodeEliminationPhase().apply(compilation.graph);
         printGraph("After DeadCodeElimination", compilation.graph);
 
@@ -91,9 +91,11 @@ public class IR {
             new DeadCodeEliminationPhase().apply(compilation.graph);
         }
 
+        new LoweringPhase().apply(graph);
+
         new SplitCriticalEdgesPhase().apply(graph);
 
-        Schedule schedule = new Schedule();
+        IdentifyBlocksPhase schedule = new IdentifyBlocksPhase(true);
         schedule.apply(graph);
 
 

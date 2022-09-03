@@ -30,7 +30,7 @@ import com.sun.cri.ci.*;
  * The {@code Phi} instruction represents the merging of dataflow
  * in the instruction graph. It refers to a join block and a variable.
  */
-public class Phi extends FloatingNode {
+public final class Phi extends FloatingNode {
 
     private static final int DEFAULT_MAX_VALUES = 2;
 
@@ -92,8 +92,8 @@ public class Phi extends FloatingNode {
         return (Value) inputs().get(INPUT_COUNT + i);
     }
 
-    public Value setValueAt(int i, Value x) {
-        return (Value) inputs().set(INPUT_COUNT + i, x);
+    public Node setValueAt(int i, Node x) {
+        return inputs().set(INPUT_COUNT + i, x);
     }
 
     /**
@@ -144,7 +144,7 @@ public class Phi extends FloatingNode {
         return "Phi: (" + str + ")";
     }
 
-    public Phi addInput(Value y) {
+    public Phi addInput(Node y) {
         assert !this.isDeleted() && !y.isDeleted();
         Phi phi = this;
         if (usedInputCount == maxValues) {
@@ -162,11 +162,11 @@ public class Phi extends FloatingNode {
 
     public void removeInput(int index) {
         assert index < valueCount() : "index: " + index + ", valueCount: " + valueCount() + "@phi " + id();
-        setValueAt(index, null);
+        setValueAt(index, Node.Null);
         for (int i = index + 1; i < valueCount(); ++i) {
             setValueAt(i - 1, valueAt(i));
         }
-        setValueAt(valueCount() - 1, null);
+        setValueAt(valueCount() - 1, Node.Null);
         usedInputCount--;
     }
 
