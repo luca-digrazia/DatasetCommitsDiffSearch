@@ -27,7 +27,6 @@ import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import java.util.*;
 import java.util.Map.Entry;
 
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.debug.*;
@@ -68,6 +67,9 @@ public class MatchRuleRegistry {
         for (int i = 0; i < names.length; i++) {
             for (NodeClass.Position position : nodeClass.getFirstLevelInputPositions()) {
                 String name = nodeClass.getName(position);
+                if (name.endsWith("#NDF")) {
+                    name = name.substring(0, name.length() - 4);
+                }
                 if (name.equals(names[i])) {
                     result[i] = position;
                     break;
@@ -123,7 +125,7 @@ public class MatchRuleRegistry {
      */
     public static Map<Class<? extends ValueNode>, List<MatchStatement>> createRules(Class<? extends NodeLIRBuilder> theClass, NodeClassLookup lookup) {
         HashMap<Class<? extends NodeLIRBuilder>, MatchStatementSet> matchSets = new HashMap<>();
-        Iterable<MatchStatementSet> sl = Services.load(MatchStatementSet.class);
+        ServiceLoader<MatchStatementSet> sl = ServiceLoader.loadInstalled(MatchStatementSet.class);
         for (MatchStatementSet rules : sl) {
             matchSets.put(rules.forClass(), rules);
         }
