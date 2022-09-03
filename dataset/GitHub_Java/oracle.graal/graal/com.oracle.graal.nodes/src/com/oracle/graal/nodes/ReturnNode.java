@@ -22,14 +22,12 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public final class ReturnNode extends ControlSinkNode implements LIRLowerable, IterableNodeType {
+public final class ReturnNode extends ControlSinkNode implements LIRLowerable {
 
     @Input private ValueNode result;
-    @Input private MemoryMapNode memoryMap;
 
     public ValueNode result() {
         return result;
@@ -37,18 +35,13 @@ public final class ReturnNode extends ControlSinkNode implements LIRLowerable, I
 
     /**
      * Constructs a new Return instruction.
-     *
+     * 
      * @param result the instruction producing the result for this return; {@code null} if this is a
      *            void return
      */
     public ReturnNode(ValueNode result) {
-        this(result, null);
-    }
-
-    public ReturnNode(ValueNode result, MemoryMapNode memoryMap) {
         super(StampFactory.forVoid());
         this.result = result;
-        this.memoryMap = memoryMap;
     }
 
     @Override
@@ -57,20 +50,7 @@ public final class ReturnNode extends ControlSinkNode implements LIRLowerable, I
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        if (this.result() == null) {
-            gen.getLIRGeneratorTool().emitReturn(null);
-        } else {
-            gen.getLIRGeneratorTool().emitReturn(gen.operand(this.result()));
-        }
-    }
-
-    public void setMemoryMap(MemoryMapNode memoryMap) {
-        updateUsages(this.memoryMap, memoryMap);
-        this.memoryMap = memoryMap;
-    }
-
-    public MemoryMapNode getMemoryMap() {
-        return memoryMap;
+    public void generate(LIRGeneratorTool gen) {
+        gen.visitReturn(this);
     }
 }

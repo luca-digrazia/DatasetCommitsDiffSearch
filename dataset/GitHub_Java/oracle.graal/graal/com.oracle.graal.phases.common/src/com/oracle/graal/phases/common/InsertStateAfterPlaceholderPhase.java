@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.phases.common;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -31,7 +30,8 @@ import com.oracle.graal.phases.*;
 
 public class InsertStateAfterPlaceholderPhase extends Phase {
 
-    private static class PlaceholderNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, LIRLowerable, Canonicalizable {
+    private static class PlaceholderNode extends AbstractStateSplit implements StateSplit, IterableNodeType, LIRLowerable, Canonicalizable {
+
         public PlaceholderNode() {
             super(StampFactory.forVoid());
         }
@@ -42,13 +42,20 @@ public class InsertStateAfterPlaceholderPhase extends Phase {
         }
 
         @Override
-        public boolean hasSideEffect(CodeCacheProvider runtime) {
+        public boolean hasSideEffect() {
             return false;
         }
 
         @Override
         public ValueNode canonical(CanonicalizerTool tool) {
+            if (!usages().isEmpty()) {
+                return this;
+            }
             if (stateAfter() == null) {
+                return null;
+            }
+            FixedNode next = next();
+            if (next instanceof PlaceholderNode && ((PlaceholderNode) next).stateAfter() != null) {
                 return null;
             }
             return this;
@@ -57,10 +64,19 @@ public class InsertStateAfterPlaceholderPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        for (ReturnNode ret : graph.getNodes(ReturnNode.class)) {
-            PlaceholderNode p = graph.add(new PlaceholderNode());
-            p.setStateAfter(graph.add(new FrameState(FrameState.AFTER_BCI)));
-            graph.addBeforeFixed(ret, p);
+        boolean needsPlaceHolder = false;
+        for (Node node : graph.getNodes().filterInterface(StateSplit.class)) {
+            StateSplit stateSplit = (StateSplit) node;
+            if (stateSplit.hasSideEffect() && stateSplit.stateAfter() != null) {
+                needsPlaceHolder = true;
+            }
+        }
+        if (needsPlaceHolder) {
+            for (ReturnNode ret : graph.getNodes().filter(ReturnNode.class)) {
+                PlaceholderNode p = graph.add(new PlaceholderNode());
+                p.setStateAfter(graph.add(new FrameState(FrameState.AFTER_BCI)));
+                graph.addBeforeFixed(ret, p);
+            }
         }
     }
 
