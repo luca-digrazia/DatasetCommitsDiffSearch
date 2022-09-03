@@ -167,7 +167,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
      * @return True if the constant can be used directly, false if the constant needs to be in a
      *         register.
      */
-    public abstract boolean canStoreConstant(Constant c, boolean isCompressed);
+    public abstract boolean canStoreConstant(Constant c);
 
     public LIRGenerator(StructuredGraph graph, Providers providers, FrameMap frameMap, CallingConvention cc, LIR lir) {
         this.graph = graph;
@@ -565,10 +565,10 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
         emitIncomingValues(params);
 
-        for (ParameterNode param : graph.getNodes(ParameterNode.class)) {
-            Value paramValue = params[param.index()];
-            assert paramValue.getKind() == param.kind().getStackKind();
-            setResult(param, emitMove(paramValue));
+        for (LocalNode local : graph.getNodes(LocalNode.class)) {
+            Value param = params[local.index()];
+            assert param.getKind() == local.kind().getStackKind();
+            setResult(local, emitMove(param));
         }
     }
 
@@ -1007,6 +1007,4 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     public abstract void emitBitScanReverse(Variable result, Value operand);
 
     public abstract void emitByteSwap(Variable result, Value operand);
-
-    public abstract void emitCharArrayEquals(Variable result, Value array1, Value array2, Value length);
 }
