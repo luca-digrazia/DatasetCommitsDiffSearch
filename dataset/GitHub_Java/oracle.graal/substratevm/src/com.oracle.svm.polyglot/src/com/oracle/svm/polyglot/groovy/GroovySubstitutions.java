@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,8 +24,8 @@ package com.oracle.svm.polyglot.groovy;
 
 import java.util.function.BooleanSupplier;
 
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Substitute;
@@ -35,22 +33,22 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.util.VMError;
 
 @AutomaticFeature
-final class GroovyIndyInterfaceFeature implements Feature {
+final class GroovyFeature implements Feature {
 
     static final class IsEnabled implements BooleanSupplier {
         @Override
         public boolean getAsBoolean() {
-            return ImageSingletons.contains(com.oracle.svm.polyglot.groovy.GroovyIndyInterfaceFeature.class);
+            return ImageSingletons.contains(com.oracle.svm.polyglot.groovy.GroovyFeature.class);
         }
     }
 
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return access.findClassByName("org.codehaus.groovy.vmplugin.v7.IndyInterface") != null;
+        return access.findClassByName("org.codehaus.groovy.reflection.ClassInfo") != null;
     }
 }
 
-@TargetClass(className = "org.codehaus.groovy.vmplugin.v7.IndyInterface", onlyWith = com.oracle.svm.polyglot.groovy.GroovyIndyInterfaceFeature.IsEnabled.class)
+@TargetClass(className = "org.codehaus.groovy.vmplugin.v7.IndyInterface", onlyWith = com.oracle.svm.polyglot.groovy.GroovyFeature.IsEnabled.class)
 final class Target_org_codehaus_groovy_vmplugin_v7_IndyInterface_invalidateSwitchPoints {
     @Substitute
     protected static void invalidateSwitchPoints() {
