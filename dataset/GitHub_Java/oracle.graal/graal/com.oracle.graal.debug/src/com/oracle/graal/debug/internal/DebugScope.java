@@ -57,10 +57,12 @@ public final class DebugScope implements Debug.Scope {
                 StringBuilder str = new StringBuilder();
                 printScopeName(str);
                 str.append(indent);
-                String result = args.length == 0 ? msg : String.format(msg, args);
-                String lineSep = System.lineSeparator();
-                str.append(result.replace(lineSep, lineSep.concat(indent)));
-                str.append(lineSep);
+                if (args.length == 0) {
+                    str.append(msg);
+                } else {
+                    str.append(String.format(msg, args));
+                }
+                str.append(System.lineSeparator());
                 output.append(str);
                 lastUsedIndent = this;
             }
