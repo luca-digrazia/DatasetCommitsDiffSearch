@@ -40,6 +40,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.channels.WritableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -54,6 +55,7 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
+import java.util.function.Supplier;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.util.EconomicMap;
@@ -61,8 +63,6 @@ import org.graalvm.util.EconomicSet;
 import org.graalvm.util.Pair;
 
 import jdk.vm.ci.meta.JavaMethod;
-import static org.graalvm.compiler.debug.DebugOptions.DumpPath;
-import org.graalvm.graphio.GraphOutput;
 
 /**
  * A facility for logging and dumping as well as a container for values associated with
@@ -101,7 +101,6 @@ public final class DebugContext implements AutoCloseable {
     Scope lastClosedScope;
     Throwable lastExceptionThrown;
     private IgvDumpChannel sharedChannel;
-    private GraphOutput<?, ?> parentOutput;
 
     /**
      * Stores the {@link MetricKey} values.
@@ -113,19 +112,6 @@ public final class DebugContext implements AutoCloseable {
      */
     public boolean areScopesEnabled() {
         return immutable.scopesEnabled;
-    }
-
-    public <G, N, M> GraphOutput<G, M> buildOutput(GraphOutput.Builder<G, N, M> builder) throws IOException {
-        if (parentOutput != null) {
-            return builder.build(parentOutput);
-        } else {
-            if (sharedChannel == null) {
-                sharedChannel = new IgvDumpChannel(this::getFilePrinterPath, immutable.options);
-            }
-            final GraphOutput<G, M> output = builder.build(sharedChannel);
-            parentOutput = output;
-            return output;
-        }
     }
 
     /**
@@ -393,7 +379,7 @@ public final class DebugContext implements AutoCloseable {
             List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
             List<DebugVerifyHandler> verifyHandlers = new ArrayList<>();
             for (DebugHandlersFactory factory : factories) {
-                for (DebugHandler handler : factory.createHandlers(options)) {
+                for (DebugHandler handler : factory.createHandlers(this::sharedChannel, options)) {
                     if (handler instanceof DebugDumpHandler) {
                         dumpHandlers.add((DebugDumpHandler) handler);
                     } else {
@@ -411,15 +397,11 @@ public final class DebugContext implements AutoCloseable {
         }
     }
 
-    private Path getFilePrinterPath() {
-        // Construct the path to the file.
-        // PrintGraphFileName -
-        String extension = "bgv";
-        try {
-            return PathUtilities.getPath(immutable.options, DumpPath, extension);
-        } catch (IOException ex) {
-            throw rethrowSilently(RuntimeException.class, ex);
+    private WritableByteChannel sharedChannel(Supplier<Path> pathProvider) {
+        if (sharedChannel == null) {
+            sharedChannel = new IgvDumpChannel(pathProvider, immutable.options);
         }
+        return sharedChannel;
     }
 
     /**
@@ -1118,7 +1100,7 @@ public final class DebugContext implements AutoCloseable {
             OptionValues options = getOptions();
             dumpHandlers = new ArrayList<>();
             for (DebugHandlersFactory factory : DebugHandlersFactory.LOADER) {
-                for (DebugHandler handler : factory.createHandlers(options)) {
+                for (DebugHandler handler : factory.createHandlers(this::sharedChannel, options)) {
                     if (handler instanceof DebugDumpHandler) {
                         dumpHandlers.add((DebugDumpHandler) handler);
                     }
@@ -2070,10 +2052,5 @@ public final class DebugContext implements AutoCloseable {
             out.printf("%-" + String.valueOf(maxKeyWidth) + "s = %20s%n", e.getKey(), e.getValue());
         }
         out.println();
-    }
-
-    @SuppressWarnings({"unused", "unchecked"})
-    private static <E extends Exception> E rethrowSilently(Class<E> type, Throwable ex) throws E {
-        throw (E) ex;
     }
 }
