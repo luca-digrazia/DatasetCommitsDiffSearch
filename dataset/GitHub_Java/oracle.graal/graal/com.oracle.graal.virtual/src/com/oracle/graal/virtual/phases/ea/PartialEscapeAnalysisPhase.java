@@ -31,14 +31,13 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.CanonicalizerPhase.CustomCanonicalizer;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.virtual.nodes.*;
 
 public class PartialEscapeAnalysisPhase extends BasePhase<HighTierContext> {
 
@@ -126,13 +125,8 @@ public class PartialEscapeAnalysisPhase extends BasePhase<HighTierContext> {
 
     private static boolean matches(StructuredGraph graph, String filter) {
         if (filter != null) {
-            if (filter.startsWith("~")) {
-                ResolvedJavaMethod method = graph.method();
-                return method == null || !MetaUtil.format("%H.%n", method).contains(filter.substring(1));
-            } else {
-                ResolvedJavaMethod method = graph.method();
-                return method != null && MetaUtil.format("%H.%n", method).contains(filter);
-            }
+            ResolvedJavaMethod method = graph.method();
+            return method != null && MetaUtil.format("%H.%n", method).contains(filter);
         }
         return true;
     }
@@ -144,8 +138,8 @@ public class PartialEscapeAnalysisPhase extends BasePhase<HighTierContext> {
         IdentityHashMap<Node, Node> path = new IdentityHashMap<>();
         flood.add(graph.start());
         for (Node current : flood) {
-            if (current instanceof AbstractEndNode) {
-                AbstractEndNode end = (AbstractEndNode) current;
+            if (current instanceof EndNode) {
+                EndNode end = (EndNode) current;
                 flood.add(end.merge());
                 if (!path.containsKey(end.merge())) {
                     path.put(end.merge(), end);
@@ -187,13 +181,14 @@ public class PartialEscapeAnalysisPhase extends BasePhase<HighTierContext> {
                 }
             }
         }
+        // CheckStyle: stop system..print check
         boolean success = true;
         for (Node node : obsoleteNodes) {
             if (flood.isMarked(node)) {
-                TTY.print("offending node path:");
+                System.out.print("offending node path:");
                 Node current = node;
                 while (current != null) {
-                    TTY.println(current.toString());
+                    System.out.println(current.toString());
                     current = path.get(current);
                     if (current != null && current instanceof FixedNode && !obsoleteNodes.contains(current)) {
                         break;
@@ -202,42 +197,38 @@ public class PartialEscapeAnalysisPhase extends BasePhase<HighTierContext> {
                 success = false;
             }
         }
+        // CheckStyle: resume system..print check
         return success;
     }
 
     public static Map<Invoke, Double> getHints(StructuredGraph graph) {
-        NodesToDoubles probabilities = new ComputeProbabilityClosure(graph).apply();
         Map<Invoke, Double> hints = null;
-        for (CommitAllocationNode commit : graph.getNodes(CommitAllocationNode.class)) {
+        for (MaterializeObjectNode materialize : graph.getNodes(MaterializeObjectNode.class)) {
             double sum = 0;
             double invokeSum = 0;
-            for (Node commitUsage : commit.usages()) {
-                for (Node usage : commitUsage.usages()) {
-                    if (usage instanceof FixedNode) {
-                        sum += probabilities.get((FixedNode) usage);
-                    } else {
-                        if (usage instanceof MethodCallTargetNode) {
-                            invokeSum += probabilities.get(((MethodCallTargetNode) usage).invoke().asNode());
-                        }
-                        for (Node secondLevelUage : usage.usages()) {
-                            if (secondLevelUage instanceof FixedNode) {
-                                sum += probabilities.get(((FixedNode) secondLevelUage));
-                            }
+            for (Node usage : materialize.usages()) {
+                if (usage instanceof FixedNode) {
+                    sum += ((FixedNode) usage).probability();
+                } else {
+                    if (usage instanceof MethodCallTargetNode) {
+                        invokeSum += ((MethodCallTargetNode) usage).invoke().probability();
+                    }
+                    for (Node secondLevelUage : materialize.usages()) {
+                        if (secondLevelUage instanceof FixedNode) {
+                            sum += ((FixedNode) secondLevelUage).probability();
                         }
                     }
                 }
             }
             // TODO(lstadler) get rid of this magic number
             if (sum > 100 && invokeSum > 0) {
-                for (Node commitUsage : commit.usages()) {
-                    for (Node usage : commitUsage.usages()) {
-                        if (usage instanceof MethodCallTargetNode) {
-                            if (hints == null) {
-                                hints = new HashMap<>();
-                            }
-                            Invoke invoke = ((MethodCallTargetNode) usage).invoke();
-                            hints.put(invoke, sum / invokeSum);
+                for (Node usage : materialize.usages()) {
+                    if (usage instanceof MethodCallTargetNode) {
+                        if (hints == null) {
+                            hints = new HashMap<>();
                         }
+                        Invoke invoke = ((MethodCallTargetNode) usage).invoke();
+                        hints.put(invoke, sum / invokeSum);
                     }
                 }
             }

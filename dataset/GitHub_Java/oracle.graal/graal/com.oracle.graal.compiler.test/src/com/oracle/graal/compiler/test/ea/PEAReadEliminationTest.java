@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -221,10 +221,10 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     private void processMethod(final String snippet) {
         graph = parse(snippet);
+        new ComputeProbabilityPhase().apply(graph);
         Assumptions assumptions = new Assumptions(false);
-        HighTierContext context = new HighTierContext(runtime(), assumptions, replacements);
+        HighTierContext context = new HighTierContext(runtime(), assumptions);
         new InliningPhase(runtime(), null, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
-        new PartialEscapePhase(false, true, canonicalizer).apply(graph, context);
+        new PartialEscapeAnalysisPhase(false, true).apply(graph, context);
     }
 }

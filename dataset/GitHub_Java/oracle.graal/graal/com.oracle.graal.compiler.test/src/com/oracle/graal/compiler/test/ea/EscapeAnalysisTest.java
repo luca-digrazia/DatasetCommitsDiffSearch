@@ -35,15 +35,16 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.virtual.nodes.*;
 import com.oracle.graal.virtual.phases.ea.*;
 
 /**
- * The PartialEscapeAnalysisPhase is expected to remove all allocations and return the correct
- * values.
+ * In these test cases the probability of all invokes is set to a high value, such that an
+ * InliningPhase should inline them all. After that, the EscapeAnalysisPhase is expected to remove
+ * all allocations and return the correct values.
  */
 public class EscapeAnalysisTest extends GraalCompilerTest {
 
@@ -217,19 +218,22 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
 
             public ReturnNode call() {
                 new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
+                for (Invoke n : graph.getInvokes()) {
+                    n.setInliningRelevance(1);
+                }
 
                 Assumptions assumptions = new Assumptions(false);
-                HighTierContext context = new HighTierContext(runtime(), assumptions, replacements);
+                HighTierContext context = new HighTierContext(runtime(), assumptions);
                 new InliningPhase(runtime(), null, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
-                new PartialEscapePhase(iterativeEscapeAnalysis, new CanonicalizerPhase(true)).apply(graph, context);
+                new PartialEscapeAnalysisPhase(iterativeEscapeAnalysis, false).apply(graph, context);
                 Assert.assertEquals(1, graph.getNodes(ReturnNode.class).count());
                 ReturnNode returnNode = graph.getNodes(ReturnNode.class).first();
                 if (expectedConstantResult != null) {
                     Assert.assertTrue(returnNode.result().toString(), returnNode.result().isConstant());
                     Assert.assertEquals(expectedConstantResult, returnNode.result().asConstant());
                 }
-                int newInstanceCount = graph.getNodes(NewInstanceNode.class).count() + graph.getNodes(NewArrayNode.class).count() + graph.getNodes(CommitAllocationNode.class).count();
+                int newInstanceCount = graph.getNodes(NewInstanceNode.class).count() + graph.getNodes(NewArrayNode.class).count() + graph.getNodes(MaterializeObjectNode.class).count();
                 Assert.assertEquals(0, newInstanceCount);
                 return returnNode;
             }

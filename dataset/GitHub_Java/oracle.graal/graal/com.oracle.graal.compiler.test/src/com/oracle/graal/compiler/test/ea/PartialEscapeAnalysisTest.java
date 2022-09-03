@@ -34,10 +34,8 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.nodes.*;
 import com.oracle.graal.virtual.phases.ea.*;
@@ -133,12 +131,10 @@ public class PartialEscapeAnalysisTest extends GraalCompilerTest {
         try {
             Assert.assertTrue("partial escape analysis should have removed all NewInstanceNode allocations", result.getNodes(NewInstanceNode.class).isEmpty());
             Assert.assertTrue("partial escape analysis should have removed all NewArrayNode allocations", result.getNodes(NewArrayNode.class).isEmpty());
-
-            NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure(result).apply();
             double probabilitySum = 0;
             int materializeCount = 0;
             for (MaterializeObjectNode materialize : result.getNodes(MaterializeObjectNode.class)) {
-                probabilitySum += nodeProbabilities.get(materialize);
+                probabilitySum += materialize.probability();
                 materializeCount++;
             }
             Assert.assertEquals("unexpected number of MaterializeObjectNodes", expectedCount, materializeCount);
@@ -160,7 +156,10 @@ public class PartialEscapeAnalysisTest extends GraalCompilerTest {
             @Override
             public StructuredGraph call() {
                 StructuredGraph graph = parse(snippet);
-
+                new ComputeProbabilityPhase().apply(graph);
+                for (Invoke n : graph.getInvokes()) {
+                    n.node().setProbability(100000);
+                }
                 Assumptions assumptions = new Assumptions(false);
                 HighTierContext context = new HighTierContext(runtime(), assumptions);
                 new InliningPhase(runtime(), null, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
