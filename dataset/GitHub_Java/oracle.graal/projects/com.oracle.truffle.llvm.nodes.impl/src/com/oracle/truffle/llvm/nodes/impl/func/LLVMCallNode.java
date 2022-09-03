@@ -182,8 +182,7 @@ public abstract class LLVMCallNode {
 
         private final NativeFunctionHandle functionHandle;
 
-        public LLVMResolvedDirectNativeCallNode(@SuppressWarnings("unused") LLVMFunctionDescriptor function, NativeFunctionHandle nativeFunctionHandle, LLVMExpressionNode[] args,
-                        LLVMContext context) {
+        public LLVMResolvedDirectNativeCallNode(@SuppressWarnings("unused") LLVMFunctionDescriptor function, NativeFunctionHandle nativeFunctionHandle, LLVMExpressionNode[] args, LLVMContext context) {
             super(prepareForNative(args, context));
             functionHandle = nativeFunctionHandle;
         }
