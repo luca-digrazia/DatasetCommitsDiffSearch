@@ -22,6 +22,8 @@
  */
 package org.graalvm.compiler.core.test;
 
+import static org.graalvm.compiler.core.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -46,7 +48,7 @@ public class SimpleCFGTest extends GraalCompilerTest {
 
     @Test
     public void testImplies() {
-        StructuredGraph graph = new StructuredGraph.Builder(getInitialOptions(), AllowAssumptions.YES).build();
+        StructuredGraph graph = new StructuredGraph(AllowAssumptions.YES, INVALID_COMPILATION_ID);
 
         EndNode trueEnd = graph.add(new EndNode());
         EndNode falseEnd = graph.add(new EndNode());

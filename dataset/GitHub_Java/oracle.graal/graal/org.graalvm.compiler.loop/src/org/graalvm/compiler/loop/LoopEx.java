@@ -69,9 +69,8 @@ import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.debug.ControlFlowAnchored;
 import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.EconomicSet;
 import org.graalvm.util.Equivalence;
+import org.graalvm.util.EconomicMap;
 
 import jdk.vm.ci.code.BytecodeFrame;
 
@@ -178,7 +177,7 @@ public class LoopEx {
             if (!binary.isAssociative()) {
                 continue;
             }
-            ValueNode result = BinaryArithmeticNode.reassociate(binary, invariant, binary.getX(), binary.getY());
+            BinaryArithmeticNode<?> result = BinaryArithmeticNode.reassociate(binary, invariant, binary.getX(), binary.getY());
             if (result != binary) {
                 if (Debug.isLogEnabled()) {
                     Debug.log("%s : Reassociated %s into %s", graph.method().format("%H::%n"), binary, result);
@@ -297,7 +296,7 @@ public class LoopEx {
     }
 
     public void nodesInLoopBranch(NodeBitMap branchNodes, AbstractBeginNode branch) {
-        EconomicSet<AbstractBeginNode> blocks = EconomicSet.create();
+        Collection<AbstractBeginNode> blocks = new LinkedList<>();
         Collection<LoopExitNode> exits = new LinkedList<>();
         Queue<Block> work = new LinkedList<>();
         ControlFlowGraph cfg = loopsData().getCFG();
@@ -305,9 +304,9 @@ public class LoopEx {
         while (!work.isEmpty()) {
             Block b = work.remove();
             if (loop().getExits().contains(b)) {
-                assert !exits.contains(b.getBeginNode());
                 exits.add((LoopExitNode) b.getBeginNode());
-            } else if (blocks.add(b.getBeginNode())) {
+            } else {
+                blocks.add(b.getBeginNode());
                 Block d = b.getDominatedSibling();
                 while (d != null) {
                     if (loop.getBlocks().contains(d)) {

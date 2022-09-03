@@ -28,6 +28,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map.Entry;
 
+import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
+import jdk.vm.ci.meta.JavaConstant;
+
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.hotspot.nodes.aot.InitializeKlassNode;
@@ -39,9 +42,6 @@ import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
-
-import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
-import jdk.vm.ci.meta.Constant;
 
 public class EliminateRedundantInitializationPhase extends BasePhase<PhaseContext> {
     /**
@@ -204,7 +204,7 @@ public class EliminateRedundantInitializationPhase extends BasePhase<PhaseContex
         ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, false, true, false);
         ArrayList<Node> redundantInits = new ArrayList<>();
         for (ConstantNode node : getConstantNodes(graph)) {
-            Constant constant = node.asConstant();
+            JavaConstant constant = node.asJavaConstant();
             if (constant instanceof HotSpotMetaspaceConstant) {
                 redundantInits.addAll(processConstantNode(cfg, node));
             }

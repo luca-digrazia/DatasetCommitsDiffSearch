@@ -53,7 +53,7 @@ import org.graalvm.compiler.lir.constopt.ConstantTree.NodeCost;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.lir.phases.PreAllocationOptimizationPhase;
-import org.graalvm.compiler.options.NestedBooleanOptionKey;
+import org.graalvm.compiler.options.NestedBooleanOptionValue;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 
@@ -72,7 +72,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
     public static class Options {
         // @formatter:off
         @Option(help = "Enable constant load optimization.", type = OptionType.Debug)
-        public static final NestedBooleanOptionKey LIROptConstantLoadOptimization = new NestedBooleanOptionKey(LIROptimization, true);
+        public static final NestedBooleanOptionValue LIROptConstantLoadOptimization = new NestedBooleanOptionValue(LIROptimization, true);
         // @formatter:on
     }
 
@@ -291,7 +291,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
                 // no better solution found
                 materializeAtDefinitionSkipped.increment();
             }
-            Debug.dump(Debug.DETAILED_LOG_LEVEL, constTree, "ConstantTree for %s", tree.getVariable());
+            Debug.dump(Debug.INFO_LOG_LEVEL, constTree, "ConstantTree for %s", tree.getVariable());
         }
 
         private void createLoads(DefUseTree tree, ConstantTree constTree, AbstractBlockBase<?> startBlock) {

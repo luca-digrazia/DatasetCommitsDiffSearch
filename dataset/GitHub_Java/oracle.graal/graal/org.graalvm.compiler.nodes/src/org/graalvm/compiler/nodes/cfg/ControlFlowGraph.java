@@ -195,13 +195,7 @@ public final class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
     }
 
     private static void addDeferredExit(DeferredExit[] deferredExits, Block b) {
-        Loop<Block> outermostExited = b.getDominator().getLoop();
-        Loop<Block> exitBlockLoop = b.getLoop();
-        assert outermostExited != null;
-        while (outermostExited.getParent() != null && outermostExited.getParent() != exitBlockLoop) {
-            outermostExited = outermostExited.getParent();
-        }
-        int loopIndex = outermostExited.getIndex();
+        int loopIndex = b.getDominator().getLoop().getIndex();
         deferredExits[loopIndex] = new DeferredExit(b, deferredExits[loopIndex]);
     }
 
