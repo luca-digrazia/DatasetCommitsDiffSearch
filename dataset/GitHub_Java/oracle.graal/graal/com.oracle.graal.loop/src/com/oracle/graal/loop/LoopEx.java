@@ -30,11 +30,12 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 
+import jdk.vm.ci.common.JVMCIError;
+
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.cfg.Loop;
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeBitMap;
 import com.oracle.graal.graph.iterators.NodePredicate;
@@ -45,8 +46,8 @@ import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.FixedGuardNode;
 import com.oracle.graal.nodes.FixedNode;
 import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.FullInfopointNode;
 import com.oracle.graal.nodes.IfNode;
+import com.oracle.graal.nodes.InfopointNode;
 import com.oracle.graal.nodes.LogicNode;
 import com.oracle.graal.nodes.LoopBeginNode;
 import com.oracle.graal.nodes.LoopExitNode;
@@ -194,7 +195,7 @@ public class LoopEx {
     public boolean detectCounted() {
         LoopBeginNode loopBegin = loopBegin();
         FixedNode next = loopBegin.next();
-        while (next instanceof FixedGuardNode || next instanceof ValueAnchorNode || next instanceof FullInfopointNode) {
+        while (next instanceof FixedGuardNode || next instanceof ValueAnchorNode || next instanceof InfopointNode) {
             next = ((FixedWithNextNode) next).next();
         }
         if (next instanceof IfNode) {
@@ -282,7 +283,7 @@ public class LoopEx {
                     }
                     break;
                 default:
-                    throw GraalError.shouldNotReachHere();
+                    throw JVMCIError.shouldNotReachHere();
             }
             counted = new CountedLoopInfo(this, iv, limit, oneOff, negated ? ifNode.falseSuccessor() : ifNode.trueSuccessor());
             return true;
@@ -294,7 +295,7 @@ public class LoopEx {
         return data;
     }
 
-    public void nodesInLoopBranch(NodeBitMap branchNodes, AbstractBeginNode branch) {
+    public NodeBitMap nodesInLoopBranch(AbstractBeginNode branch) {
         Collection<AbstractBeginNode> blocks = new LinkedList<>();
         Collection<LoopExitNode> exits = new LinkedList<>();
         Queue<Block> work = new LinkedList<>();
@@ -313,7 +314,7 @@ public class LoopEx {
                 }
             }
         }
-        LoopFragment.computeNodes(branchNodes, branch.graph(), blocks, exits);
+        return LoopFragment.computeNodes(branch.graph(), blocks, exits);
     }
 
     public Map<Node, InductionVariable> getInductionVariables() {

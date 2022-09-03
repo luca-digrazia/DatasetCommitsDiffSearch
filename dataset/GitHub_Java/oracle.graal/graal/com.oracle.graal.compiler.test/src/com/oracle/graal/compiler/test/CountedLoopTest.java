@@ -227,7 +227,7 @@ public class CountedLoopTest extends GraalCompilerTest {
         public void rewrite(LoopsData loops) {
             InductionVariable inductionVariable = loops.getInductionVariable(iv);
             ValueNode node = property.get(inductionVariable);
-            replaceAtUsagesAndDelete(node);
+            graph().replaceFloating(this, node);
         }
 
         public void generate(NodeLIRBuilderTool gen) {
