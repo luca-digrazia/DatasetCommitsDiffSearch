@@ -1318,7 +1318,5 @@ class SourceSnippets {
         // END: SourceSnippets#fromAString
         return source;
     }
-
-    public static boolean loaded = true;
 }
 // @formatter:on
