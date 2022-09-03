@@ -32,7 +32,7 @@ import com.oracle.graal.replacements.nodes.*;
  * 
  * @see ClassSubstitutions#isInterface(Class)
  */
-public class ClassIsInterfaceNode extends MacroNode implements Canonicalizable {
+public class ClassIsInterfaceNode extends MacroNode implements Canonicalizable, Lowerable {
 
     public ClassIsInterfaceNode(Invoke invoke) {
         super(invoke);
