@@ -178,7 +178,7 @@ public final class SuspendedEvent {
     /**
      * Returns the debugger session this suspended event was created for.
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.17
      */
@@ -204,7 +204,7 @@ public final class SuspendedEvent {
      * event is processed, it is possible and suggested to keep a reference to it and use it any
      * time later when evaluating sources in the {@link com.oracle.truffle.api.vm.PolyglotEngine}.
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @return instance of debugger associated with the just suspended execution and any subsequent
      *         ones in the same {@link com.oracle.truffle.api.vm.PolyglotEngine}.
@@ -240,7 +240,7 @@ public final class SuspendedEvent {
      * Returns the guest language source section of the AST node before/after the execution is
      * suspended. Returns <code>null</code> if no source section information is available.
      * <p>
-     * This method is thread-safe.ad.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.17
      */
@@ -253,7 +253,7 @@ public final class SuspendedEvent {
      * Returns <code>true</code> if the execution is suspended before executing a guest language
      * source location. Returns <code>false</code> if it was suspended after.
      * <p>
-     * This method is thread-safe..
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.14
      */
@@ -269,8 +269,7 @@ public final class SuspendedEvent {
      * instrumented statement. The debug value remains valid event if the current execution was
      * suspend.
      * <p>
-     * This method is not thread-safe and will throw an {@link IllegalStateException} if called on
-     * another thread than it was created with.
+     * This method is not allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.17
      */
@@ -322,8 +321,9 @@ public final class SuspendedEvent {
      * Returns the cause of failure, if any, during evaluation of a breakpoint's
      * {@linkplain Breakpoint#setCondition(String) condition}.
      *
+     *
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @param breakpoint a breakpoint associated with this event
      * @return the cause of condition failure
@@ -342,7 +342,7 @@ public final class SuspendedEvent {
      * Returns the {@link Breakpoint breakpoints} that individually would cause the "hit" where
      * execution is suspended.
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @return an unmodifiable list of breakpoints
      *
@@ -380,8 +380,7 @@ public final class SuspendedEvent {
     /**
      * Returns the topmost stack frame returned by {@link #getStackFrames()}.
      * <p>
-     * This method is not thread-safe and will throw an {@link IllegalStateException} if called on
-     * another thread than it was created with.
+     * This method is not allowed to be invoked from other threads than the execution thread.
      *
      * @see #getStackFrames()
      * @since 0.17
@@ -398,8 +397,7 @@ public final class SuspendedEvent {
      * suspend} and should not be stored permanently.
      *
      * <p>
-     * This method is not thread-safe and will throw an {@link IllegalStateException} if called on
-     * another thread than it was created with.
+     * This method is not allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.17
      */
@@ -432,7 +430,7 @@ public final class SuspendedEvent {
      * <li>execution completes.</li>
      * </ul>
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.9
      */
@@ -473,7 +471,7 @@ public final class SuspendedEvent {
      * </ul>
      * </ul>
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @param stepCount the number of times to perform StepInto before halting
      * @throws IllegalArgumentException if {@code stepCount <= 0}
@@ -509,7 +507,7 @@ public final class SuspendedEvent {
      * </li>
      * </ul>
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.9
      */
@@ -550,7 +548,7 @@ public final class SuspendedEvent {
      * mode is set.</li>
      * </ul>
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @param stepCount the number of times to perform StepOver before halting
      * @throws IllegalArgumentException if {@code stepCount <= 0}
@@ -570,7 +568,7 @@ public final class SuspendedEvent {
      * {@link com.oracle.truffle.tck.ExecWithTimeOut#tckSnippets}
      *
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.12
      */
