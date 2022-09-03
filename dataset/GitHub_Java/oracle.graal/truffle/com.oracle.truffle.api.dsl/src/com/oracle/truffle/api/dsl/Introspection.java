@@ -198,7 +198,7 @@ public final class Introspection {
         }
 
         /**
-         * Returns the number of dynamic specialization instances that are active for this
+         * Returns the number of dynamic specialization instances that are active of this
          * specialization.
          *
          * @since 0.22

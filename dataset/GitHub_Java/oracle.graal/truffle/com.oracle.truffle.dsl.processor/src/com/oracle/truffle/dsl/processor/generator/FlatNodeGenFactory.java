@@ -64,7 +64,7 @@ import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
 import com.oracle.truffle.api.dsl.internal.DSLOptions;
-import com.oracle.truffle.api.dsl.internal.IntrospectionAccessor;
+import com.oracle.truffle.api.dsl.internal.ReflectionAccesor;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.Node.Child;
@@ -375,8 +375,8 @@ public class FlatNodeGenFactory {
     }
 
     private void generateReflectionInfo(CodeTypeElement clazz) {
-        clazz.getImplements().add(context.getType(IntrospectionAccessor.class));
-        CodeExecutableElement reflection = new CodeExecutableElement(modifiers(PUBLIC), context.getType(Object.class), "getIntrospectionData");
+        clazz.getImplements().add(context.getType(ReflectionAccesor.class));
+        CodeExecutableElement reflection = new CodeExecutableElement(modifiers(PUBLIC), context.getType(Object.class), "getReflectionData");
 
         CodeTreeBuilder builder = reflection.createBuilder();
 
@@ -451,6 +451,8 @@ public class FlatNodeGenFactory {
             if (mayBeExcluded(specialization)) {
                 builder.startElseIf().tree(exclude.createContains(frameState, new Object[]{specialization})).end().startBlock();
                 builder.startStatement().string("s[1] = (byte)0b10 /* excluded */").end();
+// builder.startStatement().string("s[1] =
+// (byte)0b01").staticReference(context.getType(State.class), "EXCLUDED").end();
                 builder.end();
             }
             builder.startElseBlock();
