@@ -597,9 +597,8 @@ public final class NodeClass extends FieldIntrospection {
 
         while (index < edges.getCount()) {
             NodeList<Node> list = edges.getNodeList(node, index);
-            if (list != null) {
-                edges.initializeList(node, index, updateEdgeListCopy(node, list, duplicationReplacement, edges.type()));
-            }
+            assert list != null : edges;
+            edges.initializeList(node, index, updateEdgeListCopy(node, list, duplicationReplacement, edges.type()));
             index++;
         }
     }
@@ -732,7 +731,7 @@ public final class NodeClass extends FieldIntrospection {
                         Fingerprint.submit("duplicating %s", node);
                     }
                     Node newNode = node.clone(graph, WithAllEdges);
-                    assert newNode.inputs().isEmpty() || newNode.hasNoUsages();
+                    assert newNode.inputs().isEmpty() || newNode.usages().isEmpty();
                     assert newNode.getClass() == node.getClass();
                     newNodes.put(node, newNode);
                 }

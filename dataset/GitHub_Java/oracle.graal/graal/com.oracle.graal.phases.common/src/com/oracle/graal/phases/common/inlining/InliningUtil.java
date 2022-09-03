@@ -265,7 +265,7 @@ public class InliningUtil {
             }
         }
 
-        final AbstractBeginNode prevBegin = AbstractBeginNode.prevBegin(invokeNode);
+        final BeginNode prevBegin = BeginNode.prevBegin(invokeNode);
         DuplicationReplacement localReplacement = new DuplicationReplacement() {
 
             public Node replacement(Node node) {
@@ -303,9 +303,9 @@ public class InliningUtil {
             }
 
             // get rid of memory kill
-            AbstractBeginNode begin = invokeWithException.next();
+            BeginNode begin = invokeWithException.next();
             if (begin instanceof KillingBeginNode) {
-                AbstractBeginNode newBegin = new BeginNode();
+                BeginNode newBegin = new BeginNode();
                 graph.addAfterFixed(begin, graph.add(newBegin));
                 begin.replaceAtUsages(newBegin);
                 graph.removeFixed(begin);
@@ -344,7 +344,7 @@ public class InliningUtil {
                 for (ReturnNode returnNode : returnNodes) {
                     returnDuplicates.add((ReturnNode) duplicates.get(returnNode));
                 }
-                AbstractMergeNode merge = graph.add(new MergeNode());
+                MergeNode merge = graph.add(new MergeNode());
                 merge.setStateAfter(stateAfter);
                 ValueNode returnValue = mergeReturns(merge, returnDuplicates, canonicalizedNodes);
                 invokeNode.replaceAtUsages(returnValue);
@@ -448,8 +448,8 @@ public class InliningUtil {
                 } else {
                     StateSplit stateSplit = (StateSplit) usage;
                     FixedNode fixedStateSplit = stateSplit.asNode();
-                    if (fixedStateSplit instanceof AbstractMergeNode) {
-                        AbstractMergeNode merge = (AbstractMergeNode) fixedStateSplit;
+                    if (fixedStateSplit instanceof MergeNode) {
+                        MergeNode merge = (MergeNode) fixedStateSplit;
                         while (merge.isAlive()) {
                             AbstractEndNode end = merge.forwardEnds().first();
                             DeoptimizeNode deoptimizeNode = graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.NotCompiledExceptionHandler));
@@ -458,7 +458,7 @@ public class InliningUtil {
                         }
                     } else {
                         FixedNode deoptimizeNode = graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.NotCompiledExceptionHandler));
-                        if (fixedStateSplit instanceof AbstractBeginNode) {
+                        if (fixedStateSplit instanceof BeginNode) {
                             deoptimizeNode = BeginNode.begin(deoptimizeNode);
                         }
                         fixedStateSplit.replaceAtPredecessor(deoptimizeNode);
@@ -469,7 +469,7 @@ public class InliningUtil {
         }
     }
 
-    public static ValueNode mergeReturns(AbstractMergeNode merge, List<? extends ReturnNode> returnNodes, List<Node> canonicalizedNodes) {
+    public static ValueNode mergeReturns(MergeNode merge, List<? extends ReturnNode> returnNodes, List<Node> canonicalizedNodes) {
         PhiNode returnValuePhi = null;
 
         for (ReturnNode returnNode : returnNodes) {
