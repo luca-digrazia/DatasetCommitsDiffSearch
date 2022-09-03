@@ -4174,8 +4174,7 @@ public class BytecodeParser implements GraphBuilderContext {
         ValueNode value = frameState.pop(JavaKind.Int);
 
         int nofCases = bs.numberOfCases();
-        int nofCasesPlusDefault = nofCases + 1;
-        double[] keyProbabilities = switchProbability(nofCasesPlusDefault, bci);
+        double[] keyProbabilities = switchProbability(nofCases + 1, bci);
 
         EconomicMap<Integer, SuccessorInfo> bciToBlockSuccessorIndex = EconomicMap.create(Equivalence.DEFAULT);
         for (int i = 0; i < currentBlock.getSuccessorCount(); i++) {
@@ -4185,11 +4184,11 @@ public class BytecodeParser implements GraphBuilderContext {
 
         ArrayList<BciBlock> actualSuccessors = new ArrayList<>();
         int[] keys = new int[nofCases];
-        int[] keySuccessors = new int[nofCasesPlusDefault];
+        int[] keySuccessors = new int[nofCases + 1];
         int deoptSuccessorIndex = -1;
         int nextSuccessorIndex = 0;
         boolean constantValue = value.isConstant();
-        for (int i = 0; i < nofCasesPlusDefault; i++) {
+        for (int i = 0; i < nofCases + 1; i++) {
             if (i < nofCases) {
                 keys[i] = bs.keyAt(i);
             }
@@ -4201,7 +4200,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 }
                 keySuccessors[i] = deoptSuccessorIndex;
             } else {
-                int targetBci = i < nofCases ? bs.targetAt(i) : bs.defaultTarget();
+                int targetBci = i >= nofCases ? bs.defaultTarget() : bs.targetAt(i);
                 SuccessorInfo info = bciToBlockSuccessorIndex.get(targetBci);
                 if (info.actualIndex < 0) {
                     info.actualIndex = nextSuccessorIndex++;
@@ -4210,34 +4209,13 @@ public class BytecodeParser implements GraphBuilderContext {
                 keySuccessors[i] = info.actualIndex;
             }
         }
-        /*
-         * When the profile indicates a case is never taken, the above code will cause the case to
-         * deopt should it be subsequently encountered. However, the case may share code with
-         * another case that is taken according to the profile. Since code will be compiled for that
-         * latter case, the first case should simply route to that code instead of deopting.
-         *
-         * For example:
-         * // @formatter:off
-         * switch (opcode) {
-         *     case GOTO:
-         *     case GOTO_W: {
-         *         // emit goto code
-         *         break;
-         *     }
-         * }
-         * // @formatter:on
-         *
-         * The profile may indicate the GOTO_W case is never taken. However, instead of deopting,
-         * it should use the same target code as the GOTO case.
-         */
+        // Second iteration: patch successors with deoptSuccessorIndex if their targets are resolved
         if (deoptSuccessorIndex >= 0) {
-            for (int i = 0; i < nofCasesPlusDefault; i++) {
-                if (keySuccessors[i] == deoptSuccessorIndex) {
-                    int targetBci = i < nofCases ? bs.targetAt(i) : bs.defaultTarget();
-                    SuccessorInfo info = bciToBlockSuccessorIndex.get(targetBci);
-                    if (info.actualIndex >= 0) {
-                        keySuccessors[i] = info.actualIndex;
-                    }
+            for (int i = 0; i < nofCases + 1; i++) {
+                int targetBci = i >= nofCases ? bs.defaultTarget() : bs.targetAt(i);
+                SuccessorInfo info = bciToBlockSuccessorIndex.get(targetBci);
+                if (keySuccessors[i] == deoptSuccessorIndex && info.actualIndex >= 0) {
+                    keySuccessors[i] = info.actualIndex;
                 }
             }
         }
