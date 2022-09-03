@@ -162,7 +162,7 @@ public class ConvertDeoptimizeToGuardPhase extends BasePhase<PhaseContext> {
         while (current != null) {
             if (GraalOptions.GuardPriorities.getValue(from.getOptions()) && current instanceof FixedGuardNode) {
                 FixedGuardNode otherGuard = (FixedGuardNode) current;
-                if (otherGuard.computePriority().compareTo(deopt.computePriority()) < 0) {
+                if (otherGuard.computePriority().ordinal() < deopt.computePriority().ordinal()) {
                     moveAsDeoptAfter(otherGuard, deopt);
                     return;
                 }
