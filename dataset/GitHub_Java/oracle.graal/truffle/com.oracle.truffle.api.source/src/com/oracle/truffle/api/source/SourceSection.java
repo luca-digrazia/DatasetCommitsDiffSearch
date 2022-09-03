@@ -289,6 +289,7 @@ public final class SourceSection {
 
     /** @since 0.8 or earlier */
     @Override
+    @SuppressFBWarnings("ES_COMPARING_STRINGS_WITH_EQ")
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
