@@ -25,26 +25,36 @@ package com.oracle.max.graal.runtime.nodes;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.runtime.*;
 import com.sun.cri.ci.*;
 
 
 public final class FPConversionNode extends FloatingNode {
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_OBJECT = 0;
 
-    @NodeInput
-    private Value value;
+    private static final int SUCCESSOR_COUNT = 0;
 
-    public Value value() {
-        return value;
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setValue(Value x) {
-        updateUsages(value, x);
-        value = x;
+    /**
+     * The instruction that produces the object tested against null.
+     */
+     public Value value() {
+        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
+    }
+
+    public void setValue(Value n) {
+        inputs().set(super.inputCount() + INPUT_OBJECT, n);
     }
 
     public FPConversionNode(CiKind kind, Value value, Graph graph) {
-        super(kind, graph);
+        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.setValue(value);
     }
 

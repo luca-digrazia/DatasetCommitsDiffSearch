@@ -523,7 +523,7 @@ public final class BlockMap {
             }
 
             assert block.loops == 0;
-            block.loops = (long) 1 << (long) nextLoop;
+            block.loops = 1 << nextLoop;
             nextLoop++;
         }
         assert Long.bitCount(block.loops) == 1;

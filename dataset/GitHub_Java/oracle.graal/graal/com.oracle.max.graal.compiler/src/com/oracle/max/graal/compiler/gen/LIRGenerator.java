@@ -42,7 +42,6 @@ import com.oracle.max.graal.compiler.ir.Deoptimize.DeoptAction;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.value.*;
-import com.oracle.max.graal.compiler.value.FrameState.ValueProcedure;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.Bytecodes.MemoryBarriers;
 import com.sun.cri.ci.*;
@@ -200,6 +199,10 @@ public abstract class LIRGenerator extends ValueVisitor {
         variablesForConstants = new ArrayList<CiVariable>();
 
         this.operands = new OperandPool(compilation.target);
+    }
+
+    public CiTarget target() {
+        return compilation.target;
     }
 
     public LIRList lir() {
@@ -481,13 +484,6 @@ public abstract class LIRGenerator extends ValueVisitor {
             emitInstanceOf((TypeCheck) node, trueSuccessor, falseSuccessor, info);
         } else if (node instanceof NotInstanceOf) {
             emitInstanceOf((TypeCheck) node, falseSuccessor, trueSuccessor, info);
-        } else if (node instanceof Constant) {
-            CiConstant constant = ((Constant) node).asConstant();
-            assert constant.kind == CiKind.Boolean;
-            LIRBlock target = constant.asBoolean() ? trueSuccessor : falseSuccessor;
-            if (target != null) {
-                lir.jump(target);
-            }
         } else {
             throw Util.unimplemented(node.toString());
         }
@@ -588,11 +584,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     protected FrameState stateBeforeInvokeWithArguments(Invoke invoke) {
-        Value[] args = new Value[invoke.argumentCount()];
-        for (int i = 0; i < invoke.argumentCount(); i++) {
-            args[i] = invoke.argument(i);
-        }
-        return invoke.stateAfter().duplicateModified(getBeforeInvokeBci(invoke), invoke.stateAfter().rethrowException(), invoke.kind, args);
+        return invoke.stateAfter().duplicateModified(getBeforeInvokeBci(invoke), invoke.stateAfter().rethrowException(), invoke.kind, invoke.arguments().toArray(new Value[0]));
     }
 
     private int getBeforeInvokeBci(Invoke invoke) {
@@ -750,8 +742,11 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitFixedGuard(FixedGuard fixedGuard) {
-        BooleanNode comp = fixedGuard.node();
-        emitGuardComp(comp);
+        for (Node n : fixedGuard.inputs()) {
+            if (n != null) {
+                emitGuardComp((BooleanNode) n);
+            }
+        }
     }
 
     public void emitGuardComp(BooleanNode comp) {
@@ -1082,7 +1077,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             lastState = fs;
         } else if (block.blockPredecessors().size() == 1) {
             FrameState fs = block.blockPredecessors().get(0).lastState();
-            assert fs != null;
+            //assert fs != null : "B" + block.blockID() + ", pred=B" + block.blockPredecessors().get(0).blockID();
             if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
                 TTY.println("STATE CHANGE (singlePred)");
                 if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
@@ -1102,7 +1097,7 @@ public abstract class LIRGenerator extends ValueVisitor {
      * @return the operand that is guaranteed to be a stack location when it is
      *         initially defined a by move from {@code value}
      */
-    CiValue forceToSpill(CiValue value, CiKind kind, boolean mustStayOnStack) {
+    public CiValue forceToSpill(CiValue value, CiKind kind, boolean mustStayOnStack) {
         assert value.isLegal() : "value should not be illegal";
         assert kind.jvmSlots == value.kind.jvmSlots : "size mismatch";
         if (!value.isVariableOrRegister()) {
@@ -1469,8 +1464,11 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitEndNode(EndNode end) {
         setNoResult(end);
+        assert end.merge() != null;
         moveToPhi(end.merge(), end);
-        lir.jump(getLIRBlock(end.merge()));
+        LIRBlock lirBlock = getLIRBlock(end.merge());
+        assert lirBlock != null : end;
+        lir.jump(lirBlock);
     }
 
     @Override
@@ -1617,25 +1615,57 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    protected void walkState(final Node x, FrameState state) {
+    protected void walkState(Node x, FrameState state) {
         if (state == null) {
             return;
         }
 
-        state.forEachLiveStateValue(new ValueProcedure() {
-            public void doValue(Value value) {
-                if (value == x) {
-                    // nothing to do, will be visited shortly
-                } else if (value instanceof Phi && !((Phi) value).isDead()) {
-                    // phi's are special
-                    operandForPhi((Phi) value);
-                } else if (value.operand().isIllegal()) {
-                    // instruction doesn't have an operand yet
-                    CiValue operand = makeOperand(value);
-                    assert operand.isLegal() : "must be evaluated now";
+        walkState(x, state.outerFrameState());
+
+        for (int index = 0; index < state.stackSize(); index++) {
+            Value value = state.stackAt(index);
+            if (value != x) {
+                walkStateValue(value);
+            }
+        }
+        for (int index = 0; index < state.localsSize(); index++) {
+            final Value value = state.localAt(index);
+            if (value != null) {
+                if (!(value instanceof Phi && ((Phi) value).isDead())) {
+                    walkStateValue(value);
                 }
             }
-        });
+        }
+    }
+
+    private void walkStateValue(Value value) {
+        if (value != null) {
+            if (value instanceof VirtualObject) {
+                walkVirtualObject((VirtualObject) value);
+            } else if (value instanceof Phi && !((Phi) value).isDead()) {
+                // phi's are special
+                operandForPhi((Phi) value);
+            } else if (value.operand().isIllegal()) {
+                // instruction doesn't have an operand yet
+                CiValue operand = makeOperand(value);
+                assert operand.isLegal() : "must be evaluated now";
+            }
+        }
+    }
+
+    private void walkVirtualObject(VirtualObject value) {
+        if (value.input() instanceof Phi) {
+            assert !((Phi) value.input()).isDead();
+        }
+        HashSet<Object> fields = new HashSet<Object>();
+        VirtualObject obj = value;
+        do {
+            if (!fields.contains(obj.field().representation())) {
+                fields.add(obj.field().representation());
+                walkStateValue(obj.input());
+            }
+            obj = obj.object();
+        } while (obj != null);
     }
 
     protected LIRDebugInfo stateFor(Value x) {
@@ -1652,10 +1682,9 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     List<CiValue> visitInvokeArguments(CiCallingConvention cc, Invoke x, List<CiValue> pointerSlots) {
         // for each argument, load it into the correct location
-        List<CiValue> argList = new ArrayList<CiValue>(x.argumentCount());
+        List<CiValue> argList = new ArrayList<CiValue>();
         int j = 0;
-        for (int i = 0; i < x.argumentCount(); i++) {
-            Value arg = x.argument(i);
+        for (Value arg : x.arguments()) {
             if (arg != null) {
                 CiValue operand = cc.locations[j++];
                 if (operand.isRegister()) {
