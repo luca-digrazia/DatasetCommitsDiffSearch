@@ -36,12 +36,14 @@ import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.java.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.options.OptionValue.OverrideScope;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.runtime.*;
 
@@ -172,7 +174,6 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         return Boolean.valueOf(true);
     }
 
-    @Ignore("ImmutableCode override may not work reliably in non-hosted mode")
     @Test
     public void testBoxedBooleanAOT() {
         StructuredGraph result = compile("getBoxedBoolean", true);
@@ -201,11 +202,14 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         ResolvedJavaMethod method = graph.method();
 
         try (OverrideScope s = OptionValue.override(ImmutableCode, compileAOT)) {
+            PhasePlan phasePlan = new PhasePlan();
+            GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(getMetaAccess(), getForeignCalls(), GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
+            phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
             CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
             // create suites everytime, as we modify options for the compiler
             final Suites suitesLocal = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getSuites().createSuites();
-            final CompilationResult compResult = compileGraph(graph, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), null, getDefaultGraphBuilderSuite(),
-                            OptimisticOptimizations.ALL, getProfilingInfo(graph), new SpeculationLog(), suitesLocal, true, new CompilationResult(), CompilationResultBuilderFactory.Default);
+            final CompilationResult compResult = compileGraph(graph, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), null, phasePlan, OptimisticOptimizations.ALL,
+                            getProfilingInfo(graph), new SpeculationLog(), suitesLocal, true, new CompilationResult(), CompilationResultBuilderFactory.Default);
             addMethod(method, compResult);
         }
 

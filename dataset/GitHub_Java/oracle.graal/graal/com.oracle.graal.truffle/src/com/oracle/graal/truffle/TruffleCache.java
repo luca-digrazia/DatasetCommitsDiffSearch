@@ -26,7 +26,6 @@ import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
 import java.util.*;
-import java.util.Map.Entry;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
@@ -56,16 +55,13 @@ import com.oracle.truffle.api.nodes.*;
  */
 public final class TruffleCache {
 
-    private static final int MAX_CACHE_SIZE = 512;
     private final Providers providers;
     private final GraphBuilderConfiguration config;
     private final OptimisticOptimizations optimisticOptimizations;
 
     private final HashMap<List<Object>, StructuredGraph> cache = new HashMap<>();
-    private final HashMap<List<Object>, Long> lastUsed = new HashMap<>();
     private final StructuredGraph markerGraph = new StructuredGraph();
     private final ResolvedJavaType stringBuilderClass;
-    private long counter;
 
     public TruffleCache(Providers providers, GraphBuilderConfiguration config, OptimisticOptimizations optimisticOptimizations) {
         this.providers = providers;
@@ -86,7 +82,6 @@ public final class TruffleCache {
         }
         StructuredGraph resultGraph = cache.get(key);
         if (resultGraph != null) {
-            lastUsed.put(key, counter++);
             return resultGraph;
         }
 
@@ -95,40 +90,17 @@ public final class TruffleCache {
             return null;
         }
 
-        if (lastUsed.values().size() >= TruffleCompilerOptions.TruffleMaxCompilationCacheSize.getValue()) {
-            List<Long> lastUsedList = new ArrayList<>();
-            for (long l : lastUsed.values()) {
-                lastUsedList.add(l);
-            }
-            Collections.sort(lastUsedList);
-            long mid = lastUsedList.get(lastUsedList.size() / 2);
-
-            List<List<Object>> toRemoveList = new ArrayList<>();
-            for (Entry<List<Object>, Long> entry : lastUsed.entrySet()) {
-                if (entry.getValue() < mid) {
-                    toRemoveList.add(entry.getKey());
-                }
-            }
-
-            for (List<Object> entry : toRemoveList) {
-                cache.remove(entry);
-                lastUsed.remove(entry);
-            }
-        }
-
-        lastUsed.put(key, counter++);
         cache.put(key, markerGraph);
         try (Scope s = Debug.scope("TruffleCache", new Object[]{providers.getMetaAccess(), method})) {
 
             final StructuredGraph graph = new StructuredGraph(method);
-            final PhaseContext phaseContext = new PhaseContext(providers, new Assumptions(false));
-            Mark mark = graph.getMark();
-            new GraphBuilderPhase.Instance(phaseContext.getMetaAccess(), config, optimisticOptimizations).apply(graph);
+            PhaseContext phaseContext = new PhaseContext(providers, new Assumptions(false));
+            new GraphBuilderPhase(phaseContext.getMetaAccess(), providers.getForeignCalls(), config, optimisticOptimizations).apply(graph);
 
-            for (ParameterNode param : graph.getNodes(ParameterNode.class)) {
-                if (param.kind() == Kind.Object) {
-                    ValueNode actualArgument = arguments.get(param.index());
-                    param.setStamp(param.stamp().join(actualArgument.stamp()));
+            for (LocalNode l : graph.getNodes(LocalNode.class)) {
+                if (l.kind() == Kind.Object) {
+                    ValueNode actualArgument = arguments.get(l.index());
+                    l.setStamp(l.stamp().join(actualArgument.stamp()));
                 }
             }
 
@@ -141,6 +113,7 @@ public final class TruffleCache {
             CanonicalizerPhase canonicalizerPhase = new CanonicalizerPhase(!ImmutableCode.getValue());
             PartialEscapePhase partialEscapePhase = new PartialEscapePhase(false, canonicalizerPhase);
 
+            Mark mark = null;
             while (true) {
 
                 partialEscapePhase.apply(graph, phaseContext);
@@ -154,7 +127,7 @@ public final class TruffleCache {
 
                 boolean inliningProgress = false;
                 for (MethodCallTargetNode methodCallTarget : graph.getNodes(MethodCallTargetNode.class)) {
-                    if (!graph.getMark().equals(mark)) {
+                    if (graph.getMark().equals(mark)) {
                         // Make sure macro substitutions such as
                         // CompilerDirectives.transferToInterpreter get processed first.
                         for (Node newNode : graph.getNewNodes(mark)) {
@@ -162,7 +135,7 @@ public final class TruffleCache {
                                 MethodCallTargetNode methodCallTargetNode = (MethodCallTargetNode) newNode;
                                 Class<? extends FixedWithNextNode> macroSubstitution = providers.getReplacements().getMacroSubstitution(methodCallTargetNode.targetMethod());
                                 if (macroSubstitution != null) {
-                                    InliningUtil.inlineMacroNode(methodCallTargetNode.invoke(), methodCallTargetNode.targetMethod(), macroSubstitution);
+                                    InliningUtil.inlineMacroNode(methodCallTargetNode.invoke(), methodCallTargetNode.targetMethod(), methodCallTargetNode.graph(), macroSubstitution);
                                 } else {
                                     tryCutOffRuntimeExceptions(methodCallTargetNode);
                                 }

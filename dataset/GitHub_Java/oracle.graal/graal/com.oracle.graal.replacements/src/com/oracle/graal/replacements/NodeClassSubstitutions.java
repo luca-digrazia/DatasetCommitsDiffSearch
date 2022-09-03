@@ -22,38 +22,64 @@
  */
 package com.oracle.graal.replacements;
 
+import static com.oracle.graal.phases.GraalOptions.*;
+
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.nodes.*;
 
 /**
  * Substitutions for improving the performance of some critical methods in {@link NodeClass}
  * methods. These substitutions improve the performance by forcing the relevant methods to be
  * inlined (intrinsification being a special form of inlining) and removing a checked cast. The
- * latter cannot be done directly in Java code as {@link UnsafeCastNode} is not available to the
- * project containing {@link NodeClass}.
+ * latter cannot be done directly in Java code as {@link PiNode} is not available to the project
+ * containing {@link NodeClass}.
  */
 @ClassSubstitution(NodeClass.class)
 public class NodeClassSubstitutions {
 
+    /**
+     * A macro node for calls to {@link NodeClass#get(Class)}. It can use the compiler's knowledge
+     * about node classes to replace itself with a constant value for a constant {@link Class}
+     * parameter.
+     */
+    public static class NodeClassGetNode extends PureFunctionMacroNode {
+
+        public NodeClassGetNode(Invoke invoke) {
+            super(invoke);
+        }
+
+        @Override
+        protected Constant evaluate(Constant param, MetaAccessProvider metaAccess) {
+            return param.isNull() || ImmutableCode.getValue() ? null : Constant.forObject(NodeClass.get((Class<?>) param.asObject()));
+        }
+    }
+
+    @MacroSubstitution(isStatic = true, forced = true, macro = NodeClassGetNode.class)
+    private static native NodeClass get(Class<?> c);
+
     @MethodSubstitution
     private static Node getNode(Node node, long offset) {
-        return UnsafeCastNode.unsafeCast(UnsafeLoadNode.load(node, 0, offset, Kind.Object), Node.class, false, false);
+        return PiNode.piCast(UnsafeLoadNode.load(node, offset, Kind.Object, LocationIdentity.ANY_LOCATION), Node.class, false, false);
     }
 
     @MethodSubstitution
     private static NodeList getNodeList(Node node, long offset) {
-        return UnsafeCastNode.unsafeCast(UnsafeLoadNode.load(node, 0, offset, Kind.Object), NodeList.class, false, false);
+        return PiNode.piCast(UnsafeLoadNode.load(node, offset, Kind.Object, LocationIdentity.ANY_LOCATION), NodeList.class, false, false);
     }
 
     @MethodSubstitution
     private static void putNode(Node node, long offset, Node value) {
-        UnsafeStoreNode.store(node, 0, offset, value, Kind.Object);
+        UnsafeStoreNode.store(node, offset, value, Kind.Object, LocationIdentity.ANY_LOCATION);
     }
 
     @MethodSubstitution
     private static void putNodeList(Node node, long offset, NodeList value) {
-        UnsafeStoreNode.store(node, 0, offset, value, Kind.Object);
+        UnsafeStoreNode.store(node, offset, value, Kind.Object, LocationIdentity.ANY_LOCATION);
     }
 
 }

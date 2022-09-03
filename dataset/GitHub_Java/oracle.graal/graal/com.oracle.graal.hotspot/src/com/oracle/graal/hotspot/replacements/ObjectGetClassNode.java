@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
@@ -37,7 +37,6 @@ import com.oracle.graal.replacements.nodes.*;
  * This macro node will replace itself with the correct Java {@link Class} as soon as the object's
  * type is known (exact).
  */
-@NodeInfo
 public class ObjectGetClassNode extends MacroNode implements Virtualizable, Canonicalizable {
 
     public ObjectGetClassNode(Invoke invoke) {
@@ -68,17 +67,12 @@ public class ObjectGetClassNode extends MacroNode implements Virtualizable, Cano
         if (usages().isEmpty()) {
             return null;
         } else {
-            ResolvedJavaType type = StampTool.typeOrNull(getObject());
-            if (StampTool.isExactType(getObject())) {
-                Constant clazz = type.getEncoding(Representation.JavaClass);
-                return ConstantNode.forConstant(clazz, tool.getMetaAccess());
-            }
-            if (type != null && tool.assumptions().useOptimisticAssumptions()) {
-                ResolvedJavaType exactType = type.findUniqueConcreteSubtype();
-                if (exactType != null) {
-                    tool.assumptions().recordConcreteSubtype(type, exactType);
-                    Constant clazz = exactType.getEncoding(Representation.JavaClass);
-                    return ConstantNode.forConstant(clazz, tool.getMetaAccess());
+            Stamp stamp = getObject().stamp();
+            if (stamp instanceof ObjectStamp) {
+                ObjectStamp objectStamp = (ObjectStamp) stamp;
+                if (objectStamp.isExactType()) {
+                    Constant clazz = objectStamp.type().getEncoding(Representation.JavaClass);
+                    return ConstantNode.forConstant(clazz, tool.getMetaAccess(), graph());
                 }
             }
             return this;

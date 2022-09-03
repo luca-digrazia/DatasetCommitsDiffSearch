@@ -68,16 +68,16 @@ public class PartialEvaluator {
     private final Providers providers;
     private final ResolvedJavaMethod executeHelperMethod;
     private final CanonicalizerPhase canonicalizer;
-    private final GraphBuilderConfiguration config;
+    private final ResolvedJavaType[] skippedExceptionTypes;
     private Set<Constant> constantReceivers;
     private final GraphCache cache;
     private final TruffleCache truffleCache;
 
-    public PartialEvaluator(RuntimeProvider runtime, Providers providers, TruffleCache truffleCache, GraphBuilderConfiguration config) {
+    public PartialEvaluator(RuntimeProvider runtime, Providers providers, TruffleCache truffleCache) {
         this.providers = providers;
         CustomCanonicalizer customCanonicalizer = new PartialEvaluatorCanonicalizer(providers.getMetaAccess(), providers.getConstantReflection());
         this.canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue(), customCanonicalizer);
-        this.config = config;
+        this.skippedExceptionTypes = TruffleCompilerImpl.getSkippedExceptionTypes(providers.getMetaAccess());
         this.cache = runtime.getGraphCache();
         this.truffleCache = truffleCache;
         try {
@@ -98,13 +98,16 @@ public class PartialEvaluator {
             constantReceivers = new HashSet<>();
         }
 
+        final GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault();
+        config.setSkippedExceptionTypes(skippedExceptionTypes);
+
         final StructuredGraph graph = new StructuredGraph(executeHelperMethod);
 
         try (Scope s = Debug.scope("createGraph", graph)) {
-            new GraphBuilderPhase.Instance(providers.getMetaAccess(), config, TruffleCompilerImpl.Optimizations).apply(graph);
+            new GraphBuilderPhase(providers.getMetaAccess(), providers.getForeignCalls(), config, TruffleCompilerImpl.Optimizations).apply(graph);
 
             // Replace thisNode with constant.
-            ParameterNode thisNode = graph.getParameter(0);
+            LocalNode thisNode = graph.getLocal(0);
             thisNode.replaceAndDelete(ConstantNode.forObject(callTarget, providers.getMetaAccess(), graph));
 
             // Canonicalize / constant propagate.
@@ -138,8 +141,10 @@ public class PartialEvaluator {
                 new DebugHistogramAsciiPrinter(TTY.out().out()).print(histogram);
             }
 
+            // Additional inlining.
+            final PhasePlan plan = new PhasePlan();
             canonicalizer.apply(graph, baseContext);
-            HighTierContext tierContext = new HighTierContext(providers, assumptions, cache, new PhaseSuite<HighTierContext>(), OptimisticOptimizations.NONE);
+            HighTierContext tierContext = new HighTierContext(providers, assumptions, cache, plan, OptimisticOptimizations.NONE);
 
             for (NeverPartOfCompilationNode neverPartOfCompilationNode : graph.getNodes(NeverPartOfCompilationNode.class)) {
                 Throwable exception = new VerificationError(neverPartOfCompilationNode.getMessage());
@@ -189,14 +194,17 @@ public class PartialEvaluator {
                         constantReceivers.add(constantNode.asConstant());
                     }
                     Replacements replacements = providers.getReplacements();
-                    Class<? extends FixedWithNextNode> macroSubstitution = replacements.getMacroSubstitution(methodCallTargetNode.targetMethod());
-                    if (macroSubstitution != null) {
-                        InliningUtil.inlineMacroNode(methodCallTargetNode.invoke(), methodCallTargetNode.targetMethod(), macroSubstitution);
-                        changed = true;
-                        continue;
+                    StructuredGraph inlineGraph = replacements.getMethodSubstitution(methodCallTargetNode.targetMethod());
+
+                    if (inlineGraph == null) {
+                        Class<? extends FixedWithNextNode> macroSubstitution = replacements.getMacroSubstitution(methodCallTargetNode.targetMethod());
+                        if (macroSubstitution != null) {
+                            InliningUtil.inlineMacroNode(methodCallTargetNode.invoke(), methodCallTargetNode.targetMethod(), methodCallTargetNode.graph(), macroSubstitution);
+                            changed = true;
+                            continue;
+                        }
                     }
 
-                    StructuredGraph inlineGraph = replacements.getMethodSubstitution(methodCallTargetNode.targetMethod());
                     if (inlineGraph == null && !Modifier.isNative(methodCallTargetNode.targetMethod().getModifiers()) &&
                                     methodCallTargetNode.targetMethod().getAnnotation(CompilerDirectives.SlowPath.class) == null) {
                         inlineGraph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, phaseContext);
@@ -244,16 +252,16 @@ public class PartialEvaluator {
             assert graph.hasLoops();
             final StructuredGraph graphCopy = graph.copy();
             final List<Node> modifiedNodes = new ArrayList<>();
-            for (ParameterNode param : graphCopy.getNodes(ParameterNode.class)) {
-                ValueNode arg = arguments.get(param.index());
+            for (LocalNode local : graphCopy.getNodes(LocalNode.class)) {
+                ValueNode arg = arguments.get(local.index());
                 if (arg.isConstant()) {
                     Constant constant = arg.asConstant();
-                    for (Node usage : param.usages()) {
+                    for (Node usage : local.usages()) {
                         if (usage instanceof Canonicalizable) {
                             modifiedNodes.add(usage);
                         }
                     }
-                    param.replaceAndDelete(ConstantNode.forConstant(constant, phaseContext.getMetaAccess(), graphCopy));
+                    local.replaceAndDelete(ConstantNode.forConstant(constant, phaseContext.getMetaAccess(), graphCopy));
                 }
             }
             try (Scope s = Debug.scope("TruffleUnrollLoop", targetMethod)) {
