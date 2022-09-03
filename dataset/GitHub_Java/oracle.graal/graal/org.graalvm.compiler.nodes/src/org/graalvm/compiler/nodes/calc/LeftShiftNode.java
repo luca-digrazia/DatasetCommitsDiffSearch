@@ -70,7 +70,7 @@ public final class LeftShiftNode extends ShiftNode<Shl> {
         LeftShiftNode self = leftShiftNode;
         if (forY.isConstant()) {
             int amount = forY.asJavaConstant().asInt();
-            int originalAmount = amount;
+            int originalAmout = amount;
             int mask = op.getShiftAmountMask(stamp);
             amount &= mask;
             if (amount == 0) {
@@ -96,7 +96,7 @@ public final class LeftShiftNode extends ShiftNode<Shl> {
                     }
                 }
             }
-            if (originalAmount != amount) {
+            if (originalAmout != amount) {
                 return new LeftShiftNode(forX, ConstantNode.forInt(amount));
             }
         }
