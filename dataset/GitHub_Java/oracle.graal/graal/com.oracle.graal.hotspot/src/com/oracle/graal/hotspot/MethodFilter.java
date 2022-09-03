@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot;
 
-import java.util.*;
 import java.util.regex.*;
 
 import com.oracle.max.cri.ci.*;
@@ -45,9 +44,6 @@ import com.oracle.max.cri.ri.*;
  * <li><pre>visit(Argument;BlockScope)</pre>
  * Matches all methods named "visit", with the first parameter of type "Argument", and the second parameter of type "BlockScope".
  * The packages of the parameter types are irrelevant.</li>
- * <li><pre>arraycopy(Object;;;;)</pre>
- * Matches all methods named "arraycopy", with the first parameter of type "Object", and four more parameters of any type.
- * The packages of the parameter types are irrelevant.</li>
  * <li><pre>com.oracle.graal.compiler.graph.PostOrderNodeIterator.*</pre>
  * Matches all methods in the class "com.oracle.graal.compiler.graph.PostOrderNodeIterator".</li>
  * <li><pre>*</pre>
@@ -55,6 +51,7 @@ import com.oracle.max.cri.ri.*;
  * <li><pre>com.oracle.graal.compiler.graph.*.visit</pre>
  * Matches all methods named "visit" in classes in the package "com.oracle.graal.compiler.graph".</pre>
  * </ul>
+ *
  */
 public class MethodFilter {
 
@@ -71,7 +68,7 @@ public class MethodFilter {
             if (pattern.charAt(pattern.length() - 1) != ')') {
                 throw new IllegalArgumentException("missing ')' at end of method filter pattern: " + pattern);
             }
-            String[] signatureClasses = pattern.substring(pos + 1, pattern.length() - 1).split(";", -1);
+            String[] signatureClasses = pattern.substring(pos + 1, pattern.length() - 1).split(";");
             signature = new Pattern[signatureClasses.length];
             for (int i = 0; i < signatureClasses.length; i++) {
                 signature[i] = createClassGlobPattern(signatureClasses[i].trim());
@@ -98,12 +95,10 @@ public class MethodFilter {
     }
 
     private static Pattern createClassGlobPattern(String pattern) {
-        if (pattern.length() == 0) {
-            return null;
-        } else if (pattern.contains(".")) {
+        if (pattern.contains(".")) {
             return Pattern.compile(createGlobString(pattern));
         } else {
-            return Pattern.compile("([^\\.]*\\.)*" + createGlobString(pattern));
+            return Pattern.compile("([^\\.]\\.)*" + createGlobString(pattern));
         }
     }
 
@@ -122,8 +117,7 @@ public class MethodFilter {
             }
             for (int i = 0; i < signature.length; i++) {
                 RiType type = sig.argumentTypeAt(i, null);
-                String javaName = CiUtil.toJavaName(type);
-                if (signature[i] != null && !signature[i].matcher(javaName).matches()) {
+                if (!signature[i].matcher(CiUtil.toJavaName(type)).matches()) {
                     return false;
                 }
             }
@@ -144,7 +138,7 @@ public class MethodFilter {
             sep = ", ";
         }
         if (signature != null) {
-            buf.append(sep).append("signature=").append(Arrays.toString(signature));
+            buf.append(sep).append("signature=").append(signature);
             sep = ", ";
         }
         return buf.append("]").toString();
