@@ -49,15 +49,6 @@ import com.oracle.truffle.api.nodes.Node;
 @SuppressWarnings("deprecation")
 abstract class ToJavaNode extends Node {
     static final int LIMIT = 3;
-
-    /** Subtype or lossless conversion to primitive type (incl. unboxing). */
-    static final int STRICT = 0;
-    /** Wrapping or array conversion; int to char. */
-    static final int LOOSE = 1;
-    /** Lossy conversion to String. */
-    static final int COERCE = 2;
-    static final int[] PRIORITIES = {STRICT, LOOSE, COERCE};
-
     @Child private Node isExecutable = Message.IS_EXECUTABLE.createNode();
     @Child private Node isInstantiable = Message.IS_INSTANTIABLE.createNode();
     @Child private Node isNull = Message.IS_NULL.createNode();
@@ -124,19 +115,21 @@ abstract class ToJavaNode extends Node {
         return convertedValue;
     }
 
-    boolean canConvertToPrimitive(Object value, Class<?> targetType, int priority) {
+    boolean canConvertToPrimitive(Object value, Class<?> targetType, boolean strict) {
         if (JavaObject.isJavaInstance(targetType, value)) {
             return true;
         }
-        if (!isAssignableFromTrufflePrimitiveType(targetType)) {
+        Object unboxed;
+        if (isAssignableFromTrufflePrimitiveType(targetType)) {
+            unboxed = primitive.unbox(value);
+            Object convertedValue = primitive.toPrimitive(unboxed, targetType);
+            if (convertedValue != null) {
+                return true;
+            }
+        } else {
             return false;
         }
-        Object unboxed = primitive.unbox(value);
-        Object convertedValue = primitive.toPrimitive(unboxed, targetType);
-        if (convertedValue != null) {
-            return true;
-        }
-        if (priority <= STRICT) {
+        if (strict) {
             return false;
         }
         if (targetType == char.class || targetType == Character.class) {
@@ -147,18 +140,18 @@ abstract class ToJavaNode extends Node {
                     return true;
                 }
             }
-        } else if (priority >= COERCE && targetType == String.class && JavaInterop.isPrimitive(unboxed)) {
+        } else if (targetType == String.class && JavaInterop.isPrimitive(unboxed)) {
             return true;
         }
         return false;
     }
 
     @SuppressWarnings({"unused"})
-    boolean canConvert(Object value, Class<?> targetType, Type genericType, Object languageContext, int priority) {
-        if (canConvertToPrimitive(value, targetType, priority)) {
+    boolean canConvert(Object value, Class<?> targetType, Type genericType, Object languageContext, boolean strict) {
+        if (canConvertToPrimitive(value, targetType, strict)) {
             return true;
         }
-        if (priority <= STRICT) {
+        if (strict) {
             return false;
         }
         if (targetType == Value.class && languageContext != null) {
