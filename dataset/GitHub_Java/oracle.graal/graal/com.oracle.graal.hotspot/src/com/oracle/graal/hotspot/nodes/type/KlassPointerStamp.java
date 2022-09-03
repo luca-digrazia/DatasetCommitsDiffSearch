@@ -24,12 +24,11 @@ package com.oracle.graal.hotspot.nodes.type;
 
 import java.util.*;
 
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
+import com.oracle.graal.hotspot.meta.*;
 
 public final class KlassPointerStamp extends MetaspacePointerStamp {
 
@@ -88,7 +87,6 @@ public final class KlassPointerStamp extends MetaspacePointerStamp {
         }
 
         assert c instanceof HotSpotMetaspaceConstant;
-        assert ((HotSpotMetaspaceConstant) c).isCompressed() == isCompressed();
         if (nonNull()) {
             return this;
         }

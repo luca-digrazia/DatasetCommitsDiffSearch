@@ -22,9 +22,7 @@
  */
 package com.oracle.graal.compiler.common.type;
 
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.JavaConstant;
-import com.oracle.jvmci.meta.Constant;
+import com.oracle.graal.api.meta.*;
 
 /**
  * Abstract base class of all pointer types.
@@ -40,7 +38,7 @@ public abstract class AbstractPointerStamp extends Stamp {
     }
 
     public boolean nonNull() {
-        return nonNull || this.isEmpty();
+        return nonNull;
     }
 
     public boolean alwaysNull() {
@@ -63,11 +61,7 @@ public abstract class AbstractPointerStamp extends Stamp {
         AbstractPointerStamp other = (AbstractPointerStamp) stamp;
         boolean joinNonNull = this.nonNull || other.nonNull;
         boolean joinAlwaysNull = this.alwaysNull || other.alwaysNull;
-        if (joinNonNull && joinAlwaysNull) {
-            return empty();
-        } else {
-            return copyWith(joinNonNull, joinAlwaysNull);
-        }
+        return copyWith(joinNonNull, joinAlwaysNull);
     }
 
     @Override
