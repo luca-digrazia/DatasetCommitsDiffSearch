@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -32,6 +30,7 @@ import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.OptimisticOptimizations.Optimization;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.junit.Test;
 
 public class MergeCanonicalizerTest extends GraalCompilerTest {
@@ -70,8 +69,8 @@ public class MergeCanonicalizerTest extends GraalCompilerTest {
 
     private void testReturnCount(String snippet, int returnCount) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
-        new CanonicalizerPhase().apply(graph, getProviders());
-        new CanonicalizerPhase().apply(graph, getProviders());
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
         graph.getDebug().dump(DebugContext.BASIC_LEVEL, graph, "Graph");
         assertDeepEquals(returnCount, graph.getNodes(ReturnNode.TYPE).count());
     }
