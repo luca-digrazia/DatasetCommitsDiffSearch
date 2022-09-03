@@ -22,12 +22,9 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -74,7 +71,7 @@ public final class TypeProfileProxyNode extends FloatingNode implements Canonica
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (ObjectStamp.isExactType(object)) {
             // The profile is useless - we know the type!
             return object;
@@ -104,7 +101,7 @@ public final class TypeProfileProxyNode extends FloatingNode implements Canonica
                 Debug.log("Profile useless, there is enough static type information available.");
                 return object;
             }
-            if (Objects.equals(type, lastCheckedType)) {
+            if (type == lastCheckedType) {
                 // We have already incorporate the knowledge about this type => abort.
                 return this;
             }

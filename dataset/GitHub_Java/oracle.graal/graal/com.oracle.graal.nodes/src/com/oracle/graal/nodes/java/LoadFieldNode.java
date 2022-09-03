@@ -27,7 +27,6 @@ import java.lang.reflect.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -37,7 +36,7 @@ import com.oracle.graal.nodes.virtual.*;
  * The {@code LoadFieldNode} represents a read of a static or instance field.
  */
 @NodeInfo(nameTemplate = "LoadField#{p#field/s}")
-public final class LoadFieldNode extends AccessFieldNode implements Canonicalizable, VirtualizableRoot {
+public final class LoadFieldNode extends AccessFieldNode implements Canonicalizable, IterableNodeType, VirtualizableRoot {
 
     /**
      * Creates a new LoadFieldNode instance.
@@ -59,23 +58,17 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
-        if (usages().isEmpty() && (isStatic() || ObjectStamp.isObjectNonNull(object().stamp()))) {
-            return null;
-        }
-        MetaAccessProvider metaAccess = tool.getMetaAccess();
-        if (tool.canonicalizeReads() && metaAccess != null) {
-            ConstantNode constant = asConstant(metaAccess);
+    public ValueNode canonical(CanonicalizerTool tool) {
+        MetaAccessProvider runtime = tool.runtime();
+        if (tool.canonicalizeReads() && runtime != null) {
+            ConstantNode constant = asConstant(runtime);
             if (constant != null) {
                 return constant;
             }
-            PhiNode phi = asPhi(metaAccess);
+            PhiNode phi = asPhi(runtime);
             if (phi != null) {
                 return phi;
             }
-        }
-        if (!isStatic() && object().isNullConstant()) {
-            return graph().add(new DeoptimizeNode(DeoptimizationAction.None, DeoptimizationReason.NullCheckException));
         }
         return this;
     }
@@ -83,7 +76,7 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
     /**
      * Gets a constant value for this load if possible.
      */
-    public ConstantNode asConstant(MetaAccessProvider metaAccess) {
+    public ConstantNode asConstant(MetaAccessProvider runtime) {
         Constant constant = null;
         if (isStatic()) {
             constant = field().readConstantValue(null);
@@ -91,12 +84,12 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
             constant = field().readConstantValue(object().asConstant());
         }
         if (constant != null) {
-            return ConstantNode.forConstant(constant, metaAccess, graph());
+            return ConstantNode.forConstant(constant, runtime, graph());
         }
         return null;
     }
 
-    private PhiNode asPhi(MetaAccessProvider metaAccess) {
+    private PhiNode asPhi(MetaAccessProvider runtime) {
         if (!isStatic() && Modifier.isFinal(field.getModifiers()) && object() instanceof PhiNode && ((PhiNode) object()).values().filter(NodePredicates.isNotA(ConstantNode.class)).isEmpty()) {
             PhiNode phi = (PhiNode) object();
             Constant[] constants = new Constant[phi.valueCount()];
@@ -109,7 +102,7 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
             }
             PhiNode newPhi = graph().addWithoutUnique(new PhiNode(stamp(), phi.merge()));
             for (int i = 0; i < phi.valueCount(); i++) {
-                newPhi.addInput(ConstantNode.forConstant(constants[i], metaAccess, graph()));
+                newPhi.addInput(ConstantNode.forConstant(constants[i], runtime, graph()));
             }
             return newPhi;
         }

@@ -25,8 +25,6 @@ package com.oracle.graal.nodes.calc;
 import static com.oracle.graal.nodes.calc.CompareNode.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -68,7 +66,7 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (condition instanceof LogicNegationNode) {
             LogicNegationNode negated = (LogicNegationNode) condition;
             return graph().unique(new ConditionalNode(negated.getInput(), falseValue(), trueValue()));
@@ -113,8 +111,8 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
         generator.emitConditional(this);
     }
 
-    private ConditionalNode(@InjectedNodeParameter StructuredGraph graph, Condition condition, ValueNode x, ValueNode y) {
-        this(createCompareNode(graph, condition, x, y));
+    private ConditionalNode(Condition condition, ValueNode x, ValueNode y) {
+        this(createCompareNode(condition, x, y));
     }
 
     private ConditionalNode(ValueNode type, ValueNode object) {

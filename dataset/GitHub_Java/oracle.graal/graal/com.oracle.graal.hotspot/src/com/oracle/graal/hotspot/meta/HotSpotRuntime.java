@@ -476,9 +476,9 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     }
 
     @Override
-    public Integer lookupArrayLength(Constant array) {
+    public int lookupArrayLength(Constant array) {
         if (array.getKind() != Kind.Object || array.isNull() || !array.asObject().getClass().isArray()) {
-            return null;
+            throw new IllegalArgumentException(array + " is not an array");
         }
         return Array.getLength(array.asObject());
     }
