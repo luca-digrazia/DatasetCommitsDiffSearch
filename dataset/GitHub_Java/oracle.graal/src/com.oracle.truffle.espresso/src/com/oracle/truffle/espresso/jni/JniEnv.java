@@ -28,7 +28,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.CharBuffer;
@@ -71,10 +70,10 @@ import com.oracle.truffle.nfi.types.NativeSimpleType;
 
 public class JniEnv extends NativeEnv {
 
-    public static final int JNI_OK = 0; /* success */
-    public static final int JNI_ERR = -1; /* unknown error */
-    public static final int JNI_COMMIT = 1;
-    public static final int JNI_ABORT = 2;
+    private static final int JNI_OK = 0; /* success */
+    private static final int JNI_ERR = -1; /* unknown error */
+    private static final int JNI_COMMIT = 1;
+    private static final int JNI_ABORT = 2;
 
     private long jniEnvPtr;
 
@@ -168,22 +167,14 @@ public class JniEnv extends NativeEnv {
         StringBuilder sb = new StringBuilder("(");
         // Prepend JNIEnv* . The raw pointer will be substituted by the proper `this` reference.
         sb.append(NativeSimpleType.POINTER);
-        for (Parameter param : method.getParameters()) {
-            sb.append(", ");
-
-            // Override NFI type.
-            NFIType nfiType = param.getAnnotatedType().getAnnotation(NFIType.class);
-            if (nfiType != null) {
-                sb.append(NativeSimpleType.valueOf(nfiType.value().toUpperCase()));
-            } else {
-                sb.append(classToType(param.getType(), false));
-            }
+        for (Class<?> param : method.getParameterTypes()) {
+            sb.append(", ").append(classToType(param, false));
         }
         sb.append("): ").append(classToType(method.getReturnType(), true));
         return sb.toString();
     }
 
-    public TruffleObject lookupJniImpl(String methodName) {
+    TruffleObject lookupJniImpl(String methodName) {
         Method m = jniMethods.get(methodName);
         try {
             // Dummy placeholder for unimplemented/unknown methods.
@@ -203,10 +194,6 @@ public class JniEnv extends NativeEnv {
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    public boolean containsMethod(String methodName) {
-        return jniMethods.containsKey(methodName);
     }
 
     private class VarArgsImpl implements VarArgs {
@@ -1212,37 +1199,31 @@ public class JniEnv extends NativeEnv {
         buf.put(chars, start, len);
     }
 
-    private String nfiSignature(String signature, boolean isJni) {
+    private String nfiSignature(String signature) {
         SignatureDescriptor descriptor = EspressoLanguage.getCurrentContext().getSignatureDescriptors().make(signature);
         int argCount = descriptor.getParameterCount(false);
         StringBuilder sb = new StringBuilder("(");
 
-        boolean first = true;
-        if (isJni) {
-            sb.append(NativeSimpleType.POINTER); // JNIEnv*
-            sb.append(",");
-            sb.append(Utils.kindToType(JavaKind.Object, false)); // Receiver or class (for static methods).
-            first = false;
-        }
-        for (int i = 0; i  < argCount; ++i) {
-            JavaKind kind = descriptor.getParameterKind(i);
-            if (!first) {
-                sb.append(", ");
-            } else {
-                first = false;
-            }
+        if (argCount > 0) {
+            JavaKind kind = descriptor.getParameterKind(0);
             sb.append(Utils.kindToType(kind, false));
         }
+        for (int i = 1; i  < argCount; ++i) {
+            JavaKind kind = descriptor.getParameterKind(i);
+            sb.append(", ").append(Utils.kindToType(kind, false));
+        }
 
-        sb.append("): ").append(Utils.kindToType(descriptor.resultKind(), false));
+        sb.append("): ").append(Utils.kindToType(descriptor.resultKind(), true));
         return sb.toString();
     }
 
     @JniImpl
-    public int RegisterNative(StaticObject clazz, String name, String signature, @NFIType("POINTER") TruffleObject closure) {
+    public int RegisterNative(StaticObject clazz, String name, String signature, TruffleObject closure) {
         String className = meta(((StaticObjectClass) clazz).getMirror()).getInternalName();
-        TruffleObject boundNative = NativeLibrary.bind(closure, nfiSignature(signature, true));
-        RootNode nativeNode = new VmNativeNode(EspressoLanguage.getCurrentContext().getLanguage(), boundNative, true,null);
+
+        TruffleObject boundNative = NativeLibrary.bind(closure, nfiSignature(signature));
+
+        RootNode nativeNode = new VmNativeNode(EspressoLanguage.getCurrentContext().getLanguage(), boundNative, null);
         EspressoLanguage.getCurrentContext().getInterpreterToVM().registerIntrinsic(className, name, signature, nativeNode);
         return JNI_OK;
     }

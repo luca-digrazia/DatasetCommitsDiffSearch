@@ -36,6 +36,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.jni.Mangle;
 import com.oracle.truffle.espresso.jni.NativeLibrary;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -49,7 +50,6 @@ import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.IntrinsicReflectionRootNode;
 import com.oracle.truffle.espresso.nodes.IntrinsicRootNode;
 import com.oracle.truffle.espresso.nodes.JniNativeNode;
-import com.oracle.truffle.espresso.nodes.NativeRootNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.types.SignatureDescriptor;
 import com.oracle.truffle.espresso.vm.VM;
@@ -193,8 +193,6 @@ public final class MethodInfo implements ModifiersProvider {
                     ((IntrinsicReflectionRootNode) redirectedMethod).setOriginalMethod(Meta.meta(this));
                 } else if (redirectedMethod instanceof IntrinsicRootNode) {
                     ((IntrinsicRootNode) redirectedMethod).setOriginalMethod(Meta.meta(this));
-                } else if (redirectedMethod instanceof NativeRootNode) {
-                    ((NativeRootNode) redirectedMethod).setOriginalMethod(Meta.meta(this));
                 }
                 intrinsified = true;
                 callTarget = Truffle.getRuntime().createCallTarget(redirectedMethod);
