@@ -29,7 +29,11 @@
  */
 package com.oracle.truffle.llvm.parser.base.model.types;
 
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
+import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
 public enum MetaType implements Type {
 
@@ -59,7 +63,39 @@ public enum MetaType implements Type {
     }
 
     @Override
-    public int sizeof() {
-        return this == X86_MMX ? Long.BYTES : 0;
+    public FrameSlotKind getFrameSlotKind() {
+        switch (this) {
+            case VOID:
+                throw new LLVMUnsupportedException(LLVMUnsupportedException.UnsupportedReason.PARSER_ERROR_VOID_SLOT);
+            default:
+                return FrameSlotKind.Object;
+        }
+    }
+
+    @Override
+    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
+        switch (this) {
+            case VOID:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.VOID;
+            case OPAQUE:
+                return LLVMFunctionDescriptor.LLVMRuntimeType.ADDRESS;
+            default:
+                throw new UnsupportedOperationException("Cannot resolve to Runtime Type: " + this);
+        }
+    }
+
+    @Override
+    public int getBits() {
+        return 0;
+    }
+
+    @Override
+    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return Long.BYTES;
+    }
+
+    @Override
+    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return 0;
     }
 }
