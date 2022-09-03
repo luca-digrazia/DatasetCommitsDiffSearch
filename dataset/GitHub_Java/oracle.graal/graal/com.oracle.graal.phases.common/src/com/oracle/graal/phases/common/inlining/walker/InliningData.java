@@ -97,7 +97,7 @@ public class InliningData {
      * @param invoke the invoke that should be inlined
      * @return an instance of InlineInfo, or null if no inlining is possible at the given invoke
      */
-    private InlineInfo getInlineInfo(Invoke invoke, Assumptions assumptions) {
+    public InlineInfo getInlineInfo(Invoke invoke, Assumptions assumptions) {
         final String failureMessage = InliningUtil.checkInvokeConditions(invoke);
         if (failureMessage != null) {
             InliningUtil.logNotInlinedMethod(invoke, failureMessage);
@@ -165,7 +165,7 @@ public class InliningData {
         return getTypeCheckedInlineInfo(invoke, targetMethod);
     }
 
-    private InlineInfo getTypeCheckedInlineInfo(Invoke invoke, ResolvedJavaMethod targetMethod) {
+    public InlineInfo getTypeCheckedInlineInfo(Invoke invoke, ResolvedJavaMethod targetMethod) {
         JavaTypeProfile typeProfile;
         ValueNode receiver = invoke.callTarget().arguments().get(0);
         if (receiver instanceof TypeProfileProxyNode) {
@@ -290,7 +290,7 @@ public class InliningData {
         }
     }
 
-    private InlineInfo getAssumptionInlineInfo(Invoke invoke, ResolvedJavaMethod concrete, Assumptions.Assumption takenAssumption) {
+    public InlineInfo getAssumptionInlineInfo(Invoke invoke, ResolvedJavaMethod concrete, Assumptions.Assumption takenAssumption) {
         assert !concrete.isAbstract();
         if (!InliningUtil.checkTargetConditions(this, context.getReplacements(), invoke, concrete, context.getOptimisticOptimizations())) {
             return null;
@@ -298,7 +298,7 @@ public class InliningData {
         return new AssumptionInlineInfo(invoke, concrete, takenAssumption);
     }
 
-    private InlineInfo getExactInlineInfo(Invoke invoke, ResolvedJavaMethod targetMethod) {
+    public InlineInfo getExactInlineInfo(Invoke invoke, ResolvedJavaMethod targetMethod) {
         assert !targetMethod.isAbstract();
         if (!InliningUtil.checkTargetConditions(this, context.getReplacements(), invoke, targetMethod, context.getOptimisticOptimizations())) {
             return null;
@@ -366,7 +366,7 @@ public class InliningData {
     /**
      * Process the next invoke and enqueue all its graphs for processing.
      */
-    private void processNextInvoke() {
+    void processNextInvoke() {
         CallsiteHolder callsiteHolder = currentGraph();
         Invoke invoke = callsiteHolder.popInvoke();
         MethodInvocation callerInvocation = currentInvocation();
@@ -410,16 +410,16 @@ public class InliningData {
         return !graphQueue.isEmpty();
     }
 
-    private CallsiteHolder currentGraph() {
+    public CallsiteHolder currentGraph() {
         return graphQueue.peek();
     }
 
-    private void popGraph() {
+    public void popGraph() {
         graphQueue.pop();
         assert graphQueue.size() <= maxGraphs;
     }
 
-    private void popGraphs(int count) {
+    public void popGraphs(int count) {
         assert count >= 0;
         for (int i = 0; i < count; i++) {
             graphQueue.pop();
@@ -431,7 +431,7 @@ public class InliningData {
     /**
      * Gets the call hierarchy of this inlining from outer most call to inner most callee.
      */
-    private Object[] inliningContext() {
+    public Object[] inliningContext() {
         if (!Debug.isDumpEnabled()) {
             return NO_CONTEXT;
         }
@@ -443,7 +443,7 @@ public class InliningData {
         return result;
     }
 
-    private MethodInvocation currentInvocation() {
+    public MethodInvocation currentInvocation() {
         return invocationQueue.peekFirst();
     }
 
@@ -455,7 +455,7 @@ public class InliningData {
         return methodInvocation;
     }
 
-    private void popInvocation() {
+    public void popInvocation() {
         maxGraphs -= invocationQueue.peekFirst().callee().numberOfMethods();
         assert graphQueue.size() <= maxGraphs;
         invocationQueue.removeFirst();
