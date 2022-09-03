@@ -40,19 +40,12 @@ import com.intel.llvm.ireditor.types.ResolvedType;
 import com.intel.llvm.ireditor.types.ResolvedVectorType;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMFunctionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStatementNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI32VectorNode;
 import com.oracle.truffle.llvm.nodes.base.vector.LLVMVectorNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstruction.LLVMAllocaInstruction;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
@@ -61,50 +54,35 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
 
+/**
+ * This interface decouples the parser and the concrete implementation of the nodes by only making
+ * {@link LLVMExpressionNode} and {@link LLVMNode} visible. The parser should not directly
+ * instantiate a node, but instead use the factory facade.
+ */
 public interface NodeFactoryFacade {
 
-    LLVMVectorNode createInsertElement(LLVMBaseType resultType, LLVMExpressionNode vector, Type vectorType, LLVMExpressionNode element, LLVMI32Node index);
+    LLVMVectorNode createInsertElement(LLVMBaseType resultType, LLVMExpressionNode vector, Type vectorType, LLVMExpressionNode element, LLVMExpressionNode index);
 
     LLVMExpressionNode createExtractElement(LLVMBaseType resultType, LLVMExpressionNode vector, LLVMExpressionNode index);
 
-    LLVMVectorNode createShuffleVector(LLVMBaseType llvmType, LLVMAddressNode target, LLVMExpressionNode vector1, LLVMExpressionNode vector2, LLVMI32VectorNode mask);
+    LLVMExpressionNode createShuffleVector(LLVMBaseType llvmType, LLVMExpressionNode target, LLVMExpressionNode vector1, LLVMExpressionNode vector2, LLVMExpressionNode mask);
 
-    LLVMExpressionNode createLoad(ResolvedType resolvedResultType, LLVMAddressNode loadTarget);
+    LLVMExpressionNode createLoad(ResolvedType resolvedResultType, LLVMExpressionNode loadTarget);
 
-    LLVMNode createStore(LLVMAddressNode pointerNode, LLVMExpressionNode valueNode, ResolvedType type);
+    LLVMNode createStore(LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, ResolvedType type);
 
-    LLVMExpressionNode createLogicalOperation(LLVMExpressionNode left, LLVMExpressionNode right, LLVMLogicalInstructionType opCode, LLVMBaseType llvmType, LLVMAddressNode target);
+    LLVMExpressionNode createLogicalOperation(LLVMExpressionNode left, LLVMExpressionNode right, LLVMLogicalInstructionType opCode, LLVMBaseType llvmType, LLVMExpressionNode target);
 
-    LLVMExpressionNode createLogicalOperation(LLVMExpressionNode left, LLVMExpressionNode right, BitwiseBinaryInstruction type, LLVMBaseType llvmType, LLVMAddressNode target);
+    LLVMExpressionNode createLogicalOperation(LLVMExpressionNode left, LLVMExpressionNode right, BitwiseBinaryInstruction type, LLVMBaseType llvmType, LLVMExpressionNode target);
 
     LLVMExpressionNode createUndefinedValue(EObject t);
 
+    LLVMExpressionNode createLiteral(Object value, LLVMBaseType type);
+
     LLVMExpressionNode createSimpleConstantNoArray(String stringValue, LLVMBaseType instructionType, ResolvedType type);
 
-    LLVMExpressionNode createZeroArrayLiteral(ResolvedType arrayElementLLVMType, int nrElements, LLVMAllocaInstruction address);
-
-    LLVMFunctionNode[] createFunctionLiteralNodes(int nrElements, LLVMFunction value);
-
-    LLVMAddressNode[] createPointerLiteralNodes(int nrElements, LLVMAddress value);
-
-    LLVMDoubleNode[] createDoubleLiteralNodes(int nrElements, double value);
-
-    LLVMFloatNode[] createFloatLiteralNodes(int nrElements, float value);
-
-    LLVMI64Node[] createI64LiteralNodes(int nrElements, long value);
-
-    LLVMI32Node[] createI32LiteralNodes(int nrElements, int value);
-
-    LLVMI16Node[] createI16LiteralNodes(int nrElements, short value);
-
-    LLVMI8Node[] createI8LiteralNodes(int nrElements, byte value);
-
-    LLVMI1Node[] createI1LiteralNodes(int nrElements, boolean value);
-
-    LLVMExpressionNode createVectorLiteralNode(List<LLVMExpressionNode> listValues, LLVMAddressNode target, ResolvedVectorType type);
+    LLVMExpressionNode createVectorLiteralNode(List<LLVMExpressionNode> listValues, LLVMExpressionNode target, ResolvedVectorType type);
 
     /**
      * Creates an intrinsic for a <code>@llvm.*</code> function.
@@ -116,9 +94,9 @@ public interface NodeFactoryFacade {
      */
     LLVMNode createLLVMIntrinsic(String functionName, Object[] argNodes, FunctionDef functionDef);
 
-    LLVMStatementNode createRetVoid();
+    LLVMNode createRetVoid();
 
-    LLVMStatementNode createNonVoidRet(LLVMExpressionNode retValue, ResolvedType resolvedType);
+    LLVMNode createNonVoidRet(LLVMExpressionNode retValue, ResolvedType resolvedType);
 
     LLVMExpressionNode createFunctionArgNode(int argIndex, LLVMBaseType paramType);
 
@@ -132,20 +110,62 @@ public interface NodeFactoryFacade {
 
     FrameSlotKind getFrameSlotKind(LLVMBaseType llvmType);
 
-    LLVMI1Node createIntegerComparison(LLVMExpressionNode left, LLVMExpressionNode right, LLVMBaseType llvmType, LLVMIntegerComparisonType type);
+    LLVMExpressionNode createIntegerComparison(LLVMExpressionNode left, LLVMExpressionNode right, LLVMBaseType llvmType, LLVMIntegerComparisonType type);
 
-    LLVMI1Node createFloatComparison(LLVMExpressionNode left, LLVMExpressionNode right, LLVMBaseType llvmType, LLVMFloatComparisonType type);
+    LLVMExpressionNode createFloatComparison(LLVMExpressionNode left, LLVMExpressionNode right, LLVMBaseType llvmType, LLVMFloatComparisonType type);
 
     LLVMExpressionNode createCast(LLVMExpressionNode fromNode, ResolvedType targetType, ResolvedType fromType, LLVMConversionType type);
 
-    LLVMExpressionNode createArithmeticOperation(LLVMExpressionNode left, LLVMExpressionNode right, LLVMArithmeticInstructionType instr, LLVMBaseType llvmType, LLVMAddressNode target);
+    LLVMExpressionNode createArithmeticOperation(LLVMExpressionNode left, LLVMExpressionNode right, LLVMArithmeticInstructionType instr, LLVMBaseType llvmType, LLVMExpressionNode target);
 
-    LLVMExpressionNode createExtractValue(LLVMBaseType type, LLVMAddressNode targetAddress);
+    LLVMExpressionNode createExtractValue(LLVMBaseType type, LLVMExpressionNode targetAddress);
 
-    LLVMAddressNode createGetElementPtr(LLVMBaseType llvmBaseType, LLVMAddressNode currentAddress, LLVMExpressionNode valueRef, int indexedTypeLength);
+    LLVMExpressionNode createGetElementPtr(LLVMBaseType llvmBaseType, LLVMExpressionNode currentAddress, LLVMExpressionNode valueRef, int indexedTypeLength);
 
     Class<?> getJavaClass(LLVMExpressionNode llvmExpressionNode);
 
-    LLVMExpressionNode createSelect(LLVMBaseType llvmType, LLVMI1Node condition, LLVMExpressionNode trueValue, LLVMExpressionNode falseValue);
+    LLVMExpressionNode createSelect(LLVMBaseType llvmType, LLVMExpressionNode condition, LLVMExpressionNode trueValue, LLVMExpressionNode falseValue);
+
+    /**
+     * Creates a zero vector initializer.
+     *
+     * @param nrElements the number of elements of the vector
+     * @param target the allocated result storage
+     * @param llvmType the type of the vector
+     *
+     * @return the zero vector initializer
+     */
+    LLVMExpressionNode createZeroVectorInitializer(int nrElements, LLVMExpressionNode target, LLVMBaseType llvmType);
+
+    // TODO we do want to have a LLVM node here or merge with createStructLiteralNode
+    Node createStructWriteNode(LLVMExpressionNode node, ResolvedType type);
+
+    LLVMExpressionNode createStructLiteralNode(int[] offsets, Node[] nodes, LLVMExpressionNode alloc);
+
+    LLVMNode createUnreachableNode();
+
+    LLVMNode createIndirectBranch(LLVMExpressionNode value, int[] labelTargets);
+
+    LLVMStatementNode createSwitch(LLVMExpressionNode cond, int defaultLabel, int[] otherLabels, LLVMExpressionNode[] cases, LLVMBaseType llvmType);
+
+    LLVMStatementNode createConditionalBranch(int trueIndex, int falseIndex, LLVMExpressionNode conditionNode);
+
+    LLVMStatementNode createUnconditionalBranch(int unconditionalIndex);
+
+    LLVMAddressNode createArrayLiteral(List<LLVMExpressionNode> arrayValues, ResolvedType arrayType);
+
+    LLVMNode createConditionalPhiWriteNode(LLVMExpressionNode create, LLVMNode phiWriteNode);
+
+    LLVMExpressionNode createAlloc(LLVMBaseType llvmType, LLVMExpressionNode numElements, int byteSize, int alignment);
+
+    LLVMAllocaInstruction createAlloc(int size, int alignment);
+
+    LLVMExpressionNode createInsertValue(LLVMExpressionNode resultAggregate, LLVMAddressNode sourceAggregate, int size, int offset, LLVMExpressionNode valueToInsert, LLVMBaseType llvmType);
+
+    LLVMExpressionNode createZeroNode(LLVMExpressionNode addressNode, int size);
+
+    LLVMExpressionNode createEmptyStructLiteralNode(LLVMExpressionNode alloca, int byteSize);
+
+    LLVMExpressionNode createGetElementPtr(LLVMExpressionNode currentAddress, LLVMExpressionNode oneValueNode, int currentOffset);
 
 }
