@@ -26,10 +26,8 @@
 
 package com.oracle.graal.jtt.threads;
 
-import org.junit.Assert;
-import org.junit.Test;
-
-import com.oracle.graal.jtt.JTTTest;
+import com.oracle.graal.jtt.*;
+import com.oracle.graal.test.*;
 
 //Test all, mainly monitors
 public class Thread_isInterrupted02 extends JTTTest {
@@ -46,18 +44,13 @@ public class Thread_isInterrupted02 extends JTTTest {
             // start the thread and wait for it
             thread.setDaemon(true); // in case the thread gets stuck
             thread.start();
-            while (!thread.wait1Condition) {
-                thread.wait(10000);
-            }
+            thread.wait();
         }
         synchronized (start) {
             thread.interrupt();
-            thread.sentInterrupt = true;
         }
         synchronized (end) {
-            while (!thread.wait2Condition) {
-                end.wait(10000);
-            }
+            end.wait(200);
         }
         return thread.interrupted;
     }
@@ -65,9 +58,6 @@ public class Thread_isInterrupted02 extends JTTTest {
     private static class Thread extends java.lang.Thread {
 
         private boolean interrupted;
-        private boolean sentInterrupt;
-        private boolean wait1Condition;
-        private boolean wait2Condition;
 
         @Override
         public void run() {
@@ -75,40 +65,32 @@ public class Thread_isInterrupted02 extends JTTTest {
                 synchronized (start) {
                     synchronized (this) {
                         // signal test thread that we are running
-                        wait1Condition = true;
                         notify();
                     }
                     // wait for the condition, which should be interrupted
-                    while (!sentInterrupt) {
-                        if (waitTime == 0) {
-                            start.wait();
-                        } else {
-                            start.wait(waitTime);
-                        }
-                        if (Thread.interrupted()) {
-                            throw new InterruptedException();
-                        }
+                    if (waitTime == 0) {
+                        start.wait();
+                    } else {
+                        start.wait(waitTime);
                     }
-                    Assert.fail("should not reach here - was not interrupted");
                 }
             } catch (InterruptedException e) {
                 // interrupted successfully.
                 interrupted = true;
                 synchronized (end) {
                     // notify the other thread we are done
-                    wait2Condition = true;
                     end.notify();
                 }
             }
         }
     }
 
-    @Test(timeout = 20000)
+    @LongTest(timeout = 20000)
     public void run0() throws Throwable {
         runTest("test", 0, 0);
     }
 
-    @Test(timeout = 20000)
+    @LongTest(timeout = 20000)
     public void run1() throws Throwable {
         runTest("test", 1, 500);
     }

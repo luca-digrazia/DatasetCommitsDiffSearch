@@ -25,7 +25,7 @@
 package com.oracle.graal.jtt.threads;
 
 import com.oracle.graal.jtt.*;
-import org.junit.*;
+import com.oracle.graal.test.*;
 
 public final class Monitor_contended01 extends JTTTest implements Runnable {
 
@@ -71,7 +71,7 @@ public final class Monitor_contended01 extends JTTTest implements Runnable {
         }
     }
 
-    @Test
+    @LongTest(timeout = 20000)
     public void run0() throws Throwable {
         runTest("test");
     }

@@ -26,9 +26,11 @@ package com.oracle.graal.jtt.hotpath;
 
 import org.junit.*;
 
+import com.oracle.graal.jtt.*;
+
 /*
  */
-public class HP_series {
+public class HP_series extends JTTTest {
 
     public static double test(int count) {
         final int arrayRows = count;
@@ -98,9 +100,17 @@ public class HP_series {
         return (0.0);
     }
 
+    /*
+     * This test is sensible to the implementation of Math.pow, cos and sin. Since for these
+     * functions, the specs says "The computed result must be within 1 ulp of the exact result",
+     * different implementation may return different results. The 11 ulp delta allowed for test(100)
+     * tries to account for that but is not guaranteed to work forever.
+     */
+    @Ignore("failure-prone because of the variabiliy of pow/cos/sin")
     @Test
     public void run0() throws Throwable {
-        Assert.assertEquals(0.6248571921291398d, test(100), 0);
+        double expected = 0.6248571921291398d;
+        runTestWithDelta(11 * Math.ulp(expected), "test", 100);
     }
 
 }
