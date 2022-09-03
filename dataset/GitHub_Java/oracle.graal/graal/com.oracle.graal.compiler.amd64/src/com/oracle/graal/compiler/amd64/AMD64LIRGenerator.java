@@ -224,18 +224,18 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueLabel, LabelRef falseLabel) {
+    public void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label) {
         boolean mirrored = emitCompare(left, right);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
         switch (left.getKind().getStackKind()) {
             case Int:
             case Long:
             case Object:
-                append(new BranchOp(finalCondition, trueLabel, falseLabel));
+                append(new BranchOp(finalCondition, label));
                 break;
             case Float:
             case Double:
-                append(new FloatBranchOp(finalCondition, unorderedIsTrue, trueLabel, falseLabel));
+                append(new FloatBranchOp(finalCondition, unorderedIsTrue, label));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere("" + left.getKind());
@@ -250,22 +250,14 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, boolean negated) {
-        if (negated) {
-            append(new BranchOp(ConditionFlag.NoOverflow, noOverflow, overflow));
-        } else {
-            append(new BranchOp(ConditionFlag.Overflow, overflow, noOverflow));
-        }
+    public void emitOverflowCheckBranch(LabelRef destination, boolean negated) {
+        append(new BranchOp(negated ? ConditionFlag.NoOverflow : ConditionFlag.Overflow, destination));
     }
 
     @Override
-    public void emitIntegerTestBranch(Value left, Value right, boolean negated, LabelRef trueDestination, LabelRef falseDestination) {
+    public void emitIntegerTestBranch(Value left, Value right, boolean negated, LabelRef label) {
         emitIntegerTest(left, right);
-        if (negated) {
-            append(new BranchOp(Condition.NE, falseDestination, trueDestination));
-        } else {
-            append(new BranchOp(Condition.EQ, trueDestination, falseDestination));
-        }
+        append(new BranchOp(negated ? Condition.NE : Condition.EQ, label));
     }
 
     @Override

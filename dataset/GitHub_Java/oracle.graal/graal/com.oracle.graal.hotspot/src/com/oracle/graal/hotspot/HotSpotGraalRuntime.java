@@ -189,16 +189,6 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
     protected final HotSpotVMConfig config;
     private final HotSpotBackend hostBackend;
 
-    public final HotSpotResolvedPrimitiveType typeBoolean;
-    public final HotSpotResolvedPrimitiveType typeByte;
-    public final HotSpotResolvedPrimitiveType typeChar;
-    public final HotSpotResolvedPrimitiveType typeShort;
-    public final HotSpotResolvedPrimitiveType typeInt;
-    public final HotSpotResolvedPrimitiveType typeLong;
-    public final HotSpotResolvedPrimitiveType typeFloat;
-    public final HotSpotResolvedPrimitiveType typeDouble;
-    public final HotSpotResolvedPrimitiveType typeVoid;
-
     private final Map<Class<? extends Architecture>, HotSpotBackend> backends = new HashMap<>();
 
     private HotSpotGraalRuntime() {
@@ -210,26 +200,6 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
         compilerToGpu = toGPU;
         vmToCompiler = toCompiler;
         config = new HotSpotVMConfig(compilerToVm);
-
-        typeBoolean = new HotSpotResolvedPrimitiveType(Kind.Boolean);
-        typeByte = new HotSpotResolvedPrimitiveType(Kind.Byte);
-        typeChar = new HotSpotResolvedPrimitiveType(Kind.Char);
-        typeShort = new HotSpotResolvedPrimitiveType(Kind.Short);
-        typeInt = new HotSpotResolvedPrimitiveType(Kind.Int);
-        typeLong = new HotSpotResolvedPrimitiveType(Kind.Long);
-        typeFloat = new HotSpotResolvedPrimitiveType(Kind.Float);
-        typeDouble = new HotSpotResolvedPrimitiveType(Kind.Double);
-        typeVoid = new HotSpotResolvedPrimitiveType(Kind.Void);
-
-        initMirror(typeBoolean);
-        initMirror(typeByte);
-        initMirror(typeChar);
-        initMirror(typeShort);
-        initMirror(typeInt);
-        initMirror(typeLong);
-        initMirror(typeFloat);
-        initMirror(typeDouble);
-        initMirror(typeVoid);
 
         // Set some global options:
         if (config.compileTheWorld) {
@@ -270,13 +240,6 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
         if (GraalOptions.CacheGraphs.getValue()) {
             cache = new HotSpotGraphCache(compilerToVm);
         }
-    }
-
-    private void initMirror(HotSpotResolvedPrimitiveType type) {
-        Class<?> mirror = type.mirror();
-        final long offset = config.graalMirrorInClassOffset;
-        unsafe.putObject(mirror, offset, type);
-        assert unsafe.getObject(mirror, offset) == type;
     }
 
     private HotSpotBackend registerBackend(HotSpotBackend backend) {
@@ -361,31 +324,32 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
     }
 
     public JavaType lookupType(String name, HotSpotResolvedObjectType accessingClass, boolean eagerResolve) {
-        if (name.length() == 1) {
+        if (name.length() == 1 && vmToCompiler instanceof VMToCompilerImpl) {
+            VMToCompilerImpl impl = (VMToCompilerImpl) vmToCompiler;
             Kind kind = Kind.fromPrimitiveOrVoidTypeChar(name.charAt(0));
             switch (kind) {
                 case Boolean:
-                    return typeBoolean;
+                    return impl.typeBoolean;
                 case Byte:
-                    return typeByte;
+                    return impl.typeByte;
                 case Char:
-                    return typeChar;
-                case Short:
-                    return typeShort;
-                case Int:
-                    return typeInt;
-                case Long:
-                    return typeLong;
-                case Float:
-                    return typeFloat;
+                    return impl.typeChar;
                 case Double:
-                    return typeDouble;
-                case Void:
-                    return typeVoid;
-                case Object:
-                    break;
+                    return impl.typeDouble;
+                case Float:
+                    return impl.typeFloat;
                 case Illegal:
                     break;
+                case Int:
+                    return impl.typeInt;
+                case Long:
+                    return impl.typeLong;
+                case Object:
+                    break;
+                case Short:
+                    return impl.typeShort;
+                case Void:
+                    return impl.typeVoid;
             }
         }
         return compilerToVm.lookupType(name, accessingClass, eagerResolve);

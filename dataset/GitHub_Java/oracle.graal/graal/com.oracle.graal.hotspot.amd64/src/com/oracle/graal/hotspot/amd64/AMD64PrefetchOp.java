@@ -32,7 +32,7 @@ import com.oracle.graal.lir.asm.*;
 
 public class AMD64PrefetchOp extends AMD64LIRInstruction {
 
-    private final int instr;  // AllocatePrefetchInstr
+    private final int instr;  // AllocatePrefecthInstr
     @Alive({COMPOSITE}) protected AMD64AddressValue address;
 
     public AMD64PrefetchOp(AMD64AddressValue address, int instr) {
