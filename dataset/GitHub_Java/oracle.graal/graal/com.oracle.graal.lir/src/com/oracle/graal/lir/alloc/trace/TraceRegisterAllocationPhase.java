@@ -63,8 +63,6 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
         public static final OptionValue<Boolean> TraceRAtrivialBlockAllocator = new OptionValue<>(true);
         @Option(help = "Share information about spilled values to other traces.", type = OptionType.Debug)
         public static final OptionValue<Boolean> TraceRAshareSpillInformation = new OptionValue<>(true);
-        @Option(help = "Reuse spill slots for global move resolution cycle breaking.", type = OptionType.Debug)
-        public static final OptionValue<Boolean> TraceRAreuseStackSlotsForMoveResolutionCycleBreaking = new OptionValue<>(true);
         // @formatter:on
     }
 
