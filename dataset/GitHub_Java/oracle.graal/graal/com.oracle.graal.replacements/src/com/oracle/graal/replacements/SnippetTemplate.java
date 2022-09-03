@@ -854,43 +854,25 @@ public class SnippetTemplate {
      */
     public static final UsageReplacer DEFAULT_REPLACER = new UsageReplacer() {
 
-        private LocationIdentity getLocationIdentity(Node node) {
-            if (node instanceof MemoryAccess) {
-                return ((MemoryAccess) node).getLocationIdentity();
-            } else if (node instanceof MemoryProxy) {
-                return ((MemoryProxy) node).getLocationIdentity();
-            } else if (node instanceof MemoryPhiNode) {
-                return ((MemoryPhiNode) node).getLocationIdentity();
-            } else {
-                return null;
-            }
-        }
-
         @Override
         public void replace(ValueNode oldNode, ValueNode newNode, MemoryMapNode mmap) {
-            if (mmap != null && newNode != null) {
-                for (Node usage : oldNode.usages().snapshot()) {
-                    LocationIdentity identity = getLocationIdentity(usage);
-                    if (identity != null && identity != LocationIdentity.FINAL_LOCATION) {
-                        // lastLocationAccess points into the snippet graph. find a proper
-                        // MemoryCheckPoint inside the snippet graph
-                        MemoryNode lastAccess = mmap.getLastLocationAccess(identity);
+            oldNode.replaceAtUsages(newNode);
+            if (mmap == null || newNode == null) {
+                return;
+            }
+            for (Node usage : newNode.usages().snapshot()) {
+                if (usage instanceof FloatingReadNode && ((FloatingReadNode) usage).getLastLocationAccess() == newNode) {
+                    assert newNode.graph().isAfterFloatingReadPhase();
 
-                        assert lastAccess != null : "no mapping found for lowerable node " + oldNode + ". (No node in the snippet kill the same location as the lowerable node?)";
-                        if (usage instanceof MemoryAccess) {
-                            MemoryAccess access = (MemoryAccess) usage;
-                            if (access.getLastLocationAccess() == oldNode) {
-                                assert newNode.graph().isAfterFloatingReadPhase();
-                                access.setLastLocationAccess(lastAccess);
-                            }
-                        } else {
-                            assert usage instanceof MemoryProxy || usage instanceof MemoryPhiNode;
-                            usage.replaceFirstInput(oldNode, lastAccess.asNode());
-                        }
-                    }
+                    // lastLocationAccess points into the snippet graph. find a proper
+                    // MemoryCheckPoint inside the snippet graph
+                    FloatingReadNode read = (FloatingReadNode) usage;
+                    Node lastAccess = mmap.getLastLocationAccess(read.location().getLocationIdentity());
+
+                    assert lastAccess != null : "no mapping found for lowerable node " + oldNode + ". (No node in the snippet kill the same location as the lowerable node?)";
+                    read.setLastLocationAccess(lastAccess);
                 }
             }
-            oldNode.replaceAtUsages(newNode);
         }
     };
 
@@ -951,14 +933,14 @@ public class SnippetTemplate {
         }
 
         @Override
-        public MemoryNode getLastLocationAccess(LocationIdentity locationIdentity) {
+        public Node getLastLocationAccess(LocationIdentity locationIdentity) {
             assert memoryMap != null : "no memory map stored for this snippet graph (snippet doesn't have a ReturnNode?)";
-            MemoryNode lastLocationAccess = memoryMap.getLastLocationAccess(locationIdentity);
+            Node lastLocationAccess = memoryMap.getLastLocationAccess(locationIdentity);
             assert lastLocationAccess != null;
             if (lastLocationAccess instanceof StartNode) {
                 return replaceeStart;
             } else {
-                return (MemoryNode) duplicates.get(ValueNodeUtil.asNode(lastLocationAccess));
+                return duplicates.get(lastLocationAccess);
             }
         }
     }

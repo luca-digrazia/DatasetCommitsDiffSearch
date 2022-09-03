@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.spi;
 
-import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
@@ -33,24 +32,14 @@ import com.oracle.graal.nodes.*;
 /**
  * Interface for managing replacements.
  */
-public interface Replacements extends Remote {
+public interface Replacements {
 
     /**
      * Gets the snippet graph derived from a given method.
-     *
+     * 
      * @return the snippet graph, if any, that is derived from {@code method}
      */
     StructuredGraph getSnippet(ResolvedJavaMethod method);
-
-    /**
-     * Gets the snippet graph derived from a given method.
-     *
-     * @param recursiveEntry if the snippet contains a call to this method, it's considered as
-     *            recursive call and won't be processed for {@linkplain MethodSubstitution
-     *            substitutions} or {@linkplain MacroSubstitution macro nodes}.
-     * @return the snippet graph, if any, that is derived from {@code method}
-     */
-    StructuredGraph getSnippet(ResolvedJavaMethod method, ResolvedJavaMethod recursiveEntry);
 
     /**
      * Registers a method as snippet.
@@ -58,24 +47,23 @@ public interface Replacements extends Remote {
     void registerSnippet(ResolvedJavaMethod method);
 
     /**
-     * Notifies this object during snippet specialization once the specialized snippet's constant
-     * parameters have been replaced with constant values.
-     *
-     * @param specializedSnippet the snippet in the process of being specialized. This is a copy of
-     *            the unspecialized snippet graph created during snippet preparation.
+     * Prepares the copy of a snippet graph immediately after instantiation. This can be used to do
+     * node intrinsification for example.
+     * 
+     * @param snippetCopy The copy of the snippet graph.
      */
-    void notifyAfterConstantsBound(StructuredGraph specializedSnippet);
+    void prepareSnippetCopyAfterInstantiation(StructuredGraph snippetCopy);
 
     /**
      * Gets the graph that is a substitution for a given method.
-     *
+     * 
      * @return the graph, if any, that is a substitution for {@code method}
      */
     StructuredGraph getMethodSubstitution(ResolvedJavaMethod method);
 
     /**
      * Gets the node class with which a method invocation should be replaced.
-     *
+     * 
      * @param method target of an invocation
      * @return the {@linkplain MacroSubstitution#macro() macro node class} associated with
      *         {@code method} or null if there is no such association
@@ -90,15 +78,8 @@ public interface Replacements extends Remote {
     /**
      * Registers all the {@linkplain MethodSubstitution method} and {@linkplain MacroSubstitution
      * macro} substitutions defined by a given class.
-     *
-     * @param original the original class for which substitutions are being registered. This must be
-     *            the same type denoted by the {@link ClassSubstitution} annotation on
-     *            {@code substitutions}. It is required here so that an implementation is not forced
-     *            to read annotations during registration.
-     * @param substitutions the class defining substitutions for {@code original}. This class must
-     *            be annotated with {@link ClassSubstitution}.
      */
-    void registerSubstitutions(Type original, Class<?> substitutions);
+    void registerSubstitutions(Class<?> substitutions);
 
     /**
      * Returns all methods that are currently registered as method/macro substitution or as a
