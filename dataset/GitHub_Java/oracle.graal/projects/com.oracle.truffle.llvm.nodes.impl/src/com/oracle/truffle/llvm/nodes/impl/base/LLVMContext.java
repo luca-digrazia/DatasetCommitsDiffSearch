@@ -47,10 +47,8 @@ import com.oracle.truffle.llvm.types.memory.LLVMStack;
 
 public class LLVMContext extends ExecutionContext {
 
-    private final List<RootCallTarget> globalVarInits = new ArrayList<>();
-    private final List<RootCallTarget> globalVarDeallocs = new ArrayList<>();
-    private final List<RootCallTarget> constructorFunctions = new ArrayList<>();
-    private final List<RootCallTarget> destructorFunctions = new ArrayList<>();
+    private final List<RootCallTarget> staticInitializers = new ArrayList<>();
+    private final List<RootCallTarget> staticDestructors = new ArrayList<>();
 
     private final LLVMFunctionRegistry registry;
 
@@ -60,7 +58,7 @@ public class LLVMContext extends ExecutionContext {
 
     private Object[] mainArguments;
 
-    private Source mainSourceFile;
+    private Source sourceFile;
 
     private boolean parseOnly;
 
@@ -122,44 +120,28 @@ public class LLVMContext extends ExecutionContext {
         return mainArguments;
     }
 
-    public void setMainSourceFile(Source mainSourceFile) {
-        this.mainSourceFile = mainSourceFile;
+    public void setSourceFile(Source sourceFile) {
+        this.sourceFile = sourceFile;
     }
 
-    public Source getMainSourceFile() {
-        return mainSourceFile;
+    public Source getSourceFile() {
+        return sourceFile;
     }
 
-    public void registerGlobalVarDealloc(RootCallTarget globalVarDealloc) {
-        globalVarDeallocs.add(globalVarDealloc);
+    public void registerStaticDestructor(RootCallTarget staticDestructor) {
+        staticDestructors.add(staticDestructor);
     }
 
-    public void registerConstructorFunction(RootCallTarget constructorFunction) {
-        constructorFunctions.add(constructorFunction);
+    public void registerStaticInitializer(RootCallTarget staticInitializer) {
+        staticInitializers.add(staticInitializer);
     }
 
-    public void registerDestructorFunction(RootCallTarget destructorFunction) {
-        destructorFunctions.add(destructorFunction);
+    public List<RootCallTarget> getStaticDestructors() {
+        return staticDestructors;
     }
 
-    public void registerGlobalVarInit(RootCallTarget globalVarInit) {
-        globalVarInits.add(globalVarInit);
-    }
-
-    public List<RootCallTarget> getGlobalVarDeallocs() {
-        return globalVarDeallocs;
-    }
-
-    public List<RootCallTarget> getConstructorFunctions() {
-        return constructorFunctions;
-    }
-
-    public List<RootCallTarget> getDestructorFunctions() {
-        return destructorFunctions;
-    }
-
-    public List<RootCallTarget> getGlobalVarInits() {
-        return globalVarInits;
+    public List<RootCallTarget> getStaticInitializers() {
+        return staticInitializers;
     }
 
     public void setParseOnly(boolean parseOnly) {
