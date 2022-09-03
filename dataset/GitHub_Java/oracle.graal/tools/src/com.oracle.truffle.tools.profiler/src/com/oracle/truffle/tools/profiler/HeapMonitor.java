@@ -51,6 +51,7 @@ import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.tools.profiler.impl.HeapMonitorInstrument;
+import com.oracle.truffle.tools.profiler.impl.ProfilerToolFactory;
 
 /**
  * Implementation of a heap allocation monitor for
@@ -71,7 +72,12 @@ import com.oracle.truffle.tools.profiler.impl.HeapMonitorInstrument;
 public final class HeapMonitor implements Closeable {
 
     private static final long CLEAN_INTERVAL = 200;
-    private static final ThreadLocal<Boolean> RECURSIVE = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static final ThreadLocal<Boolean> RECURSIVE = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
 
     private final TruffleInstrument.Env env;
 
@@ -103,13 +109,15 @@ public final class HeapMonitor implements Closeable {
         }
         clearData();
         if (referenceThread == null) {
-            this.referenceThread = new Thread(() -> {
-                while (!closed) {
-                    cleanReferenceQueue();
-                    try {
-                        Thread.sleep(CLEAN_INTERVAL);
-                    } catch (InterruptedException e) {
-                        // fallthrough might be closed now
+            this.referenceThread = new Thread(new Runnable() {
+                public void run() {
+                    while (!closed) {
+                        cleanReferenceQueue();
+                        try {
+                            Thread.sleep(CLEAN_INTERVAL);
+                        } catch (InterruptedException e) {
+                            // fallthrough might be closed now
+                        }
                     }
                 }
             });
@@ -225,8 +233,17 @@ public final class HeapMonitor implements Closeable {
     }
 
     private static HeapSummary getSummary(Map<LanguageInfo, Map<String, HeapSummary>> summaries, LanguageInfo language, String metaObject) {
-        Map<String, HeapSummary> summaryMap = summaries.computeIfAbsent(language, k -> new LinkedHashMap<>());
-        return summaryMap.computeIfAbsent(metaObject, k -> new HeapSummary());
+        Map<String, HeapSummary> summaryMap = summaries.get(language);
+        if (summaryMap == null) {
+            summaryMap = new LinkedHashMap<>();
+            summaries.put(language, summaryMap);
+        }
+        HeapSummary summary = summaryMap.get(metaObject);
+        if (summary == null) {
+            summary = new HeapSummary();
+            summaryMap.put(metaObject, summary);
+        }
+        return summary;
     }
 
     /*
@@ -303,8 +320,16 @@ public final class HeapMonitor implements Closeable {
         Set<ObjectPhantomReference> collectedReferences = new HashSet<>();
         synchronized (deadObjectCounters) {
             do {
-                Map<String, DeadObjectCounters> counters = deadObjectCounters.computeIfAbsent(reference.language, k -> new LinkedHashMap<>());
-                DeadObjectCounters counter = counters.computeIfAbsent(reference.metaObject, k -> new DeadObjectCounters());
+                Map<String, DeadObjectCounters> counters = deadObjectCounters.get(reference.language);
+                if (counters == null) {
+                    counters = new LinkedHashMap<>();
+                    deadObjectCounters.put(reference.language, counters);
+                }
+                DeadObjectCounters counter = counters.get(reference.metaObject);
+                if (counter == null) {
+                    counter = new DeadObjectCounters();
+                    counters.put(reference.metaObject, counter);
+                }
                 counter.bytes += reference.computeBytesDiff();
                 if (reference.oldSize == 0) { // if not a reallocation
                     counter.instances++;
@@ -385,7 +410,12 @@ public final class HeapMonitor implements Closeable {
     }
 
     static {
-        HeapMonitorInstrument.setFactory(HeapMonitor::new);
+        HeapMonitorInstrument.setFactory(new ProfilerToolFactory<HeapMonitor>() {
+            @Override
+            public HeapMonitor create(TruffleInstrument.Env env) {
+                return new HeapMonitor(env);
+            }
+        });
     }
 
 }
