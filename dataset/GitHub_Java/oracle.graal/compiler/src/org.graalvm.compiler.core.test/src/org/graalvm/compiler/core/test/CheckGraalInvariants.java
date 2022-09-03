@@ -219,12 +219,6 @@ public class CheckGraalInvariants extends GraalCompilerTest {
                                  */
                                 continue;
                             }
-                            if (isGSON(className)) {
-                                /*
-                                 * GSON classes are compiled with old JDK
-                                 */
-                                continue;
-                            }
                             classNames.add(className);
                         }
                     }
@@ -338,10 +332,6 @@ public class CheckGraalInvariants extends GraalCompilerTest {
 
     private static boolean isInNativeImage(String className) {
         return className.startsWith("org.graalvm.nativeimage");
-    }
-
-    private static boolean isGSON(String className) {
-        return className.contains("com.google.gson");
     }
 
     private static List<Class<?>> initializeClasses(InvariantsTool tool, List<String> classNames) {

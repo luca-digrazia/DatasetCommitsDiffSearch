@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -54,7 +54,6 @@ import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import org.graalvm.compiler.replacements.test.ReplacementsTest;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.compiler.test.SubprocessUtil.Subprocess;
 import org.junit.Assert;
 import org.junit.Test;
@@ -111,7 +110,7 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
             return;
         }
         String recursionPropName = getClass().getName() + ".recursion";
-        if (JavaVersionUtil.JAVA_SPEC <= 8 || Boolean.getBoolean(recursionPropName)) {
+        if (Java8OrEarlier || Boolean.getBoolean(recursionPropName)) {
             testHelper();
         } else {
             List<String> vmArgs = withoutDebuggerArguments(getVMCommandLine());
@@ -207,7 +206,7 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
         assumeTrue("VM name not in <pid>@<host> format: " + vmName, p != -1);
         String pid = vmName.substring(0, p);
         Class<?> c;
-        if (JavaVersionUtil.JAVA_SPEC <= 8) {
+        if (Java8OrEarlier) {
             ClassLoader cl = ToolProvider.getSystemToolClassLoader();
             c = Class.forName("com.sun.tools.attach.VirtualMachine", true, cl);
         } else {

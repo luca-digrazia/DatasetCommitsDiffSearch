@@ -73,8 +73,7 @@ public class HotSpotGraalManagementTest {
 
     public HotSpotGraalManagementTest() {
         try {
-            /* Trigger loading of the management library using the bootstrap class loader. */
-            ManagementFactory.getThreadMXBean();
+            System.loadLibrary("management");
             MBeanServerFactory.findMBeanServer(null);
         } catch (UnsatisfiedLinkError | NoClassDefFoundError e) {
             throw new AssumptionViolatedException("Management classes/module(s) not available: " + e);
