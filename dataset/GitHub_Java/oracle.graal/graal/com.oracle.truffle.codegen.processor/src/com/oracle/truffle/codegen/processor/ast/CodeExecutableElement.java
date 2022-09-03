@@ -59,10 +59,6 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
         }
     }
 
-    public boolean isDefault() {
-        return false;
-    }
-
     @Override
     public List<TypeMirror> getThrownTypes() {
         return throwables;

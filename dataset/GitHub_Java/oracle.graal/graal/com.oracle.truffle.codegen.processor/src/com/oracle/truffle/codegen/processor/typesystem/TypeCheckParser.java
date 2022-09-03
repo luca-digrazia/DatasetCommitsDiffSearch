@@ -26,7 +26,6 @@ import java.lang.annotation.*;
 import java.util.*;
 
 import javax.lang.model.element.*;
-import javax.lang.model.type.*;
 
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
@@ -41,22 +40,22 @@ class TypeCheckParser extends TypeSystemMethodParser<TypeCheckData> {
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        TypeData targetType = findTypeByMethodName(method.getSimpleName().toString(), "is");
+        TypeData targetType = findTypeByMethodName(method, mirror, "is");
         if (targetType == null) {
             return null;
         }
         List<ParameterSpec> specs = new ArrayList<>();
         specs.add(new ParameterSpec("value", getTypeSystem(), false, Cardinality.ONE));
         ParameterSpec returnTypeSpec = new ParameterSpec("returnType", getContext().getType(boolean.class), false);
-        MethodSpec spec = new MethodSpec(Collections.<TypeMirror> emptyList(), returnTypeSpec, specs);
+        MethodSpec spec = new MethodSpec(returnTypeSpec, specs);
         return spec;
     }
 
     @Override
     public TypeCheckData create(TemplateMethod method) {
-        TypeData checkedType = findTypeByMethodName(method, "is");
+        TypeData checkedType = findTypeByMethodName(method.getMethod(), method.getMarkerAnnotation(), "is");
         assert checkedType != null;
-        ActualParameter parameter = method.findParameter("valueValue");
+        ActualParameter parameter = method.findParameter("value");
         assert parameter != null;
         return new TypeCheckData(method, checkedType, parameter.getActualTypeData(getTypeSystem()));
     }

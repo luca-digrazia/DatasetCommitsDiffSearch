@@ -43,8 +43,9 @@ public abstract class TemplateParser<M extends Template> extends AbstractParser<
         return extensionParser;
     }
 
-    protected void verifyExclusiveMethodAnnotation(Template template, Class<?>... annotationTypes) {
-        List<ExecutableElement> methods = ElementFilter.methodsIn(template.getTemplateType().getEnclosedElements());
+    protected boolean verifyExclusiveMethodAnnotation(TypeElement type, Class<?>... annotationTypes) {
+        boolean valid = true;
+        List<ExecutableElement> methods = ElementFilter.methodsIn(type.getEnclosedElements());
         for (ExecutableElement method : methods) {
             List<AnnotationMirror> foundAnnotations = new ArrayList<>();
             for (int i = 0; i < annotationTypes.length; i++) {
@@ -60,9 +61,34 @@ public abstract class TemplateParser<M extends Template> extends AbstractParser<
                     annotationNames.add("@" + Utils.getSimpleName(mirror.getAnnotationType()));
                 }
 
-                template.addError("Non exclusive usage of annotations %s.", annotationNames);
+                for (AnnotationMirror mirror : foundAnnotations) {
+                    context.getLog().error(method, mirror, "Non exclusive usage of annotations %s.", annotationNames);
+                }
+                valid = false;
             }
         }
+        return valid;
+    }
+
+    protected boolean verifyTemplateType(TypeElement template, AnnotationMirror annotation) {
+        // annotation type on class path!?
+        boolean valid = true;
+        TypeElement annotationTypeElement = processingEnv.getElementUtils().getTypeElement(getAnnotationType().getCanonicalName());
+        if (annotationTypeElement == null) {
+            log.error(template, annotation, "Required class " + getAnnotationType().getName() + " is not on the classpath.");
+            valid = false;
+        }
+        if (template.getModifiers().contains(Modifier.PRIVATE)) {
+            log.error(template, annotation, "The annotated class must have at least package protected visibility.");
+            valid = false;
+        }
+
+        if (template.getModifiers().contains(Modifier.FINAL)) {
+            log.error(template, annotation, "The annotated class must not be final.");
+            valid = false;
+        }
+
+        return valid;
     }
 
 }

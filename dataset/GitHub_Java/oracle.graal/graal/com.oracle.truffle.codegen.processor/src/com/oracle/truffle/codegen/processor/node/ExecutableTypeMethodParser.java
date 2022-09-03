@@ -44,14 +44,14 @@ public class ExecutableTypeMethodParser extends MethodParser<ExecutableTypeData>
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
         List<TypeMirror> types = new ArrayList<>();
-        types.addAll(getNode().getTypeSystem().getPrimitiveTypeMirrors());
+        types.addAll(Arrays.asList(getNode().getTypeSystem().getPrimitiveTypeMirrors()));
         types.add(getContext().getType(void.class));
 
-        ParameterSpec returnTypeSpec = new ParameterSpec("executedValue", types, false, Cardinality.ONE);
+        ParameterSpec returnTypeSpec = new ParameterSpec("executedValue", types.toArray(new TypeMirror[types.size()]), getNode().getTypeSystem().getGenericType(), false, Cardinality.ONE);
 
         List<ParameterSpec> parameters = new ArrayList<>();
         parameters.add(new ParameterSpec("frame", getContext().getTruffleTypes().getFrame(), true));
-        return new MethodSpec(new ArrayList<TypeMirror>(), returnTypeSpec, parameters);
+        return new MethodSpec(returnTypeSpec, parameters);
     }
 
     @Override

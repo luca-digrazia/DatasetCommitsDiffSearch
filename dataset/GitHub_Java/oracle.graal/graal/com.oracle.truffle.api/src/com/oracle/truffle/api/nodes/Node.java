@@ -25,8 +25,6 @@ package com.oracle.truffle.api.nodes;
 import java.lang.annotation.*;
 import java.util.*;
 
-import com.oracle.truffle.api.*;
-
 /**
  * Abstract base class for all Truffle nodes.
  */
@@ -38,8 +36,6 @@ public abstract class Node implements Cloneable {
     public static final Node[] EMPTY_ARRAY = new Node[0];
 
     private Node parent;
-
-    private SourceSection sourceSection;
 
     /**
      * Marks array fields that are children of this node.
@@ -55,34 +51,6 @@ public abstract class Node implements Cloneable {
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.FIELD})
     public @interface Child {
-    }
-
-    /**
-     * Assigns a link to a guest language source section to this node.
-     * 
-     * @param section the object representing a section in guest language source code
-     */
-    public final void assignSourceSection(SourceSection section) {
-        if (sourceSection != null) {
-            throw new IllegalStateException("Source section is already assigned.");
-        }
-        this.sourceSection = section;
-    }
-
-    /**
-     * Clears any previously assigned guest language source code from this node.
-     */
-    public final void clearSourceSection() {
-        this.sourceSection = null;
-    }
-
-    /**
-     * Retrieves the guest language source code section that is currently assigned to this node.
-     * 
-     * @return the assigned source code section
-     */
-    public final SourceSection getSourceSection() {
-        return sourceSection;
     }
 
     /**
@@ -155,7 +123,7 @@ public abstract class Node implements Cloneable {
      * @return the new node
      */
     @SuppressWarnings({"unchecked"})
-    public final <T extends Node> T replace(T newNode, String reason) {
+    public <T extends Node> T replace(T newNode, String reason) {
         assert this.getParent() != null;
         return (T) this.getParent().replaceChild(this, newNode);
     }
@@ -166,7 +134,7 @@ public abstract class Node implements Cloneable {
      * @param newNode the new node that is the replacement
      * @return the new node
      */
-    public final <T extends Node> T replace(T newNode) {
+    public <T extends Node> T replace(T newNode) {
         return replace(newNode, "");
     }
 

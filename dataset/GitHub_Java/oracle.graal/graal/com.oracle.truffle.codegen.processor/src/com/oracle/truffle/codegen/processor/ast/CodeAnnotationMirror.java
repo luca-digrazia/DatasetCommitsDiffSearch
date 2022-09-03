@@ -26,8 +26,8 @@ import java.util.*;
 
 import javax.lang.model.element.*;
 import javax.lang.model.type.*;
+import javax.lang.model.util.*;
 
-import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.api.element.*;
 
 public class CodeAnnotationMirror implements WritableAnnotationMirror {
@@ -60,7 +60,13 @@ public class CodeAnnotationMirror implements WritableAnnotationMirror {
     }
 
     public ExecutableElement findExecutableElement(String name) {
-        return Utils.findExecutableElement(annotationType, name);
+        List<? extends ExecutableElement> elements = ElementFilter.methodsIn(annotationType.asElement().getEnclosedElements());
+        for (ExecutableElement executableElement : elements) {
+            if (executableElement.getSimpleName().toString().equals(name)) {
+                return executableElement;
+            }
+        }
+        return null;
     }
 
     public static CodeAnnotationMirror clone(AnnotationMirror mirror) {

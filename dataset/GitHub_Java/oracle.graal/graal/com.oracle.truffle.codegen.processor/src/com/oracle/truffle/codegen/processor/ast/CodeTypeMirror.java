@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.codegen.processor.ast;
 
-import java.lang.annotation.*;
 import java.util.*;
 
 import javax.lang.model.element.*;
@@ -93,21 +92,4 @@ public class CodeTypeMirror implements TypeMirror {
 
     }
 
-    public List<? extends AnnotationMirror> getAnnotationMirrors() {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * @param annotationType
-     */
-    public <A extends Annotation> A getAnnotation(Class<A> annotationType) {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * @param annotationType
-     */
-    public <A extends Annotation> A[] getAnnotationsByType(Class<A> annotationType) {
-        throw new UnsupportedOperationException();
-    }
 }

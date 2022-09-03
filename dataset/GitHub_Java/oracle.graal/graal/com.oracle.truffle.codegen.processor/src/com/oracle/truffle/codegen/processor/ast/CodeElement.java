@@ -103,29 +103,7 @@ public abstract class CodeElement<E extends Element> implements WritableElement,
         return annotations;
     }
 
-    /**
-     * Support JDK8 langtools.
-     * 
-     * @param annotationType
-     */
-    public <A extends Annotation> A[] getAnnotationsByType(Class<A> annotationType) {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Support for some JDK8 builds. (remove after jdk8 is released)
-     * 
-     * @param annotationType
-     */
-    public <A extends Annotation> A[] getAnnotations(Class<A> annotationType) {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Support for some JDK8 builds. (remove after jdk8 is released)
-     * 
-     * @param annotationType
-     */
+    @Override
     public <A extends Annotation> A getAnnotation(Class<A> annotationType) {
         throw new UnsupportedOperationException();
     }

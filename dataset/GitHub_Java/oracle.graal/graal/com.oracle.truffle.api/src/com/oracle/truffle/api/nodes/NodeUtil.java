@@ -99,18 +99,6 @@ public class NodeUtil {
 
             this.parentOffset = parentOffsetTemp;
         }
-
-        public long getParentOffset() {
-            return parentOffset;
-        }
-
-        public long[] getNodeFieldOffsets() {
-            return nodeFieldOffsets;
-        }
-
-        public long[] getNodeArrayFieldOffsets() {
-            return nodeArrayFieldOffsets;
-        }
     }
 
     public static class NodeIterator implements Iterator<Node> {
@@ -192,7 +180,7 @@ public class NodeUtil {
         return array;
     }
 
-    protected static final Unsafe unsafe = getUnsafe();
+    private static final Unsafe unsafe = getUnsafe();
 
     private static Unsafe getUnsafe() {
         try {

@@ -162,7 +162,10 @@ public class TypeSystemParser extends TemplateParser<TypeSystemData> {
                 continue;
             }
 
-            TypeMirror boxedType = Utils.boxType(context, primitiveType);
+            TypeMirror boxedType = primitiveType;
+            if (boxedType.getKind().isPrimitive()) {
+                boxedType = processingEnv.getTypeUtils().boxedClass((PrimitiveType) boxedType).asType();
+            }
 
             if (Utils.typeEquals(boxedType, objectType)) {
                 log.error(templateType, templateTypeAnnotation, annotationValue, "Types must not contain the generic type java.lang.Object.");

@@ -215,7 +215,6 @@ public class TypeSystemCodeGenerator extends CompilationUnitFactory<TypeSystemDa
             method.addParameter(new CodeVariableElement(getContext().getType(Object.class), LOCAL_VALUE));
 
             CodeTreeBuilder body = method.createBuilder();
-            body.startAssert().startCall(isTypeMethodName(type)).string(LOCAL_VALUE).end().end();
             body.startReturn().cast(type.getPrimitiveType(), body.create().string(LOCAL_VALUE).getTree()).end();
 
             return method;
@@ -234,6 +233,5 @@ public class TypeSystemCodeGenerator extends CompilationUnitFactory<TypeSystemDa
 
             return method;
         }
-
     }
 }

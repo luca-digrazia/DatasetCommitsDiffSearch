@@ -99,6 +99,7 @@ public abstract class ClassElementFactory<M> extends CodeElementFactory<M> {
         if (element.getModifiers().contains(Modifier.PRIVATE)) {
             return null;
         }
+
         CodeExecutableElement executable = CodeExecutableElement.clone(getContext().getEnvironment(), element);
         executable.setReturnType(null);
         executable.setSimpleName(CodeNames.of(type.getSimpleName().toString()));
@@ -127,10 +128,6 @@ public abstract class ClassElementFactory<M> extends CodeElementFactory<M> {
 
         CodeAnnotationMirror generatedByAnnotation = new CodeAnnotationMirror((DeclaredType) getContext().getType(GeneratedBy.class));
         generatedByAnnotation.setElementValue(generatedByAnnotation.findExecutableElement("value"), new CodeAnnotationValue(templateType.asType()));
-        if (model.getTemplateMethodName() != null) {
-            generatedByAnnotation.setElementValue(generatedByAnnotation.findExecutableElement("methodName"), new CodeAnnotationValue(model.getTemplateMethodName()));
-        }
-
         clazz.addAnnotationMirror(generatedByAnnotation);
 
         context.registerType(model.getTemplateType(), clazz.asType());

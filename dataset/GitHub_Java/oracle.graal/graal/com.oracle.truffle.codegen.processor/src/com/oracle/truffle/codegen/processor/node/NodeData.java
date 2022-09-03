@@ -133,8 +133,7 @@ public class NodeData extends Template {
         } else {
             ExecutableTypeData execType = null;
             for (ExecutableTypeData type : types) {
-                TypeData returnType = type.getReturnType().getActualTypeData(getTypeSystem());
-                if (!returnType.isVoid()) {
+                if (!type.getReturnType().getActualTypeData(getTypeSystem()).isVoid()) {
                     if (execType != null) {
                         // multiple generic types not allowed
                         return null;
@@ -281,12 +280,25 @@ public class NodeData extends Template {
         return specializations;
     }
 
+    // @formatter:off
     public String dump() {
         StringBuilder b = new StringBuilder();
-        b.append(String.format("[name = %s\n" + "  typeSystem = %s\n" + "  fields = %s\n" + "  types = %s\n" + "  specializations = %s\n" + "  guards = %s\n" + "]",
-                        Utils.getQualifiedName(getTemplateType()), getTypeSystem(), dumpList(fields), dumpList(getExecutableTypes()), dumpList(getSpecializations()), dumpList(guards)));
+        b.append(String.format("[name = %s\n" +
+                        "  typeSystem = %s\n" +
+                        "  fields = %s\n" +
+                        "  types = %s\n" +
+                        "  specializations = %s\n" +
+                        "  guards = %s\n" +
+                        "]", Utils.getQualifiedName(getTemplateType()),
+                            getTypeSystem(),
+                            dumpList(fields),
+                            dumpList(getExecutableTypes()),
+                            dumpList(getSpecializations()),
+                            dumpList(guards)
+                        ));
         return b.toString();
     }
+    // @formatter:on
 
     private static String dumpList(Object[] array) {
         if (array == null) {

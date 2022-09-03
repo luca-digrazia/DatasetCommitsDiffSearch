@@ -24,12 +24,21 @@ package com.oracle.truffle.sl.nodes;
 
 import com.oracle.truffle.api.frame.*;
 
-public abstract class FrameSlotNode extends TypedNode {
+public abstract class FrameSlotNode extends TypedNode implements FrameSlotTypeListener {
 
     protected final FrameSlot slot;
 
     public FrameSlotNode(FrameSlot slot) {
         this.slot = slot;
+        slot.registerOneShotTypeListener(this);
     }
 
+    @Override
+    public void typeChanged(FrameSlot changedSlot, Class<?> oldType) {
+        if (getParent() != null) {
+            replace(specialize(changedSlot.getType()));
+        }
+    }
+
+    protected abstract FrameSlotNode specialize(Class<?> clazz);
 }

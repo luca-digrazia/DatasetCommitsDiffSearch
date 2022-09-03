@@ -66,7 +66,8 @@ public class SLTypes {
     }
 
     @TypeCheck
-    public boolean isBigInteger(@SuppressWarnings("unused") int value) {
+    public boolean isBigInteger(@SuppressWarnings("unused")
+    int value) {
         return true;
     }
 }

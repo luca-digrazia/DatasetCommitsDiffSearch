@@ -61,7 +61,7 @@ public class GraphPrintVisitor {
 
             dom = db.newDocument();
         } catch (ParserConfigurationException ex) {
-            throw new RuntimeException(ex);
+            System.out.println("Error while trying to instantiate DocumentBuilder " + ex);
         }
 
         graphDocument = dom.createElement("graphDocument");

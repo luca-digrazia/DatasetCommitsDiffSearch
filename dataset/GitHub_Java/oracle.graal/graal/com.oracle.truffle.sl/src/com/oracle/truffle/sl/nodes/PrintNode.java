@@ -26,17 +26,19 @@ import java.io.*;
 
 import com.oracle.truffle.api.codegen.*;
 
-@NodeChild(value = "expression", type = TypedNode.class)
 public abstract class PrintNode extends StatementNode {
+
+    @Child protected TypedNode expression;
 
     private final PrintStream output;
 
-    public PrintNode(PrintStream output) {
+    public PrintNode(TypedNode expression, PrintStream output) {
+        this.expression = adoptChild(expression);
         this.output = output;
     }
 
     public PrintNode(PrintNode node) {
-        this(node.output);
+        this(node.expression, node.output);
     }
 
     @Specialization

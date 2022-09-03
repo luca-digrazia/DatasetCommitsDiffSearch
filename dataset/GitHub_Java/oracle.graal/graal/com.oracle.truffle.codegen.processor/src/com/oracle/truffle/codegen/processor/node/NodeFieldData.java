@@ -28,7 +28,7 @@ import javax.lang.model.type.*;
 public class NodeFieldData {
 
     public enum FieldKind {
-        CHILD, CHILDREN
+        FIELD, CHILD, CHILDREN
     }
 
     public enum ExecutionKind {
@@ -41,7 +41,7 @@ public class NodeFieldData {
 
     private final FieldKind fieldKind;
     private final ExecutionKind executionKind;
-    private NodeData nodeData;
+    private final NodeData nodeData;
 
     public NodeFieldData(NodeData typeNodeData, VariableElement fieldElement, Element accessElement, AnnotationMirror childAnnotationMirror, FieldKind fieldKind, ExecutionKind executionKind) {
         this.fieldElement = fieldElement;
@@ -50,23 +50,6 @@ public class NodeFieldData {
         this.nodeData = typeNodeData;
         this.fieldKind = fieldKind;
         this.executionKind = executionKind;
-    }
-
-    NodeFieldData(NodeFieldData field) {
-        this.fieldElement = field.fieldElement;
-        this.accessElement = field.accessElement;
-        this.childAnnotationMirror = field.childAnnotationMirror;
-        this.fieldKind = field.fieldKind;
-        this.executionKind = field.executionKind;
-        this.nodeData = field.nodeData;
-    }
-
-    public boolean isShortCircuit() {
-        return executionKind == ExecutionKind.SHORT_CIRCUIT;
-    }
-
-    void setNode(NodeData nodeData) {
-        this.nodeData = nodeData;
     }
 
     public VariableElement getFieldElement() {
@@ -103,7 +86,7 @@ public class NodeFieldData {
 
     @Override
     public String toString() {
-        return "NodeFieldData[name=" + getName() + ", kind=" + fieldKind + ", execution=" + executionKind + ", node=" + getNodeData().toString() + "]";
+        return "NodeFieldData[name=" + getName() + ", kind=" + fieldKind + ", execution=" + executionKind + "]";
     }
 
 }

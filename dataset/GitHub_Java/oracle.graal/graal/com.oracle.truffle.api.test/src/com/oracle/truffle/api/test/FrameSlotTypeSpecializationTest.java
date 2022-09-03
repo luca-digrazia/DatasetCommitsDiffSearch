@@ -34,7 +34,12 @@ import com.oracle.truffle.api.nodes.*;
  * <p>
  * Dynamically typed languages can speculate on the type of a frame slot and only fall back at run
  * time to a more generic type if necessary. The new type of a frame slot can be set using the
- * {@link FrameSlot#setKind(FrameSlotKind)} method.
+ * {@link FrameSlot#setType(Class)} method. It is the responsibility of the language implementor to
+ * update the content of currently active frames (using {@link Frame#updateToLatestVersion()}).
+ * Also, nodes that depend a specific type of a frame slot must be replaced. Such node can register
+ * a listener that implements {@link FrameSlotTypeListener} using
+ * {@link FrameSlot#registerOneShotTypeListener(FrameSlotTypeListener)}. The event of a type change
+ * on the frame slot will fire only once for the next upcoming change.
  * </p>
  * 
  * <p>
@@ -48,13 +53,13 @@ public class FrameSlotTypeSpecializationTest {
     public void test() {
         TruffleRuntime runtime = Truffle.getRuntime();
         FrameDescriptor frameDescriptor = new FrameDescriptor();
-        FrameSlot slot = frameDescriptor.addFrameSlot("localVar", FrameSlotKind.Int);
+        FrameSlot slot = frameDescriptor.addFrameSlot("localVar", Integer.class);
         TestRootNode rootNode = new TestRootNode(new IntAssignLocal(slot, new StringTestChildNode()), new IntReadLocal(slot));
         CallTarget target = runtime.createCallTarget(rootNode, frameDescriptor);
-        Assert.assertEquals(FrameSlotKind.Int, slot.getKind());
+        Assert.assertEquals(Integer.class, slot.getType());
         Object result = target.call();
         Assert.assertEquals("42", result);
-        Assert.assertEquals(FrameSlotKind.Object, slot.getKind());
+        Assert.assertEquals(Object.class, slot.getType());
     }
 
     class TestRootNode extends RootNode {
@@ -97,28 +102,34 @@ public class FrameSlotTypeSpecializationTest {
 
     }
 
-    class IntAssignLocal extends FrameSlotNode {
+    class IntAssignLocal extends FrameSlotNode implements FrameSlotTypeListener {
 
         @Child private TestChildNode value;
 
         IntAssignLocal(FrameSlot slot, TestChildNode value) {
             super(slot);
             this.value = adoptChild(value);
+            slot.registerOneShotTypeListener(this);
         }
 
         @Override
         Object execute(VirtualFrame frame) {
             Object o = value.execute(frame);
             if (o instanceof Integer) {
-                try {
-                    frame.setInt(slot, (Integer) o);
-                } catch (FrameSlotTypeException e) {
-                    // fall through
-                }
+                frame.setInt(slot, (Integer) o);
+            } else {
+                slot.setType(Object.class);
+                frame.updateToLatestVersion();
+                frame.setObject(slot, o);
             }
-            FrameUtil.setObjectSafe(frame, slot, o);
-            this.replace(new ObjectAssignLocal(slot, value));
             return null;
+        }
+
+        @Override
+        public void typeChanged(FrameSlot changedSlot, Class<?> oldType) {
+            if (changedSlot.getType() == Object.class) {
+                this.replace(new ObjectAssignLocal(changedSlot, value));
+            }
         }
     }
 
@@ -134,27 +145,27 @@ public class FrameSlotTypeSpecializationTest {
         @Override
         Object execute(VirtualFrame frame) {
             Object o = value.execute(frame);
-            try {
-                frame.setObject(slot, o);
-            } catch (FrameSlotTypeException e) {
-                FrameUtil.setObjectSafe(frame, slot, o);
-            }
+            frame.setObject(slot, o);
             return null;
         }
     }
 
-    class IntReadLocal extends FrameSlotNode {
+    class IntReadLocal extends FrameSlotNode implements FrameSlotTypeListener {
 
         IntReadLocal(FrameSlot slot) {
             super(slot);
+            slot.registerOneShotTypeListener(this);
         }
 
         @Override
         Object execute(VirtualFrame frame) {
-            try {
-                return frame.getInt(slot);
-            } catch (FrameSlotTypeException e) {
-                return this.replace(new ObjectReadLocal(slot)).execute(frame);
+            return frame.getInt(slot);
+        }
+
+        @Override
+        public void typeChanged(FrameSlot changedSlot, Class<?> oldType) {
+            if (changedSlot.getType() == Object.class) {
+                this.replace(new ObjectReadLocal(changedSlot));
             }
         }
     }
@@ -167,11 +178,7 @@ public class FrameSlotTypeSpecializationTest {
 
         @Override
         Object execute(VirtualFrame frame) {
-            try {
-                return frame.getObject(slot);
-            } catch (FrameSlotTypeException e) {
-                throw new IllegalStateException(e);
-            }
+            return frame.getObject(slot);
         }
     }
 }

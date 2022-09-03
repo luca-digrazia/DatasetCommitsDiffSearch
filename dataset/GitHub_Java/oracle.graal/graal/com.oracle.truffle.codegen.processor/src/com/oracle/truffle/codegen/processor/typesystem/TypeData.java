@@ -30,36 +30,19 @@ import javax.lang.model.type.*;
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
 
-public class TypeData extends MessageContainer {
+public class TypeData extends Template {
 
-    private final TypeSystemData typeSystem;
-    private final AnnotationValue annotationValue;
+    protected TypeSystemData typeSystem;
     private final TypeMirror primitiveType;
     private final TypeMirror boxedType;
 
     private final List<TypeCastData> typeCasts = new ArrayList<>();
     private final List<TypeCheckData> typeChecks = new ArrayList<>();
 
-    public TypeData(TypeSystemData typeSystem, AnnotationValue value, TypeMirror primitiveType, TypeMirror boxedType) {
-        this.typeSystem = typeSystem;
-        this.annotationValue = value;
+    public TypeData(TypeElement templateType, AnnotationMirror annotation, TypeMirror primitiveType, TypeMirror boxedType) {
+        super(templateType, annotation);
         this.primitiveType = primitiveType;
         this.boxedType = boxedType;
-    }
-
-    @Override
-    public Element getMessageElement() {
-        return typeSystem.getMessageElement();
-    }
-
-    @Override
-    public AnnotationMirror getMessageAnnotation() {
-        return typeSystem.getMessageAnnotation();
-    }
-
-    @Override
-    public AnnotationValue getMessageAnnotationValue() {
-        return annotationValue;
     }
 
     void addTypeCast(TypeCastData typeCast) {
@@ -104,10 +87,6 @@ public class TypeData extends MessageContainer {
     @Override
     public String toString() {
         return getClass().getSimpleName() + "[" + Utils.getSimpleName(primitiveType) + "]";
-    }
-
-    public boolean equalsType(TypeData actualTypeData) {
-        return Utils.typeEquals(boxedType, actualTypeData.boxedType);
     }
 
 }

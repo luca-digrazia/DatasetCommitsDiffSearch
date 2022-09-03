@@ -31,7 +31,6 @@ import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.api.*;
 import com.oracle.truffle.codegen.processor.api.element.*;
-import com.oracle.truffle.codegen.processor.template.*;
 
 public class ExtensionParser {
 
@@ -46,25 +45,25 @@ public class ExtensionParser {
         this.extensionContext = new ExtensionContextImpl(context.getEnvironment(), null, factory);
     }
 
-    public List<WritableElement> parseAll(Template template, List<? extends Element> elements) {
+    public List<WritableElement> parseAll(TypeElement typeElement, List<? extends Element> elements) {
         List<WritableElement> generatedMethods = new ArrayList<>();
-        parseElement(template, generatedMethods, template.getTemplateType());
+        parseElement(generatedMethods, typeElement);
 
         List<? extends ExecutableElement> methods = ElementFilter.methodsIn(elements);
         for (ExecutableElement method : methods) {
             for (VariableElement var : method.getParameters()) {
-                parseElement(template, generatedMethods, var);
+                parseElement(generatedMethods, var);
             }
-            parseElement(template, generatedMethods, method);
+            parseElement(generatedMethods, method);
         }
 
         return generatedMethods;
     }
 
-    private void parseElement(Template template, List<WritableElement> elements, Element element) {
+    private void parseElement(List<WritableElement> elements, Element element) {
         List<? extends AnnotationMirror> mirrors = element.getAnnotationMirrors();
         for (AnnotationMirror mirror : mirrors) {
-            ExtensionProcessor processor = findProcessor(template, mirror);
+            ExtensionProcessor processor = findProcessor(element, mirror);
             if (processor != null) {
                 try {
                     factory.generatorAnnotationMirror = mirror;
@@ -72,7 +71,7 @@ public class ExtensionParser {
                     processor.process(extensionContext, mirror, element);
                     elements.addAll(extensionContext.returnElements());
                 } catch (Throwable e) {
-                    template.addError("Processor for '%s' failed with exception: \n\n%s.", Utils.getQualifiedName(mirror.getAnnotationType()), Utils.printException(e));
+                    context.getLog().error(element, mirror, "Processor for '%s' failed with exception: \n\n%s.", Utils.getQualifiedName(mirror.getAnnotationType()), Utils.printException(e));
                 } finally {
                     factory.generatorAnnotationMirror = null;
                     factory.generatorElement = null;
@@ -81,7 +80,7 @@ public class ExtensionParser {
         }
     }
 
-    private ExtensionProcessor findProcessor(Template template, AnnotationMirror mirror) {
+    private ExtensionProcessor findProcessor(Element element, AnnotationMirror mirror) {
         String processorName = Utils.getQualifiedName(mirror.getAnnotationType());
         ExtensionProcessor processor = null;
         if (extensions.containsKey(processorName)) {
@@ -89,24 +88,24 @@ public class ExtensionParser {
         } else {
             AnnotationMirror foundExtension = Utils.findAnnotationMirror(context.getEnvironment(), mirror.getAnnotationType().asElement(), ExtensionAnnotation.class);
             if (foundExtension != null) {
-                String className = Utils.getAnnotationValue(String.class, foundExtension, "processorClassName");
+                String className = Utils.getAnnotationValueString(foundExtension, "processorClassName");
                 Class<?> processorClass;
                 try {
                     processorClass = Class.forName(className);
                 } catch (ClassNotFoundException e) {
-                    template.addError("Could not find processor class '%s' configured in '@%s'.", className, processorName);
+                    context.getLog().error(element, mirror, "Could not find processor class '%s' configured in '@%s'.", className, processorName);
                     return null;
                 }
                 try {
                     processor = (ExtensionProcessor) processorClass.newInstance();
                 } catch (InstantiationException e) {
-                    template.addError("Could not instantiate processor class '%s' configured in '@%s'.", className, processorName);
+                    context.getLog().error(element, mirror, "Could not instantiate processor class '%s' configured in '@%s'.", className, processorName);
                     return null;
                 } catch (IllegalAccessException e) {
-                    template.addError("Could not access processor class '%s' configured in '@%s'.", className, processorName);
+                    context.getLog().error(element, mirror, "Could not access processor class '%s' configured in '@%s'.", className, processorName);
                     return null;
                 } catch (ClassCastException e) {
-                    template.addError("Processor class '%s' configured in '@%s' does not implement '%s'.", className, processorName, ExtensionProcessor.class.getName());
+                    context.getLog().error(element, mirror, "Processor class '%s' configured in '@%s' does not implement '%s'.", className, processorName, ExtensionProcessor.class.getName());
                     return null;
                 }
             }

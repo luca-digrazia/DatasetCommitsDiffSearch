@@ -25,38 +25,21 @@ package com.oracle.truffle.codegen.processor.node;
 import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 
-import com.oracle.truffle.codegen.processor.template.*;
+public class SpecializationThrowsData {
 
-public class SpecializationThrowsData extends MessageContainer {
-
-    private final AnnotationValue annotationValue;
     private final AnnotationMirror annotationMirror;
     private final TypeMirror javaClass;
+    private final String transitionTo;
     private SpecializationData specialization;
 
-    public SpecializationThrowsData(AnnotationMirror annotationMirror, AnnotationValue value, TypeMirror javaClass) {
+    public SpecializationThrowsData(AnnotationMirror annotationMirror, TypeMirror javaClass, String transitionTo) {
         this.annotationMirror = annotationMirror;
-        this.annotationValue = value;
         this.javaClass = javaClass;
+        this.transitionTo = transitionTo;
     }
 
     void setSpecialization(SpecializationData specialization) {
         this.specialization = specialization;
-    }
-
-    @Override
-    public Element getMessageElement() {
-        return specialization.getMessageElement();
-    }
-
-    @Override
-    public AnnotationMirror getMessageAnnotation() {
-        return annotationMirror;
-    }
-
-    @Override
-    public AnnotationValue getMessageAnnotationValue() {
-        return annotationValue;
     }
 
     public TypeMirror getJavaClass() {
@@ -71,7 +54,16 @@ public class SpecializationThrowsData extends MessageContainer {
         return annotationMirror;
     }
 
+    public String getTransitionToName() {
+        return transitionTo;
+    }
+
     public SpecializationData getTransitionTo() {
-        return specialization.findNextSpecialization();
+        for (SpecializationData s : specialization.getNode().getSpecializations()) {
+            if (s.getMethodName().equals(transitionTo)) {
+                return s;
+            }
+        }
+        return null;
     }
 }

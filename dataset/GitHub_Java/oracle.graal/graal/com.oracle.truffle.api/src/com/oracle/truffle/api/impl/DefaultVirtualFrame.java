@@ -192,9 +192,4 @@ public final class DefaultVirtualFrame implements VirtualFrame {
         }
         currentVersion = version;
     }
-
-    @Override
-    public FrameDescriptor getFrameDescriptor() {
-        return this.descriptor;
-    }
 }

@@ -23,7 +23,6 @@
 package com.oracle.truffle.sl.nodes;
 
 import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
 
 public class BlockNode extends StatementNode {
 
@@ -34,7 +33,6 @@ public class BlockNode extends StatementNode {
     }
 
     @Override
-    @ExplodeLoop
     public void executeVoid(VirtualFrame frame) {
         for (StatementNode statement : statements) {
             statement.executeVoid(frame);

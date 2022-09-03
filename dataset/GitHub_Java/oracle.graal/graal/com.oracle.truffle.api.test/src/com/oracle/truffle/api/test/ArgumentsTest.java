@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,7 +35,7 @@ import com.oracle.truffle.api.nodes.*;
  * A guest language can pass its own custom arguments when invoking a Truffle method by creating a
  * subclass of {@link Arguments}. When invoking a call target with
  * {@link CallTarget#call(Arguments)}, the arguments can be passed. A Truffle node can access the
- * arguments passed into the Truffle method by using {@link VirtualFrame#getArguments}.
+ * arguments passed into the Truffle method by using {@link VirtualFrame#getArguments()}.
  * </p>
  * 
  * <p>
@@ -75,7 +75,6 @@ public class ArgumentsTest {
         @Children private TestArgumentNode[] children;
 
         TestRootNode(TestArgumentNode[] children) {
-            super(null);
             this.children = adoptChildren(children);
         }
 
@@ -94,12 +93,11 @@ public class ArgumentsTest {
         private final int index;
 
         TestArgumentNode(int index) {
-            super(null);
             this.index = index;
         }
 
         int execute(VirtualFrame frame) {
-            return frame.getArguments(TestArguments.class).values[index];
+            return ((TestArguments) frame.getArguments()).values[index];
         }
     }
 }

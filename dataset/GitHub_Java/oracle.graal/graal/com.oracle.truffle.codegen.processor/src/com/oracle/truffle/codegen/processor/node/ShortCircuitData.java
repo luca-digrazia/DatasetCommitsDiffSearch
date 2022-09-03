@@ -61,8 +61,9 @@ public class ShortCircuitData extends TemplateMethod {
         }
 
         for (ActualParameter param : getParameters()) {
-            ActualParameter specializationParam = specialization.findParameter(param.getLocalName());
-            if (!Utils.typeEquals(param.getType(), specializationParam.getType())) {
+            ParameterSpec paramSpec = param.getSpecification();
+            ActualParameter specializationParam = specialization.findParameter(paramSpec.getName());
+            if (!Utils.typeEquals(param.getActualType(), specializationParam.getActualType())) {
                 return false;
             }
         }

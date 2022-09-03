@@ -25,19 +25,23 @@ package com.oracle.truffle.sl.nodes;
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.api.frame.*;
 
-@NodeChild(value = "conditionNode", type = ConditionNode.class)
+@ExecuteChildren("conditionNode")
 public abstract class IfNode extends StatementNode {
 
+    @Child protected ConditionNode conditionNode;
+
     @Child private StatementNode thenPartNode;
+
     @Child private StatementNode elsePartNode;
 
-    public IfNode(StatementNode thenPart, StatementNode elsePart) {
+    public IfNode(ConditionNode condition, StatementNode thenPart, StatementNode elsePart) {
+        this.conditionNode = adoptChild(condition);
         this.thenPartNode = adoptChild(thenPart);
         this.elsePartNode = adoptChild(elsePart);
     }
 
     protected IfNode(IfNode node) {
-        this(node.thenPartNode, node.elsePartNode);
+        this(node.conditionNode, node.thenPartNode, node.elsePartNode);
     }
 
     @Specialization
