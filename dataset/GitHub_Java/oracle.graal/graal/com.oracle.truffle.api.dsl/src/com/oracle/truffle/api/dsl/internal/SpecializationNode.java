@@ -25,7 +25,6 @@
 package com.oracle.truffle.api.dsl.internal;
 
 import java.lang.reflect.*;
-import java.util.*;
 import java.util.concurrent.*;
 
 import com.oracle.truffle.api.*;
@@ -65,14 +64,6 @@ public abstract class SpecializationNode extends Node {
         return NodeCost.NONE;
     }
 
-    public void reset() {
-        SpecializationNode start = findStart();
-        SpecializationNode end = findEnd();
-        if (start != end) {
-            start.replace(end, "reset specialization");
-        }
-    }
-
     public static Node updateRoot(Node node) {
         updateRootImpl(((SpecializedNode) node).getSpecializationNode(), node);
         return node;
@@ -95,7 +86,7 @@ public abstract class SpecializationNode extends Node {
     protected final SpecializationNode polymorphicMerge(SpecializationNode newNode) {
         SpecializationNode merged = next.merge(newNode);
         if (merged == newNode && !isSame(newNode) && count() <= 2) {
-            return removeSame(new RewriteEvent0(findRoot(), "merged polymorphic to monomorphic"));
+            return removeSame(new RewriteEvent0(findParentNode(), "merged polymorphic to monomorphic"));
         }
         return merged;
     }
@@ -121,22 +112,6 @@ public abstract class SpecializationNode extends Node {
         return next != null ? next.merge(newNode) : newNode;
     }
 
-    protected SpecializationNode mergeNoSame(SpecializationNode newNode) {
-        return next != null ? next.merge(newNode) : newNode;
-    }
-
-    protected final int countSame(SpecializationNode node) {
-        return findStart().countSameImpl(node);
-    }
-
-    private int countSameImpl(SpecializationNode node) {
-        if (next != null) {
-            return next.countSameImpl(node) + (isSame(node) ? 1 : 0);
-        } else {
-            return 0;
-        }
-    }
-
     @Override
     public final boolean equals(Object obj) {
         if (obj instanceof SpecializationNode) {
@@ -158,51 +133,10 @@ public abstract class SpecializationNode extends Node {
         return next != null ? next.count() + 1 : 1;
     }
 
-    private SpecializationNode findEnd() {
-        SpecializationNode node = this;
-        while (node.next != null) {
-            node = node.next;
-        }
-        return node;
-    }
-
-    protected final Object removeThis(final CharSequence reason, Frame frame) {
-        return removeThisImpl(reason).acceptAndExecute(frame);
-    }
-
-    protected final Object removeThis(final CharSequence reason, Frame frame, Object o1) {
-        return removeThisImpl(reason).acceptAndExecute(frame, o1);
-    }
-
-    protected final Object removeThis(final CharSequence reason, Frame frame, Object o1, Object o2) {
-        return removeThisImpl(reason).acceptAndExecute(frame, o1, o2);
-    }
-
-    protected final Object removeThis(final CharSequence reason, Frame frame, Object o1, Object o2, Object o3) {
-        return removeThisImpl(reason).acceptAndExecute(frame, o1, o2, o3);
-    }
-
-    protected final Object removeThis(final CharSequence reason, Frame frame, Object o1, Object o2, Object o3, Object o4) {
-        return removeThisImpl(reason).acceptAndExecute(frame, o1, o2, o3, o4);
-    }
-
-    protected final Object removeThis(final CharSequence reason, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
-        return removeThisImpl(reason).acceptAndExecute(frame, o1, o2, o3, o4, o5);
-    }
-
-    protected final Object removeThis(final CharSequence reason, Frame frame, Object... args) {
-        return removeThisImpl(reason).acceptAndExecute(frame, args);
-    }
-
-    private SpecializationNode removeThisImpl(final CharSequence reason) {
-        this.replace(this.next, reason);
-        return findEnd().findStart();
-    }
-
     protected final SpecializationNode removeSame(final CharSequence reason) {
         return atomic(new Callable<SpecializationNode>() {
             public SpecializationNode call() throws Exception {
-                return removeSameImpl(SpecializationNode.this, reason);
+                return removeImpl(SpecializationNode.this, reason);
             }
         });
     }
@@ -222,11 +156,11 @@ public abstract class SpecializationNode extends Node {
         return node;
     }
 
-    private Node findRoot() {
+    private Node findParentNode() {
         return findStart().getParent();
     }
 
-    private SpecializationNode removeSameImpl(SpecializationNode toRemove, CharSequence reason) {
+    private SpecializationNode removeImpl(SpecializationNode toRemove, CharSequence reason) {
         SpecializationNode start = findStart();
         SpecializationNode current = start;
         while (current != null) {
@@ -238,7 +172,7 @@ public abstract class SpecializationNode extends Node {
             }
             current = current.next;
         }
-        return findEnd().findStart();
+        return start;
     }
 
     public Object acceptAndExecute(Frame frame) {
@@ -314,7 +248,7 @@ public abstract class SpecializationNode extends Node {
         if (nextSpecialization == null) {
             return unsupported(frame);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEvent0(findRoot(), "inserted new specialization")).acceptAndExecute(frame);
+        return insertSpecialization(nextSpecialization, new RewriteEvent0(findParentNode(), "inserted new specialization")).acceptAndExecute(frame);
     }
 
     protected final Object uninitialized(Frame frame, Object o1) {
@@ -326,7 +260,7 @@ public abstract class SpecializationNode extends Node {
         if (nextSpecialization == null) {
             return unsupported(frame, o1);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEvent1(findRoot(), "inserted new specialization", o1)).acceptAndExecute(frame, o1);
+        return insertSpecialization(nextSpecialization, new RewriteEvent1(findParentNode(), "inserted new specialization", o1)).acceptAndExecute(frame, o1);
     }
 
     protected final Object uninitialized(Frame frame, Object o1, Object o2) {
@@ -338,7 +272,7 @@ public abstract class SpecializationNode extends Node {
         if (nextSpecialization == null) {
             return unsupported(frame, o1, o2);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEvent2(findRoot(), "inserted new specialization", o1, o2)).acceptAndExecute(frame, o1, o2);
+        return insertSpecialization(nextSpecialization, new RewriteEvent2(findParentNode(), "inserted new specialization", o1, o2)).acceptAndExecute(frame, o1, o2);
     }
 
     protected final Object uninitialized(Frame frame, Object o1, Object o2, Object o3) {
@@ -350,7 +284,7 @@ public abstract class SpecializationNode extends Node {
         if (nextSpecialization == null) {
             return unsupported(frame, o1, o2, o3);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEvent3(findRoot(), "inserted new specialization", o1, o2, o3)).acceptAndExecute(frame, o1, o2, o3);
+        return insertSpecialization(nextSpecialization, new RewriteEvent3(findParentNode(), "inserted new specialization", o1, o2, o3)).acceptAndExecute(frame, o1, o2, o3);
     }
 
     protected final Object uninitialized(Frame frame, Object o1, Object o2, Object o3, Object o4) {
@@ -362,7 +296,7 @@ public abstract class SpecializationNode extends Node {
         if (nextSpecialization == null) {
             return unsupported(frame, o1, o2, o3, o4);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEvent4(findRoot(), "inserts new specialization", o1, o2, o3, o4)).acceptAndExecute(frame, o1, o2, o3, o4);
+        return insertSpecialization(nextSpecialization, new RewriteEvent4(findParentNode(), "inserts new specialization", o1, o2, o3, o4)).acceptAndExecute(frame, o1, o2, o3, o4);
     }
 
     protected final Object uninitialized(Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
@@ -374,7 +308,7 @@ public abstract class SpecializationNode extends Node {
         if (nextSpecialization == null) {
             unsupported(frame, o1, o2, o3, o4, o5);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEventN(findRoot(), "inserts new specialization", o1, o2, o3, o4, o5)).acceptAndExecute(frame, o1, o2, o3, o4, o5);
+        return insertSpecialization(nextSpecialization, new RewriteEventN(findParentNode(), "inserts new specialization", o1, o2, o3, o4, o5)).acceptAndExecute(frame, o1, o2, o3, o4, o5);
     }
 
     protected final Object uninitialized(Frame frame, Object... args) {
@@ -386,7 +320,7 @@ public abstract class SpecializationNode extends Node {
         if (nextSpecialization == null) {
             unsupported(frame, args);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEventN(findRoot(), "inserts new specialization", args)).acceptAndExecute(frame, args);
+        return insertSpecialization(nextSpecialization, new RewriteEventN(findParentNode(), "inserts new specialization", args)).acceptAndExecute(frame, args);
     }
 
     private boolean needsPolymorphic() {
@@ -394,59 +328,59 @@ public abstract class SpecializationNode extends Node {
     }
 
     protected final Object remove(String reason, Frame frame) {
-        return removeSame(new RewriteEvent0(findRoot(), reason)).acceptAndExecute(frame);
+        return removeSame(new RewriteEvent0(findParentNode(), reason)).acceptAndExecute(frame);
     }
 
     protected final Object remove(String reason, Frame frame, Object o1) {
-        return removeSame(new RewriteEvent1(findRoot(), reason, o1)).acceptAndExecute(frame, o1);
+        return removeSame(new RewriteEvent1(findParentNode(), reason, o1)).acceptAndExecute(frame, o1);
     }
 
     protected final Object remove(String reason, Frame frame, Object o1, Object o2) {
-        return removeSame(new RewriteEvent2(findRoot(), reason, o1, o2)).acceptAndExecute(frame, o1, o2);
+        return removeSame(new RewriteEvent2(findParentNode(), reason, o1, o2)).acceptAndExecute(frame, o1, o2);
     }
 
     protected final Object remove(String reason, Frame frame, Object o1, Object o2, Object o3) {
-        return removeSame(new RewriteEvent3(findRoot(), reason, o1, o2, o3)).acceptAndExecute(frame, o1, o2, o3);
+        return removeSame(new RewriteEvent3(findParentNode(), reason, o1, o2, o3)).acceptAndExecute(frame, o1, o2, o3);
     }
 
     protected final Object remove(String reason, Frame frame, Object o1, Object o2, Object o3, Object o4) {
-        return removeSame(new RewriteEvent4(findRoot(), reason, o1, o2, o3, o4)).acceptAndExecute(frame, o1, o2, o3, o4);
+        return removeSame(new RewriteEvent4(findParentNode(), reason, o1, o2, o3, o4)).acceptAndExecute(frame, o1, o2, o3, o4);
     }
 
     protected final Object remove(String reason, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
-        return removeSame(new RewriteEventN(findRoot(), reason, o1, o2, o3, o4, o5)).acceptAndExecute(frame, o1, o2, o3, o4, o5);
+        return removeSame(new RewriteEventN(findParentNode(), reason, o1, o2, o3, o4, o5)).acceptAndExecute(frame, o1, o2, o3, o4, o5);
     }
 
     protected final Object remove(String reason, Frame frame, Object... args) {
-        return removeSame(new RewriteEventN(findRoot(), reason, args)).acceptAndExecute(frame, args);
+        return removeSame(new RewriteEventN(findParentNode(), reason, args)).acceptAndExecute(frame, args);
     }
 
     protected Object unsupported(Frame frame) {
-        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren());
+        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren());
     }
 
     protected Object unsupported(Frame frame, Object o1) {
-        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1);
+        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), o1);
     }
 
     protected Object unsupported(Frame frame, Object o1, Object o2) {
-        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2);
+        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), o1, o2);
     }
 
     protected Object unsupported(Frame frame, Object o1, Object o2, Object o3) {
-        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2, o3);
+        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), o1, o2, o3);
     }
 
     protected Object unsupported(Frame frame, Object o1, Object o2, Object o3, Object o4) {
-        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2, o3, o4);
+        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), o1, o2, o3, o4);
     }
 
     protected Object unsupported(Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
-        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2, o3, o4, o5);
+        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), o1, o2, o3, o4, o5);
     }
 
     protected Object unsupported(Frame frame, Object... args) {
-        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), args);
+        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), args);
     }
 
     private SpecializationNode insertSpecialization(final SpecializationNode generated, final CharSequence message) {
@@ -478,8 +412,8 @@ public abstract class SpecializationNode extends Node {
             return insertBefore(insertBefore, generated, message);
         } else {
             // existing node
-            merged.replace(merged, new RewriteEvent0(merged.findRoot(), "merged specialization"));
-            return start;
+            merged.replace(merged, new RewriteEvent0(merged.findParentNode(), "merged specialization"));
+            return merged;
         }
     }
 
@@ -504,7 +438,7 @@ public abstract class SpecializationNode extends Node {
 
         appendFields(b, clazz);
         if (next != null) {
-            b.append("\n -> ").append(next.toString());
+            b.append(" -> ").append(next.toString());
         }
         return b.toString();
     }
@@ -515,69 +449,25 @@ public abstract class SpecializationNode extends Node {
             return;
         }
         b.append("(");
-        String sep = "";
         for (Field field : fields) {
             if (Modifier.isStatic(field.getModifiers())) {
                 continue;
             }
-            b.append(sep);
             String name = field.getName();
             if (name.equals("root")) {
                 continue;
             }
             b.append(field.getName());
-            b.append(" = ");
             try {
                 field.setAccessible(true);
-                Object value = field.get(this);
-                if (value instanceof Object[]) {
-                    b.append(Arrays.toString((Object[]) field.get(this)));
-                } else {
-                    b.append(field.get(this));
-                }
+                b.append(field.get(this));
             } catch (IllegalArgumentException e) {
                 b.append(e.toString());
             } catch (IllegalAccessException e) {
                 b.append(e.toString());
             }
-            sep = ", ";
         }
         b.append(")");
-    }
-
-    // utilities for generated code
-    protected static void check(Assumption assumption) throws InvalidAssumptionException {
-        if (assumption != null) {
-            assumption.check();
-        }
-    }
-
-    @ExplodeLoop
-    protected static void check(Assumption[] assumptions) throws InvalidAssumptionException {
-        if (assumptions != null) {
-            CompilerAsserts.compilationConstant(assumptions.length);
-            for (Assumption assumption : assumptions) {
-                check(assumption);
-            }
-        }
-    }
-
-    protected static boolean isValid(Assumption assumption) {
-        if (assumption != null) {
-            return assumption.isValid();
-        }
-        return true;
-    }
-
-    protected static boolean isValid(Assumption[] assumptions) {
-        if (assumptions != null) {
-            for (Assumption assumption : assumptions) {
-                if (!isValid(assumption)) {
-                    return false;
-                }
-            }
-        }
-        return true;
     }
 
 }
