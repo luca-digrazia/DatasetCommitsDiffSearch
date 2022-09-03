@@ -109,16 +109,12 @@ public final class FixedGuardNode extends DeoptimizingFixedWithNextNode implemen
             DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason));
             deopt.setDeoptimizationState(getDeoptimizationState());
             IfNode ifNode;
-            AbstractBeginNode noDeoptSuccessor;
             if (negated) {
                 ifNode = graph().add(new IfNode(condition, deopt, next, 0));
-                noDeoptSuccessor = ifNode.falseSuccessor();
             } else {
                 ifNode = graph().add(new IfNode(condition, next, deopt, 1));
-                noDeoptSuccessor = ifNode.trueSuccessor();
             }
             ((FixedWithNextNode) predecessor()).setNext(ifNode);
-            this.replaceAtUsages(noDeoptSuccessor);
             GraphUtil.killWithUnusedFloatingInputs(this);
         }
     }
