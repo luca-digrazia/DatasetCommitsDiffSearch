@@ -105,9 +105,11 @@ public class Debug {
         return config.isDumpEnabledForMethod();
     }
 
-    public static final int BASIC_LOG_LEVEL = 1;
-    public static final int INFO_LOG_LEVEL = 2;
-    public static final int VERBOSE_LOG_LEVEL = 3;
+    public static final int DEFAULT_LOG_LEVEL = 2;
+
+    public static boolean isDumpEnabled() {
+        return isDumpEnabled(DEFAULT_LOG_LEVEL);
+    }
 
     public static boolean isDumpEnabled(int dumpLevel) {
         return ENABLED && DebugScope.getInstance().isDumpEnabled(dumpLevel);
@@ -164,7 +166,7 @@ public class Debug {
     }
 
     public static boolean isLogEnabled() {
-        return isLogEnabled(BASIC_LOG_LEVEL);
+        return isLogEnabled(DEFAULT_LOG_LEVEL);
     }
 
     public static boolean isLogEnabled(int logLevel) {
@@ -388,7 +390,7 @@ public class Debug {
     }
 
     public static void log(String msg) {
-        log(BASIC_LOG_LEVEL, msg);
+        log(DEFAULT_LOG_LEVEL, msg);
     }
 
     /**
@@ -403,7 +405,7 @@ public class Debug {
     }
 
     public static void log(String format, Object arg) {
-        log(BASIC_LOG_LEVEL, format, arg);
+        log(DEFAULT_LOG_LEVEL, format, arg);
     }
 
     /**
@@ -419,7 +421,7 @@ public class Debug {
     }
 
     public static void log(String format, int arg) {
-        log(BASIC_LOG_LEVEL, format, arg);
+        log(DEFAULT_LOG_LEVEL, format, arg);
     }
 
     /**
@@ -435,7 +437,7 @@ public class Debug {
     }
 
     public static void log(String format, Object arg1, Object arg2) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2);
     }
 
     /**
@@ -448,7 +450,7 @@ public class Debug {
     }
 
     public static void log(String format, int arg1, Object arg2) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2);
     }
 
     /**
@@ -461,7 +463,7 @@ public class Debug {
     }
 
     public static void log(String format, Object arg1, int arg2) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2);
     }
 
     /**
@@ -474,7 +476,7 @@ public class Debug {
     }
 
     public static void log(String format, int arg1, int arg2) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2);
     }
 
     /**
@@ -487,7 +489,7 @@ public class Debug {
     }
 
     public static void log(String format, Object arg1, Object arg2, Object arg3) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2, arg3);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3);
     }
 
     /**
@@ -500,7 +502,7 @@ public class Debug {
     }
 
     public static void log(String format, int arg1, int arg2, int arg3) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2, arg3);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3);
     }
 
     /**
@@ -513,7 +515,7 @@ public class Debug {
     }
 
     public static void log(String format, Object arg1, Object arg2, Object arg3, Object arg4) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2, arg3, arg4);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4);
     }
 
     /**
@@ -526,7 +528,7 @@ public class Debug {
     }
 
     public static void log(String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5);
     }
 
     /**
@@ -539,7 +541,7 @@ public class Debug {
     }
 
     public static void log(String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6);
     }
 
     /**
@@ -552,11 +554,11 @@ public class Debug {
     }
 
     public static void log(String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6, Object arg7) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
     }
 
     public static void log(String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6, Object arg7, Object arg8) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
     }
 
     /**
@@ -575,7 +577,7 @@ public class Debug {
     }
 
     public static void log(String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6, Object arg7, Object arg8, Object arg9) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
     }
 
     public static void log(int logLevel, String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6, Object arg7, Object arg8, Object arg9) {
@@ -585,7 +587,7 @@ public class Debug {
     }
 
     public static void log(String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6, Object arg7, Object arg8, Object arg9, Object arg10) {
-        log(BASIC_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
+        log(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
     }
 
     public static void log(int logLevel, String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6, Object arg7, Object arg8, Object arg9, Object arg10) {
@@ -595,7 +597,7 @@ public class Debug {
     }
 
     public static void logv(String format, Object... args) {
-        logv(INFO_LOG_LEVEL, format, args);
+        logv(DEFAULT_LOG_LEVEL, format, args);
     }
 
     /**
@@ -623,7 +625,7 @@ public class Debug {
     @Deprecated
     public static void log(String format, Object[] args) {
         assert false : "shouldn't use this";
-        log(BASIC_LOG_LEVEL, format, args);
+        log(DEFAULT_LOG_LEVEL, format, args);
     }
 
     /**
@@ -638,10 +640,18 @@ public class Debug {
         logv(logLevel, format, args);
     }
 
+    public static void dump(Object object, String msg) {
+        dump(DEFAULT_LOG_LEVEL, object, msg);
+    }
+
     public static void dump(int dumpLevel, Object object, String msg) {
         if (ENABLED && DebugScope.getInstance().isDumpEnabled(dumpLevel)) {
             DebugScope.getInstance().dump(dumpLevel, object, msg);
         }
+    }
+
+    public static void dump(Object object, String format, Object arg) {
+        dump(DEFAULT_LOG_LEVEL, object, format, arg);
     }
 
     public static void dump(int dumpLevel, Object object, String format, Object arg) {
@@ -650,16 +660,36 @@ public class Debug {
         }
     }
 
+    public static void dump(Object object, String format, Object arg1, Object arg2) {
+        dump(DEFAULT_LOG_LEVEL, object, format, arg1, arg2);
+    }
+
     public static void dump(int dumpLevel, Object object, String format, Object arg1, Object arg2) {
         if (ENABLED && DebugScope.getInstance().isDumpEnabled(dumpLevel)) {
             DebugScope.getInstance().dump(dumpLevel, object, format, arg1, arg2);
         }
     }
 
+    public static void dump(Object object, String format, Object arg1, Object arg2, Object arg3) {
+        dump(DEFAULT_LOG_LEVEL, object, format, arg1, arg2, arg3);
+    }
+
     public static void dump(int dumpLevel, Object object, String format, Object arg1, Object arg2, Object arg3) {
         if (ENABLED && DebugScope.getInstance().isDumpEnabled(dumpLevel)) {
             DebugScope.getInstance().dump(dumpLevel, object, format, arg1, arg2, arg3);
         }
+    }
+
+    /**
+     * This override exists to catch cases when {@link #dump(Object, String, Object)} is called with
+     * one argument bound to a varargs method parameter. It will bind to this method instead of the
+     * single arg variant and produce a deprecation warning instead of silently wrapping the
+     * Object[] inside of another Object[].
+     */
+    @Deprecated
+    public static void dump(Object object, String format, Object[] args) {
+        assert false : "shouldn't use this";
+        dump(DEFAULT_LOG_LEVEL, object, format, args);
     }
 
     /**
@@ -739,7 +769,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String msg) {
-        return logAndIndent(BASIC_LOG_LEVEL, msg);
+        return logAndIndent(DEFAULT_LOG_LEVEL, msg);
     }
 
     /**
@@ -757,7 +787,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, Object arg) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg);
     }
 
     /**
@@ -776,7 +806,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, int arg) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg);
     }
 
     /**
@@ -795,7 +825,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, int arg1, Object arg2) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg1, arg2);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg1, arg2);
     }
 
     /**
@@ -809,7 +839,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, Object arg1, int arg2) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg1, arg2);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg1, arg2);
     }
 
     /**
@@ -823,7 +853,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, int arg1, int arg2) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg1, arg2);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg1, arg2);
     }
 
     /**
@@ -837,7 +867,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, Object arg1, Object arg2) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg1, arg2);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg1, arg2);
     }
 
     /**
@@ -851,7 +881,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, Object arg1, Object arg2, Object arg3) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg1, arg2, arg3);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3);
     }
 
     /**
@@ -865,7 +895,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, int arg1, int arg2, int arg3) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg1, arg2, arg3);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3);
     }
 
     /**
@@ -879,7 +909,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, Object arg1, int arg2, int arg3) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg1, arg2, arg3);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3);
     }
 
     /**
@@ -893,7 +923,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, Object arg1, Object arg2, Object arg3, Object arg4) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg1, arg2, arg3, arg4);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4);
     }
 
     /**
@@ -907,7 +937,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5);
     }
 
     /**
@@ -921,7 +951,7 @@ public class Debug {
     }
 
     public static Indent logAndIndent(String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6) {
-        return logAndIndent(BASIC_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6);
+        return logAndIndent(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6);
     }
 
     /**
@@ -969,7 +999,7 @@ public class Debug {
     @Deprecated
     public static void logAndIndent(String format, Object[] args) {
         assert false : "shouldn't use this";
-        logAndIndent(BASIC_LOG_LEVEL, format, args);
+        logAndIndent(DEFAULT_LOG_LEVEL, format, args);
     }
 
     /**
