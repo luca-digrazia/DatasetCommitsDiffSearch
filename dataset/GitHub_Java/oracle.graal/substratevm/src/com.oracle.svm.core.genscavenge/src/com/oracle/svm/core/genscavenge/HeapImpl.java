@@ -53,7 +53,6 @@ import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.heap.GC;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.heap.NativeImageInfo;
@@ -232,15 +231,6 @@ public class HeapImpl extends Heap {
             result = HeapChunkProvider.get().walkHeapChunks(visitor);
         }
         return result;
-    }
-
-    /** Tear down the heap, return all allocated virtual memory chunks to VirtualMemoryProvider. */
-    @Override
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public final void tearDown() {
-        youngGeneration.tearDown();
-        oldGeneration.tearDown();
-        HeapChunkProvider.get().tearDown();
     }
 
     /** State: Who handles object headers? */
