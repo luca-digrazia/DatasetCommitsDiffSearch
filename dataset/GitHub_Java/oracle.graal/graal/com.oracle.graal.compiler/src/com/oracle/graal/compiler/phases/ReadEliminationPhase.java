@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.extended.*;
 
 public class ReadEliminationPhase extends Phase {
@@ -82,10 +81,7 @@ public class ReadEliminationPhase extends Phase {
             return exisiting;
         }
         if (lastLocationAccess instanceof ValueProxyNode) {
-            ValueProxyNode proxy = (ValueProxyNode) lastLocationAccess;
-            ValueNode value = getValue(n, proxy.value(), nodeMap);
-            assert proxy.type() == PhiType.Value;
-            return lastLocationAccess.graph().add(new ValueProxyNode(value, proxy.proxyPoint(), PhiType.Value));
+            return getValue(n, ((ValueProxyNode) lastLocationAccess).value(), nodeMap);
         }
         if (lastLocationAccess instanceof WriteNode) {
             return ((WriteNode) lastLocationAccess).value();
