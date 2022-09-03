@@ -76,10 +76,7 @@ public class GraphUtil {
                     loopend.safeDelete();
                 }
                 begin.removeExits();
-                FixedNode loopBody = begin.next();
-                if (loopBody != null) { // for small infinite loops, the body may be killed while killing the loop ends
-                    killCFG(loopBody);
-                }
+                killCFG(begin.next());
                 begin.safeDelete();
             } else if (merge instanceof LoopBeginNode && ((LoopBeginNode) merge).loopEnds().isEmpty()) { // not a loop anymore
                 graph.reduceDegenerateLoopBegin((LoopBeginNode) merge);
@@ -201,7 +198,7 @@ public class GraphUtil {
                 if (stateAfter != null) {
                     ResolvedJavaMethod method = stateAfter.method();
                     if (method != null) {
-                        StackTraceElement stackTraceElement = method.asStackTraceElement(stateAfter.bci);
+                        StackTraceElement stackTraceElement = method.toStackTraceElement(stateAfter.bci);
                         if (stackTraceElement.getFileName() != null && stackTraceElement.getLineNumber() >= 0) {
                             return stackTraceElement.getFileName() + ":" + stackTraceElement.getLineNumber();
                         }

@@ -29,12 +29,13 @@ import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCall.Descriptor;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.JavaType.Representation;
 import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
-import com.oracle.graal.api.meta.ProfilingInfo.ExceptionSeen;
-import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.bytecode.*;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.phases.*;
+import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.java.BciBlockMapping.Block;
@@ -46,17 +47,12 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.util.*;
+import com.oracle.max.criutils.*;
 
 /**
  * The {@code GraphBuilder} class parses the bytecode of a method and builds the IR graph.
  */
 public final class GraphBuilderPhase extends Phase {
-
-    public static final Descriptor CREATE_NULL_POINTER_EXCEPTION = new Descriptor("createNullPointerException", true, Kind.Object);
-    public static final Descriptor CREATE_OUT_OF_BOUNDS_EXCEPTION = new Descriptor("createOutOfBoundsException", true, Kind.Object, Kind.Int);
-
 
     /**
      * The minimum value to which {@link GraalOptions#TraceBytecodeParserLevel} must be set to trace
@@ -120,9 +116,9 @@ public final class GraphBuilderPhase extends Phase {
     protected void run(StructuredGraph graph) {
         method = graph.method();
         graphId = graph.graphId();
-        profilingInfo = method.getProfilingInfo();
-        assert method.getCode() != null : "method must contain bytecodes: " + method;
-        this.stream = new BytecodeStream(method.getCode());
+        profilingInfo = method.profilingInfo();
+        assert method.code() != null : "method must contain bytecodes: " + method;
+        this.stream = new BytecodeStream(method.code());
         this.constantPool = method.getConstantPool();
         unwindBlock = null;
         returnBlock = null;
@@ -161,7 +157,7 @@ public final class GraphBuilderPhase extends Phase {
         loopHeaders = blockMap.loopHeaders;
 
         lastInstr = currentGraph.start();
-        if (isSynchronized(method.getModifiers())) {
+        if (isSynchronized(method.accessFlags())) {
             // add a monitor enter to the start block
             currentGraph.start().setStateAfter(frameState.create(FrameState.BEFORE_BCI));
             methodSynchronizedObject = synchronizedObject(frameState, method);
@@ -239,7 +235,7 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     public static boolean covers(ExceptionHandler handler, int bci) {
-        return handler.getStartBCI() <= bci && bci < handler.getEndBCI();
+        return handler.startBCI() <= bci && bci < handler.endBCI();
     }
 
     public static boolean isCatchAll(ExceptionHandler handler) {
@@ -296,7 +292,7 @@ public final class GraphBuilderPhase extends Phase {
             }
         } else if (con instanceof Constant) {
             Constant constant = (Constant) con;
-            frameState.push(constant.getKind().getStackKind(), appendConstant(constant));
+            frameState.push(constant.getKind().stackKind(), appendConstant(constant));
         } else {
             throw new Error("lookupConstant returned an object of incorrect type");
         }
@@ -308,13 +304,13 @@ public final class GraphBuilderPhase extends Phase {
         ValueNode index = frameState.ipop();
         ValueNode array = frameState.apop();
         ValueNode v = append(currentGraph.add(new LoadIndexedNode(array, index, kind, graphId)));
-        frameState.push(kind.getStackKind(), v);
+        frameState.push(kind.stackKind(), v);
     }
 
     private void genStoreIndexed(Kind kind) {
         emitExplicitExceptions(frameState.peek(2), frameState.peek(1));
 
-        ValueNode value = frameState.pop(kind.getStackKind());
+        ValueNode value = frameState.pop(kind.stackKind());
         ValueNode index = frameState.ipop();
         ValueNode array = frameState.apop();
         StoreIndexedNode result = currentGraph.add(new StoreIndexedNode(array, index, kind, value, graphId));
@@ -405,7 +401,7 @@ public final class GraphBuilderPhase extends Phase {
     private void genArithmeticOp(Kind result, int opcode, boolean canTrap) {
         ValueNode y = frameState.pop(result);
         ValueNode x = frameState.pop(result);
-        boolean isStrictFP = isStrict(method.getModifiers());
+        boolean isStrictFP = isStrict(method.accessFlags());
         ArithmeticNode v;
         switch(opcode){
             case IADD:
@@ -483,8 +479,8 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void genConvert(ConvertNode.Op opcode) {
-        ValueNode input = frameState.pop(opcode.from.getStackKind());
-        frameState.push(opcode.to.getStackKind(), append(currentGraph.unique(new ConvertNode(opcode, input))));
+        ValueNode input = frameState.pop(opcode.from.stackKind());
+        frameState.push(opcode.to.stackKind(), append(currentGraph.unique(new ConvertNode(opcode, input))));
     }
 
     private void genIncrement() {
@@ -585,14 +581,14 @@ public final class GraphBuilderPhase extends Phase {
     private JavaMethod lookupMethod(int cpi, int opcode) {
         eagerResolvingForSnippets(cpi, opcode);
         JavaMethod result = constantPool.lookupMethod(cpi, opcode);
-        assert !graphBuilderConfig.eagerResolvingForSnippets() || ((result instanceof ResolvedJavaMethod) && ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized());
+        assert !graphBuilderConfig.eagerResolvingForSnippets() || ((result instanceof ResolvedJavaMethod) && ((ResolvedJavaMethod) result).holder().isInitialized());
         return result;
     }
 
     private JavaField lookupField(int cpi, int opcode) {
         eagerResolvingForSnippets(cpi, opcode);
         JavaField result = constantPool.lookupField(cpi, opcode);
-        assert !graphBuilderConfig.eagerResolvingForSnippets() || (result instanceof ResolvedJavaField && ((ResolvedJavaField) result).getDeclaringClass().isInitialized());
+        assert !graphBuilderConfig.eagerResolvingForSnippets() || (result instanceof ResolvedJavaField && ((ResolvedJavaField) result).holder().isInitialized());
         return result;
     }
 
@@ -619,7 +615,7 @@ public final class GraphBuilderPhase extends Phase {
         if (!optimisticOpts.useTypeCheckHints() || TypeCheckHints.isFinalClass(type)) {
             return null;
         } else {
-            ResolvedJavaType uniqueSubtype = type.findUniqueConcreteSubtype();
+            ResolvedJavaType uniqueSubtype = type.uniqueConcreteSubtype();
             if (uniqueSubtype != null) {
                 return new JavaTypeProfile(0.0D, new ProfiledType(uniqueSubtype, 1.0D));
             } else {
@@ -633,7 +629,7 @@ public final class GraphBuilderPhase extends Phase {
         JavaType type = lookupType(cpi, CHECKCAST);
         boolean initialized = type instanceof ResolvedJavaType;
         if (initialized) {
-            ConstantNode typeInstruction = genTypeOrDeopt(Representation.ObjectHub, type, true);
+            ConstantNode typeInstruction = genTypeOrDeopt(JavaType.Representation.ObjectHub, type, true);
             ValueNode object = frameState.apop();
             CheckCastNode checkCast = currentGraph.add(new CheckCastNode(typeInstruction, (ResolvedJavaType) type, object, getProfileForTypeCheck((ResolvedJavaType) type)));
             append(checkCast);
@@ -651,7 +647,7 @@ public final class GraphBuilderPhase extends Phase {
         ValueNode object = frameState.apop();
         if (type instanceof ResolvedJavaType) {
             ResolvedJavaType resolvedType = (ResolvedJavaType) type;
-            ConstantNode hub = appendConstant(resolvedType.getEncoding(Representation.ObjectHub));
+            ConstantNode hub = appendConstant(resolvedType.getEncoding(JavaType.Representation.ObjectHub));
             InstanceOfNode instanceOfNode = new InstanceOfNode(hub, (ResolvedJavaType) type, object, getProfileForTypeCheck(resolvedType));
             frameState.ipush(append(MaterializeNode.create(currentGraph.unique(instanceOfNode))));
         } else {
@@ -667,7 +663,7 @@ public final class GraphBuilderPhase extends Phase {
     void genNewInstance(int cpi) {
         JavaType type = lookupType(cpi, NEW);
         if (type instanceof ResolvedJavaType && ((ResolvedJavaType) type).isInitialized()) {
-            NewInstanceNode n = currentGraph.add(new NewInstanceNode((ResolvedJavaType) type, true, false));
+            NewInstanceNode n = currentGraph.add(new NewInstanceNode((ResolvedJavaType) type, true));
             frameState.apush(append(n));
         } else {
             append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId)));
@@ -681,26 +677,26 @@ public final class GraphBuilderPhase extends Phase {
      * @param code the array type code
      * @return the kind from the array type code
      */
-    public static Class< ? > arrayTypeCodeToClass(int code) {
+    public static Kind arrayTypeCodeToKind(int code) {
         // Checkstyle: stop
         switch (code) {
-            case 4:  return boolean.class;
-            case 5:  return char.class;
-            case 6:  return float.class;
-            case 7:  return double.class;
-            case 8:  return byte.class;
-            case 9:  return short.class;
-            case 10: return int.class;
-            case 11: return long.class;
+            case 4:  return Kind.Boolean;
+            case 5:  return Kind.Char;
+            case 6:  return Kind.Float;
+            case 7:  return Kind.Double;
+            case 8:  return Kind.Byte;
+            case 9:  return Kind.Short;
+            case 10: return Kind.Int;
+            case 11: return Kind.Long;
             default: throw new IllegalArgumentException("unknown array type code: " + code);
         }
         // Checkstyle: resume
     }
 
     private void genNewPrimitiveArray(int typeCode) {
-        Class< ? > clazz = arrayTypeCodeToClass(typeCode);
-        ResolvedJavaType elementType = runtime.lookupJavaType(clazz);
-        NewPrimitiveArrayNode nta = currentGraph.add(new NewPrimitiveArrayNode(elementType, frameState.ipop(), true, false));
+        Kind kind = arrayTypeCodeToKind(typeCode);
+        ResolvedJavaType elementType = runtime.getResolvedJavaType(kind);
+        NewPrimitiveArrayNode nta = currentGraph.add(new NewPrimitiveArrayNode(elementType, frameState.ipop(), true));
         frameState.apush(append(nta));
     }
 
@@ -708,7 +704,7 @@ public final class GraphBuilderPhase extends Phase {
         JavaType type = lookupType(cpi, ANEWARRAY);
         ValueNode length = frameState.ipop();
         if (type instanceof ResolvedJavaType) {
-            NewArrayNode n = currentGraph.add(new NewObjectArrayNode((ResolvedJavaType) type, length, true, false));
+            NewArrayNode n = currentGraph.add(new NewObjectArrayNode((ResolvedJavaType) type, length, true));
             frameState.apush(append(n));
         } else {
             append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId)));
@@ -736,14 +732,14 @@ public final class GraphBuilderPhase extends Phase {
     private void genGetField(JavaField field) {
         emitExplicitExceptions(frameState.peek(0), null);
 
-        Kind kind = field.getKind();
+        Kind kind = field.kind();
         ValueNode receiver = frameState.apop();
-        if ((field instanceof ResolvedJavaField) && ((ResolvedJavaField) field).getDeclaringClass().isInitialized()) {
+        if ((field instanceof ResolvedJavaField) && ((ResolvedJavaField) field).holder().isInitialized()) {
             LoadFieldNode load = currentGraph.add(new LoadFieldNode(receiver, (ResolvedJavaField) field, graphId));
             appendOptimizedLoadField(kind, load);
         } else {
             append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId)));
-            frameState.push(kind.getStackKind(), append(ConstantNode.defaultForKind(kind, currentGraph)));
+            frameState.push(kind.stackKind(), append(ConstantNode.defaultForKind(kind, currentGraph)));
         }
     }
 
@@ -759,9 +755,6 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void emitNullCheck(ValueNode receiver) {
-        if (receiver.stamp().nonNull()) {
-            return;
-        }
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
         BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
         IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 0.5, graphId));
@@ -773,7 +766,7 @@ public final class GraphBuilderPhase extends Phase {
             ValueNode exception = ConstantNode.forObject(new NullPointerException(), runtime, currentGraph);
             trueSucc.setNext(handleException(exception, bci()));
         } else {
-            RuntimeCallNode call = currentGraph.add(new RuntimeCallNode(CREATE_NULL_POINTER_EXCEPTION));
+            RuntimeCallNode call = currentGraph.add(new RuntimeCallNode(RuntimeCall.CreateNullPointerException));
             call.setStateAfter(frameState.create(bci()));
             trueSucc.setNext(call);
             call.setNext(handleException(call, bci()));
@@ -792,7 +785,7 @@ public final class GraphBuilderPhase extends Phase {
             ValueNode exception = ConstantNode.forObject(new ArrayIndexOutOfBoundsException(), runtime, currentGraph);
             falseSucc.setNext(handleException(exception, bci()));
         } else {
-            RuntimeCallNode call = currentGraph.add(new RuntimeCallNode(CREATE_OUT_OF_BOUNDS_EXCEPTION, index));
+            RuntimeCallNode call = currentGraph.add(new RuntimeCallNode(RuntimeCall.CreateOutOfBoundsException, new ValueNode[] {index}));
             call.setStateAfter(frameState.create(bci()));
             falseSucc.setNext(call);
             call.setNext(handleException(call, bci()));
@@ -816,9 +809,9 @@ public final class GraphBuilderPhase extends Phase {
     private void genPutField(JavaField field) {
         emitExplicitExceptions(frameState.peek(1), null);
 
-        ValueNode value = frameState.pop(field.getKind().getStackKind());
+        ValueNode value = frameState.pop(field.kind().stackKind());
         ValueNode receiver = frameState.apop();
-        if (field instanceof ResolvedJavaField && ((ResolvedJavaField) field).getDeclaringClass().isInitialized()) {
+        if (field instanceof ResolvedJavaField && ((ResolvedJavaField) field).holder().isInitialized()) {
             StoreFieldNode store = currentGraph.add(new StoreFieldNode(receiver, (ResolvedJavaField) field, value, graphId));
             appendOptimizedStoreField(store);
         } else {
@@ -827,32 +820,32 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void genGetStatic(JavaField field) {
-        JavaType holder = field.getDeclaringClass();
+        JavaType holder = field.holder();
         boolean isInitialized = (field instanceof ResolvedJavaField) && ((ResolvedJavaType) holder).isInitialized();
         Constant constantValue = null;
         if (isInitialized) {
-            constantValue = ((ResolvedJavaField) field).readConstantValue(null);
+            constantValue = ((ResolvedJavaField) field).constantValue(null);
         }
         if (constantValue != null) {
-            frameState.push(constantValue.getKind().getStackKind(), appendConstant(constantValue));
+            frameState.push(constantValue.getKind().stackKind(), appendConstant(constantValue));
         } else {
-            ValueNode container = genTypeOrDeopt(field.getKind() == Kind.Object ? Representation.StaticObjectFields : Representation.StaticPrimitiveFields, holder, isInitialized);
-            Kind kind = field.getKind();
+            ValueNode container = genTypeOrDeopt(field.kind() == Kind.Object ? JavaType.Representation.StaticObjectFields : JavaType.Representation.StaticPrimitiveFields, holder, isInitialized);
+            Kind kind = field.kind();
             if (container != null) {
                 LoadFieldNode load = currentGraph.add(new LoadFieldNode(container, (ResolvedJavaField) field, graphId));
                 appendOptimizedLoadField(kind, load);
             } else {
                 // deopt will be generated by genTypeOrDeopt, not needed here
-                frameState.push(kind.getStackKind(), append(ConstantNode.defaultForKind(kind, currentGraph)));
+                frameState.push(kind.stackKind(), append(ConstantNode.defaultForKind(kind, currentGraph)));
             }
         }
     }
 
     private void genPutStatic(JavaField field) {
-        JavaType holder = field.getDeclaringClass();
+        JavaType holder = field.holder();
         boolean isInitialized = (field instanceof ResolvedJavaField) && ((ResolvedJavaType) holder).isInitialized();
-        ValueNode container = genTypeOrDeopt(field.getKind() == Kind.Object ? Representation.StaticObjectFields : Representation.StaticPrimitiveFields, holder, isInitialized);
-        ValueNode value = frameState.pop(field.getKind().getStackKind());
+        ValueNode container = genTypeOrDeopt(field.kind() == Kind.Object ? JavaType.Representation.StaticObjectFields : JavaType.Representation.StaticPrimitiveFields, holder, isInitialized);
+        ValueNode value = frameState.pop(field.kind().stackKind());
         if (container != null) {
             StoreFieldNode store = currentGraph.add(new StoreFieldNode(container, (ResolvedJavaField) field, value, graphId));
             appendOptimizedStoreField(store);
@@ -861,7 +854,7 @@ public final class GraphBuilderPhase extends Phase {
         }
     }
 
-    private ConstantNode genTypeOrDeopt(Representation representation, JavaType holder, boolean initialized) {
+    private ConstantNode genTypeOrDeopt(JavaType.Representation representation, JavaType holder, boolean initialized) {
         if (initialized) {
             return appendConstant(((ResolvedJavaType) holder).getEncoding(representation));
         } else {
@@ -877,17 +870,17 @@ public final class GraphBuilderPhase extends Phase {
     private void appendOptimizedLoadField(Kind kind, LoadFieldNode load) {
         // append the load to the instruction
         ValueNode optimized = append(load);
-        frameState.push(kind.getStackKind(), optimized);
+        frameState.push(kind.stackKind(), optimized);
     }
 
     private void genInvokeStatic(JavaMethod target) {
         if (target instanceof ResolvedJavaMethod) {
             ResolvedJavaMethod resolvedTarget = (ResolvedJavaMethod) target;
-            ResolvedJavaType holder = resolvedTarget.getDeclaringClass();
+            ResolvedJavaType holder = resolvedTarget.holder();
             if (!holder.isInitialized() && GraalOptions.ResolveClassBeforeStaticInvoke) {
                 genInvokeDeopt(target, false);
             } else {
-                ValueNode[] args = frameState.popArguments(resolvedTarget.getSignature().getParameterSlots(false), resolvedTarget.getSignature().getParameterCount(false));
+                ValueNode[] args = frameState.popArguments(resolvedTarget.signature().argumentSlots(false), resolvedTarget.signature().argumentCount(false));
                 appendInvoke(InvokeKind.Static, resolvedTarget, args);
             }
         } else {
@@ -897,7 +890,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genInvokeInterface(JavaMethod target) {
         if (target instanceof ResolvedJavaMethod) {
-            ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(true), target.getSignature().getParameterCount(true));
+            ValueNode[] args = frameState.popArguments(target.signature().argumentSlots(true), target.signature().argumentCount(true));
             genInvokeIndirect(InvokeKind.Interface, (ResolvedJavaMethod) target, args);
         } else {
             genInvokeDeopt(target, true);
@@ -906,7 +899,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genInvokeVirtual(JavaMethod target) {
         if (target instanceof ResolvedJavaMethod) {
-            ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(true), target.getSignature().getParameterCount(true));
+            ValueNode[] args = frameState.popArguments(target.signature().argumentSlots(true), target.signature().argumentCount(true));
             genInvokeIndirect(InvokeKind.Virtual, (ResolvedJavaMethod) target, args);
         } else {
             genInvokeDeopt(target, true);
@@ -917,8 +910,8 @@ public final class GraphBuilderPhase extends Phase {
     private void genInvokeSpecial(JavaMethod target) {
         if (target instanceof ResolvedJavaMethod) {
             assert target != null;
-            assert target.getSignature() != null;
-            ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(true), target.getSignature().getParameterCount(true));
+            assert target.signature() != null;
+            ValueNode[] args = frameState.popArguments(target.signature().argumentSlots(true), target.signature().argumentCount(true));
             invokeDirect((ResolvedJavaMethod) target, args);
         } else {
             genInvokeDeopt(target, true);
@@ -927,32 +920,32 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genInvokeDeopt(JavaMethod unresolvedTarget, boolean withReceiver) {
         append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId)));
-        frameState.popArguments(unresolvedTarget.getSignature().getParameterSlots(withReceiver), unresolvedTarget.getSignature().getParameterCount(withReceiver));
-        Kind kind = unresolvedTarget.getSignature().getReturnKind();
+        frameState.popArguments(unresolvedTarget.signature().argumentSlots(withReceiver), unresolvedTarget.signature().argumentCount(withReceiver));
+        Kind kind = unresolvedTarget.signature().returnKind();
         if (kind != Kind.Void) {
-            frameState.push(kind.getStackKind(), append(ConstantNode.defaultForKind(kind, currentGraph)));
+            frameState.push(kind.stackKind(), append(ConstantNode.defaultForKind(kind, currentGraph)));
         }
     }
 
     private void genInvokeIndirect(InvokeKind invokeKind, ResolvedJavaMethod target, ValueNode[] args) {
         ValueNode receiver = args[0];
         // attempt to devirtualize the call
-        ResolvedJavaType klass = target.getDeclaringClass();
+        ResolvedJavaType klass = target.holder();
 
         // 0. check for trivial cases
-        if (target.canBeStaticallyBound()) {
+        if (target.canBeStaticallyBound() && !isAbstract(target.accessFlags())) {
             // check for trivial cases (e.g. final methods, nonvirtual methods)
             invokeDirect(target, args);
             return;
         }
         // 1. check if the exact type of the receiver can be determined
-        ResolvedJavaType exact = klass.getExactType();
+        ResolvedJavaType exact = klass.exactType();
         if (exact == null && receiver.objectStamp().isExactType()) {
             exact = receiver.objectStamp().type();
         }
         if (exact != null) {
             // either the holder class is exact, or the receiver object has an exact type
-            invokeDirect(exact.resolveMethod(target), args);
+            invokeDirect(exact.resolveMethodImpl(target), args);
             return;
         }
         // devirtualization failed, produce an actual invokevirtual
@@ -964,18 +957,18 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void appendInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args) {
-        Kind resultType = targetMethod.getSignature().getReturnKind();
+        Kind resultType = targetMethod.signature().returnKind();
         if (GraalOptions.DeoptALot) {
             DeoptimizeNode deoptimize = currentGraph.add(new DeoptimizeNode(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint, graphId));
-            deoptimize.setMessage("invoke " + targetMethod.getName());
+            deoptimize.setMessage("invoke " + targetMethod.name());
             append(deoptimize);
             frameState.pushReturn(resultType, ConstantNode.defaultForKind(resultType, currentGraph));
             return;
         }
 
-        JavaType returnType = targetMethod.getSignature().getReturnType(method.getDeclaringClass());
+        JavaType returnType = targetMethod.signature().returnType(method.holder());
         if (graphBuilderConfig.eagerResolvingForSnippets()) {
-            returnType = returnType.resolve(targetMethod.getDeclaringClass());
+            returnType = returnType.resolve(targetMethod.holder());
         }
         MethodCallTargetNode callTarget = currentGraph.add(new MethodCallTargetNode(invokeKind, targetMethod, args, returnType));
         // be conservative if information was not recorded (could result in endless recompiles otherwise)
@@ -1289,8 +1282,8 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private ValueNode synchronizedObject(FrameStateBuilder state, ResolvedJavaMethod target) {
-        if (isStatic(target.getModifiers())) {
-            return append(ConstantNode.forConstant(target.getDeclaringClass().getEncoding(Representation.JavaClass), runtime, currentGraph));
+        if (isStatic(target.accessFlags())) {
+            return append(ConstantNode.forConstant(target.holder().getEncoding(Representation.JavaClass), runtime, currentGraph));
         } else {
             return state.loadLocal(0);
         }
@@ -1358,15 +1351,15 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void createReturn() {
-        if (method.isConstructor() && method.getDeclaringClass().getSuperclass() == null) {
+        if (method.isConstructor() && method.holder().superType() == null) {
             callRegisterFinalizer();
         }
-        Kind returnKind = method.getSignature().getReturnKind().getStackKind();
+        Kind returnKind = method.signature().returnKind().stackKind();
         ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
         assert frameState.stackSize() == 0;
 
         // TODO (gdub) remove this when FloatingRead can handle this case
-        if (Modifier.isSynchronized(method.getModifiers())) {
+        if (Modifier.isSynchronized(method.accessFlags())) {
             append(currentGraph.add(new ValueAnchorNode(x)));
             assert !frameState.rethrowException();
         }
@@ -1382,7 +1375,7 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void synchronizedEpilogue(int bci) {
-        if (Modifier.isSynchronized(method.getModifiers())) {
+        if (Modifier.isSynchronized(method.accessFlags())) {
             MonitorExitNode monitorExit = genMonitorExit(methodSynchronizedObject);
             monitorExit.setStateAfter(frameState.create(bci));
             assert !frameState.rethrowException();
@@ -1397,7 +1390,7 @@ public final class GraphBuilderPhase extends Phase {
             return;
         }
 
-        JavaType catchType = block.handler.getCatchType();
+        JavaType catchType = block.handler.catchType();
         if (graphBuilderConfig.eagerResolving()) {
             catchType = lookupType(block.handler.catchTypeCPI(), INSTANCEOF);
         }
@@ -1412,7 +1405,7 @@ public final class GraphBuilderPhase extends Phase {
             }
         }
 
-        ConstantNode typeInstruction = genTypeOrDeopt(Representation.ObjectHub, catchType, initialized);
+        ConstantNode typeInstruction = genTypeOrDeopt(JavaType.Representation.ObjectHub, catchType, initialized);
         if (typeInstruction != null) {
             Block nextBlock = block.successors.size() == 1 ? unwindBlock(block.deoptBci) : block.successors.get(1);
             ValueNode exception = frameState.stackAt(0);
@@ -1526,11 +1519,11 @@ public final class GraphBuilderPhase extends Phase {
             log.println(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
             for (int i = 0; i < frameState.localsSize(); ++i) {
                 ValueNode value = frameState.localAt(i);
-                log.println(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
+                log.println(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().javaName, value));
             }
             for (int i = 0; i < frameState.stackSize(); ++i) {
                 ValueNode value = frameState.stackAt(i);
-                log.println(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
+                log.println(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().javaName, value));
             }
         }
     }
