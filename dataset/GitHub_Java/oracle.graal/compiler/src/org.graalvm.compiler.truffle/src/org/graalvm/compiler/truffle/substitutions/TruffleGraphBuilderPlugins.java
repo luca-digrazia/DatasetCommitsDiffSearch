@@ -404,10 +404,12 @@ public class TruffleGraphBuilderPlugins {
                 }
 
                 final ValueNode nonNullArguments = b.add(PiNode.create(args, StampFactory.objectNonNull(StampTool.typeReferenceOrNull(args))));
-                final NewFrameNode node = new NewFrameNode(knownTruffleFields, b.getMetaAccess(), b.getConstantReflection(), b.getGraph(),
-                        knownTruffleFields.classFrameClass, descriptor, nonNullArguments);
-                b.addPush(JavaKind.Object, node);
+                b.addPush(JavaKind.Object, newFrameNode(b, descriptor, nonNullArguments));
                 return true;
+            }
+            private NewFrameNode newFrameNode(GraphBuilderContext b, ValueNode descriptor, ValueNode nonNullArguments) {
+                return new NewFrameNode(knownTruffleFields, b.getMetaAccess(), b.getConstantReflection(), b.getGraph(), knownTruffleFields.classFrameClass, descriptor,
+                        nonNullArguments);
             }
         });
         r.register2("castArrayFixedLength", Object[].class, int.class, new InvocationPlugin() {
