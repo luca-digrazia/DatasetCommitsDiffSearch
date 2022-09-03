@@ -64,9 +64,7 @@ public interface Replacements {
      * @param trackNodeSourcePosition
      * @return the snippet graph, if any, that is derived from {@code method}
      */
-    default StructuredGraph getSnippet(ResolvedJavaMethod method, Object[] args, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition) {
-        return getSnippet(method, null, args, trackNodeSourcePosition, replaceePosition);
-    }
+    StructuredGraph getSnippet(ResolvedJavaMethod method, Object[] args, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition);
 
     /**
      * Gets the snippet graph derived from a given method.
