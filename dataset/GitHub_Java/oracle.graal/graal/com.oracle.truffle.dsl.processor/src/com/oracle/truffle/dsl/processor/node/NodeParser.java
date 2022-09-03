@@ -332,12 +332,10 @@ public class NodeParser extends TemplateParser<NodeData> {
         nodeData.setNodeContainer(nodeContainer != null);
         nodeData.setTypeSystem(typeSystem);
         nodeData.setFields(parseFields(typeHierarchy, elements));
-        nodeData.setChildren(parseChildren(elements, typeHierarchy));
-        nodeData.setExecutableTypes(groupExecutableTypes(new ExecutableTypeMethodParser(context, nodeData).parse(elements)));
-
-        // resolveChildren invokes cyclic parsing.
         parsedNodes.put(Utils.getQualifiedName(templateType), nodeData);
-        resolveChildren(nodeData);
+        // parseChildren invokes cyclic parsing.
+        nodeData.setChildren(parseChildren(nodeData, elements, typeHierarchy));
+        nodeData.setExecutableTypes(groupExecutableTypes(new ExecutableTypeMethodParser(context, nodeData).parse(elements)));
 
         return nodeData;
     }
@@ -386,26 +384,7 @@ public class NodeParser extends TemplateParser<NodeData> {
         return fields;
     }
 
-    private void resolveChildren(NodeData node) {
-        for (NodeChildData nodeChild : node.getChildren()) {
-            NodeData fieldNodeData = resolveNode(Utils.fromTypeMirror(nodeChild.getNodeType()));
-            nodeChild.setNode(fieldNodeData);
-            if (fieldNodeData == null) {
-                nodeChild.addError("Node type '%s' is invalid or not a valid Node.", Utils.getQualifiedName(nodeChild.getNodeType()));
-            } else if (!Utils.typeEquals(fieldNodeData.getTypeSystem().getTemplateType().asType(), (node.getTypeSystem().getTemplateType().asType()))) {
-                nodeChild.addError("The @%s of the node and the @%s of the @%s does not match. %s != %s. ", TypeSystem.class.getSimpleName(), TypeSystem.class.getSimpleName(),
-                                NodeChild.class.getSimpleName(), Utils.getSimpleName(node.getTypeSystem().getTemplateType()), Utils.getSimpleName(fieldNodeData.getTypeSystem().getTemplateType()));
-            }
-            List<ExecutableTypeData> types = nodeChild.findGenericExecutableTypes(context);
-            if (types.isEmpty()) {
-                AnnotationValue executeWithValue = Utils.getAnnotationValue(nodeChild.getMessageAnnotation(), "executeWith");
-                nodeChild.addError(executeWithValue, "No generic execute method found with %s evaluated arguments for node type %s.", nodeChild.getExecuteWith().size(),
-                                Utils.getSimpleName(nodeChild.getNodeType()));
-            }
-        }
-    }
-
-    private List<NodeChildData> parseChildren(List<? extends Element> elements, final List<TypeElement> typeHierarchy) {
+    private List<NodeChildData> parseChildren(NodeData node, List<? extends Element> elements, final List<TypeElement> typeHierarchy) {
         Set<String> shortCircuits = new HashSet<>();
         for (ExecutableElement method : ElementFilter.methodsIn(elements)) {
             AnnotationMirror mirror = Utils.findAnnotationMirror(processingEnv, method, ShortCircuit.class);
@@ -479,6 +458,14 @@ public class NodeParser extends TemplateParser<NodeData> {
                     continue;
                 }
 
+                NodeData fieldNodeData = resolveNode(Utils.fromTypeMirror(childType));
+                nodeChild.setNode(fieldNodeData);
+                if (fieldNodeData == null) {
+                    nodeChild.addError("Node type '%s' is invalid or not a valid Node.", Utils.getQualifiedName(childType));
+                } else if (!Utils.typeEquals(fieldNodeData.getTypeSystem().getTemplateType().asType(), (node.getTypeSystem().getTemplateType().asType()))) {
+                    nodeChild.addError("The @%s of the node and the @%s of the @%s does not match. %s != %s. ", TypeSystem.class.getSimpleName(), TypeSystem.class.getSimpleName(),
+                                    NodeChild.class.getSimpleName(), Utils.getSimpleName(node.getTypeSystem().getTemplateType()), Utils.getSimpleName(fieldNodeData.getTypeSystem().getTemplateType()));
+                }
                 index++;
             }
         }
@@ -529,6 +516,12 @@ public class NodeParser extends TemplateParser<NodeData> {
             }
             child.setExecuteWith(executeWith);
             if (child.getNodeData() == null) {
+                continue;
+            }
+
+            List<ExecutableTypeData> types = child.findGenericExecutableTypes(context);
+            if (types.isEmpty()) {
+                child.addError(executeWithValue, "No generic execute method found with %s evaluated arguments for node type %s.", executeWith.size(), Utils.getSimpleName(child.getNodeType()));
                 continue;
             }
         }
