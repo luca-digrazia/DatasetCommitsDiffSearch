@@ -22,40 +22,26 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
 
-import com.oracle.graal.nodes.type.*;
+@NodeInfo
+public abstract class FixedNode extends ValueNode implements FixedNodeInterface {
+    public static final NodeClass<FixedNode> TYPE = NodeClass.create(FixedNode.class);
 
-public abstract class FixedNode extends ValueNode {
-
-    private double probability;
-
-    public FixedNode(Stamp stamp) {
-        super(stamp);
-    }
-
-    public double probability() {
-        return probability;
-    }
-
-    public void setProbability(double probability) {
-        this.probability = probability;
-    }
-
-    protected void copyInto(FixedNode newNode) {
-        newNode.setProbability(probability);
-    }
-
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("probability", String.format(Locale.ENGLISH, "%7.5f", probability));
-        return properties;
+    protected FixedNode(NodeClass<? extends FixedNode> c, Stamp stamp) {
+        super(c, stamp);
     }
 
     @Override
     public boolean verify() {
         assertTrue(this.successors().isNotEmpty() || this.predecessor() != null, "FixedNode should not float");
         return super.verify();
+    }
+
+    @Override
+    public FixedNode asNode() {
+        return this;
     }
 }

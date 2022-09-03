@@ -22,27 +22,16 @@
  */
 package com.oracle.graal.nodes.spi;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import static com.oracle.graal.nodes.StructuredGraph.GuardsStage.*;
+import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.nodes.FixedNodeInterface;
+import com.oracle.graal.nodes.FrameState;
 
 /**
  * Interface for nodes which have {@link FrameState} nodes as input.
- * <p>
- * Some node can implement more than one interface which requires a {@link FrameState} input (e.g.
- * {@link DeoptimizingNode} and {@link StateSplit}). Since this interface can only report one
- * FrameState, such nodes must ensure they only maintain a link to at most one FrameState at all
- * times. Usually this is not a problem because FrameStates are associated only with StateSplit
- * nodes before the {@link #AFTER_FSA} stage and only with DeoptimizingNodes after.
- * 
  */
-public interface NodeWithState {
-    /**
-     * Gets the {@link FrameState} associated with this node.
-     * 
-     * @return the {@link FrameState} associated with this node
-     */
-    FrameState getState();
+public interface NodeWithState extends FixedNodeInterface {
 
-    Node asNode();
+    default NodeIterable<FrameState> states() {
+        return asNode().inputs().filter(FrameState.class);
+    }
 }

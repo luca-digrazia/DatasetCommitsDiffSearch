@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,17 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import jdk.vm.ci.meta.LocationIdentity;
-
+import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedNodeInterface;
 
 /**
  * This interface marks subclasses of {@link FixedNode} that kill a set of memory locations
  * represented by location identities (i.e. change a value at one or more locations that belong to
  * these location identities).
  */
-public interface MemoryCheckpoint extends MemoryNode {
-
-    FixedNode asNode();
+public interface MemoryCheckpoint extends MemoryNode, FixedNodeInterface {
 
     interface Single extends MemoryCheckpoint {
 
@@ -61,7 +59,7 @@ public interface MemoryCheckpoint extends MemoryNode {
 
     }
 
-    public class TypeAssertion {
+    class TypeAssertion {
 
         public static boolean correctType(Node node) {
             return !(node instanceof MemoryCheckpoint) || (node instanceof MemoryCheckpoint.Single ^ node instanceof MemoryCheckpoint.Multi);
