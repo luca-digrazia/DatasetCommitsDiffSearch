@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
 
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.code.*;
@@ -46,12 +46,13 @@ public class IdentityHashCodeStub extends CRuntimeStub {
 
     @Snippet
     private static int identityHashCode(Object object) {
+        printf("Calling identityHashCode\n", 0);
         int result = identityHashCodeC(IDENTITY_HASH_CODE_C, thread(), object);
-        StubUtil.handlePendingException(false);
+        handlePendingException(false);
         return result;
     }
 
-    public static final Descriptor IDENTITY_HASH_CODE_C = StubUtil.descriptorFor(IdentityHashCodeStub.class, "identityHashCodeC", false);
+    public static final Descriptor IDENTITY_HASH_CODE_C = descriptorFor(IdentityHashCodeStub.class, "identityHashCodeC", false);
 
     @NodeIntrinsic(CRuntimeCall.class)
     public static native int identityHashCodeC(@ConstantNodeParameter Descriptor identityHashCodeC, Word thread, Object object);

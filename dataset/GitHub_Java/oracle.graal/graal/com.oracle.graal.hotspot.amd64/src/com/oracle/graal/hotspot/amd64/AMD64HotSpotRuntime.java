@@ -27,7 +27,6 @@ import static com.oracle.graal.compiler.amd64.AMD64LIRGenerator.*;
 import static com.oracle.graal.hotspot.amd64.AMD64DeoptimizeOp.*;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotBackend.*;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotUnwindOp.*;
-import static com.oracle.graal.hotspot.nodes.IdentityHashCodeStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorEnterStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorExitStubCall.*;
 import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
@@ -112,11 +111,6 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /* arg1: format */                       Kind.Object,
                 /* arg2:  value */                       Kind.Long));
 
-        addRuntimeCall(IDENTITY_HASHCODE, config.identityHashCodeStub,
-                /*        temps */ null,
-                /*          ret */ rax.asValue(Kind.Int),
-                /* arg0:    obj */ javaCallingConvention(Kind.Object));
-
         addRuntimeCall(ENCRYPT_BLOCK, config.aescryptEncryptBlockStub,
                 /*        temps */ null,
                 /*          ret */ ret(Kind.Void),
@@ -193,6 +187,6 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
 
     @Override
     protected RegisterConfig createRegisterConfig(boolean globalStubConfig) {
-        return new AMD64HotSpotRegisterConfig(graalRuntime.getTarget().arch, config, globalStubConfig);
+        return new AMD64HotSpotRegisterConfig(config, globalStubConfig);
     }
 }

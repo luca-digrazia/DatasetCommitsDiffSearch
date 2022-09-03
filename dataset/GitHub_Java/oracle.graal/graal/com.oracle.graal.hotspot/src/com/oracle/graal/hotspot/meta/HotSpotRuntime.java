@@ -30,15 +30,18 @@ import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.api.meta.Value.*;
 import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.hotspot.nodes.IdentityHashCodeStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
 import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
+import static com.oracle.graal.hotspot.stubs.IdentityHashCodeStub.*;
 import static com.oracle.graal.hotspot.stubs.NewArrayStub.*;
 import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
 import static com.oracle.graal.hotspot.stubs.NewMultiArrayStub.*;
 import static com.oracle.graal.hotspot.stubs.RegisterFinalizerStub.*;
+import static com.oracle.graal.hotspot.stubs.Stub.*;
 import static com.oracle.graal.hotspot.stubs.ThreadIsInterruptedStub.*;
 import static com.oracle.graal.java.GraphBuilderPhase.RuntimeCalls.*;
 import static com.oracle.graal.nodes.java.RegisterFinalizerNode.*;
@@ -198,7 +201,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                 result[i] = ccRegs[i].asValue(kind);
             } else {
                 result[i] = StackSlot.get(kind.getStackKind(), currentStackOffset, false);
-                currentStackOffset += Math.max(target.arch.getSizeInBytes(kind), target.wordSize);
+                currentStackOffset += Math.max(target.sizeInBytes(kind), target.wordSize);
             }
         }
         return result;
@@ -332,6 +335,15 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                    /* arg1: receiverThread */                         Kind.Object,
               /* arg1: clearInterrupted */                            Kind.Boolean));
 
+        addStubCall(IDENTITY_HASHCODE,
+                        /*          ret */ ret(Kind.Int),
+                        /* arg0:    obj */ javaCallingConvention(Kind.Object));
+
+        addCRuntimeCall(IDENTITY_HASH_CODE_C, config.identityHashCodeAddress,
+                        /*             ret */ ret(Kind.Int),
+                        /* arg0:    thread */ nativeCallingConvention(word,
+                        /* arg1:    object */                         Kind.Object));
+
         // @formatter:on
     }
 
@@ -429,6 +441,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         registerStub(new NewMultiArrayStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_MULTI_ARRAY)));
         registerStub(new RegisterFinalizerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(REGISTER_FINALIZER)));
         registerStub(new ThreadIsInterruptedStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(THREAD_IS_INTERRUPTED)));
+        registerStub(new IdentityHashCodeStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(IDENTITY_HASHCODE)));
     }
 
     private void registerStub(Stub stub) {
@@ -854,7 +867,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     }
 
     private IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index) {
-        int scale = this.graalRuntime.getTarget().arch.getSizeInBytes(elementKind);
+        int scale = this.graalRuntime.getTarget().sizeInBytes(elementKind);
         return IndexedLocationNode.create(LocationNode.getArrayLocation(elementKind), elementKind, getArrayBaseOffset(elementKind), index, graph, scale);
     }
 
