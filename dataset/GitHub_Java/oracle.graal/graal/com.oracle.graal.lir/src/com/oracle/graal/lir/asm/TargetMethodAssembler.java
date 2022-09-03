@@ -51,8 +51,7 @@ public class TargetMethodAssembler {
     public final AbstractAssembler asm;
     public final CompilationResult compilationResult;
     public final TargetDescription target;
-    public final CodeCacheProvider codeCache;
-    public final ForeignCallsProvider foreignCalls;
+    public final CodeCacheProvider runtime;
     public final FrameMap frameMap;
 
     /**
@@ -63,11 +62,9 @@ public class TargetMethodAssembler {
 
     private List<ExceptionInfo> exceptionInfoList;
 
-    public TargetMethodAssembler(CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, FrameMap frameMap, AbstractAssembler asm, FrameContext frameContext,
-                    CompilationResult compilationResult) {
-        this.target = codeCache.getTarget();
-        this.codeCache = codeCache;
-        this.foreignCalls = foreignCalls;
+    public TargetMethodAssembler(TargetDescription target, CodeCacheProvider runtime, FrameMap frameMap, AbstractAssembler asm, FrameContext frameContext, CompilationResult compilationResult) {
+        this.target = target;
+        this.runtime = runtime;
         this.frameMap = frameMap;
         this.asm = asm;
         this.compilationResult = compilationResult;
@@ -188,7 +185,7 @@ public class TargetMethodAssembler {
     public int asIntConst(Value value) {
         assert (value.getKind().getStackKind() == Kind.Int || value.getKind() == Kind.Long) && isConstant(value);
         Constant constant = (Constant) value;
-        assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
+        assert !runtime.needsDataPatch(constant) : constant + " should be in a DataPatch";
         long c = constant.asLong();
         if (!NumUtil.isInt(c)) {
             throw GraalInternalError.shouldNotReachHere();
@@ -202,7 +199,7 @@ public class TargetMethodAssembler {
     public float asFloatConst(Value value) {
         assert (value.getKind().getStackKind() == Kind.Float && isConstant(value));
         Constant constant = (Constant) value;
-        assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
+        assert !runtime.needsDataPatch(constant) : constant + " should be in a DataPatch";
         return constant.asFloat();
     }
 
@@ -212,7 +209,7 @@ public class TargetMethodAssembler {
     public long asLongConst(Value value) {
         assert (value.getKind().getStackKind() == Kind.Long && isConstant(value));
         Constant constant = (Constant) value;
-        assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
+        assert !runtime.needsDataPatch(constant) : constant + " should be in a DataPatch";
         return constant.asLong();
     }
 
@@ -222,7 +219,7 @@ public class TargetMethodAssembler {
     public double asDoubleConst(Value value) {
         assert (value.getKind().getStackKind() == Kind.Double && isConstant(value));
         Constant constant = (Constant) value;
-        assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
+        assert !runtime.needsDataPatch(constant) : constant + " should be in a DataPatch";
         return constant.asDouble();
     }
 
