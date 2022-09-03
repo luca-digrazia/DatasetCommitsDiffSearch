@@ -23,6 +23,7 @@
 package com.oracle.graal.graph;
 
 import static com.oracle.graal.graph.Edges.Type.*;
+import static com.oracle.graal.graph.Node.*;
 
 import java.util.*;
 
@@ -84,7 +85,7 @@ public class Graph {
      * Used to global value number {@link ValueNumberable} {@linkplain NodeClass#isLeafNode() leaf}
      * nodes.
      */
-    private final HashMap<CacheEntry, Node> cachedLeafNodes = CollectionsFactory.newMap();
+    private final HashMap<CacheEntry, Node> cachedLeafNodes = new HashMap<>();
 
     /*
      * Indicates that the graph should no longer be modified. Frozen graphs can be used my multiple

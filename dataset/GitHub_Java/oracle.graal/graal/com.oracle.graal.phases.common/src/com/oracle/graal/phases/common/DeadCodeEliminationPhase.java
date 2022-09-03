@@ -24,8 +24,6 @@ package com.oracle.graal.phases.common;
 
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Options.*;
 
-import java.util.function.*;
-
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -72,52 +70,93 @@ public class DeadCodeEliminationPhase extends Phase {
         if (optional && ReduceDCE.getValue()) {
             return;
         }
-
         NodeFlood flood = graph.createNodeFlood();
-        int totalNodeCount = graph.getNodeCount();
-        flood.add(graph.start());
-        iterateSuccessorsAndInputs(flood);
-        int totalMarkedCount = flood.getTotalMarkedCount();
-        if (totalNodeCount == totalMarkedCount) {
-            // All nodes are live => nothing more to do.
-            return;
-        } else {
-            // Some nodes are not marked alive and therefore dead => proceed.
-            assert totalNodeCount > totalMarkedCount;
-        }
 
+        flood.add(graph.start());
+        iterateSuccessors(flood);
+        disconnectCFGNodes(flood, graph);
+        iterateInputs(flood, graph);
         deleteNodes(flood, graph);
+
+        // remove chained Merges
+        for (MergeNode merge : graph.getNodes(MergeNode.class)) {
+            if (merge.forwardEndCount() == 1 && !(merge instanceof LoopBeginNode)) {
+                graph.reduceTrivialMerge(merge);
+            }
+        }
     }
 
-    private static void iterateSuccessorsAndInputs(NodeFlood flood) {
-        BiConsumer<Node, Node> consumer = (n, succOrInput) -> {
-            assert succOrInput.isAlive() : succOrInput;
-            flood.add(succOrInput);
-        };
+    private static void iterateSuccessors(NodeFlood flood) {
         for (Node current : flood) {
             if (current instanceof AbstractEndNode) {
                 AbstractEndNode end = (AbstractEndNode) current;
                 flood.add(end.merge());
             } else {
-                current.acceptSuccessors(consumer);
-                current.acceptInputs(consumer);
+                for (Node successor : current.successors()) {
+                    flood.add(successor);
+                }
+            }
+        }
+    }
+
+    private static void disconnectCFGNodes(NodeFlood flood, StructuredGraph graph) {
+        for (AbstractEndNode node : graph.getNodes(AbstractEndNode.class)) {
+            if (!flood.isMarked(node)) {
+                MergeNode merge = node.merge();
+                if (merge != null && flood.isMarked(merge)) {
+                    // We are a dead end node leading to a live merge.
+                    merge.removeEnd(node);
+                }
+            }
+        }
+        for (LoopBeginNode loop : graph.getNodes(LoopBeginNode.class)) {
+            if (flood.isMarked(loop)) {
+                boolean reachable = false;
+                for (LoopEndNode end : loop.loopEnds()) {
+                    if (flood.isMarked(end)) {
+                        reachable = true;
+                        break;
+                    }
+                }
+                if (!reachable) {
+                    Debug.log("Removing loop with unreachable end: %s", loop);
+                    for (LoopEndNode end : loop.loopEnds().snapshot()) {
+                        loop.removeEnd(end);
+                    }
+                    graph.reduceDegenerateLoopBegin(loop);
+                }
             }
         }
     }
 
     private static void deleteNodes(NodeFlood flood, StructuredGraph graph) {
-        BiConsumer<Node, Node> consumer = (n, input) -> {
-            if (input.isAlive() && flood.isMarked(input)) {
-                input.removeUsage(n);
-            }
-        };
-
         for (Node node : graph.getNodes()) {
             if (!flood.isMarked(node)) {
-                node.markDeleted();
-                node.acceptInputs(consumer);
+                node.clearInputs();
+                node.clearSuccessors();
+            }
+        }
+        for (Node node : graph.getNodes()) {
+            if (!flood.isMarked(node)) {
                 metricNodesRemoved.increment();
+                node.safeDelete();
             }
         }
     }
+
+    private static void iterateInputs(NodeFlood flood, StructuredGraph graph) {
+        for (Node node : graph.getNodes()) {
+            if (flood.isMarked(node)) {
+                for (Node input : node.inputs()) {
+                    flood.add(input);
+                }
+            }
+        }
+        for (Node current : flood) {
+            for (Node input : current.inputs()) {
+                flood.add(input);
+            }
+        }
+    }
+
 }

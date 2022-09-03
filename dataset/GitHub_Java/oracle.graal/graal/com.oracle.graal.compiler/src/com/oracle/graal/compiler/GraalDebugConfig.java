@@ -52,9 +52,6 @@ public class GraalDebugConfig implements DebugConfig {
     public static final OptionValue<String> Log = new OptionValue<>(null);
     @Option(help = "Pattern for filtering debug scope output based on method context (see MethodFilter)", type = OptionType.Debug)
     public static final OptionValue<String> MethodFilter = new OptionValue<>(null);
-    @Option(help = "Only check MethodFilter against the root method in the context if true, otherwise check all methods", type = OptionType.Debug)
-    public static final OptionValue<Boolean> MethodFilterRootOnly = new OptionValue<>(false);
-
     @Option(help = "How to print metric and timing values:%n" +
                    "Name - aggregate by unqualified name%n" +
                    "Partial - aggregate by partially qualified name (e.g., A.B.C.D.Counter and X.Y.Z.D.Counter will be merged to D.Counter)%n" +
@@ -65,6 +62,16 @@ public class GraalDebugConfig implements DebugConfig {
     public static final OptionValue<Boolean> SuppressZeroDebugValues = new OptionValue<>(false);
     @Option(help = "Send Graal IR to dump handlers on error", type = OptionType.Debug)
     public static final OptionValue<Boolean> DumpOnError = new OptionValue<>(false);
+    @Option(help = "Enable expensive assertions", type = OptionType.Debug)
+    public static final OptionValue<Boolean> DetailedAsserts = new StableOptionValue<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            boolean enabled = false;
+            // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)
+            assert (enabled = true) == true;
+            return enabled;
+        }
+    };
     @Option(help = "Enable more verbose log output when available", type = OptionType.Debug)
     public static final OptionValue<Boolean> LogVerbose = new OptionValue<>(false);
     // @formatter:on
@@ -198,30 +205,17 @@ public class GraalDebugConfig implements DebugConfig {
         if (methodFilter == null && extraFilters.isEmpty()) {
             return true;
         } else {
-            JavaMethod lastMethod = null;
             for (Object o : Debug.context()) {
                 if (extraFilters.contains(o)) {
                     return true;
                 } else if (methodFilter != null) {
                     JavaMethod method = asJavaMethod(o);
                     if (method != null) {
-                        if (!MethodFilterRootOnly.getValue()) {
-                            if (com.oracle.graal.compiler.MethodFilter.matches(methodFilter, method)) {
-                                return true;
-                            }
-                        } else {
-                            /*
-                             * The context values operate as a stack so if we want MethodFilter to
-                             * only apply to the root method we have to check only the last method
-                             * seen.
-                             */
-                            lastMethod = method;
+                        if (com.oracle.graal.compiler.MethodFilter.matches(methodFilter, method)) {
+                            return true;
                         }
                     }
                 }
-            }
-            if (lastMethod != null && com.oracle.graal.compiler.MethodFilter.matches(methodFilter, lastMethod)) {
-                return true;
             }
             return false;
         }

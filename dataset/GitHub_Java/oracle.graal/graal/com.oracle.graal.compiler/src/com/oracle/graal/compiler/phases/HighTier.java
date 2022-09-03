@@ -31,6 +31,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.cfs.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.phases.ea.*;
@@ -59,9 +60,14 @@ public class HighTier extends PhaseSuite<HighTierContext> {
                 appendPhase(new InliningPhase(canonicalizer));
                 appendPhase(new DeadCodeEliminationPhase(Optional));
 
-                if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
+                boolean reduceOrEliminate = FlowSensitiveReduction.getValue() || ConditionalElimination.getValue();
+                if (reduceOrEliminate && OptCanonicalizer.getValue()) {
                     appendPhase(canonicalizer);
-                    appendPhase(new IterativeConditionalEliminationPhase(canonicalizer));
+                    if (FlowSensitiveReduction.getValue()) {
+                        appendPhase(new IterativeFlowSensitiveReductionPhase(canonicalizer));
+                    } else {
+                        appendPhase(new IterativeConditionalEliminationPhase(canonicalizer));
+                    }
                 }
             }
         }
@@ -85,15 +91,8 @@ public class HighTier extends PhaseSuite<HighTierContext> {
         }
 
         if (OptLoopTransform.getValue()) {
-            if (LoopPeeling.getValue()) {
-                appendPhase(new LoopPeelingPhase());
-            }
-            if (LoopUnswitch.getValue()) {
-                appendPhase(new LoopUnswitchingPhase());
-            }
-            if (ReassociateInvariants.getValue()) {
-                appendPhase(new ReassociateInvariantPhase());
-            }
+            appendPhase(new LoopTransformHighPhase());
+            appendPhase(new LoopTransformLowPhase());
         }
         appendPhase(new RemoveValueProxyPhase());
 

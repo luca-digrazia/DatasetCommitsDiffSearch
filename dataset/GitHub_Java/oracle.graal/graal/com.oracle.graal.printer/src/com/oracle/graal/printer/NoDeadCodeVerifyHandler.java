@@ -22,19 +22,17 @@
  */
 package com.oracle.graal.printer;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import static com.oracle.graal.printer.NoDeadCodeVerifyHandler.Options.*;
 
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.options.Option;
-import jdk.internal.jvmci.options.OptionType;
-import jdk.internal.jvmci.options.OptionValue;
+import java.util.*;
+import java.util.concurrent.*;
 
-import com.oracle.graal.debug.DebugVerifyHandler;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.phases.common.*;
 
 /**
  * Verifies that graphs have no dead code.
@@ -62,7 +60,7 @@ public class NoDeadCodeVerifyHandler implements DebugVerifyHandler {
     private static final Map<String, Boolean> discovered = new ConcurrentHashMap<>();
 
     public void verify(Object object, String message) {
-        if (Options.NDCV.getValue() != OFF && object instanceof StructuredGraph) {
+        if (NDCV.getValue() != OFF && object instanceof StructuredGraph) {
             StructuredGraph graph = (StructuredGraph) object;
             List<Node> before = graph.getNodes().snapshot();
             new DeadCodeEliminationPhase().run(graph);
@@ -72,13 +70,13 @@ public class NoDeadCodeVerifyHandler implements DebugVerifyHandler {
                 if (discovered.put(message, Boolean.TRUE) == null) {
                     before.removeAll(after);
                     String prefix = message == null ? "" : message + ": ";
-                    JVMCIError error = new JVMCIError("%sfound dead nodes in %s: %s", prefix, graph, before);
-                    if (Options.NDCV.getValue() == INFO) {
+                    GraalInternalError error = new GraalInternalError("%sfound dead nodes in %s: %s", prefix, graph, before);
+                    if (NDCV.getValue() == INFO) {
                         System.out.println(error.getMessage());
-                    } else if (Options.NDCV.getValue() == VERBOSE) {
+                    } else if (NDCV.getValue() == VERBOSE) {
                         error.printStackTrace(System.out);
                     } else {
-                        assert Options.NDCV.getValue() == FATAL;
+                        assert NDCV.getValue() == FATAL;
                         throw error;
                     }
                 }

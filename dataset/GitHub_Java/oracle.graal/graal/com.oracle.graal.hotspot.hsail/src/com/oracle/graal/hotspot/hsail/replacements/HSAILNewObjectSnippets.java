@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,24 +23,26 @@
 package com.oracle.graal.hotspot.hsail.replacements;
 
 import static com.oracle.graal.api.code.UnsignedMath.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.hsail.replacements.HSAILHotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.hsail.replacements.HSAILNewObjectSnippets.Options.*;
 import static com.oracle.graal.nodes.PiArrayNode.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
-import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
@@ -54,57 +56,146 @@ import com.oracle.graal.word.*;
  */
 public class HSAILNewObjectSnippets extends NewObjectSnippets {
 
-    static public class Options {
+    public static class Options {
 
         // @formatter:off
-        @Option(help = "In HSAIL allocation, allow allocation from eden as fallback if TLAB is full")
+        @Option(help = "In HSAIL allocation, allow allocation from eden as fallback if TLAB is full", type = OptionType.Debug)
         static final OptionValue<Boolean> HsailUseEdenAllocate = new OptionValue<>(false);
 
-        @Option(help = "Estimate of number of bytes allocated by each HSAIL workitem, used to size TLABs")
-        static public final OptionValue<Integer> HsailAllocBytesPerWorkitem = new OptionValue<>(64);
+        @Option(help = "In HSAIL allocation, allow GPU to allocate a new tlab if TLAB is full", type = OptionType.Debug)
+        static final OptionValue<Boolean> HsailNewTlabAllocate = new OptionValue<>(true);
+
+        @Option(help = "Estimate of number of bytes allocated by each HSAIL workitem, used to size TLABs", type = OptionType.Debug)
+        public  static  final OptionValue<Integer> HsailAllocBytesPerWorkitem = new OptionValue<>(64);
 
         // @formatter:on
     }
 
     private static final boolean hsailUseEdenAllocate = HsailUseEdenAllocate.getValue();
+    private static final boolean hsailNewTlabAllocate = HsailNewTlabAllocate.getValue();
+
+    protected static Word fillNewTlabInfoWithTlab(Word oldTlabInfo) {
+        Word allocInfo = readTlabInfoAllocInfo(oldTlabInfo);
+        Word newTlabInfo = atomicGetAndAddAllocInfoTlabInfosPoolNext(allocInfo, config().hsailTlabInfoSize);
+        Word tlabInfosPoolEnd = readAllocInfoTlabInfosPoolEnd(allocInfo);
+        if (newTlabInfo.aboveOrEqual(tlabInfosPoolEnd)) {
+            // could not get a new tlab info, mark zero and we will later deoptimize
+            return (Word.zero());
+        }
+
+        // make new size depend on old tlab size
+        Word newTlabSize = readTlabInfoEnd(oldTlabInfo).subtract(readTlabInfoStart(oldTlabInfo));
+        // try to allocate a new tlab
+        Word tlabStart = NewInstanceStub.edenAllocate(newTlabSize, false);
+        writeTlabInfoStart(newTlabInfo, tlabStart);  // write this field even if zero
+        if (tlabStart.equal(0)) {
+            // could not get a new tlab, mark zero and we will later deoptimize
+            return (Word.zero());
+        }
+        // here we have a new tlab and a tlabInfo, we can fill it in
+        writeTlabInfoTop(newTlabInfo, tlabStart);
+        writeTlabInfoOriginalTop(newTlabInfo, tlabStart);
+        // set end so that we leave space for the tlab "alignment reserve"
+        Word alignReserveBytes = readAllocInfoTlabAlignReserveBytes(allocInfo);
+        writeTlabInfoEnd(newTlabInfo, tlabStart.add(newTlabSize.subtract(alignReserveBytes)));
+        writeTlabInfoAllocInfo(newTlabInfo, allocInfo);
+        writeTlabInfoTlab(newTlabInfo, readTlabInfoTlab(oldTlabInfo));
+        return (newTlabInfo);
+    }
+
+    protected static Word allocateFromTlabSlowPath(Word fastPathTlabInfo, int size, Word fastPathTop, Word fastPathEnd) {
+        // eventually this will be a separate call, not inlined
+
+        // we come here from the fastpath allocation
+        // here we know that the tlab has overflowed (top + size > end)
+        // find out if we are the first overflower
+        Word tlabInfo = fastPathTlabInfo;
+        Word top = fastPathTop;
+        Word end = fastPathEnd;
+
+        // start a loop where we try to get a new tlab and then try to allocate from it
+        // keep doing this until we run out of tlabs or tlabInfo structures
+        // initialize result with error return value
+        Word result = Word.zero();
+        while (result.equal(Word.zero()) && tlabInfo.notEqual(Word.zero())) {
+            boolean firstOverflower = top.belowOrEqual(end);
+            if (firstOverflower) {
+                // store the last good top before overflow into last_good_top field
+                // we will move it back into top later when back in the VM
+                writeTlabInfoLastGoodTop(tlabInfo, top);
+            }
+
+            // if all this allocate tlab from gpu logic is disabled,
+            // just immediately set tlabInfo to 0 here
+            if (!hsailNewTlabAllocate) {
+                tlabInfo = Word.zero();
+            } else {
+                // loop here waiting for the first overflower to get a new tlab
+                // note that on an hsa device we must be careful how we loop in order to ensure
+                // "forward progress". For example we must not break out of the loop.
+                Word oldTlabInfo = tlabInfo;
+                do {
+                    if (firstOverflower) {
+                        // allocate new tlabInfo and new tlab to fill it, returning 0 if any
+                        // problems
+                        // this will get all spinners out of this loop.
+                        tlabInfo = fillNewTlabInfoWithTlab(oldTlabInfo);
+                        writeTlabInfoPtrStoreRelease(tlabInfo);
+                    } else {
+                        tlabInfo = getTlabInfoPtrLoadAcquire();
+                    }
+                } while (tlabInfo.equal(oldTlabInfo));
+                // when we get out of the loop if tlabInfoPtr contains 0, it means we
+                // can't get any more tlabs and will have to deoptimize
+                // otherwise, we have a valid new tlabInfo/tlab and can try to allocate again.
+                if (tlabInfo.notEqual(0)) {
+                    top = atomicGetAndAddTlabInfoTop(tlabInfo, size);
+                    end = readTlabInfoEnd(tlabInfo);
+                    Word newTop = top.add(size);
+                    if (probability(FAST_PATH_PROBABILITY, newTop.belowOrEqual(end))) {
+                        result = top;
+                    }
+                }
+            }
+        } // while (result == 0) && (tlabInfo != 0))
+        return result;
+    }
+
+    protected static Object addressToFormattedObject(Word addr, @ConstantParameter int size, KlassPointer hub, Word prototypeMarkWord, @ConstantParameter boolean fillContents,
+                    @ConstantParameter String typeContext) {
+        Object result = formatObject(hub, size, addr, prototypeMarkWord, fillContents, true, true);
+        profileAllocation("instance", size, typeContext);
+        return piCast(verifyOop(result), StampFactory.forNodeIntrinsic());
+    }
 
     @Snippet
-    public static Object allocateInstanceAtomic(@ConstantParameter int size, Word hub, Word prototypeMarkWord, @ConstantParameter boolean fillContents, @ConstantParameter String typeContext) {
-        Word thread = thread();
+    public static Object allocateInstanceAtomic(@ConstantParameter int size, KlassPointer hub, Word prototypeMarkWord, @ConstantParameter boolean fillContents, @ConstantParameter String typeContext) {
         boolean haveResult = false;
         if (useTLAB()) {
-            Word top = atomicGetAndAddTlabTop(thread, size);
-            Word end = readTlabEnd(thread);
-            Word newTop = top.add(size);
-            if (probability(FAST_PATH_PROBABILITY, newTop.belowOrEqual(end))) {
-                // writeTlabTop(thread, newTop) was done by the atomicGetAndAdd
-                Object result = formatObject(hub, size, top, prototypeMarkWord, fillContents, true, false, true);
-                profileAllocation("instance", size, typeContext);
-                return piCast(verifyOop(result), StampFactory.forNodeIntrinsic());
-            } else {
-                // only one overflower will be the first overflower, detectable because
-                // oldtop was still below end
-                if (top.belowOrEqual(end)) {
-                    // hack alert: store the last good top before overflow into pf_top
-                    // we will move it back into top later when back in the VM
-                    writeTlabPfTop(thread, top);
+            // inlining this manually here because it resulted in better fastpath codegen
+            Word tlabInfo = getTlabInfoPtr();
+            if (probability(FAST_PATH_PROBABILITY, tlabInfo.notEqual(0))) {
+                Word top = atomicGetAndAddTlabInfoTop(tlabInfo, size);
+                Word end = readTlabInfoEnd(tlabInfo);
+                Word newTop = top.add(size);
+                if (probability(FAST_PATH_PROBABILITY, newTop.belowOrEqual(end))) {
+                    return addressToFormattedObject(top, size, hub, prototypeMarkWord, fillContents, typeContext);
+                } else {
+                    Word addr = allocateFromTlabSlowPath(tlabInfo, size, top, end);
+                    if (addr.notEqual(0)) {
+                        return addressToFormattedObject(addr, size, hub, prototypeMarkWord, fillContents, typeContext);
+                    }
                 }
-                // useless logic but see notes on deopt path below
-                haveResult = newTop.belowOrEqual(end);
             }
         }
-        if (hsailUseEdenAllocate) {
-            // originally:
-            // result = NewInstanceStubCall.call(hub);
 
-            // we could not allocate from tlab, try allocating directly from eden
+        // we could not allocate from tlab, try allocating directly from eden
+        if (hsailUseEdenAllocate) {
             // false for no logging
-            Word memory = NewInstanceStub.edenAllocate(Word.unsigned(size), false);
-            if (memory.notEqual(0)) {
+            Word addr = NewInstanceStub.edenAllocate(Word.unsigned(size), false);
+            if (addr.notEqual(0)) {
                 new_eden.inc();
-                Object result = formatObject(hub, size, memory, prototypeMarkWord, fillContents, true, false, true);
-                profileAllocation("instance", size, typeContext);
-                return piCast(verifyOop(result), StampFactory.forNodeIntrinsic());
+                return addressToFormattedObject(addr, size, hub, prototypeMarkWord, fillContents, typeContext);
             }
         }
         // haveResult test here helps avoid dropping earlier stores were seen to be dropped without
@@ -117,7 +208,7 @@ public class HSAILNewObjectSnippets extends NewObjectSnippets {
     }
 
     @Snippet
-    public static Object allocateArrayAtomic(Word hub, int length, Word prototypeMarkWord, @ConstantParameter int headerSize, @ConstantParameter int log2ElementSize,
+    public static Object allocateArrayAtomic(KlassPointer hub, int length, Word prototypeMarkWord, @ConstantParameter int headerSize, @ConstantParameter int log2ElementSize,
                     @ConstantParameter boolean fillContents, @ConstantParameter boolean maybeUnroll, @ConstantParameter String typeContext) {
         if (!belowThan(length, MAX_ARRAY_FAST_PATH_ALLOCATION_LENGTH)) {
             // This handles both negative array sizes and very large array sizes
@@ -126,44 +217,44 @@ public class HSAILNewObjectSnippets extends NewObjectSnippets {
         return allocateArrayAtomicImpl(hub, length, prototypeMarkWord, headerSize, log2ElementSize, fillContents, maybeUnroll, typeContext);
     }
 
-    private static Object allocateArrayAtomicImpl(Word hub, int length, Word prototypeMarkWord, int headerSize, int log2ElementSize, boolean fillContents, boolean maybeUnroll, String typeContext) {
+    protected static Object addressToFormattedArray(Word addr, int allocationSize, int length, int headerSize, KlassPointer hub, Word prototypeMarkWord, boolean fillContents, boolean maybeUnroll,
+                    @ConstantParameter String typeContext) {
+        // we are not in a stub so we can set useSnippetCounters to true
+        Object result = formatArray(hub, allocationSize, length, headerSize, addr, prototypeMarkWord, fillContents, maybeUnroll, true);
+        profileAllocation("array", allocationSize, typeContext);
+        return piArrayCast(verifyOop(result), length, StampFactory.forNodeIntrinsic());
+    }
+
+    private static Object allocateArrayAtomicImpl(KlassPointer hub, int length, Word prototypeMarkWord, int headerSize, int log2ElementSize, boolean fillContents, boolean maybeUnroll,
+                    String typeContext) {
         int alignment = wordSize();
         int allocationSize = computeArrayAllocationSize(length, alignment, headerSize, log2ElementSize);
-        Word thread = thread();
         boolean haveResult = false;
         if (useTLAB()) {
-            Word top = atomicGetAndAddTlabTop(thread, allocationSize);
-            Word end = readTlabEnd(thread);
-            Word newTop = top.add(allocationSize);
-            if (probability(FAST_PATH_PROBABILITY, newTop.belowOrEqual(end))) {
-                // writeTlabTop(thread, newTop) was done by the atomicGetAndAdd
-                newarray_loopInit.inc();
-                // we are not in a stub so we can set useSnippetCounters to true
-                Object result = formatArray(hub, allocationSize, length, headerSize, top, prototypeMarkWord, fillContents, maybeUnroll, true);
-                profileAllocation("array", allocationSize, typeContext);
-                return piArrayCast(verifyOop(result), length, StampFactory.forNodeIntrinsic());
-            } else {
-                // only one overflower will be the first overflower, detectable because
-                // oldtop was still below end
-                if (top.belowOrEqual(end)) {
-                    // hack alert: store the last good top before overflow into pf_top
-                    // we will move it back into top later when back in the VM
-                    writeTlabPfTop(thread, top);
+            // inlining this manually here because it resulted in better fastpath codegen
+            Word tlabInfo = getTlabInfoPtr();
+            if (probability(FAST_PATH_PROBABILITY, tlabInfo.notEqual(0))) {
+                Word top = atomicGetAndAddTlabInfoTop(tlabInfo, allocationSize);
+                Word end = readTlabInfoEnd(tlabInfo);
+                Word newTop = top.add(allocationSize);
+                if (probability(FAST_PATH_PROBABILITY, newTop.belowOrEqual(end))) {
+                    return addressToFormattedArray(top, allocationSize, length, headerSize, hub, prototypeMarkWord, fillContents, maybeUnroll, typeContext);
+                } else {
+                    Word addr = allocateFromTlabSlowPath(tlabInfo, allocationSize, top, end);
+                    if (addr.notEqual(0)) {
+                        return addressToFormattedArray(addr, allocationSize, length, headerSize, hub, prototypeMarkWord, fillContents, maybeUnroll, typeContext);
+                    }
                 }
-                // useless logic but see notes on deopt path below
-                haveResult = newTop.belowOrEqual(end);
             }
         }
+
         // we could not allocate from tlab, try allocating directly from eden
         if (hsailUseEdenAllocate) {
             // false for no logging
-            Word memory = NewInstanceStub.edenAllocate(Word.unsigned(allocationSize), false);
-            if (memory.notEqual(0)) {
+            Word addr = NewInstanceStub.edenAllocate(Word.unsigned(allocationSize), false);
+            if (addr.notEqual(0)) {
                 newarray_eden.inc();
-                // we are not in a stub so we can set useSnippetCounters to true
-                Object result = formatArray(hub, allocationSize, length, headerSize, memory, prototypeMarkWord, fillContents, maybeUnroll, true);
-                profileAllocation("array", allocationSize, typeContext);
-                return piArrayCast(verifyOop(result), length, StampFactory.forNodeIntrinsic());
+                return addressToFormattedArray(addr, allocationSize, length, headerSize, hub, prototypeMarkWord, fillContents, maybeUnroll, typeContext);
             }
         }
         if (!haveResult) {
@@ -194,7 +285,7 @@ public class HSAILNewObjectSnippets extends NewObjectSnippets {
             StructuredGraph graph = newInstanceNode.graph();
             HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) newInstanceNode.instanceClass();
             assert !type.isArray();
-            ConstantNode hub = ConstantNode.forConstant(type.klass(), providers.getMetaAccess(), graph);
+            ConstantNode hub = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), type.klass(), providers.getMetaAccess(), graph);
             int size = instanceSize(type);
 
             Arguments args = new Arguments(allocateInstance, graph.getGuardsStage(), tool.getLoweringStage());
@@ -202,7 +293,7 @@ public class HSAILNewObjectSnippets extends NewObjectSnippets {
             args.add("hub", hub);
             args.add("prototypeMarkWord", type.prototypeMarkWord());
             args.addConst("fillContents", newInstanceNode.fillContents());
-            args.addConst("typeContext", MetaUtil.toJavaName(type, false));
+            args.addConst("typeContext", type.toJavaName(false));
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering allocateInstance in %s: node=%s, template=%s, arguments=%s", graph, newInstanceNode, template, args);
@@ -212,26 +303,27 @@ public class HSAILNewObjectSnippets extends NewObjectSnippets {
         /**
          * Lowers a {@link NewArrayNode}.
          */
-        public void lower(NewArrayNode newArrayNode, LoweringTool tool) {
+        public void lower(NewArrayNode newArrayNode, HotSpotGraalRuntimeProvider runtime, LoweringTool tool) {
             StructuredGraph graph = newArrayNode.graph();
             ResolvedJavaType elementType = newArrayNode.elementType();
             HotSpotResolvedObjectType arrayType = (HotSpotResolvedObjectType) elementType.getArrayClass();
             Kind elementKind = elementType.getKind();
-            ConstantNode hub = ConstantNode.forConstant(arrayType.klass(), providers.getMetaAccess(), graph);
-            final int headerSize = HotSpotGraalRuntime.getArrayBaseOffset(elementKind);
+            ConstantNode hub = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), arrayType.klass(), providers.getMetaAccess(), graph);
+            final int headerSize = runtime.getArrayBaseOffset(elementKind);
             // lowerer extends HotSpotLoweringProvider so we can just use that
             HotSpotLoweringProvider lowerer = (HotSpotLoweringProvider) providers.getLowerer();
-            int log2ElementSize = CodeUtil.log2(lowerer.getScalingFactor(elementKind));
+            int log2ElementSize = CodeUtil.log2(lowerer.arrayScalingFactor(elementKind));
 
             Arguments args = new Arguments(allocateArray, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("hub", hub);
-            args.add("length", newArrayNode.length());
+            ValueNode length = newArrayNode.length();
+            args.add("length", length.isAlive() ? length : graph.addOrUniqueWithInputs(length));
             args.add("prototypeMarkWord", arrayType.prototypeMarkWord());
             args.addConst("headerSize", headerSize);
             args.addConst("log2ElementSize", log2ElementSize);
             args.addConst("fillContents", newArrayNode.fillContents());
-            args.addConst("maybeUnroll", newArrayNode.length().isConstant());
-            args.addConst("typeContext", MetaUtil.toJavaName(arrayType, false));
+            args.addConst("maybeUnroll", length.isConstant());
+            args.addConst("typeContext", arrayType.toJavaName(false));
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering allocateArray in %s: node=%s, template=%s, arguments=%s", graph, newArrayNode, template, args);
@@ -250,6 +342,7 @@ public class HSAILNewObjectSnippets extends NewObjectSnippets {
     private static final SnippetCounter new_eden = new SnippetCounter(countersNew, "eden", "used edenAllocate");
 
     private static final SnippetCounter.Group countersNewArray = SnippetCounters.getValue() ? new SnippetCounter.Group("NewArray") : null;
-    private static final SnippetCounter newarray_loopInit = new SnippetCounter(countersNewArray, "tlabLoopInit", "TLAB alloc with zeroing in a loop");
+    // private static final SnippetCounter newarray_loopInit = new SnippetCounter(countersNewArray,
+    // "tlabLoopInit", "TLAB alloc with zeroing in a loop");
     private static final SnippetCounter newarray_eden = new SnippetCounter(countersNewArray, "eden", "used edenAllocate");
 }

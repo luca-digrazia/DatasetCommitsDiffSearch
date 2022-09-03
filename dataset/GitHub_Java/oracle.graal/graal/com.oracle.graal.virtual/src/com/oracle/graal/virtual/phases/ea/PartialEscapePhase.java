@@ -28,7 +28,6 @@ import static com.oracle.graal.virtual.phases.ea.PartialEscapePhase.Options.*;
 import java.util.*;
 import java.util.function.*;
 
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
@@ -123,7 +122,7 @@ public class PartialEscapePhase extends EffectsPhase<PhaseContext> {
                     for (Node usage : commitUsage.usages()) {
                         if (usage instanceof MethodCallTargetNode) {
                             if (hints == null) {
-                                hints = CollectionsFactory.newMap();
+                                hints = new HashMap<>();
                             }
                             Invoke invoke = ((MethodCallTargetNode) usage).invoke();
                             hints.put(invoke, sum / invokeSum);
