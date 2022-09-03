@@ -25,12 +25,7 @@ package org.graalvm.compiler.truffle.debug;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TraceTruffleInlining;
 
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.truffle.GraalTruffleRuntime;
-import org.graalvm.compiler.truffle.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.TruffleInlining;
-import org.graalvm.compiler.truffle.TruffleInliningDecision;
-import org.graalvm.compiler.truffle.TruffleInliningProfile;
-import org.graalvm.compiler.truffle.TruffleCompilerOptions;
+import org.graalvm.compiler.truffle.*;
 
 public final class TraceInliningListener extends AbstractDebugCompilationListener {
 
