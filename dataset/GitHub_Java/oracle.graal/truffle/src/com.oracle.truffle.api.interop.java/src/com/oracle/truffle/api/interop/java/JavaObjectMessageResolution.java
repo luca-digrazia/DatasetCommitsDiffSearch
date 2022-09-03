@@ -312,11 +312,26 @@ class JavaObjectMessageResolution {
                     return 0b1111;
                 }
             }
+            if (JavaInteropReflect.isJNIMethod(receiver, name)) {
+                return 0b11111;
+            }
             if (JavaInteropReflect.isMemberType(receiver, name)) {
                 return 0b11;
             }
             return 0;
         }
+    }
+
+    @Resolve(message = "com.oracle.truffle.api.interop.java.ClassMessage")
+    abstract static class ClassMessageNode extends Node {
+        protected Object access(JavaObject receiver) {
+            if (receiver.isClass()) {
+                return new JavaObject(null, receiver.clazz.getClass());
+            } else {
+                return new JavaObject(null, receiver.clazz);
+            }
+        }
+
     }
 
     @Resolve(message = "IS_EXECUTABLE")
