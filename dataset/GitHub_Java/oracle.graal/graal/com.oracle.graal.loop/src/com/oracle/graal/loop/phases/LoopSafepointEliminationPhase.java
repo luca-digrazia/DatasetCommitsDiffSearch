@@ -22,37 +22,44 @@
  */
 package com.oracle.graal.loop.phases;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.loop.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.loop.LoopEx;
+import com.oracle.graal.loop.LoopsData;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.Invoke;
+import com.oracle.graal.nodes.LoopEndNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.cfg.Block;
+import com.oracle.graal.nodes.extended.ForeignCallNode;
+import com.oracle.graal.phases.BasePhase;
+import com.oracle.graal.phases.tiers.MidTierContext;
 
-public class LoopSafepointEliminationPhase extends BasePhase<LowTierContext> {
+public class LoopSafepointEliminationPhase extends BasePhase<MidTierContext> {
 
     @Override
-    protected void run(StructuredGraph graph, LowTierContext context) {
+    protected void run(StructuredGraph graph, MidTierContext context) {
         LoopsData loops = new LoopsData(graph);
-        if (context.getOptimisticOptimizations().useLoopLimitChecks()) {
+        if (context.getOptimisticOptimizations().useLoopLimitChecks() && graph.getGuardsStage().allowsFloatingGuards()) {
             loops.detectedCountedLoops();
             for (LoopEx loop : loops.countedLoops()) {
-                if (loop.lirLoop().children.isEmpty() && loop.counted().getKind() == Kind.Int) {
-                    loop.loopBegin().dependencies().add(loop.counted().getOverFlowGuard());
+                if (loop.loop().getChildren().isEmpty() && loop.counted().getStamp().getBits() <= 32) {
+                    boolean hasSafepoint = false;
                     for (LoopEndNode loopEnd : loop.loopBegin().loopEnds()) {
-                        loopEnd.disableSafepoint();
+                        hasSafepoint |= loopEnd.canSafepoint();
+                    }
+                    if (hasSafepoint) {
+                        loop.counted().createOverFlowGuard();
+                        loop.loopBegin().disableSafepoint();
                     }
                 }
             }
         }
         for (LoopEx loop : loops.countedLoops()) {
             for (LoopEndNode loopEnd : loop.loopBegin().loopEnds()) {
-                Block b = loops.controlFlowGraph().blockFor(loopEnd);
-                blocks: while (b != loop.lirLoop().header) {
+                Block b = loops.getCFG().blockFor(loopEnd);
+                blocks: while (b != loop.loop().getHeader()) {
                     assert b != null;
                     for (FixedNode node : b.getNodes()) {
-                        if (node instanceof Invoke || node instanceof RuntimeCallNode) {
+                        if (node instanceof Invoke || node instanceof ForeignCallNode) {
                             loopEnd.disableSafepoint();
                             break blocks;
                         }
@@ -61,5 +68,6 @@ public class LoopSafepointEliminationPhase extends BasePhase<LowTierContext> {
                 }
             }
         }
+        loops.deleteUnusedNodes();
     }
 }
