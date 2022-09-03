@@ -23,12 +23,12 @@
 package com.oracle.graal.lir.amd64;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.*;
 
-public class AMD64FrameMapBuilder extends FrameMapBuilderImpl {
+public class AMD64FrameMapBuilder extends DelayedFrameMapBuilder {
 
-    public AMD64FrameMapBuilder(FrameMap frameMap, CodeCacheProvider codeCache, RegisterConfig registerConfig) {
-        super(frameMap, codeCache, registerConfig);
+    public AMD64FrameMapBuilder(FrameMapFactory factory, CodeCacheProvider codeCache, RegisterConfig registerConfig) {
+        super(factory, codeCache, registerConfig);
     }
 
     /**

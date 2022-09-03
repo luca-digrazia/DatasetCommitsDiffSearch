@@ -27,7 +27,7 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.*;
 
 /**
  * AMD64 specific frame map.
@@ -111,8 +111,10 @@ public class AMD64FrameMap extends FrameMap {
      * runtime for walking/inspecting frames of such methods.
      */
     StackSlot allocateRBPSpillSlot() {
-        assert spillSize == initialSpillSize : "RBP spill slot must be the first allocated stack slots";
-        rbpSpillSlot = allocateSpillSlot(LIRKind.value(Kind.Long));
+        assert spillSize == initialSpillSize : "RBP spill slot can only be allocated before getting other stack slots";
+        int size = spillSlotSize(LIRKind.value(Kind.Long));
+        spillSize = NumUtil.roundUp(spillSize + size, size);
+        rbpSpillSlot = allocateNewSpillSlot(LIRKind.value(Kind.Long), 0);
         assert asStackSlot(rbpSpillSlot).getRawOffset() == -16 : asStackSlot(rbpSpillSlot).getRawOffset();
         return rbpSpillSlot;
     }
@@ -124,7 +126,8 @@ public class AMD64FrameMap extends FrameMap {
     }
 
     public StackSlot allocateDeoptimizationRescueSlot() {
-        assert spillSize == initialSpillSize || spillSize == initialSpillSize + spillSlotSize(LIRKind.value(Kind.Long)) : "Deoptimization rescue slot must be the first or second (if there is an RBP spill slot) stack slot";
-        return allocateSpillSlot(LIRKind.value(Kind.Long));
+        int size = spillSlotSize(LIRKind.value(Kind.Long));
+        spillSize = NumUtil.roundUp(spillSize + size, size);
+        return allocateNewSpillSlot(LIRKind.value(Kind.Long), 0);
     }
 }
