@@ -113,10 +113,6 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
             // check if the type of the receiver can narrow the result
             ValueNode receiver = receiver();
             ResolvedJavaType type = StampTool.typeOrNull(receiver);
-            if (type == null && invokeKind == InvokeKind.Virtual) {
-                // For virtual calls, we are guaranteed to receive a correct receiver type.
-                type = targetMethod.getDeclaringClass();
-            }
             if (type != null && (invoke().stateAfter() != null || invoke().stateDuring() != null)) {
                 /*
                  * either the holder class is exact, or the receiver object has an exact type, or
@@ -156,7 +152,9 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                     ResolvedJavaMethod newResolvedMethod = single.resolveMethod(targetMethod(), invoke().getContextType(), true);
                     // TODO (je): we can not yet deal with default methods
                     if (newResolvedMethod != null && !newResolvedMethod.isDefault()) {
-                        LogicNode condition = graph().unique(InstanceOfNode.create(single, receiver, getProfile()));
+                        ProfilingInfo profilingInfo = invoke().getContextMethod().getProfilingInfo();
+                        JavaTypeProfile profile = profilingInfo.getTypeProfile(invoke().bci());
+                        LogicNode condition = graph().unique(InstanceOfNode.create(single, receiver, profile));
                         assert graph().getGuardsStage().ordinal() < StructuredGraph.GuardsStage.FIXED_DEOPTS.ordinal() : "Graph already fixed!";
                         GuardNode guard = graph().unique(
                                         GuardNode.create(condition, BeginNode.prevBegin(invoke().asNode()), DeoptimizationReason.OptimizedTypeCheckViolated, DeoptimizationAction.InvalidateRecompile,
@@ -169,17 +167,6 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                 }
             }
         }
-    }
-
-    private JavaTypeProfile getProfile() {
-        assert !isStatic();
-        if (receiver() instanceof TypeProfileProxyNode) {
-            // get profile from TypeProfileProxy
-            return ((TypeProfileProxyNode) receiver()).getProfile();
-        }
-        // get profile from invoke()
-        ProfilingInfo profilingInfo = invoke().getContextMethod().getProfilingInfo();
-        return profilingInfo.getTypeProfile(invoke().bci());
     }
 
     @Override
