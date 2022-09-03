@@ -52,14 +52,16 @@ class LibFFILibraryMessageResolution {
 
         @Specialization(replaces = "lookupCached")
         protected TruffleObject lookup(LibFFILibrary receiver, String symbol) {
-            TruffleObject preBound = receiver.findSymbol(symbol);
-            if (preBound != null) {
-                return preBound;
+            UnknownIdentifierException unknown;
+            try {
+                return receiver.findSymbol(symbol);
+            } catch (UnknownIdentifierException ex) {
+                unknown = ex;
             }
             try {
                 return receiver.lookupSymbol(symbol);
             } catch (UnsatisfiedLinkError ex) {
-                throw UnknownIdentifierException.raise(symbol);
+                throw unknown.raise();
             }
         }
     }
