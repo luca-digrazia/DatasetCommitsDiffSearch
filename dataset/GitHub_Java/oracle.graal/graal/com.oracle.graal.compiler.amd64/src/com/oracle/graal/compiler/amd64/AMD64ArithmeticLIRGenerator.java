@@ -910,21 +910,24 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
     @Override
     public Value emitMathCos(Value input) {
         Variable result = getLIRGen().newVariable(LIRKind.combine(input));
-        getLIRGen().append(new AMD64MathIntrinsicOp(getAMD64LIRGen(), COS, result, getLIRGen().asAllocatable(input)));
+        AllocatableValue stackSlot = getLIRGen().getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+        getLIRGen().append(new AMD64MathIntrinsicOp(getAMD64LIRGen(), COS, result, getLIRGen().asAllocatable(input), stackSlot));
         return result;
     }
 
     @Override
     public Value emitMathSin(Value input) {
         Variable result = getLIRGen().newVariable(LIRKind.combine(input));
-        getLIRGen().append(new AMD64MathIntrinsicOp(getAMD64LIRGen(), SIN, result, getLIRGen().asAllocatable(input)));
+        AllocatableValue stackSlot = getLIRGen().getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+        getLIRGen().append(new AMD64MathIntrinsicOp(getAMD64LIRGen(), SIN, result, getLIRGen().asAllocatable(input), stackSlot));
         return result;
     }
 
     @Override
     public Value emitMathTan(Value input) {
         Variable result = getLIRGen().newVariable(LIRKind.combine(input));
-        getLIRGen().append(new AMD64MathIntrinsicOp(getAMD64LIRGen(), TAN, result, getLIRGen().asAllocatable(input)));
+        AllocatableValue stackSlot = getLIRGen().getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+        getLIRGen().append(new AMD64MathIntrinsicOp(getAMD64LIRGen(), TAN, result, getLIRGen().asAllocatable(input), stackSlot));
         return result;
     }
 
@@ -1120,15 +1123,4 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
         getLIRGen().append(new AMD64BinaryConsumer.Op(CMP.getRMOpcode(size), size, left, getLIRGen().asAllocatable(right)));
     }
 
-    @Override
-    public Value emitRound(Value value, RoundingMode mode) {
-        Variable result = getLIRGen().newVariable(LIRKind.combine(value));
-        assert ((AMD64Kind) value.getPlatformKind()).isXMM();
-        if (value.getPlatformKind() == AMD64Kind.SINGLE) {
-            getLIRGen().append(new AMD64Binary.RMIOp(AMD64RMIOp.ROUNDSS, OperandSize.PD, result, getLIRGen().asAllocatable(value), mode.encoding));
-        } else {
-            getLIRGen().append(new AMD64Binary.RMIOp(AMD64RMIOp.ROUNDSD, OperandSize.PD, result, getLIRGen().asAllocatable(value), mode.encoding));
-        }
-        return result;
-    }
 }
