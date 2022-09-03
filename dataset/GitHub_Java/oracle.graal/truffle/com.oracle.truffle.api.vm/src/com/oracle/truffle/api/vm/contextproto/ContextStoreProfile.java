@@ -17,7 +17,7 @@ final class ContextStoreProfile {
     private volatile ContextStore dynamicStore = UNINTIALIZED_STORE;
     private volatile Thread dynamicStoreThread;
 
-    private volatile ThreadLocal<ContextStore> threadStore;
+    private final ThreadLocal<ContextStore> threadStore = new ThreadLocal<>();
 
     public ContextStoreProfile(ContextStore initialStore) {
         this.constantStore = initialStore;
@@ -53,11 +53,10 @@ final class ContextStoreProfile {
         }
 
         // fast path multiple threads
-        ThreadLocal<ContextStore> tlstore = threadStore;
+        ContextStore tlstore = threadStore.get();
         if (tlstore != null) {
-            ContextStore currentstore = tlstore.get();
-            if (currentstore != store) {
-                tlstore.set(store);
+            if (tlstore != store) {
+                threadStore.set(tlstore);
             }
             return;
         }
@@ -86,13 +85,6 @@ final class ContextStoreProfile {
                 dynamicStore = store;
                 return;
             } else {
-                final ContextStore initialStore = dynamicStore;
-                threadStore = new ThreadLocal<ContextStore>() {
-                    @Override
-                    protected ContextStore initialValue() {
-                        return initialStore;
-                    }
-                };
                 dynamicStore = null;
                 dynamicStoreThread = null;
                 dynamicStoreAssumption.invalidate();
@@ -106,7 +98,8 @@ final class ContextStoreProfile {
         assert dynamicStoreThread == null;
         assert constantStore == null;
         assert dynamicStore == null;
-        assert threadStore != null;
+
+        threadStore.set(store);
     }
 
     @TruffleBoundary
