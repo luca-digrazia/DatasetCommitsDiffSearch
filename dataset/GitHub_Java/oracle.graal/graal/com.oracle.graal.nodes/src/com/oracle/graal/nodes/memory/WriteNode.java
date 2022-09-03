@@ -22,24 +22,17 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.LocationIdentity;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Simplifiable;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.memory.address.AddressNode.Address;
-import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Writes a given {@linkplain #value() value} a {@linkplain FixedAccessNode memory location}.
@@ -72,7 +65,7 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simpli
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         LIRKind writeKind = gen.getLIRGeneratorTool().getLIRKind(value().stamp());
-        gen.getLIRGeneratorTool().getArithmetic().emitStore(writeKind, gen.operand(address), gen.operand(value()), gen.state(this));
+        gen.getLIRGeneratorTool().emitStore(writeKind, gen.operand(address), gen.operand(value()), gen.state(this));
     }
 
     @Override
