@@ -155,6 +155,7 @@ class QueryHandler extends DataHandler {
         if (conditions != null && conditions.length > 0) {
             conditions[0] = DBUtility.convertWhereClauseToColumnName(conditions[0]);
         }
+        columns = DBUtility.convertSelectClauseToValidNames(columns);
         orderBy = DBUtility.convertOrderByClauseToValidName(orderBy);
 		return query(modelClass, columns, getWhereClause(conditions),
                 getWhereArgs(conditions), null, null, orderBy, limit,
