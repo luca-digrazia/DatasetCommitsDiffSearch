@@ -74,7 +74,7 @@ public class Dropper extends AssociationUpdater {
 	 * @return A list contains all the table names need to drop.
 	 */
 	private List<String> findTablesToDrop() {
-		List<String> dropTableNames = new ArrayList<>();
+		List<String> dropTableNames = new ArrayList<String>();
 		Cursor cursor = null;
 		try {
 			cursor = mDb.query(Const.TableSchema.TABLE_NAME, null, null, null, null, null, null);
@@ -107,7 +107,7 @@ public class Dropper extends AssociationUpdater {
 	 * @return A list only contains table names.
 	 */
 	private List<String> pickTableNamesFromTableModels() {
-		List<String> tableNames = new ArrayList<>();
+		List<String> tableNames = new ArrayList<String>();
 		for (TableModel tableModel : mTableModels) {
 			tableNames.add(tableModel.getTableName());
 		}
