@@ -22,24 +22,35 @@
  */
 package com.oracle.truffle.object;
 
-import static com.oracle.truffle.api.object.Layout.*;
+import static com.oracle.truffle.api.object.Layout.OPTION_PREFIX;
 
-public class ObjectStorageOptions {
+public final class ObjectStorageOptions {
+    private ObjectStorageOptions() {
+    }
+
     // Shape configuration
     /** Primitive location switch. */
-    public static boolean PrimitiveLocations = booleanOption(OPTION_PREFIX + "PrimitiveLocations", true);
-    public static boolean IntegerLocations = booleanOption(OPTION_PREFIX + "IntegerLocations", true);
-    public static boolean DoubleLocations = booleanOption(OPTION_PREFIX + "DoubleLocations", true);
-    public static boolean LongLocations = booleanOption(OPTION_PREFIX + "LongLocations", true);
-    public static boolean BooleanLocations = booleanOption(OPTION_PREFIX + "BooleanLocations", true);
-    public static boolean TypedObjectLocations = booleanOption(OPTION_PREFIX + "TypedObjectLocations", true);
+    public static final boolean PrimitiveLocations = booleanOption(OPTION_PREFIX + "PrimitiveLocations", true);
+    public static final boolean IntegerLocations = booleanOption(OPTION_PREFIX + "IntegerLocations", true);
+    public static final boolean DoubleLocations = booleanOption(OPTION_PREFIX + "DoubleLocations", true);
+    public static final boolean LongLocations = booleanOption(OPTION_PREFIX + "LongLocations", true);
+    public static final boolean BooleanLocations = booleanOption(OPTION_PREFIX + "BooleanLocations", true);
+    public static final boolean TypedObjectLocations = booleanOption(OPTION_PREFIX + "TypedObjectLocations", true);
 
     /** Allocation of in-object fields. */
-    public static boolean InObjectFields = booleanOption(OPTION_PREFIX + "InObjectFields", true);
+    public static final boolean InObjectFields = booleanOption(OPTION_PREFIX + "InObjectFields", true);
 
     // Debug options (should be final)
     public static final boolean TraceReshape = booleanOption(OPTION_PREFIX + "TraceReshape", false);
-    public static final boolean DumpShapes = booleanOption(OPTION_PREFIX + "DumpShapes", false);
+
+    static final boolean DebugCounters = booleanOption(OPTION_PREFIX + "DebugCounters", false);
+    static final boolean DumpDebugCounters = booleanOption(OPTION_PREFIX + "DumpDebugCounters", true);
+
+    static final boolean DumpShapesDOT = booleanOption(OPTION_PREFIX + "DumpShapesDOT", false);
+    static final boolean DumpShapesJSON = booleanOption(OPTION_PREFIX + "DumpShapesJSON", false);
+    static final boolean DumpShapesIGV = booleanOption(OPTION_PREFIX + "DumpShapesIGV", false);
+    static final boolean DumpShapes = DumpShapesDOT || DumpShapesJSON || DumpShapesIGV;
+    static final String DumpShapesPath = System.getProperty(OPTION_PREFIX + "DumpShapesPath", "");
 
     public static final boolean Profile = booleanOption(OPTION_PREFIX + "Profile", false);
     public static final int ProfileTopResults = Integer.getInteger(OPTION_PREFIX + "ProfileTopResults", -1);
