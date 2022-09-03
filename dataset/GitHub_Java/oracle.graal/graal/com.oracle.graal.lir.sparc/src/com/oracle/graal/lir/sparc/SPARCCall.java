@@ -153,13 +153,14 @@ public class SPARCCall {
         }
         int before = masm.codeBuffer.position();
         if (scratch != null) {
-            // offset might not fit a 30-bit displacement, generate an
-            // indirect call with a 64-bit immediate
-            new Sethix(0L, scratch, true).emit(masm);
-            new Jmpl(scratch, 0, r15).emit(masm);
-        } else {
-            new Call(0).emit(masm);
+// // offset might not fit a 32-bit immediate, generate an
+// // indirect call with a 64-bit immediate
+// masm.movq(scratch, 0L);
+// masm.call(scratch);
+// } else {
+// masm.call();
         }
+        new Call(0).emit(masm);
         int after = masm.codeBuffer.position();
         tasm.recordDirectCall(before, after, callTarget, info);
         tasm.recordExceptionHandlers(after, info);
@@ -167,14 +168,14 @@ public class SPARCCall {
         new Nop().emit(masm);  // delay slot
     }
 
-    public static void indirectJmp(TargetMethodAssembler tasm, SPARCMacroAssembler masm, Register dst, InvokeTarget target) {
+    public static void directJmp(TargetMethodAssembler tasm, SPARCMacroAssembler masm, InvokeTarget target) {
         int before = masm.codeBuffer.position();
-        new Sethix(0L, dst, true).emit(masm);
-        new Jmp(new SPARCAddress(dst, 0)).emit(masm);
+// masm.jmp(0, true);
         int after = masm.codeBuffer.position();
-        tasm.recordIndirectCall(before, after, target, null);
+        tasm.recordDirectCall(before, after, target, null);
 // masm.ensureUniquePC();
         new Nop().emit(masm);  // delay slot
+        throw new InternalError("NYI");
     }
 
     public static void indirectCall(TargetMethodAssembler tasm, SPARCMacroAssembler masm, Register dst, InvokeTarget callTarget, LIRFrameState info) {

@@ -107,10 +107,14 @@ public class SPARCMacroAssembler extends SPARCAssembler {
         }
     }
 
-    public static class Clr extends Or {
+    public static class Clr {
 
-        public Clr(Register dst) {
-            super(g0, g0, dst);
+        public Clr(SPARCAssembler asm, Register dst) {
+            new Or(g0, g0, dst).emit(asm);
+        }
+
+        public Clr(SPARCAssembler asm, SPARCAddress addr) {
+            new Stw(g0, addr).emit(asm);
         }
     }
 
@@ -275,19 +279,12 @@ public class SPARCMacroAssembler extends SPARCAssembler {
         }
     }
 
+    @SuppressWarnings("unused")
     public static class Setuw {
 
-        private int value;
-        private Register dst;
-
-        public Setuw(int value, Register dst) {
-            this.value = value;
-            this.dst = dst;
-        }
-
-        public void emit(SPARCMacroAssembler masm) {
+        public Setuw(SPARCAssembler masm, int value, Register dst) {
             if (value == 0) {
-                new Clr(dst).emit(masm);
+                new Clr(masm, dst);
             } else if (-4095 <= value && value <= 4096) {
                 new Or(g0, value, dst).emit(masm);
             } else if (value >= 0 && ((value & 0x3FFF) == 0)) {
@@ -301,54 +298,41 @@ public class SPARCMacroAssembler extends SPARCAssembler {
 
     public static class Setx {
 
-        private long value;
-        private Register tmp;
-        private Register dst;
-
-        public Setx(long value, Register tmp, Register dst) {
-            this.value = value;
-            this.tmp = tmp;
-            this.dst = dst;
-        }
-
-        public void emit(SPARCMacroAssembler masm) {
+        public Setx(SPARCAssembler asm, long value, Register tmp, Register dst) {
             int hi = (int) (value >> 32);
             int lo = (int) (value & ~0);
 
             if (isSimm13(lo) && value == lo) {
-                new Or(g0, lo, dst).emit(masm);
+                new Or(g0, lo, dst).emit(asm);
             } else if (hi == 0) {
-                new Sethi(lo, dst).emit(masm);   // hardware version zero-extends to upper 32
+                new Sethi(lo, dst).emit(asm);   // hardware version zero-extends to upper 32
                 if (lo10(lo) != 0) {
-                    new Or(dst, lo10(lo), dst).emit(masm);
+                    new Or(dst, lo10(lo), dst).emit(asm);
                 }
             } else if (hi == -1) {
-                new Sethi(~lo, dst).emit(masm);  // hardware version zero-extends to upper 32
-                new Xor(dst, ~lo10(~0), dst).emit(masm);
-                new Add(dst, lo10(lo), dst).emit(masm);
+                new Sethi(~lo, dst).emit(asm);  // hardware version zero-extends to upper 32
+                new Xor(dst, lo10(lo) ^ ~lo10(~0), dst).emit(asm);
             } else if (lo == 0) {
                 if (isSimm13(hi)) {
-                    new Or(g0, hi, dst).emit(masm);
+                    new Or(g0, hi, dst).emit(asm);
                 } else {
-                    new Sethi(hi, dst).emit(masm);   // hardware version zero-extends to upper 32
+                    new Sethi(hi, dst).emit(asm);   // hardware version zero-extends to upper 32
                     if (lo10(hi) != 0) {
-                        new Or(dst, lo10(hi), dst).emit(masm);
+                        new Or(dst, lo10(hi), dst).emit(asm);
                     }
                 }
-                new Sllx(dst, 32, dst).emit(masm);
+                new Sllx(dst, 32, dst).emit(asm);
             } else {
-                // TODO Use the same logic as in MacroAssembler::internal_sethi, which doesn't need
-// a scratch register.
-                new Sethi(hi, tmp).emit(masm);
-                new Sethi(lo, dst).emit(masm); // macro assembler version sign-extends
+                new Sethi(hi, tmp).emit(asm);
+                new Sethi(lo, dst).emit(asm); // macro assembler version sign-extends
                 if (lo10(hi) != 0) {
-                    new Or(tmp, lo10(hi), tmp).emit(masm);
+                    new Or(tmp, lo10(hi), tmp).emit(asm);
                 }
                 if (lo10(lo) != 0) {
-                    new Or(dst, lo10(lo), dst).emit(masm);
+                    new Or(dst, lo10(lo), dst).emit(asm);
                 }
-                new Sllx(tmp, 32, tmp).emit(masm);
-                new Or(dst, tmp, dst).emit(masm);
+                new Sllx(tmp, 32, tmp).emit(asm);
+                new Or(dst, tmp, dst).emit(asm);
             }
         }
     }

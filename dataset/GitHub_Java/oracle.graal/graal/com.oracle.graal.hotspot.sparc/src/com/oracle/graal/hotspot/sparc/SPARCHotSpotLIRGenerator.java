@@ -37,25 +37,11 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 
 public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSpotLIRGenerator {
 
-    private HotSpotRuntime runtime() {
-        return (HotSpotRuntime) runtime;
-    }
+    public StackSlot deoptimizationRescueSlot;
 
     public SPARCHotSpotLIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, CallingConvention cc, LIR lir) {
         super(graph, runtime, target, frameMap, cc, lir);
-    }
-
-    /**
-     * The slot reserved for storing the original return address when a frame is marked for
-     * deoptimization. The return address slot in the callee is overwritten with the address of a
-     * deoptimization stub.
-     */
-    StackSlot deoptimizationRescueSlot;
-
-    @Override
-    public void visitSafepointNode(SafepointNode i) {
-        LIRFrameState info = state(i);
-        append(new SPARCSafepointOp(info, runtime().config, this));
+        // TODO Auto-generated constructor stub
     }
 
     @Override
