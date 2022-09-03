@@ -61,9 +61,6 @@ abstract class ComputeInExecutor<R> implements Runnable {
 
     private void exceptionCheck() throws RuntimeException {
         if (exception instanceof RuntimeException) {
-            if (exception instanceof IllegalStateException) {
-                throw new IllegalStateException(exception);
-            }
             throw (RuntimeException) exception;
         }
         if (exception != null) {
