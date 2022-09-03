@@ -77,27 +77,13 @@ public final class ObjectEqualsNode extends CompareNode implements Virtualizable
         boolean xVirtual = stateX != null && stateX.getState() == EscapeState.Virtual;
         boolean yVirtual = stateY != null && stateY.getState() == EscapeState.Virtual;
 
-        if (xVirtual && !yVirtual) {
-            if (stateX.getVirtualObject().hasIdentity()) {
-                // one of them is virtual: they can never be the same objects
-                tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
-            }
-        } else if (!xVirtual && yVirtual) {
-            if (stateY.getVirtualObject().hasIdentity()) {
-                // one of them is virtual: they can never be the same objects
-                tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
-            }
+        if (xVirtual ^ yVirtual) {
+            // one of them is virtual: they can never be the same objects
+            tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
         } else if (xVirtual && yVirtual) {
             boolean xIdentity = stateX.getVirtualObject().hasIdentity();
             boolean yIdentity = stateY.getVirtualObject().hasIdentity();
             if (xIdentity ^ yIdentity) {
-                /*
-                 * One of the two objects has identity, the other doesn't. In code, this looks like
-                 * "Integer.valueOf(a) == new Integer(b)", which is always false.
-                 * 
-                 * In other words: an object created via valueOf can never be equal to one created
-                 * by new in the same compilation unit.
-                 */
                 tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
             } else if (!xIdentity && !yIdentity) {
                 // both are virtual without identity: check contents
