@@ -35,25 +35,20 @@ public interface Invokable {
 
     int bci();
 
-    default boolean isAlive() {
-        return asFixedNode().isAlive();
-    }
-
     FixedNode asFixedNode();
 
     /**
      * Called on a {@link Invokable} node after it is registered with a graph.
      *
      * To override the default functionality, code that creates an {@link Invokable} should set the
-     * updating logic by calling {@link InliningLog#openUpdateScope}.
+     * {@link InliningLog#createUpdateScope} dynamic variable.
      */
     default void updateInliningLogAfterRegister(StructuredGraph newGraph) {
-        InliningLog log = newGraph.getInliningLog();
-        if (log.getUpdateScope() != null) {
-            log.getUpdateScope().accept(null, this);
+        if (newGraph.getInliningLog().getUpdateScope() != null) {
+            newGraph.getInliningLog().getUpdateScope().accept(null, this);
         } else {
-            assert !log.containsLeafCallsite(this);
-            log.trackNewCallsite(this);
+            assert !newGraph.getInliningLog().containsLeafCallsite(this);
+            newGraph.getInliningLog().trackNewCallsite(this);
         }
     }
 
@@ -63,10 +58,10 @@ public interface Invokable {
      * This call is always preceded with a call to {@link Invokable#updateInliningLogAfterRegister}.
      *
      * To override the default functionality, code that creates an {@link Invokable} should set the
-     * updating logic by calling {@link InliningLog#openUpdateScope}.
+     * {@link InliningLog#createUpdateScope} dynamic variable.
      */
     default void updateInliningLogAfterClone(Node other) {
-        if (GraalOptions.TraceInlining.getValue(asFixedNode().getOptions())) {
+        if (GraalOptions.TraceInlining.getValue(asFixedNode().getOptions()).isTracing()) {
             // At this point, the invokable node was already added to the inlining log
             // in the call to updateInliningLogAfterRegister, so we need to remove it.
             InliningLog log = asFixedNode().graph().getInliningLog();

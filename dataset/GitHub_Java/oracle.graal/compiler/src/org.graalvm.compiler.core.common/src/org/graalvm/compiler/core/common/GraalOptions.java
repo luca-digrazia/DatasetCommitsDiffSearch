@@ -22,6 +22,7 @@
  */
 package org.graalvm.compiler.core.common;
 
+import org.graalvm.compiler.options.EnumOptionKey;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
@@ -259,12 +260,6 @@ public final class GraalOptions {
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> OptDevirtualizeInvokesOptimistically = new OptionKey<>(true);
 
-    @Option(help = "Track the NodeSourcePosition.", type = OptionType.Debug)
-    public static final OptionKey<Boolean> TrackNodeSourcePosition = new OptionKey<>(false);
-
-    @Option(help = "Track source stack trace where a node was inserted into the graph.", type = OptionType.Debug)
-    public static final OptionKey<Boolean> TrackNodeInsertion = new OptionKey<>(false);
-
     @Option(help = "Allow backend to match complex expressions.", type = OptionType.Debug)
     public static final OptionKey<Boolean> MatchExpressions = new OptionKey<>(true);
 
@@ -280,9 +275,7 @@ public final class GraalOptions {
     @Option(help = "Enable experimental Trace Register Allocation.", type = OptionType.Debug)
     public static final OptionKey<Boolean> TraceRA = new OptionKey<>(false);
 
-    @Option(help = "file:doc-files/TraceInliningHelp.txt", type = OptionType.Debug)
-    public static final OptionKey<Boolean> TraceInlining = new OptionKey<>(false);
+    @Option(help = "How to trace inlining decisions, one of: None, Tree", type = OptionType.Debug)
+    public static final OptionKey<TraceInliningMode> TraceInlining = new EnumOptionKey<>(TraceInliningMode.None);
 
-    @Option(help = "Enable inlining decision tracing in stubs and snippets.", type = OptionType.Debug)
-    public static final OptionKey<Boolean> TraceInliningStubsAndSnippets = new OptionKey<>(false);
 }
