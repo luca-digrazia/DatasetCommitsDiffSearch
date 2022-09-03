@@ -27,7 +27,7 @@ import com.oracle.graal.graph.*;
 public abstract class NodePredicates {
 
     private static final TautologyPredicate TAUTOLOGY = new TautologyPredicate();
-    private static final ContradictionPredicate CONTRADICTION = new ContradictionPredicate();
+    private static final FalsePredicate FALSE = new FalsePredicate();
     private static final IsNullPredicate IS_NULL = new IsNullPredicate();
     private static final IsNotNullPredicate IS_NOT_NULL = new IsNotNullPredicate();
 
@@ -36,7 +36,7 @@ public abstract class NodePredicates {
     }
 
     public static NodePredicate alwaysFalse() {
-        return CONTRADICTION;
+        return FALSE;
     }
 
     public static NodePredicate isNull() {
@@ -85,7 +85,7 @@ public abstract class NodePredicates {
         }
 
         public NodePredicate negate() {
-            return CONTRADICTION;
+            return FALSE;
         }
 
         public NodePredicate or(NodePredicate np) {
@@ -93,7 +93,7 @@ public abstract class NodePredicates {
         }
     }
 
-    static final class ContradictionPredicate implements NodePredicate {
+    static final class FalsePredicate implements NodePredicate {
 
         @Override
         public boolean apply(Node n) {
