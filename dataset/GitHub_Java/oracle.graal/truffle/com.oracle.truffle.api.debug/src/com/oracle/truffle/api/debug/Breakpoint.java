@@ -102,6 +102,7 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
  *
  * @since 0.9
  */
+@SuppressWarnings("javadoc")
 public final class Breakpoint {
 
     /**
