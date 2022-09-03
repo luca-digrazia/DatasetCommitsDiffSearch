@@ -29,18 +29,16 @@ import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.sl.nodes.*;
 import com.oracle.truffle.sl.nodes.controlflow.*;
 import com.oracle.truffle.sl.nodes.local.*;
-import com.oracle.truffle.sl.runtime.*;
 
 /**
- * A visitor which traverses a completely parsed Simple (not yet executed) AST and instruments some
- * of them.
+ * This is a general purpose visitor which traverses a completely parsed Simple AST and instruments
+ * all the nodes within it. This visitor is designed to visit the tree immediately after it has been
+ * parsed.
+ *
  */
 public class SLInstrumenter implements NodeVisitor {
 
-    private final SLContext context;
-
-    public SLInstrumenter(SLContext context) {
-        this.context = context;
+    public SLInstrumenter() {
     }
 
     /**
@@ -55,7 +53,7 @@ public class SLInstrumenter implements NodeVisitor {
         if (node instanceof SLExpressionNode && node.getParent() != null) {
             SLExpressionNode expressionNode = (SLExpressionNode) node;
             if (expressionNode.getSourceSection() != null) {
-                Probe probe = expressionNode.probe(context);
+                Probe probe = expressionNode.probe();
                 // probe.tagAs(STATEMENT);
 
                 if (node instanceof SLWriteLocalVariableNode)
@@ -65,7 +63,7 @@ public class SLInstrumenter implements NodeVisitor {
 
             SLStatementNode statementNode = (SLStatementNode) node;
             if (statementNode.getSourceSection() != null) {
-                Probe probe = statementNode.probe(context);
+                Probe probe = statementNode.probe();
                 probe.tagAs(STATEMENT);
 
                 if (node instanceof SLWhileNode)

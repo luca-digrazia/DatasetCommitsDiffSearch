@@ -67,67 +67,42 @@ public abstract class SLExpressionNode extends SLStatementNode {
      */
 
     public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.expectLong(executeGeneric(frame));
+        return SLTypesGen.SLTYPES.expectLong(executeGeneric(frame));
     }
 
     public BigInteger executeBigInteger(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.expectBigInteger(executeGeneric(frame));
+        return SLTypesGen.SLTYPES.expectBigInteger(executeGeneric(frame));
     }
 
     public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.expectBoolean(executeGeneric(frame));
+        return SLTypesGen.SLTYPES.expectBoolean(executeGeneric(frame));
     }
 
     public String executeString(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.expectString(executeGeneric(frame));
+        return SLTypesGen.SLTYPES.expectString(executeGeneric(frame));
     }
 
     public SLFunction executeFunction(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.expectSLFunction(executeGeneric(frame));
+        return SLTypesGen.SLTYPES.expectSLFunction(executeGeneric(frame));
     }
 
     public SLNull executeNull(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.expectSLNull(executeGeneric(frame));
+        return SLTypesGen.SLTYPES.expectSLNull(executeGeneric(frame));
     }
 
     @Override
     public Probe probe() {
         Node parent = getParent();
 
-        if (parent == null) {
-            throw new IllegalStateException("Cannot call probe() a node without a parent.");
-        }
+        if (parent == null)
+            throw new IllegalStateException("Cannot probe a node without a parent");
 
-        if (parent instanceof SLExpressionWrapperNode) {
-            return ((SLExpressionWrapperNode) parent).getProbe();
-        }
+        if (parent instanceof SLExpressionWrapper)
+            return ((SLExpressionWrapper) parent).getProbe();
 
-        // Create a new wrapper/probe with this node as its child.
-        final SLExpressionWrapperNode wrapper = new SLExpressionWrapperNode(this);
-
-        // Connect it to a Probe
-        final Probe probe = ProbeNode.insertProbe(wrapper);
-
-        // Replace this node in the AST with the wrapper
+        SLExpressionWrapper wrapper = new SLExpressionWrapper(getRootNodeSLContext(this), this);
         this.replace(wrapper);
-
-        return probe;
-    }
-
-    @Override
-    public void probeLite(TruffleEventReceiver eventReceiver) {
-        Node parent = getParent();
-
-        if (parent == null) {
-            throw new IllegalStateException("Cannot call probeLite() on a node without a parent.");
-        }
-
-        if (parent instanceof SLExpressionWrapperNode) {
-            throw new IllegalStateException("Cannot call probeLite() on a node that already has a wrapper.");
-        }
-        final SLExpressionWrapperNode wrapper = new SLExpressionWrapperNode(this);
-        ProbeNode.insertProbeLite(wrapper, eventReceiver);
-
-        this.replace(wrapper);
+        wrapper.insertChild();
+        return wrapper.getProbe();
     }
 }

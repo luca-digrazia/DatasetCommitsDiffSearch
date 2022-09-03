@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,12 +36,10 @@ import org.junit.runner.notification.*;
 import org.junit.runners.*;
 import org.junit.runners.model.*;
 
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.instrument.impl.*;
 import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.sl.factory.*;
 import com.oracle.truffle.sl.nodes.instrument.*;
-import com.oracle.truffle.sl.nodes.local.*;
 import com.oracle.truffle.sl.parser.*;
 import com.oracle.truffle.sl.runtime.*;
 import com.oracle.truffle.sl.test.instrument.SLInstrumentTestRunner.InstrumentTestCase;
@@ -87,14 +85,10 @@ public final class SLInstrumentTestRunner extends ParentRunner<InstrumentTestCas
 
     public SLInstrumentTestRunner(Class<?> testClass) throws InitializationError {
         super(testClass);
-        final SLStandardASTProber prober = new SLStandardASTProber();
-        Probe.registerASTProber(prober);
         try {
             testCases = createTests(testClass);
         } catch (IOException e) {
             throw new InitializationError(e);
-        } finally {
-            Probe.unregisterASTProber(prober);
         }
     }
 
@@ -202,22 +196,32 @@ public final class SLInstrumentTestRunner extends ParentRunner<InstrumentTestCas
         notifier.fireTestStarted(testCase.name);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        PrintWriter printer = new PrintWriter(out);
-        final ASTProber prober = new SLStandardASTProber();
-        Probe.registerASTProber(prober);
+        PrintStream printer = new PrintStream(out);
         try {
             // We use the name of the file to determine what visitor to attach to it.
             if (testCase.baseName.endsWith(ASSIGNMENT_VALUE_SUFFIX)) {
                 // Set up the execution context for Simple and register our two listeners
-                slContext = SLContextFactory.create(new BufferedReader(new StringReader(testCase.testInput)), printer);
+                slContext = new SLContext(new BufferedReader(new StringReader(testCase.testInput)), printer);
 
                 final Source source = Source.fromText(readAllLines(testCase.path), testCase.sourceName);
                 Parser.parseSL(slContext, source);
+                List<SLFunction> functionList = slContext.getFunctionRegistry().getFunctions();
 
-                // Attach an instrument to every probe tagged as an assignment
-                for (Probe probe : Probe.findProbesTaggedAs(StandardSyntaxTag.ASSIGNMENT)) {
-                    SLPrintAssigmentValueListener slPrintAssigmentValueListener = new SLPrintAssigmentValueListener(printer);
-                    probe.attach(Instrument.create(slPrintAssigmentValueListener, "SL print assignment value"));
+                // Since only functions can be global in SL, this guarantees that we instrument
+                // everything of interest. Parsing must occur before accepting the visitors since
+                // the visitor which creates our instrumentation points expects a complete AST.
+
+                for (SLFunction function : functionList) {
+                    RootCallTarget rootCallTarget = function.getCallTarget();
+                    rootCallTarget.getRootNode().accept(new SLInstrumenter());
+                }
+
+                // We iterate over all tags the SLInsturmenter tagged as assignments and attach our
+                // test instrument to those.
+                for (Probe probe : slContext.findProbesTaggedAs(StandardSyntaxTag.ASSIGNMENT)) {
+                    if (probe.isTaggedAs(StandardSyntaxTag.ASSIGNMENT)) {
+                        probe.addInstrument(new SLPrintAssigmentValueInstrument(printer));
+                    }
                 }
 
                 SLFunction main = slContext.getFunctionRegistry().lookup("main");
@@ -226,13 +230,11 @@ public final class SLInstrumentTestRunner extends ParentRunner<InstrumentTestCas
                 notifier.fireTestFailure(new Failure(testCase.name, new UnsupportedOperationException("No instrumentation found.")));
             }
 
-            printer.flush();
             String actualOutput = new String(out.toByteArray());
             Assert.assertEquals(testCase.expectedOutput, actualOutput);
         } catch (Throwable ex) {
             notifier.fireTestFailure(new Failure(testCase.name, ex));
         } finally {
-            Probe.unregisterASTProber(prober);
             notifier.fireTestFinished(testCase.name);
         }
 
@@ -268,25 +270,4 @@ public final class SLInstrumentTestRunner extends ParentRunner<InstrumentTestCas
             return "Filter contains " + pattern;
         }
     }
-
-    /**
-     * This sample listener provides prints the value of an assignment (after the assignment is
-     * complete) to the {@link PrintWriter} specified in the constructor. This listener can only be
-     * attached at {@link SLWriteLocalVariableNode}, but provides no guards to protect it from being
-     * attached elsewhere.
-     */
-    public final class SLPrintAssigmentValueListener extends DefaultSimpleInstrumentListener {
-
-        private PrintWriter output;
-
-        public SLPrintAssigmentValueListener(PrintWriter output) {
-            this.output = output;
-        }
-
-        @Override
-        public void returnValue(Probe probe, Object result) {
-            output.println(result);
-        }
-    }
-
 }
