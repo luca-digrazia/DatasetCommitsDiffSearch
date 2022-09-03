@@ -126,8 +126,9 @@ public class Snippets {
                     new CanonicalizerPhase(target, runtime, null).apply(graph);
                 }
 
-                for (LoopEndNode end : graph.getNodes(LoopEndNode.class)) {
-                    end.disableSafepoint();
+                // Snippets must have no safepoints
+                for (SafepointNode s : graph.getNodes(SafepointNode.class)) {
+                    graph.removeFixed(s);
                 }
 
                 new InsertStateAfterPlaceholderPhase().apply(graph);

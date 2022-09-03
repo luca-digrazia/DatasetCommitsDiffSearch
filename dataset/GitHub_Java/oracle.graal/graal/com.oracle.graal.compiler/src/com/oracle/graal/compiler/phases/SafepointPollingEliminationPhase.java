@@ -26,16 +26,23 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.util.*;
 
+/**
+ * Removes safepoints from loops that include calls.
+ * This optimization is conservative; it does not try to remove safepoints from outer loops.
+ */
 public class SafepointPollingEliminationPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        for (LoopEndNode loopEnd : graph.getNodes(LoopEndNode.class)) {
-            NodeIterable<FixedNode> it = NodeIterators.dominators(loopEnd).until(loopEnd.loopBegin());
-            for (FixedNode n : it) {
-                if (n instanceof Invoke) {
-                    loopEnd.setSafepointPolling(false);
-                    break;
+        for (SafepointNode safepoint : graph.getNodes(SafepointNode.class)) {
+            LoopEndNode loopEnd = safepoint.loopEnd();
+            if (loopEnd != null) {
+                NodeIterable<FixedNode> it = NodeIterators.dominators(loopEnd).until(loopEnd.loopBegin());
+                for (FixedNode n : it) {
+                    if (n instanceof Invoke) {
+                        graph.removeFixed(safepoint);
+                        break;
+                    }
                 }
             }
         }
