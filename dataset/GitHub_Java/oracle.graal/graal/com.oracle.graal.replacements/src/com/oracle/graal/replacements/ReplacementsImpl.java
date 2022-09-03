@@ -39,6 +39,7 @@ import java.util.concurrent.ConcurrentMap;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -123,7 +124,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
      *         inlined based on substitution related criteria
      */
     @Override
-    public InlineInfo shouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
+    public InlineInfo shouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType) {
         ResolvedJavaMethod subst = getSubstitutionMethod(method);
         if (subst != null) {
             if (b.parsingIntrinsic() || InlineDuringParsing.getValue() || InlineIntrinsicsDuringParsing.getValue()) {
@@ -304,7 +305,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
 
                 finalizeGraph(graph);
 
-                Debug.dump(Debug.INFO_LOG_LEVEL, graph, "%s: Final", method.getName());
+                Debug.dump(graph, "%s: Final", method.getName());
 
                 return graph;
             } catch (Throwable e) {
