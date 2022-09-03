@@ -179,7 +179,7 @@ final class HotSpotGraalRuntimeMBean implements DynamicMBean {
                 boolean found = false;
                 for (HotSpotMBeanOperationProvider p : GraalServices.load(HotSpotMBeanOperationProvider.class)) {
                     List<MBeanOperationInfo> info = new ArrayList<>();
-                    p.registerOperations(MBeanOperationInfo.class, info);
+                    p.registerOperations(info);
                     for (MBeanOperationInfo op : info) {
                         if (actionName.equals(op.getName())) {
                             retvalue = p.invoke(actionName, params, signature);
@@ -240,7 +240,7 @@ final class HotSpotGraalRuntimeMBean implements DynamicMBean {
         }, "void", MBeanOperationInfo.ACTION));
 
         for (HotSpotMBeanOperationProvider p : GraalServices.load(HotSpotMBeanOperationProvider.class)) {
-            p.registerOperations(MBeanOperationInfo.class, opts);
+            p.registerOperations(opts);
         }
 
         return new MBeanInfo(
