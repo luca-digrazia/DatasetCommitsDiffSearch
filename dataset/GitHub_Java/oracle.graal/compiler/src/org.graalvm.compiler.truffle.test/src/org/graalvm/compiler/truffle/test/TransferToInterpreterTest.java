@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,19 +22,14 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import org.graalvm.compiler.core.common.CompilationIdentifier;
-import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
+import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
-import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
-import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
-import org.graalvm.compiler.truffle.runtime.DefaultInliningPolicy;
-import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
-import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.TruffleInlining;
+import org.graalvm.compiler.truffle.hotspot.HotSpotTruffleCompiler;
+import org.graalvm.compiler.truffle.GraalTruffleRuntime;
+import org.graalvm.compiler.truffle.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -65,7 +58,6 @@ public class TransferToInterpreterTest {
 
     @Test
     public void test() {
-        Assume.assumeTrue(TruffleCompilerOptions.getValue(TruffleCompilerOptions.TruffleCompileImmediately));
         RootNode rootNode = new TestRootNode();
         GraalTruffleRuntime runtime = GraalTruffleRuntime.getRuntime();
         OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
@@ -73,11 +65,7 @@ public class TransferToInterpreterTest {
         Assert.assertFalse(target.isValid());
         OptionValues options = TruffleCompilerOptions.getOptions();
         DebugContext debug = DebugContext.create(options, DebugHandlersFactory.LOADER);
-        final OptimizedCallTarget compilable = target;
-        TruffleCompilerImpl compiler = (TruffleCompilerImpl) runtime.newTruffleCompiler();
-        CompilationIdentifier compilationId = compiler.createCompilationIdentifier(compilable);
-        TruffleInliningPlan inliningPlan = new TruffleInlining(compilable, new DefaultInliningPolicy());
-        compiler.compileAST(debug, compilable, inliningPlan, compilationId, null, null);
+        HotSpotTruffleCompiler.create(runtime).compileMethod(debug, target, runtime);
         Assert.assertTrue(target.isValid());
         target.call(0);
         Assert.assertTrue(target.isValid());

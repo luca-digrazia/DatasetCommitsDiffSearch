@@ -246,8 +246,11 @@ public abstract class TruffleCompiler {
         return result;
     }
 
+    /**
+     * @param compilationIdentifier
+     */
     protected CompilationResult createCompilationResult(String name, CompilationIdentifier compilationIdentifier) {
-        return new CompilationResult(compilationIdentifier, name);
+        return new CompilationResult(name);
     }
 
     protected abstract PhaseSuite<HighTierContext> createGraphBuilderSuite();
