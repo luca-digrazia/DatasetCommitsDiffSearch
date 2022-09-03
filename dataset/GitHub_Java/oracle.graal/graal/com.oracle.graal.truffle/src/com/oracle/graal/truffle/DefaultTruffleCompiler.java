@@ -24,6 +24,8 @@ package com.oracle.graal.truffle;
 
 import java.util.ListIterator;
 
+import com.oracle.graal.nodes.spi.StampProvider;
+import com.oracle.graal.phases.OptimisticOptimizations;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -38,13 +40,12 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
-import com.oracle.graal.nodes.spi.StampProvider;
 import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.tiers.HighTierContext;
 import com.oracle.graal.phases.tiers.Suites;
 import com.oracle.graal.runtime.RuntimeProvider;
+import com.oracle.graal.truffle.phases.InstrumentBranchesPhase;
 
 public final class DefaultTruffleCompiler extends TruffleCompiler {
 
@@ -70,6 +71,51 @@ public final class DefaultTruffleCompiler extends TruffleCompiler {
     @Override
     protected PhaseSuite<HighTierContext> createGraphBuilderSuite() {
         PhaseSuite<HighTierContext> suite = backend.getSuites().getDefaultGraphBuilderSuite().copy();
+        ListIterator<BasePhase<? super HighTierContext>> iterator = suite.findPhase(GraphBuilderPhase.class);
+        iterator.remove();
+        iterator.add(new TruffleGraphBuilderPhase(config));
         return suite;
+    }
+
+    public static class TruffleGraphBuilderPhase extends GraphBuilderPhase {
+        public TruffleGraphBuilderPhase(GraphBuilderConfiguration config) {
+            super(config);
+        }
+
+        @Override
+        protected void run(StructuredGraph graph, HighTierContext context) {
+            new TruffleGraphBuilderPhase.Instance(context.getMetaAccess(), context.getStampProvider(), context.getConstantReflection(), getGraphBuilderConfig(),
+                            context.getOptimisticOptimizations(), null).run(graph);
+        }
+
+        public static class Instance extends GraphBuilderPhase.Instance {
+            private boolean mustInstrumentBranches;
+
+            public Instance(MetaAccessProvider metaAccess, StampProvider stampProvider,
+                            ConstantReflectionProvider constantReflection, GraphBuilderConfiguration config,
+                            OptimisticOptimizations optimisticOpts, IntrinsicContext initialIntrinsicContext) {
+                super(metaAccess, stampProvider, constantReflection, config, optimisticOpts, initialIntrinsicContext);
+                this.mustInstrumentBranches = TruffleCompilerOptions.TruffleInstrumentBranches.getValue();
+            }
+
+            @Override
+            protected void run(StructuredGraph graph) {
+                super.run(graph);
+            }
+
+            @Override
+            protected BytecodeParser createBytecodeParser(StructuredGraph graph, BytecodeParser parent,
+                            ResolvedJavaMethod method, int entryBCI,
+                            IntrinsicContext intrinsicContext) {
+                return new BytecodeParser(this, graph, parent, method, entryBCI, intrinsicContext) {
+                    @Override
+                    protected void postProcessIfNode(ValueNode node) {
+                        if (mustInstrumentBranches) {
+                            InstrumentBranchesPhase.addNodeSourceLocation(node, createBytecodePosition());
+                        }
+                    }
+                };
+            }
+        }
     }
 }

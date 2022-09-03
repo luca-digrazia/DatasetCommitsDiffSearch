@@ -184,7 +184,7 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
             }
         }
 
-        private static class Point {
+        private class Point {
             private int index;
 
             Point(int index) {
