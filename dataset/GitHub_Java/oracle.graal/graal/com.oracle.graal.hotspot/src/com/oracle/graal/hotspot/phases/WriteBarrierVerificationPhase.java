@@ -41,18 +41,12 @@ import com.oracle.graal.phases.*;
  */
 public class WriteBarrierVerificationPhase extends Phase {
 
-    private final boolean useG1GC;
-
-    public WriteBarrierVerificationPhase(boolean useG1GC) {
-        this.useG1GC = useG1GC;
-    }
-
     @Override
     protected void run(StructuredGraph graph) {
         processWrites(graph);
     }
 
-    private void processWrites(StructuredGraph graph) {
+    private static void processWrites(StructuredGraph graph) {
         for (Node node : graph.getNodes()) {
             if (isObjectWrite(node)) {
                 validateWrite(node);
@@ -60,7 +54,7 @@ public class WriteBarrierVerificationPhase extends Phase {
         }
     }
 
-    private void validateWrite(Node write) {
+    private static void validateWrite(Node write) {
         /*
          * The currently validated write is checked in order to discover if it has an appropriate
          * attached write barrier.
@@ -74,25 +68,14 @@ public class WriteBarrierVerificationPhase extends Phase {
         while (iterator.hasNext()) {
             Node currentNode = iterator.next();
             assert !isSafepoint(currentNode) : "Write barrier must be present";
-            if (useG1GC) {
-                if (!(currentNode instanceof G1PostWriteBarrier) || ((currentNode instanceof G1PostWriteBarrier) && !validateBarrier(write, (WriteBarrier) currentNode))) {
-                    expandFrontier(frontier, currentNode);
-                }
-            } else {
-                if (!(currentNode instanceof SerialWriteBarrier) || ((currentNode instanceof SerialWriteBarrier) && !validateBarrier(write, (WriteBarrier) currentNode))) {
-                    expandFrontier(frontier, currentNode);
-                }
+            if (!(currentNode instanceof SerialWriteBarrier) || ((currentNode instanceof SerialWriteBarrier) && !validateBarrier(write, (SerialWriteBarrier) currentNode))) {
+                expandFrontier(frontier, currentNode);
             }
         }
     }
 
-    private boolean hasAttachedBarrier(Node node) {
-        if (useG1GC) {
-            return ((FixedWithNextNode) node).next() instanceof G1PostWriteBarrier && ((FixedWithNextNode) node).predecessor() instanceof G1PreWriteBarrier &&
-                            validateBarrier(node, (G1PostWriteBarrier) ((FixedWithNextNode) node).next()) && validateBarrier(node, (G1PreWriteBarrier) ((FixedWithNextNode) node).predecessor());
-        } else {
-            return (((FixedWithNextNode) node).next() instanceof SerialWriteBarrier) && validateBarrier(node, (SerialWriteBarrier) ((FixedWithNextNode) node).next());
-        }
+    private static boolean hasAttachedBarrier(Node node) {
+        return (((FixedWithNextNode) node).next() instanceof SerialWriteBarrier) && validateBarrier(node, (SerialWriteBarrier) ((FixedWithNextNode) node).next());
     }
 
     private static boolean isObjectWrite(Node node) {
@@ -120,7 +103,7 @@ public class WriteBarrierVerificationPhase extends Phase {
         return ((node instanceof DeoptimizingNode) && ((DeoptimizingNode) node).canDeoptimize()) || (node instanceof LoopBeginNode);
     }
 
-    private static boolean validateBarrier(Node write, WriteBarrier barrier) {
+    private static boolean validateBarrier(Node write, SerialWriteBarrier barrier) {
         ValueNode writtenObject = null;
         LocationNode writtenLocation = null;
         if (write instanceof WriteNode) {

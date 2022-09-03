@@ -27,10 +27,12 @@ import org.junit.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.phases.*;
+import com.oracle.graal.nodes.HeapAccess.WriteBarrierType;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.extended.WriteNode.WriteBarrierType;
+import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class WriteBarrierAdditionTest extends GraalCompilerTest {
 
@@ -48,8 +50,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
         main.b = temp2;
     }
 
-    public static void test2Snippet() {
-        boolean test = true;
+    public static void test2Snippet(boolean test) {
         Container main = new Container();
         Container temp1 = new Container();
         Container temp2 = new Container();
@@ -57,11 +58,9 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
             if (test) {
                 main.a = temp1;
                 main.b = temp2;
-                test = false;
             } else {
                 main.a = temp2;
                 main.b = temp1;
-                test = true;
             }
         }
     }
@@ -100,7 +99,8 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
 
             public void run() {
                 StructuredGraph graph = parse(snippet);
-                new LoweringPhase(null, runtime(), replacements, new Assumptions(false)).apply(graph);
+                HighTierContext context = new HighTierContext(runtime(), new Assumptions(false), replacements);
+                new LoweringPhase(LoweringType.BEFORE_GUARDS).apply(graph, context);
                 new WriteBarrierAdditionPhase().apply(graph);
                 Debug.dump(graph, "After Write Barrier Addition");
                 final int barriers = graph.getNodes(SerialWriteBarrier.class).count();
@@ -108,7 +108,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
                 for (WriteNode write : graph.getNodes(WriteNode.class)) {
                     if (write.getWriteBarrierType() != WriteBarrierType.NONE) {
                         Assert.assertTrue(write.successors().count() == 1);
-                        Assert.assertTrue(write.successors().first() instanceof SerialWriteBarrier);
+                        Assert.assertTrue(write.next() instanceof SerialWriteBarrier);
                     }
                 }
             }

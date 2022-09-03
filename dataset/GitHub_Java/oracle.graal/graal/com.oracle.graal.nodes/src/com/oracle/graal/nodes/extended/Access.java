@@ -30,4 +30,6 @@ public interface Access extends DeoptimizingNode, GuardedNode, HeapAccess {
 
     LocationNode nullCheckLocation();
 
+    void setNullCheck(boolean check);
+
 }

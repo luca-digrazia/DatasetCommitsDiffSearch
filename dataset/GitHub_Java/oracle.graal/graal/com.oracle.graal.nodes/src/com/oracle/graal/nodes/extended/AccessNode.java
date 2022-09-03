@@ -38,7 +38,7 @@ public abstract class AccessNode extends DeoptimizingFixedWithNextNode implement
     @Input private ValueNode location;
     private boolean nullCheck;
     private WriteBarrierType barrierType;
-    private boolean compressible;
+    private boolean compress;
 
     public ValueNode object() {
         return object;
@@ -64,17 +64,17 @@ public abstract class AccessNode extends DeoptimizingFixedWithNextNode implement
         this(object, location, stamp, null, WriteBarrierType.NONE, false);
     }
 
-    public AccessNode(ValueNode object, ValueNode location, Stamp stamp, WriteBarrierType barrierType, boolean compressible) {
-        this(object, location, stamp, null, barrierType, compressible);
+    public AccessNode(ValueNode object, ValueNode location, Stamp stamp, WriteBarrierType barrierType, boolean compress) {
+        this(object, location, stamp, null, barrierType, compress);
     }
 
-    public AccessNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, WriteBarrierType barrierType, boolean compressible) {
+    public AccessNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, WriteBarrierType barrierType, boolean compress) {
         super(stamp);
         this.object = object;
         this.location = location;
         this.guard = guard;
         this.barrierType = barrierType;
-        this.compressible = compressible;
+        this.compress = compress;
     }
 
     @Override
@@ -109,7 +109,7 @@ public abstract class AccessNode extends DeoptimizingFixedWithNextNode implement
     }
 
     @Override
-    public boolean compressible() {
-        return compressible;
+    public boolean compress() {
+        return compress;
     }
 }

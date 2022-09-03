@@ -27,12 +27,11 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Reads an {@linkplain AccessNode accessed} value.
  */
-public final class ReadNode extends FloatableAccessNode implements Node.IterableNodeType, LIRLowerable, Canonicalizable, PiPushable, Virtualizable {
+public final class ReadNode extends FloatableAccessNode implements Node.IterableNodeType, LIRLowerable, Canonicalizable, PiPushable {
 
     public ReadNode(ValueNode object, ValueNode location, Stamp stamp, WriteBarrierType barrierType, boolean compress) {
         super(object, location, stamp, barrierType, compress);
@@ -46,12 +45,12 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
         super(object, ConstantLocationNode.create(locationIdentity, kind, displacement, object.graph()), StampFactory.forKind(kind));
     }
 
-    private ReadNode(ValueNode object, ValueNode location, ValueNode guard) {
+    private ReadNode(ValueNode object, ValueNode location, GuardingNode guard) {
         /*
          * Used by node intrinsics. Since the initial value for location is a parameter, i.e., a
          * LocalNode, the constructor cannot use the declared type LocationNode.
          */
-        super(object, location, StampFactory.forNodeIntrinsic(), (GuardingNode) guard, WriteBarrierType.NONE, false);
+        super(object, location, StampFactory.forNodeIntrinsic(), guard, WriteBarrierType.NONE, false);
     }
 
     @Override
@@ -127,21 +126,6 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
 
         }
         return false;
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        if (location() instanceof ConstantLocationNode) {
-            ConstantLocationNode constantLocation = (ConstantLocationNode) location();
-            State state = tool.getObjectState(object());
-            if (state != null && state.getState() == EscapeState.Virtual) {
-                VirtualObjectNode virtual = state.getVirtualObject();
-                int entryIndex = virtual.entryIndexForOffset(constantLocation.getDisplacement());
-                if (entryIndex != -1 && virtual.entryKind(entryIndex) == constantLocation.getValueKind()) {
-                    tool.replaceWith(state.getEntry(entryIndex));
-                }
-            }
-        }
     }
 
     /**
