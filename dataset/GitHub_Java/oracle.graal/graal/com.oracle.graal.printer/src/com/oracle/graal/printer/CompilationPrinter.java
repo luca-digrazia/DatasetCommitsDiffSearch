@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,22 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-
 import java.io.*;
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.max.criutils.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.lir.dfa.*;
 
 /**
- * Utility for printing compilation related data structures at various compilation phases.
- * The output format is such that it can then be fed to the
- * <a href="https://c1visualizer.dev.java.net/">C1 Visualizer</a>.
+ * Utility for printing compilation related data structures at various compilation phases. The
+ * output format is such that it can then be fed to the <a
+ * href="https://c1visualizer.dev.java.net/">C1 Visualizer</a>.
  */
 public class CompilationPrinter implements Closeable {
+
     public static final String COLUMN_END = " <|@";
     public static final String HOVER_START = "<@";
     public static final String HOVER_SEP = "|@";
@@ -45,11 +46,12 @@ public class CompilationPrinter implements Closeable {
     private static OutputStream globalOut;
 
     /**
-     * Gets a global output stream on a file in the current working directory.
-     * This stream is first opened if necessary. The name of the file
-     * is {@code "compilations-" + System.currentTimeMillis() + ".cfg"}.
+     * Gets a global output stream on a file in the current working directory. This stream is first
+     * opened if necessary. The name of the file is
+     * {@code "compilations-" + System.currentTimeMillis() + ".cfg"}.
      *
-     * @return the global output stream or {@code null} if there was an error opening the file for writing
+     * @return the global output stream or {@code null} if there was an error opening the file for
+     *         writing
      */
     public static synchronized OutputStream globalOut() {
         if (globalOut == null) {
@@ -82,7 +84,7 @@ public class CompilationPrinter implements Closeable {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         out.out().close();
     }
 
@@ -103,8 +105,8 @@ public class CompilationPrinter implements Closeable {
      */
     public void printCompilation(JavaMethod method) {
         begin("compilation");
-        out.print("name \" ").print(MetaUtil.format("%H::%n", method)).println('"');
-        out.print("method \"").print(MetaUtil.format("%f %r %H.%n(%p)", method)).println('"');
+        out.print("name \" ").print(method.format("%H::%n")).println('"');
+        out.print("method \"").print(method.format("%f %r %H.%n(%p)")).println('"');
         out.print("date ").println(System.currentTimeMillis());
         end("compilation");
     }
@@ -112,21 +114,23 @@ public class CompilationPrinter implements Closeable {
     /**
      * Formats given debug info as a multi line string.
      */
-    protected String debugInfoToString(BytecodePosition codePos, BitSet registerRefMap, BitSet frameRefMap, Architecture arch) {
+    protected String debugInfoToString(BytecodePosition codePos, ReferenceMap refMap, ValueSet liveBasePointers, RegisterSaveLayout calleeSaveInfo) {
         StringBuilder sb = new StringBuilder();
-
-        if (registerRefMap != null) {
-            sb.append("reg-ref-map:");
-            for (int reg = registerRefMap.nextSetBit(0); reg >= 0; reg = registerRefMap.nextSetBit(reg + 1)) {
-                sb.append(' ').append(arch == null ? "r" + reg : arch.registers[reg]);
-            }
+        if (refMap != null) {
+            sb.append("reference-map: ");
+            sb.append(refMap.toString());
+            sb.append("\n");
+        }
+        if (liveBasePointers != null) {
+            sb.append("live-base-pointers: ");
+            sb.append(liveBasePointers);
             sb.append("\n");
         }
 
-        if (frameRefMap != null) {
-            sb.append("frame-ref-map:");
-            for (int reg = frameRefMap.nextSetBit(0); reg >= 0; reg = frameRefMap.nextSetBit(reg + 1)) {
-                sb.append(' ').append("s").append(reg);
+        if (calleeSaveInfo != null) {
+            sb.append("callee-save-info:");
+            for (Map.Entry<Register, Integer> e : calleeSaveInfo.registersToSlots(true).entrySet()) {
+                sb.append(" " + e.getKey() + " -> s" + e.getValue());
             }
             sb.append("\n");
         }
@@ -165,9 +169,9 @@ public class CompilationPrinter implements Closeable {
 
             for (int i = 0; i < virtualObjects.size(); i++) {
                 VirtualObject obj = virtualObjects.get(i);
-                sb.append(obj).append(" ").append(obj.type().name()).append(" ");
-                for (int j = 0; j < obj.values().length; j++) {
-                    sb.append(valueToString(obj.values()[j], virtualObjects)).append(' ');
+                sb.append(obj).append(" ").append(obj.getType().getName()).append(" ");
+                for (int j = 0; j < obj.getValues().length; j++) {
+                    sb.append(valueToString(obj.getValues()[j], virtualObjects)).append(' ');
                 }
                 sb.append("\n");
 
@@ -180,14 +184,14 @@ public class CompilationPrinter implements Closeable {
         if (value == null) {
             return "-";
         }
-        if (isVirtualObject(value) && !virtualObjects.contains(asVirtualObject(value))) {
-            virtualObjects.add(asVirtualObject(value));
+        if (value instanceof VirtualObject && !virtualObjects.contains(value)) {
+            virtualObjects.add((VirtualObject) value);
         }
         return value.toString();
     }
 
     public void printMachineCode(String code, String label) {
-        if (code.length() == 0) {
+        if (code == null || code.length() == 0) {
             return;
         }
         if (label != null) {
@@ -202,7 +206,7 @@ public class CompilationPrinter implements Closeable {
     }
 
     public void printBytecodes(String code) {
-        if (code.length() == 0) {
+        if (code == null || code.length() == 0) {
             return;
         }
         begin("bytecodes");
