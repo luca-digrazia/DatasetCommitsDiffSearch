@@ -247,16 +247,16 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         logInliningDecision(result);
     }
 
-    private static void performInlining(TruffleInliningResult result) {
-        if (result.getCallTarget().inliningPerformed) {
+    private void performInlining(TruffleInliningResult result) {
+        if (inliningPerformed) {
             return;
         }
-        result.getCallTarget().inliningPerformed = true;
+        inliningPerformed = true;
         for (TruffleInliningProfile profile : result) {
             profile.getCallNode().inline();
             TruffleInliningResult recursiveResult = profile.getRecursiveResult();
             if (recursiveResult != null) {
-                performInlining(recursiveResult);
+                recursiveResult.getCallTarget().performInlining(recursiveResult);
             }
         }
     }
