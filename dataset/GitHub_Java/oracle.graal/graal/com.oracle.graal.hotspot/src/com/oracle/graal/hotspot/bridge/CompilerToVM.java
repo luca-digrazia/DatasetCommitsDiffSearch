@@ -25,6 +25,7 @@ package com.oracle.graal.hotspot.bridge;
 
 import java.lang.reflect.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -80,8 +81,6 @@ public interface CompilerToVM {
 
     boolean JavaType_isInitialized(HotSpotResolvedJavaType klass);
 
-    void JavaType_initialize(HotSpotResolvedJavaType klass);
-
     JavaType getType(Class<?> javaClass);
 
     JavaType JavaType_uniqueConcreteSubtype(HotSpotResolvedJavaType klass);
@@ -104,7 +103,7 @@ public interface CompilerToVM {
 
     ResolvedJavaField getJavaField(Field reflectionField);
 
-    long getMaxCallTargetOffset(long stub);
+    long getMaxCallTargetOffset(RuntimeCall rtcall);
 
     String disassembleNative(byte[] code, long address);
 

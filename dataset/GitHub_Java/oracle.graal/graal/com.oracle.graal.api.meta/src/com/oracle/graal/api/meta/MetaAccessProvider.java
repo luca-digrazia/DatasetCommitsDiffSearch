@@ -25,7 +25,8 @@ package com.oracle.graal.api.meta;
 import java.lang.reflect.*;
 
 /**
- * Interface implemented by the runtime to allow access to its metadata.
+ * Interface implemented by the runtime to allow access to its meta data.
+ *
  */
 public interface MetaAccessProvider {
 
@@ -35,36 +36,40 @@ public interface MetaAccessProvider {
      * @param clazz the Java class object
      * @return the resolved Java type object
      */
-    ResolvedJavaType lookupJavaType(Class< ? > clazz);
+    ResolvedJavaType getResolvedJavaType(Class< ? > clazz);
+
+    /**
+     * Returns the JavaType object representing the base type for the given kind.
+     */
+    ResolvedJavaType getResolvedJavaType(Kind kind);
+
+    /**
+     * Returns the type of the given constant object.
+     *
+     * @return {@code null} if {@code constant.isNull() || !constant.kind.isObject()}
+     */
+    ResolvedJavaType getTypeOf(Constant constant);
+
+    /**
+     * Used by the canonicalizer to compare objects, since a given runtime might not want to expose the real objects to
+     * the compiler.
+     *
+     * @return true if the two parameters represent the same runtime object, false otherwise
+     */
+    boolean areConstantObjectsEqual(Constant x, Constant y);
 
     /**
      * Provides the {@link ResolvedJavaMethod} for a {@link Method} obtained via reflection.
      */
-    ResolvedJavaMethod lookupJavaMethod(Method reflectionMethod);
+    ResolvedJavaMethod getResolvedJavaMethod(Method reflectionMethod);
 
     /**
      * Provides the {@link ResolvedJavaField} for a {@link Field} obtained via reflection.
      */
-    ResolvedJavaField lookupJavaField(Field reflectionField);
+    ResolvedJavaField getResolvedJavaField(Field reflectionField);
 
     /**
-     * Returns the resolved Java type of the given {@link Constant} object.
-     *
-     * @return {@code null} if {@code constant.isNull() || !constant.kind.isObject()}
+     * Gets the length of the array that is wrapped in a Constant object.
      */
-    ResolvedJavaType lookupJavaType(Constant constant);
-
-    /**
-     * Compares two constants for equality.
-     * This is used instead of {@link Constant#equals(Object)} in case where the runtime
-     * may have an interpretation for object equality other than {@code x.asObject() == y.asObject()}.
-     *
-     * @return {@code true} if the two parameters represent the same runtime object, {@code false} otherwise
-     */
-    boolean constantEquals(Constant x, Constant y);
-
-    /**
-     * Returns the length of an array that is wrapped in a {@link Constant} object.
-     */
-    int lookupArrayLength(Constant array);
+    int getArrayLength(Constant array);
 }
