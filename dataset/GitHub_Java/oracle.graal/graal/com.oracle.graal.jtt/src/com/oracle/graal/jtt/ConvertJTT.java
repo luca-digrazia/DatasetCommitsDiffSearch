@@ -52,8 +52,7 @@ public class ConvertJTT {
                         try {
                             processFile(file.toPath(), new File(targetDir, file.getName()).toPath(), packageName);
                         } catch (RuntimeException e) {
-                            e.printStackTrace();
-                            System.out.println("in file " + file.getAbsolutePath());
+                            throw new RuntimeException(String.format("Exception while processing file %s", file.getAbsolutePath()), e);
                         }
                     }
                 }
@@ -135,7 +134,7 @@ public class ConvertJTT {
                 }
                 output.add(line);
             } else {
-// line = line.replace(oldClassName, newClassName);
+                // line = line.replace(oldClassName, newClassName);
                 line = line.replace(" jtt.", " com.oracle.graal.jtt.");
                 output.add(line);
             }
