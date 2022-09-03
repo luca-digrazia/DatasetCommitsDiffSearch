@@ -22,31 +22,44 @@
  */
 package com.oracle.truffle.dsl.processor.java.compiler;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
-import javax.annotation.processing.*;
-import javax.lang.model.element.*;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
 
-import com.oracle.truffle.dsl.processor.java.*;
+import com.oracle.truffle.dsl.processor.java.ElementUtils;
 
 public class JDTCompiler extends AbstractCompiler {
 
     public static boolean isValidElement(Element currentElement) {
         try {
-            Class<?> elementClass = Class.forName("org.eclipse.jdt.internal.compiler.apt.model.ElementImpl");
+            Class<?> elementClass = currentElement.getClass().getClassLoader().loadClass("org.eclipse.jdt.internal.compiler.apt.model.ElementImpl");
             return elementClass.isAssignableFrom(currentElement.getClass());
         } catch (ClassNotFoundException e) {
             return false;
         }
     }
 
-    public List<? extends Element> getAllMembersInDeclarationOrder(ProcessingEnvironment environment, TypeElement type) {
-        return sortBySourceOrder(new ArrayList<>(environment.getElementUtils().getAllMembers(type)));
-
+    /**
+     * @see "https://bugs.openjdk.java.net/browse/JDK-8039214"
+     */
+    @SuppressWarnings("unused")
+    private static List<Element> newElementList(List<? extends Element> src) {
+        List<Element> workaround = new ArrayList<Element>(src);
+        return workaround;
     }
 
-    public List<? extends Element> getEnclosedElementsInDeclarationOrder(TypeElement type) {
-        return sortBySourceOrder(new ArrayList<>(type.getEnclosedElements()));
+    @Override
+    public List<? extends Element> getAllMembersInDeclarationOrder(ProcessingEnvironment environment, TypeElement type) {
+        return sortBySourceOrder(newElementList(environment.getElementUtils().getAllMembers(type)));
     }
 
     private static List<? extends Element> sortBySourceOrder(List<Element> elements) {
@@ -128,8 +141,9 @@ public class JDTCompiler extends AbstractCompiler {
         List<Object> declarationOrder;
         try {
             Object binding = field(type, "_binding");
-            Class<?> sourceTypeBinding = Class.forName("org.eclipse.jdt.internal.compiler.lookup.SourceTypeBinding");
-            Class<?> binaryTypeBinding = Class.forName("org.eclipse.jdt.internal.compiler.lookup.BinaryTypeBinding");
+            ClassLoader classLoader = binding.getClass().getClassLoader();
+            Class<?> sourceTypeBinding = classLoader.loadClass("org.eclipse.jdt.internal.compiler.lookup.SourceTypeBinding");
+            Class<?> binaryTypeBinding = classLoader.loadClass("org.eclipse.jdt.internal.compiler.lookup.BinaryTypeBinding");
 
             declarationOrder = null;
             if (sourceTypeBinding.isAssignableFrom(binding.getClass())) {
@@ -173,9 +187,10 @@ public class JDTCompiler extends AbstractCompiler {
             }
         });
 
-        Class<?> binaryMethod = Class.forName("org.eclipse.jdt.internal.compiler.env.IBinaryMethod");
-        Class<?> binaryField = Class.forName("org.eclipse.jdt.internal.compiler.env.IBinaryField");
-        Class<?> nestedType = Class.forName("org.eclipse.jdt.internal.compiler.env.IBinaryNestedType");
+        ClassLoader classLoader = binding.getClass().getClassLoader();
+        Class<?> binaryMethod = classLoader.loadClass("org.eclipse.jdt.internal.compiler.env.IBinaryMethod");
+        Class<?> binaryField = classLoader.loadClass("org.eclipse.jdt.internal.compiler.env.IBinaryField");
+        Class<?> nestedType = classLoader.loadClass("org.eclipse.jdt.internal.compiler.env.IBinaryNestedType");
 
         List<Object> bindings = new ArrayList<>();
         for (Object sortedElement : sortedElements) {
@@ -247,73 +262,4 @@ public class JDTCompiler extends AbstractCompiler {
             }
         }
     }
-
-    @Override
-    public String getMethodBody(ProcessingEnvironment env, ExecutableElement method) {
-        try {
-
-            char[] source = getSource(method);
-            if (source == null) {
-                return null;
-            }
-
-            /*
-             * AbstractMethodDeclaration decl =
-             * ((MethodBinding)(((ElementImpl)method)._binding)).sourceMethod(); int bodyStart =
-             * decl.bodyStart; int bodyEnd = decl.bodyEnd;
-             */
-            Object decl = method(field(method, "_binding"), "sourceMethod");
-            int bodyStart = (int) field(decl, "bodyStart");
-            int bodyEnd = (int) field(decl, "bodyEnd");
-
-            int length = bodyEnd - bodyStart;
-            char[] target = new char[length];
-            System.arraycopy(source, bodyStart, target, 0, length);
-
-            return new String(target);
-        } catch (Exception e) {
-            return ElementUtils.printException(e);
-        }
-    }
-
-    private static char[] getSource(Element element) throws Exception {
-        /*
-         * Binding binding = ((ElementImpl)element)._binding; char[] source = null; if (binding
-         * instanceof MethodBinding) { source = ((MethodBinding)
-         * binding).sourceMethod().compilationResult.getCompilationUnit().getContents(); } else if
-         * (binding instanceof SourceTypeBinding) { source =
-         * ((SourceTypeBinding)binding).scope.referenceContext
-         * .compilationResult.compilationUnit.getContents(); } return source;
-         */
-
-        Object binding = field(element, "_binding");
-        Class<?> methodBindingClass = Class.forName("org.eclipse.jdt.internal.compiler.lookup.MethodBinding");
-        Class<?> referenceBindingClass = Class.forName("org.eclipse.jdt.internal.compiler.lookup.SourceTypeBinding");
-
-        char[] source = null;
-        if (methodBindingClass.isAssignableFrom(binding.getClass())) {
-            Object sourceMethod = method(binding, "sourceMethod");
-            if (sourceMethod == null) {
-                return null;
-            }
-            source = (char[]) method(method(field(sourceMethod, "compilationResult"), "getCompilationUnit"), "getContents");
-        } else if (referenceBindingClass.isAssignableFrom(binding.getClass())) {
-            source = (char[]) method(field(field(field(field(binding, "scope"), "referenceContext"), "compilationResult"), "compilationUnit"), "getContents");
-        }
-        return source;
-    }
-
-    @Override
-    public String getHeaderComment(ProcessingEnvironment env, Element type) {
-        try {
-            char[] source = getSource(type);
-            if (source == null) {
-                return null;
-            }
-            return parseHeader(new String(source));
-        } catch (Exception e) {
-            return ElementUtils.printException(e);
-        }
-    }
-
 }
