@@ -33,14 +33,11 @@ import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
 
 public abstract class LLVMRunGlobalVariableInitalization extends LLVMIntrinsic {
 
@@ -48,10 +45,10 @@ public abstract class LLVMRunGlobalVariableInitalization extends LLVMIntrinsic {
     @CompilationFinal(dimensions = 1) private RootCallTarget[] targets;
 
     @Specialization
-    public Object execute(@Cached("getContextReference()") ContextReference<LLVMContext> context) {
+    public Object execute() {
         if (targets == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            List<RootCallTarget> globalVarInits = context.get().getGlobalVarInits();
+            List<RootCallTarget> globalVarInits = getContext().getGlobalVarInits();
             targets = globalVarInits.toArray(new RootCallTarget[globalVarInits.size()]);
         }
         for (RootCallTarget target : targets) {
