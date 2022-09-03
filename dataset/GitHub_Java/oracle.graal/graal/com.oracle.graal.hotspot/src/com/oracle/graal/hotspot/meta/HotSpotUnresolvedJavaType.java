@@ -31,36 +31,30 @@ import com.oracle.graal.hotspot.*;
 public class HotSpotUnresolvedJavaType extends HotSpotJavaType {
 
     private static final long serialVersionUID = -2320936267633521314L;
-    public final String simpleName;
-    public final int dimensions;
+    private final HotSpotGraalRuntimeProvider runtime;
 
-    public HotSpotUnresolvedJavaType(String name, String simpleName, int dimensions) {
+    public HotSpotUnresolvedJavaType(String name, HotSpotGraalRuntimeProvider runtime) {
         super(name);
-        assert dimensions >= 0;
-        this.simpleName = simpleName;
-        this.dimensions = dimensions;
+        assert name.charAt(0) == '[' || name.charAt(name.length() - 1) == ';' : name;
+        this.runtime = runtime;
     }
 
-    public static String getFullName(String name, int dimensions) {
-        StringBuilder str = new StringBuilder(name.length() + dimensions + 2);
-        for (int i = 0; i < dimensions; i++) {
-            str.append('[');
-        }
-        str.append('L').append(name).append(';');
-        return str.toString();
+    /**
+     * Creates an unresolved type for a valid {@link JavaType#getName() type name}.
+     */
+    public static HotSpotUnresolvedJavaType create(HotSpotGraalRuntimeProvider runtime, String name) {
+        return new HotSpotUnresolvedJavaType(name, runtime);
     }
 
     @Override
     public JavaType getComponentType() {
-        assert dimensions > 0 : "no array class" + getName();
-        String name = getFullName(getName(), dimensions - 1);
-        return new HotSpotUnresolvedJavaType(name, simpleName, dimensions - 1);
+        assert getName().charAt(0) == '[' : "no array class" + getName();
+        return new HotSpotUnresolvedJavaType(getName().substring(1), runtime);
     }
 
     @Override
     public JavaType getArrayClass() {
-        String name = getFullName(getName(), dimensions + 1);
-        return new HotSpotUnresolvedJavaType(name, simpleName, dimensions + 1);
+        return new HotSpotUnresolvedJavaType('[' + getName(), runtime);
     }
 
     @Override
@@ -70,21 +64,42 @@ public class HotSpotUnresolvedJavaType extends HotSpotJavaType {
 
     @Override
     public int hashCode() {
-        return simpleName.hashCode();
+        return getName().hashCode();
     }
 
     @Override
-    public boolean equals(Object o) {
-        return o == this;
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || !(obj instanceof HotSpotUnresolvedJavaType)) {
+            return false;
+        }
+        HotSpotUnresolvedJavaType that = (HotSpotUnresolvedJavaType) obj;
+        return this.getName().equals(that.getName());
     }
 
     @Override
     public String toString() {
-        return "HotSpotType<" + simpleName + ", unresolved>";
+        return "HotSpotType<" + getName() + ", unresolved>";
     }
 
     @Override
     public ResolvedJavaType resolve(ResolvedJavaType accessingClass) {
-        return (ResolvedJavaType) HotSpotGraalRuntime.getInstance().lookupType(getName(), (HotSpotResolvedObjectType) accessingClass, true);
+        return (ResolvedJavaType) runtime.lookupType(getName(), (HotSpotResolvedObjectType) accessingClass, true);
+    }
+
+    /**
+     * Try to find a loaded version of this class.
+     *
+     * @param accessingClass
+     * @return the resolved class or null.
+     */
+    ResolvedJavaType reresolve(HotSpotResolvedObjectType accessingClass) {
+        JavaType type = runtime.lookupType(getName(), accessingClass, false);
+        if (type instanceof ResolvedJavaType) {
+            return (ResolvedJavaType) type;
+        }
+        return null;
     }
 }
