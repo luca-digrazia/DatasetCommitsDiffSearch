@@ -48,10 +48,10 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
 import com.oracle.truffle.llvm.context.LLVMContext;
 import com.oracle.truffle.llvm.context.LLVMLanguage;
-import com.oracle.truffle.llvm.parser.api.LLVMParserResult;
-import com.oracle.truffle.llvm.parser.api.facade.NodeFactoryFacade;
-import com.oracle.truffle.llvm.parser.api.facade.NodeFactoryFacadeProvider;
-import com.oracle.truffle.llvm.parser.bc.LLVMBitcodeVisitor;
+import com.oracle.truffle.llvm.parser.LLVMParserResult;
+import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
+import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacadeProvider;
+import com.oracle.truffle.llvm.parser.bc.impl.LLVMBitcodeVisitor;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 
@@ -98,10 +98,10 @@ public class LLVM {
             private CallTarget parse(Source code) throws IOException {
                 Node findContext = LLVMLanguage.INSTANCE.createFindContextNode0();
                 LLVMContext context = LLVMLanguage.INSTANCE.findContext0(findContext);
-                CallTarget mainFunction = null;
+                final CallTarget[] mainFunction = new CallTarget[]{null};
                 if (code.getMimeType().equals(LLVMLanguage.LLVM_BITCODE_MIME_TYPE) || code.getMimeType().equals(LLVMLanguage.LLVM_BITCODE_BASE64_MIME_TYPE)) {
                     LLVMParserResult parserResult = parseBitcodeFile(code, context);
-                    mainFunction = parserResult.getMainFunction();
+                    mainFunction[0] = parserResult.getMainFunction();
                     handleParserResult(context, parserResult);
                 } else if (code.getMimeType().equals(LLVMLanguage.SULONG_LIBRARY_MIME_TYPE)) {
                     final SulongLibrary library = new SulongLibrary(new File(code.getPath()));
@@ -122,14 +122,14 @@ public class LLVM {
                             }
                             handleParserResult(context, parserResult);
                             if (parserResult.getMainFunction() != null) {
-                                mainFunction = parserResult.getMainFunction();
+                                mainFunction[0] = parserResult.getMainFunction();
                             }
                         } catch (Throwable t) {
                             throw new IOException("Error while trying to parse " + source.getName(), t);
                         }
                     }
-                    if (mainFunction == null) {
-                        mainFunction = Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(null));
+                    if (mainFunction[0] == null) {
+                        mainFunction[0] = Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(null));
                     }
                 } else {
                     throw new IllegalArgumentException("undeclared mime type");
@@ -138,7 +138,7 @@ public class LLVM {
                 if (context.isParseOnly()) {
                     return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(mainFunction));
                 } else {
-                    return mainFunction;
+                    return mainFunction[0];
                 }
             }
 
