@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.lir.ssi;
 
-import static com.oracle.graal.lir.LIRValueUtil.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
 
 import java.util.*;
@@ -50,7 +49,6 @@ public final class SSIVerifier {
         this.lir = lir;
     }
 
-    @SuppressWarnings("try")
     private boolean verify() {
         try (Scope s = Debug.scope("SSIVerifier", lir)) {
             for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
@@ -135,10 +133,6 @@ public final class SSIVerifier {
             // registers can be redefined
             return false;
         }
-        if (isStackSlotValue(value) && !isVirtualStackSlot(value)) {
-            // non-virtual stack slots can be redefined
-            return false;
-        }
         if (value.equals(Value.ILLEGAL)) {
             // Don't care about illegal values
             return false;
@@ -147,16 +141,12 @@ public final class SSIVerifier {
     }
 
     private static boolean checkUsage(Value value) {
-        if (isConstantValue(value)) {
+        if (value instanceof Constant) {
             // Constants do not need to be defined
             return false;
         }
         if (isRegister(value)) {
             // Assume fixed registers are correct
-            return false;
-        }
-        if (isStackSlotValue(value) && !isVirtualStackSlot(value)) {
-            // non-virtual stack slots are assumed to be correct
             return false;
         }
         if (value.equals(Value.ILLEGAL)) {

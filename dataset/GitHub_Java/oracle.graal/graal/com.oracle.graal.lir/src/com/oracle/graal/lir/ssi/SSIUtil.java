@@ -22,18 +22,16 @@
  */
 package com.oracle.graal.lir.ssi;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
-import com.oracle.graal.lir.StandardOp.LabelOp;
-import com.oracle.graal.lir.ValueConsumer;
-import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
+import com.oracle.graal.lir.LIRInstruction.*;
+import com.oracle.graal.lir.StandardOp.*;
+import com.oracle.graal.lir.ssa.SSAUtil.*;
 
 /**
  * Utilities for working with Static-Single-Information LIR form.
@@ -73,14 +71,14 @@ import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
  *   v0|i = ...
  *   JUMP ~[v0|i, int[0|0x0]] destination: B0 -> B1
  * ________________________________________________
- * 
+ *
  * B2 -> B1
  *   ...
  *   v1|i = ...
  *   v2|i = ...
  *   JUMP ~[v1|i, v2|i] destination: B2 -> B1
  * ________________________________________________
- * 
+ *
  * B1 <- B0,B2
  *   [v3|i, v4|i] = LABEL
  *   ...
@@ -99,12 +97,12 @@ import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
  *   TEST (x: v1|i, y: v1|i)
  *   BRANCH ~[v2|i, v0|j] condition: <, true: B1 false: B2
  * ________________________________________________
- * 
+ *
  * B1 <- B0
  *   [-, v0|j] = LABEL
  *   ...
  * ________________________________________________
- * 
+ *
  * B2 <- B0
  *   [v2|i, v0|j] = LABEL
  *   ...
