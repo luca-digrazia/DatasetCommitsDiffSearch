@@ -29,7 +29,7 @@ import java.util.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.truffle.*;
 
-public final class TracePerformanceWarningsListener extends AbstractDebugCompilationListener {
+public class TracePerformanceWarningsListener extends AbstractDebugCompilationListener {
 
     private TracePerformanceWarningsListener() {
     }

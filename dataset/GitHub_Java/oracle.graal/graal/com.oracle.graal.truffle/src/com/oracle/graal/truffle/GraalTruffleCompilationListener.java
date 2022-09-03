@@ -40,12 +40,9 @@ public interface GraalTruffleCompilationListener {
 
     void notifyCompilationTruffleTierFinished(OptimizedCallTarget target, StructuredGraph graph);
 
-    void notifyCompilationGraalTierFinished(OptimizedCallTarget target, StructuredGraph graph);
-
     void notifyCompilationSuccess(OptimizedCallTarget target, StructuredGraph graph, CompilationResult result);
 
     void notifyCompilationInvalidated(OptimizedCallTarget target, Object source, CharSequence reason);
 
     void notifyShutdown(TruffleRuntime runtime);
-
 }

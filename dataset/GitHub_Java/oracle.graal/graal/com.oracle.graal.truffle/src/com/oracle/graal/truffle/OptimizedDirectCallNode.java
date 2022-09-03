@@ -173,4 +173,8 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
         return true;
     }
 
+    @Override
+    public String toString() {
+        return String.format("OptimizedDirectCallNode(target=%s, parent=%s)", getCurrentCallTarget().toString(), getParent());
+    }
 }

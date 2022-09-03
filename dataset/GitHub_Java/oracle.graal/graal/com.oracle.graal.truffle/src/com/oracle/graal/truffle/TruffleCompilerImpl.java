@@ -149,8 +149,6 @@ public class TruffleCompilerImpl {
             throw Debug.handle(e);
         }
 
-        compilationNotify.notifyCompilationGraalTierFinished((OptimizedCallTarget) predefinedInstalledCode, graph);
-
         List<AssumptionValidAssumption> validAssumptions = new ArrayList<>();
         Assumptions newAssumptions = new Assumptions(true);
         if (assumptions != null) {
