@@ -31,6 +31,9 @@ import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrument.ASTProber;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentRoot;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentRootFactory;
 import com.oracle.truffle.api.instrument.EventHandlerNode;
 import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrument.KillException;
@@ -50,7 +53,7 @@ public final class InstrumentationPETestLanguage extends TruffleLanguage<Object>
 
     public static final InstrumentationPETestLanguage INSTANCE = new InstrumentationPETestLanguage();
 
-    enum InstrumentTestTag implements SyntaxTag {
+    static enum InstrumentTestTag implements SyntaxTag {
 
         ADD_TAG("addition", "test language addition node"),
 
@@ -59,7 +62,7 @@ public final class InstrumentationPETestLanguage extends TruffleLanguage<Object>
         private final String name;
         private final String description;
 
-        InstrumentTestTag(String name, String description) {
+        private InstrumentTestTag(String name, String description) {
             this.name = name;
             this.description = description;
         }
@@ -124,6 +127,11 @@ public final class InstrumentationPETestLanguage extends TruffleLanguage<Object>
     }
 
     @Override
+    protected AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
+        return null;
+    }
+
+    @Override
     protected Object createContext(Env env) {
         return null;
     }
@@ -163,7 +171,7 @@ public final class InstrumentationPETestLanguage extends TruffleLanguage<Object>
         @Child private TestLanguageNode child;
         @Child private EventHandlerNode eventHandlerNode;
 
-        TestLanguageWrapperNode(TestLanguageNode child) {
+        public TestLanguageWrapperNode(TestLanguageNode child) {
             assert !(child instanceof TestLanguageWrapperNode);
             this.child = child;
         }
@@ -211,7 +219,7 @@ public final class InstrumentationPETestLanguage extends TruffleLanguage<Object>
     static class TestValueNode extends TestLanguageNode {
         private final int value;
 
-        TestValueNode(int value) {
+        public TestValueNode(int value) {
             this.value = value;
         }
 
@@ -228,7 +236,7 @@ public final class InstrumentationPETestLanguage extends TruffleLanguage<Object>
         @Child private TestLanguageNode leftChild;
         @Child private TestLanguageNode rightChild;
 
-        TestAdditionNode(TestValueNode leftChild, TestValueNode rightChild) {
+        public TestAdditionNode(TestValueNode leftChild, TestValueNode rightChild) {
             this.leftChild = insert(leftChild);
             this.rightChild = insert(rightChild);
         }
@@ -253,7 +261,7 @@ public final class InstrumentationPETestLanguage extends TruffleLanguage<Object>
          * newly created AST. Global registry is not used, since that would interfere with other
          * tests run in the same environment.
          */
-        TestRootNode(String name, TestLanguageNode body) {
+        public TestRootNode(String name, TestLanguageNode body) {
             super(InstrumentationPETestLanguage.class, null, null);
             this.name = name;
             this.body = body;
@@ -277,6 +285,25 @@ public final class InstrumentationPETestLanguage extends TruffleLanguage<Object>
         /** for testing. */
         public TestLanguageNode getBody() {
             return body;
+        }
+    }
+
+    static class TestAdvancedInstrumentCounterRoot extends AdvancedInstrumentRoot {
+
+        private long count;
+
+        @Override
+        public Object executeRoot(Node node, VirtualFrame vFrame) {
+            count++;
+            return null;
+        }
+
+        public long getCount() {
+            return count;
+        }
+
+        public String instrumentationInfo() {
+            return null;
         }
     }
 
