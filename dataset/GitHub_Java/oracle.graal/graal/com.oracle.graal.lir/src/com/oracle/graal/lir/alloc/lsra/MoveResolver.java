@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,29 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
+import static java.lang.String.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
 
 import java.util.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.debug.*;
 import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 
 /**
  */
-public class MoveResolver {
+class MoveResolver {
 
     private final LinearScan allocator;
 
     private int insertIdx;
     private LIRInsertionBuffer insertionBuffer; // buffer where moves are inserted
 
-    private final List<Interval> mappingFrom;
-    private final List<Constant> mappingFromOpr;
+    protected final List<Interval> mappingFrom;
+    private final List<Value> mappingFromOpr;
     private final List<Interval> mappingTo;
     private boolean multipleReadsAllowed;
     private final int[] registerBlocked;
@@ -55,14 +56,6 @@ public class MoveResolver {
         } else {
             throw JVMCIError.shouldNotReachHere("unhandled value " + location);
         }
-    }
-
-    protected Interval getMappingFrom(int i) {
-        return mappingFrom.get(i);
-    }
-
-    protected int mappingFromSize() {
-        return mappingFrom.size();
     }
 
     protected int valueBlocked(Value location) {
@@ -88,7 +81,7 @@ public class MoveResolver {
         return allocator;
     }
 
-    protected MoveResolver(LinearScan allocator) {
+    MoveResolver(LinearScan allocator) {
 
         this.allocator = allocator;
         this.multipleReadsAllowed = false;
@@ -97,12 +90,12 @@ public class MoveResolver {
         this.mappingTo = new ArrayList<>(8);
         this.insertIdx = -1;
         this.insertionBuffer = new LIRInsertionBuffer();
-        this.registerBlocked = new int[allocator.getRegisters().length];
+        this.registerBlocked = new int[allocator.registers.length];
     }
 
-    protected boolean checkEmpty() {
+    boolean checkEmpty() {
         assert mappingFrom.size() == 0 && mappingFromOpr.size() == 0 && mappingTo.size() == 0 : "list must be empty before and after processing";
-        for (int i = 0; i < getAllocator().getRegisters().length; i++) {
+        for (int i = 0; i < getAllocator().registers.length; i++) {
             assert registerBlocked[i] == 0 : "register map must be empty before and after processing";
         }
         checkMultipleReads();
@@ -176,7 +169,7 @@ public class MoveResolver {
         }
     }
 
-    private static boolean checkIntervalLocation(Interval from, Interval to, Constant fromOpr) {
+    private static boolean checkIntervalLocation(Interval from, Interval to, Value fromOpr) {
         if (from == null) {
             return fromOpr != null;
         } else {
@@ -274,11 +267,12 @@ public class MoveResolver {
         return getAllocator().getSpillMoveFactory().createMove(toOpr, fromOpr);
     }
 
-    private void insertMove(Constant fromOpr, Interval toInterval) {
+    private void insertMove(Value fromOpr, Interval toInterval) {
+        assert LIRKind.verifyMoveKinds(toInterval.kind(), fromOpr.getLIRKind()) : format("move between different types %s %s", fromOpr.getLIRKind(), toInterval.kind());
         assert insertIdx != -1 : "must setup insert position first";
 
         AllocatableValue toOpr = toInterval.operand;
-        LIRInstruction move = getAllocator().getSpillMoveFactory().createLoad(toOpr, fromOpr);
+        LIRInstruction move = getAllocator().getSpillMoveFactory().createMove(toOpr, fromOpr);
         insertionBuffer.append(insertIdx, move);
 
         if (Debug.isLogEnabled()) {
@@ -286,7 +280,6 @@ public class MoveResolver {
         }
     }
 
-    @SuppressWarnings("try")
     private void resolveMappings() {
         try (Indent indent = Debug.logAndIndent("resolveMapping")) {
             assert verifyBeforeResolve();
@@ -358,7 +351,7 @@ public class MoveResolver {
         // one stack slot to another can happen (not allowed by LIRAssembler
         StackSlotValue spillSlot = fromInterval.spillSlot();
         if (spillSlot == null) {
-            spillSlot = getAllocator().getFrameMapBuilder().allocateSpillSlot(fromInterval.kind());
+            spillSlot = getAllocator().frameMapBuilder.allocateSpillSlot(fromInterval.kind());
             fromInterval.setSpillSlot(spillSlot);
         }
         spillInterval(spillCandidate, fromInterval, spillSlot);
@@ -387,18 +380,17 @@ public class MoveResolver {
         unblockRegisters(fromInterval);
     }
 
-    @SuppressWarnings("try")
     private void printMapping() {
         try (Indent indent = Debug.logAndIndent("Mapping")) {
             for (int i = mappingFrom.size() - 1; i >= 0; i--) {
                 Interval fromInterval = mappingFrom.get(i);
                 Interval toInterval = mappingTo.get(i);
-                String from;
+                Value from;
                 Value to = toInterval.location();
                 if (fromInterval == null) {
-                    from = mappingFromOpr.get(i).toString();
+                    from = mappingFromOpr.get(i);
                 } else {
-                    from = fromInterval.location().toString();
+                    from = fromInterval.location();
                 }
                 Debug.log("move %s <- %s", from, to);
             }
@@ -428,7 +420,7 @@ public class MoveResolver {
         this.insertIdx = newInsertIdx;
     }
 
-    public void addMapping(Interval fromInterval, Interval toInterval) {
+    void addMapping(Interval fromInterval, Interval toInterval) {
 
         if (isIllegal(toInterval.location()) && toInterval.canMaterialize()) {
             if (Debug.isLogEnabled()) {
@@ -438,7 +430,7 @@ public class MoveResolver {
         }
         if (isIllegal(fromInterval.location()) && fromInterval.canMaterialize()) {
             // Instead of a reload, re-materialize the value
-            JavaConstant rematValue = fromInterval.getMaterializedValue();
+            Value rematValue = fromInterval.getMaterializedValue();
             addMapping(rematValue, toInterval);
             return;
         }
@@ -450,14 +442,16 @@ public class MoveResolver {
         assert LIRKind.verifyMoveKinds(toInterval.kind(), fromInterval.kind()) : String.format("Kind mismatch: %s vs. %s, from=%s, to=%s", fromInterval.kind(), toInterval.kind(), fromInterval,
                         toInterval);
         mappingFrom.add(fromInterval);
-        mappingFromOpr.add(null);
+        mappingFromOpr.add(Value.ILLEGAL);
         mappingTo.add(toInterval);
     }
 
-    public void addMapping(Constant fromOpr, Interval toInterval) {
+    void addMapping(Value fromOpr, Interval toInterval) {
         if (Debug.isLogEnabled()) {
             Debug.log("add move mapping from %s to %s", fromOpr, toInterval);
         }
+
+        assert isConstant(fromOpr) : "only for constants";
 
         mappingFrom.add(null);
         mappingFromOpr.add(fromOpr);
