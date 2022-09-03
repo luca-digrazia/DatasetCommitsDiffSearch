@@ -87,24 +87,9 @@ public final class LLVMContext {
     private final Map<String, String> environment;
     private final LinkedList<LLVMNativePointer> caughtExceptionStack = new LinkedList<>();
     private final HashMap<String, Integer> nativeCallStatistics;
-
-    private static final class Handle {
-
-        private int refcnt;
-        private final LLVMNativePointer pointer;
-        private final TruffleObject managed;
-
-        private Handle(LLVMNativePointer pointer, TruffleObject managed) {
-            this.refcnt = 0;
-            this.pointer = pointer;
-            this.managed = managed;
-        }
-    }
-
     private final Object handlesLock;
-    private final IdentityHashMap<TruffleObject, Handle> handleFromManaged;
-    private final HashMap<LLVMNativePointer, Handle> handleFromPointer;
-
+    private final IdentityHashMap<TruffleObject, LLVMNativePointer> toNative;
+    private final HashMap<LLVMNativePointer, TruffleObject> toManaged;
     private final LLVMSourceContext sourceContext;
     private final LLVMGlobalsStack globalStack;
 
@@ -231,8 +216,8 @@ public final class LLVMContext {
         this.sigDfl = LLVMNativePointer.create(0);
         this.sigIgn = LLVMNativePointer.create(1);
         this.sigErr = LLVMNativePointer.create(-1);
-        this.handleFromManaged = new IdentityHashMap<>();
-        this.handleFromPointer = new HashMap<>();
+        this.toNative = new IdentityHashMap<>();
+        this.toManaged = new HashMap<>();
         this.handlesLock = new Object();
         this.functionPointerRegistry = new LLVMFunctionPointerRegistry();
         this.sourceContext = new LLVMSourceContext();
@@ -509,20 +494,20 @@ public final class LLVMContext {
     @TruffleBoundary
     public boolean isHandle(LLVMNativePointer address) {
         synchronized (handlesLock) {
-            return handleFromPointer.containsKey(address);
+            return toManaged.containsKey(address);
         }
     }
 
     @TruffleBoundary
     public TruffleObject getManagedObjectForHandle(LLVMNativePointer address) {
         synchronized (handlesLock) {
-            final Handle handle = handleFromPointer.get(address);
+            final TruffleObject object = toManaged.get(address);
 
-            if (handle == null) {
+            if (object == null) {
                 throw new UnsupportedOperationException("Cannot resolve native handle: " + address);
             }
 
-            return handle.managed;
+            return object;
         }
     }
 
@@ -537,45 +522,38 @@ public final class LLVMContext {
     @TruffleBoundary
     public void releaseHandle(LLVMMemory memory, LLVMNativePointer address) {
         synchronized (handlesLock) {
-            Handle handle = handleFromPointer.get(address);
-            if (handle == null) {
+            final TruffleObject object = toManaged.get(address);
+
+            if (object == null) {
                 throw new UnsupportedOperationException("Cannot resolve native handle: " + address);
             }
 
-            if (--handle.refcnt == 0) {
-                handleFromPointer.remove(address);
-                handleFromManaged.remove(getIdentityKey(handle.managed));
-                memory.free(address);
-            }
+            toManaged.remove(address);
+            toNative.remove(getIdentityKey(object));
+            memory.free(address);
         }
     }
 
     @TruffleBoundary
     public LLVMNativePointer getHandleForManagedObject(LLVMMemory memory, TruffleObject object) {
         synchronized (handlesLock) {
-            Handle handle = handleFromManaged.computeIfAbsent(getIdentityKey(object), (k) -> {
+            return toNative.computeIfAbsent(getIdentityKey(object), (k) -> {
                 LLVMNativePointer allocatedMemory = memory.allocateMemory(Long.BYTES);
                 memory.putI64(allocatedMemory, 0xdeadbeef);
-                Handle h = new Handle(allocatedMemory, object);
-                handleFromPointer.put(allocatedMemory, h);
-                return h;
+                toManaged.put(allocatedMemory, object);
+                return allocatedMemory;
             });
-            handle.refcnt++;
-            return handle.pointer;
         }
     }
 
     @TruffleBoundary
     public LLVMNativePointer getDerefHandleForManagedObject(LLVMMemory memory, TruffleObject object) {
         synchronized (handlesLock) {
-            Handle handle = handleFromManaged.computeIfAbsent(object, (k) -> {
+            return toNative.computeIfAbsent(object, (k) -> {
                 LLVMNativePointer allocatedMemory = memory.allocateDerefMemory();
-                Handle h = new Handle(allocatedMemory, object);
-                handleFromPointer.put(allocatedMemory, h);
-                return h;
+                toManaged.put(allocatedMemory, object);
+                return allocatedMemory;
             });
-            handle.refcnt++;
-            return handle.pointer;
         }
     }
 
