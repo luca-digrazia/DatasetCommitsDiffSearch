@@ -199,9 +199,7 @@ final class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSpo
             Register[] savedRegisters = frameMap.registerConfig.getAllocatableRegisters();
             savedRegisterLocations = new StackSlot[savedRegisters.length];
             for (int i = 0; i < savedRegisters.length; i++) {
-                PlatformKind kind = target.arch.getLargestStorableKind(savedRegisters[i].getRegisterCategory());
-                assert kind != Kind.Illegal;
-                StackSlot spillSlot = frameMap.allocateSpillSlot(kind);
+                StackSlot spillSlot = frameMap.allocateSpillSlot(Kind.Long);
                 savedRegisterLocations[i] = spillSlot;
             }
             save = new AMD64SaveRegistersOp(savedRegisters, savedRegisterLocations);
