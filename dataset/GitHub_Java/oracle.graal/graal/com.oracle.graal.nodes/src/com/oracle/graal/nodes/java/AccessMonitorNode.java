@@ -23,10 +23,8 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
@@ -40,9 +38,12 @@ import com.oracle.graal.nodes.type.*;
  * locking hierarchy.
  * <br>
  * The Java bytecode specification allows non-balanced locking. Graal does not handle such cases and throws a
- * {@link BailoutException} instead during graph building.
+ * {@link BailoutException} instead. Detecting non-balanced monitors during bytecode parsing is difficult, since the
+ * node flowing into the {@link MonitorExitNode} can be a phi function hiding the node that was flowing into the
+ * {@link MonitorEnterNode}. Optimization phases are free to throw {@link BailoutException} if they detect such cases.
+ * Otherwise, they are detected during LIR construction.
  */
-public abstract class AccessMonitorNode extends AbstractStateSplit implements StateSplit, MemoryCheckpoint, Virtualizable {
+public abstract class AccessMonitorNode extends AbstractStateSplit implements StateSplit, MemoryCheckpoint {
 
     @Input private ValueNode object;
     private boolean eliminated;
@@ -67,22 +68,5 @@ public abstract class AccessMonitorNode extends AbstractStateSplit implements St
     public AccessMonitorNode(ValueNode object) {
         super(StampFactory.forVoid());
         this.object = object;
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object);
-        if (state != null && state.getState() == EscapeState.Virtual) {
-            Debug.log("monitor operation %s on %s\n", this, state);
-            int newLockCount = state.getLockCount() + (this instanceof MonitorEnterNode ? 1 : -1);
-            state.setLockCount(newLockCount);
-            tool.replaceFirstInput(object(), state.getVirtualObject());
-            tool.customAction(new Runnable() {
-                @Override
-                public void run() {
-                    eliminate();
-                }
-            });
-        }
     }
 }

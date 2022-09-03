@@ -35,7 +35,6 @@ import com.oracle.graal.nodes.virtual.*;
  * The {@code FrameState} class encapsulates the frame state (i.e. local variables and
  * operand stack) at a particular point in the abstract interpretation.
  */
-@NodeInfo(nameTemplate = "FrameState@{p#method/s}:{p#bci}")
 public final class FrameState extends VirtualState implements Node.IterableNodeType, LIRLowerable {
 
     /**
@@ -100,7 +99,7 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
 
     @Input private final NodeInputList<ValueNode> values;
 
-    @Input private final NodeInputList<EscapeObjectState> virtualObjectMappings;
+    @Input private final NodeInputList<VirtualObjectState> virtualObjectMappings;
 
     /**
      * The bytecode index to which this frame state applies.
@@ -117,7 +116,7 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
      * @param stackSize size of the stack
      * @param rethrowException if true the VM should re-throw the exception on top of the stack when deopt'ing using this framestate
      */
-    public FrameState(ResolvedJavaMethod method, int bci, List<ValueNode> values, int stackSize, boolean rethrowException, boolean duringCall, InliningIdentifier inliningIdentifier, List<EscapeObjectState> virtualObjectMappings) {
+    public FrameState(ResolvedJavaMethod method, int bci, List<ValueNode> values, int stackSize, boolean rethrowException, boolean duringCall, InliningIdentifier inliningIdentifier, List<VirtualObjectState> virtualObjectMappings) {
         assert stackSize >= 0;
         assert (bci >= 0 && method != null) || (bci < 0 && method == null && values.isEmpty());
         this.method = method;
@@ -137,7 +136,7 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
      * @param bci marker bci, needs to be < 0
      */
     public FrameState(int bci) {
-        this(null, bci, Collections.<ValueNode>emptyList(), 0, false, false, null, Collections.<EscapeObjectState>emptyList());
+        this(null, bci, Collections.<ValueNode>emptyList(), 0, false, false, null, Collections.<VirtualObjectState>emptyList());
     }
 
     public FrameState(ResolvedJavaMethod method, int bci, ValueNode[] locals, ValueNode[] stack, int stackSize, boolean rethrowException, boolean duringCall, InliningIdentifier inliningIdentifier) {
@@ -199,7 +198,7 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
         return method;
     }
 
-    public void addVirtualObjectMapping(EscapeObjectState virtualObject) {
+    public void addVirtualObjectMapping(VirtualObjectState virtualObject) {
         virtualObjectMappings.add(virtualObject);
     }
 
@@ -211,7 +210,7 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
         return virtualObjectMappings.get(i);
     }
 
-    public NodeInputList<EscapeObjectState> virtualObjectMappings() {
+    public NodeInputList<VirtualObjectState> virtualObjectMappings() {
         return virtualObjectMappings;
     }
 
@@ -241,8 +240,8 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
         if (newOuterFrameState != null) {
             newOuterFrameState = newOuterFrameState.duplicateWithVirtualState();
         }
-        ArrayList<EscapeObjectState> newVirtualMappings = new ArrayList<>(virtualObjectMappings.size());
-        for (EscapeObjectState state : virtualObjectMappings) {
+        ArrayList<VirtualObjectState> newVirtualMappings = new ArrayList<>(virtualObjectMappings.size());
+        for (VirtualObjectState state : virtualObjectMappings) {
             newVirtualMappings.add(state.duplicateWithVirtualState());
         }
         FrameState other = graph().add(new FrameState(method, bci, values, stackSize, rethrowException, duringCall, inliningIdentifier, newVirtualMappings));
@@ -326,7 +325,7 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
         String nl = CodeUtil.NEW_LINE;
         FrameState fs = frameState;
         while (fs != null) {
-            MetaUtil.appendLocation(sb, fs.method, fs.bci).append(nl);
+            CodeUtil.appendLocation(sb, fs.method, fs.bci).append(nl);
             sb.append("locals: [");
             for (int i = 0; i < fs.localsSize(); i++) {
                 sb.append(i == 0 ? "" : ", ").append(fs.localAt(i) == null ? "_" : fs.localAt(i).toString(Verbosity.Id));
@@ -353,16 +352,30 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
     }
 
     @Override
-    public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
-        Map<Object, Object> properties = super.getDebugProperties(map);
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("bci", bci);
         if (method != null) {
-            //properties.put("method", MetaUtil.format("%H.%n(%p):%r", method));
+            properties.put("method", CodeUtil.format("%H.%n(%p):%r", method));
             StackTraceElement ste = method.toStackTraceElement(bci);
             if (ste.getFileName() != null && ste.getLineNumber() >= 0) {
-                properties.put("sourceFile", ste.getFileName());
-                properties.put("sourceLine", ste.getLineNumber());
+                properties.put("source", ste.getFileName() + ":" + ste.getLineNumber());
             }
+        } else {
+            properties.put("method", "None");
         }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < localsSize(); i++) {
+            sb.append(i == 0 ? "" : ", ").append(localAt(i) == null ? "_" : localAt(i).toString(Verbosity.Id));
+        }
+        properties.put("locals", sb.toString());
+        sb = new StringBuilder();
+        for (int i = 0; i < stackSize(); i++) {
+            sb.append(i == 0 ? "" : ", ").append(stackAt(i) == null ? "_" : stackAt(i).toString(Verbosity.Id));
+        }
+        properties.put("stack", sb.toString());
+        properties.put("rethrowException", rethrowException);
+        properties.put("duringCall", duringCall);
         return properties;
     }
 
@@ -380,38 +393,11 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
         for (ValueNode value : values.nonNull()) {
             closure.apply(this, value);
         }
-        for (EscapeObjectState state : virtualObjectMappings) {
+        for (VirtualObjectState state : virtualObjectMappings) {
             state.applyToNonVirtual(closure);
         }
         if (outerFrameState() != null) {
             outerFrameState().applyToNonVirtual(closure);
         }
-    }
-
-    @Override
-    public void applyToVirtual(VirtualClosure closure) {
-        closure.apply(this);
-        for (EscapeObjectState state : virtualObjectMappings) {
-            state.applyToVirtual(closure);
-        }
-        if (outerFrameState() != null) {
-            outerFrameState().applyToVirtual(closure);
-        }
-    }
-
-    @Override
-    public boolean isPartOfThisState(VirtualState state) {
-        if (state == this) {
-            return true;
-        }
-        if (outerFrameState() != null && outerFrameState().isPartOfThisState(state)) {
-            return true;
-        }
-        for (EscapeObjectState objectState : virtualObjectMappings) {
-            if (objectState.isPartOfThisState(state)) {
-                return true;
-            }
-        }
-        return false;
     }
 }

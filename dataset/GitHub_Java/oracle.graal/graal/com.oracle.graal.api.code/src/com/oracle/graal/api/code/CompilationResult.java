@@ -57,7 +57,7 @@ public class CompilationResult implements Serializable {
         private static final long serialVersionUID = 2479806696381720162L;
         public final DebugInfo debugInfo;
 
-        public Safepoint(int pcOffset, DebugInfo debugInfo) {
+        Safepoint(int pcOffset, DebugInfo debugInfo) {
             super(pcOffset);
             this.debugInfo = debugInfo;
         }
@@ -105,7 +105,7 @@ public class CompilationResult implements Serializable {
          */
         public final boolean direct;
 
-        public Call(Object target, int pcOffset, int size, boolean direct, DebugInfo debugInfo) {
+        Call(Object target, int pcOffset, int size, boolean direct, DebugInfo debugInfo) {
             super(pcOffset, debugInfo);
             this.size = size;
             this.target = target;
@@ -149,7 +149,7 @@ public class CompilationResult implements Serializable {
     }
 
     /**
-     * Provides extra information about instructions or data at specific positions in {@link CompilationResult#getTargetCode()}.
+     * Provides extra information about instructions or data at specific positions in {@link CompilationResult#targetCode()}.
      * This is optional information that can be used to enhance a disassembly of the code.
      */
     public abstract static class CodeAnnotation implements Serializable {
@@ -291,16 +291,12 @@ public class CompilationResult implements Serializable {
         }
     }
 
-    /**
-     * Represents a mark in the machine code that can be used by the runtime for its own purposes. A mark
-     * can reference other marks.
-     */
     public static final class Mark extends Site {
         private static final long serialVersionUID = 3612943150662354844L;
         public final Object id;
         public final Mark[] references;
 
-        public Mark(int pcOffset, Object id, Mark[] references) {
+        Mark(int pcOffset, Object id, Mark[] references) {
             super(pcOffset);
             this.id = id;
             this.references = references;
@@ -340,11 +336,17 @@ public class CompilationResult implements Serializable {
 
     private Assumptions assumptions;
 
+    /**
+     * Constructs a new target method.
+     */
+    public CompilationResult() {
+    }
+
     public void setAssumptions(Assumptions assumptions) {
         this.assumptions = assumptions;
     }
 
-    public Assumptions getAssumptions() {
+    public Assumptions assumptions() {
         return assumptions;
     }
 
@@ -386,7 +388,7 @@ public class CompilationResult implements Serializable {
      *
      * @param codePos the position of the call in the code array
      * @param size the size of the call instruction
-     * @param target the {@link CodeCacheProvider#lookupCallTarget(Object) target} being called
+     * @param target the {@link CodeCacheProvider#asCallTarget(Object) target} being called
      * @param debugInfo the debug info for the call
      * @param direct specifies if this is a {@linkplain Call#direct direct} call
      */
@@ -453,7 +455,7 @@ public class CompilationResult implements Serializable {
      *
      * @return the frame size
      */
-    public int getFrameSize() {
+    public int frameSize() {
         assert frameSize != -1 : "frame size not yet initialized!";
         return frameSize;
     }
@@ -462,7 +464,7 @@ public class CompilationResult implements Serializable {
      * @return the code offset of the start of the epilogue that restores all callee saved registers, or -1 if this is
      *         not a callee saved method
      */
-    public int getRegisterRestoreEpilogueOffset() {
+    public int registerRestoreEpilogueOffset() {
         return registerRestoreEpilogueOffset;
     }
 
@@ -470,12 +472,12 @@ public class CompilationResult implements Serializable {
      * Offset in bytes for the custom stack area (relative to sp).
      * @return the offset in bytes
      */
-    public int getCustomStackAreaOffset() {
+    public int customStackAreaOffset() {
         return customStackAreaOffset;
     }
 
     /**
-     * @see #getCustomStackAreaOffset()
+     * @see #customStackAreaOffset()
      * @param offset
      */
     public void setCustomStackAreaOffset(int offset) {
@@ -485,21 +487,21 @@ public class CompilationResult implements Serializable {
     /**
      * @return the machine code generated for this method
      */
-    public byte[] getTargetCode() {
+    public byte[] targetCode() {
         return targetCode;
     }
 
     /**
      * @return the size of the machine code generated for this method
      */
-    public int getTargetCodeSize() {
+    public int targetCodeSize() {
         return targetCodeSize;
     }
 
     /**
      * @return the code annotations or {@code null} if there are none
      */
-    public List<CodeAnnotation> getAnnotations() {
+    public List<CodeAnnotation> annotations() {
         return annotations;
     }
 
@@ -517,7 +519,7 @@ public class CompilationResult implements Serializable {
             appendRefMap(sb, "registerMap", info.getRegisterRefMap());
             BytecodePosition codePos = info.getBytecodePosition();
             if (codePos != null) {
-                MetaUtil.appendLocation(sb.append(" "), codePos.getMethod(), codePos.getBCI());
+                CodeUtil.appendLocation(sb.append(" "), codePos.getMethod(), codePos.getBCI());
                 if (info.hasFrame()) {
                     sb.append(" #locals=").append(info.frame().numLocals).append(" #expr=").append(info.frame().numStack);
                     if (info.frame().numLocks > 0) {

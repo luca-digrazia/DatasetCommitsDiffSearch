@@ -27,6 +27,8 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import java.io.*;
 import java.util.*;
 
+import com.oracle.max.criutils.*;
+import com.oracle.graal.alloc.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.alloc.*;
@@ -380,7 +382,7 @@ class CFGPrinter extends CompilationPrinter {
         StringBuilder buf = new StringBuilder();
         FrameState curState = state;
         do {
-            buf.append(MetaUtil.toLocation(curState.method(), curState.bci)).append('\n');
+            buf.append(CodeUtil.toLocation(curState.method(), curState.bci)).append('\n');
 
             if (curState.stackSize() > 0) {
                 buf.append("stack: ");
@@ -393,12 +395,6 @@ class CFGPrinter extends CompilationPrinter {
             buf.append("locals: ");
             for (int i = 0; i < curState.localsSize(); i++) {
                 buf.append(stateValueToString(curState.localAt(i))).append(' ');
-            }
-            buf.append("\n");
-
-            buf.append("locks: ");
-            for (int i = 0; i < curState.locksSize(); i++) {
-                buf.append(stateValueToString(curState.lockAt(i))).append(' ');
             }
             buf.append("\n");
 
@@ -425,10 +421,7 @@ class CFGPrinter extends CompilationPrinter {
      * @param block the block to print
      */
     private void printLIR(Block block) {
-        if (lir == null) {
-            return;
-        }
-        List<LIRInstruction> lirInstructions = lir.lir(block);
+        List<LIRInstruction> lirInstructions = block.lir;
         if (lirInstructions == null) {
             return;
         }
@@ -440,21 +433,18 @@ class CFGPrinter extends CompilationPrinter {
             LIRInstruction inst = lirInstructions.get(i);
             out.printf("nr %4d ", inst.id()).print(COLUMN_END);
 
-            final StringBuilder stateString = new StringBuilder();
-            inst.forEachState(new LIRInstruction.StateProcedure() {
-                @Override
-                protected void doState(LIRFrameState state) {
-                    if (state.hasDebugInfo()) {
-                        stateString.append(debugInfoToString(state.debugInfo().getBytecodePosition(), state.debugInfo().getRegisterRefMap(), state.debugInfo().getFrameRefMap(), target.arch));
-                    } else {
-                        stateString.append(debugInfoToString(state.topFrame, null, null, target.arch));
-                    }
-                }
-            });
-            if (stateString.length() > 0) {
+            if (inst.info != null) {
                 int level = out.indentationLevel();
                 out.adjustIndentation(-level);
-                out.print(" st ").print(HOVER_START).print("st").print(HOVER_SEP).print(stateString.toString()).print(HOVER_END).print(COLUMN_END);
+                String state;
+                if (inst.info.hasDebugInfo()) {
+                    state = debugInfoToString(inst.info.debugInfo().getBytecodePosition(), inst.info.debugInfo().getRegisterRefMap(), inst.info.debugInfo().getFrameRefMap(), target.arch);
+                } else {
+                    state = debugInfoToString(inst.info.topFrame, null, null, target.arch);
+                }
+                if (state != null) {
+                    out.print(" st ").print(HOVER_START).print("st").print(HOVER_SEP).print(state).print(HOVER_END).print(COLUMN_END);
+                }
                 out.adjustIndentation(level);
             }
 
@@ -512,10 +502,10 @@ class CFGPrinter extends CompilationPrinter {
     private void printInterval(Interval interval) {
         out.printf("%s %s ", interval.operand, (isRegister(interval.operand) ? "fixed" : interval.kind().name()));
         if (isRegister(interval.operand)) {
-            out.printf("\"[%s|%c]\"", interval.operand, interval.operand.getKind().typeChar);
+            out.printf("\"[%s|%c]\"", interval.operand, interval.operand.kind.typeChar);
         } else {
             if (interval.location() != null) {
-                out.printf("\"[%s|%c]\"", interval.location(), interval.location().getKind().typeChar);
+                out.printf("\"[%s|%c]\"", interval.location(), interval.location().kind.typeChar);
             }
         }
 
@@ -540,6 +530,34 @@ class CFGPrinter extends CompilationPrinter {
         }
 
         out.printf(" \"%s\"", interval.spillState());
+        out.println();
+    }
+
+    public void printIntervals(String label, IntervalPrinter.Interval[] intervals) {
+        begin("intervals");
+        out.println(String.format("name \"%s\"", label));
+
+        for (IntervalPrinter.Interval interval : intervals) {
+            printInterval(interval);
+        }
+
+        end("intervals");
+    }
+
+    private void printInterval(IntervalPrinter.Interval interval) {
+        out.printf("%s %s \"%s\" %s %s ", interval.name, interval.type, interval.description, interval.variable, "no");
+        if (interval.ranges.size() == 0) {
+            // One range is required in the spec, so output a dummy range.
+            out.printf("[0, 0[ ");
+        } else {
+            for (IntervalPrinter.Range range : interval.ranges) {
+                out.printf("[%d, %d[ ", range.from, range.to);
+            }
+        }
+        for (IntervalPrinter.UsePosition usePos : interval.uses) {
+            out.printf("%d %s ", usePos.pos, usePos.kind);
+        }
+        out.printf("\"%s\"", "no");
         out.println();
     }
 }

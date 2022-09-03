@@ -33,7 +33,8 @@ import com.oracle.graal.api.meta.*;
 public class CallingConvention {
 
     /**
-     * Constants denoting the type of a call for which a calling convention is requested.
+     * Constants denoting the type of a call for which a calling convention is
+     * {@linkplain RegisterConfig#getCallingConvention(Type, Kind[], TargetDescription, boolean) requested}.
      */
     public enum Type {
         /**

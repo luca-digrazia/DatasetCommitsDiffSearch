@@ -23,8 +23,11 @@
 package com.oracle.graal.nodes.java;
 
 import java.lang.reflect.*;
+import java.util.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -53,7 +56,7 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
         this.object = object;
         this.field = field;
         this.leafGraphId = leafGraphId;
-        assert field.getDeclaringClass().isInitialized();
+        assert field.holder().isInitialized();
     }
 
     /**
@@ -73,7 +76,7 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
      * @return {@code true} if this field access is to a static field
      */
     public boolean isStatic() {
-        return Modifier.isStatic(field.getModifiers());
+        return Modifier.isStatic(field.accessFlags());
     }
 
     /**
@@ -81,18 +84,25 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
      * @return {@code true} if the field is resolved and declared volatile
      */
     public boolean isVolatile() {
-        return Modifier.isVolatile(field.getModifiers());
+        return Modifier.isVolatile(field.accessFlags());
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(CiLoweringTool tool) {
         tool.getRuntime().lower(this, tool);
+    }
+
+    @Override
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> debugProperties = super.getDebugProperties();
+        debugProperties.put("field", CodeUtil.format("%h.%n", field));
+        return debugProperties;
     }
 
     @Override
     public String toString(Verbosity verbosity) {
         if (verbosity == Verbosity.Name) {
-            return super.toString(verbosity) + "#" + field.getName();
+            return super.toString(verbosity) + "#" + field.name();
         } else {
             return super.toString(verbosity);
         }
@@ -100,7 +110,7 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
 
     @Override
     public boolean verify() {
-        assertTrue((object == null) == isStatic(), "static field must not have object, instance field must have object");
+        assertTrue(object != null, "Access object can not be null");
         return super.verify();
     }
 }

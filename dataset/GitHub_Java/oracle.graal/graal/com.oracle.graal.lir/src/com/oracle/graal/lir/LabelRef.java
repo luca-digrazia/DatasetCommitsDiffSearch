@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.lir;
 
-import com.oracle.graal.asm.*;
-import com.oracle.graal.nodes.cfg.*;
+import com.oracle.max.asm.*;
+import com.oracle.graal.lir.cfg.*;
 
 /**
  * LIR instructions such as JUMP and BRANCH need to reference their target {@link Block}. However,
@@ -68,16 +68,16 @@ public abstract class LabelRef {
      * @param suxIndex The index of the successor.
      * @return The newly created label reference.
      */
-    public static LabelRef forSuccessor(final LIR lir, final Block block, final int suxIndex) {
+    public static LabelRef forSuccessor(final Block block, final int suxIndex) {
         return new LabelRef() {
             @Override
             public Label label() {
-                return ((StandardOp.LabelOp) lir.lir(block.getSuccessors().get(suxIndex)).get(0)).getLabel();
+                return ((StandardOp.LabelOp) block.suxAt(suxIndex).lir.get(0)).getLabel();
             }
 
             @Override
             public String toString() {
-                return suxIndex < block.getSuccessorCount() ? block.getSuccessors().get(suxIndex).toString() : "?" + block + ":" + suxIndex + "?";
+                return suxIndex < block.numberOfSux() ? block.suxAt(suxIndex).toString() : "?" + block + ":" + suxIndex + "?";
             }
         };
     }

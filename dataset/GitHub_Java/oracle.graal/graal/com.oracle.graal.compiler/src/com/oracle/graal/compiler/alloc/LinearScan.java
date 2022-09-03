@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.compiler.alloc;
 
+import static com.oracle.graal.alloc.util.LocationUtil.*;
 import static com.oracle.graal.api.code.CodeUtil.*;
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.lir.LIRValueUtil.*;
-
 import java.util.*;
 
+import com.oracle.max.criutils.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
@@ -39,13 +38,9 @@ import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.LIRInstruction.StateProcedure;
-import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
-import com.oracle.graal.lir.StandardOp.MoveOp;
+import com.oracle.graal.lir.LIRInstruction.*;
+import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.lir.cfg.*;
-import com.oracle.max.criutils.*;
 
 /**
  * An implementation of the linear scan register allocator algorithm described
@@ -872,13 +867,16 @@ public final class LinearScan {
                         TTY.println("  used in block B%d", block.getId());
                         for (LIRInstruction ins : block.lir) {
                             TTY.println(ins.id() + ": " + ins.toString());
-                            ins.forEachState(new ValueProcedure() {
-                                @Override
-                                public Value doValue(Value liveStateOperand) {
-                                    TTY.println("   operand=" + liveStateOperand);
-                                    return liveStateOperand;
-                                }
-                            });
+                            LIRDebugInfo info = ins.info;
+                            if (info != null) {
+                                info.forEachState(new ValueProcedure() {
+                                    @Override
+                                    public Value doValue(Value liveStateOperand) {
+                                        TTY.println("   operand=" + liveStateOperand);
+                                        return liveStateOperand;
+                                    }
+                                });
+                            }
                         }
                     }
                     if (blockData.get(block).liveKill.get(operandNum)) {
@@ -1034,7 +1032,7 @@ public final class LinearScan {
      * Determines the priority which with an instruction's input operand will be allocated a register.
      */
     static RegisterPriority registerPriorityOfInputOperand(EnumSet<OperandFlag> flags) {
-        if (flags.contains(OperandFlag.STACK)) {
+        if (flags.contains(OperandFlag.Stack)) {
             return RegisterPriority.ShouldHaveRegister;
         }
         // all other operands require a register
@@ -1070,7 +1068,7 @@ public final class LinearScan {
     }
 
     void addRegisterHint(final LIRInstruction op, final Value targetValue, OperandMode mode, EnumSet<OperandFlag> flags) {
-        if (flags.contains(OperandFlag.HINT) && isVariableOrRegister(targetValue)) {
+        if (flags.contains(OperandFlag.RegisterHint) && isVariableOrRegister(targetValue)) {
 
             op.forEachRegisterHint(targetValue, mode, new ValueProcedure() {
                 @Override
@@ -1403,21 +1401,21 @@ public final class LinearScan {
         assert isVariable(operand) : "register number out of bounds";
         assert intervalFor(operand) != null : "no interval found";
 
-        return splitChildAtOpId(intervalFor(operand), block.getFirstLirInstructionId(), LIRInstruction.OperandMode.DEF);
+        return splitChildAtOpId(intervalFor(operand), block.getFirstLirInstructionId(), LIRInstruction.OperandMode.Output);
     }
 
     Interval intervalAtBlockEnd(Block block, Value operand) {
         assert isVariable(operand) : "register number out of bounds";
         assert intervalFor(operand) != null : "no interval found";
 
-        return splitChildAtOpId(intervalFor(operand), block.getLastLirInstructionId() + 1, LIRInstruction.OperandMode.DEF);
+        return splitChildAtOpId(intervalFor(operand), block.getLastLirInstructionId() + 1, LIRInstruction.OperandMode.Output);
     }
 
     Interval intervalAtOpId(Value operand, int opId) {
         assert isVariable(operand) : "register number out of bounds";
         assert intervalFor(operand) != null : "no interval found";
 
-        return splitChildAtOpId(intervalFor(operand), opId, LIRInstruction.OperandMode.USE);
+        return splitChildAtOpId(intervalFor(operand), opId, LIRInstruction.OperandMode.Input);
     }
 
     void resolveCollectMappings(Block fromBlock, Block toBlock, MoveResolver moveResolver) {
@@ -1699,7 +1697,20 @@ public final class LinearScan {
     }
 
 
-    private void computeDebugInfo(IntervalWalker iw, final LIRInstruction op, LIRFrameState info) {
+    private void computeDebugInfo(IntervalWalker iw, LIRInstruction op) {
+        assert iw != null : "interval walker needed for debug information";
+        computeDebugInfo(iw, op, op.info);
+
+        if (op instanceof LIRXirInstruction) {
+            LIRXirInstruction xir = (LIRXirInstruction) op;
+            if (xir.infoAfter != null) {
+                computeDebugInfo(iw, op, xir.infoAfter);
+            }
+        }
+    }
+
+
+    private void computeDebugInfo(IntervalWalker iw, final LIRInstruction op, LIRDebugInfo info) {
         BitSet registerRefMap = op.hasCall() ? null : frameMap.initRegisterRefMap();
         BitSet frameRefMap = frameMap.initFrameRefMap();
         computeOopMap(iw, op, registerRefMap, frameRefMap);
@@ -1708,7 +1719,7 @@ public final class LinearScan {
             @Override
             public Value doValue(Value operand) {
                 int tempOpId = op.id();
-                OperandMode mode = OperandMode.USE;
+                OperandMode mode = OperandMode.Input;
                 Block block = blockForId(tempOpId);
                 if (block.numberOfSux() == 1 && tempOpId == block.getLastLirInstructionId()) {
                     // generating debug information for the last instruction of a block.
@@ -1720,7 +1731,7 @@ public final class LinearScan {
                     if (instr instanceof StandardOp.JumpOp) {
                         if (blockData.get(block).liveOut.get(operandNumber(operand))) {
                             tempOpId = block.suxAt(0).getFirstLirInstructionId();
-                            mode = OperandMode.DEF;
+                            mode = OperandMode.Output;
                         }
                     }
                 }
@@ -1737,7 +1748,7 @@ public final class LinearScan {
         info.finish(registerRefMap, frameRefMap, frameMap);
     }
 
-    private void assignLocations(List<LIRInstruction> instructions, final IntervalWalker iw) {
+    private void assignLocations(List<LIRInstruction> instructions, IntervalWalker iw) {
         int numInst = instructions.size();
         boolean hasDead = false;
 
@@ -1763,13 +1774,10 @@ public final class LinearScan {
             op.forEachTemp(assignProc);
             op.forEachOutput(assignProc);
 
-            // compute reference map and debug information
-            op.forEachState(new StateProcedure() {
-                @Override
-                protected void doState(LIRFrameState state) {
-                    computeDebugInfo(iw, op, state);
-                }
-            });
+            if (op.info != null) {
+                // compute reference map and debug information
+                computeDebugInfo(iw, op);
+            }
 
             // remove useless moves
             if (op instanceof MoveOp) {
@@ -2041,7 +2049,7 @@ public final class LinearScan {
             for (int j = 0; j < instructions.size(); j++) {
                 LIRInstruction op = instructions.get(j);
 
-                if (op.hasState()) {
+                if (op.info != null) {
                     iw.walkBefore(op.id());
                     boolean checkLive = true;
 

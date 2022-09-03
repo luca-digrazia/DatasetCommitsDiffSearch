@@ -25,7 +25,7 @@ package com.oracle.graal.nodes.java;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.ResolvedJavaType.*;
+import com.oracle.graal.api.meta.JavaType.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -80,8 +80,8 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
             int survivingEdge = keySuccessorIndex(keyCount());
             for (int i = 0; i < keyCount(); i++) {
                 Constant typeHub = keyAt(i);
-                assert constant.getKind() == typeHub.getKind();
-                if (tool.runtime().constantEquals(constant, typeHub)) {
+                assert constant.kind == typeHub.kind;
+                if (tool.runtime().areConstantObjectsEqual(value().asConstant(), typeHub)) {
                     survivingEdge = keySuccessorIndex(i);
                 }
             }
@@ -93,12 +93,12 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
             tool.addToWorkList(blockSuccessor(survivingEdge));
             ((StructuredGraph) graph()).removeSplitPropagate(this, survivingEdge);
         }
-        if (value() instanceof LoadHubNode) {
-            ObjectStamp stamp = ((LoadHubNode) value()).object().objectStamp();
+        if (value() instanceof ReadHubNode) {
+            ObjectStamp stamp = ((ReadHubNode) value()).object().objectStamp();
             if (stamp.type() != null) {
                 int validKeys = 0;
                 for (int i = 0; i < keyCount(); i++) {
-                    if (keys[i].isAssignableTo(stamp.type())) {
+                    if (keys[i].isSubtypeOf(stamp.type())) {
                         validKeys++;
                     }
                 }
@@ -113,7 +113,7 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
                     double totalProbability = 0;
                     int current = 0;
                     for (int i = 0; i < keyCount() + 1; i++) {
-                        if (i == keyCount() || keys[i].isAssignableTo(stamp.type())) {
+                        if (i == keyCount() || keys[i].isSubtypeOf(stamp.type())) {
                             int index = newSuccessors.indexOf(keySuccessor(i));
                             if (index == -1) {
                                 index = newSuccessors.size();

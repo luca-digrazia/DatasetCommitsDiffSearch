@@ -25,14 +25,16 @@ package com.oracle.graal.nodes.java;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code NewMultiArrayNode} represents an allocation of a multi-dimensional object
  * array.
  */
-public final class NewMultiArrayNode extends FixedWithNextNode implements LIRLowerable, Lowerable {
+public final class NewMultiArrayNode extends FixedWithNextNode implements LIRLowerable, TypeFeedbackProvider {
 
     @Input private final NodeInputList<ValueNode> dimensions;
     private final ResolvedJavaType type;
@@ -58,16 +60,19 @@ public final class NewMultiArrayNode extends FixedWithNextNode implements LIRLow
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
-    }
-
-    @Override
     public void generate(LIRGeneratorTool gen) {
         gen.visitNewMultiArray(this);
     }
 
     public ResolvedJavaType type() {
         return type;
+    }
+
+    @Override
+    public void typeFeedback(TypeFeedbackTool tool) {
+        for (ValueNode length : dimensions) {
+            assert length.kind() == Kind.Int;
+            tool.addScalar(length).constantBound(Condition.GE, Constant.INT_0);
+        }
     }
 }

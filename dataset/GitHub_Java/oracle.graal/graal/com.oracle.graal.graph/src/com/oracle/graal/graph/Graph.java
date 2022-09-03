@@ -47,6 +47,7 @@ public class Graph {
     private int deletedNodeCount;
     private GraphEventLog eventLog;
 
+    ArrayList<Node> usagesDropped = new ArrayList<>();
     InputChangedListener inputChanged;
     private final HashMap<CacheEntry, Node> cachedNodes = new HashMap<>();
 
@@ -146,6 +147,16 @@ public class Graph {
     public <T extends Node> T add(T node) {
         node.initialize(this);
         return node;
+    }
+
+    public int getUsagesDroppedNodesCount() {
+        return usagesDropped.size();
+    }
+
+    public List<Node> getAndCleanUsagesDroppedNodes() {
+        ArrayList<Node> result = usagesDropped;
+        usagesDropped = new ArrayList<>();
+        return result;
     }
 
     public interface InputChangedListener {
@@ -310,11 +321,6 @@ public class Graph {
                     return getNodes((Class) clazz);
                 }
                 return super.filter(clazz);
-            }
-
-            @Override
-            public int count() {
-                return getNodeCount();
             }
         };
     }

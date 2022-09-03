@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.api.code;
 
-import static com.oracle.graal.api.meta.MetaUtil.*;
-
 import java.io.*;
 import java.util.*;
 
@@ -36,9 +34,6 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
 
     private static final long serialVersionUID = 5152062717588239131L;
 
-    /**
-     * Abstract base class for assumptions.
-     */
     public abstract static class Assumption implements Serializable {
 
         private static final long serialVersionUID = -1936652569665112915L;
@@ -82,11 +77,6 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
                 return other.context == context && other.subtype == subtype;
             }
             return false;
-        }
-
-        @Override
-        public String toString() {
-            return "ConcreteSubtype[context=" + toJavaName(context) + ", subtype=" + toJavaName(subtype) + "]";
         }
     }
 
@@ -137,11 +127,6 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
             }
             return false;
         }
-
-        @Override
-        public String toString() {
-            return "ConcreteMethod[method=" + format("%H.%n(%p)", method) + ", context=" + toJavaName(context) + ", impl=" + format("%H.%n(%p)", impl) + "]";
-        }
     }
 
     /**
@@ -173,23 +158,14 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
             }
             return false;
         }
-
-        @Override
-        public String toString() {
-            return "MethodContents[method=" + format("%H.%n(%p)", method) + "]";
-        }
     }
 
     /**
      * Array with the assumptions. This field is directly accessed from C++ code in the Graal/HotSpot implementation.
      */
     private Assumption[] list;
-    private boolean useOptimisticAssumptions;
-    private int count;
 
-    public Assumptions(boolean useOptimisticAssumptions) {
-        this.useOptimisticAssumptions = useOptimisticAssumptions;
-    }
+    private int count;
 
     /**
      * Returns whether any assumptions have been registered.
@@ -197,10 +173,6 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
      */
     public boolean isEmpty() {
         return count == 0;
-    }
-
-    public boolean useOptimisticAssumptions() {
-        return useOptimisticAssumptions;
     }
 
     @Override
@@ -228,9 +200,9 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
      * @param receiverType the type that is assumed to have no finalizable subclasses
      * @return {@code true} if the assumption was recorded and can be assumed; {@code false} otherwise
      */
+    @SuppressWarnings("static-method")
     public boolean recordNoFinalizableSubclassAssumption(ResolvedJavaType receiverType) {
         // TODO (thomaswue): Record that assumption correctly.
-        assert useOptimisticAssumptions;
         return false;
     }
 
@@ -240,7 +212,6 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
      * @param subtype the one concrete subtype
      */
     public void recordConcreteSubtype(ResolvedJavaType context, ResolvedJavaType subtype) {
-        assert useOptimisticAssumptions;
         record(new ConcreteSubtype(context, subtype));
     }
 
@@ -253,7 +224,6 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
      * @param impl the concrete method that is the only possible target for the virtual call
      */
     public void recordConcreteMethod(ResolvedJavaMethod method, ResolvedJavaType context, ResolvedJavaMethod impl) {
-        assert useOptimisticAssumptions;
         record(new ConcreteMethod(method, context, impl));
     }
 
