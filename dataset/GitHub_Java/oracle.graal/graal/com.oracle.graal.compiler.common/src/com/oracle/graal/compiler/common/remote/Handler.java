@@ -24,19 +24,21 @@ package com.oracle.graal.compiler.common.remote;
 
 import java.lang.reflect.*;
 import java.util.*;
-import java.util.concurrent.*;
 
 public class Handler<T> implements InvocationHandler {
 
     private final T delegate;
+    private final Context context;
 
-    /**
-     * Proxies objects may be visible to multiple threads.
-     */
-    Map<Invocation, Object> cachedInvocations = new ConcurrentHashMap<>();
+    Map<Invocation, Object> cachedInvocations = new HashMap<>();
 
-    public Handler(T delegate) {
+    public Handler(T delegate, Context context) {
         this.delegate = delegate;
+        this.context = context;
+    }
+
+    public T getDelegate() {
+        return delegate;
     }
 
     static Object[] unproxify(Object[] args) {
@@ -46,34 +48,24 @@ public class Handler<T> implements InvocationHandler {
         Object[] res = args;
         for (int i = 0; i < args.length; i++) {
             Object arg = args[i];
-            if (arg != null) {
-                if (Proxy.isProxyClass(arg.getClass())) {
-                    Handler<?> h = (Handler<?>) Proxy.getInvocationHandler(arg);
-                    if (res == args) {
-                        res = args.clone();
-                    }
-                    res[i] = h.delegate;
-                } else if (arg instanceof Object[]) {
-                    Object[] arrayArg = (Object[]) arg;
-                    arrayArg = unproxify(arrayArg);
-                    if (arrayArg != arg) {
-                        if (res == args) {
-                            res = args.clone();
-                        }
-                        res[i] = arrayArg;
-                    }
+            if (arg != null && Proxy.isProxyClass(arg.getClass())) {
+                Handler<?> h = (Handler<?>) Proxy.getInvocationHandler(arg);
+                if (res == args) {
+                    res = args.clone();
                 }
+                res[i] = h.delegate;
             }
         }
         return res;
     }
 
+    /**
+     * @param method
+     */
     private static boolean isCacheable(Method method) {
         // TODO: use annotations for finer control of what should be cached
-        return method.getReturnType() != Void.TYPE;
+        return true;
     }
-
-    private static final Object NULL_RESULT = new Object();
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] a) throws Throwable {
@@ -81,33 +73,21 @@ public class Handler<T> implements InvocationHandler {
         boolean isCacheable = isCacheable(method);
         Invocation invocation = new Invocation(method, delegate, args);
         if (isCacheable) {
-            Object result = cachedInvocations.get(invocation);
-            if (result != null) {
-                if (result == NULL_RESULT) {
-                    result = null;
-                }
+            assert method.getReturnType() != Void.TYPE : method;
+            if (cachedInvocations.containsKey(invocation)) {
+                Object result = cachedInvocations.get(invocation);
                 // System.out.println(invocation + ": " + result);
                 return result;
             }
         } else {
-            // System.out.println("not cacheable: " + method);
+            // System.out.println("not pure: " + method);
         }
 
-        Context context = Context.getCurrent();
-        assert context != null;
-        try {
-            assert context.activeInvocations >= 0;
-            context.activeInvocations++;
-            Object result = invocation.invoke();
-            result = context.get(result);
-            if (isCacheable) {
-                context.invocationCacheHits--;
-                cachedInvocations.put(invocation, result == null ? NULL_RESULT : result);
-            }
-            return result;
-        } finally {
-            assert context.activeInvocations > 0;
-            context.activeInvocations--;
+        Object result = invocation.invoke();
+        result = context.get(result);
+        if (isCacheable) {
+            cachedInvocations.put(invocation, result);
         }
+        return result;
     }
 }
