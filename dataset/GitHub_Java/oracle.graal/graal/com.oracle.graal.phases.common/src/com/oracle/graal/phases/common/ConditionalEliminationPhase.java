@@ -258,14 +258,6 @@ public class ConditionalEliminationPhase extends Phase {
                 metricTypeRegistered.increment();
             }
         }
-
-        public void clear() {
-            knownTypes.clear();
-            knownNonNull.clear();
-            knownNull.clear();
-            trueConditions.clear();
-            falseConditions.clear();
-        }
     }
 
     public static ResolvedJavaType widen(ResolvedJavaType a, ResolvedJavaType b) {
@@ -363,9 +355,6 @@ public class ConditionalEliminationPhase extends Phase {
 
         private void registerControlSplitInfo(Node pred, AbstractBeginNode begin) {
             assert pred != null && begin != null;
-            if (begin instanceof LoopExitNode) {
-                state.clear();
-            }
 
             if (pred instanceof IfNode) {
                 IfNode ifNode = (IfNode) pred;
