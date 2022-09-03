@@ -55,7 +55,6 @@ public final class FrameDescriptor implements Cloneable {
     private final EconomicMap<Object, FrameSlot> identifierToSlotMap;
     private Assumption version;
     private EconomicMap<Object, Assumption> identifierToNotInFrameAssumptionMap;
-    private int size;
 
     /**
      * Flag that can be used by the runtime to track that {@link Frame#materialize()} was called on
@@ -146,8 +145,7 @@ public final class FrameDescriptor implements Cloneable {
         if (identifierToSlotMap.containsKey(identifier)) {
             throw new IllegalArgumentException("duplicate frame slot: " + identifier);
         }
-        FrameSlot slot = new FrameSlot(this, identifier, info, kind, size);
-        size++;
+        FrameSlot slot = new FrameSlot(this, identifier, info, kind, slots.size());
         slots.add(slot);
         identifierToSlotMap.put(identifier, slot);
         updateVersion();
@@ -228,26 +226,23 @@ public final class FrameDescriptor implements Cloneable {
      */
     public void removeFrameSlot(Object identifier) {
         CompilerAsserts.neverPartOfCompilation(NEVER_PART_OF_COMPILATION_MESSAGE);
-        FrameSlot slot = identifierToSlotMap.get(identifier);
-        if (slot == null) {
+        if (!identifierToSlotMap.containsKey(identifier)) {
             throw new IllegalArgumentException("no such frame slot: " + identifier);
         }
-        slots.remove(slot);
+        slots.remove(identifierToSlotMap.get(identifier));
         identifierToSlotMap.removeKey(identifier);
         updateVersion();
         getNotInFrameAssumption(identifier);
     }
 
     /**
-     * Returns the size of an array which is needed for storing all the slots in it using their
-     * {@link FrameSlot#getIndex()} as a position in the array. (The number may be bigger than the
-     * number of slots, if some slots are removed.)
+     * Returns number of slots in the descriptor.
      *
-     * @return the size of the frame
+     * @return the same value as {@link #getSlots()}.{@link List#size()} would return
      * @since 0.8 or earlier
      */
     public int getSize() {
-        return size;
+        return slots.size();
     }
 
     /**
@@ -366,10 +361,6 @@ public final class FrameDescriptor implements Cloneable {
         FrameDescriptor clonedFrameDescriptor = new FrameDescriptor(this.defaultValue);
         clonedFrameDescriptor.slots.addAll(slots);
         clonedFrameDescriptor.identifierToSlotMap.putAll(identifierToSlotMap);
-        for (FrameSlot slot : slots) {
-            slot.shareWith(clonedFrameDescriptor);
-        }
-        clonedFrameDescriptor.size = this.size;
         return clonedFrameDescriptor;
     }
 
