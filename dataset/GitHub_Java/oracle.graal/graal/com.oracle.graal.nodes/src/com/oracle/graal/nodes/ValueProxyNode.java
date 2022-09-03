@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,41 +23,60 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.Node.*;
-import com.oracle.graal.nodes.PhiNode.PhiType;
-import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.spi.ValueProxy;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 
+@NodeInfo(nameTemplate = "Proxy({i#value})")
+public final class ValueProxyNode extends ProxyNode implements Canonicalizable, Virtualizable, ValueProxy {
 
+    public static final NodeClass<ValueProxyNode> TYPE = NodeClass.create(ValueProxyNode.class);
+    @Input ValueNode value;
+    private final boolean loopPhiProxy;
 
-public class ValueProxyNode extends FloatingNode implements Node.IterableNodeType, ValueNumberable {
-    @Input(notDataflow = true) private BeginNode proxyPoint;
-    @Input private ValueNode value;
-    @Data private final PhiType type;
-
-    public ValueProxyNode(ValueNode value, BeginNode exit, PhiType type) {
-        super(value.stamp());
-        this.type = type;
-        assert exit != null;
-        this.proxyPoint = exit;
+    public ValueProxyNode(ValueNode value, LoopExitNode loopExit) {
+        super(TYPE, value.stamp(), loopExit);
         this.value = value;
+        loopPhiProxy = loopExit.loopBegin().isPhiAtMerge(value);
     }
 
+    @Override
     public ValueNode value() {
         return value;
     }
 
-    public BeginNode proxyPoint() {
-        return proxyPoint;
-    }
-
-    public PhiType type() {
-        return type;
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(value.stamp());
     }
 
     @Override
-    public boolean verify() {
-        assert value != null;
-        assert proxyPoint != null;
-        return super.verify();
+    public Node canonical(CanonicalizerTool tool) {
+        ValueNode curValue = value;
+        if (curValue.isConstant()) {
+            return curValue;
+        }
+        if (loopPhiProxy && !loopExit.loopBegin().isPhiAtMerge(curValue)) {
+            return curValue;
+        }
+        return this;
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(value);
+        if (alias instanceof VirtualObjectNode) {
+            tool.replaceWithVirtual((VirtualObjectNode) alias);
+        }
+    }
+
+    @Override
+    public ValueNode getOriginalNode() {
+        return value();
     }
 }
