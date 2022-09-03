@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,19 @@
  */
 package com.oracle.graal.asm.amd64.test;
 
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static org.junit.Assume.assumeTrue;
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static org.junit.Assume.*;
 
-import java.lang.reflect.Field;
+import java.lang.reflect.*;
 
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.JavaKind;
+import org.junit.*;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import com.oracle.graal.asm.amd64.AMD64Address;
-import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.asm.test.AssemblerTest;
-import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.amd64.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.asm.test.*;
 
 public class IncrementDecrementMacroTest extends AssemblerTest {
 
@@ -60,17 +54,17 @@ public class IncrementDecrementMacroTest extends AssemblerTest {
     private static class IncrementCodeGenTest implements CodeGenTest {
         final int value;
 
-        IncrementCodeGenTest(int value) {
+        public IncrementCodeGenTest(int value) {
             this.value = value;
         }
 
         @Override
         public byte[] generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc) {
             AMD64MacroAssembler asm = new AMD64MacroAssembler(target, registerConfig);
-            Register ret = registerConfig.getReturnRegister(JavaKind.Int);
+            Register ret = registerConfig.getReturnRegister(Kind.Int);
             try {
                 Field f = LongField.class.getDeclaredField("x");
-                AMD64Address arg = new AMD64Address(asRegister(cc.getArgument(0)), (int) UNSAFE.objectFieldOffset(f));
+                AMD64Address arg = new AMD64Address(asRegister(cc.getArgument(0)), (int) unsafe.objectFieldOffset(f));
                 asm.incrementq(arg, value);
                 asm.movq(ret, arg);
                 asm.ret(0);
@@ -97,17 +91,17 @@ public class IncrementDecrementMacroTest extends AssemblerTest {
     private static class DecrementCodeGenTest implements CodeGenTest {
         final int value;
 
-        DecrementCodeGenTest(int value) {
+        public DecrementCodeGenTest(int value) {
             this.value = value;
         }
 
         @Override
         public byte[] generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc) {
             AMD64MacroAssembler asm = new AMD64MacroAssembler(target, registerConfig);
-            Register ret = registerConfig.getReturnRegister(JavaKind.Int);
+            Register ret = registerConfig.getReturnRegister(Kind.Int);
             try {
                 Field f = LongField.class.getDeclaredField("x");
-                AMD64Address arg = new AMD64Address(asRegister(cc.getArgument(0)), (int) UNSAFE.objectFieldOffset(f));
+                AMD64Address arg = new AMD64Address(asRegister(cc.getArgument(0)), (int) unsafe.objectFieldOffset(f));
                 asm.decrementq(arg, value);
                 asm.movq(ret, arg);
                 asm.ret(0);
