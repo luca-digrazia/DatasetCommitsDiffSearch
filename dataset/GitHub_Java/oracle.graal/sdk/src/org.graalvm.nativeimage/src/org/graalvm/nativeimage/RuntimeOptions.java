@@ -29,8 +29,6 @@ import org.graalvm.options.OptionDescriptors;
 
 /**
  * Used for manipulating options at run time.
- *
- * @since 1.0
  */
 public final class RuntimeOptions {
 
@@ -38,28 +36,24 @@ public final class RuntimeOptions {
     }
 
     /**
-     * Set the value of the option with the provided name to the new value.
+     * Set the value of an option at run time.
      *
-     * @since 1.0
+     * @param optionName The name of the option to be changed.
+     * @param value The new value for the option.
      */
     public static void set(String optionName, Object value) {
         ImageSingletons.lookup(RuntimeOptionsSupport.class).set(optionName, value);
     }
 
     /**
-     * Get the value of the option with the provided name.
+     * Get the value of an option at run time.
      *
-     * @since 1.0
+     * @param optionName The name of the option to be accessed.
      */
     public static <T> T get(String optionName) {
         return ImageSingletons.lookup(RuntimeOptionsSupport.class).get(optionName);
     }
 
-    /**
-     * Returns all available run time options.
-     *
-     * @since 1.0
-     */
     public static OptionDescriptors getOptions() {
         return ImageSingletons.lookup(RuntimeOptionsSupport.class).getOptions();
     }

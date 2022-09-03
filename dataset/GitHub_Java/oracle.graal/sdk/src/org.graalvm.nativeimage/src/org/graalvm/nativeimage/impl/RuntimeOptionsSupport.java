@@ -32,6 +32,4 @@ public interface RuntimeOptionsSupport {
     <T> T get(String optionName);
 
     OptionDescriptors getOptions();
-
-    void runStartupHooks();
 }
