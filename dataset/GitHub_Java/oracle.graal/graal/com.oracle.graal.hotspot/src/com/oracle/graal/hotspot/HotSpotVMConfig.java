@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -58,11 +58,6 @@ public class HotSpotVMConfig extends CompilerObject {
         }
         return false;
     }
-
-    /**
-     * Maximum allowed size of allocated area for a frame.
-     */
-    public final int maxFrameSize = 16 * 1024;
 
     HotSpotVMConfig(CompilerToVM compilerToVm) {
         /** These fields are set in {@link CompilerToVM#initializeConfiguration}. */
@@ -857,7 +852,6 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMField(name = "Array<Klass*>::_length", type = "int", get = HotSpotVMField.Type.OFFSET) @Stable public int metaspaceArrayLengthOffset;
     @HotSpotVMField(name = "Array<Klass*>::_data[0]", type = "Klass*", get = HotSpotVMField.Type.OFFSET) @Stable public int metaspaceArrayBaseOffset;
 
-    @HotSpotVMField(name = "InstanceKlass::_graal_node_class", type = "oop", get = HotSpotVMField.Type.OFFSET) @Stable public int klassNodeClassOffset;
     @HotSpotVMField(name = "InstanceKlass::_source_file_name_index", type = "u2", get = HotSpotVMField.Type.OFFSET) @Stable public int klassSourceFileNameIndexOffset;
     @HotSpotVMField(name = "InstanceKlass::_init_state", type = "u1", get = HotSpotVMField.Type.OFFSET) @Stable public int klassStateOffset;
     @HotSpotVMField(name = "InstanceKlass::_constants", type = "ConstantPool*", get = HotSpotVMField.Type.OFFSET) @Stable public int instanceKlassConstantsOffset;
@@ -1017,10 +1011,9 @@ public class HotSpotVMConfig extends CompilerObject {
      */
     @HotSpotVMField(name = "Hsail::HSAILDeoptimizationInfo::_deopt_save_states[0]", type = "Hsail::HSAILKernelDeoptimization", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailSaveStatesOffset0;
     @HotSpotVMField(name = "Hsail::HSAILDeoptimizationInfo::_deopt_save_states[1]", type = "Hsail::HSAILKernelDeoptimization", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailSaveStatesOffset1;
-    @HotSpotVMField(name = "Hsail::HSAILDeoptimizationInfo::_deopt_occurred", type = "jint", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailDeoptOccurredOffset;
+    @HotSpotVMField(name = "Hsail::HSAILDeoptimizationInfo::_deopt_occurred", type = "jint", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailDeoptOffset;
     @HotSpotVMField(name = "Hsail::HSAILDeoptimizationInfo::_never_ran_array", type = "jboolean *", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailNeverRanArrayOffset;
     @HotSpotVMField(name = "Hsail::HSAILDeoptimizationInfo::_deopt_next_index", type = "jint", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailDeoptNextIndexOffset;
-    @HotSpotVMField(name = "Hsail::HSAILDeoptimizationInfo::_donor_threads", type = "JavaThread**", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailDonorThreadsOffset;
 
     @HotSpotVMField(name = "Hsail::HSAILKernelDeoptimization::_workitemid", type = "jint", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailDeoptimizationWorkItem;
     @HotSpotVMField(name = "Hsail::HSAILKernelDeoptimization::_actionAndReason", type = "jint", get = HotSpotVMField.Type.OFFSET) @Stable public int hsailDeoptimizationReason;
@@ -1246,7 +1239,6 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMField(name = "ThreadLocalAllocBuffer::_start", type = "HeapWord*", get = HotSpotVMField.Type.OFFSET) @Stable private int threadLocalAllocBufferStartOffset;
     @HotSpotVMField(name = "ThreadLocalAllocBuffer::_end", type = "HeapWord*", get = HotSpotVMField.Type.OFFSET) @Stable private int threadLocalAllocBufferEndOffset;
     @HotSpotVMField(name = "ThreadLocalAllocBuffer::_top", type = "HeapWord*", get = HotSpotVMField.Type.OFFSET) @Stable private int threadLocalAllocBufferTopOffset;
-    @HotSpotVMField(name = "ThreadLocalAllocBuffer::_pf_top", type = "HeapWord*", get = HotSpotVMField.Type.OFFSET) @Stable private int threadLocalAllocBufferPfTopOffset;
     @HotSpotVMField(name = "ThreadLocalAllocBuffer::_slow_allocations", type = "unsigned", get = HotSpotVMField.Type.OFFSET) @Stable private int threadLocalAllocBufferSlowAllocationsOffset;
     @HotSpotVMField(name = "ThreadLocalAllocBuffer::_fast_refill_waste", type = "unsigned", get = HotSpotVMField.Type.OFFSET) @Stable private int threadLocalAllocBufferFastRefillWasteOffset;
     @HotSpotVMField(name = "ThreadLocalAllocBuffer::_number_of_refills", type = "unsigned", get = HotSpotVMField.Type.OFFSET) @Stable private int threadLocalAllocBufferNumberOfRefillsOffset;
@@ -1283,10 +1275,6 @@ public class HotSpotVMConfig extends CompilerObject {
 
     public int threadTlabTopOffset() {
         return threadTlabOffset + threadLocalAllocBufferTopOffset;
-    }
-
-    public int threadTlabPfTopOffset() {
-        return threadTlabOffset + threadLocalAllocBufferPfTopOffset;
     }
 
     @HotSpotVMFlag(name = "TLABStats") @Stable public boolean tlabStats;
@@ -1504,22 +1492,6 @@ public class HotSpotVMConfig extends CompilerObject {
             this.base = base;
             this.shift = shift;
             this.alignment = alignment;
-        }
-
-        public int compress(long ptr) {
-            if (ptr == 0L) {
-                return 0;
-            } else {
-                return (int) ((ptr - base) >>> shift);
-            }
-        }
-
-        public long uncompress(int ptr) {
-            if (ptr == 0) {
-                return 0L;
-            } else {
-                return ((ptr & 0xFFFFFFFFL) << shift) + base;
-            }
         }
 
         @Override
