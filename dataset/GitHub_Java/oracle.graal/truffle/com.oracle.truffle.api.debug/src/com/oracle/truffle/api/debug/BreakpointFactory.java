@@ -57,7 +57,6 @@ import com.oracle.truffle.api.instrumentation.ExecutionEventNode;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
 import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
-import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter.IndexRange;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.InvalidAssumptionException;
@@ -156,7 +155,7 @@ final class BreakpointFactory {
         BreakpointImpl breakpoint = breakpoints.get(lineLocation);
         if (breakpoint == null) {
             final SourceSectionFilter query = SourceSectionFilter.newBuilder().sourceIs(lineLocation.getSource()).lineStartsIn(IndexRange.byLength(lineLocation.getLineNumber(), 1)).tagIs(
-                            StandardTags.StatementTag.class).build();
+                            Debugger.HALT_TAG).build();
             breakpoint = new BreakpointImpl(lineLocation, query, ignoreCount, oneShot);
             if (TRACE) {
                 trace("NEW " + breakpoint.getShortDescription());
@@ -188,7 +187,7 @@ final class BreakpointFactory {
      * @throws IOException if a breakpoint already exists at the location and the ignore count is
      *             the same
      */
-    Breakpoint create(int ignoreCount, Class<?> tag, boolean oneShot) throws IOException {
+    Breakpoint create(int ignoreCount, String tag, boolean oneShot) throws IOException {
         BreakpointImpl breakpoint = breakpoints.get(tag);
         if (breakpoint == null) {
             final SourceSectionFilter query = SourceSectionFilter.newBuilder().tagIs(tag).build();
@@ -395,7 +394,7 @@ final class BreakpointFactory {
             assert conditionSource != null;
             final Node instrumentedNode = context.getInstrumentedNode();
             if (condLangClass == null) {
-                condLangClass = Debugger.AccessorDebug.nodesAccess().findLanguage(instrumentedNode.getRootNode());
+                condLangClass = Debugger.ACCESSOR.findLanguage(instrumentedNode);
                 if (condLangClass == null) {
                     warningLog.addWarning("Unable to find language for condition: \"" + conditionSource.getCode() + "\" at " + getLocationDescription());
                     return null;
@@ -404,7 +403,7 @@ final class BreakpointFactory {
             try {
                 final CallTarget callTarget = Debugger.ACCESSOR.parse(condLangClass, conditionSource, instrumentedNode, new String[0]);
                 final DirectCallNode callNode = Truffle.getRuntime().createDirectCallNode(callTarget);
-                return new BreakpointConditionEventNode(context, callNode);
+                return new BreakpointConditionEventNode(instrumentedNode, callNode);
             } catch (IOException e) {
                 warningLog.addWarning("Unable to parse breakpoint condition: \"" + conditionSource.getCode() + "\" at " + getLocationDescription());
                 return null;
@@ -436,9 +435,9 @@ final class BreakpointFactory {
             this.state = after;
         }
 
-        private void doBreak(EventContext context, VirtualFrame vFrame) {
+        private void doBreak(Node node, VirtualFrame vFrame) {
             if (++hitCount > ignoreCount) {
-                breakpointCallback.haltedAt(context, vFrame.materialize(), "Breakpoint");
+                breakpointCallback.haltedAt(node, vFrame.materialize(), "Breakpoint");
             }
         }
 
@@ -447,7 +446,7 @@ final class BreakpointFactory {
          * where the breakpoint is set. Designed so that when in the fast path, there is either an
          * unconditional "halt" call to the debugger or nothing.
          */
-        private void nodeEnter(EventContext context, VirtualFrame vFrame) {
+        private void nodeEnter(Node astNode, VirtualFrame vFrame) {
             try {
                 // Deopt if the global active/inactive flag has changed
                 this.breakpointsActiveAssumption.check();
@@ -464,17 +463,17 @@ final class BreakpointFactory {
                 if (isOneShot()) {
                     dispose();
                 }
-                BreakpointImpl.this.doBreak(context, vFrame);
+                BreakpointImpl.this.doBreak(astNode, vFrame);
             }
         }
 
-        private void conditionFailure(EventContext context, VirtualFrame vFrame, Exception ex) {
+        private void conditionFailure(Node node, VirtualFrame vFrame, Exception ex) {
             addExceptionWarning(ex);
             if (TRACE) {
                 trace("breakpoint failure = %s  %s", ex, getShortDescription());
             }
             // Take the breakpoint if evaluation fails.
-            nodeEnter(context, vFrame);
+            nodeEnter(node, vFrame);
         }
 
         @TruffleBoundary
@@ -490,7 +489,7 @@ final class BreakpointFactory {
                 if (TRACE) {
                     trace("hit breakpoint " + getShortDescription());
                 }
-                BreakpointImpl.this.nodeEnter(context, frame);
+                BreakpointImpl.this.nodeEnter(context.getInstrumentedNode(), frame);
             }
 
             @Override
@@ -510,10 +509,10 @@ final class BreakpointFactory {
         /** Attached to implement a conditional breakpoint. */
         private class BreakpointConditionEventNode extends ExecutionEventNode {
             @Child DirectCallNode callNode;
-            final EventContext context;
+            final Node instrumentedNode;
 
-            BreakpointConditionEventNode(EventContext context, DirectCallNode callNode) {
-                this.context = context;
+            BreakpointConditionEventNode(Node node, DirectCallNode callNode) {
+                this.instrumentedNode = node;
                 this.callNode = callNode;
             }
 
@@ -526,13 +525,13 @@ final class BreakpointFactory {
                             trace("breakpoint cond=%b %s %s", result, conditionSource.getCode(), getShortDescription());
                         }
                         if ((Boolean) result) {
-                            nodeEnter(context, frame); // as if unconditional
+                            nodeEnter(instrumentedNode, frame); // as if unconditional
                         }
                     } else {
-                        conditionFailure(context, frame, new RuntimeException("breakpoint condition failure: non-boolean result " + conditionSource.getCode()));
+                        conditionFailure(instrumentedNode, frame, new RuntimeException("breakpoint condition failure: non-boolean result " + conditionSource.getCode()));
                     }
                 } catch (Exception ex) {
-                    conditionFailure(context, frame, new RuntimeException("breakpoint condition failure: " + conditionSource.getCode() + ex.getMessage()));
+                    conditionFailure(instrumentedNode, frame, new RuntimeException("breakpoint condition failure: " + conditionSource.getCode() + ex.getMessage()));
                 }
             }
         }
