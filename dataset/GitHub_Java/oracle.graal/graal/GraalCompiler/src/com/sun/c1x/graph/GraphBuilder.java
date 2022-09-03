@@ -104,6 +104,7 @@ public final class GraphBuilder {
     // Exception handler list
     private List<ExceptionHandler> exceptionHandlers;
 
+    private Block curBlock;                   // the current block
     private final FrameStateBuilder frameState;          // the current execution state
     private Instruction lastInstr;                 // the last instruction added
     private Instruction placeholder;
@@ -181,6 +182,7 @@ public final class GraphBuilder {
         startBlock.firstInstruction = startBlockBegin;
 
         graph.root().setStart(startBlockBegin);
+        curBlock = startBlock;
 
         RiExceptionHandler[] handlers = rootMethod.exceptionHandlers();
         if (handlers != null && handlers.length > 0) {
@@ -198,9 +200,10 @@ public final class GraphBuilder {
         }
 
         assert !loopHeaders.contains(startBlock);
-        mergeOrClone(startBlockBegin, frameState, false);
+        startBlockBegin.mergeOrClone(frameState, rootMethod, false);
 
         // 3. setup internal state for appending instructions
+        curBlock = startBlock;
         lastInstr = startBlockBegin;
         lastInstr.appendNext(null);
 
@@ -270,6 +273,7 @@ public final class GraphBuilder {
 
     private void finishStartBlock(BlockBegin startBlock, Instruction stdEntry) {
         assert bci() == 0;
+        assert curBlock.firstInstruction == startBlock;
         FrameState stateAfter = frameState.create(bci());
         Goto base = new Goto((BlockBegin) stdEntry, stateAfter, graph);
         appendWithBCI(base);
@@ -277,67 +281,14 @@ public final class GraphBuilder {
 //        assert stdEntry instanceof Placeholder;
         assert ((BlockBegin) stdEntry).stateBefore() == null;
         prepareTarget(0);
-        mergeOrClone(stdEntry, stateAfter, loopHeaders.contains(stdEntry));
+        mergeOrClone(stdEntry, stateAfter, method(), loopHeaders.contains(stdEntry));
     }
 
     private void prepareTarget(int bci) {
     }
 
-
-    public void mergeOrClone(Block target, FrameStateAccess newState) {
-        if (target.isLoopHeader) {
-            assert target.firstInstruction instanceof BlockBegin;
-            mergeOrClone(target.firstInstruction, newState, true);
-
-
-        }
-    }
-
-
-    private void mergeOrClone(Instruction first, FrameStateAccess stateAfter, boolean loopHeader) {
-        if (first instanceof BlockBegin) {
-            BlockBegin block = (BlockBegin) first;
-            FrameState existingState = block.stateBefore();
-
-            if (existingState == null) {
-                // copy state because it is modified
-                FrameState duplicate = stateAfter.duplicate(block.bci());
-
-                // if the block is a loop header, insert all necessary phis
-                if (loopHeader) {
-                    insertLoopPhis(block, duplicate);
-                }
-
-                block.setStateBefore(duplicate);
-            } else {
-                if (!C1XOptions.AssumeVerifiedBytecode && !existingState.isCompatibleWith(stateAfter)) {
-                    // stacks or locks do not match--bytecodes would not verify
-                    throw new CiBailout("stack or locks do not match");
-                }
-
-                assert existingState.localsSize() == stateAfter.localsSize();
-                assert existingState.stackSize() == stateAfter.stackSize();
-
-                existingState.merge(block, stateAfter);
-            }
-        } else {
-            assert false;
-        }
-    }
-
-    private void insertLoopPhis(BlockBegin merge, FrameState newState) {
-        int stackSize = newState.stackSize();
-        for (int i = 0; i < stackSize; i++) {
-            // always insert phis for the stack
-            newState.setupPhiForStack(merge, i);
-        }
-        int localsSize = newState.localsSize();
-        for (int i = 0; i < localsSize; i++) {
-            Value x = newState.localAt(i);
-            if (x != null) {
-                newState.setupPhiForLocal(merge, i);
-            }
-        }
+    private void mergeOrClone(Instruction block, FrameState stateAfter, RiMethod method, boolean loopHeader) {
+        ((BlockBegin) block).mergeOrClone(stateAfter, method, loopHeader);
     }
 
     public RiMethod method() {
@@ -350,6 +301,10 @@ public final class GraphBuilder {
 
     public int bci() {
         return stream.currentBCI();
+    }
+
+    public int nextBCI() {
+        return stream.nextBCI();
     }
 
     private void loadLocal(int index, CiKind kind) {
@@ -466,7 +421,7 @@ public final class GraphBuilder {
         if (oldState != null && dispatchEntry.predecessors().size() == 1) {
             dispatchEntry.setStateBefore(null);
         }
-        mergeOrClone(dispatchEntry, state, false);
+        dispatchEntry.mergeOrClone(state, null, false);
         FrameState mergedState = dispatchEntry.stateBefore();
 
         if (dispatchEntry.next() instanceof ExceptionDispatch) {
@@ -689,31 +644,35 @@ public final class GraphBuilder {
     }
 
     private void genGoto(int fromBCI, int toBCI) {
-        append(new Goto((BlockBegin) createTargetAt(toBCI, frameState), null, graph));
+        append(new Goto((BlockBegin) blockAt(toBCI), null, graph));
     }
 
-    private void ifNode(Value x, Condition cond, Value y) {
-        Instruction tsucc = createTargetAt(stream().readBranchDest(), frameState);
-        Instruction fsucc = createTargetAt(stream().nextBCI(), frameState);
+    private void ifNode(Value x, Condition cond, Value y, FrameState stateBefore) {
+        Instruction tsucc = blockAt(stream().readBranchDest());
+        Instruction fsucc = blockAt(stream().nextBCI());
         append(new If(x, cond, y, (BlockBegin) tsucc, (BlockBegin) fsucc, null, graph));
+        stateBefore.delete();
     }
 
     private void genIfZero(Condition cond) {
         Value y = appendConstant(CiConstant.INT_0);
+        FrameState stateBefore = frameState.create(bci());
         Value x = frameState.ipop();
-        ifNode(x, cond, y);
+        ifNode(x, cond, y, stateBefore);
     }
 
     private void genIfNull(Condition cond) {
+        FrameState stateBefore = frameState.create(bci());
         Value y = appendConstant(CiConstant.NULL_OBJECT);
         Value x = frameState.apop();
-        ifNode(x, cond, y);
+        ifNode(x, cond, y, stateBefore);
     }
 
     private void genIfSame(CiKind kind, Condition cond) {
+        FrameState stateBefore = frameState.create(bci());
         Value y = frameState.pop(kind);
         Value x = frameState.pop(kind);
-        ifNode(x, cond, y);
+        ifNode(x, cond, y, stateBefore);
     }
 
     private void genThrow(int bci) {
@@ -1066,23 +1025,15 @@ public final class GraphBuilder {
         for (int i = 0; i < max; i++) {
             // add all successors to the successor list
             int offset = ts.offsetAt(i);
-            list.add(createTargetAt(bci + offset, frameState));
+            list.add(blockAt(bci + offset));
             isBackwards |= offset < 0; // track if any of the successors are backwards
         }
         int offset = ts.defaultOffset();
         isBackwards |= offset < 0; // if the default successor is backwards
-        list.add(createTargetAt(bci + offset, frameState));
+        list.add(blockAt(bci + offset));
         boolean isSafepoint = isBackwards && !noSafepoints();
-        FrameState stateAfter = isSafepoint ? frameState.create(bci()) : null;
-        append(new TableSwitch(frameState.ipop(), (List) list, ts.lowKey(), stateAfter, graph));
-    }
-
-    private Instruction createTargetAt(int bci, FrameStateAccess stateAfter) {
-        return createTarget(blockList[bci], stateAfter);
-    }
-
-    private Instruction createTarget(Block block, FrameStateAccess stateAfter) {
-        return block.firstInstruction;
+        FrameState stateBefore = isSafepoint ? frameState.create(bci()) : null;
+        append(new TableSwitch(frameState.ipop(), (List) list, ts.lowKey(), stateBefore, graph));
     }
 
     private void genLookupswitch() {
@@ -1095,16 +1046,16 @@ public final class GraphBuilder {
         for (int i = 0; i < max; i++) {
             // add all successors to the successor list
             int offset = ls.offsetAt(i);
-            list.add(createTargetAt(bci + offset, frameState));
+            list.add(blockAt(bci + offset));
             keys[i] = ls.keyAt(i);
             isBackwards |= offset < 0; // track if any of the successors are backwards
         }
         int offset = ls.defaultOffset();
         isBackwards |= offset < 0; // if the default successor is backwards
-        list.add(createTargetAt(bci + offset, frameState));
+        list.add(blockAt(bci + offset));
         boolean isSafepoint = isBackwards && !noSafepoints();
-        FrameState stateAfter = isSafepoint ? frameState.create(bci()) : null;
-        append(new LookupSwitch(frameState.ipop(), (List) list, keys, stateAfter, graph));
+        FrameState stateBefore = isSafepoint ? frameState.create(bci()) : null;
+        append(new LookupSwitch(frameState.ipop(), (List) list, keys, stateBefore, graph));
     }
 
     private Value appendConstant(CiConstant constant) {
@@ -1157,10 +1108,12 @@ public final class GraphBuilder {
     }
 
     private void fillSyncHandler(Value lock, Block syncHandler) {
+        Block origBlock = curBlock;
         FrameState origState = frameState.create(-1);
         Instruction origLast = lastInstr;
 
         lastInstr = syncHandler.firstInstruction;
+        curBlock = syncHandler;
         while (lastInstr.next() != null) {
             // go forward to the end of the block
             lastInstr = lastInstr.next();
@@ -1182,9 +1135,10 @@ public final class GraphBuilder {
 
         genThrow(bci);
         BlockEnd end = (BlockEnd) lastInstr;
-        ((BlockBegin) syncHandler.firstInstruction).setEnd(end);
+        ((BlockBegin) curBlock.firstInstruction).setEnd(end);
         end.setStateAfter(frameState.create(bci()));
 
+        curBlock = origBlock;
         frameState.initializeFrom(origState);
         origState.delete();
         lastInstr = origLast;
@@ -1203,6 +1157,7 @@ public final class GraphBuilder {
             if (!isVisited(block)) {
                 markVisited(block);
                 // now parse the block
+                curBlock = block;
                 if (block.firstInstruction instanceof Placeholder) {
                     assert false;
                     placeholder = block.firstInstruction;
@@ -1216,26 +1171,25 @@ public final class GraphBuilder {
                 }
                 assert block.firstInstruction.next() == null;
 
-                iterateBytecodesForBlock(block);
+                iterateBytecodesForBlock(block.startBci);
             }
         }
     }
 
-    private BlockEnd iterateBytecodesForBlock(Block block) {
+    private BlockEnd iterateBytecodesForBlock(int bci) {
         assert frameState != null;
+        stream.setBCI(bci);
 
-        stream.setBCI(block.startBci);
-
+        BlockBegin block = (BlockBegin) curBlock.firstInstruction;
         BlockEnd end = null;
         int endBCI = stream.endBCI();
         boolean blockStart = true;
 
-        int bci = block.startBci;
         while (bci < endBCI) {
-            Block nextBlock = blockList[bci];
+            Instruction nextBlock = blockAtOrNull(bci);
             if (nextBlock != null && nextBlock != block) {
                 // we fell through to the next block, add a goto and break
-                end = new Goto((BlockBegin) nextBlock.firstInstruction, null, graph);
+                end = new Goto((BlockBegin) nextBlock, null, graph);
                 lastInstr = lastInstr.appendNext(end);
                 break;
             }
@@ -1243,8 +1197,8 @@ public final class GraphBuilder {
             int opcode = stream.currentBC();
 
             traceState();
-            traceInstruction(bci, opcode, blockStart);
-            processBytecode(bci, opcode);
+            traceInstruction(bci, stream, opcode, blockStart);
+            processBytecode(bci, stream, opcode);
 
             if (lastInstr instanceof BlockEnd) {
                 end = (BlockEnd) lastInstr;
@@ -1271,14 +1225,12 @@ public final class GraphBuilder {
         assert end != null : "end should exist after iterating over bytecodes";
         FrameState stateAtEnd = frameState.create(bci());
         end.setStateAfter(stateAtEnd);
-        if (block.firstInstruction instanceof BlockBegin) {
-            ((BlockBegin) block.firstInstruction).setEnd(end);
-        }
+        block.setEnd(end);
 
         // propagate the state
         for (BlockBegin succ : end.blockSuccessors()) {
-            assert succ.blockPredecessors().contains(end);
-            mergeOrClone(succ, stateAtEnd, loopHeaders.contains(succ));
+            assert succ.blockPredecessors().contains(block.end());
+            succ.mergeOrClone(stateAtEnd, method(), loopHeaders.contains(succ));
             addToWorkList(blockList[succ.bci()]);
         }
         return end;
@@ -1302,7 +1254,7 @@ public final class GraphBuilder {
         }
     }
 
-    private void processBytecode(int bci, int opcode) {
+    private void processBytecode(int bci, BytecodeStream s, int opcode) {
         int cpi;
 
         // Checkstyle: stop
@@ -1323,16 +1275,16 @@ public final class GraphBuilder {
             case FCONST_2       : frameState.fpush(appendConstant(CiConstant.FLOAT_2)); break;
             case DCONST_0       : frameState.dpush(appendConstant(CiConstant.DOUBLE_0)); break;
             case DCONST_1       : frameState.dpush(appendConstant(CiConstant.DOUBLE_1)); break;
-            case BIPUSH         : frameState.ipush(appendConstant(CiConstant.forInt(stream.readByte()))); break;
-            case SIPUSH         : frameState.ipush(appendConstant(CiConstant.forInt(stream.readShort()))); break;
+            case BIPUSH         : frameState.ipush(appendConstant(CiConstant.forInt(s.readByte()))); break;
+            case SIPUSH         : frameState.ipush(appendConstant(CiConstant.forInt(s.readShort()))); break;
             case LDC            : // fall through
             case LDC_W          : // fall through
-            case LDC2_W         : genLoadConstant(stream.readCPI()); break;
-            case ILOAD          : loadLocal(stream.readLocalIndex(), CiKind.Int); break;
-            case LLOAD          : loadLocal(stream.readLocalIndex(), CiKind.Long); break;
-            case FLOAD          : loadLocal(stream.readLocalIndex(), CiKind.Float); break;
-            case DLOAD          : loadLocal(stream.readLocalIndex(), CiKind.Double); break;
-            case ALOAD          : loadLocal(stream.readLocalIndex(), CiKind.Object); break;
+            case LDC2_W         : genLoadConstant(s.readCPI()); break;
+            case ILOAD          : loadLocal(s.readLocalIndex(), CiKind.Int); break;
+            case LLOAD          : loadLocal(s.readLocalIndex(), CiKind.Long); break;
+            case FLOAD          : loadLocal(s.readLocalIndex(), CiKind.Float); break;
+            case DLOAD          : loadLocal(s.readLocalIndex(), CiKind.Double); break;
+            case ALOAD          : loadLocal(s.readLocalIndex(), CiKind.Object); break;
             case ILOAD_0        : // fall through
             case ILOAD_1        : // fall through
             case ILOAD_2        : // fall through
@@ -1361,11 +1313,11 @@ public final class GraphBuilder {
             case BALOAD         : genLoadIndexed(CiKind.Byte  ); break;
             case CALOAD         : genLoadIndexed(CiKind.Char  ); break;
             case SALOAD         : genLoadIndexed(CiKind.Short ); break;
-            case ISTORE         : storeLocal(CiKind.Int, stream.readLocalIndex()); break;
-            case LSTORE         : storeLocal(CiKind.Long, stream.readLocalIndex()); break;
-            case FSTORE         : storeLocal(CiKind.Float, stream.readLocalIndex()); break;
-            case DSTORE         : storeLocal(CiKind.Double, stream.readLocalIndex()); break;
-            case ASTORE         : storeLocal(CiKind.Object, stream.readLocalIndex()); break;
+            case ISTORE         : storeLocal(CiKind.Int, s.readLocalIndex()); break;
+            case LSTORE         : storeLocal(CiKind.Long, s.readLocalIndex()); break;
+            case FSTORE         : storeLocal(CiKind.Float, s.readLocalIndex()); break;
+            case DSTORE         : storeLocal(CiKind.Double, s.readLocalIndex()); break;
+            case ASTORE         : storeLocal(CiKind.Object, s.readLocalIndex()); break;
             case ISTORE_0       : // fall through
             case ISTORE_1       : // fall through
             case ISTORE_2       : // fall through
@@ -1474,9 +1426,9 @@ public final class GraphBuilder {
             case IF_ICMPLE      : genIfSame(CiKind.Int, Condition.LE); break;
             case IF_ACMPEQ      : genIfSame(frameState.peekKind(), Condition.EQ); break;
             case IF_ACMPNE      : genIfSame(frameState.peekKind(), Condition.NE); break;
-            case GOTO           : genGoto(stream.currentBCI(), stream.readBranchDest()); break;
-            case JSR            : genJsr(stream.readBranchDest()); break;
-            case RET            : genRet(stream.readLocalIndex()); break;
+            case GOTO           : genGoto(s.currentBCI(), s.readBranchDest()); break;
+            case JSR            : genJsr(s.readBranchDest()); break;
+            case RET            : genRet(s.readLocalIndex()); break;
             case TABLESWITCH    : genTableswitch(); break;
             case LOOKUPSWITCH   : genLookupswitch(); break;
             case IRETURN        : genReturn(frameState.ipop()); break;
@@ -1485,28 +1437,28 @@ public final class GraphBuilder {
             case DRETURN        : genReturn(frameState.dpop()); break;
             case ARETURN        : genReturn(frameState.apop()); break;
             case RETURN         : genReturn(null  ); break;
-            case GETSTATIC      : cpi = stream.readCPI(); genGetStatic(cpi, constantPool().lookupField(cpi, opcode)); break;
-            case PUTSTATIC      : cpi = stream.readCPI(); genPutStatic(cpi, constantPool().lookupField(cpi, opcode)); break;
-            case GETFIELD       : cpi = stream.readCPI(); genGetField(cpi, constantPool().lookupField(cpi, opcode)); break;
-            case PUTFIELD       : cpi = stream.readCPI(); genPutField(cpi, constantPool().lookupField(cpi, opcode)); break;
-            case INVOKEVIRTUAL  : cpi = stream.readCPI(); genInvokeVirtual(constantPool().lookupMethod(cpi, opcode), cpi, constantPool()); break;
-            case INVOKESPECIAL  : cpi = stream.readCPI(); genInvokeSpecial(constantPool().lookupMethod(cpi, opcode), null, cpi, constantPool()); break;
-            case INVOKESTATIC   : cpi = stream.readCPI(); genInvokeStatic(constantPool().lookupMethod(cpi, opcode), cpi, constantPool()); break;
-            case INVOKEINTERFACE: cpi = stream.readCPI(); genInvokeInterface(constantPool().lookupMethod(cpi, opcode), cpi, constantPool()); break;
-            case NEW            : genNewInstance(stream.readCPI()); break;
-            case NEWARRAY       : genNewTypeArray(stream.readLocalIndex()); break;
-            case ANEWARRAY      : genNewObjectArray(stream.readCPI()); break;
+            case GETSTATIC      : cpi = s.readCPI(); genGetStatic(cpi, constantPool().lookupField(cpi, opcode)); break;
+            case PUTSTATIC      : cpi = s.readCPI(); genPutStatic(cpi, constantPool().lookupField(cpi, opcode)); break;
+            case GETFIELD       : cpi = s.readCPI(); genGetField(cpi, constantPool().lookupField(cpi, opcode)); break;
+            case PUTFIELD       : cpi = s.readCPI(); genPutField(cpi, constantPool().lookupField(cpi, opcode)); break;
+            case INVOKEVIRTUAL  : cpi = s.readCPI(); genInvokeVirtual(constantPool().lookupMethod(cpi, opcode), cpi, constantPool()); break;
+            case INVOKESPECIAL  : cpi = s.readCPI(); genInvokeSpecial(constantPool().lookupMethod(cpi, opcode), null, cpi, constantPool()); break;
+            case INVOKESTATIC   : cpi = s.readCPI(); genInvokeStatic(constantPool().lookupMethod(cpi, opcode), cpi, constantPool()); break;
+            case INVOKEINTERFACE: cpi = s.readCPI(); genInvokeInterface(constantPool().lookupMethod(cpi, opcode), cpi, constantPool()); break;
+            case NEW            : genNewInstance(s.readCPI()); break;
+            case NEWARRAY       : genNewTypeArray(s.readLocalIndex()); break;
+            case ANEWARRAY      : genNewObjectArray(s.readCPI()); break;
             case ARRAYLENGTH    : genArrayLength(); break;
-            case ATHROW         : genThrow(stream.currentBCI()); break;
+            case ATHROW         : genThrow(s.currentBCI()); break;
             case CHECKCAST      : genCheckCast(); break;
             case INSTANCEOF     : genInstanceOf(); break;
-            case MONITORENTER   : genMonitorEnter(frameState.apop(), stream.currentBCI()); break;
-            case MONITOREXIT    : genMonitorExit(frameState.apop(), stream.currentBCI()); break;
-            case MULTIANEWARRAY : genNewMultiArray(stream.readCPI()); break;
+            case MONITORENTER   : genMonitorEnter(frameState.apop(), s.currentBCI()); break;
+            case MONITOREXIT    : genMonitorExit(frameState.apop(), s.currentBCI()); break;
+            case MULTIANEWARRAY : genNewMultiArray(s.readCPI()); break;
             case IFNULL         : genIfNull(Condition.EQ); break;
             case IFNONNULL      : genIfNull(Condition.NE); break;
-            case GOTO_W         : genGoto(stream.currentBCI(), stream.readFarBranchDest()); break;
-            case JSR_W          : genJsr(stream.readFarBranchDest()); break;
+            case GOTO_W         : genGoto(s.currentBCI(), s.readFarBranchDest()); break;
+            case JSR_W          : genJsr(s.readFarBranchDest()); break;
             case BREAKPOINT:
                 throw new CiBailout("concurrent setting of breakpoint");
             default:
@@ -1515,7 +1467,7 @@ public final class GraphBuilder {
         // Checkstyle: resume
     }
 
-    private void traceInstruction(int bci, int opcode, boolean blockStart) {
+    private void traceInstruction(int bci, BytecodeStream s, int opcode, boolean blockStart) {
         if (C1XOptions.TraceBytecodeParserLevel >= TRACELEVEL_INSTRUCTIONS && !TTY.isSuppressed()) {
             StringBuilder sb = new StringBuilder(40);
             sb.append(blockStart ? '+' : '|');
@@ -1525,8 +1477,8 @@ public final class GraphBuilder {
                 sb.append(' ');
             }
             sb.append(bci).append(": ").append(Bytecodes.nameOf(opcode));
-            for (int i = bci + 1; i < stream.nextBCI(); ++i) {
-                sb.append(' ').append(stream.readUByte(i));
+            for (int i = bci + 1; i < s.nextBCI(); ++i) {
+                sb.append(' ').append(s.readUByte(i));
             }
             log.println(sb.toString());
         }
