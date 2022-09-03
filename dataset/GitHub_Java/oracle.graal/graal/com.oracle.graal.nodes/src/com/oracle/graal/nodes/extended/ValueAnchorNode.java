@@ -28,14 +28,13 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
  * The ValueAnchor instruction keeps non-CFG (floating) nodes above a certain point in the graph.
  */
-public final class ValueAnchorNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType, Virtualizable {
+public final class ValueAnchorNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType {
 
     public ValueAnchorNode(ValueNode... values) {
         super(StampFactory.dependency(), values);
@@ -72,7 +71,7 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
                 ArithmeticNode arithmeticNode = (ArithmeticNode) node;
                 if (arithmeticNode.y().isConstant()) {
                     Constant constant = arithmeticNode.y().asConstant();
-                    assert constant.getKind() == arithmeticNode.kind() : constant.getKind() + " != " + arithmeticNode.kind();
+                    assert constant.kind == arithmeticNode.kind() : constant.kind + " != " + arithmeticNode.kind();
                     if (constant.asLong() != 0) {
                         continue;
                     }
@@ -84,23 +83,5 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
             return null; // no node which require an anchor found
         }
         return this;
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        // don't process this node if it is anchoring the return value
-        if (next() instanceof MonitorExitNode) {
-            MonitorExitNode monitorExit = (MonitorExitNode) next();
-            if (monitorExit.stateAfter() != null && monitorExit.stateAfter().bci == FrameState.AFTER_BCI && monitorExit.next() instanceof ReturnNode) {
-                return;
-            }
-        }
-        for (ValueNode node : dependencies().nonNull().and(isNotA(BeginNode.class))) {
-            State state = tool.getObjectState(node);
-            if (state == null || state.getState() != EscapeState.Virtual) {
-                return;
-            }
-        }
-        tool.delete();
     }
 }

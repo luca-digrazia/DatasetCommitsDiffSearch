@@ -22,24 +22,21 @@
  */
 package com.oracle.graal.nodes.util;
 
+import static com.oracle.graal.graph.iterators.NodePredicates.*;
+
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.graph.iterators.NodePredicates.PositiveTypePredicate;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
 
 public class GraphUtil {
 
-    private static final NodePredicate FLOATING = new NodePredicate() {
-        @Override
-        public final boolean  apply(Node n) {
-            //isA(FloatingNode.class).or(VirtualState.class).or(CallTargetNode.class)
-            return n instanceof FloatingNode || n instanceof VirtualState || n instanceof CallTargetNode;
-        }
-    };
+    private static final PositiveTypePredicate FLOATING = isA(FloatingNode.class).or(VirtualState.class).or(CallTargetNode.class);
 
     public static void killCFG(FixedNode node) {
         assert node.isAlive();
@@ -75,7 +72,12 @@ public class GraphUtil {
                     loopend.predecessor().replaceFirstSuccessor(loopend, null);
                     loopend.safeDelete();
                 }
-                begin.removeExits();
+                for (LoopExitNode loopexit : begin.loopExits().snapshot()) {
+                    for (ValueProxyNode vpn : loopexit.proxies().snapshot()) {
+                        graph.replaceFloating(vpn, vpn.value());
+                    }
+                    graph.replaceFixedWithFixed(loopexit, graph.add(new BeginNode()));
+                }
                 killCFG(begin.next());
                 begin.safeDelete();
             } else if (merge instanceof LoopBeginNode && ((LoopBeginNode) merge).loopEnds().isEmpty()) { // not a loop anymore

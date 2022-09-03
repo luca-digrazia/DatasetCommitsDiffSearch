@@ -53,6 +53,7 @@ public class Block {
     }
 
     public int getId() {
+        assert id >= 0;
         return id;
     }
 
@@ -155,6 +156,18 @@ public class Block {
             @Override
             public Iterator<FixedNode> iterator() {
                 return new NodeIterator();
+            }
+
+            @Override
+            public String toString() {
+                StringBuilder str = new StringBuilder().append('[');
+                for (FixedNode node : this) {
+                    str.append(node).append(", ");
+                }
+                if (str.length() > 1) {
+                    str.setLength(str.length() - 2);
+                }
+                return str.append(']').toString();
             }
         };
     }

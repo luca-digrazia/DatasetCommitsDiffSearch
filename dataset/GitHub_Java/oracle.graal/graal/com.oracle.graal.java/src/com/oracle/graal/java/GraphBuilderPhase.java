@@ -292,7 +292,7 @@ public final class GraphBuilderPhase extends Phase {
             }
         } else if (con instanceof Constant) {
             Constant constant = (Constant) con;
-            frameState.push(constant.getKind().stackKind(), appendConstant(constant));
+            frameState.push(constant.kind.stackKind(), appendConstant(constant));
         } else {
             throw new Error("lookupConstant returned an object of incorrect type");
         }
@@ -663,7 +663,7 @@ public final class GraphBuilderPhase extends Phase {
     void genNewInstance(int cpi) {
         JavaType type = lookupType(cpi, NEW);
         if (type instanceof ResolvedJavaType && ((ResolvedJavaType) type).isInitialized()) {
-            NewInstanceNode n = currentGraph.add(new NewInstanceNode((ResolvedJavaType) type, true));
+            NewInstanceNode n = currentGraph.add(new NewInstanceNode((ResolvedJavaType) type));
             frameState.apush(append(n));
         } else {
             append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId)));
@@ -696,7 +696,7 @@ public final class GraphBuilderPhase extends Phase {
     private void genNewPrimitiveArray(int typeCode) {
         Kind kind = arrayTypeCodeToKind(typeCode);
         ResolvedJavaType elementType = runtime.getResolvedJavaType(kind);
-        NewPrimitiveArrayNode nta = currentGraph.add(new NewPrimitiveArrayNode(elementType, frameState.ipop(), true));
+        NewPrimitiveArrayNode nta = currentGraph.add(new NewPrimitiveArrayNode(frameState.ipop(), elementType));
         frameState.apush(append(nta));
     }
 
@@ -704,7 +704,7 @@ public final class GraphBuilderPhase extends Phase {
         JavaType type = lookupType(cpi, ANEWARRAY);
         ValueNode length = frameState.ipop();
         if (type instanceof ResolvedJavaType) {
-            NewArrayNode n = currentGraph.add(new NewObjectArrayNode((ResolvedJavaType) type, length, true));
+            NewArrayNode n = currentGraph.add(new NewObjectArrayNode((ResolvedJavaType) type, length));
             frameState.apush(append(n));
         } else {
             append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId)));
@@ -827,9 +827,9 @@ public final class GraphBuilderPhase extends Phase {
             constantValue = ((ResolvedJavaField) field).constantValue(null);
         }
         if (constantValue != null) {
-            frameState.push(constantValue.getKind().stackKind(), appendConstant(constantValue));
+            frameState.push(constantValue.kind.stackKind(), appendConstant(constantValue));
         } else {
-            ValueNode container = genTypeOrDeopt(field.kind() == Kind.Object ? JavaType.Representation.StaticObjectFields : JavaType.Representation.StaticPrimitiveFields, holder, isInitialized);
+            ValueNode container = genTypeOrDeopt(JavaType.Representation.StaticFields, holder, isInitialized);
             Kind kind = field.kind();
             if (container != null) {
                 LoadFieldNode load = currentGraph.add(new LoadFieldNode(container, (ResolvedJavaField) field, graphId));
@@ -843,8 +843,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genPutStatic(JavaField field) {
         JavaType holder = field.holder();
-        boolean isInitialized = (field instanceof ResolvedJavaField) && ((ResolvedJavaType) holder).isInitialized();
-        ValueNode container = genTypeOrDeopt(field.kind() == Kind.Object ? JavaType.Representation.StaticObjectFields : JavaType.Representation.StaticPrimitiveFields, holder, isInitialized);
+        ValueNode container = genTypeOrDeopt(JavaType.Representation.StaticFields, holder, field instanceof ResolvedJavaField && ((ResolvedJavaType) holder).isInitialized());
         ValueNode value = frameState.pop(field.kind().stackKind());
         if (container != null) {
             StoreFieldNode store = currentGraph.add(new StoreFieldNode(container, (ResolvedJavaField) field, value, graphId));
@@ -1005,17 +1004,12 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private MonitorEnterNode genMonitorEnter(ValueNode x) {
-        frameState.pushLock(GraphUtil.originalValue(x));
         MonitorEnterNode monitorEnter = currentGraph.add(new MonitorEnterNode(x));
         appendWithBCI(monitorEnter);
         return monitorEnter;
     }
 
     private MonitorExitNode genMonitorExit(ValueNode x) {
-        ValueNode lockedObject = frameState.popLock();
-        if (lockedObject != GraphUtil.originalValue(x)) {
-            throw new BailoutException("unbalanced monitors: mismatch at monitorexit %s %s", GraphUtil.originalValue(x), lockedObject);
-        }
         MonitorExitNode monitorExit = currentGraph.add(new MonitorExitNode(x));
         appendWithBCI(monitorExit);
         return monitorExit;
@@ -1365,12 +1359,7 @@ public final class GraphBuilderPhase extends Phase {
         }
 
         synchronizedEpilogue(FrameState.AFTER_BCI);
-        if (!frameState.locksEmpty()) {
-            System.out.println("unbalanced monitors");
-            throw new BailoutException("unbalanced monitors");
-        }
         ReturnNode returnNode = currentGraph.add(new ReturnNode(x));
-
         append(returnNode);
     }
 
