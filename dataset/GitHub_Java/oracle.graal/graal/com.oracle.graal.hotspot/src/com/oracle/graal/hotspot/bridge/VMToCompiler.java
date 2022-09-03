@@ -23,44 +23,32 @@
 
 package com.oracle.graal.hotspot.bridge;
 
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.hotspot.ri.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import java.io.*;
 
 /**
  * Calls from HotSpot into Java.
  */
 public interface VMToCompiler {
 
-    boolean compileMethod(HotSpotMethodResolved method, int entryBCI, boolean blocking, int priority) throws Throwable;
+    void startRuntime() throws Throwable;
 
-    void shutdownCompiler() throws Throwable;
-
-    void startCompiler() throws Throwable;
+    void startCompiler(boolean bootstrapEnabled) throws Throwable;
 
     void bootstrap() throws Throwable;
 
-    RiMethod createRiMethodUnresolved(String name, String signature, RiType holder);
+    /**
+     * Compiles a method to machine code. This method is called from the VM
+     * (VMToCompiler::compileMethod).
+     *
+     * @param ctask the CompileTask pointer if this is a request from a HotSpot compiler thread
+     */
+    void compileMethod(long metaspaceMethod, int entryBCI, long ctask, boolean blocking);
 
-    RiSignature createRiSignature(String signature);
+    void shutdownCompiler() throws Exception;
 
-    RiField createRiField(RiType holder, String name, RiType type, int offset, int flags);
+    void shutdownRuntime() throws Throwable;
 
-    RiType createRiType(HotSpotConstantPool pool, String name);
+    void compileTheWorld() throws Throwable;
 
-    RiType createRiTypePrimitive(int basicType);
-
-    RiType createRiTypeUnresolved(String name);
-
-    CiConstant createCiConstant(CiKind kind, long value);
-
-    CiConstant createCiConstantFloat(float value);
-
-    CiConstant createCiConstantDouble(double value);
-
-    CiConstant createCiConstantObject(Object object);
-
-    PhasePlan createPhasePlan(OptimisticOptimizations optimisticOpts);
+    PrintStream log();
 }
