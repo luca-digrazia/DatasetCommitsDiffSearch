@@ -22,16 +22,30 @@
  */
 package com.oracle.graal.truffle;
 
-import java.lang.ref.*;
-import java.util.*;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleAssumptions;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleStackTraceLimit;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.truffle.api.impl.*;
-import com.oracle.truffle.api.nodes.*;
+import java.lang.ref.WeakReference;
+import java.util.Arrays;
+import java.util.stream.Collectors;
+
+import jdk.vm.ci.code.InstalledCode;
+
+import com.oracle.graal.debug.TTY;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.impl.AbstractAssumption;
+import com.oracle.truffle.api.nodes.InvalidAssumptionException;
 
 public final class OptimizedAssumption extends AbstractAssumption {
 
-    List<WeakReference<InstalledCode>> dependentInstalledCode;
+    private static class Entry {
+        WeakReference<InstalledCode> installedCode;
+        long version;
+        Entry next;
+    }
+
+    private Entry first;
 
     public OptimizedAssumption(String name) {
         super(name);
@@ -39,33 +53,71 @@ public final class OptimizedAssumption extends AbstractAssumption {
 
     @Override
     public void check() throws InvalidAssumptionException {
-        if (!isValid) {
+        if (!this.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new InvalidAssumptionException();
         }
     }
 
     @Override
-    public synchronized void invalidate() {
+    public void invalidate() {
         if (isValid) {
-            if (dependentInstalledCode != null) {
-                for (WeakReference<InstalledCode> installedCodeReference : dependentInstalledCode) {
-                    InstalledCode installedCode = installedCodeReference.get();
-                    if (installedCode != null) {
-                        installedCode.invalidate();
-                    }
+            invalidateImpl();
+        }
+    }
+
+    @TruffleBoundary
+    private synchronized void invalidateImpl() {
+        /*
+         * Check again, now that we are holding the lock. Since isValid is defined volatile,
+         * double-checked locking is allowed.
+         */
+        if (!isValid) {
+            return;
+        }
+
+        boolean invalidatedInstalledCode = false;
+        Entry e = first;
+        while (e != null) {
+            InstalledCode installedCode = e.installedCode.get();
+            if (installedCode != null && installedCode.getVersion() == e.version) {
+                invalidateWithReason(installedCode, "assumption invalidated");
+                invalidatedInstalledCode = true;
+                if (TraceTruffleAssumptions.getValue()) {
+                    logInvalidatedInstalledCode(installedCode);
                 }
-                dependentInstalledCode = null;
             }
-            isValid = false;
+            e = e.next;
+        }
+        first = null;
+        isValid = false;
+
+        if (TraceTruffleAssumptions.getValue()) {
+            if (invalidatedInstalledCode) {
+                logStackTrace();
+            }
         }
     }
 
     public synchronized void registerInstalledCode(InstalledCode installedCode) {
         if (isValid) {
-            if (dependentInstalledCode == null) {
-                dependentInstalledCode = new ArrayList<>();
+            Entry e = new Entry();
+            e.installedCode = new WeakReference<>(installedCode);
+            e.version = installedCode.getVersion();
+            e.next = first;
+            first = e;
+        } else {
+            invalidateWithReason(installedCode, "assumption already invalidated when installing code");
+            if (TraceTruffleAssumptions.getValue()) {
+                logInvalidatedInstalledCode(installedCode);
+                logStackTrace();
             }
-            dependentInstalledCode.add(new WeakReference<>(installedCode));
+        }
+    }
+
+    private void invalidateWithReason(InstalledCode installedCode, String reason) {
+        if (installedCode instanceof OptimizedCallTarget) {
+            ((OptimizedCallTarget) installedCode).invalidate(this, reason);
         } else {
             installedCode.invalidate();
         }
@@ -74,5 +126,17 @@ public final class OptimizedAssumption extends AbstractAssumption {
     @Override
     public boolean isValid() {
         return isValid;
+    }
+
+    private void logInvalidatedInstalledCode(InstalledCode installedCode) {
+        TTY.out().out().printf("assumption '%s' invalidated installed code '%s'\n", name, installedCode);
+    }
+
+    private static void logStackTrace() {
+        final int skip = 1;
+        final int limit = TraceTruffleStackTraceLimit.getValue();
+        StackTraceElement[] stackTrace = new Throwable().getStackTrace();
+        String suffix = stackTrace.length > skip + limit ? "\n  ..." : "";
+        TTY.out().out().println(Arrays.stream(stackTrace).skip(skip).limit(limit).map(StackTraceElement::toString).collect(Collectors.joining("\n  ", "", suffix)));
     }
 }
