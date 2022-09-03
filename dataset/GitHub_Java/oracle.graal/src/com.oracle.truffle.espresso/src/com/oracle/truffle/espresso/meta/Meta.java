@@ -37,10 +37,8 @@ import java.util.function.IntFunction;
 import java.util.stream.Stream;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.FieldInfo;
 import com.oracle.truffle.espresso.impl.MethodInfo;
-import com.oracle.truffle.espresso.intrinsics.Type;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -200,22 +198,12 @@ public final class Meta {
         return ex;
     }
 
-    public StaticObject initEx(java.lang.Class<?> clazz, @Type(Throwable.class) StaticObject cause) {
-        StaticObject ex = throwableKlass(clazz).allocateInstance();
-        meta(ex).method("<init>", void.class, Throwable.class).invoke(cause);
-        return ex;
-    }
-
     public EspressoException throwEx(java.lang.Class<?> clazz) {
         throw new EspressoException(initEx(clazz));
     }
 
     public EspressoException throwEx(java.lang.Class<?> clazz, String message) {
         throw new EspressoException(initEx(clazz, message));
-    }
-
-    public EspressoException throwEx(java.lang.Class<?> clazz, @Type(Throwable.class) StaticObject cause) {
-        throw new EspressoException(initEx(clazz, cause));
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -334,7 +322,31 @@ public final class Meta {
             }
         }
 
-        return guestObject;
+        if (Arrays.stream(JavaKind.values()).anyMatch(c -> c.toBoxedJavaClass() == guestObject.getClass())) {
+            // boxed value
+            return toKind(guestObject, kind);
+        }
+        throw EspressoError.shouldNotReachHere(guestObject + " cannot be converted to host world");
+    }
+
+    private static Object toKind(Object boxed, JavaKind kind) {
+        if (kind.getStackKind() != kind) {
+            assert kind.getStackKind() == JavaKind.Int;
+            assert boxed.getClass() == Integer.class;
+            switch (kind) {
+                case Boolean:
+                    int v = (int) boxed;
+                    assert v == 0 || v == 1;
+                    return v != 0;
+                case Byte:
+                    return (byte) (int) boxed;
+                case Char:
+                    return (char) (int) boxed;
+                case Short:
+                    return (short) (int) boxed;
+            }
+        }
+        return boxed;
     }
 
     public Object toHost(Object guestObject) {
@@ -367,14 +379,6 @@ public final class Meta {
 
         Klass(com.oracle.truffle.espresso.impl.Klass klass) {
             this.klass = klass;
-        }
-
-        public void safeInitialize() {
-            try {
-                klass.initialize();
-            } catch (EspressoException e) {
-                throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ExceptionInInitializerError.class, e.getException());
-            }
         }
 
         public Meta.Klass getComponentType() {

@@ -1316,6 +1316,7 @@ public class JniEnv extends NativeEnv {
         return EspressoLanguage.getCurrentContext().getVM().JVM_DefineClass(name, loader, bufPtr, bufLen, StaticObject.NULL);
     }
 
+
     // JavaVM **vm);
 
     @JniImpl
