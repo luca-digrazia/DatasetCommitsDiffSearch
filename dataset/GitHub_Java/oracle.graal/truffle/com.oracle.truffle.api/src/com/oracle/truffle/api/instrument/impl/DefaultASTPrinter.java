@@ -24,39 +24,45 @@
  */
 package com.oracle.truffle.api.instrument.impl;
 
-import java.io.*;
-import java.util.*;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.ArrayList;
 
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind;
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeClass;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * A language-agnostic for printing out various pieces of a Truffle AST.
  */
-public class DefaultASTPrinter implements ASTPrinter {
+@SuppressWarnings("deprecation")
+@Deprecated
+public class DefaultASTPrinter implements com.oracle.truffle.api.instrument.ASTPrinter {
 
     public DefaultASTPrinter() {
     }
 
+    @Override
     public void printTree(PrintWriter p, Node node, int maxDepth, Node markNode) {
         printTree(p, node, maxDepth, markNode, 1);
         p.println();
         p.flush();
     }
 
+    @Override
     public String printTreeToString(Node node, int maxDepth, Node markNode) {
         StringWriter out = new StringWriter();
         printTree(new PrintWriter(out), node, maxDepth, markNode);
         return out.toString();
     }
 
+    @Override
     public String printTreeToString(Node node, int maxDepth) {
         return printTreeToString(node, maxDepth, null);
     }
 
+    @Override
     public String printNodeWithInstrumentation(Node node) {
         if (node == null) {
             return "null";
@@ -64,15 +70,15 @@ public class DefaultASTPrinter implements ASTPrinter {
         final StringBuilder sb = new StringBuilder();
         sb.append(nodeName(node));
         sb.append("(");
-        if (node instanceof InstrumentationNode) {
-            sb.append(instrumentInfo((InstrumentationNode) node));
+        if (node instanceof com.oracle.truffle.api.instrument.InstrumentationNode) {
+            sb.append(instrumentInfo((com.oracle.truffle.api.instrument.InstrumentationNode) node));
         }
         sb.append(sourceInfo(node));
         sb.append(NodeUtil.printSyntaxTags(node));
         sb.append(")");
         final Node parent = node.getParent();
-        if (parent instanceof WrapperNode) {
-            final WrapperNode wrapper = (WrapperNode) parent;
+        if (parent instanceof com.oracle.truffle.api.instrument.WrapperNode) {
+            final com.oracle.truffle.api.instrument.WrapperNode wrapper = (com.oracle.truffle.api.instrument.WrapperNode) parent;
             sb.append(" Probed");
             sb.append(NodeUtil.printSyntaxTags(wrapper));
         }
@@ -89,20 +95,20 @@ public class DefaultASTPrinter implements ASTPrinter {
 
         p.print("(");
 
-        if (node instanceof InstrumentationNode) {
-            p.print(instrumentInfo((InstrumentationNode) node));
+        if (node instanceof com.oracle.truffle.api.instrument.InstrumentationNode) {
+            p.print(instrumentInfo((com.oracle.truffle.api.instrument.InstrumentationNode) node));
         }
 
         p.print(sourceInfo(node));
 
         p.print(NodeUtil.printSyntaxTags(node));
 
-        ArrayList<NodeFieldAccessor> childFields = new ArrayList<>();
+        ArrayList<com.oracle.truffle.api.nodes.NodeFieldAccessor> childFields = new ArrayList<>();
 
-        for (NodeFieldAccessor field : NodeClass.get(node).getFields()) {
-            if (field.getKind() == NodeFieldKind.CHILD || field.getKind() == NodeFieldKind.CHILDREN) {
+        for (com.oracle.truffle.api.nodes.NodeFieldAccessor field : NodeClass.get(node).getFields()) {
+            if (field.getKind() == com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind.CHILD || field.getKind() == com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind.CHILDREN) {
                 childFields.add(field);
-            } else if (field.getKind() == NodeFieldKind.DATA) {
+            } else if (field.getKind() == com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind.DATA) {
                 // p.print(sep);
                 // sep = ", ";
                 //
@@ -121,16 +127,16 @@ public class DefaultASTPrinter implements ASTPrinter {
 
             if (childFields.size() != 0) {
                 p.print(" {");
-                for (NodeFieldAccessor field : childFields) {
+                for (com.oracle.truffle.api.nodes.NodeFieldAccessor field : childFields) {
 
                     Object value = field.loadValue(node);
                     if (value == null) {
                         printNewLine(p, level);
                         p.print(field.getName());
                         p.print(" = null ");
-                    } else if (field.getKind() == NodeFieldKind.CHILD) {
+                    } else if (field.getKind() == com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind.CHILD) {
                         printChild(p, maxDepth, markNode, level, field, value);
-                    } else if (field.getKind() == NodeFieldKind.CHILDREN) {
+                    } else if (field.getKind() == com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind.CHILDREN) {
                         printChildren(p, maxDepth, markNode, level, field, value);
                     } else {
                         printNewLine(p, level);
@@ -143,7 +149,7 @@ public class DefaultASTPrinter implements ASTPrinter {
         }
     }
 
-    protected void printChildren(PrintWriter p, int maxDepth, Node markNode, int level, NodeFieldAccessor field, Object value) {
+    protected void printChildren(PrintWriter p, int maxDepth, Node markNode, int level, com.oracle.truffle.api.nodes.NodeFieldAccessor field, Object value) {
         printNewLine(p, level);
         p.print(field.getName());
         Node[] children = (Node[]) value;
@@ -157,7 +163,7 @@ public class DefaultASTPrinter implements ASTPrinter {
         p.print("]");
     }
 
-    protected void printChild(PrintWriter p, int maxDepth, Node markNode, int level, NodeFieldAccessor field, Object value) {
+    protected void printChild(PrintWriter p, int maxDepth, Node markNode, int level, com.oracle.truffle.api.nodes.NodeFieldAccessor field, Object value) {
         final Node valueNode = (Node) value;
         printNewLine(p, level, valueNode == markNode);
         p.print(field.getName());
@@ -187,9 +193,8 @@ public class DefaultASTPrinter implements ASTPrinter {
     protected static String sourceInfo(Node node) {
         final SourceSection src = node.getSourceSection();
         if (src != null) {
-            if (src instanceof NullSourceSection) {
-                final NullSourceSection nullSection = (NullSourceSection) src;
-                return nullSection.getShortDescription();
+            if (src.getSource() == null) {
+                return src.getShortDescription();
             } else {
                 return src.getSource().getName() + ":" + src.getStartLine();
             }
@@ -197,7 +202,7 @@ public class DefaultASTPrinter implements ASTPrinter {
         return "";
     }
 
-    protected static String instrumentInfo(InstrumentationNode node) {
+    protected static String instrumentInfo(com.oracle.truffle.api.instrument.InstrumentationNode node) {
         final String info = node.instrumentationInfo();
         return info == null ? "" : info;
     }
