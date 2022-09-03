@@ -29,9 +29,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.Set;
 
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.code.SourceStackTraceBailoutException;
+import org.graalvm.compiler.core.common.CollectionsFactory;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.Debug;
@@ -68,9 +70,6 @@ import org.graalvm.compiler.nodes.spi.ValueProxy;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValue;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodePosition;
@@ -90,14 +89,14 @@ public class GraphUtil {
     @SuppressWarnings("try")
     public static void killCFG(FixedNode node, SimplifierTool tool) {
         try (Debug.Scope scope = Debug.scope("KillCFG", node)) {
-            EconomicSet<Node> unusedNodes = null;
-            EconomicSet<Node> unsafeNodes = null;
+            Set<Node> unusedNodes = null;
+            Set<Node> unsafeNodes = null;
             Graph.NodeEventScope nodeEventScope = null;
             if (VerifyGraalGraphEdges.getValue()) {
                 unsafeNodes = collectUnsafeNodes(node.graph());
             }
             if (VerifyKillCFGUnusedNodes.getValue()) {
-                EconomicSet<Node> collectedUnusedNodes = unusedNodes = CollectionFactory.newSet(Equivalence.IDENTITY);
+                Set<Node> collectedUnusedNodes = unusedNodes = CollectionsFactory.newSet();
                 nodeEventScope = node.graph().trackNodeEvents(new Graph.NodeEventListener() {
                     @Override
                     public void event(Graph.NodeEvent e, Node n) {
@@ -115,19 +114,13 @@ public class GraphUtil {
                 }
             }
             if (VerifyGraalGraphEdges.getValue()) {
-                EconomicSet<Node> newUnsafeNodes = collectUnsafeNodes(node.graph());
+                Set<Node> newUnsafeNodes = collectUnsafeNodes(node.graph());
                 newUnsafeNodes.removeAll(unsafeNodes);
                 assert newUnsafeNodes.isEmpty() : "New unsafe nodes: " + newUnsafeNodes;
             }
             if (VerifyKillCFGUnusedNodes.getValue()) {
                 nodeEventScope.close();
-                Iterator<Node> iterator = unusedNodes.iterator();
-                while (iterator.hasNext()) {
-                    Node curNode = iterator.next();
-                    if (curNode.isDeleted()) {
-                        iterator.remove();
-                    }
-                }
+                unusedNodes.removeIf(n -> n.isDeleted());
                 assert unusedNodes.isEmpty() : "New unused nodes: " + unusedNodes;
             }
         } catch (Throwable t) {
@@ -138,8 +131,8 @@ public class GraphUtil {
     /**
      * Collects all node in the graph which have non-optional inputs that are null.
      */
-    private static EconomicSet<Node> collectUnsafeNodes(Graph graph) {
-        EconomicSet<Node> unsafeNodes = CollectionFactory.newSet(Equivalence.IDENTITY);
+    private static Set<Node> collectUnsafeNodes(Graph graph) {
+        Set<Node> unsafeNodes = CollectionsFactory.newSet();
         for (Node n : graph.getNodes()) {
             for (Position pos : n.inputPositions()) {
                 Node input = pos.get(n);
