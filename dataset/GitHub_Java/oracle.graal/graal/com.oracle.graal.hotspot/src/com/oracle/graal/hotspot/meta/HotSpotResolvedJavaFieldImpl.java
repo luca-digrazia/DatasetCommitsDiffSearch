@@ -28,21 +28,15 @@ import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectTypeImpl.*;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
-import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.options.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.ReplacementsImpl.FrameStateProcessing;
-import com.oracle.graal.replacements.Snippet.SnippetInliningPolicy;
-import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 
 /**
  * Represents a field in a HotSpot type.
  */
-public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotSpotResolvedJavaField {
+public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotSpotResolvedJavaField, HotSpotProxified {
 
     private static final long serialVersionUID = 7692985878836955683L;
     private final HotSpotResolvedObjectTypeImpl holder;
@@ -54,6 +48,39 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
      * This value contains all flags as stored in the VM including internal ones.
      */
     private final int modifiers;
+    private final LocationIdentity locationIdentity = new FieldLocationIdentity(this);
+
+    public static class FieldLocationIdentity extends LocationIdentity {
+        HotSpotResolvedJavaField inner;
+
+        public FieldLocationIdentity(HotSpotResolvedJavaFieldImpl inner) {
+            super(false);
+            this.inner = inner;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj instanceof FieldLocationIdentity) {
+                FieldLocationIdentity fieldLocationIdentity = (FieldLocationIdentity) obj;
+                return inner.equals(fieldLocationIdentity.inner);
+
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return inner.hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return inner.getName();
+        }
+    }
 
     public HotSpotResolvedJavaFieldImpl(HotSpotResolvedObjectTypeImpl holder, String name, JavaType type, long offset, int modifiers) {
         this.holder = holder;
@@ -72,7 +99,12 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
         }
         if (obj instanceof HotSpotResolvedJavaField) {
             HotSpotResolvedJavaFieldImpl that = (HotSpotResolvedJavaFieldImpl) obj;
-            return this.holder.equals(that.holder) && this.name.equals(that.name) && this.type.equals(that.type);
+            if (that.offset != this.offset || that.isStatic() != this.isStatic()) {
+                return false;
+            } else if (this.holder.equals(that.holder)) {
+                assert this.name.equals(that.name) && this.type.equals(that.type);
+                return true;
+            }
         }
         return false;
     }
@@ -93,159 +125,6 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
     }
 
     /**
-     * Compares two {@link StackTraceElement}s for equality, ignoring differences in
-     * {@linkplain StackTraceElement#getLineNumber() line number}.
-     */
-    private static boolean equalsIgnoringLine(StackTraceElement left, StackTraceElement right) {
-        return left.getClassName().equals(right.getClassName()) && left.getMethodName().equals(right.getMethodName()) && left.getFileName().equals(right.getFileName());
-    }
-
-    /**
-     * If the compiler is configured for AOT mode, {@link #readConstantValue(JavaConstant)} should
-     * be only called for snippets or replacements.
-     */
-    private static boolean isCalledForSnippets() {
-        MetaAccessProvider metaAccess = runtime().getHostProviders().getMetaAccess();
-        ResolvedJavaMethod makeGraphMethod = null;
-        ResolvedJavaMethod initMethod = null;
-        try {
-            Class<?> rjm = ResolvedJavaMethod.class;
-            makeGraphMethod = metaAccess.lookupJavaMethod(ReplacementsImpl.class.getDeclaredMethod("makeGraph", rjm, rjm, SnippetInliningPolicy.class, FrameStateProcessing.class));
-            initMethod = metaAccess.lookupJavaMethod(SnippetTemplate.AbstractTemplates.class.getDeclaredMethod("template", Arguments.class));
-        } catch (NoSuchMethodException | SecurityException e) {
-            throw new GraalInternalError(e);
-        }
-        StackTraceElement makeGraphSTE = makeGraphMethod.asStackTraceElement(0);
-        StackTraceElement initSTE = initMethod.asStackTraceElement(0);
-
-        StackTraceElement[] stackTrace = new Exception().getStackTrace();
-        for (StackTraceElement element : stackTrace) {
-            // Ignoring line numbers should not weaken this check too much while at
-            // the same time making it more robust against source code changes
-            if (equalsIgnoringLine(makeGraphSTE, element) || equalsIgnoringLine(initSTE, element)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Separate out the static initialization to eliminate cycles between clinit and other locks
-     * that could lead to deadlock. Static code that doesn't call back into type or field machinery
-     * is probably ok but anything else should be made lazy.
-     */
-    static class Embeddable {
-
-        /**
-         * @return Return true if it's ok to embed the value of {@code field}.
-         */
-        public static boolean test(HotSpotResolvedJavaField field) {
-            return !ImmutableCode.getValue() || !fields.contains(field);
-        }
-
-        private static final List<ResolvedJavaField> fields = new ArrayList<>();
-        static {
-            try {
-                MetaAccessProvider metaAccess = runtime().getHostProviders().getMetaAccess();
-                fields.add(metaAccess.lookupJavaField(Boolean.class.getDeclaredField("TRUE")));
-                fields.add(metaAccess.lookupJavaField(Boolean.class.getDeclaredField("FALSE")));
-
-                Class<?> characterCacheClass = Character.class.getDeclaredClasses()[0];
-                assert "java.lang.Character$CharacterCache".equals(characterCacheClass.getName());
-                fields.add(metaAccess.lookupJavaField(characterCacheClass.getDeclaredField("cache")));
-
-                Class<?> byteCacheClass = Byte.class.getDeclaredClasses()[0];
-                assert "java.lang.Byte$ByteCache".equals(byteCacheClass.getName());
-                fields.add(metaAccess.lookupJavaField(byteCacheClass.getDeclaredField("cache")));
-
-                Class<?> shortCacheClass = Short.class.getDeclaredClasses()[0];
-                assert "java.lang.Short$ShortCache".equals(shortCacheClass.getName());
-                fields.add(metaAccess.lookupJavaField(shortCacheClass.getDeclaredField("cache")));
-
-                Class<?> integerCacheClass = Integer.class.getDeclaredClasses()[0];
-                assert "java.lang.Integer$IntegerCache".equals(integerCacheClass.getName());
-                fields.add(metaAccess.lookupJavaField(integerCacheClass.getDeclaredField("cache")));
-
-                Class<?> longCacheClass = Long.class.getDeclaredClasses()[0];
-                assert "java.lang.Long$LongCache".equals(longCacheClass.getName());
-                fields.add(metaAccess.lookupJavaField(longCacheClass.getDeclaredField("cache")));
-
-                fields.add(metaAccess.lookupJavaField(Throwable.class.getDeclaredField("UNASSIGNED_STACK")));
-                fields.add(metaAccess.lookupJavaField(Throwable.class.getDeclaredField("SUPPRESSED_SENTINEL")));
-            } catch (SecurityException | NoSuchFieldException e) {
-                throw new GraalInternalError(e);
-            }
-        }
-    }
-
-    /**
-     * in AOT mode, some fields should never be embedded even for snippets/replacements.
-     */
-    private boolean isEmbeddable() {
-        return Embeddable.test(this);
-    }
-
-    private static final String SystemClassName = "Ljava/lang/System;";
-
-    /**
-     * {@inheritDoc}
-     * <p>
-     * The {@code value} field in {@link OptionValue} is considered constant if the type of
-     * {@code receiver} is (assignable to) {@link StableOptionValue}.
-     */
-    @Override
-    public JavaConstant readConstantValue(JavaConstant receiver) {
-        assert !ImmutableCode.getValue() || isCalledForSnippets() : receiver;
-
-        if (receiver == null) {
-            assert isStatic();
-            if (isFinal()) {
-                if (holder.isInitialized() && !holder.getName().equals(SystemClassName) && isEmbeddable()) {
-                    return readValue(receiver);
-                }
-            }
-        } else {
-            /*
-             * for non-static final fields, we must assume that they are only initialized if they
-             * have a non-default value.
-             */
-            assert !isStatic();
-            Object object = HotSpotObjectConstantImpl.asObject(receiver);
-
-            // Canonicalization may attempt to process an unsafe read before
-            // processing a guard (e.g. a null check or a type check) for this read
-            // so we need to check the object being read
-            if (object != null) {
-                if (isFinal()) {
-                    if (isInObject(object)) {
-                        JavaConstant value = readValue(receiver);
-                        if (assumeNonStaticFinalFieldsAsFinal(object.getClass()) || !value.isDefaultForKind()) {
-                            return value;
-                        }
-                    }
-                } else if (isStable()) {
-                    if (isInObject(object)) {
-                        JavaConstant value = readValue(receiver);
-                        if (assumeDefaultStableFieldsAsFinal(object.getClass()) || !value.isDefaultForKind()) {
-                            return value;
-                        }
-                    }
-                } else {
-                    Class<?> clazz = object.getClass();
-                    if (StableOptionValue.class.isAssignableFrom(clazz)) {
-                        if (isInObject(object)) {
-                            assert getName().equals("value") : "Unexpected field in " + StableOptionValue.class.getName() + " hierarchy:" + this;
-                            StableOptionValue<?> option = (StableOptionValue<?>) object;
-                            return HotSpotObjectConstantImpl.forObject(option.getValue());
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
      * Determines if a given object contains this field.
      *
      * @return true iff this is a non-static field and its declaring class is assignable from
@@ -259,46 +138,8 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
     }
 
     @Override
-    public JavaConstant readValue(JavaConstant receiver) {
-        if (receiver == null) {
-            assert isStatic();
-            if (holder.isInitialized()) {
-                return runtime().getHostProviders().getConstantReflection().readUnsafeConstant(getKind(), HotSpotObjectConstantImpl.forObject(holder.mirror()), offset);
-            }
-            return null;
-        } else {
-            assert !isStatic();
-            assert receiver.isNonNull() && isInObject(HotSpotObjectConstantImpl.asObject(receiver));
-            return runtime().getHostProviders().getConstantReflection().readUnsafeConstant(getKind(), receiver, offset);
-        }
-    }
-
-    private static boolean assumeNonStaticFinalFieldsAsFinal(Class<?> clazz) {
-        return clazz == SnippetCounter.class;
-    }
-
-    /**
-     * Usually {@link Stable} fields are not considered constant if the value is the
-     * {@link JavaConstant#isDefaultForKind default value}. For some special classes we want to
-     * override this behavior.
-     */
-    private static boolean assumeDefaultStableFieldsAsFinal(Class<?> clazz) {
-        // HotSpotVMConfig has a lot of zero-value fields which we know are stable and want to be
-        // considered as constants.
-        if (clazz == HotSpotVMConfig.class) {
-            return true;
-        }
-        return false;
-    }
-
-    @Override
     public HotSpotResolvedObjectTypeImpl getDeclaringClass() {
         return holder;
-    }
-
-    @Override
-    public Kind getKind() {
-        return getType().getKind();
     }
 
     @Override
@@ -308,9 +149,9 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
 
     @Override
     public JavaType getType() {
-        if (!(type instanceof ResolvedJavaType)) {
+        if (type instanceof HotSpotUnresolvedJavaType) {
             // Don't allow unresolved types to hang around forever
-            ResolvedJavaType resolved = type.resolve(holder);
+            ResolvedJavaType resolved = ((HotSpotUnresolvedJavaType) type).reresolve(holder);
             if (resolved != null) {
                 type = resolved;
             }
@@ -342,6 +183,9 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
             return true;
         }
         assert getAnnotation(Stable.class) == null;
+        if (ImplicitStableValues.getValue() && isImplicitStableField()) {
+            return true;
+        }
         return false;
     }
 
@@ -360,8 +204,66 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
         }
         try {
             return holder.mirror().getDeclaredField(name);
-        } catch (NoSuchFieldException e) {
+        } catch (NoSuchFieldException | NoClassDefFoundError e) {
             return null;
         }
+    }
+
+    private boolean isArray() {
+        JavaType fieldType = getType();
+        return fieldType instanceof ResolvedJavaType && ((ResolvedJavaType) fieldType).isArray();
+    }
+
+    private boolean isImplicitStableField() {
+        if (isSynthetic()) {
+            if (isSyntheticImplicitStableField()) {
+                return true;
+            }
+        } else if (isWellKnownImplicitStableField()) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isSyntheticImplicitStableField() {
+        assert this.isSynthetic();
+        if (isStatic() && isArray()) {
+            if (isFinal() && name.equals("$VALUES") || name.equals("ENUM$VALUES")) {
+                // generated int[] field for EnumClass::values()
+                return true;
+            } else if (name.startsWith("$SwitchMap$") || name.startsWith("$SWITCH_TABLE$")) {
+                // javac and ecj generate a static field in an inner class for a switch on an enum
+                // named $SwitchMap$p$k$g$EnumClass and $SWITCH_TABLE$p$k$g$EnumClass, respectively
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isWellKnownImplicitStableField() {
+        return WellKnownImplicitStableField.test(this);
+    }
+
+    static class WellKnownImplicitStableField {
+        /**
+         * @return {@code true} if the field is a well-known stable field.
+         */
+        public static boolean test(HotSpotResolvedJavaField field) {
+            return field.equals(STRING_VALUE_FIELD);
+        }
+
+        private static final ResolvedJavaField STRING_VALUE_FIELD;
+        static {
+            try {
+                MetaAccessProvider metaAccess = runtime().getHostProviders().getMetaAccess();
+                STRING_VALUE_FIELD = metaAccess.lookupJavaField(String.class.getDeclaredField("value"));
+            } catch (SecurityException | NoSuchFieldException e) {
+                throw new GraalInternalError(e);
+            }
+        }
+    }
+
+    public LocationIdentity getLocationIdentity() {
+        return locationIdentity;
     }
 }

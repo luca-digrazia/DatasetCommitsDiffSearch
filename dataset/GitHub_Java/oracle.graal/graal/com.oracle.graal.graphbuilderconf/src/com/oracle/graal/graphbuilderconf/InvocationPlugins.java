@@ -26,53 +26,39 @@ import static java.lang.String.*;
 
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.stream.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.graphbuilderconf.MethodIdMap.MethodKey;
-import com.oracle.graal.graphbuilderconf.MethodIdMap.Receiver;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Manages a set of {@link InvocationPlugin}s.
  */
 public class InvocationPlugins {
 
-    public static class InvocationPluginReceiver implements Receiver {
-        private final GraphBuilderContext parser;
-        private ValueNode[] args;
-        private ValueNode value;
+    /**
+     * Access to the receiver in an {@link InvocationPlugin} for a non-static method. The class
+     * literal for this interface must be used with
+     * {@link InvocationPlugins#register(InvocationPlugin, Class, String, Class...)} to denote the
+     * receiver argument for such a non-static method.
+     */
+    public interface Receiver {
+        /**
+         * Gets the receiver value, null checking it first if necessary.
+         *
+         * @return the receiver value with a {@linkplain StampTool#isPointerNonNull(ValueNode)
+         *         non-null} stamp
+         */
+        ValueNode get();
 
-        public InvocationPluginReceiver(GraphBuilderContext parser) {
-            this.parser = parser;
-        }
-
-        @Override
-        public ValueNode get() {
-            assert args != null : "Cannot get the receiver of a static method";
-            if (value == null) {
-                value = parser.nullCheckedValue(args[0]);
-                if (value != args[0]) {
-                    args[0] = value;
-                }
-            }
-            return value;
-        }
-
-        @Override
-        public boolean isConstant() {
-            return args[0].isConstant();
-        }
-
-        public InvocationPluginReceiver init(ResolvedJavaMethod targetMethod, ValueNode[] newArgs) {
-            if (!targetMethod.isStatic()) {
-                this.args = newArgs;
-                this.value = null;
-                return this;
-            }
-            return null;
-        }
+        /**
+         * Determines if the receiver is constant.
+         */
+        boolean isConstant();
     }
 
     /**
@@ -157,30 +143,98 @@ public class InvocationPlugins {
         public void register5(String name, Class<?> arg1, Class<?> arg2, Class<?> arg3, Class<?> arg4, Class<?> arg5, InvocationPlugin plugin) {
             plugins.register(plugin, declaringClass, name, arg1, arg2, arg3, arg4, arg5);
         }
+    }
 
-        /**
-         * Registers a plugin that implements a method based on the bytecode of a substitute method.
-         *
-         * @param substituteDeclaringClass the class declaring the substitute method
-         * @param name the name of both the original and substitute method
-         * @param argumentTypes the parameter types of the substitute
-         */
-        public void registerMethodSubstitution(Class<?> substituteDeclaringClass, String name, Class<?>... argumentTypes) {
-            MethodSubstitutionPlugin plugin = new MethodSubstitutionPlugin(substituteDeclaringClass, name, argumentTypes);
-            plugins.register(plugin, declaringClass, name, argumentTypes);
+    static final class MethodInfo {
+        final boolean isStatic;
+        final Class<?> declaringClass;
+        final String name;
+        final Class<?>[] argumentTypes;
+        final InvocationPlugin plugin;
+
+        int id;
+
+        MethodInfo(InvocationPlugin plugin, Class<?> declaringClass, String name, Class<?>... argumentTypes) {
+            this.plugin = plugin;
+            this.isStatic = argumentTypes.length == 0 || argumentTypes[0] != Receiver.class;
+            this.declaringClass = declaringClass;
+            this.name = name;
+            this.argumentTypes = argumentTypes;
+            if (!isStatic) {
+                argumentTypes[0] = declaringClass;
+            }
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof MethodInfo) {
+                MethodInfo that = (MethodInfo) obj;
+                boolean res = this.name.equals(that.name) && this.declaringClass.equals(that.declaringClass) && Arrays.equals(this.argumentTypes, that.argumentTypes);
+                assert !res || this.isStatic == that.isStatic;
+                return res;
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            // Replay compilation mandates use of stable hash codes
+            return declaringClass.getName().hashCode() ^ name.hashCode();
+        }
+
+        ResolvedJavaMethod resolve(MetaAccessProvider metaAccess) {
+            try {
+                ResolvedJavaMethod method;
+                Class<?>[] parameterTypes = isStatic ? argumentTypes : Arrays.copyOfRange(argumentTypes, 1, argumentTypes.length);
+                if (name.equals("<init>")) {
+                    method = metaAccess.lookupJavaMethod(declaringClass.getDeclaredConstructor(parameterTypes));
+                } else {
+                    method = metaAccess.lookupJavaMethod(declaringClass.getDeclaredMethod(name, parameterTypes));
+                }
+                assert method.isStatic() == isStatic;
+                return method;
+            } catch (NoSuchMethodException | SecurityException e) {
+                throw new GraalInternalError(e);
+            }
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder(declaringClass.getName()).append('.').append(name).append('(');
+            for (Class<?> p : argumentTypes) {
+                if (sb.charAt(sb.length() - 1) != '(') {
+                    sb.append(", ");
+                }
+                sb.append(p.getSimpleName());
+            }
+            return sb.append(')').toString();
         }
     }
 
-    protected final MethodIdMap<InvocationPlugin> plugins;
+    protected final MetaAccessProvider metaAccess;
+    private final List<MethodInfo> registrations;
+
+    /**
+     * The minimum {@linkplain InvocationPluginIdHolder#getInvocationPluginId() id} for a method
+     * associated with a plugin in {@link #plugins}.
+     */
+    private int minId = Integer.MAX_VALUE;
+
+    /**
+     * Resolved methods to plugins map. The keys (i.e., indexes) are derived from
+     * {@link InvocationPluginIdHolder#getInvocationPluginId()}.
+     */
+    private volatile InvocationPlugin[] plugins;
 
     /**
      * The plugins {@linkplain #lookupInvocation(ResolvedJavaMethod) searched} before searching in
      * this object.
      */
-    protected final InvocationPlugins parent;
+    private InvocationPlugins parent;
 
     private InvocationPlugins(InvocationPlugins parent, MetaAccessProvider metaAccess) {
-        this.plugins = new MethodIdMap<>(metaAccess);
+        this.metaAccess = metaAccess;
+        this.registrations = new ArrayList<>(INITIAL_PLUGIN_CAPACITY);
         InvocationPlugins p = parent;
         // Only adopt a non-empty parent
         while (p != null && p.size() == 0) {
@@ -189,11 +243,13 @@ public class InvocationPlugins {
         this.parent = p;
     }
 
+    private static final int INITIAL_PLUGIN_CAPACITY = 64;
+
     /**
      * Creates a set of invocation plugins with a non-null {@linkplain #getParent() parent}.
      */
     public InvocationPlugins(InvocationPlugins parent) {
-        this(parent, parent.plugins.getMetaAccess());
+        this(parent, parent.metaAccess);
     }
 
     public InvocationPlugins(MetaAccessProvider metaAccess) {
@@ -205,9 +261,13 @@ public class InvocationPlugins {
      * registered for {@code method}.
      */
     public void register(InvocationPlugin plugin, Class<?> declaringClass, String name, Class<?>... argumentTypes) {
-        MethodKey<InvocationPlugin> methodInfo = plugins.put(plugin, declaringClass, name, argumentTypes);
+        MethodInfo methodInfo = new MethodInfo(plugin, declaringClass, name, argumentTypes);
         assert Checker.check(this, methodInfo, plugin);
+        assert plugins == null : "invocation plugin registration is closed";
+        registrations.add(methodInfo);
     }
+
+    private static int nextInvocationPluginId = 1;
 
     /**
      * Gets the plugin for a given method.
@@ -216,14 +276,54 @@ public class InvocationPlugins {
      * @return the plugin associated with {@code method} or {@code null} if none exists
      */
     public InvocationPlugin lookupInvocation(ResolvedJavaMethod method) {
-        assert method instanceof MethodIdHolder;
+        assert method instanceof InvocationPluginIdHolder;
         if (parent != null) {
             InvocationPlugin plugin = parent.lookupInvocation(method);
             if (plugin != null) {
                 return plugin;
             }
         }
-        return plugins.get((MethodIdHolder) method);
+        InvocationPluginIdHolder pluggable = (InvocationPluginIdHolder) method;
+        if (plugins == null) {
+            // Must synchronize across all InvocationPlugins objects to ensure thread safe
+            // allocation of InvocationPlugin identifiers
+            synchronized (InvocationPlugins.class) {
+                if (plugins == null) {
+                    if (registrations.isEmpty()) {
+                        plugins = new InvocationPlugin[0];
+                    } else {
+                        int max = Integer.MIN_VALUE;
+                        for (MethodInfo methodInfo : registrations) {
+                            InvocationPluginIdHolder p = (InvocationPluginIdHolder) methodInfo.resolve(metaAccess);
+                            int id = p.getInvocationPluginId();
+                            if (id == 0) {
+                                id = nextInvocationPluginId++;
+                                p.setInvocationPluginId(id);
+                            }
+                            if (id < minId) {
+                                minId = id;
+                            }
+                            if (id > max) {
+                                max = id;
+
+                            }
+                            methodInfo.id = id;
+                        }
+
+                        int length = (max - minId) + 1;
+                        plugins = new InvocationPlugin[length];
+                        for (MethodInfo m : registrations) {
+                            int index = m.id - minId;
+                            plugins[index] = m.plugin;
+                        }
+                    }
+                }
+            }
+        }
+
+        int id = pluggable.getInvocationPluginId();
+        int index = id - minId;
+        return index >= 0 && index < plugins.length ? plugins[index] : null;
     }
 
     /**
@@ -236,7 +336,7 @@ public class InvocationPlugins {
 
     @Override
     public String toString() {
-        return plugins + " / parent: " + this.parent;
+        return registrations.stream().map(MethodInfo::toString).collect(Collectors.joining(", ")) + " / parent: " + this.parent;
     }
 
     private static class Checker {
@@ -265,19 +365,11 @@ public class InvocationPlugins {
             SIGS = sigs.toArray(new Class<?>[sigs.size()][]);
         }
 
-        public static boolean check(InvocationPlugins plugins, MethodKey<InvocationPlugin> method, InvocationPlugin plugin) {
-            InvocationPlugins p = plugins.parent;
+        public static boolean check(InvocationPlugins plugins, MethodInfo method, InvocationPlugin plugin) {
+            InvocationPlugins p = plugins;
             while (p != null) {
-                assert !p.plugins.containsKey(method) : "a plugin is already registered for " + method;
+                assert !p.registrations.contains(method) : "a plugin is already registered for " + method;
                 p = p.parent;
-            }
-            if (plugin instanceof ForeignCallPlugin) {
-                return true;
-            }
-            if (plugin instanceof MethodSubstitutionPlugin) {
-                MethodSubstitutionPlugin msplugin = (MethodSubstitutionPlugin) plugin;
-                msplugin.getJavaSubstitute();
-                return true;
             }
             int arguments = method.isStatic ? method.argumentTypes.length : method.argumentTypes.length - 1;
             assert arguments < SIGS.length : format("need to extend %s to support method with %d arguments: %s", InvocationPlugin.class.getSimpleName(), arguments, method);
@@ -293,8 +385,12 @@ public class InvocationPlugins {
         }
     }
 
+    public MetaAccessProvider getMetaAccess() {
+        return metaAccess;
+    }
+
     public int size() {
-        return plugins.size();
+        return registrations.size();
     }
 
     /**
