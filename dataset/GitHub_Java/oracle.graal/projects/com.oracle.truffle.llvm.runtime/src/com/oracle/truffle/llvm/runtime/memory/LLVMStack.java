@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.runtime.memory;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 
 /**
@@ -69,12 +70,12 @@ public final class LLVMStack extends LLVMMemory {
         return isFreed;
     }
 
-    public long getStackPointer() {
-        return stackPointer;
+    public LLVMAddress getStackPointer() {
+        return LLVMAddress.fromLong(stackPointer);
     }
 
-    public void setStackPointer(long pointer) {
-        this.stackPointer = pointer;
+    public void setStackPointer(LLVMAddress pointer) {
+        this.stackPointer = pointer.getVal();
     }
 
     public void free() {
@@ -91,7 +92,7 @@ public final class LLVMStack extends LLVMMemory {
 
     public static final int NO_ALIGNMENT_REQUIREMENTS = 1;
 
-    public long allocateStackMemory(final long size, final int alignment) {
+    public LLVMAddress allocateStackMemory(final long size, final int alignment) {
         assert size >= 0;
         assert alignment != 0 && powerOfTwo(alignment);
         final long alignedAllocation = (stackPointer - size) & -alignment;
@@ -101,7 +102,7 @@ public final class LLVMStack extends LLVMMemory {
             CompilerDirectives.transferToInterpreter();
             throw new StackOverflowError("stack overflow");
         }
-        return alignedAllocation;
+        return LLVMAddress.fromLong(alignedAllocation);
     }
 
     private static boolean powerOfTwo(int value) {

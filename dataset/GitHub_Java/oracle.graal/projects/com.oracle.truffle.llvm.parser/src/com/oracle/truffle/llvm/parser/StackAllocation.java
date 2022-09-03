@@ -42,8 +42,9 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstructio
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.ValueInstructionVisitor;
-import com.oracle.truffle.llvm.runtime.LLVMException;
+import com.oracle.truffle.llvm.parser.util.LLVMFrameIDs;
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 public final class StackAllocation {
 
@@ -81,7 +82,11 @@ public final class StackAllocation {
         @Override
         public void visit(FunctionDefinition functionDefinition) {
             final FrameDescriptor frame = new FrameDescriptor();
-            frame.addFrameSlot(LLVMException.FRAME_SLOT_ID, FrameSlotKind.Object);
+            if (!(functionDefinition.getType().getReturnType() instanceof VoidType)) {
+                frame.addFrameSlot(LLVMFrameIDs.FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
+            }
+            frame.addFrameSlot(LLVMFrameIDs.FUNCTION_EXCEPTION_VALUE_FRAME_SLOT_ID, FrameSlotKind.Object);
+
             for (FunctionParameter parameter : functionDefinition.getParameters()) {
                 frame.addFrameSlot(parameter.getName(), Type.getFrameSlotKind(parameter.getType()));
             }
