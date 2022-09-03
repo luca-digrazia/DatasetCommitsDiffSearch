@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -125,78 +125,59 @@ public class AMD64ControlFlow {
         }
     }
 
-    public static class StrategySwitchOp extends AMD64BlockEndOp {
+    public static final class StrategySwitchOp extends AMD64BlockEndOp {
         public static final LIRInstructionClass<StrategySwitchOp> TYPE = LIRInstructionClass.create(StrategySwitchOp.class);
-        protected final Constant[] keyConstants;
+        @Use({CONST}) protected JavaConstant[] keyConstants;
         private final LabelRef[] keyTargets;
         private LabelRef defaultTarget;
         @Alive({REG}) protected Value key;
         @Temp({REG, ILLEGAL}) protected Value scratch;
-        protected final SwitchStrategy strategy;
+        private final SwitchStrategy strategy;
 
         public StrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch) {
-            this(TYPE, strategy, keyTargets, defaultTarget, key, scratch);
-        }
-
-        protected StrategySwitchOp(LIRInstructionClass<? extends StrategySwitchOp> c, SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch) {
-            super(c);
+            super(TYPE);
             this.strategy = strategy;
-            this.keyConstants = strategy.getKeyConstants();
+            this.keyConstants = strategy.keyConstants;
             this.keyTargets = keyTargets;
             this.defaultTarget = defaultTarget;
             this.key = key;
             this.scratch = scratch;
             assert keyConstants.length == keyTargets.length;
             assert keyConstants.length == strategy.keyProbabilities.length;
-            assert (scratch.getPlatformKind() == JavaKind.Illegal) == (key.getPlatformKind() == JavaKind.Int || key.getPlatformKind() == JavaKind.Long);
+            assert (scratch.getKind() == Kind.Illegal) == (key.getKind() == Kind.Int || key.getKind() == Kind.Long);
         }
 
         @Override
         public void emitCode(final CompilationResultBuilder crb, final AMD64MacroAssembler masm) {
-            strategy.run(new SwitchClosure(asRegister(key), crb, masm));
-        }
+            final Register keyRegister = asRegister(key);
 
-        public class SwitchClosure extends BaseSwitchClosure {
-
-            protected final Register keyRegister;
-            protected final CompilationResultBuilder crb;
-            protected final AMD64MacroAssembler masm;
-
-            protected SwitchClosure(Register keyRegister, CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-                super(crb, masm, keyTargets, defaultTarget);
-                this.keyRegister = keyRegister;
-                this.crb = crb;
-                this.masm = masm;
-            }
-
-            protected void emitComparison(Constant c) {
-                JavaConstant jc = (JavaConstant) c;
-                switch (jc.getJavaKind()) {
-                    case Int:
-                        if (crb.codeCache.needsDataPatch(jc)) {
-                            crb.recordInlineDataInCode(jc);
-                        }
-                        long lc = jc.asLong();
-                        assert NumUtil.isInt(lc);
-                        masm.cmpl(keyRegister, (int) lc);
-                        break;
-                    case Long:
-                        masm.cmpq(keyRegister, (AMD64Address) crb.asLongConstRef(jc));
-                        break;
-                    case Object:
-                        AMD64Move.const2reg(crb, masm, scratch, jc);
-                        masm.cmpptr(keyRegister, asRegister(scratch));
-                        break;
-                    default:
-                        throw new JVMCIError("switch only supported for int, long and object");
+            BaseSwitchClosure closure = new BaseSwitchClosure(crb, masm, keyTargets, defaultTarget) {
+                @Override
+                protected void conditionalJump(int index, Condition condition, Label target) {
+                    switch (key.getKind()) {
+                        case Int:
+                            if (crb.codeCache.needsDataPatch(keyConstants[index])) {
+                                crb.recordInlineDataInCode(keyConstants[index]);
+                            }
+                            long lc = keyConstants[index].asLong();
+                            assert NumUtil.isInt(lc);
+                            masm.cmpl(keyRegister, (int) lc);
+                            break;
+                        case Long:
+                            masm.cmpq(keyRegister, (AMD64Address) crb.asLongConstRef(keyConstants[index]));
+                            break;
+                        case Object:
+                            assert condition == Condition.EQ || condition == Condition.NE;
+                            AMD64Move.move(crb, masm, scratch, keyConstants[index]);
+                            masm.cmpptr(keyRegister, asObjectReg(scratch));
+                            break;
+                        default:
+                            throw new JVMCIError("switch only supported for int, long and object");
+                    }
+                    masm.jcc(intCond(condition), target);
                 }
-            }
-
-            @Override
-            protected void conditionalJump(int index, Condition condition, Label target) {
-                emitComparison(keyConstants[index]);
-                masm.jcc(intCond(condition), target);
-            }
+            };
+            strategy.run(closure);
         }
     }
 
@@ -221,9 +202,9 @@ public class AMD64ControlFlow {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            Register indexReg = asRegister(index, JavaKind.Int);
-            Register idxScratchReg = asRegister(idxScratch, JavaKind.Int);
-            Register scratchReg = asRegister(scratch, JavaKind.Long);
+            Register indexReg = asIntReg(index);
+            Register idxScratchReg = asIntReg(idxScratch);
+            Register scratchReg = asLongReg(scratch);
 
             if (!indexReg.equals(idxScratchReg)) {
                 masm.movl(idxScratchReg, indexReg);
@@ -361,7 +342,7 @@ public class AMD64ControlFlow {
     private static void cmove(CompilationResultBuilder crb, AMD64MacroAssembler masm, Value result, ConditionFlag cond, Value other) {
         if (isRegister(other)) {
             assert !asRegister(other).equals(asRegister(result)) : "other already overwritten by previous move";
-            switch ((JavaKind) other.getPlatformKind()) {
+            switch (other.getKind()) {
                 case Boolean:
                 case Byte:
                 case Short:
@@ -377,7 +358,7 @@ public class AMD64ControlFlow {
             }
         } else {
             AMD64Address addr = (AMD64Address) crb.asAddress(other);
-            switch ((JavaKind) other.getPlatformKind()) {
+            switch (other.getKind()) {
                 case Boolean:
                 case Byte:
                 case Short:

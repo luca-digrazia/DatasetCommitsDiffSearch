@@ -50,7 +50,6 @@ import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
 import com.oracle.graal.lir.asm.*;
 
@@ -59,7 +58,7 @@ public class SPARCControlFlow {
     // if does not fit into simm5 of cbcond) instruction and the final branch instruction
     private static final int maximumSelfOffsetInstructions = 2;
 
-    public static final class ReturnOp extends SPARCLIRInstruction implements BlockEndOp {
+    public static final class ReturnOp extends SPARCBlockEndOp {
         public static final LIRInstructionClass<ReturnOp> TYPE = LIRInstructionClass.create(ReturnOp.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(2);
 
@@ -82,7 +81,7 @@ public class SPARCControlFlow {
         }
     }
 
-    public static final class CompareBranchOp extends SPARCLIRInstruction implements BlockEndOp, SPARCDelayedControlTransfer {
+    public static final class CompareBranchOp extends SPARCBlockEndOp implements SPARCDelayedControlTransfer {
         public static final LIRInstructionClass<CompareBranchOp> TYPE = LIRInstructionClass.create(CompareBranchOp.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(3);
         static final EnumSet<Kind> SUPPORTED_KINDS = EnumSet.of(Kind.Long, Kind.Int, Kind.Object, Kind.Float, Kind.Double);
@@ -329,7 +328,7 @@ public class SPARCControlFlow {
         return false;
     }
 
-    public static final class BranchOp extends SPARCLIRInstruction implements StandardOp.BranchOp {
+    public static final class BranchOp extends SPARCBlockEndOp implements StandardOp.BranchOp {
         public static final LIRInstructionClass<BranchOp> TYPE = LIRInstructionClass.create(BranchOp.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(2);
         protected final ConditionFlag conditionFlag;
@@ -394,7 +393,7 @@ public class SPARCControlFlow {
         return true;
     }
 
-    public static final class StrategySwitchOp extends SPARCLIRInstruction implements BlockEndOp {
+    public static final class StrategySwitchOp extends SPARCBlockEndOp {
         public static final LIRInstructionClass<StrategySwitchOp> TYPE = LIRInstructionClass.create(StrategySwitchOp.class);
         @Use({CONST}) protected JavaConstant[] keyConstants;
         private final LabelRef[] keyTargets;
@@ -502,7 +501,7 @@ public class SPARCControlFlow {
         }
     }
 
-    public static final class TableSwitchOp extends SPARCLIRInstruction implements BlockEndOp {
+    public static final class TableSwitchOp extends SPARCBlockEndOp {
         public static final LIRInstructionClass<TableSwitchOp> TYPE = LIRInstructionClass.create(TableSwitchOp.class);
 
         private final int lowKey;

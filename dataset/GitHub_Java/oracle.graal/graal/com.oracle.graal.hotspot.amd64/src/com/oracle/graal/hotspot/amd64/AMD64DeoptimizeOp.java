@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,36 +22,27 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
-import com.oracle.graal.api.meta.*;
+import static com.oracle.graal.hotspot.HotSpotHostBackend.*;
+
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.*;
+import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
 
 @Opcode("DEOPT")
-final class AMD64DeoptimizeOp extends AMD64LIRInstruction {
+final class AMD64DeoptimizeOp extends AMD64BlockEndOp implements BlockEndOp {
+    public static final LIRInstructionClass<AMD64DeoptimizeOp> TYPE = LIRInstructionClass.create(AMD64DeoptimizeOp.class);
 
-    public static final Descriptor DEOPTIMIZE = new Descriptor("deoptimize", true, void.class);
-
-    private DeoptimizationAction action;
-    private DeoptimizationReason reason;
     @State private LIRFrameState info;
 
-    AMD64DeoptimizeOp(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info) {
-        this.action = action;
-        this.reason = reason;
+    AMD64DeoptimizeOp(LIRFrameState info) {
+        super(TYPE);
         this.info = info;
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        HotSpotGraalRuntime runtime = HotSpotGraalRuntime.getInstance();
-        Register thread = runtime.getRuntime().threadRegister();
-        masm.movl(new AMD64Address(thread, runtime.getConfig().pendingDeoptimizationOffset), tasm.runtime.encodeDeoptActionAndReason(action, reason));
-        AMD64Call.directCall(tasm, masm, tasm.runtime.lookupRuntimeCall(DEOPTIMIZE), null, false, info);
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        AMD64Call.directCall(crb, masm, crb.foreignCalls.lookupForeignCall(UNCOMMON_TRAP_HANDLER), null, false, info);
     }
 }

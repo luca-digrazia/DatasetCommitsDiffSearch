@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,31 +20,25 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot.amd64;
-
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+package com.oracle.graal.lir.amd64;
 
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.amd64.*;
+import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.lir.asm.*;
 
-import jdk.internal.jvmci.meta.*;
+public abstract class AMD64BlockEndOp extends AbstractBlockEndOp {
 
-/**
- * @see AMD64HotSpotEpilogueOp
- */
-abstract class AMD64HotSpotEpilogueBlockEndOp extends AMD64BlockEndOp {
+    public static final LIRInstructionClass<AMD64BlockEndOp> TYPE = LIRInstructionClass.create(AMD64BlockEndOp.class);
 
-    protected AMD64HotSpotEpilogueBlockEndOp(LIRInstructionClass<? extends AMD64HotSpotEpilogueBlockEndOp> c, AllocatableValue savedRbp) {
+    protected AMD64BlockEndOp(LIRInstructionClass<? extends AMD64BlockEndOp> c) {
         super(c);
-        this.savedRbp = savedRbp;
     }
 
-    @Use({REG, STACK}) private AllocatableValue savedRbp;
-
-    protected void leaveFrameAndRestoreRbp(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-        AMD64HotSpotEpilogueOp.leaveFrameAndRestoreRbp(savedRbp, crb, masm);
+    @Override
+    public final void emitCode(CompilationResultBuilder crb) {
+        emitCode(crb, (AMD64MacroAssembler) crb.asm);
     }
 
+    public abstract void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm);
 }
