@@ -35,8 +35,14 @@ import com.oracle.truffle.dsl.processor.java.model.*;
 
 public final class OrganizedImports {
 
-    private final Map<String, String> classImportUsage = new HashMap<>();
-    private final Map<String, String> staticImportUsage = new HashMap<>();
+    private final Set<TypeMirror> staticImportUsage = new HashSet<>();
+
+    private final Map<String, TypeMirror> simpleNamesUsed = new HashMap<>();
+
+    private final Set<String> declaredStaticMethods = new HashSet<>();
+    private final Set<String> declaredStaticFields = new HashSet<>();
+    private final Set<String> ambiguousStaticMethods = new HashSet<>();
+    private final Set<String> ambiguousStaticFields = new HashSet<>();
     private final Map<String, Set<String>> autoImportCache = new HashMap<>();
 
     private final CodeTypeElement topLevelClass;
@@ -55,6 +61,22 @@ public final class OrganizedImports {
         ImportTypeReferenceVisitor reference = new ImportTypeReferenceVisitor();
         topLevelClass.accept(reference, null);
 
+        processStaticImports(topLevelClass);
+        List<TypeElement> types = ElementUtils.getSuperTypes(topLevelClass);
+        for (TypeElement typeElement : types) {
+            processStaticImports(typeElement);
+        }
+
+        for (TypeMirror type : staticImportUsage) {
+            TypeElement element = fromTypeMirror(type);
+            if (element != null) {
+                // already processed by supertype
+                if (types.contains(element)) {
+                    continue;
+                }
+                processStaticImports(element);
+            }
+        }
     }
 
     public String createTypeReference(Element enclosedElement, TypeMirror type) {
@@ -83,16 +105,15 @@ public final class OrganizedImports {
     }
 
     public String createStaticFieldReference(Element enclosedElement, TypeMirror type, String fieldName) {
-        return createStaticReference(enclosedElement, type, fieldName);
+        return createStaticReference(enclosedElement, type, fieldName, ambiguousStaticFields);
     }
 
     public String createStaticMethodReference(Element enclosedElement, TypeMirror type, String methodName) {
-        return createStaticReference(enclosedElement, type, methodName);
+        return createStaticReference(enclosedElement, type, methodName, ambiguousStaticMethods);
     }
 
-    private String createStaticReference(Element enclosedElement, TypeMirror type, String name) {
-        String qualifiedName = staticImportUsage.get(name);
-        if (qualifiedName == null) {
+    private String createStaticReference(Element enclosedElement, TypeMirror type, String name, Set<String> ambiguousSymbols) {
+        if (ambiguousSymbols.contains(name)) {
             // ambiguous import
             return createTypeReference(enclosedElement, type) + "." + name;
         } else {
@@ -107,40 +128,38 @@ public final class OrganizedImports {
             b.append("? extends ").append(createTypeReference(enclosedElement, type.getExtendsBound()));
         } else if (type.getSuperBound() != null) {
             b.append("? super ").append(createTypeReference(enclosedElement, type.getExtendsBound()));
-        } else {
-            b.append("?");
         }
         return b.toString();
     }
 
     private String createDeclaredTypeName(Element enclosedElement, DeclaredType type) {
-        String name = ElementUtils.fixECJBinaryNameIssue(type.asElement().getSimpleName().toString());
-        if (classImportUsage.containsKey(name)) {
-            String qualifiedImport = classImportUsage.get(name);
-            String qualifiedName = ElementUtils.getEnclosedQualifiedName(type);
+        String name;
+        name = ElementUtils.fixECJBinaryNameIssue(type.asElement().getSimpleName().toString());
 
-            if (!qualifiedName.equals(qualifiedImport)) {
-                name = qualifiedName;
+        if (needsImport(enclosedElement, type)) {
+            TypeMirror usedByType = simpleNamesUsed.get(name);
+            if (usedByType == null) {
+                simpleNamesUsed.put(name, type);
+                usedByType = type;
+            }
+
+            if (!typeEquals(type, usedByType)) {
+                name = getQualifiedName(type);
             }
         }
 
-        List<? extends TypeMirror> genericTypes = type.getTypeArguments();
-        if (genericTypes.size() == 0) {
+        if (type.getTypeArguments().size() == 0) {
             return name;
         }
 
         StringBuilder b = new StringBuilder(name);
         b.append("<");
-        for (int i = 0; i < genericTypes.size(); i++) {
-            TypeMirror genericType = i < genericTypes.size() ? genericTypes.get(i) : null;
-            if (genericType != null) {
-                b.append(createTypeReference(enclosedElement, genericType));
-            } else {
-                b.append("?");
-            }
-
-            if (i < genericTypes.size() - 1) {
-                b.append(", ");
+        if (type.getTypeArguments().size() > 0) {
+            for (int i = 0; i < type.getTypeArguments().size(); i++) {
+                b.append(createTypeReference(enclosedElement, type.getTypeArguments().get(i)));
+                if (i < type.getTypeArguments().size() - 1) {
+                    b.append(", ");
+                }
             }
         }
         b.append(">");
@@ -150,10 +169,59 @@ public final class OrganizedImports {
     public Set<CodeImport> generateImports() {
         Set<CodeImport> imports = new HashSet<>();
 
-        imports.addAll(generateImports(classImportUsage));
+        imports.addAll(generateImports(simpleNamesUsed.values()));
         imports.addAll(generateStaticImports(staticImportUsage));
 
         return imports;
+    }
+
+    boolean processStaticImports(TypeElement element) {
+        Set<String> importedMethods = new HashSet<>();
+        List<ExecutableElement> methods = ElementFilter.methodsIn(element.getEnclosedElements());
+        for (ExecutableElement method : methods) {
+            if (method.getModifiers().contains(Modifier.STATIC)) {
+                importedMethods.add(method.getSimpleName().toString());
+            }
+        }
+
+        boolean allMethodsAmbiguous = processStaticImportElements(importedMethods, this.ambiguousStaticMethods, this.declaredStaticMethods);
+
+        Set<String> importedFields = new HashSet<>();
+        List<VariableElement> fields = ElementFilter.fieldsIn(element.getEnclosedElements());
+        for (VariableElement field : fields) {
+            if (field.getModifiers().contains(Modifier.STATIC)) {
+                importedFields.add(field.getSimpleName().toString());
+            }
+        }
+
+        boolean allFieldsAmbiguous = processStaticImportElements(importedFields, this.ambiguousStaticFields, this.declaredStaticFields);
+
+        return allMethodsAmbiguous && allFieldsAmbiguous;
+    }
+
+    private static boolean processStaticImportElements(Set<String> newElements, Set<String> ambiguousElements, Set<String> declaredElements) {
+        boolean allAmbiguous = false;
+        if (declaredElements.containsAll(newElements)) {
+            // all types already declared -> we can remove the import completely -> they will all
+            // get ambiguous
+            allAmbiguous = true;
+        }
+        Set<String> newAmbiguous = new HashSet<>();
+        Set<String> newDeclared = new HashSet<>();
+
+        for (String newElement : newElements) {
+            if (declaredElements.contains(newElement)) {
+                newAmbiguous.add(newElement);
+            } else if (ambiguousElements.contains(newElement)) {
+                // nothing to do
+            } else {
+                newDeclared.add(newElement);
+            }
+        }
+
+        ambiguousElements.addAll(newAmbiguous);
+        declaredElements.addAll(newDeclared);
+        return allAmbiguous;
     }
 
     private boolean needsImport(Element enclosed, TypeMirror importType) {
@@ -167,18 +235,18 @@ public final class OrganizedImports {
             return false; // same package name -> no import
         }
 
-        String enclosedElementId = ElementUtils.getUniqueIdentifier(enclosedElement.asType());
-        Set<String> autoImportedTypes = autoImportCache.get(enclosedElementId);
+        Set<String> autoImportedTypes = autoImportCache.get(enclosedElement.toString());
         if (autoImportedTypes == null) {
             List<Element> elements = ElementUtils.getElementHierarchy(enclosedElement);
             autoImportedTypes = new HashSet<>();
             for (Element element : elements) {
+
                 if (element.getKind().isClass()) {
                     collectSuperTypeImports((TypeElement) element, autoImportedTypes);
                     collectInnerTypeImports((TypeElement) element, autoImportedTypes);
                 }
             }
-            autoImportCache.put(enclosedElementId, autoImportedTypes);
+            autoImportCache.put(enclosedElement.toString(), autoImportedTypes);
         }
 
         String qualifiedName = getQualifiedName(importType);
@@ -189,13 +257,10 @@ public final class OrganizedImports {
         return true;
     }
 
-    private static Set<CodeImport> generateImports(Map<String, String> symbols) {
+    private static Set<CodeImport> generateImports(Collection<TypeMirror> toGenerate) {
         TreeSet<CodeImport> importObjects = new TreeSet<>();
-        for (String symbol : symbols.keySet()) {
-            String packageName = symbols.get(symbol);
-            if (packageName != null) {
-                importObjects.add(new CodeImport(packageName, symbol, false));
-            }
+        for (TypeMirror importType : toGenerate) {
+            importObjects.add(new CodeImport(importType, getQualifiedName(importType), false));
         }
         return importObjects;
     }
@@ -217,7 +282,7 @@ public final class OrganizedImports {
         }
     }
 
-    private Set<CodeImport> generateStaticImports(Map<String, String> toGenerate) {
+    private Set<CodeImport> generateStaticImports(Set<TypeMirror> toGenerate) {
         Set<String> autoImportedStaticTypes = new HashSet<>();
 
         // if type is declared inside a super type of this class -> no import
@@ -225,18 +290,17 @@ public final class OrganizedImports {
         autoImportedStaticTypes.addAll(getQualifiedSuperTypeNames(topLevelClass));
 
         TreeSet<CodeImport> importObjects = new TreeSet<>();
-        for (String symbol : toGenerate.keySet()) {
-            String qualifiedName = toGenerate.get(symbol);
-            if (qualifiedName == null) {
-                // ambiguous
-                continue;
+        for (TypeMirror importType : toGenerate) {
+            if (getPackageName(importType) == null) {
+                continue; // no package name -> no import
             }
-            // not not import
+
+            String qualifiedName = getQualifiedName(importType);
             if (autoImportedStaticTypes.contains(qualifiedName)) {
                 continue;
             }
 
-            importObjects.add(new CodeImport(qualifiedName, symbol, true));
+            importObjects.add(new CodeImport(importType, qualifiedName + ".*", true));
         }
 
         return importObjects;
@@ -245,15 +309,15 @@ public final class OrganizedImports {
     private abstract static class TypeReferenceVisitor extends CodeElementScanner<Void, Void> {
 
         @Override
-        public void visitTree(CodeTree e, Void p, Element enclosing) {
+        public void visitTree(CodeTree e, Void p) {
             if (e.getCodeKind() == CodeTreeKind.STATIC_FIELD_REFERENCE) {
-                visitStaticFieldReference(enclosing, e.getType(), e.getString());
+                visitStaticFieldReference(e, e.getType(), e.getString());
             } else if (e.getCodeKind() == CodeTreeKind.STATIC_METHOD_REFERENCE) {
-                visitStaticMethodReference(enclosing, e.getType(), e.getString());
+                visitStaticMethodReference(e, e.getType(), e.getString());
             } else if (e.getType() != null) {
-                visitTypeReference(enclosing, e.getType());
+                visitTypeReference(e, e.getType());
             }
-            super.visitTree(e, p, enclosing);
+            super.visitTree(e, p);
         }
 
         @Override
@@ -413,69 +477,18 @@ public final class OrganizedImports {
 
         @Override
         public void visitStaticFieldReference(Element enclosedType, TypeMirror type, String elementName) {
-            registerSymbol(staticImportUsage, ElementUtils.getQualifiedName(type), elementName);
+            staticImportUsage.add(type);
         }
 
         @Override
         public void visitStaticMethodReference(Element enclosedType, TypeMirror type, String elementName) {
-            registerSymbol(staticImportUsage, ElementUtils.getQualifiedName(type), elementName);
+            staticImportUsage.add(type);
         }
 
         @Override
         public void visitTypeReference(Element enclosedType, TypeMirror type) {
             if (type != null) {
-                switch (type.getKind()) {
-                    case BOOLEAN:
-                    case BYTE:
-                    case CHAR:
-                    case DOUBLE:
-                    case FLOAT:
-                    case SHORT:
-                    case INT:
-                    case LONG:
-                    case VOID:
-                        return;
-                    case DECLARED:
-                        if (needsImport(enclosedType, type)) {
-                            DeclaredType declard = (DeclaredType) type;
-                            registerSymbol(classImportUsage, ElementUtils.getEnclosedQualifiedName(declard), ElementUtils.getDeclaredName(declard, false));
-                        }
-                        for (TypeMirror argument : ((DeclaredType) type).getTypeArguments()) {
-                            visitTypeReference(enclosedType, argument);
-                        }
-                        return;
-                    case ARRAY:
-                        visitTypeReference(enclosedType, ((ArrayType) type).getComponentType());
-                        return;
-                    case WILDCARD:
-                        WildcardType wildcard = (WildcardType) type;
-                        if (wildcard.getExtendsBound() != null) {
-                            visitTypeReference(enclosedType, wildcard.getExtendsBound());
-                        } else if (wildcard.getSuperBound() != null) {
-                            visitTypeReference(enclosedType, wildcard.getSuperBound());
-                        }
-                        return;
-                    case TYPEVAR:
-                        return;
-                    default:
-                        throw new RuntimeException("Unknown type specified " + type.getKind() + " mirror: " + type);
-                }
-
-            }
-        }
-
-        private void registerSymbol(Map<String, String> symbolUsage, String elementQualifiedName, String elementName) {
-            if (symbolUsage.containsKey(elementName)) {
-                String otherQualifiedName = symbolUsage.get(elementName);
-                if (otherQualifiedName == null) {
-                    // already registered ambiguous
-                    return;
-                }
-                if (!otherQualifiedName.equals(elementQualifiedName)) {
-                    symbolUsage.put(elementName, null);
-                }
-            } else {
-                symbolUsage.put(elementName, elementQualifiedName);
+                createTypeReference(enclosedType, type);
             }
         }
 
