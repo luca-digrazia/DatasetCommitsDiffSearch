@@ -26,20 +26,24 @@ import com.sun.c1x.ir.*;
 
 public interface FrameStateAccess {
 
-    FrameState duplicate();
-
-    Value valueAt(int i);
-
-    int stackSize();
+    FrameState duplicate(int newBci);
 
     int localsSize();
 
-    Value stackAt(int i);
-
-    Value lockAt(int i);
+    int stackSize();
 
     int locksSize();
 
+    Value valueAt(int i);
+
     Value localAt(int i);
+
+    Value lockAt(int i);
+
+    Value stackAt(int i);
+
+    FrameState duplicateWithEmptyStack(int bci);
+
+    void setValueAt(int j, Value v);
 
 }
