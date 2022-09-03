@@ -29,6 +29,9 @@
  */
 package com.oracle.truffle.llvm.types;
 
+import com.oracle.truffle.api.CompilerDirectives.ValueType;
+
+@ValueType
 public final class LLVMAddress {
 
     public static final int WORD_LENGTH_BIT = 64;
@@ -93,7 +96,7 @@ public final class LLVMAddress {
 
     @Override
     public String toString() {
-        return Long.toString(getVal());
+        return String.format("0x%x", getVal());
     }
 
     public boolean signedLessThan(LLVMAddress val2) {
@@ -110,6 +113,10 @@ public final class LLVMAddress {
 
     public boolean signedGreaterEquals(LLVMAddress val2) {
         return val > val2.getVal();
+    }
+
+    public LLVMAddress copy() {
+        return new LLVMAddress(val);
     }
 
 }
