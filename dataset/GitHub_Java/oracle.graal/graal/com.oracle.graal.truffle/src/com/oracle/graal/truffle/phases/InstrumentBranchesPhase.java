@@ -24,7 +24,6 @@ package com.oracle.graal.truffle.phases;
 
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.nodes.AbstractBeginNode;
 import com.oracle.graal.nodes.ConstantNode;
@@ -157,10 +156,7 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
                 pointMap.put(key, p);
                 return p;
             } else {
-                if (tableCount == ACCESS_TABLE.length) {
-                    TTY.println("Maximum number of branch instrumentation counters exceeded.");
-                    tableCount += 1;
-                }
+                System.err.println("Maximum number of branch instrumentation counters exceeded.");
                 return null;
             }
         }
