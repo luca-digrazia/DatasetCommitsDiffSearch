@@ -225,9 +225,7 @@ public class GraalCompiler {
 
         new LoweringPhase(target, runtime, replacements, assumptions).apply(graph);
 
-        new FrameStateAssignmentPhase().apply(graph);
-
-        new DeadCodeEliminationPhase().apply(graph);
+        new FrameStateAssignementPhase().apply(graph);
 
         final SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);

@@ -92,7 +92,7 @@ public final class SchedulePhase extends Phase {
                         for (Iterator<FloatingReadNode> iter = currentState.iterator(); iter.hasNext();) {
                             FloatingReadNode read = iter.next();
                             FixedNode fixed = (FixedNode) node;
-                            if (identity == LocationNode.ANY_LOCATION || read.location().getLocationIdentity() == identity) {
+                            if (identity == LocationNode.ANY_LOCATION || read.location().locationIdentity() == identity) {
                                 addPhantomReference(read, fixed);
                             }
                         }
@@ -171,7 +171,7 @@ public final class SchedulePhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        cfg = ControlFlowGraph.compute(graph, true, true, true, true);
+        cfg = ControlFlowGraph.compute(graph, true, true, true, false);
         earliestCache = graph.createNodeMap();
         blockToNodesMap = new BlockMap<>(cfg);
 
@@ -652,7 +652,7 @@ public final class SchedulePhase extends Phase {
                 }
             }
 
-            if (instruction instanceof AbstractBeginNode) {
+            if (instruction instanceof BeginNode) {
                 ArrayList<ProxyNode> proxies = (instruction instanceof LoopExitNode) ? new ArrayList<ProxyNode>() : null;
                 for (ScheduledNode inBlock : blockToNodesMap.get(b)) {
                     if (!visited.isMarked(inBlock)) {
