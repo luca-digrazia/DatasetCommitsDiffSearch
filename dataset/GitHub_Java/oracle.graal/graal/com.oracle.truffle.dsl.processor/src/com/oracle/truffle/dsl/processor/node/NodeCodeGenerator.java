@@ -1492,7 +1492,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                     guardsAnd = " && ";
                 }
 
-                CodeTree cast = createCast(castBuilder, child, valueParam, typeGuard.getType(), checkMinimumState);
+                CodeTree cast = createCast(castBuilder, child, valueParam, typeGuard.getType(), minimumState);
                 if (cast != null) {
                     castBuilder.tree(cast);
                 }
@@ -1605,7 +1605,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             return builder.getRoot();
         }
 
-        private CodeTree createCast(CodeTreeBuilder parent, NodeChildData field, ActualParameter source, TypeData targetType, boolean checkMinimumState) {
+        private CodeTree createCast(CodeTreeBuilder parent, NodeChildData field, ActualParameter source, TypeData targetType, boolean minimumState) {
             NodeData node = field.getNodeData();
             TypeData sourceType = source.getTypeSystemType();
 
@@ -1632,7 +1632,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             CodeTreeBuilder builder = parent.create();
             builder.tree(createLazyAssignment(parent, castValueName(source), targetType.getPrimitiveType(), condition, value));
-            if (checkMinimumState && types.size() > 1) {
+            if (minimumState && types.size() > 1) {
                 CodeTree castType = createCallTypeSystemMethod(context, parent, node, TypeSystemCodeGenerator.getImplicitClass(targetType), CodeTreeBuilder.singleString(valueName(source)));
                 builder.tree(createLazyAssignment(builder, typeName(source), getContext().getType(Class.class), condition, castType));
             }
