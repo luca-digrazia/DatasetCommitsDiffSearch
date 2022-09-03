@@ -110,7 +110,7 @@ public class LoopBegin extends Merge {
     }
 
     @Override
-    public Iterable<Node> phiPredecessors() {
+    public List<Node> phiPredecessors() {
         return Arrays.asList(new Node[]{this.forwardEdge(), this.loopEnd()});
     }
 
@@ -131,12 +131,18 @@ public class LoopBegin extends Merge {
     }
 
     @Override
+    public Node singlePredecessor() {
+        assert endCount() == 1;
+        return endAt(0).singlePredecessor();
+    }
+
+    @Override
     public Iterable< ? extends Node> dataUsages() {
         final Iterator< ? extends Node> dataUsages = super.dataUsages().iterator();
         return new Iterable<Node>() {
             @Override
             public Iterator<Node> iterator() {
-                return new StateSplit.FilteringIterator(dataUsages, LoopBegin.class);
+                return new StateSplit.FilteringIterator(dataUsages, LoopEnd.class);
             }
         };
     }

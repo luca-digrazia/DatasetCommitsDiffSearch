@@ -31,20 +31,34 @@ import com.sun.cri.ci.*;
 
 public final class MaterializeNode extends FloatingNode {
 
-    @NodeInput
-    private Value value;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_VALUE = 0;
 
-    public Value value() {
-        return value;
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setValue(Value x) {
-        updateUsages(value, x);
-        value = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
     }
 
-    public MaterializeNode(Value value, Graph graph) {
-        super(CiKind.Int, graph);
+    /**
+     * The instruction which produces the input value to this instruction.
+     */
+     public BooleanNode value() {
+        return (BooleanNode) inputs().get(super.inputCount() + INPUT_VALUE);
+    }
+
+    public void setValue(BooleanNode n) {
+        inputs().set(super.inputCount() + INPUT_VALUE, n);
+    }
+
+    public MaterializeNode(BooleanNode value, Graph graph) {
+        super(CiKind.Int, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setValue(value);
     }
 
