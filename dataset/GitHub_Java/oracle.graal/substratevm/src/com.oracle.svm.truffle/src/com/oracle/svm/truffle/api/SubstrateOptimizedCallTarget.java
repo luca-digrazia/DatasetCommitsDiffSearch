@@ -24,6 +24,8 @@
  */
 package com.oracle.svm.truffle.api;
 
+import com.oracle.svm.core.code.AbstractCodeInfo;
+import com.oracle.svm.core.code.RuntimeMethodInfo;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
@@ -32,9 +34,6 @@ import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.InvokeJavaFunctionPointer;
-import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.code.CodeInfo;
-import com.oracle.svm.core.code.CodeInfoAccess;
 import com.oracle.svm.core.code.CodeInfoTable;
 import com.oracle.svm.core.deopt.SubstrateInstalledCode;
 import com.oracle.svm.core.deopt.SubstrateSpeculationLog;
@@ -42,7 +41,6 @@ import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.truffle.api.nodes.RootNode;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.SpeculationLog;
 
 public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements SubstrateInstalledCode, OptimizedAssumptionDependency {
 
@@ -56,11 +54,6 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
     @Override
     public SubstrateSpeculationLog getSpeculationLog() {
         return (SubstrateSpeculationLog) super.getSpeculationLog();
-    }
-
-    @Override
-    public SpeculationLog getCompilationSpeculationLog() {
-        return getSpeculationLog();
     }
 
     @Override
@@ -86,16 +79,15 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
     @Override
     public boolean isValidLastTier() {
         long address0 = getAddress();
-        return (address0 != 0) && isValidLastTier0(address0);
-    }
-
-    @Uninterruptible(reason = "Prevent invalidation of code while in this method.")
-    private static boolean isValidLastTier0(long address0) {
-        CodeInfo codeInfo = CodeInfoTable.lookupCodeInfo(WordFactory.pointer(address0));
-        if (codeInfo.isNonNull() && codeInfo.notEqual(CodeInfoTable.getImageCodeInfo())) {
-            return CodeInfoAccess.getTier(codeInfo) == TruffleCompiler.LAST_TIER_INDEX;
+        if (address0 == 0) {
+            return false;
         }
-        return false;
+        AbstractCodeInfo codeInfo = CodeInfoTable.lookupCodeInfo(WordFactory.pointer(address0));
+        if (!(codeInfo instanceof RuntimeMethodInfo)) {
+            return false;
+        }
+        RuntimeMethodInfo runtimeCodeInfo = (RuntimeMethodInfo) codeInfo;
+        return runtimeCodeInfo.getTier() == TruffleCompiler.LAST_TIER_INDEX;
     }
 
     @Override
@@ -108,6 +100,9 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
         return getAddress();
     }
 
+    /**
+     * @param method
+     */
     @Override
     public void setAddress(long address, ResolvedJavaMethod method) {
         this.address = address;
@@ -127,7 +122,7 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
          * that no longer contains executable code.
          */
         long start = address;
-        if (!inInlinedCode() && start != 0) {
+        if (start != 0) {
             CallBoundaryFunctionPointer target = WordFactory.pointer(start);
             return KnownIntrinsics.convertUnknownValue(target.invoke(this, args), Object.class);
         } else {
