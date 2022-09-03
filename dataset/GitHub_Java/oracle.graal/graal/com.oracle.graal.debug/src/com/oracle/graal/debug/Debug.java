@@ -1210,13 +1210,9 @@ public class Debug {
         return createTimer(format, arg1, arg2);
     }
 
-    /**
-     * There are paths where construction of formatted class names are common and the code below is
-     * surprisingly expensive, so compute it once and cache it.
-     */
-    private static final ClassValue<String> formattedClassName = new ClassValue<String>() {
-        @Override
-        protected String computeValue(Class<?> c) {
+    public static Object convertFormatArg(Object arg) {
+        if (arg instanceof Class) {
+            Class<?> c = (Class<?>) arg;
             final String simpleName = c.getSimpleName();
             Class<?> enclosingClass = c.getEnclosingClass();
             if (enclosingClass != null) {
@@ -1229,12 +1225,6 @@ public class Debug {
             } else {
                 return simpleName;
             }
-        }
-    };
-
-    public static Object convertFormatArg(Object arg) {
-        if (arg instanceof Class) {
-            return formattedClassName.get((Class<?>) arg);
         }
         return arg;
     }

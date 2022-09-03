@@ -76,7 +76,6 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
     private HotSpotTruffleRuntime() {
         installOptimizedCallTargetCallMethod();
-        installOptimizedCallTargetCallDirect();
         lookupCallMethods(getGraalProviders().getMetaAccess());
 
         // Create compilation queue.
@@ -92,10 +91,6 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
             }
         });
         compileQueue = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), factory);
-    }
-
-    private static void installOptimizedCallTargetCallDirect() {
-        ((HotSpotResolvedJavaMethod) getGraalProviders().getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod())).setNotInlineable();
     }
 
     @Override

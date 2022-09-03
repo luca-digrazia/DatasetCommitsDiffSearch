@@ -22,28 +22,37 @@
  */
 package com.oracle.graal.phases.common.inlining.walker;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.phases.common.inlining.walker.CallsiteHolderDummy.*;
+import com.oracle.graal.api.code.Assumptions;
+import com.oracle.graal.api.code.BailoutException;
+import com.oracle.graal.api.meta.JavaTypeProfile;
+import com.oracle.graal.api.meta.ResolvedJavaMethod;
+import com.oracle.graal.api.meta.ResolvedJavaType;
+import com.oracle.graal.compiler.common.GraalInternalError;
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugMetric;
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.AbstractNewObjectNode;
+import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.nodes.virtual.AllocatedObjectNode;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.inlining.InliningUtil;
+import com.oracle.graal.phases.common.inlining.info.*;
+import com.oracle.graal.phases.common.inlining.info.elem.Inlineable;
+import com.oracle.graal.phases.common.inlining.info.elem.InlineableGraph;
+import com.oracle.graal.phases.common.inlining.info.elem.InlineableMacroNode;
+import com.oracle.graal.phases.common.inlining.policy.InliningPolicy;
+import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.phases.util.Providers;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.virtual.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.common.inlining.*;
-import com.oracle.graal.phases.common.inlining.info.*;
-import com.oracle.graal.phases.common.inlining.info.elem.*;
-import com.oracle.graal.phases.common.inlining.policy.*;
-import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.phases.util.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.common.inlining.walker.CallsiteHolderDummy.DUMMY_CALLSITE_HOLDER;
 
 /**
  * <p>
@@ -178,7 +187,7 @@ public class InliningData {
                 holder = receiverType;
                 if (receiverStamp.isExactType()) {
                     assert targetMethod.getDeclaringClass().isAssignableFrom(holder) : holder + " subtype of " + targetMethod.getDeclaringClass() + " for " + targetMethod;
-                    ResolvedJavaMethod resolvedMethod = holder.resolveConcreteMethod(targetMethod, contextType);
+                    ResolvedJavaMethod resolvedMethod = holder.resolveMethod(targetMethod, contextType);
                     if (resolvedMethod != null) {
                         return getExactInlineInfo(invoke, resolvedMethod);
                     }
@@ -188,7 +197,7 @@ public class InliningData {
 
         if (holder.isArray()) {
             // arrays can be treated as Objects
-            ResolvedJavaMethod resolvedMethod = holder.resolveConcreteMethod(targetMethod, contextType);
+            ResolvedJavaMethod resolvedMethod = holder.resolveMethod(targetMethod, contextType);
             if (resolvedMethod != null) {
                 return getExactInlineInfo(invoke, resolvedMethod);
             }
@@ -197,7 +206,7 @@ public class InliningData {
         if (assumptions.useOptimisticAssumptions()) {
             ResolvedJavaType uniqueSubtype = holder.findUniqueConcreteSubtype();
             if (uniqueSubtype != null) {
-                ResolvedJavaMethod resolvedMethod = uniqueSubtype.resolveConcreteMethod(targetMethod, contextType);
+                ResolvedJavaMethod resolvedMethod = uniqueSubtype.resolveMethod(targetMethod, contextType);
                 if (resolvedMethod != null) {
                     return getAssumptionInlineInfo(invoke, resolvedMethod, new Assumptions.ConcreteSubtype(holder, uniqueSubtype));
                 }
@@ -240,7 +249,7 @@ public class InliningData {
 
             ResolvedJavaType type = ptypes[0].getType();
             assert type.isArray() || !type.isAbstract();
-            ResolvedJavaMethod concrete = type.resolveConcreteMethod(targetMethod, contextType);
+            ResolvedJavaMethod concrete = type.resolveMethod(targetMethod, contextType);
             if (!checkTargetConditions(invoke, concrete)) {
                 return null;
             }
@@ -264,7 +273,7 @@ public class InliningData {
             ArrayList<ResolvedJavaMethod> concreteMethods = new ArrayList<>();
             ArrayList<Double> concreteMethodsProbabilities = new ArrayList<>();
             for (int i = 0; i < ptypes.length; i++) {
-                ResolvedJavaMethod concrete = ptypes[i].getType().resolveConcreteMethod(targetMethod, contextType);
+                ResolvedJavaMethod concrete = ptypes[i].getType().resolveMethod(targetMethod, contextType);
                 if (concrete == null) {
                     InliningUtil.logNotInlined(invoke, inliningDepth(), targetMethod, "could not resolve method");
                     return null;
@@ -311,7 +320,7 @@ public class InliningData {
             ArrayList<JavaTypeProfile.ProfiledType> usedTypes = new ArrayList<>();
             ArrayList<Integer> typesToConcretes = new ArrayList<>();
             for (JavaTypeProfile.ProfiledType type : ptypes) {
-                ResolvedJavaMethod concrete = type.getType().resolveConcreteMethod(targetMethod, contextType);
+                ResolvedJavaMethod concrete = type.getType().resolveMethod(targetMethod, contextType);
                 int index = concreteMethods.indexOf(concrete);
                 if (index == -1) {
                     notRecordedTypeProbability += type.getProbability();
@@ -359,7 +368,7 @@ public class InliningData {
         InlineInfo calleeInfo = calleeInvocation.callee();
         try {
             try (Debug.Scope scope = Debug.scope("doInline", callerGraph)) {
-                Set<Node> canonicalizedNodes = Node.newNodeHashSet();
+                Set<Node> canonicalizedNodes = new HashSet<>();
                 calleeInfo.invoke().asNode().usages().snapshotTo(canonicalizedNodes);
                 Collection<Node> parameterUsages = calleeInfo.inline(new Providers(context), callerAssumptions);
                 canonicalizedNodes.addAll(parameterUsages);
@@ -471,7 +480,6 @@ public class InliningData {
     }
 
     /**
-     * Gets the freshly instantiated arguments.
      * <p>
      * A freshly instantiated argument is either:
      * <uL>
@@ -715,9 +723,9 @@ public class InliningData {
     }
 
     /**
-     * Checks an invariant that {@link #moveForward()} must maintain: "the top invocation records
-     * how many concrete target methods (for it) remain on the {@link #graphQueue}; those targets
-     * 'belong' to the current invocation in question.
+     * This method checks an invariant that {@link #moveForward()} must maintain: "the top
+     * invocation records how many concrete target methods (for it) remain on the
+     * {@link #graphQueue}; those targets 'belong' to the current invocation in question."
      */
     private boolean topGraphsForTopInvocation() {
         if (invocationQueue.isEmpty()) {

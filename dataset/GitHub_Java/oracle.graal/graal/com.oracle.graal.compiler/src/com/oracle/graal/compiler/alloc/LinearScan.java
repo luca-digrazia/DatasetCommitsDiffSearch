@@ -1795,7 +1795,7 @@ public final class LinearScan {
         InstructionStateProcedure stateProc = new InstructionStateProcedure() {
 
             @Override
-            public void doState(LIRInstruction op, LIRFrameState state) {
+            protected void doState(LIRInstruction op, LIRFrameState state) {
                 computeDebugInfo(iw, op, state);
             }
         };
