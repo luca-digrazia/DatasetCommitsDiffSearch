@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,15 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.UnsafeStoreNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * A special purpose store node that differs from {@link UnsafeStoreNode} in that it is not a
@@ -44,11 +39,11 @@ import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 @NodeInfo
 public final class DirectReadNode extends FixedWithNextNode implements LIRLowerable {
 
-    public static final NodeClass<DirectReadNode> TYPE = NodeClass.create(DirectReadNode.class);
+    public static final NodeClass<DirectReadNode> TYPE = NodeClass.get(DirectReadNode.class);
     @Input protected ValueNode address;
-    protected final JavaKind readKind;
+    protected final Kind readKind;
 
-    public DirectReadNode(ValueNode address, JavaKind readKind) {
+    public DirectReadNode(ValueNode address, Kind readKind) {
         super(TYPE, StampFactory.forKind(readKind.getStackKind()));
         this.address = address;
         this.readKind = readKind;
@@ -67,24 +62,51 @@ public final class DirectReadNode extends FixedWithNextNode implements LIRLowera
      * @see com.oracle.graal.replacements.DefaultJavaLoweringProvider#createUnsafeRead
      */
     @Override
-    public void generate(NodeLIRBuilderTool builder) {
-        LIRGeneratorTool gen = builder.getLIRGeneratorTool();
-        LIRKind kind = gen.target().getLIRKind(readKind);
-        Value loaded = gen.getArithmetic().emitLoad(kind, builder.operand(address), null);
-        switch (readKind) {
+    public void generate(NodeLIRBuilderTool gen) {
+        LIRKind kind = gen.getLIRGeneratorTool().target().getLIRKind(readKind);
+        Value loaded = gen.getLIRGeneratorTool().emitLoad(kind, gen.operand(address), null);
+        switch ((Kind) kind.getPlatformKind()) {
             case Byte:
-                loaded = gen.getArithmetic().emitSignExtend(loaded, 8, 32);
+                loaded = gen.getLIRGeneratorTool().emitSignExtend(loaded, 8, 32);
                 break;
             case Short:
-                loaded = gen.getArithmetic().emitSignExtend(loaded, 16, 32);
+                loaded = gen.getLIRGeneratorTool().emitSignExtend(loaded, 16, 32);
                 break;
             case Boolean:
-                loaded = gen.getArithmetic().emitZeroExtend(loaded, 8, 32);
+                loaded = gen.getLIRGeneratorTool().emitZeroExtend(loaded, 8, 32);
                 break;
             case Char:
-                loaded = gen.getArithmetic().emitZeroExtend(loaded, 16, 32);
+                loaded = gen.getLIRGeneratorTool().emitZeroExtend(loaded, 16, 32);
                 break;
         }
-        builder.setResult(this, loaded);
+        gen.setResult(this, loaded);
+    }
+
+    @SuppressWarnings("unchecked")
+    @NodeIntrinsic
+    public static <T> T read(long address, @ConstantNodeParameter Kind kind) {
+        if (kind == Kind.Boolean) {
+            return (T) Boolean.valueOf(unsafe.getByte(address) != 0);
+        }
+        if (kind == Kind.Byte) {
+            return (T) (Byte) unsafe.getByte(address);
+        }
+        if (kind == Kind.Short) {
+            return (T) (Short) unsafe.getShort(address);
+        }
+        if (kind == Kind.Char) {
+            return (T) (Character) unsafe.getChar(address);
+        }
+        if (kind == Kind.Int) {
+            return (T) (Integer) unsafe.getInt(address);
+        }
+        if (kind == Kind.Float) {
+            return (T) (Float) unsafe.getFloat(address);
+        }
+        if (kind == Kind.Long) {
+            return (T) (Long) unsafe.getLong(address);
+        }
+        assert kind == Kind.Double;
+        return (T) (Double) unsafe.getDouble(address);
     }
 }
