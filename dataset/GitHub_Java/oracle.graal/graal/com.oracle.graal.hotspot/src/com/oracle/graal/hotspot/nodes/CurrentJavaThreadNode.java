@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,41 +22,46 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.word.Word;
+import com.oracle.graal.word.WordTypes;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.PlatformKind;
 
 /**
  * Gets the address of the C++ JavaThread object for the current thread.
  */
-public class CurrentJavaThreadNode extends FloatingNode implements LIRLowerable {
+@NodeInfo(cycles = CYCLES_1, size = SIZE_1)
+public final class CurrentJavaThreadNode extends FloatingNode implements LIRLowerable {
+    public static final NodeClass<CurrentJavaThreadNode> TYPE = NodeClass.create(CurrentJavaThreadNode.class);
 
-    public CurrentJavaThreadNode() {
-        super(StampFactory.forWord());
+    public CurrentJavaThreadNode(@InjectedNodeParameter WordTypes wordTypes) {
+        this(wordTypes.getWordKind());
+    }
+
+    public CurrentJavaThreadNode(JavaKind wordKind) {
+        super(TYPE, StampFactory.forKind(wordKind));
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        Register rawThread = HotSpotGraalRuntime.getInstance().getRuntime().threadRegister();
-        gen.setResult(this, rawThread.asValue(this.kind()));
-    }
-
-    private static int eetopOffset() {
-        try {
-            return (int) UnsafeAccess.unsafe.objectFieldOffset(Thread.class.getDeclaredField("eetop"));
-        } catch (Exception e) {
-            throw new GraalInternalError(e);
-        }
+    public void generate(NodeLIRBuilderTool gen) {
+        Register rawThread = ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).getProviders().getRegisters().getThreadRegister();
+        PlatformKind wordKind = gen.getLIRGeneratorTool().target().arch.getWordKind();
+        gen.setResult(this, rawThread.asValue(LIRKind.value(wordKind)));
     }
 
     @NodeIntrinsic
-    public static Word get() {
-        return Word.box(unsafeReadWord(Thread.currentThread(), eetopOffset()));
-    }
+    public static native Word get();
 }
