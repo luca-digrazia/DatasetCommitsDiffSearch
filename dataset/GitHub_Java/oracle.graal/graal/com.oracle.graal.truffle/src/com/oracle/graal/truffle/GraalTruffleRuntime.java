@@ -284,11 +284,11 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
             compilationListeners.forEach(l -> l.notifyCompilationTruffleTierFinished(target, graph));
         }
 
-        public void notifyShutdown(GraalTruffleRuntime runtime) {
+        public void notifyShutdown(TruffleRuntime runtime) {
             compilationListeners.forEach(l -> l.notifyShutdown(runtime));
         }
 
-        public void notifyStartup(GraalTruffleRuntime runtime) {
+        public void notifyStartup(TruffleRuntime runtime) {
             compilationListeners.forEach(l -> l.notifyStartup(runtime));
         }
 

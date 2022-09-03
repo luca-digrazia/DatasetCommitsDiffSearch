@@ -29,6 +29,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.truffle.*;
+import com.oracle.truffle.api.*;
 
 public abstract class AbstractDebugCompilationListener implements GraalTruffleCompilationListener {
 
@@ -61,10 +62,10 @@ public abstract class AbstractDebugCompilationListener implements GraalTruffleCo
     public void notifyCompilationInvalidated(OptimizedCallTarget target, Object source, CharSequence reason) {
     }
 
-    public void notifyShutdown(GraalTruffleRuntime runtime) {
+    public void notifyShutdown(TruffleRuntime runtime) {
     }
 
-    public void notifyStartup(GraalTruffleRuntime runtime) {
+    public void notifyStartup(TruffleRuntime runtime) {
     }
 
     public static void log(int indent, String msg, String details, Map<String, Object> properties) {
