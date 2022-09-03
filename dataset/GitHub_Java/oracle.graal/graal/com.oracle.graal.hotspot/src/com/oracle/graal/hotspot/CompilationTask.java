@@ -355,7 +355,7 @@ public class CompilationTask {
             DebugEnvironment.initialize(TTY.cachedOut);
         }
 
-        HotSpotResolvedJavaMethod method = HotSpotResolvedJavaMethodImpl.fromMetaspace(metaspaceMethod);
+        HotSpotResolvedJavaMethod method = HotSpotResolvedJavaMethod.fromMetaspace(metaspaceMethod);
         compileMethod(method, entryBCI, ctask, id);
     }
 
