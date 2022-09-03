@@ -23,6 +23,7 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 
 /**
  * This interface marks nodes that access some memory location, and that have an edge to the last
@@ -32,7 +33,7 @@ public interface MemoryAccess {
 
     LocationIdentity getLocationIdentity();
 
-    MemoryNode getLastLocationAccess();
+    Node getLastLocationAccess();
 
-    void setLastLocationAccess(MemoryNode lla);
+    void setLastLocationAccess(Node lla);
 }
