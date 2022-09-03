@@ -32,6 +32,9 @@ import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.nodes.AbstractDeoptimizeNode;
+import org.graalvm.compiler.nodes.DeoptimizeNode;
+import org.graalvm.compiler.nodes.DynamicDeoptimizeNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
@@ -40,40 +43,47 @@ import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
 import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
 import org.graalvm.compiler.replacements.Snippets;
 
-import com.oracle.svm.core.deopt.DeoptTester;
-import com.oracle.svm.core.graal.nodes.DeoptTestNode;
+import com.oracle.svm.core.deopt.DeoptimizationRuntime;
+import com.oracle.svm.core.graal.nodes.UnreachableNode;
 
-public final class DeoptTestSnippets extends SubstrateTemplates implements Snippets {
+import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
+
+public final class DeoptRuntimeSnippets extends SubstrateTemplates implements Snippets {
 
     @Snippet
-    protected static void deoptTestSnippet() {
-        runtimeCall(DeoptTester.DEOPTTEST);
+    protected static void deoptSnippet(long actionAndReason, SpeculationReason speculation) {
+        runtimeCall(DeoptimizationRuntime.DEOPTIMIZE, actionAndReason, speculation);
+        throw UnreachableNode.unreachable();
     }
 
     @SuppressWarnings("unused")
     public static void registerLowerings(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
                     Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings) {
-        new DeoptTestSnippets(options, factories, providers, snippetReflection, lowerings);
+        new DeoptRuntimeSnippets(options, factories, providers, snippetReflection, lowerings);
     }
 
-    private DeoptTestSnippets(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
+    private DeoptRuntimeSnippets(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
                     Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings) {
         super(options, factories, providers, snippetReflection);
 
-        lowerings.put(DeoptTestNode.class, new DeoptTestLowering());
+        AbstractDeoptimizeLowering lowering = new AbstractDeoptimizeLowering();
+        lowerings.put(DeoptimizeNode.class, lowering);
+        lowerings.put(DynamicDeoptimizeNode.class, lowering);
     }
 
-    protected class DeoptTestLowering implements NodeLoweringProvider<DeoptTestNode> {
+    protected class AbstractDeoptimizeLowering implements NodeLoweringProvider<AbstractDeoptimizeNode> {
 
-        private final SnippetInfo deoptTest = snippet(DeoptTestSnippets.class, "deoptTestSnippet");
+        private final SnippetInfo deopt = snippet(DeoptRuntimeSnippets.class, "deoptSnippet");
 
         @Override
-        public void lower(DeoptTestNode node, LoweringTool tool) {
+        public void lower(AbstractDeoptimizeNode node, LoweringTool tool) {
             if (tool.getLoweringStage() != LoweringTool.StandardLoweringStage.LOW_TIER) {
                 return;
             }
 
-            Arguments args = new Arguments(deoptTest, node.graph().getGuardsStage(), tool.getLoweringStage());
+            Arguments args = new Arguments(deopt, node.graph().getGuardsStage(), tool.getLoweringStage());
+            args.add("actionAndReason", node.getActionAndReason(tool.getMetaAccess()));
+            args.add("speculation", node.getSpeculation(tool.getMetaAccess()));
             template(node, args).instantiate(providers.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
         }
     }

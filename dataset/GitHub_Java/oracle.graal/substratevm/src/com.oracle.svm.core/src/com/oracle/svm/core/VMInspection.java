@@ -36,7 +36,7 @@ import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.nativeimage.CurrentIsolate;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.IsolateThread;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
@@ -47,7 +47,7 @@ import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.stack.JavaStackWalker;
 import com.oracle.svm.core.stack.ThreadStackPrinter;
-import com.oracle.svm.core.thread.JavaVMOperation;
+import com.oracle.svm.core.thread.VMOperation;
 import com.oracle.svm.core.thread.VMThreads;
 
 import sun.misc.Signal;
@@ -92,9 +92,9 @@ class DumpAllStacks implements SignalHandler {
 
     @Override
     public void handle(Signal arg0) {
-        JavaVMOperation.enqueueBlockingSafepoint("DumpAllStacks", () -> {
+        VMOperation.enqueueBlockingSafepoint("DumpAllStacks", () -> {
             Log log = Log.log();
-            for (IsolateThread vmThread = VMThreads.firstThread(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
+            for (IsolateThread vmThread = VMThreads.firstThread(); VMThreads.isNonNullThread(vmThread); vmThread = VMThreads.nextThread(vmThread)) {
                 if (vmThread == CurrentIsolate.getCurrentThread()) {
                     /* Skip the signal handler stack */
                     continue;
@@ -163,7 +163,7 @@ class DumpRuntimeCompilation implements SignalHandler {
 
     @Override
     public void handle(Signal arg0) {
-        JavaVMOperation.enqueueBlockingSafepoint("DumpRuntimeCompilation", () -> {
+        VMOperation.enqueueBlockingSafepoint("DumpRuntimeCompilation", () -> {
             Log log = Log.log();
             SubstrateUtil.dumpRuntimeCompilation(log);
             log.flush();

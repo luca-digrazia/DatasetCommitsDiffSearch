@@ -35,7 +35,6 @@ import java.nio.ByteOrder;
 
 import org.graalvm.compiler.core.common.util.TypeConversion;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.word.BarrieredAccess;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.CurrentIsolate;
@@ -52,6 +51,7 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.MonitorSupport;
 import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.Specialize;
 import com.oracle.svm.core.annotate.Uninterruptible;
@@ -87,7 +87,6 @@ import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
-import sun.misc.Unsafe;
 
 /**
  * Performs deoptimization. The method to deoptimize (= the source method) is either a specialized
@@ -144,8 +143,6 @@ import sun.misc.Unsafe;
  * </ol>
  */
 public final class Deoptimizer {
-
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
 
     private static final RingBuffer<char[]> recentDeoptimizationEvents = new RingBuffer<>();
 
@@ -275,9 +272,6 @@ public final class Deoptimizer {
     }
 
     /** Deoptimize a specific method on all thread stacks. */
-    @NeverInline("Starting a stack walk in the caller frame. " +
-                    "Note that we could start the stack frame also further down the stack, because VM operation frames never need deoptimization. " +
-                    "But we don't store stack frame information for the first frame we would need to process.")
     private static void deoptimizeInRangeOperation(CodePointer fromIp, CodePointer toIp, boolean deoptAll) {
         VMOperation.guaranteeInProgress("Deoptimizer.deoptimizeInRangeOperation, but not in VMOperation.");
         /* Handle my own thread specially, because I do not have a JavaFrameAnchor. */
@@ -846,7 +840,7 @@ public final class Deoptimizer {
             Object lockee = KnownIntrinsics.convertUnknownValue(SubstrateObjectConstant.asObject(valueConstant), Object.class);
             int lockeeIndex = TypeConversion.asS4(valueInfo.getData());
             assert lockee == materializedObjects[lockeeIndex];
-            MonitorSupport.monitorEnterWithoutBlockingCheck(lockee);
+            MonitorSupport.monitorEnter(lockee);
 
             if (relockedObjects == null) {
                 relockedObjects = new Object[sourceFrame.getVirtualObjects().length];
@@ -920,7 +914,7 @@ public final class Deoptimizer {
             curIdx = 2;
         } else {
             try {
-                obj = UNSAFE.allocateInstance(DynamicHub.toClass(hub));
+                obj = UnsafeAccess.UNSAFE.allocateInstance(DynamicHub.toClass(hub));
             } catch (InstantiationException ex) {
                 throw VMError.shouldNotReachHere(ex);
             }
