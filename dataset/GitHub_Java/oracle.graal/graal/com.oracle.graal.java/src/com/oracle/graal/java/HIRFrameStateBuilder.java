@@ -45,7 +45,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
     private final StructuredGraph graph;
 
     public HIRFrameStateBuilder(ResolvedJavaMethod method, StructuredGraph graph, boolean eagerResolve) {
-        super(method);
+        super(method, new ValueNode[method.getMaxLocals()], new ValueNode[Math.max(1, method.getMaxStackSize())], EMPTY_ARRAY);
 
         assert graph != null;
 
@@ -56,7 +56,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
         int index = 0;
         if (!method.isStatic()) {
             // add the receiver
-            ParameterNode receiver = graph.unique(new ParameterNode(javaIndex, StampFactory.declaredNonNull(method.getDeclaringClass())));
+            ParameterNode receiver = graph.unique(ParameterNode.create(javaIndex, StampFactory.declaredNonNull(method.getDeclaringClass())));
             storeLocal(javaIndex, receiver);
             javaIndex = 1;
             index = 1;
@@ -76,7 +76,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
             } else {
                 stamp = StampFactory.forKind(kind);
             }
-            ParameterNode param = graph.unique(new ParameterNode(index, stamp));
+            ParameterNode param = graph.unique(ParameterNode.create(index, stamp));
             storeLocal(javaIndex, param);
             javaIndex += stackSlots(kind);
             index++;
@@ -87,7 +87,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
         super(other);
         assert other.graph != null;
         graph = other.graph;
-        monitorIds = other.monitorIds.length == 0 ? other.monitorIds : other.monitorIds.clone();
+        monitorIds = other.monitorIds == EMPTY_MONITOR_ARRAY ? EMPTY_MONITOR_ARRAY : other.monitorIds.clone();
 
         assert locals.length == method.getMaxLocals();
         assert stack.length == Math.max(1, method.getMaxStackSize());
@@ -95,8 +95,8 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
     }
 
     @Override
-    protected ValueNode[] allocateArray(int length) {
-        return length == 0 ? EMPTY_ARRAY : new ValueNode[length];
+    protected ValueNode[] getEmptyArray() {
+        return EMPTY_ARRAY;
     }
 
     @Override
@@ -123,7 +123,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
     }
 
     public FrameState create(int bci) {
-        return graph.add(new FrameState(method, bci, locals, Arrays.asList(stack).subList(0, stackSize), lockedObjects, monitorIds, rethrowException, false));
+        return graph.add(FrameState.create(method, bci, locals, Arrays.asList(stack).subList(0, stackSize), lockedObjects, monitorIds, rethrowException, false));
     }
 
     @Override
@@ -190,7 +190,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
                 return null;
             }
 
-            ValuePhiNode phi = graph.addWithoutUnique(new ValuePhiNode(currentValue.stamp().unrestricted(), block));
+            ValuePhiNode phi = graph.addWithoutUnique(ValuePhiNode.create(currentValue.stamp().unrestricted(), block));
             for (int i = 0; i < block.phiPredecessorCount(); i++) {
                 phi.addInput(currentValue);
             }
@@ -288,7 +288,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
         }
         assert !block.isPhiAtMerge(value) : "phi function for this block already created";
 
-        ValuePhiNode phi = graph.addWithoutUnique(new ValuePhiNode(value.stamp().unrestricted(), block));
+        ValuePhiNode phi = graph.addWithoutUnique(ValuePhiNode.create(value.stamp().unrestricted(), block));
         phi.addInput(value);
         return phi;
     }

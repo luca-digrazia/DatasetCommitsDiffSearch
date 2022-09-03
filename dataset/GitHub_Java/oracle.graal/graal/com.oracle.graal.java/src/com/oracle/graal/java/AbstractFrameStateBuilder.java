@@ -23,9 +23,12 @@
 
 package com.oracle.graal.java;
 
+import java.util.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
+import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
 
 public abstract class AbstractFrameStateBuilder<T extends KindProvider, S extends AbstractFrameStateBuilder<T, S>> {
 
@@ -40,11 +43,11 @@ public abstract class AbstractFrameStateBuilder<T extends KindProvider, S extend
      */
     protected boolean rethrowException;
 
-    public AbstractFrameStateBuilder(ResolvedJavaMethod method) {
+    public AbstractFrameStateBuilder(ResolvedJavaMethod method, T[] l, T[] s, T[] lo) {
         this.method = method;
-        this.locals = allocateArray(method.getMaxLocals());
-        this.stack = allocateArray(Math.max(1, method.getMaxStackSize()));
-        this.lockedObjects = allocateArray(0);
+        this.locals = l;
+        this.stack = s;
+        this.lockedObjects = lo;
     }
 
     protected AbstractFrameStateBuilder(S other) {
@@ -52,7 +55,7 @@ public abstract class AbstractFrameStateBuilder<T extends KindProvider, S extend
         this.stackSize = other.stackSize;
         this.locals = other.locals.clone();
         this.stack = other.stack.clone();
-        this.lockedObjects = other.lockedObjects.length == 0 ? other.lockedObjects : other.lockedObjects.clone();
+        this.lockedObjects = other.lockedObjects == getEmptyArray() ? getEmptyArray() : other.lockedObjects.clone();
         this.rethrowException = other.rethrowException;
 
         assert locals.length == method.getMaxLocals();
@@ -61,7 +64,7 @@ public abstract class AbstractFrameStateBuilder<T extends KindProvider, S extend
 
     public abstract S copy();
 
-    protected abstract T[] allocateArray(int length);
+    protected abstract T[] getEmptyArray();
 
     public abstract boolean isCompatibleWith(S other);
 
@@ -170,9 +173,8 @@ public abstract class AbstractFrameStateBuilder<T extends KindProvider, S extend
      */
     public T loadLocal(int i) {
         T x = locals[i];
-        assert x != null : i;
-        assert x.getKind().getSlotCount() == 1 || locals[i + 1] == null;
-        assert i == 0 || locals[i - 1] == null || locals[i - 1].getKind().getSlotCount() == 1;
+        assert !isTwoSlot(x.getKind()) || locals[i + 1] == null;
+        assert i == 0 || locals[i - 1] == null || !isTwoSlot(locals[i - 1].getKind());
         return x;
     }
 
@@ -186,13 +188,13 @@ public abstract class AbstractFrameStateBuilder<T extends KindProvider, S extend
     public void storeLocal(int i, T x) {
         assert x == null || x.getKind() != Kind.Void && x.getKind() != Kind.Illegal : "unexpected value: " + x;
         locals[i] = x;
-        if (x != null && x.getKind().needsTwoSlots()) {
+        if (x != null && isTwoSlot(x.getKind())) {
             // if this is a double word, then kill i+1
             locals[i + 1] = null;
         }
         if (x != null && i > 0) {
             T p = locals[i - 1];
-            if (p != null && p.getKind().needsTwoSlots()) {
+            if (p != null && isTwoSlot(p.getKind())) {
                 // if there was a double word at i - 1, then kill it
                 locals[i - 1] = null;
             }
@@ -213,7 +215,7 @@ public abstract class AbstractFrameStateBuilder<T extends KindProvider, S extend
     public void push(Kind kind, T x) {
         assert x.getKind() != Kind.Void && x.getKind() != Kind.Illegal;
         xpush(assertKind(kind, x));
-        if (kind.needsTwoSlots()) {
+        if (isTwoSlot(kind)) {
             xpush(null);
         }
     }
@@ -289,7 +291,7 @@ public abstract class AbstractFrameStateBuilder<T extends KindProvider, S extend
      */
     public T pop(Kind kind) {
         assert kind != Kind.Void;
-        if (kind.needsTwoSlots()) {
+        if (isTwoSlot(kind)) {
             xpop();
         }
         return assertKind(kind, xpop());
@@ -358,22 +360,18 @@ public abstract class AbstractFrameStateBuilder<T extends KindProvider, S extend
      *
      * @return an array containing the arguments off of the stack
      */
-    public T[] popArguments(int argSize) {
-        T[] result = allocateArray(argSize);
-        int newStackSize = stackSize;
-        for (int i = argSize - 1; i >= 0; i--) {
-            newStackSize--;
-            if (stack[newStackSize] == null) {
-                /* Two-slot value. */
-                newStackSize--;
-                assert stack[newStackSize].getKind().needsTwoSlots();
-            } else {
-                assert stack[newStackSize].getKind().getSlotCount() == 1;
-            }
-            result[i] = stack[newStackSize];
+    public T[] popArguments(int slotSize, int argSize) {
+        int base = stackSize - slotSize;
+        List<T> r = new ArrayList<>(argSize);
+        int stackindex = 0;
+        while (stackindex < slotSize) {
+            T element = stack[base + stackindex];
+            assert element != null;
+            r.add(element);
+            stackindex += stackSlots(element.getKind());
         }
-        stackSize = newStackSize;
-        return result;
+        stackSize = base;
+        return r.toArray(getEmptyArray());
     }
 
     /**
@@ -389,11 +387,15 @@ public abstract class AbstractFrameStateBuilder<T extends KindProvider, S extend
         for (int i = 0; i < argumentNumber; i++) {
             if (stackAt(idx) == null) {
                 idx--;
-                assert stackAt(idx).getKind().needsTwoSlots();
+                assert isTwoSlot(stackAt(idx).getKind());
             }
             idx--;
         }
         return stackAt(idx);
+    }
+
+    public static int stackSlots(Kind kind) {
+        return isTwoSlot(kind) ? 2 : 1;
     }
 
     /**
@@ -401,6 +403,11 @@ public abstract class AbstractFrameStateBuilder<T extends KindProvider, S extend
      */
     public void clearStack() {
         stackSize = 0;
+    }
+
+    protected static boolean isTwoSlot(Kind kind) {
+        assert kind != Kind.Void && kind != Kind.Illegal;
+        return kind == Kind.Long || kind == Kind.Double;
     }
 
     private T assertKind(Kind kind, T x) {
