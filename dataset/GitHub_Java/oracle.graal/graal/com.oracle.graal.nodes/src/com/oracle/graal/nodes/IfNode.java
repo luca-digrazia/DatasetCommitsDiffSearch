@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -66,7 +66,7 @@ public class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerab
     }
 
     public static IfNode create(LogicNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double trueSuccessorProbability) {
-        return new IfNode(condition, trueSuccessor, falseSuccessor, trueSuccessorProbability);
+        return USE_GENERATED_NODES ? new IfNodeGen(condition, trueSuccessor, falseSuccessor, trueSuccessorProbability) : new IfNode(condition, trueSuccessor, falseSuccessor, trueSuccessorProbability);
     }
 
     protected IfNode(LogicNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double trueSuccessorProbability) {
@@ -74,7 +74,7 @@ public class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerab
     }
 
     public static IfNode create(LogicNode condition, BeginNode trueSuccessor, BeginNode falseSuccessor, double trueSuccessorProbability) {
-        return new IfNode(condition, trueSuccessor, falseSuccessor, trueSuccessorProbability);
+        return USE_GENERATED_NODES ? new IfNodeGen(condition, trueSuccessor, falseSuccessor, trueSuccessorProbability) : new IfNode(condition, trueSuccessor, falseSuccessor, trueSuccessorProbability);
     }
 
     protected IfNode(LogicNode condition, BeginNode trueSuccessor, BeginNode falseSuccessor, double trueSuccessorProbability) {
@@ -236,7 +236,8 @@ public class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerab
         do {
             BeginNode trueSucc = trueSuccessor();
             BeginNode falseSucc = falseSuccessor();
-            if (trueSucc.getClass() == BeginNode.class && falseSucc.getClass() == BeginNode.class && trueSucc.next() instanceof FixedWithNextNode && falseSucc.next() instanceof FixedWithNextNode) {
+            if (trueSucc.getNodeClass().is(BeginNode.class) && falseSucc.getNodeClass().is(BeginNode.class) && trueSucc.next() instanceof FixedWithNextNode &&
+                            falseSucc.next() instanceof FixedWithNextNode) {
                 FixedWithNextNode trueNext = (FixedWithNextNode) trueSucc.next();
                 FixedWithNextNode falseNext = (FixedWithNextNode) falseSucc.next();
                 NodeClass nodeClass = trueNext.getNodeClass();
@@ -280,7 +281,7 @@ public class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerab
         if (condition() instanceof IntegerLessThanNode) {
             IntegerLessThanNode lessThan = (IntegerLessThanNode) condition();
             Constant y = lessThan.getY().stamp().asConstant();
-            if (y instanceof PrimitiveConstant && ((PrimitiveConstant) y).asLong() == 0 && falseSuccessor().next() instanceof IfNode) {
+            if (y != null && y.asLong() == 0 && falseSuccessor().next() instanceof IfNode) {
                 IfNode ifNode2 = (IfNode) falseSuccessor().next();
                 if (ifNode2.condition() instanceof IntegerLessThanNode) {
                     IntegerLessThanNode lessThan2 = (IntegerLessThanNode) ifNode2.condition();
@@ -305,7 +306,7 @@ public class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerab
                          * constants since there isn't a IntegerBelowEqualThanNode but that doesn't
                          * appear to be interesting.
                          */
-                        JavaConstant positive = lessThan2.getX().asJavaConstant();
+                        Constant positive = lessThan2.getX().asConstant();
                         if (positive != null && positive.asLong() > 0 && positive.asLong() < positive.getKind().getMaxValue()) {
                             ConstantNode newLimit = ConstantNode.forIntegerKind(positive.getKind(), positive.asLong() + 1, graph());
                             below = graph().unique(IntegerBelowNode.create(lessThan.getX(), newLimit));
@@ -709,7 +710,7 @@ public class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerab
 
         List<AbstractEndNode> falseEnds = new ArrayList<>(mergePredecessors.size());
         List<AbstractEndNode> trueEnds = new ArrayList<>(mergePredecessors.size());
-        Map<AbstractEndNode, ValueNode> phiValues = CollectionsFactory.newMap(mergePredecessors.size());
+        Map<AbstractEndNode, ValueNode> phiValues = new HashMap<>(mergePredecessors.size());
 
         BeginNode oldFalseSuccessor = falseSuccessor();
         BeginNode oldTrueSuccessor = trueSuccessor();
@@ -891,7 +892,7 @@ public class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerab
      */
     public static Constant[] constantValues(ValueNode node, MergeNode merge, boolean allowNull) {
         if (node.isConstant()) {
-            JavaConstant[] result = new JavaConstant[merge.forwardEndCount()];
+            Constant[] result = new Constant[merge.forwardEndCount()];
             Arrays.fill(result, node.asConstant());
             return result;
         }
