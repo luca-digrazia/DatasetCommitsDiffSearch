@@ -22,11 +22,8 @@
  */
 package com.oracle.graal.compiler.test.inlining;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.jvmci.code.InfopointReason;
+import com.oracle.jvmci.meta.ResolvedJavaMethod;
 import org.junit.*;
 
 import com.oracle.graal.compiler.test.*;
@@ -38,6 +35,8 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
 
 public class InliningTest extends GraalCompilerTest {
 
@@ -234,7 +233,7 @@ public class InliningTest extends GraalCompilerTest {
             StructuredGraph graph = eagerInfopointMode ? parseDebug(method, AllowAssumptions.YES) : parseEager(method, AllowAssumptions.YES);
             PhaseSuite<HighTierContext> graphBuilderSuite = eagerInfopointMode ? getCustomGraphBuilderSuite(GraphBuilderConfiguration.getFullDebugDefault(getDefaultGraphBuilderPlugins()))
                             : getDefaultGraphBuilderSuite();
-            HighTierContext context = new HighTierContext(getProviders(), graphBuilderSuite, OptimisticOptimizations.ALL);
+            HighTierContext context = new HighTierContext(getProviders(), graphBuilderSuite, OptimisticOptimizations.ALL, null);
             Debug.dump(graph, "Graph");
             new CanonicalizerPhase().apply(graph, context);
             new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
