@@ -24,6 +24,7 @@ package com.oracle.graal.virtual.phases.ea;
 
 import java.util.*;
 
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
 import com.oracle.graal.nodes.virtual.*;
@@ -31,6 +32,7 @@ import com.oracle.graal.nodes.virtual.*;
 public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<T>> extends EffectsBlockState<T> {
 
     protected final IdentityHashMap<VirtualObjectNode, ObjectState> objectStates = new IdentityHashMap<>();
+    protected final IdentityHashMap<ValueNode, VirtualObjectNode> objectAliases;
 
     /**
      * Final subclass of PartialEscapeBlockState, for performance and to make everything behave
@@ -47,12 +49,15 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
     }
 
     protected PartialEscapeBlockState() {
+        objectAliases = new IdentityHashMap<>();
     }
 
     protected PartialEscapeBlockState(PartialEscapeBlockState<T> other) {
+        super(other);
         for (Map.Entry<VirtualObjectNode, ObjectState> entry : other.objectStates.entrySet()) {
             objectStates.put(entry.getKey(), entry.getValue().cloneState());
         }
+        objectAliases = new IdentityHashMap<>(other.objectAliases);
     }
 
     public ObjectState getObjectState(VirtualObjectNode object) {
@@ -62,6 +67,11 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
 
     public ObjectState getObjectStateOptional(VirtualObjectNode object) {
         return objectStates.get(object);
+    }
+
+    public ObjectState getObjectState(ValueNode value) {
+        VirtualObjectNode object = objectAliases.get(value);
+        return object == null ? null : getObjectState(object);
     }
 
     public void materializeBefore(FixedNode fixed, VirtualObjectNode virtual, EscapeState state, GraphEffectList materializeEffects) {
@@ -90,8 +100,8 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                 values.add(null);
             }
             for (int i = 0; i < entries.length; i++) {
-                if (entries[i] instanceof VirtualObjectNode) {
-                    ObjectState entryObj = getObjectState((VirtualObjectNode) entries[i]);
+                ObjectState entryObj = getObjectState(entries[i]);
+                if (entryObj != null) {
                     if (entryObj.isVirtual()) {
                         materializeWithCommit(fixed, entryObj.getVirtualObject(), objects, locks, values, otherAllocations, state);
                     }
@@ -112,6 +122,26 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         VirtualUtil.trace("materialized %s as %s with values %s", virtual, representation, values);
     }
 
+    void addAndMarkAlias(VirtualObjectNode virtual, ValueNode node, NodeBitMap usages) {
+        objectAliases.put(node, virtual);
+        if (node.isAlive()) {
+            for (Node usage : node.usages()) {
+                markVirtualUsages(usage, usages);
+            }
+        }
+    }
+
+    private void markVirtualUsages(Node node, NodeBitMap usages) {
+        if (!usages.isNew(node)) {
+            usages.mark(node);
+        }
+        if (node instanceof VirtualState) {
+            for (Node usage : node.usages()) {
+                markVirtualUsages(usage, usages);
+            }
+        }
+    }
+
     public void addObject(VirtualObjectNode virtual, ObjectState state) {
         objectStates.put(virtual, state);
     }
@@ -120,18 +150,30 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         return objectStates.values();
     }
 
-    public Set<VirtualObjectNode> getVirtualObjects() {
-        return objectStates.keySet();
+    public Collection<VirtualObjectNode> getVirtualObjects() {
+        return objectAliases.values();
     }
 
     @Override
     public String toString() {
-        return super.toString() + ", Object States: " + objectStates;
+        return super.toString() + ", Object Aliases: " + objectAliases + ", Object States: " + objectStates;
+    }
+
+    @Override
+    public void meetAliases(List<T> states) {
+        super.meetAliases(states);
+        objectAliases.putAll(states.get(0).objectAliases);
+        for (int i = 1; i < states.size(); i++) {
+            meetMaps(objectAliases, states.get(i).objectAliases);
+        }
     }
 
     @Override
     public boolean equivalentTo(T other) {
-        return compareMaps(objectStates, other.objectStates);
+        if (!compareMaps(objectAliases, other.objectAliases) || !compareMaps(objectStates, other.objectStates)) {
+            return false;
+        }
+        return super.equivalentTo(other);
     }
 
     protected static <K, V> boolean compareMaps(Map<K, V> left, Map<K, V> right) {
