@@ -39,7 +39,7 @@ import java.nio.file.ProviderNotFoundException;
 public final class JarSourceProvider implements SourceProvider {
     private final FileSystem fileSystem;
     private final FileSupport fileSupport;
-    public static final String TYPE = "jar";
+    public final static String TYPE = "jar";
 
     public JarSourceProvider() {
         this(new FileSupport());

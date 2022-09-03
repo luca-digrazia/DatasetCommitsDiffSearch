@@ -36,7 +36,6 @@ final class Timer implements AutoCloseable {
         main.printer.printInfo(message);
     }
 
-    @Override
     public void close() {
         final long end = System.currentTimeMillis();
         main.printer.printlnInfo(" (" + (end - start) + " ms)");

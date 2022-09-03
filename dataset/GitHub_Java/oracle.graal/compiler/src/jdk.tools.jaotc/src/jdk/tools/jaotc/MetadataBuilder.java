@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,26 +25,25 @@
 
 package jdk.tools.jaotc;
 
-import static jdk.tools.jaotc.AOTCompiledClass.getType;
-import static jdk.tools.jaotc.AOTCompiledClass.metadataName;
-
 import java.util.ArrayList;
 import java.util.List;
-
-import org.graalvm.compiler.code.CompilationResult;
-import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
-import org.graalvm.compiler.hotspot.HotSpotGraalServices;
 
 import jdk.tools.jaotc.binformat.BinaryContainer;
 import jdk.tools.jaotc.binformat.ByteContainer;
 import jdk.tools.jaotc.binformat.GotSymbol;
 import jdk.tools.jaotc.utils.NativeOrderOutputStream;
+import org.graalvm.compiler.code.CompilationResult;
+import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
+
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.site.DataPatch;
 import jdk.vm.ci.code.site.Infopoint;
 import jdk.vm.ci.code.site.Mark;
 import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 import jdk.vm.ci.hotspot.HotSpotMetaData;
+
+import static jdk.tools.jaotc.AOTCompiledClass.getType;
+import static jdk.tools.jaotc.AOTCompiledClass.metadataName;
 
 final class MetadataBuilder {
 
@@ -98,7 +97,6 @@ final class MetadataBuilder {
             byte[] scopeDesc = metaData.scopesDescBytes();
             byte[] relocationInfo = metaData.relocBytes();
             byte[] oopMapInfo = metaData.oopMaps();
-            byte[] implicitExceptionBytes = HotSpotGraalServices.getImplicitExceptionBytes(metaData);
 
             // create a global symbol at this position for this method
             NativeOrderOutputStream metadataStream = new NativeOrderOutputStream();
@@ -144,10 +142,6 @@ final class MetadataBuilder {
                 NativeOrderOutputStream.PatchableInt relocationOffset = metadataStream.patchableInt();
                 NativeOrderOutputStream.PatchableInt exceptionOffset = metadataStream.patchableInt();
                 NativeOrderOutputStream.PatchableInt oopMapOffset = metadataStream.patchableInt();
-                NativeOrderOutputStream.PatchableInt implictTableOFfset = null;
-                if (implicitExceptionBytes != null) {
-                    implictTableOFfset = metadataStream.patchableInt();
-                }
                 metadataStream.align(8);
 
                 pcDescOffset.set(metadataStream.position());
@@ -161,11 +155,6 @@ final class MetadataBuilder {
 
                 exceptionOffset.set(metadataStream.position());
                 metadataStream.put(metaData.exceptionBytes()).align(8);
-
-                if (implicitExceptionBytes != null) {
-                    implictTableOFfset.set(metadataStream.position());
-                    metadataStream.put(implicitExceptionBytes).align(8);
-                }
 
                 // oopmaps should be last
                 oopMapOffset.set(metadataStream.position());

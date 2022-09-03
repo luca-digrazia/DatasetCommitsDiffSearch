@@ -257,8 +257,7 @@ final class Options {
         }
 
         // Make checkstyle happy.
-        int i = 0;
-        while (i < args.length) {
+        for (int i = 0; i < args.length; i++) {
             String arg = args[i];
 
             if (arg.charAt(0) == '-') {
@@ -285,7 +284,6 @@ final class Options {
             } else {
                 task.options.files.add(new SearchFor(arg));
             }
-            i++;
         }
     }
 

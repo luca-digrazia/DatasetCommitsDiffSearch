@@ -25,16 +25,18 @@
 
 package jdk.tools.jaotc;
 
-import jdk.tools.jaotc.aarch64.AArch64ELFMacroAssembler;
+import jdk.tools.jaotc.StubInformation;
 import jdk.tools.jaotc.amd64.AMD64ELFMacroAssembler;
-import jdk.vm.ci.aarch64.AArch64;
+import jdk.tools.jaotc.aarch64.AArch64ELFMacroAssembler;
+
 import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.code.TargetDescription;
 
 public interface ELFMacroAssembler {
 
-    static ELFMacroAssembler getELFMacroAssembler(TargetDescription target) {
+    public static ELFMacroAssembler getELFMacroAssembler(TargetDescription target) {
         Architecture architecture = target.arch;
         if (architecture instanceof AMD64) {
             return new AMD64ELFMacroAssembler(target);
@@ -45,12 +47,12 @@ public interface ELFMacroAssembler {
         }
     }
 
-    int currentEndOfInstruction();
+    public int currentEndOfInstruction();
 
-    byte[] getPLTJumpCode();
+    public byte[] getPLTJumpCode();
 
-    byte[] getPLTStaticEntryCode(StubInformation stub);
+    public byte[] getPLTStaticEntryCode(StubInformation stub);
 
-    byte[] getPLTVirtualEntryCode(StubInformation stub);
+    public byte[] getPLTVirtualEntryCode(StubInformation stub);
 
 }

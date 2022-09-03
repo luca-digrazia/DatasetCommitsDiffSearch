@@ -29,7 +29,6 @@ import jdk.tools.jaotc.LoadedClass;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.BiConsumer;
 
 public final class ClassSearch {
     private final List<SourceProvider> providers = new ArrayList<>();
@@ -39,57 +38,39 @@ public final class ClassSearch {
     }
 
     public List<LoadedClass> search(List<SearchFor> search, SearchPath searchPath) {
-        return search(search, searchPath, (s, t) -> {
-            throw new InternalError(s + " : " + t, t);
-        });
-    }
-
-    public List<LoadedClass> search(List<SearchFor> search, SearchPath searchPath, BiConsumer<String, Throwable> classLoadingErrorsHandler) {
         List<LoadedClass> loaded = new ArrayList<>();
 
         List<ClassSource> sources = new ArrayList<>();
 
         for (SearchFor entry : search) {
-            sources.add(findSource(entry, searchPath, classLoadingErrorsHandler));
+            sources.add(findSource(entry, searchPath));
         }
 
         for (ClassSource source : sources) {
-            if (source != null) {
-                source.eachClass((name, loader) -> {
-                    LoadedClass x = loadClass(name, loader, classLoadingErrorsHandler);
-                    if (x != null) {
-                        loaded.add(x);
-                    }
-                });
-            }
+            source.eachClass((name, loader) -> loaded.add(loadClass(name, loader)));
         }
 
         return loaded;
     }
 
-    private static LoadedClass loadClass(String name, ClassLoader loader, BiConsumer<String, Throwable> classLoadingErrorsHandler) {
+    private static LoadedClass loadClass(String name, ClassLoader loader) {
         try {
             Class<?> clzz = loader.loadClass(name);
             return new LoadedClass(name, clzz);
-        } catch (Throwable e) {
-            classLoadingErrorsHandler.accept(name, e);
-            return null;
+        } catch (ClassNotFoundException e) {
+            throw new InternalError("Failed to load with: " + loader, e);
         }
     }
 
-    private ClassSource findSource(SearchFor searchFor, SearchPath searchPath, BiConsumer<String, Throwable> classLoadingErrorsHandler) {
+    private ClassSource findSource(SearchFor searchFor, SearchPath searchPath) {
         ClassSource found = null;
 
         for (SourceProvider provider : providers) {
             if (!searchFor.isUnknown() && !provider.supports(searchFor.getType())) {
                 continue;
             }
-            ClassSource source = null;
-            try {
-                source = provider.findSource(searchFor.getName(), searchPath);
-            } catch (Throwable e) {
-                classLoadingErrorsHandler.accept(searchFor.getName(), e);
-            }
+
+            ClassSource source = provider.findSource(searchFor.getName(), searchPath);
             if (source != null) {
                 if (found != null) {
                     throw new InternalError("Multiple possible sources: " + source + " and: " + found);
@@ -99,7 +80,7 @@ public final class ClassSearch {
         }
 
         if (found == null) {
-            classLoadingErrorsHandler.accept(searchFor.getName(), new InternalError("Failed to find " + searchFor.getType() + " file: " + searchFor.getName()));
+            throw new InternalError("Failed to find " + searchFor.getType() + " file: " + searchFor.getName());
         }
         return found;
     }

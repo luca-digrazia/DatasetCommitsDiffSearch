@@ -63,13 +63,11 @@ public final class AMD64InstructionDecoder extends InstructionDecoder {
         static final int VEX_2BYTES = 0xC5;
     }
 
-    @SuppressWarnings("unused")
     private static class VexPrefix {
         static final int VEX_R = 0x80;
         static final int VEX_W = 0x80;
     }
 
-    @SuppressWarnings("unused")
     private static class VexOpcode {
         static final int VEX_OPCODE_NONE = 0x0;
         static final int VEX_OPCODE_0F = 0x1;
@@ -116,7 +114,7 @@ public final class AMD64InstructionDecoder extends InstructionDecoder {
             againAfterPrefix = false;
             switch (0xFF & code[ip++]) {
 
-                // These convenience macros generate groups of "case" labels for the switch.
+            // These convenience macros generate groups of "case" labels for the switch.
 
                 case Prefix.CSSegment:
                 case Prefix.SSSegment:
@@ -425,18 +423,18 @@ public final class AMD64InstructionDecoder extends InstructionDecoder {
                 case Prefix.VEX_3BYTES:
                 case Prefix.VEX_2BYTES:
                     assert ip == pcOffset + 1 : "no prefixes allowed";
-                    int vexOpcode;
+                    int vex_opcode;
                     // First byte
                     if ((code[pcOffset] & 0xFF) == Prefix.VEX_3BYTES) {
-                        vexOpcode = VexOpcode.VEX_OPCODE_MASK & code[ip];
+                        vex_opcode = VexOpcode.VEX_OPCODE_MASK & code[ip];
                         ip++; // third byte
                         is64bit = ((VexPrefix.VEX_W & code[ip]) == VexPrefix.VEX_W);
                     } else {
-                        vexOpcode = VexOpcode.VEX_OPCODE_0F;
+                        vex_opcode = VexOpcode.VEX_OPCODE_0F;
                     }
                     ip++; // opcode
                     // To find the end of instruction (which == end_pc_operand).
-                    switch (vexOpcode) {
+                    switch (vex_opcode) {
                         case VexOpcode.VEX_OPCODE_0F:
                             switch (0xFF & code[ip]) {
                                 case 0x70: // pshufd r, r/a, #8

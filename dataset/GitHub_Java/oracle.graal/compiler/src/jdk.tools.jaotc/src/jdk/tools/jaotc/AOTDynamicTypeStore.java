@@ -67,17 +67,14 @@ final class AOTDynamicTypeStore implements DynamicTypeStore {
             return cpi;
         }
 
-        @Override
         public String toString() {
             return getHolder().getName() + "@" + cpi;
         }
 
-        @Override
         public int hashCode() {
             return holder.hashCode() + getClass().hashCode() + cpi;
         }
 
-        @Override
         public boolean equals(Object o) {
             if (this == o) {
                 return true;
@@ -102,7 +99,6 @@ final class AOTDynamicTypeStore implements DynamicTypeStore {
             return methodId;
         }
 
-        @Override
         public String toString() {
             return "adapter:" + methodId + "@" + super.toString();
         }
@@ -113,7 +109,6 @@ final class AOTDynamicTypeStore implements DynamicTypeStore {
             super(holder, cpi);
         }
 
-        @Override
         public String toString() {
             return "appendix@" + super.toString();
         }
