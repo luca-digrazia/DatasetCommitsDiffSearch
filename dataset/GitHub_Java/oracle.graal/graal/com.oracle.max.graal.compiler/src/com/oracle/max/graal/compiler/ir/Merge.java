@@ -22,6 +22,8 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.value.*;
@@ -35,18 +37,10 @@ import com.sun.cri.ci.*;
  */
 public class Merge extends StateSplit {
 
-    private static final int INPUT_COUNT = 0;
+    @Input    private final NodeInputList<EndNode> ends = new NodeInputList<EndNode>(this);
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
-    }
-
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
+    public Merge(Graph graph) {
+        super(CiKind.Illegal, graph);
     }
 
     @Override
@@ -54,23 +48,39 @@ public class Merge extends StateSplit {
         return false;
     }
 
-    /**
-     * Constructs a new Merge at the specified bytecode index.
-     * @param bci the bytecode index of the start
-     * @param blockID the ID of the block
-     * @param graph
-     */
-    public Merge(Graph graph) {
-        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-    }
-
-    protected Merge(int inputCount, int successorCount, Graph graph) {
-        super(CiKind.Illegal, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
-    }
-
     @Override
     public void accept(ValueVisitor v) {
         v.visitMerge(this);
+    }
+
+    public int endIndex(EndNode end) {
+        return ends.indexOf(end);
+    }
+
+    public void addEnd(EndNode end) {
+        ends.add(end);
+    }
+
+    public int endCount() {
+        return ends.size();
+    }
+
+    public EndNode endAt(int index) {
+        return ends.get(index);
+    }
+
+    public Iterable<? extends Node> phiPredecessors() {
+        return ends;
+    }
+
+    @Override
+    public Iterable<EndNode> cfgPredecessors() {
+        return ends;
+    }
+
+    @Override
+    public Iterable< ? extends Node> dataInputs() {
+        return Collections.emptyList();
     }
 
     @Override
@@ -96,7 +106,6 @@ public class Merge extends StateSplit {
             }
             hasSucc = true;
         }
-
         return builder.toString();
     }
 
@@ -144,13 +153,13 @@ public class Merge extends StateSplit {
         boolean hasPhisOnStack = false;
 
         //if (end() != null && end().stateAfter() != null) {
-            FrameState state = stateBefore();
+            FrameState state = stateAfter();
 
             int i = 0;
             while (!hasPhisOnStack && i < state.stackSize()) {
                 Value value = state.stackAt(i);
                 hasPhisOnStack = isPhiAtBlock(value);
-                if (value != null && !(value instanceof Phi && ((Phi) value).isDead())) {
+                if (value != null) {
                     i += value.kind.sizeInSlots();
                 } else {
                     i++;
@@ -161,7 +170,7 @@ public class Merge extends StateSplit {
                 Value value = state.localAt(i);
                 hasPhisInLocals = isPhiAtBlock(value);
                 // also ignore illegal HiWords
-                if (value != null && !(value instanceof Phi && ((Phi) value).isDead())) {
+                if (value != null) {
                     i += value.kind.sizeInSlots();
                 } else {
                     i++;
@@ -180,11 +189,7 @@ public class Merge extends StateSplit {
                 if (value != null) {
                     out.println(stateString(j, value));
                     // also ignore illegal HiWords
-                    if (value instanceof Phi && ((Phi) value).isDead()) {
-                        j +=  1;
-                    } else {
-                        j += value.kind.sizeInSlots();
-                    }
+                    j += value.kind.sizeInSlots();
                 } else {
                     j++;
                 }
@@ -197,8 +202,8 @@ public class Merge extends StateSplit {
             out.println();
             out.println("Stack:");
             int j = 0;
-            while (j < stateBefore().stackSize()) {
-                Value value = stateBefore().stackAt(j);
+            while (j < stateAfter().stackSize()) {
+                Value value = stateAfter().stackAt(j);
                 if (value != null) {
                     out.println(stateString(j, value));
                     j += value.kind.sizeInSlots();
@@ -211,14 +216,14 @@ public class Merge extends StateSplit {
     }
 
     /**
-     * Determines if a given instruction is a phi whose {@linkplain Phi#block() join block} is a given block.
+     * Determines if a given instruction is a phi whose {@linkplain Phi#merge() join block} is a given block.
      *
      * @param value the instruction to test
      * @param block the block that may be the join block of {@code value} if {@code value} is a phi
      * @return {@code true} if {@code value} is a phi and its join block is {@code block}
      */
     private boolean isPhiAtBlock(Value value) {
-        return value instanceof Phi && ((Phi) value).block() == this;
+        return value instanceof Phi && ((Phi) value).merge() == this;
     }
 
 
@@ -229,7 +234,7 @@ public class Merge extends StateSplit {
      * @param index the index of the value in the frame state
      * @param value the frame state value
      * @param block if {@code value} is a phi, then its inputs are formatted if {@code block} is its
-     *            {@linkplain Phi#block() join point}
+     *            {@linkplain Phi#merge() join point}
      * @return the instruction representation as a string
      */
     public String stateString(int index, Value value) {
@@ -238,7 +243,7 @@ public class Merge extends StateSplit {
         if (value instanceof Phi) {
             Phi phi = (Phi) value;
             // print phi operands
-            if (phi.block() == this) {
+            if (phi.merge() == this) {
                 sb.append(" [");
                 for (int j = 0; j < phi.valueCount(); j++) {
                     sb.append(' ');
@@ -255,28 +260,32 @@ public class Merge extends StateSplit {
         return sb.toString();
     }
 
-    @Override
-    public String shortName() {
-        return "Merge #" + id();
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        assert getClass() == Merge.class : "copy of " + getClass();
-        Merge x = new Merge(into);
-        return x;
-    }
-
-    public void removePhiPredecessor(Node pred) {
-        int predIndex = predecessors().lastIndexOf(pred);
+    public void removeEnd(EndNode pred) {
+        int predIndex = ends.indexOf(pred);
         assert predIndex != -1;
+        ends.remove(predIndex);
 
         for (Node usage : usages()) {
             if (usage instanceof Phi) {
-                Phi phi = (Phi) usage;
-//                assert phi.valueCount() == predecessors().size();
-                phi.removeInput(predIndex);
+                ((Phi) usage).removeInput(predIndex);
             }
         }
+    }
+
+    public int phiPredecessorCount() {
+        return endCount();
+    }
+
+    public int phiPredecessorIndex(Node pred) {
+        EndNode end = (EndNode) pred;
+        return endIndex(end);
+    }
+
+    public Node phiPredecessorAt(int index) {
+        return endAt(index);
+    }
+
+    public Collection<Phi> phis() {
+        return Util.filter(this.usages(), Phi.class);
     }
 }

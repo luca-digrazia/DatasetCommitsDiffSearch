@@ -22,6 +22,8 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
@@ -30,47 +32,94 @@ import com.sun.cri.ci.*;
  * The {@code StateSplit} class is the abstract base class of all instructions
  * that store an immutable copy of the frame state.
  */
-public abstract class StateSplit extends Instruction {
+public abstract class StateSplit extends FixedNodeWithNext {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_STATE_AFTER = 0;
+    @Input private FrameState stateAfter;
 
-    private static final int SUCCESSOR_COUNT = 1;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
-    }
-
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The state for this instruction.
-     */
-     @Override
     public FrameState stateAfter() {
-        return (FrameState) inputs().get(super.inputCount() + INPUT_STATE_AFTER);
+        return stateAfter;
     }
 
-    public FrameState setStateAfter(FrameState n) {
-        return (FrameState) inputs().set(super.inputCount() + INPUT_STATE_AFTER, n);
+    public void setStateAfter(FrameState x) {
+        updateUsages(stateAfter, x);
+        stateAfter = x;
     }
 
     /**
      * Creates a new state split with the specified value type.
      * @param kind the type of the value that this instruction produces
-     * @param inputCount
-     * @param successorCount
      * @param graph
      */
-    public StateSplit(CiKind kind, int inputCount, int successorCount, Graph graph) {
-        super(kind, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
+    public StateSplit(CiKind kind, Graph graph) {
+        super(kind, graph);
     }
 
     public boolean needsStateAfter() {
         return true;
+    }
+
+    @Override
+    public void delete() {
+        FrameState stateAfter = stateAfter();
+        super.delete();
+        if (stateAfter != null) {
+            if (stateAfter.usages().isEmpty()) {
+                stateAfter.delete();
+            }
+        }
+    }
+
+    @Override
+    public Iterable< ? extends Node> dataInputs() {
+        final Iterator< ? extends Node> dataInputs = super.dataInputs().iterator();
+        return new Iterable<Node>() {
+            @Override
+            public Iterator<Node> iterator() {
+                return new FilteringIterator(dataInputs, FrameState.class);
+            }
+        };
+    }
+
+    public static final class FilteringIterator implements Iterator<Node> {
+
+        private final Iterator< ? extends Node> input;
+        private Node next;
+        private Class< ? > clazz;
+
+        public FilteringIterator(Iterator< ? extends Node> input, Class<?> clazz) {
+            this.input = input;
+            this.clazz = clazz;
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Node next() {
+            forward();
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            Node res = next;
+            next = null;
+            return res;
+        }
+
+        @Override
+        public boolean hasNext() {
+            forward();
+            return next != null;
+        }
+
+        private void forward() {
+            while (next == null && input.hasNext()) {
+                next = input.next();
+                if (clazz.isInstance(next)) {
+                    next = null;
+                }
+            }
+        }
     }
 }

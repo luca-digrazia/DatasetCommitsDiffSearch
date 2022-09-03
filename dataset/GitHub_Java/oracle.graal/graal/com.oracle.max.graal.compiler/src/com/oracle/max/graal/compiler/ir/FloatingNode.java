@@ -25,17 +25,8 @@ package com.oracle.max.graal.compiler.ir;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
-
-public abstract class FloatingNode extends Value {
-
-    /**
-     * @param kind
-     * @param inputCount
-     * @param successorCount
-     * @param graph
-     */
-    public FloatingNode(CiKind kind, int inputCount, int successorCount, Graph graph) {
-        super(kind, inputCount, successorCount, graph);
+public abstract class FloatingNode extends Value implements Node.ValueNumberable {
+    public FloatingNode(CiKind kind, Graph graph) {
+        super(kind, graph);
     }
-
 }
