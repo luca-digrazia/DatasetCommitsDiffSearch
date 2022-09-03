@@ -231,23 +231,19 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     public LIRFrameState state() {
-        return state(null);
-    }
-
-    public LIRFrameState state(DeoptimizationReason reason) {
         assert lastState != null || needOnlyOopMaps() : "must have state before instruction";
-        return stateFor(lastState, reason);
+        return stateFor(lastState);
     }
 
-    public LIRFrameState stateFor(FrameState state, DeoptimizationReason reason) {
-        return stateForWithExceptionEdge(state, reason, null);
+    public LIRFrameState stateFor(FrameState state) {
+        return stateFor(state, null);
     }
 
-    public LIRFrameState stateForWithExceptionEdge(FrameState state, DeoptimizationReason reason, LabelRef exceptionEdge) {
+    public LIRFrameState stateFor(FrameState state, LabelRef exceptionEdge) {
         if (needOnlyOopMaps()) {
-            return new LIRFrameState(null, null, null, (short) -1);
+            return new LIRFrameState(null, null, null);
         }
-        return debugInfoBuilder.build(state, lockDataSlots.subList(0, currentLockCount), lir.getDeoptimizationReasons().addSpeculation(reason), exceptionEdge);
+        return debugInfoBuilder.build(state, lockDataSlots.subList(0, currentLockCount), exceptionEdge);
     }
 
     /**
@@ -599,7 +595,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             // False constants are handled within emitBranch.
         } else {
             // Fall back to a normal branch.
-            LIRFrameState info = state(deoptReason);
+            LIRFrameState info = state();
             LabelRef stubEntry = createDeoptStub(action, deoptReason, info);
             if (negated) {
                 emitBranch(comp, stubEntry, null, info);
@@ -720,7 +716,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
         LIRFrameState callState = null;
         if (x.stateAfter() != null) {
-            callState = stateForWithExceptionEdge(x.stateDuring(), null, x instanceof InvokeWithExceptionNode ? getLIRBlock(((InvokeWithExceptionNode) x).exceptionEdge()) : null);
+            callState = stateFor(x.stateDuring(), x instanceof InvokeWithExceptionNode ? getLIRBlock(((InvokeWithExceptionNode) x).exceptionEdge()) : null);
         }
 
         Value result = cc.getReturn();
@@ -822,7 +818,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             if ((stateAfter.stackSize() > 0 && stateAfter.stackAt(stateAfter.stackSize() - 1) == x) || (stateAfter.stackSize() > 1 && stateAfter.stackAt(stateAfter.stackSize() - 2) == x)) {
                 stateBeforeReturn = stateAfter.duplicateModified(stateAfter.bci, stateAfter.rethrowException(), x.kind());
             }
-            info = stateFor(stateBeforeReturn, null);
+            info = stateFor(stateBeforeReturn);
         } else {
             info = state();
         }

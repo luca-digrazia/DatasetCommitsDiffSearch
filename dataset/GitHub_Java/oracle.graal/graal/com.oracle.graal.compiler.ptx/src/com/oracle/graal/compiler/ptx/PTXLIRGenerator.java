@@ -179,20 +179,20 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitJump(LabelRef label) {
-        append(new JumpOp(label));
+    public void emitJump(LabelRef label, LIRFrameState info) {
+        append(new JumpOp(label, info));
     }
 
     @Override
-    public void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label) {
+    public void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label, LIRFrameState info) {
         switch (left.getKind().getStackKind()) {
             case Int:
                 append(new CompareOp(ICMP, cond, left, right));
-                append(new BranchOp(cond, label));
+                append(new BranchOp(cond, label, info));
                 break;
             case Object:
                 append(new CompareOp(ACMP, cond, left, right));
-                append(new BranchOp(cond, label));
+                append(new BranchOp(cond, label, info));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere("" + left.getKind());
@@ -200,12 +200,12 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitOverflowCheckBranch(LabelRef label, boolean negated) {
+    public void emitOverflowCheckBranch(LabelRef label, LIRFrameState info, boolean negated) {
         throw new InternalError("NYI");
     }
 
     @Override
-    public void emitIntegerTestBranch(Value left, Value right, boolean negated, LabelRef label) {
+    public void emitIntegerTestBranch(Value left, Value right, boolean negated, LabelRef label, LIRFrameState info) {
         throw new InternalError("NYI");
     }
 
@@ -349,6 +349,11 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
+    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason) {
+        throw new InternalError("NYI");
+    }
+
+    @Override
     public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason) {
         append(new ReturnOp(Value.ILLEGAL));
     }
@@ -445,6 +450,14 @@ public class PTXLIRGenerator extends LIRGenerator {
     @Override
     protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key) {
         throw new InternalError("NYI");
+    }
+
+    @Override
+    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info) {
+        assert info.topFrame.getBCI() >= 0 : "invalid bci for deopt framestate";
+        PTXDeoptimizationStub stub = new PTXDeoptimizationStub(action, reason, info);
+        lir.stubs.add(stub);
+        return LabelRef.forLabel(stub.label);
     }
 
     @Override
