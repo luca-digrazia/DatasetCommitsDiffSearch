@@ -23,9 +23,8 @@
 package com.oracle.graal.hotspot.test;
 
 import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION;
-import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
-import static sun.misc.Version.jdkMajorVersion;
-import static sun.misc.Version.jdkMinorVersion;
+import static jdk.internal.jvmci.hotspot.CompilerToVM.compilerToVM;
+import static jdk.internal.jvmci.hotspot.HotSpotVMConfig.config;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -39,9 +38,13 @@ import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 
-import jdk.vm.ci.code.CompilationResult;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.CompilationResult;
+import jdk.internal.jvmci.code.InstalledCode;
+import jdk.internal.jvmci.hotspot.HotSpotCompiledNmethod;
+import jdk.internal.jvmci.hotspot.HotSpotNmethod;
+import jdk.internal.jvmci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -62,7 +65,17 @@ public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
 
     @Override
     protected InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult) {
-        return getCodeCache().setDefaultCode(method, compResult);
+        HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) method;
+        HotSpotNmethod installedCode = new HotSpotNmethod(hsMethod, compResult.getName(), true);
+        HotSpotCompiledNmethod compiledNmethod = new HotSpotCompiledNmethod(hsMethod, compResult);
+        int result = compilerToVM().installCode(getTarget(), compiledNmethod, installedCode, null);
+        HotSpotVMConfig config = config();
+        Assert.assertEquals("Error installing method " + method + ": " + config.getCodeInstallResultDescription(result), result, config.codeInstallResultOk);
+
+        // HotSpotRuntime hsRuntime = (HotSpotRuntime) getCodeCache();
+        // TTY.println(hsMethod.toString());
+        // TTY.println(hsRuntime.disassemble(installedCode));
+        return installedCode;
     }
 
     SecretKey aesKey;
@@ -91,8 +104,7 @@ public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
 
     @Test
     public void testAESCryptIntrinsics() throws Exception {
-        String[] methods = jdkMajorVersion() >= 1 && jdkMinorVersion() <= 8 ? new String[]{"encryptBlock", "decryptBlock"} : new String[]{"implEncryptBlock", "implDecryptBlock"};
-        if (compileAndInstall("com.sun.crypto.provider.AESCrypt", methods)) {
+        if (compileAndInstall("com.sun.crypto.provider.AESCrypt", "encryptBlock", "decryptBlock")) {
             ByteArrayOutputStream actual = new ByteArrayOutputStream();
             actual.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding"));
             actual.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding"));
@@ -102,8 +114,7 @@ public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
 
     @Test
     public void testCipherBlockChainingIntrinsics() throws Exception {
-        String[] methods = jdkMajorVersion() >= 1 && jdkMinorVersion() <= 8 ? new String[]{"encrypt", "decrypt"} : new String[]{"implEncrypt", "implDecrypt"};
-        if (compileAndInstall("com.sun.crypto.provider.CipherBlockChaining", methods)) {
+        if (compileAndInstall("com.sun.crypto.provider.CipherBlockChaining", "encrypt", "decrypt")) {
             ByteArrayOutputStream actual = new ByteArrayOutputStream();
             actual.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding"));
             actual.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding"));
