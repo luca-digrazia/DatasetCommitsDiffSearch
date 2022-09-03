@@ -186,10 +186,10 @@ public final class ProfilerNode<T> {
         }
     }
 
-    private ProfilerNode<T> findBySourceLocation(SourceLocation targetSourceLocation) {
+    private ProfilerNode<T> findBySourceLocation(SourceLocation sourceLocation) {
         if (children != null) {
             for (ProfilerNode<T> child : children.values()) {
-                if (child.getSourceLocation().equals(targetSourceLocation)) {
+                if (child.getSourceLocation().equals(sourceLocation)) {
                     return child;
                 }
             }
