@@ -284,6 +284,14 @@ class AsmFactory {
         parseArguments();
     }
 
+    private static AsmParseException invalidOperandSize(PrimitiveType.PrimitiveKind kind) {
+        return new AsmParseException("invalid operand size: " + kind);
+    }
+
+    private static AsmParseException invalidOperandSize(Type type) {
+        return new AsmParseException("invalid operand size: " + type);
+    }
+
     private static AsmParseException invalidOperandType(Type type) {
         return new AsmParseException("invalid operand type: " + type);
     }
@@ -338,9 +346,6 @@ class AsmFactory {
 
             if (isTilde) {
                 continue;
-            }
-            if (source == null) {
-                throw new AsmParseException("invalid token: " + token);
             }
 
             int start = source.indexOf('{');
@@ -551,6 +556,7 @@ class AsmFactory {
         assert operand != null;
         assert operation.length() > 0;
         Type dstType = getType(operand);
+        PrimitiveType.PrimitiveKind dstPrimitiveType = (dstType instanceof PrimitiveType) ? ((PrimitiveType) dstType).getPrimitiveKind() : null;
         switch (operation) {
             case "seta":
             case "setnbe":
@@ -631,43 +637,51 @@ class AsmFactory {
                 dstType = PrimitiveType.I8;
                 break;
             case "rdrand":
-                switch (getPrimitiveType(dstType)) {
-                    case I16:
-                        out = LLVMAMD64RdRandwNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
-                        break;
-                    case I32:
-                        out = LLVMAMD64RdRandlNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
-                        break;
-                    case I64:
-                        out = LLVMAMD64RdRandqNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
-                        break;
-                    default:
-                        throw invalidOperandType(dstType);
+                if (dstType instanceof PrimitiveType) {
+                    switch (dstPrimitiveType) {
+                        case I16:
+                            out = LLVMAMD64RdRandwNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
+                            break;
+                        case I32:
+                            out = LLVMAMD64RdRandlNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
+                            break;
+                        case I64:
+                            out = LLVMAMD64RdRandqNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
+                            break;
+                        default:
+                            throw invalidOperandSize(dstPrimitiveType);
+                    }
+                } else {
+                    throw invalidOperandType(dstType);
                 }
                 break;
             case "rdseed":
-                switch (getPrimitiveType(dstType)) {
-                    case I16:
-                        out = LLVMAMD64RdSeedwNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
-                        break;
-                    case I32:
-                        out = LLVMAMD64RdSeedlNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
-                        break;
-                    case I64:
-                        out = LLVMAMD64RdSeedqNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
-                        break;
-                    default:
-                        throw invalidOperandType(dstType);
+                if (dstType instanceof PrimitiveType) {
+                    switch (dstPrimitiveType) {
+                        case I16:
+                            out = LLVMAMD64RdSeedwNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
+                            break;
+                        case I32:
+                            out = LLVMAMD64RdSeedlNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
+                            break;
+                        case I64:
+                            out = LLVMAMD64RdSeedqNodeGen.create(getFlagWrite(LLVMAMD64Flags.CF));
+                            break;
+                        default:
+                            throw invalidOperandSize(dstPrimitiveType);
+                    }
+                } else {
+                    throw invalidOperandType(dstType);
                 }
                 break;
             case "pop":
                 // default size: I64
                 if (dstType == null) {
                     dstType = PrimitiveType.I64;
+                    dstPrimitiveType = PrimitiveKind.I64;
                 }
-                if (dstType instanceof PointerType) {
-                    dstType = ((PointerType) dstType).getPointeeType();
-                    switch (getPrimitiveType(dstType)) {
+                if (dstType instanceof PrimitiveType) {
+                    switch (dstPrimitiveType) {
                         case I16:
                             out = LLVMAMD64PopwNodeGen.create();
                             break;
@@ -678,33 +692,41 @@ class AsmFactory {
                             out = LLVMAMD64PopqNodeGen.create();
                             break;
                         default:
-                            throw invalidOperandType(dstType);
+                            throw invalidOperandSize(dstPrimitiveType);
+                    }
+                } else if (dstType instanceof PointerType) {
+                    PointerType ptr = (PointerType) dstType;
+                    dstType = ptr.getPointeeType();
+                    if (dstType instanceof PrimitiveType) {
+                        switch (((PrimitiveType) dstType).getPrimitiveKind()) {
+                            case I16:
+                                out = LLVMAMD64PopwNodeGen.create();
+                                break;
+                            case I32:
+                                out = LLVMAMD64PoplNodeGen.create();
+                                break;
+                            case I64:
+                                out = LLVMAMD64PopqNodeGen.create();
+                                break;
+                            default:
+                                throw invalidOperandSize(dstPrimitiveType);
+                        }
+                    } else {
+                        throw invalidOperandType(dstType);
                     }
                 } else {
-                    switch (getPrimitiveType(dstType)) {
-                        case I16:
-                            out = LLVMAMD64PopwNodeGen.create();
-                            break;
-                        case I32:
-                            out = LLVMAMD64PoplNodeGen.create();
-                            break;
-                        case I64:
-                            out = LLVMAMD64PopqNodeGen.create();
-                            break;
-                        default:
-                            throw invalidOperandType(dstType);
-                    }
+                    throw invalidOperandType(dstType);
                 }
                 break;
             case "push":
                 // default size: I64
                 if (dstType == null) {
                     dstType = PrimitiveType.I64;
+                    dstPrimitiveType = PrimitiveKind.I64;
                 }
-                if (dstType instanceof PointerType) {
-                    dstType = ((PointerType) dstType).getPointeeType();
+                if (dstType instanceof PrimitiveType) {
                     LLVMExpressionNode src = getOperandLoad(dstType, operand);
-                    switch (getPrimitiveType(dstType)) {
+                    switch (dstPrimitiveType) {
                         case I16:
                             statements.add(LLVMAMD64PushwNodeGen.create(src));
                             return;
@@ -715,37 +737,49 @@ class AsmFactory {
                             statements.add(LLVMAMD64PushqNodeGen.create(src));
                             return;
                         default:
-                            throw invalidOperandType(dstType);
+                            throw invalidOperandSize(dstPrimitiveType);
+                    }
+                } else if (dstType instanceof PointerType) {
+                    PointerType ptr = (PointerType) dstType;
+                    dstType = ptr.getPointeeType();
+                    LLVMExpressionNode src = getOperandLoad(dstType, operand);
+                    if (dstType instanceof PrimitiveType) {
+                        switch (((PrimitiveType) dstType).getPrimitiveKind()) {
+                            case I16:
+                                statements.add(LLVMAMD64PushwNodeGen.create(src));
+                                return;
+                            case I32:
+                                statements.add(LLVMAMD64PushlNodeGen.create(src));
+                                return;
+                            case I64:
+                                statements.add(LLVMAMD64PushqNodeGen.create(src));
+                                return;
+                            default:
+                                throw invalidOperandSize(dstPrimitiveType);
+                        }
+                    } else {
+                        throw invalidOperandType(dstType);
                     }
                 } else {
-                    LLVMExpressionNode src = getOperandLoad(dstType, operand);
-                    switch (getPrimitiveType(dstType)) {
-                        case I16:
-                            statements.add(LLVMAMD64PushwNodeGen.create(src));
-                            return;
-                        case I32:
-                            statements.add(LLVMAMD64PushlNodeGen.create(src));
-                            return;
-                        case I64:
-                            statements.add(LLVMAMD64PushqNodeGen.create(src));
-                            return;
-                        default:
-                            throw invalidOperandType(dstType);
-                    }
+                    throw invalidOperandType(dstType);
                 }
             case "bswap":
-                LLVMExpressionNode src = getOperandLoad(dstType, operand);
-                switch (getPrimitiveType(dstType)) {
-                    case I32:
-                        out = LLVMAMD64BswaplNodeGen.create(src);
-                        break;
-                    case I64:
-                        out = LLVMAMD64BswapqNodeGen.create(src);
-                        break;
-                    default:
-                        throw invalidOperandType(dstType);
+                if (dstType instanceof PrimitiveType) {
+                    LLVMExpressionNode src = getOperandLoad(dstType, operand);
+                    switch (dstPrimitiveType) {
+                        case I32:
+                            out = LLVMAMD64BswaplNodeGen.create(src);
+                            break;
+                        case I64:
+                            out = LLVMAMD64BswapqNodeGen.create(src);
+                            break;
+                        default:
+                            throw invalidOperandSize(dstPrimitiveType);
+                    }
+                    break;
+                } else {
+                    throw invalidOperandType(dstType);
                 }
-                break;
             default:
                 statements.add(new LLVMUnsupportedInlineAssemblerNode(sourceLocation, operation));
                 return;
@@ -753,7 +787,8 @@ class AsmFactory {
         if (dstType == null) {
             throw new IllegalArgumentException("unknown operand width");
         }
-        statements.add(getOperandStore(dstType, dst, out));
+        LLVMStatementNode write = getOperandStore(dstType, dst, out);
+        statements.add(write);
     }
 
     void createUnaryOperation(String operation, AsmOperand operand) {
@@ -1025,8 +1060,7 @@ class AsmFactory {
         AsmOperand src = a;
         assert a != null && b != null;
         Type dstType = getType(b, a);
-        LLVMExpressionNode srcA;
-        LLVMExpressionNode srcB;
+        PrimitiveType.PrimitiveKind dstPrimitiveType = (dstType instanceof PrimitiveType) ? ((PrimitiveType) dstType).getPrimitiveKind() : null;
         LLVMExpressionNode out;
         switch (operation) {
             case "lea":
@@ -1036,166 +1070,202 @@ class AsmFactory {
                 }
                 break;
             case "xor":
-                srcA = getOperandLoad(dstType, a);
-                srcB = getOperandLoad(dstType, b);
-                switch (getPrimitiveType(dstType)) {
-                    case I8:
-                        out = LLVMAMD64XorbNodeGen.create(srcA, srcB);
-                        break;
-                    case I16:
-                        out = LLVMAMD64XorwNodeGen.create(srcA, srcB);
-                        break;
-                    case I32:
-                        out = LLVMAMD64XorlNodeGen.create(srcA, srcB);
-                        break;
-                    case I64:
-                        out = LLVMAMD64XorqNodeGen.create(srcA, srcB);
-                        break;
-                    default:
-                        throw invalidOperandType(dstType);
+                if (dstType instanceof PrimitiveType) {
+                    LLVMExpressionNode srcA = getOperandLoad(dstType, a);
+                    LLVMExpressionNode srcB = getOperandLoad(dstType, b);
+                    switch (dstPrimitiveType) {
+                        case I8:
+                            out = LLVMAMD64XorbNodeGen.create(srcA, srcB);
+                            break;
+                        case I16:
+                            out = LLVMAMD64XorwNodeGen.create(srcA, srcB);
+                            break;
+                        case I32:
+                            out = LLVMAMD64XorlNodeGen.create(srcA, srcB);
+                            break;
+                        case I64:
+                            out = LLVMAMD64XorqNodeGen.create(srcA, srcB);
+                            break;
+                        default:
+                            throw invalidOperandType(dstType);
+                    }
+                } else {
+                    throw invalidOperandType(dstType);
                 }
                 break;
             case "mov":
-                if (dstType instanceof PrimitiveType || dstType instanceof PointerType) {
-                    out = getOperandLoad(dstType, a);
+                if (dstType instanceof PrimitiveType) {
+                    LLVMExpressionNode srcA = getOperandLoad(dstType, a);
+                    out = srcA;
+                } else if (dstType instanceof PointerType) {
+                    LLVMExpressionNode srcA = getOperandLoad(dstType, a);
+                    out = srcA;
                 } else {
                     throw invalidOperandType(dstType);
                 }
                 break;
             case "bsr":
-                srcA = getOperandLoad(dstType, a);
-                srcB = getOperandLoad(dstType, b);
-                switch (getPrimitiveType(dstType)) {
-                    case I16:
-                        out = LLVMAMD64BsrwNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
-                        break;
-                    case I32:
-                        out = LLVMAMD64BsrlNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
-                        break;
-                    case I64:
-                        out = LLVMAMD64BsrqNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
-                        break;
-                    default:
-                        throw invalidOperandType(dstType);
-                }
-                break;
-            case "bsf":
-                srcA = getOperandLoad(dstType, a);
-                srcB = getOperandLoad(dstType, b);
-                switch (getPrimitiveType(dstType)) {
-                    case I16:
-                        out = LLVMAMD64BsfwNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
-                        break;
-                    case I32:
-                        out = LLVMAMD64BsflNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
-                        break;
-                    case I64:
-                        out = LLVMAMD64BsfqNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
-                        break;
-                    default:
-                        throw invalidOperandType(dstType);
-                }
-                break;
-            case "xchg": {
-                LLVMStatementNode res;
-                XchgOperands operands = new XchgOperands(a, b, dstType);
-                switch (getPrimitiveType(dstType)) {
-                    case I8:
-                        res = LLVMAMD64XchgbNodeGen.create(operands.dst, operands.srcA, operands.srcB);
-                        break;
-                    case I16:
-                        res = LLVMAMD64XchgwNodeGen.create(operands.dst, operands.srcA, operands.srcB);
-                        break;
-                    case I32:
-                        res = LLVMAMD64XchglNodeGen.create(operands.dst, operands.srcA, operands.srcB);
-                        break;
-                    case I64:
-                        res = LLVMAMD64XchgqNodeGen.create(operands.dst, operands.srcA, operands.srcB);
-                        break;
-                    default:
-                        throw invalidOperandType(dstType);
-                }
-                statements.add(res);
-                return;
-            }
-            case "cmpxchg": {
-                srcA = getOperandLoad(dstType, a);
-                srcB = getOperandLoad(dstType, b);
-                LLVMAMD64WriteValueNode dst1 = getStore(dstType, b);
-                LLVMAMD64WriteValueNode dst2;
-                LLVMExpressionNode accumulator;
-                LLVMStatementNode res;
-                if (dstType instanceof PointerType) {
-                    dst2 = getRegisterStore("rax");
-                    accumulator = getOperandLoad(new PointerType(PrimitiveType.I8), new AsmRegisterOperand("rax"));
-                    res = LLVMAMD64CmpXchgqNodeGen.create(getUpdateCPAZSOFlagsNode(), dst1, dst2, accumulator, srcA, srcB);
-                } else {
-                    switch (getPrimitiveType(dstType)) {
-                        case I8:
-                            dst2 = getRegisterStore("al");
-                            accumulator = getOperandLoad(PrimitiveType.I8, new AsmRegisterOperand("al"));
-                            res = LLVMAMD64CmpXchgbNodeGen.create(getUpdateCPAZSOFlagsNode(), dst1, dst2, accumulator, srcA, srcB);
-                            break;
+                if (dstType instanceof PrimitiveType) {
+                    LLVMExpressionNode srcA = getOperandLoad(dstType, a);
+                    LLVMExpressionNode srcB = getOperandLoad(dstType, b);
+                    switch (dstPrimitiveType) {
                         case I16:
-                            dst2 = getRegisterStore("ax");
-                            accumulator = getOperandLoad(PrimitiveType.I16, new AsmRegisterOperand("ax"));
-                            res = LLVMAMD64CmpXchgwNodeGen.create(getUpdateCPAZSOFlagsNode(), dst1, dst2, accumulator, srcA, srcB);
+                            out = LLVMAMD64BsrwNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
                             break;
                         case I32:
-                            dst2 = getRegisterStore("eax");
-                            accumulator = getOperandLoad(PrimitiveType.I32, new AsmRegisterOperand("eax"));
-                            res = LLVMAMD64CmpXchglNodeGen.create(getUpdateCPAZSOFlagsNode(), dst1, dst2, accumulator, srcA, srcB);
+                            out = LLVMAMD64BsrlNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
                             break;
                         case I64:
-                            dst2 = getRegisterStore("rax");
-                            accumulator = getOperandLoad(PrimitiveType.I64, new AsmRegisterOperand("rax"));
-                            res = LLVMAMD64CmpXchgqNodeGen.create(getUpdateCPAZSOFlagsNode(), dst1, dst2, accumulator, srcA, srcB);
+                            out = LLVMAMD64BsrqNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
                             break;
                         default:
                             throw invalidOperandType(dstType);
                     }
+                } else {
+                    throw invalidOperandType(dstType);
                 }
-                statements.add(res);
-                return;
+                break;
+            case "bsf":
+                if (dstType instanceof PrimitiveType) {
+                    LLVMExpressionNode srcA = getOperandLoad(dstType, a);
+                    LLVMExpressionNode srcB = getOperandLoad(dstType, b);
+                    switch (dstPrimitiveType) {
+                        case I16:
+                            out = LLVMAMD64BsfwNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
+                            break;
+                        case I32:
+                            out = LLVMAMD64BsflNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
+                            break;
+                        case I64:
+                            out = LLVMAMD64BsfqNodeGen.create(getFlagWrite(LLVMAMD64Flags.ZF), srcA, srcB);
+                            break;
+                        default:
+                            throw invalidOperandType(dstType);
+                    }
+                } else {
+                    throw invalidOperandType(dstType);
+                }
+                break;
+            case "xchg": {
+                if (dstType instanceof PrimitiveType) {
+                    LLVMStatementNode res;
+                    XchgOperands operands = new XchgOperands(a, b, dstType);
+                    switch (dstPrimitiveType) {
+                        case I8:
+                            res = LLVMAMD64XchgbNodeGen.create(operands.dst, operands.srcA, operands.srcB);
+                            break;
+                        case I16:
+                            res = LLVMAMD64XchgwNodeGen.create(operands.dst, operands.srcA, operands.srcB);
+                            break;
+                        case I32:
+                            res = LLVMAMD64XchglNodeGen.create(operands.dst, operands.srcA, operands.srcB);
+                            break;
+                        case I64:
+                            res = LLVMAMD64XchgqNodeGen.create(operands.dst, operands.srcA, operands.srcB);
+                            break;
+                        default:
+                            throw invalidOperandType(dstType);
+                    }
+                    statements.add(res);
+                    return;
+                } else {
+                    throw invalidOperandType(dstType);
+                }
+            }
+            case "cmpxchg": {
+                if (dstType instanceof PointerType) {
+                    // treat pointers as I64
+                    dstPrimitiveType = PrimitiveKind.I64;
+                }
+                if (dstType instanceof PrimitiveType || dstType instanceof PointerType) {
+                    LLVMExpressionNode srcA = getOperandLoad(dstType, a);
+                    LLVMExpressionNode srcB = getOperandLoad(dstType, b);
+                    LLVMAMD64WriteValueNode dst1 = getStore(dstType, b);
+                    LLVMAMD64WriteValueNode dst2;
+                    LLVMExpressionNode accumulator;
+                    LLVMStatementNode res;
+                    if (dstType instanceof PointerType) {
+                        dst2 = getRegisterStore("rax");
+                        accumulator = getOperandLoad(new PointerType(PrimitiveType.I8), new AsmRegisterOperand("rax"));
+                        res = LLVMAMD64CmpXchgqNodeGen.create(getUpdateCPAZSOFlagsNode(), dst1, dst2, accumulator, srcA, srcB);
+                    } else {
+                        switch (dstPrimitiveType) {
+                            case I8:
+                                dst2 = getRegisterStore("al");
+                                accumulator = getOperandLoad(PrimitiveType.I8, new AsmRegisterOperand("al"));
+                                res = LLVMAMD64CmpXchgbNodeGen.create(getUpdateCPAZSOFlagsNode(), dst1, dst2, accumulator, srcA, srcB);
+                                break;
+                            case I16:
+                                dst2 = getRegisterStore("ax");
+                                accumulator = getOperandLoad(PrimitiveType.I16, new AsmRegisterOperand("ax"));
+                                res = LLVMAMD64CmpXchgwNodeGen.create(getUpdateCPAZSOFlagsNode(), dst1, dst2, accumulator, srcA, srcB);
+                                break;
+                            case I32:
+                                dst2 = getRegisterStore("eax");
+                                accumulator = getOperandLoad(PrimitiveType.I32, new AsmRegisterOperand("eax"));
+                                res = LLVMAMD64CmpXchglNodeGen.create(getUpdateCPAZSOFlagsNode(), dst1, dst2, accumulator, srcA, srcB);
+                                break;
+                            case I64:
+                                dst2 = getRegisterStore("rax");
+                                accumulator = getOperandLoad(PrimitiveType.I64, new AsmRegisterOperand("rax"));
+                                res = LLVMAMD64CmpXchgqNodeGen.create(getUpdateCPAZSOFlagsNode(), dst1, dst2, accumulator, srcA, srcB);
+                                break;
+                            default:
+                                throw invalidOperandType(dstType);
+                        }
+                    }
+                    statements.add(res);
+                    return;
+                } else {
+                    throw invalidOperandType(dstType);
+                }
             }
             case "and":
-                srcA = getOperandLoad(dstType, a);
-                srcB = getOperandLoad(dstType, b);
-                switch (getPrimitiveType(dstType)) {
-                    case I8:
-                        out = LLVMAMD64AndbNodeGen.create(getUpdatePZSFlagsNode(), srcA, srcB);
-                        break;
-                    case I16:
-                        out = LLVMAMD64AndwNodeGen.create(getUpdatePZSFlagsNode(), srcA, srcB);
-                        break;
-                    case I32:
-                        out = LLVMAMD64AndlNodeGen.create(getUpdatePZSFlagsNode(), srcA, srcB);
-                        break;
-                    case I64:
-                        out = LLVMAMD64AndqNodeGen.create(getUpdatePZSFlagsNode(), srcA, srcB);
-                        break;
-                    default:
-                        throw invalidOperandType(dstType);
+                if (dstType instanceof PrimitiveType) {
+                    LLVMExpressionNode srcA = getOperandLoad(dstType, a);
+                    LLVMExpressionNode srcB = getOperandLoad(dstType, b);
+                    switch (dstPrimitiveType) {
+                        case I8:
+                            out = LLVMAMD64AndbNodeGen.create(getUpdatePZSFlagsNode(), srcA, srcB);
+                            break;
+                        case I16:
+                            out = LLVMAMD64AndwNodeGen.create(getUpdatePZSFlagsNode(), srcA, srcB);
+                            break;
+                        case I32:
+                            out = LLVMAMD64AndlNodeGen.create(getUpdatePZSFlagsNode(), srcA, srcB);
+                            break;
+                        case I64:
+                            out = LLVMAMD64AndqNodeGen.create(getUpdatePZSFlagsNode(), srcA, srcB);
+                            break;
+                        default:
+                            throw invalidOperandType(dstType);
+                    }
+                } else {
+                    throw invalidOperandType(dstType);
                 }
                 break;
             case "or":
-                srcA = getOperandLoad(dstType, a);
-                srcB = getOperandLoad(dstType, b);
-                switch (getPrimitiveType(dstType)) {
-                    case I8:
-                        out = LLVMAMD64OrbNodeGen.create(srcA, srcB);
-                        break;
-                    case I16:
-                        out = LLVMAMD64OrwNodeGen.create(srcA, srcB);
-                        break;
-                    case I32:
-                        out = LLVMAMD64OrlNodeGen.create(srcA, srcB);
-                        break;
-                    case I64:
-                        out = LLVMAMD64OrqNodeGen.create(srcA, srcB);
-                        break;
-                    default:
-                        throw invalidOperandType(dstType);
+                if (dstType instanceof PrimitiveType) {
+                    LLVMExpressionNode srcA = getOperandLoad(dstType, a);
+                    LLVMExpressionNode srcB = getOperandLoad(dstType, b);
+                    switch (dstPrimitiveType) {
+                        case I8:
+                            out = LLVMAMD64OrbNodeGen.create(srcA, srcB);
+                            break;
+                        case I16:
+                            out = LLVMAMD64OrwNodeGen.create(srcA, srcB);
+                            break;
+                        case I32:
+                            out = LLVMAMD64OrlNodeGen.create(srcA, srcB);
+                            break;
+                        case I64:
+                            out = LLVMAMD64OrqNodeGen.create(srcA, srcB);
+                            break;
+                        default:
+                            throw invalidOperandType(dstType);
+                    }
+                } else {
+                    throw invalidOperandType(dstType);
                 }
                 break;
             default:
@@ -1203,14 +1273,6 @@ class AsmFactory {
                 return;
         }
         statements.add(getOperandStore(dstType, dst, out));
-    }
-
-    private static PrimitiveKind getPrimitiveType(Type dstType) {
-        if (dstType instanceof PrimitiveType) {
-            return ((PrimitiveType) dstType).getPrimitiveKind();
-        } else {
-            throw invalidOperandType(dstType);
-        }
     }
 
     void createBinaryOperation(String operation, AsmOperand a, AsmOperand b) {
@@ -1589,6 +1651,8 @@ class AsmFactory {
         dstType = getPrimitiveTypeFromSuffix(suffix);
         srcB = getOperandLoad(dstType, b);
         srcA = getOperandLoad(dstType, a);
+        @SuppressWarnings("unused")
+        PrimitiveType.PrimitiveKind dstPrimitiveType = (dstType instanceof PrimitiveType) ? ((PrimitiveType) dstType).getPrimitiveKind() : null;
         LLVMAMD64WriteValueNode res = getRegisterStore(dstType, dst);
         switch (operation) {
             case "imulw":
@@ -1689,7 +1753,7 @@ class AsmFactory {
                                     writeNodes[arg.getOutIndex()] = LLVMI64StoreNodeGen.create(null, null);
                                     break;
                                 default:
-                                    throw invalidOperandType(arg.getType());
+                                    throw invalidOperandSize(arg.getType());
                             }
                         }
                     } else {
@@ -1726,7 +1790,7 @@ class AsmFactory {
                 } else if (arg.getType() instanceof PointerType) {
                     arguments.add(LLVMWritePointerNodeGen.create(slot, null, argnode));
                 } else {
-                    throw invalidOperandType(arg.getType());
+                    throw invalidOperandSize(arg.getType());
                 }
             }
         }
