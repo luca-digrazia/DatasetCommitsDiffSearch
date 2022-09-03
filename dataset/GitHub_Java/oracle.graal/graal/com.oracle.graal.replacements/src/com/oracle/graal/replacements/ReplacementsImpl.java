@@ -212,15 +212,7 @@ public class ReplacementsImpl implements Replacements {
         return originalJavaMethod;
     }
 
-    private static SnippetInliningPolicy createPolicyClassInstance(Class<? extends SnippetInliningPolicy> policyClass) {
-        try {
-            return policyClass.getConstructor().newInstance();
-        } catch (Exception e) {
-            throw new GraalInternalError(e);
-        }
-    }
-
-    protected SnippetInliningPolicy inliningPolicy(ResolvedJavaMethod method) {
+    private SnippetInliningPolicy inliningPolicy(ResolvedJavaMethod method) {
         Class<? extends SnippetInliningPolicy> policyClass = SnippetInliningPolicy.class;
         Snippet snippet = method.getAnnotation(Snippet.class);
         if (snippet != null) {
@@ -229,7 +221,11 @@ public class ReplacementsImpl implements Replacements {
         if (policyClass == SnippetInliningPolicy.class) {
             return new DefaultSnippetInliningPolicy(providers.getMetaAccess());
         }
-        return createPolicyClassInstance(policyClass);
+        try {
+            return policyClass.getConstructor().newInstance();
+        } catch (Exception e) {
+            throw new GraalInternalError(e);
+        }
     }
 
     /**
