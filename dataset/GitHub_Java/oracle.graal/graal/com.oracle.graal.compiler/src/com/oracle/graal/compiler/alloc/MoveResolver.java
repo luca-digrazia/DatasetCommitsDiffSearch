@@ -23,7 +23,6 @@
 package com.oracle.graal.compiler.alloc;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
-
 import java.util.*;
 
 import com.oracle.graal.api.code.*;

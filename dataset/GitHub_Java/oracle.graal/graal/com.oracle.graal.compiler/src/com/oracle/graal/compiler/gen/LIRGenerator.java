@@ -341,8 +341,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool {
     }
 
     public LabelRef getLIRBlock(FixedNode b) {
-        assert lir.getControlFlowGraph() instanceof ControlFlowGraph;
-        Block result = ((ControlFlowGraph) lir.getControlFlowGraph()).blockFor(b);
+        Block result = lir.getControlFlowGraph().blockFor(b);
         int suxIndex = currentBlock.getSuccessors().indexOf(result);
         assert suxIndex != -1 : "Block not in successor list of current block";
 

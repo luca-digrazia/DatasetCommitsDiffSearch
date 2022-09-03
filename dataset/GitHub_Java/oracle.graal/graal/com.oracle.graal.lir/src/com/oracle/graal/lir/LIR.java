@@ -94,7 +94,7 @@ public class LIR {
         return spillMoveFactory;
     }
 
-    public List<LIRInstruction> lir(AbstractBlock<?> block) {
+    public List<LIRInstruction> lir(Block block) {
         return lirInstructions.get(block);
     }
 
