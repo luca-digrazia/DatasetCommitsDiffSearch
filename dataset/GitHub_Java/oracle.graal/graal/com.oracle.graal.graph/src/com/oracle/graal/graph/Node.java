@@ -142,17 +142,13 @@ public abstract class Node implements Cloneable, Formattable {
      */
     private Node usage0;
     private Node usage1;
-    private Node[] extraUsages;
+    private Node[] extraUsages = NO_NODES;
 
     private Node predecessor;
 
     public Node() {
-        init();
-    }
-
-    final void init() {
-        id = INITIAL_ID;
-        extraUsages = NO_NODES;
+        this.graph = null;
+        this.id = INITIAL_ID;
     }
 
     int id() {
@@ -957,11 +953,7 @@ public abstract class Node implements Cloneable, Formattable {
      * @param map
      */
     public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
-        NodeClass nodeClass = getNodeClass();
-        for (Integer pos : nodeClass.getPropertyPositions()) {
-            map.put(nodeClass.getPropertyName(pos), nodeClass.getProperty(this, pos));
-
-        }
+        getNodeClass().getDebugProperties(this, map);
         return map;
     }
 
