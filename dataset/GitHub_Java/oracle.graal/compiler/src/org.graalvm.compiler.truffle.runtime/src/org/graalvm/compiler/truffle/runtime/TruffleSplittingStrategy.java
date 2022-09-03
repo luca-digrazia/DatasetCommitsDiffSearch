@@ -50,9 +50,9 @@ final class TruffleSplittingStrategy {
     static void beforeCall(OptimizedDirectCallNode call, GraalTVMCI tvmci) {
         final GraalTVMCI.EngineData engineData = tvmci.getEngineData(call.getRootNode());
         if (TruffleCompilerOptions.getValue(TruffleTraceSplittingSummary)) {
-            reporter.engineDataSet.add(engineData);
+            getReporter().engineDataSet.add(engineData);
             if (call.getCurrentCallTarget().getCompilationProfile().getInterpreterCallCount() == 0) {
-                reporter.totalExecutedNodeCount += call.getCurrentCallTarget().getUninitializedNodeCount();
+                getReporter().totalExecutedNodeCount += call.getCurrentCallTarget().getUninitializedNodeCount();
             }
         }
         if (TruffleCompilerOptions.getValue(TruffleUsePollutionBasedSplittingStrategy)) {
@@ -76,6 +76,7 @@ final class TruffleSplittingStrategy {
         }
         call.split();
         if (TruffleCompilerOptions.getValue(TruffleTraceSplittingSummary)) {
+            final SplitStatisticsReporter reporter = getReporter();
             reporter.splitNodeCount += call.getCurrentCallTarget().getUninitializedNodeCount();
             reporter.splitCount++;
             reporter.splitTargets.put(call.getCallTarget(), reporter.splitTargets.getOrDefault(call.getCallTarget(), 0) + 1);
@@ -222,7 +223,7 @@ final class TruffleSplittingStrategy {
             engineData.splitLimit = Math.min(newLimit, TruffleCompilerOptions.getValue(TruffleSplittingMaxNumberOfSplitNodes));
         }
         if (TruffleCompilerOptions.getValue(TruffleTraceSplittingSummary)) {
-            reporter.totalCreatedNodeCount += callTarget.getUninitializedNodeCount();
+            getReporter().totalCreatedNodeCount += callTarget.getUninitializedNodeCount();
         }
     }
 
@@ -241,11 +242,19 @@ final class TruffleSplittingStrategy {
         }
     }
 
-    private static SplitStatisticsReporter reporter = new SplitStatisticsReporter();
+    private static SplitStatisticsReporter reporter;
+
+    private static SplitStatisticsReporter getReporter() {
+        if (reporter == null) {
+            reporter = new SplitStatisticsReporter();
+            Runtime.getRuntime().addShutdownHook(reporter);
+        }
+        return reporter;
+    }
 
     static void newPolymorphicSpecialize(Node node) {
         if (TruffleCompilerOptions.getValue(TruffleTraceSplittingSummary)) {
-            final Map<Class<? extends Node>, Integer> polymorphicNodes = reporter.polymorphicNodes;
+            final Map<Class<? extends Node>, Integer> polymorphicNodes = getReporter().polymorphicNodes;
             final Class<? extends Node> aClass = node.getClass();
             polymorphicNodes.put(aClass, polymorphicNodes.getOrDefault(aClass, 0) + 1);
         }
@@ -277,12 +286,6 @@ final class TruffleSplittingStrategy {
         static final String D_LONG_FORMAT = "[truffle] %-120s: %10d";
         static final String P_FORMAT = "[truffle] %-40s: %9.2f%%";
         static final String DELIMITER_FORMAT = "%n[truffle] --- %s";
-
-        SplitStatisticsReporter() {
-            if (TruffleCompilerOptions.getValue(TruffleTraceSplittingSummary)) {
-                Runtime.getRuntime().addShutdownHook(this);
-            }
-        }
 
         @Override
         public void run() {
