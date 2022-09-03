@@ -24,14 +24,9 @@
  */
 package com.oracle.truffle.api.instrumentation;
 
-import java.util.Set;
-
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.instrumentation.InstrumentationHandler.AbstractInstrumenter;
 import com.oracle.truffle.api.instrumentation.InstrumentationHandler.LanguageClientInstrumenter;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * Represents a binding from a {@link SourceSectionFilter} instance for a particular
@@ -57,7 +52,7 @@ public final class EventBinding<T> {
     private final T element;
 
     /* language bindings needs special treatment. */
-    private volatile boolean disposed;
+    private boolean disposed;
 
     EventBinding(AbstractInstrumenter instrumenter, SourceSectionFilter query, T element) {
         this.instrumenter = instrumenter;
@@ -76,7 +71,7 @@ public final class EventBinding<T> {
     /**
      * Returns the bound element, either a {@link ExecutionEventNodeFactory factory} or a
      * {@link ExecutionEventListener listener} implementation.
-     *
+     * 
      * @since 0.12
      */
     public T getElement() {
@@ -95,7 +90,7 @@ public final class EventBinding<T> {
 
     /**
      * Returns <code>true</code> if the binding was already disposed, otherwise <code>false</code>.
-     *
+     * 
      * @since 0.12
      */
     public boolean isDisposed() {
@@ -105,34 +100,16 @@ public final class EventBinding<T> {
     /**
      * Disposes this binding. If a binding of a listener or factory is disposed then their methods
      * are not invoked again by the instrumentation framework.
-     *
+     * 
      * @since 0.12
      */
-    public synchronized void dispose() throws IllegalStateException {
+    public void dispose() throws IllegalStateException {
         CompilerAsserts.neverPartOfCompilation();
         if (disposed) {
             throw new IllegalStateException("Bindings can only be disposed once");
         }
-        disposed = true;
         instrumenter.disposeBinding(this);
-    }
-
-    boolean isInstrumentedFull(Set<Class<?>> providedTags, RootNode rootNode, Node node, SourceSection nodeSourceSection) {
-        if (isInstrumentedLeaf(providedTags, node, nodeSourceSection)) {
-            if (rootNode == null) {
-                return false;
-            }
-            return isInstrumentedRoot(providedTags, rootNode, rootNode.getSourceSection());
-        }
-        return false;
-    }
-
-    boolean isInstrumentedRoot(Set<Class<?>> providedTags, RootNode rootNode, SourceSection rootSourceSection) {
-        return getInstrumenter().isInstrumentableRoot(rootNode) && getFilter().isInstrumentedRoot(providedTags, rootSourceSection);
-    }
-
-    boolean isInstrumentedLeaf(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection section) {
-        return getFilter().isInstrumentedNode(providedTags, instrumentedNode, section);
+        this.disposed = true;
     }
 
 }

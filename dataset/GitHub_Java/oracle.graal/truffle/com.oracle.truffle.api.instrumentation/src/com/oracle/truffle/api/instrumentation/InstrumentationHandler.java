@@ -74,8 +74,8 @@ final class InstrumentationHandler {
     private final Map<Object, AbstractInstrumenter> instrumenterMap = new HashMap<>();
 
 
-    /* Has the instrumentation framework been initialized? */
     private volatile boolean instrumentationInitialized;
+
 
     private final OutputStream out;
     private final OutputStream err;
@@ -91,7 +91,7 @@ final class InstrumentationHandler {
         if (!ACCESSOR.isInstrumentable(root)) {
             return;
         }
-        if (!initialized) {
+        if (!instrumentationInitialized) {
             initializeInstrumentation();
         }
         roots.put(root, null);
@@ -151,7 +151,7 @@ final class InstrumentationHandler {
 
         this.bindings.add(binding);
 
-        if (initialized) {
+        if (instrumentationInitialized) {
             AddBindingVisitor addBindingsVisitor = new AddBindingVisitor(binding);
             for (RootNode root : roots.keySet()) {
                 visitRoot(root, addBindingsVisitor);
@@ -238,7 +238,7 @@ final class InstrumentationHandler {
             throw new AssertionError("Instrument already added.");
         }
 
-        if (initialized) {
+        if (instrumentationInitialized) {
             instrumenter.initialize();
             List<EventBinding<?>> addedBindings = new ArrayList<>();
             for (EventBinding<?> binding : bindings) {
