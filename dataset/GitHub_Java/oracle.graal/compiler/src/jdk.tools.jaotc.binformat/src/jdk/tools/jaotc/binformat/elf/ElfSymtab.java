@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,8 +29,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import jdk.tools.jaotc.binformat.elf.Elf.Elf64_Sym;
-import jdk.tools.jaotc.binformat.elf.ElfSymbol;
-import jdk.tools.jaotc.binformat.elf.ElfByteBuffer;
 
 final class ElfSymtab {
 
@@ -36,12 +36,12 @@ final class ElfSymtab {
     private final ArrayList<ElfSymbol> globalSymbols = new ArrayList<>();
 
     /**
-     * number of symbols added
+     * Number of symbols added.
      */
     private int symbolCount;
 
     /**
-     * String holding symbol table strings
+     * String holding symbol table strings.
      */
     private final StringBuilder strTabContent = new StringBuilder();
 
@@ -77,10 +77,11 @@ final class ElfSymtab {
             strTabNrOfBytes += (name.getBytes().length + 1);
 
             sym = new ElfSymbol(symbolCount, index, type, bind, secHdrIndex, offset, size);
-            if ((bind & Elf64_Sym.STB_GLOBAL) != 0)
+            if ((bind & Elf64_Sym.STB_GLOBAL) != 0) {
                 globalSymbols.add(sym);
-            else
+            } else {
                 localSymbols.add(sym);
+            }
         }
         symbolCount++;
         return (sym);

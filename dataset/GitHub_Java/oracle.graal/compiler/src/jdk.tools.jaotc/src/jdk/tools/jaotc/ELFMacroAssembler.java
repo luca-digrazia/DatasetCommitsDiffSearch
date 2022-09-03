@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,18 +25,16 @@
 
 package jdk.tools.jaotc;
 
-import jdk.tools.jaotc.StubInformation;
-import jdk.tools.jaotc.amd64.AMD64ELFMacroAssembler;
 import jdk.tools.jaotc.aarch64.AArch64ELFMacroAssembler;
-
-import jdk.vm.ci.amd64.AMD64;
+import jdk.tools.jaotc.amd64.AMD64ELFMacroAssembler;
 import jdk.vm.ci.aarch64.AArch64;
+import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.code.TargetDescription;
 
 public interface ELFMacroAssembler {
 
-    public static ELFMacroAssembler getELFMacroAssembler(TargetDescription target) {
+    static ELFMacroAssembler getELFMacroAssembler(TargetDescription target) {
         Architecture architecture = target.arch;
         if (architecture instanceof AMD64) {
             return new AMD64ELFMacroAssembler(target);
@@ -45,12 +45,12 @@ public interface ELFMacroAssembler {
         }
     }
 
-    public int currentEndOfInstruction();
+    int currentEndOfInstruction();
 
-    public byte[] getPLTJumpCode();
+    byte[] getPLTJumpCode();
 
-    public byte[] getPLTStaticEntryCode(StubInformation stub);
+    byte[] getPLTStaticEntryCode(StubInformation stub);
 
-    public byte[] getPLTVirtualEntryCode(StubInformation stub);
+    byte[] getPLTVirtualEntryCode(StubInformation stub);
 
 }

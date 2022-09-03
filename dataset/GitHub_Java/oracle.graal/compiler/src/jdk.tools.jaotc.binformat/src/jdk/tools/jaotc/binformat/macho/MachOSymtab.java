@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,15 +28,13 @@ package jdk.tools.jaotc.binformat.macho;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-import jdk.tools.jaotc.binformat.macho.MachO.symtab_command;
 import jdk.tools.jaotc.binformat.macho.MachO.nlist_64;
-import jdk.tools.jaotc.binformat.macho.MachOSymbol;
-import jdk.tools.jaotc.binformat.macho.MachOByteBuffer;
+import jdk.tools.jaotc.binformat.macho.MachO.symtab_command;
 
 final class MachOSymtab {
 
     /**
-     * ByteBuffer holding the LC_SYMTAB command contents
+     * ByteBuffer holding the LC_SYMTAB command contents.
      */
     private final ByteBuffer symtabCmd;
 
@@ -45,17 +45,18 @@ final class MachOSymtab {
     private final ArrayList<MachOSymbol> undefSymbols = new ArrayList<>();
 
     /**
-     * number of symbols added
+     * Number of symbols added.
      */
     private int symbolCount;
 
     /**
-     * String holding symbol table strings
+     * String holding symbol table strings.
      */
     private final StringBuilder strTabContent = new StringBuilder();
 
     /**
-     * Keeps track of bytes in string table since strTabContent.length() is number of chars, not bytes.
+     * Keeps track of bytes in string table since strTabContent.length() is number of chars, not
+     * bytes.
      */
     private int strTabNrOfBytes = 0;
 

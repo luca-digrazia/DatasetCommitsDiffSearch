@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -33,12 +35,8 @@
 
 package jdk.tools.jaotc.test.collect.module;
 
-import jdk.tools.jaotc.collect.FileSupport;
-import jdk.tools.jaotc.collect.module.ModuleSource;
-import jdk.tools.jaotc.collect.module.ModuleSourceProvider;
-import jdk.tools.jaotc.test.collect.Utils;
-import org.junit.Before;
-import org.junit.Test;
+import static jdk.tools.jaotc.test.collect.Utils.mkpath;
+import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
 import java.nio.file.FileSystem;
@@ -47,11 +45,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.function.BiFunction;
 
-import static jdk.tools.jaotc.test.collect.Utils.mkpath;
+import org.junit.Before;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-
+import jdk.tools.jaotc.collect.FileSupport;
+import jdk.tools.jaotc.collect.module.ModuleSource;
+import jdk.tools.jaotc.collect.module.ModuleSourceProvider;
 
 public class ModuleSourceProviderTest {
     private ClassLoader classLoader;

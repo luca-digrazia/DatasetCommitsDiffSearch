@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -34,20 +36,22 @@
 
 package jdk.tools.jaotc.test.collect;
 
-import org.junit.Before;
-import org.junit.Test;
+import static jdk.tools.jaotc.test.collect.Utils.mkpath;
+import static jdk.tools.jaotc.test.collect.Utils.mkpaths;
+import static jdk.tools.jaotc.test.collect.Utils.set;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import jdk.tools.jaotc.collect.*;
+import org.junit.Before;
+import org.junit.Test;
 
-import static jdk.tools.jaotc.test.collect.Utils.set;
-import static jdk.tools.jaotc.test.collect.Utils.mkpath;
-import static jdk.tools.jaotc.test.collect.Utils.mkpaths;
-import static org.junit.Assert.*;
+import jdk.tools.jaotc.collect.SearchPath;
 
 public class SearchPathTest {
     private FakeFileSupport fileSupport;

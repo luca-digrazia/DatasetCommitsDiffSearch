@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,7 +28,6 @@ package jdk.tools.jaotc.binformat.pecoff;
 import java.nio.ByteBuffer;
 
 import jdk.tools.jaotc.binformat.pecoff.PECoff.IMAGE_SECTION_HEADER;
-import jdk.tools.jaotc.binformat.pecoff.PECoffByteBuffer;
 
 final class PECoffSection {
     private final ByteBuffer section;
@@ -47,8 +48,8 @@ final class PECoffSection {
         }
 
         // Copy only Max allowed bytes to Section Entry
-        byte[] Name = sectName.getBytes();
-        int max = Name.length <= IMAGE_SECTION_HEADER.Name.sz ? Name.length : IMAGE_SECTION_HEADER.Name.sz;
+        byte[] name = sectName.getBytes();
+        int max = name.length <= IMAGE_SECTION_HEADER.Name.sz ? name.length : IMAGE_SECTION_HEADER.Name.sz;
 
         assert !(sectAlign < 1 || sectAlign > 1024 || (sectAlign & (sectAlign - 1)) != 0) : "section alignment is not valid: " + sectAlign;
         align = sectAlign;
@@ -58,7 +59,7 @@ final class PECoffSection {
         // Clear and set alignment bits
         int sectFlags = (sectFlags0 & ~IMAGE_SECTION_HEADER.IMAGE_SCN_ALIGN_MASK) | (sectAlignBits & IMAGE_SECTION_HEADER.IMAGE_SCN_ALIGN_MASK);
 
-        section.put(Name, IMAGE_SECTION_HEADER.Name.off, max);
+        section.put(name, IMAGE_SECTION_HEADER.Name.off, max);
 
         section.putInt(IMAGE_SECTION_HEADER.VirtualSize.off, 0);
         section.putInt(IMAGE_SECTION_HEADER.VirtualAddress.off, 0);

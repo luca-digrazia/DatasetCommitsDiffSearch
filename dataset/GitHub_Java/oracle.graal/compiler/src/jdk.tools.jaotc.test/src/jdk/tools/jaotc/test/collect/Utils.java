@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,8 +31,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class Utils {
+    @SafeVarargs
     public static <T> Set<T> set(T... entries) {
-        Set<T> set = new HashSet<T>();
+        Set<T> set = new HashSet<>();
         for (T entry : entries) {
             set.add(entry);
         }
@@ -42,7 +45,7 @@ public class Utils {
     }
 
     public static Set<String> mkpaths(String... paths) {
-        Set<String> set = new HashSet<String>();
+        Set<String> set = new HashSet<>();
         for (String entry : paths) {
             set.add(mkpath(entry));
         }
@@ -51,8 +54,9 @@ public class Utils {
 
     public static Path getpath(String path) {
         if (path.startsWith("/") && System.getProperty("os.name").startsWith("Windows")) {
-            path = new File(path).getAbsolutePath();
+            return Paths.get(new File(path).getAbsolutePath());
+        } else {
+            return Paths.get(path);
         }
-        return Paths.get(path);
     }
 }

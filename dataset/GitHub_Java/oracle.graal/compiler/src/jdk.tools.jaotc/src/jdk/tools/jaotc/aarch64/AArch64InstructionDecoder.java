@@ -5,7 +5,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,13 +28,11 @@ package jdk.tools.jaotc.aarch64;
 
 import jdk.tools.jaotc.InstructionDecoder;
 
-import jdk.vm.ci.code.TargetDescription;
-
 public final class AArch64InstructionDecoder extends InstructionDecoder {
 
     private int currentEndOfInstruction;
 
-    public AArch64InstructionDecoder(TargetDescription target) {
+    public AArch64InstructionDecoder() {
     }
 
     @Override

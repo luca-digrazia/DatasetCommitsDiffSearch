@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2018, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -54,7 +54,7 @@ public final class AArch64ELFMacroAssembler extends AArch64MacroAssembler implem
     @Override
     public byte[] getPLTJumpCode() {
         // The main dispatch instruction
-        adrpAdd(r16);
+        addressOf(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
 
@@ -68,27 +68,27 @@ public final class AArch64ELFMacroAssembler extends AArch64MacroAssembler implem
     @Override
     public byte[] getPLTStaticEntryCode(StubInformation stub) {
         // The main dispatch instruction
-        adrpAdd(r16);
+        addressOf(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
         stub.setDispatchJumpOffset(position());
 
         // C2I stub used to call interpreter. First load r12
         // (i.e. rmethod) with a pointer to the Method structure ...
-        adrpAdd(r12);
+        addressOf(r12);
         ldr(64, r12, AArch64Address.createBaseRegisterOnlyAddress(r12));
         nop();
         stub.setMovOffset(position());
 
         // ... then jump to the interpreter.
-        adrpAdd(r16);
+        addressOf(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
         stub.setC2IJumpOffset(position());
 
         // Call to VM runtime to resolve the call.
         stub.setResolveJumpStart(position());
-        adrpAdd(r16);
+        addressOf(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
         stub.setResolveJumpOffset(position());
@@ -104,20 +104,20 @@ public final class AArch64ELFMacroAssembler extends AArch64MacroAssembler implem
     public byte[] getPLTVirtualEntryCode(StubInformation stub) {
         // Fixup an inline cache.
         // Load r9 with a pointer to the Klass.
-        adrpAdd(r17);
+        addressOf(r17);
         ldr(64, r9, AArch64Address.createBaseRegisterOnlyAddress(r17));
         nop();
         stub.setMovOffset(position());
 
         // Jump to the method.
-        adrpAdd(r16);
+        addressOf(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
         stub.setDispatchJumpOffset(position());
 
         // Call to VM runtime to resolve the call.
         stub.setResolveJumpStart(position());
-        adrpAdd(r16);
+        addressOf(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
         stub.setResolveJumpOffset(position());

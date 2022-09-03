@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,11 +27,10 @@ package jdk.tools.jaotc.binformat.elf;
 
 import java.nio.ByteBuffer;
 
-import jdk.tools.jaotc.binformat.elf.Elf.Elf64_Shdr;
 import jdk.tools.jaotc.binformat.elf.Elf.Elf64_Rel;
 import jdk.tools.jaotc.binformat.elf.Elf.Elf64_Rela;
+import jdk.tools.jaotc.binformat.elf.Elf.Elf64_Shdr;
 import jdk.tools.jaotc.binformat.elf.Elf.Elf64_Sym;
-import jdk.tools.jaotc.binformat.elf.ElfByteBuffer;
 
 final class ElfSection {
     private final String name;
@@ -39,9 +40,9 @@ final class ElfSection {
     private final int sectionIndex;
 
     /**
-     * String holding section name strings
+     * String holding section name strings.
      */
-    private final static StringBuilder sectNameTab = new StringBuilder();
+    private static final StringBuilder sectNameTab = new StringBuilder();
 
     /**
      * Keeps track of bytes in section string table since strTabContent.length() is number of chars,
@@ -50,7 +51,7 @@ final class ElfSection {
     private static int shStrTabNrOfBytes = 0;
 
     ElfSection(String sectName, byte[] sectData, int sectFlags, int sectType,
-               boolean hasRelocations, int align, int sectIndex) {
+                    boolean hasRelocations, int align, int sectIndex) {
 
         section = ElfByteBuffer.allocate(Elf64_Shdr.totalsize);
         name = sectName;

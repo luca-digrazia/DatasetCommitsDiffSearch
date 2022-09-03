@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,18 +33,22 @@
 
 package jdk.tools.jaotc.test.collect;
 
-
-import jdk.tools.jaotc.LoadedClass;
-import jdk.tools.jaotc.collect.*;
-import org.junit.Assert;
-import org.junit.Test;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+
+import org.junit.Assert;
+import org.junit.Test;
+
+import jdk.tools.jaotc.LoadedClass;
+import jdk.tools.jaotc.collect.ClassSearch;
+import jdk.tools.jaotc.collect.ClassSource;
+import jdk.tools.jaotc.collect.SearchFor;
+import jdk.tools.jaotc.collect.SearchPath;
+import jdk.tools.jaotc.collect.SourceProvider;
 
 public class ClassSearchTest {
     @Test(expected = InternalError.class)
@@ -57,14 +63,14 @@ public class ClassSearchTest {
         Set<String> searched = new HashSet<>();
         ClassSearch target = new ClassSearch();
         target.addProvider(provider("", (name, searchPath) -> {
-                searched.add(name);
-                return new NoopSource();
+            searched.add(name);
+            return new NoopSource();
         }));
         target.search(searchForList("foo", "bar", "foobar"), null);
         Assert.assertEquals(hashset("foo", "bar", "foobar"), searched);
     }
 
-    private SourceProvider provider(String supports, BiFunction<String, SearchPath, ClassSource> fn) {
+    private static SourceProvider provider(String supports, BiFunction<String, SearchPath, ClassSource> fn) {
         return new SourceProvider() {
             @Override
             public ClassSource findSource(String name, SearchPath searchPath) {
@@ -151,8 +157,8 @@ public class ClassSearchTest {
                     public void eachClass(BiConsumer<String, ClassLoader> consumer) {
                         consumer.accept("foo.Bar", new ClassLoader() {
                             @Override
-                            public Class<?> loadClass(String name) throws ClassNotFoundException {
-                                loaded.add(name);
+                            public Class<?> loadClass(String nm) throws ClassNotFoundException {
+                                loaded.add(nm);
                                 return null;
                             }
                         });
@@ -179,7 +185,7 @@ public class ClassSearchTest {
         target.search(searchForList("foobar"), null);
     }
 
-    private List<SearchFor> searchForList(String... entries) {
+    private static List<SearchFor> searchForList(String... entries) {
         List<SearchFor> list = new ArrayList<>();
         for (String entry : entries) {
             list.add(new SearchFor(entry));
@@ -187,16 +193,18 @@ public class ClassSearchTest {
         return list;
     }
 
-    private <T> List<T> list(T... entries) {
-        List<T> list = new ArrayList<T>();
+    @SafeVarargs
+    private static <T> List<T> list(T... entries) {
+        List<T> list = new ArrayList<>();
         for (T entry : entries) {
             list.add(entry);
         }
         return list;
     }
 
-    private <T> Set<T> hashset(T... entries) {
-        Set<T> set = new HashSet<T>();
+    @SafeVarargs
+    private static <T> Set<T> hashset(T... entries) {
+        Set<T> set = new HashSet<>();
         for (T entry : entries) {
             set.add(entry);
         }
