@@ -123,12 +123,6 @@ public abstract class Node {
         predecessors.clear();
     }
 
-    public void unsafeDelete() {
-        graph.unregister(this);
-        id = DeletedID;
-        assert isDeleted();
-    }
-
     public void delete() {
         assert !isDeleted();
         assert checkDeletion() : "Could not delete " + this + " (usages: " + this.usages() + ", predecessors: " + this.predecessors() + ")";
@@ -140,7 +134,10 @@ public abstract class Node {
             successors.set(i, Null);
         }
         assert predecessors().size() == 0 && usages().size() == 0;
-        unsafeDelete();
+        // make sure its not connected. pred usages
+        graph.unregister(this);
+        id = DeletedID;
+        assert isDeleted();
     }
 
     private boolean checkDeletion() {
