@@ -27,8 +27,15 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.BytecodePosition;
+import jdk.vm.ci.code.SourceStackTrace;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
 import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClassIterable;
 import com.oracle.graal.graph.NodeWorkList;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.graph.spi.SimplifierTool;
@@ -51,75 +58,30 @@ import com.oracle.graal.nodes.spi.ArrayLengthProvider;
 import com.oracle.graal.nodes.spi.LimitedValueProxy;
 import com.oracle.graal.nodes.spi.ValueProxy;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.code.SourceStackTrace;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
 public class GraphUtil {
 
     public static void killCFG(Node node, SimplifierTool tool) {
-        NodeWorkList worklist = killCFG(node, tool, null);
-        if (worklist != null) {
-            for (Node successor : worklist) {
-                killCFG(successor, tool, worklist);
-            }
-        }
-    }
-
-    private static NodeWorkList killCFG(Node node, SimplifierTool tool, NodeWorkList worklist) {
-        NodeWorkList newWorklist = worklist;
-        // DebugScope.forceDump(node.graph(), "kill CFG %s", node);
-        if (node instanceof FixedNode) {
-            newWorklist = killCFGLinear((FixedNode) node, newWorklist, tool);
-        } else {
-            propagateKill(node);
-        }
-        return newWorklist;
-    }
-
-    private static NodeWorkList killCFGLinear(FixedNode in, NodeWorkList worklist, SimplifierTool tool) {
-        NodeWorkList newWorklist = worklist;
-        FixedNode current = in;
-        while (current != null) {
-            FixedNode next = null;
-            assert current.isAlive();
-            if (current instanceof AbstractEndNode) {
-                // We reached a control flow end.
-                AbstractEndNode end = (AbstractEndNode) current;
-                killEnd(end, tool);
-            } else if (current instanceof FixedWithNextNode) {
-                next = ((FixedWithNextNode) current).next();
-            } else {
-                // Normal control flow node.
-                /*
-                 * We do not take a successor snapshot because this iterator supports concurrent
-                 * modifications as long as they do not change the size of the successor list. Not
-                 * taking a snapshot allows us to see modifications to other branches that may
-                 * happen while processing one branch.
-                 */
-                // assert node.successors().count() > 1 || node.successors().count() == 0 :
-                // node.getClass();
-                NodeClassIterable successors = current.successors();
-                if (successors.count() == 1) {
-                    next = (FixedNode) successors.first();
-                } else {
-                    if (newWorklist == null) {
-                        newWorklist = in.graph().createNodeWorkList();
-                    }
-                    for (Node successor : successors) {
-                        newWorklist.add(successor);
-                    }
+        assert node.isAlive();
+        if (node instanceof AbstractEndNode) {
+            // We reached a control flow end.
+            AbstractEndNode end = (AbstractEndNode) node;
+            killEnd(end, tool);
+        } else if (node instanceof FixedNode) {
+            // Normal control flow node.
+            /*
+             * We do not take a successor snapshot because this iterator supports concurrent
+             * modifications as long as they do not change the size of the successor list. Not
+             * taking a snapshot allows us to see modifications to other branches that may happen
+             * while processing one branch.
+             */
+            for (Node successor : node.successors()) {
+                if (successor != null) {
+                    killCFG(successor, tool);
                 }
             }
-            current.replaceAtPredecessor(null);
-            propagateKill(current);
-            current = next;
         }
-        return newWorklist;
+        node.replaceAtPredecessor(null);
+        propagateKill(node);
     }
 
     public static void killCFG(Node node) {
@@ -173,14 +135,14 @@ public class GraphUtil {
         if (node != null && node.isAlive()) {
             node.markDeleted();
 
-            node.acceptInputs((n, in) -> {
+            for (Node in : node.inputs()) {
                 if (in.isAlive()) {
-                    in.removeUsage(n);
+                    in.removeUsage(node);
                     if (in.hasNoUsages() && !(in instanceof FixedNode)) {
                         killWithUnusedFloatingInputs(in);
                     }
                 }
-            });
+            }
 
             ArrayList<Node> usageToKill = null;
             for (Node usage : node.usages()) {
@@ -195,8 +157,9 @@ public class GraphUtil {
                 for (Node usage : usageToKill) {
                     if (usage.isAlive()) {
                         if (usage instanceof PhiNode) {
+                            PhiNode phiNode = (PhiNode) usage;
                             usage.replaceFirstInput(node, null);
-                            if (!((PhiNode) usage).hasValidInput()) {
+                            if (phiNode.merge() == null || !phiNode.hasValidInput()) {
                                 propagateKill(usage);
                             }
                         } else {
@@ -209,22 +172,25 @@ public class GraphUtil {
     }
 
     public static void killWithUnusedFloatingInputs(Node node) {
-        node.safeDelete();
-        node.acceptInputs((n, in) -> {
-            if (in.isAlive() && !(in instanceof FixedNode)) {
-                if (in.hasNoUsages()) {
-                    killWithUnusedFloatingInputs(in);
-                } else if (in instanceof PhiNode) {
-                    for (Node use : in.usages()) {
-                        if (use != in) {
-                            return;
+        node.markDeleted();
+        outer: for (Node in : node.inputs()) {
+            if (in.isAlive()) {
+                in.removeUsage(node);
+                if (!(in instanceof FixedNode)) {
+                    if (in.hasNoUsages()) {
+                        killWithUnusedFloatingInputs(in);
+                    } else if (in instanceof PhiNode) {
+                        for (Node use : in.usages()) {
+                            if (use != in) {
+                                continue outer;
+                            }
                         }
+                        in.replaceAtUsages(null);
+                        killWithUnusedFloatingInputs(in);
                     }
-                    in.replaceAtUsages(null);
-                    killWithUnusedFloatingInputs(in);
                 }
             }
-        });
+        }
     }
 
     public static void removeFixedWithUnusedInputs(FixedWithNextNode fixed) {
@@ -601,17 +567,14 @@ public class GraphUtil {
      */
     public static NodeIterable<FixedNode> predecessorIterable(final FixedNode start) {
         return new NodeIterable<FixedNode>() {
-            @Override
             public Iterator<FixedNode> iterator() {
                 return new Iterator<FixedNode>() {
                     public FixedNode current = start;
 
-                    @Override
                     public boolean hasNext() {
                         return current != null;
                     }
 
-                    @Override
                     public FixedNode next() {
                         try {
                             return current;
@@ -637,17 +600,14 @@ public class GraphUtil {
             this.assumptions = assumptions;
         }
 
-        @Override
         public MetaAccessProvider getMetaAccess() {
             return metaAccess;
         }
 
-        @Override
         public ConstantReflectionProvider getConstantReflection() {
             return constantReflection;
         }
 
-        @Override
         public boolean canonicalizeReads() {
             return canonicalizeReads;
         }
@@ -657,26 +617,21 @@ public class GraphUtil {
             return true;
         }
 
-        @Override
         public void deleteBranch(Node branch) {
             branch.predecessor().replaceFirstSuccessor(branch, null);
             GraphUtil.killCFG(branch, this);
         }
 
-        @Override
         public void removeIfUnused(Node node) {
             GraphUtil.tryKillUnused(node);
         }
 
-        @Override
         public void addToWorkList(Node node) {
         }
 
-        @Override
         public void addToWorkList(Iterable<? extends Node> nodes) {
         }
 
-        @Override
         public Assumptions getAssumptions() {
             return assumptions;
         }

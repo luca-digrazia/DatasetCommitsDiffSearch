@@ -22,16 +22,16 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import jdk.vm.ci.meta.TriState;
+
 import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
 import com.oracle.graal.compiler.common.type.ObjectStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeCycles;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.LogicConstantNode;
-import com.oracle.graal.nodes.LogicNode;
 import com.oracle.graal.nodes.PiNode;
 import com.oracle.graal.nodes.UnaryOpLogicNode;
 import com.oracle.graal.nodes.ValueNode;
@@ -42,12 +42,10 @@ import com.oracle.graal.nodes.spi.Virtualizable;
 import com.oracle.graal.nodes.spi.VirtualizerTool;
 import com.oracle.graal.nodes.type.StampTool;
 
-import jdk.vm.ci.meta.TriState;
-
 /**
  * An IsNullNode will be true if the supplied value is null, and false if it is non-null.
  */
-@NodeInfo(cycles = NodeCycles.CYCLES_2)
+@NodeInfo
 public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, Virtualizable, PiPushable {
 
     public static final NodeClass<IsNullNode> TYPE = NodeClass.create(IsNullNode.class);
@@ -55,20 +53,6 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, 
     public IsNullNode(ValueNode object) {
         super(TYPE, object);
         assert object != null;
-    }
-
-    public static LogicNode create(ValueNode forValue) {
-        LogicNode result = tryCanonicalize(forValue);
-        return result == null ? new IsNullNode(forValue) : result;
-    }
-
-    public static LogicNode tryCanonicalize(ValueNode forValue) {
-        if (StampTool.isPointerAlwaysNull(forValue)) {
-            return LogicConstantNode.tautology();
-        } else if (StampTool.isPointerNonNull(forValue)) {
-            return LogicConstantNode.contradiction();
-        }
-        return null;
     }
 
     @Override
@@ -85,8 +69,12 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, 
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        LogicNode result = tryCanonicalize(forValue);
-        return result == null ? this : result;
+        if (StampTool.isPointerAlwaysNull(forValue)) {
+            return LogicConstantNode.tautology();
+        } else if (StampTool.isPointerNonNull(forValue)) {
+            return LogicConstantNode.contradiction();
+        }
+        return this;
     }
 
     @Override
