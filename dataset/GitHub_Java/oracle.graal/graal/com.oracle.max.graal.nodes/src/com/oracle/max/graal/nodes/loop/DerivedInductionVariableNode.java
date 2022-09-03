@@ -22,11 +22,10 @@
  */
 package com.oracle.max.graal.nodes.loop;
 
-import com.oracle.max.graal.graph.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.spi.*;
-import com.sun.cri.ci.*;
 
 /**
  * LinearInductionVariable that is computed in the loops with offset + scale * base.
@@ -76,27 +75,27 @@ public class DerivedInductionVariableNode extends LinearInductionVariableNode  i
      * @return the new BasicInductionVariable
      */
     public BasicInductionVariableNode toBasicInductionVariable() {
-        InductionVariableNode base = base();
-        if (base instanceof DerivedInductionVariableNode) {
-            base = ((DerivedInductionVariableNode) base).toBasicInductionVariable();
+        InductionVariableNode b = base();
+        if (b instanceof DerivedInductionVariableNode) {
+            b = ((DerivedInductionVariableNode) b).toBasicInductionVariable();
         }
         ValueNode init;
         ValueNode stride;
         LoopCounterNode counter;
-        if (base instanceof BasicInductionVariableNode) {
-            BasicInductionVariableNode basic = (BasicInductionVariableNode) base;
+        if (b instanceof BasicInductionVariableNode) {
+            BasicInductionVariableNode basic = (BasicInductionVariableNode) b;
             // let the canonicalizer do its job with this
             init = IntegerArithmeticNode.add(offset(), IntegerArithmeticNode.mul(scale(), basic.init()));
             stride = IntegerArithmeticNode.mul(scale(), basic.stride());
             counter = basic.loopCounter();
         } else {
-            assert base instanceof LoopCounterNode;
+            assert b instanceof LoopCounterNode;
             init = offset();
             stride = scale();
-            counter = (LoopCounterNode) base;
+            counter = (LoopCounterNode) b;
         }
         BasicInductionVariableNode newBIV = graph().add(new BasicInductionVariableNode(kind(), init, stride, counter));
-        this.replaceAndDelete(newBIV);
+        ((StructuredGraph) graph()).replaceFloating(this, newBIV);
         return newBIV;
     }
 
@@ -106,7 +105,7 @@ public class DerivedInductionVariableNode extends LinearInductionVariableNode  i
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (base() instanceof DerivedInductionVariableNode) {
             DerivedInductionVariableNode divBase = (DerivedInductionVariableNode) base();
             IntegerArithmeticNode newOffset = IntegerArithmeticNode.add(offset(), IntegerArithmeticNode.mul(scale(), divBase.offset()));

@@ -25,8 +25,6 @@ package com.oracle.max.graal.graph;
 import java.lang.annotation.*;
 import java.util.*;
 
-import com.oracle.max.graal.graph.NodeClass.*;
-
 
 /**
  * This class is the base class for all nodes, it represent a node which can be inserted in a {@link Graph}.<br>
@@ -47,7 +45,7 @@ import com.oracle.max.graal.graph.NodeClass.*;
  *
  *
  */
-public abstract class Node implements Cloneable, Formattable {
+public abstract class Node implements Cloneable {
 
     static final int DELETED_ID_START = -1000000000;
     static final int INITIAL_ID = -1;
@@ -490,68 +488,6 @@ public abstract class Node implements Cloneable, Formattable {
             }
             default:
                 throw new RuntimeException("unknown verbosity: " + verbosity);
-        }
-    }
-
-    @Override
-    public void formatTo(Formatter formatter, int flags, int width, int precision) {
-        if ((flags & FormattableFlags.ALTERNATE) == FormattableFlags.ALTERNATE) {
-            formatter.format(toString(Verbosity.Id));
-        } else if ((flags & FormattableFlags.UPPERCASE) == FormattableFlags.UPPERCASE) {
-            formatter.format(toString(Verbosity.Long));
-        } else {
-            formatter.format(toString(Verbosity.Short));
-        }
-
-        boolean neighborsAlternate = ((flags & FormattableFlags.LEFT_JUSTIFY) == FormattableFlags.LEFT_JUSTIFY);
-        int neighborsFlags = (neighborsAlternate ? FormattableFlags.ALTERNATE | FormattableFlags.LEFT_JUSTIFY : 0);
-        if (width > 0) {
-            if (this.predecessor != null) {
-                formatter.format(" pred={");
-                this.predecessor.formatTo(formatter, neighborsFlags, width - 1, 0);
-                formatter.format("}");
-            }
-
-            NodeClassIterator inputIter = inputs().iterator();
-            while (inputIter.hasNext()) {
-                Position position = inputIter.nextPosition();
-                Node input = getNodeClass().get(this, position);
-                if (input != null) {
-                    formatter.format(" ");
-                    formatter.format(getNodeClass().getName(position));
-                    formatter.format("={");
-                    input.formatTo(formatter, neighborsFlags, width - 1, 0);
-                    formatter.format("}");
-                }
-            }
-        }
-
-        if (precision > 0) {
-            if (this.usages.size() > 0) {
-                formatter.format(" usages={");
-                int z = 0;
-                for (Node usage : this.usages) {
-                    if (z != 0) {
-                        formatter.format(", ");
-                    }
-                    usage.formatTo(formatter, neighborsFlags, 0, precision - 1);
-                    ++z;
-                }
-                formatter.format("}");
-            }
-
-            NodeClassIterator succIter = successors().iterator();
-            while (succIter.hasNext()) {
-                Position position = succIter.nextPosition();
-                Node successor = getNodeClass().get(this, position);
-                if (successor != null) {
-                    formatter.format(" ");
-                    formatter.format(getNodeClass().getName(position));
-                    formatter.format("={");
-                    successor.formatTo(formatter, neighborsFlags, 0, precision - 1);
-                    formatter.format("}");
-                }
-            }
         }
     }
 }
