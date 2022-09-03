@@ -29,10 +29,7 @@ import java.util.Set;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractValueImpl;
 
 /**
- * Represents a polyglot value. Polyglot values can either result from a {@link #isHostObject()
- * host} or guest language.
- *
- * @since 1.0
+ * The dynamic nature of languages requires dynamic access to polyglot values.
  */
 public final class Value {
 
@@ -44,36 +41,14 @@ public final class Value {
         this.receiver = value;
     }
 
-    /**
-     * Returns the meta representation of this polyglot value. The interpretation of this function
-     * depends on the guest language. For example, in JavaScript the expression
-     * <code>context.eval("js", "42")</code> will return the "number" string as meta object.
-     *
-     * @since 1.0
-     */
     public Value getMetaObject() {
         return impl.getMetaObject(receiver);
     }
 
-    /**
-     * Returns <code>true</code> if this polyglot value has array elements. In this case array
-     * elements can be accessed using {@link #getArrayElement(long)},
-     * {@link #setArrayElement(long, Object)} and the array size can be queried using
-     * {@link #getArraySize()}.
-     *
-     * @since 1.0
-     */
     public boolean hasArrayElements() {
         return impl.hasArrayElements(receiver);
     }
 
-    /**
-     * Returns the array element at a given index as polyglot value.
-     *
-     * @param index
-     *
-     * @since 1.0
-     */
     public Value getArrayElement(long index) {
         return impl.getArrayElement(receiver, index);
     }
@@ -110,22 +85,10 @@ public final class Value {
 
     // executable
 
-    /**
-     * Returns <code>true</code> if the value can be executed. This indicates that the
-     * {@link #execute(Object...)} can be used with this value.
-     *
-     * @since 1.0
-     */
     public boolean canExecute() {
         return impl.canExecute(receiver);
     }
 
-    /**
-     * Executes the value and returns its result.
-     *
-     * @param arguments
-     * @return
-     */
     public Value execute(Object... arguments) {
         return impl.execute(receiver, arguments);
     }
