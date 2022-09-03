@@ -54,8 +54,7 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
 
         HotSpotRegistersProvider registers = createRegisters();
         HotSpotMetaAccessProvider metaAccess = new HotSpotMetaAccessProvider(runtime);
-        RegisterConfig regConfig = new SPARCHotSpotRegisterConfig(target, runtime.getConfig());
-        HotSpotCodeCacheProvider codeCache = new HotSpotCodeCacheProvider(runtime, target, regConfig);
+        HotSpotCodeCacheProvider codeCache = new SPARCHotSpotCodeCacheProvider(runtime, target);
         HotSpotConstantReflectionProvider constantReflection = new HotSpotConstantReflectionProvider(runtime);
         Value[] nativeABICallerSaveRegisters = createNativeABICallerSaveRegisters(runtime.getConfig(), codeCache.getRegisterConfig());
         HotSpotForeignCallsProvider foreignCalls = new SPARCHotSpotForeignCallsProvider(runtime, metaAccess, codeCache, nativeABICallerSaveRegisters);
@@ -63,12 +62,14 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
         // Replacements cannot have speculative optimizations since they have
         // to be valid for the entire run of the VM.
         Assumptions assumptions = new Assumptions(false);
-        Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null, new HotSpotStampProvider());
-        HotSpotSnippetReflectionProvider snippetReflection = new HotSpotSnippetReflectionProvider(runtime);
+        Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null);
+        HotSpotSnippetReflectionProvider snippetReflection = new HotSpotSnippetReflectionProvider();
         HotSpotReplacementsImpl replacements = new HotSpotReplacementsImpl(p, snippetReflection, runtime.getConfig(), assumptions, target);
         HotSpotDisassemblerProvider disassembler = new HotSpotDisassemblerProvider(runtime);
         HotSpotSuitesProvider suites = new HotSpotSuitesProvider(runtime);
-        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, snippetReflection);
+        HotSpotMethodHandleAccessProvider methodHandleAccess = new HotSpotMethodHandleAccessProvider();
+        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, snippetReflection,
+                        methodHandleAccess);
 
         return new SPARCHotSpotBackend(runtime, providers);
     }

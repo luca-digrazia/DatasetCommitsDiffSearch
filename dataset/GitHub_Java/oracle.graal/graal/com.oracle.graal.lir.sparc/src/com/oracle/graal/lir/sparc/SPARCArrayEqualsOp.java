@@ -27,11 +27,7 @@ import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static com.oracle.graal.sparc.SPARC.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.*;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.RCondition.*;
 
 import java.lang.reflect.*;
 
@@ -111,7 +107,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         // Return true
         masm.bind(trueLabel);
         new Mov(1, result).emit(masm);
-        masm.bicc(Always, ANNUL, done);
+        new Bpa(done).emit(masm);
         new Nop().emit(masm);
 
         // Return false
@@ -142,7 +138,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
 
         new And(result, VECTOR_SIZE - 1, result).emit(masm); // tail count (in bytes)
         new Andcc(length, ~(VECTOR_SIZE - 1), length).emit(masm);  // vector count (in bytes)
-        masm.bpcc(ConditionFlag.Equal, NOT_ANNUL, compareTail, CC.Xcc, PREDICT_NOT_TAKEN);
+        new Bpe(CC.Xcc, compareTail).emit(masm);
 
         new Sub(length, VECTOR_SIZE, length).emit(masm); // Delay slot
         new Add(array1, length, array1).emit(masm);
@@ -159,9 +155,9 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
             new Nop().emit(masm); // for optimal performance (see manual)
         } else {
             new Cmp(tempReg1, tempReg2).emit(masm);
-            masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_NOT_TAKEN);
+            new Bpne(Xcc, true, false, falseLabel).emit(masm);
             new Nop().emit(masm);
-            masm.bpr(Rc_z, NOT_ANNUL, compareTailCorrectVectorEnd, PREDICT_NOT_TAKEN, length);
+            new Bpr(RCondition.Rc_z, false, false, length, compareTailCorrectVectorEnd).emit(masm);
             new Nop().emit(masm);
         }
 
@@ -170,18 +166,17 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         masm.bind(loop);
         new Ldx(new SPARCAddress(array2, length), tempReg2).emit(masm);
         new Cmp(tempReg1, tempReg2).emit(masm);
-        masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_NOT_TAKEN);
+        new Bpne(Xcc, false, false, falseLabel).emit(masm);
         // Delay slot, not annul, add for next iteration
         new Addcc(length, VECTOR_SIZE, length).emit(masm);
-        // Annul, to prevent access past the array
-        masm.bpcc(NotEqual, ANNUL, loop, Xcc, PREDICT_TAKEN);
+        new Bpne(Xcc, true, true, loop).emit(masm); // Annul, to prevent access past the array
         new Ldx(new SPARCAddress(array1, length), tempReg1).emit(masm); // Load in delay slot
 
         // Tail count zero, therefore we can go to the end
         if (hasCBcond) {
             new CBcondx(ConditionFlag.Equal, result, 0, trueLabel).emit(masm);
         } else {
-            masm.bpr(Rc_z, NOT_ANNUL, trueLabel, PREDICT_TAKEN, result);
+            new Bpr(RCondition.Rc_z, true, true, result, trueLabel).emit(masm);
             new Nop().emit(masm);
         }
 
@@ -210,7 +205,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                 new CBcondx(ConditionFlag.Less, result, 4, compare2Bytes).emit(masm);
             } else {
                 new Cmp(result, 4).emit(masm);
-                masm.bpcc(Less, NOT_ANNUL, compare2Bytes, Xcc, PREDICT_NOT_TAKEN);
+                new Bpl(Xcc, false, false, compare2Bytes).emit(masm);
                 new Nop().emit(masm);
             }
 
@@ -221,7 +216,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                 new CBcondx(ConditionFlag.NotEqual, tempReg1, tempReg2, falseLabel).emit(masm);
             } else {
                 new Cmp(tempReg1, tempReg2).emit(masm);
-                masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_NOT_TAKEN);
+                new Bpne(Xcc, false, false, falseLabel).emit(masm);
                 new Nop().emit(masm);
             }
 
@@ -238,7 +233,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                     new CBcondx(ConditionFlag.Less, result, 2, compare1Byte).emit(masm);
                 } else {
                     new Cmp(result, 2).emit(masm);
-                    masm.bpcc(Less, NOT_ANNUL, compare1Byte, Xcc, PREDICT_TAKEN);
+                    new Bpl(Xcc, false, true, compare1Byte).emit(masm);
                     new Nop().emit(masm);
                 }
 
@@ -249,7 +244,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                     new CBcondx(ConditionFlag.NotEqual, tempReg1, tempReg2, falseLabel).emit(masm);
                 } else {
                     new Cmp(tempReg1, tempReg2).emit(masm);
-                    masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_TAKEN);
+                    new Bpne(Xcc, false, true, falseLabel).emit(masm);
                     new Nop().emit(masm);
                 }
 
@@ -266,16 +261,17 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                         new CBcondx(ConditionFlag.NotEqual, result, 1, trueLabel).emit(masm);
                     } else {
                         new Cmp(result, 1).emit(masm);
-                        masm.bpcc(NotEqual, NOT_ANNUL, trueLabel, Xcc, PREDICT_TAKEN);
+                        new Bpne(Xcc, trueLabel).emit(masm);
                         new Nop().emit(masm);
                     }
                     new Ldub(new SPARCAddress(array1, 0), tempReg1).emit(masm);
                     new Ldub(new SPARCAddress(array2, 0), tempReg2).emit(masm);
                     if (hasCBcond) {
+                        // new SPARCAssembler.Ldx(new SPARCAddress(o7, 1), g3).emit(masm);
                         new CBcondx(ConditionFlag.NotEqual, tempReg1, tempReg2, falseLabel).emit(masm);
                     } else {
                         new Cmp(tempReg1, tempReg2).emit(masm);
-                        masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_TAKEN);
+                        new Bpne(Xcc, falseLabel).emit(masm);
                         new Nop().emit(masm);
                     }
                 } else {

@@ -219,7 +219,7 @@ public class SPARC extends Architecture {
     public static final int FLOAT_REGISTER_COUNT = 64;
 
     /**
-     * Alignment for valid memory access.
+     * Alignment for valid memory access
      */
     public static final int MEMORY_ACCESS_ALIGN = 4;
 
@@ -237,7 +237,7 @@ public class SPARC extends Architecture {
         }
 
         Kind kind = (Kind) lirKind;
-        if (category.equals(CPU)) {
+        if (category == CPU) {
             switch (kind) {
                 case Boolean:
                 case Byte:
@@ -248,7 +248,7 @@ public class SPARC extends Architecture {
                 case Object:
                     return true;
             }
-        } else if (category.equals(FPU)) {
+        } else if (category == FPU) {
             switch (kind) {
                 case Float:
                 case Double:
@@ -260,9 +260,9 @@ public class SPARC extends Architecture {
 
     @Override
     public PlatformKind getLargestStorableKind(RegisterCategory category) {
-        if (category.equals(CPU)) {
+        if (category == CPU) {
             return Kind.Long;
-        } else if (category.equals(FPU)) {
+        } else if (category == FPU) {
             return Kind.Double;
         } else {
             return Kind.Illegal;

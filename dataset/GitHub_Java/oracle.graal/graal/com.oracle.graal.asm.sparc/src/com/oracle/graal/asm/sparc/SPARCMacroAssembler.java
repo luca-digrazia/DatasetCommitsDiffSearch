@@ -96,10 +96,6 @@ public class SPARCMacroAssembler extends SPARCAssembler {
         public Bpgeu(CC cc, Label label) {
             super(cc, label);
         }
-
-        public Bpgeu(CC cc, boolean annul, boolean predictTaken, Label label) {
-            super(cc, annul, predictTaken, label);
-        }
     }
 
     public static class Bplu extends Bpcs {
@@ -110,10 +106,6 @@ public class SPARCMacroAssembler extends SPARCAssembler {
 
         public Bplu(CC cc, Label label) {
             super(cc, label);
-        }
-
-        public Bplu(CC cc, boolean annul, boolean predictTaken, Label label) {
-            super(cc, annul, predictTaken, label);
         }
     }
 
@@ -353,14 +345,6 @@ public class SPARCMacroAssembler extends SPARCAssembler {
         private long value;
         private Register dst;
         private boolean forceRelocatable;
-        private boolean delayed = false;
-        private AssemblerEmittable delayedInstruction;
-
-        public Sethix(long value, Register dst, boolean forceRelocatable, boolean delayed) {
-            this(value, dst, forceRelocatable);
-            assert !(forceRelocatable && delayed) : "Relocatable sethix cannot be delayed";
-            this.delayed = delayed;
-        }
 
         public Sethix(long value, Register dst, boolean forceRelocatable) {
             this.value = value;
@@ -372,17 +356,6 @@ public class SPARCMacroAssembler extends SPARCAssembler {
             this(value, dst, false);
         }
 
-        private void emitInstruction(AssemblerEmittable insn, SPARCMacroAssembler masm) {
-            if (delayed) {
-                if (this.delayedInstruction != null) {
-                    delayedInstruction.emit(masm);
-                }
-                delayedInstruction = insn;
-            } else {
-                insn.emit(masm);
-            }
-        }
-
         public void emit(SPARCMacroAssembler masm) {
             int hi = (int) (value >> 32);
             int lo = (int) (value & ~0);
@@ -391,53 +364,42 @@ public class SPARCMacroAssembler extends SPARCAssembler {
             final int startPc = masm.position();
 
             if (hi == 0 && lo >= 0) {
-                emitInstruction(new Sethi(hi22(lo), dst), masm);
+                new Sethi(hi22(lo), dst).emit(masm);
             } else if (hi == -1) {
-                emitInstruction(new Sethi(hi22(~lo), dst), masm);
-                emitInstruction(new Xor(dst, ~lo10(~0), dst), masm);
+                new Sethi(hi22(~lo), dst).emit(masm);
+                new Xor(dst, ~lo10(~0), dst).emit(masm);
             } else {
                 int shiftcnt = 0;
-                emitInstruction(new Sethi(hi22(hi), dst), masm);
-                if ((hi & 0x3ff) != 0) {                                  // Any bits?
-                    // msb 32-bits are now in lsb 32
-                    emitInstruction(new Or(dst, hi & 0x3ff, dst), masm);
+                new Sethi(hi22(hi), dst).emit(masm);
+                if ((hi & 0x3ff) != 0) {                                       // Any bits?
+                    new Or(dst, hi & 0x3ff, dst).emit(masm);                   // msb 32-bits are now in lsb 32
                 }
-                if ((lo & 0xFFFFFC00) != 0) {                             // done?
-                    if (((lo >> 20) & 0xfff) != 0) {                      // Any bits set?
-                        // Make room for next 12 bits
-                        emitInstruction(new Sllx(dst, 12, dst), masm);
-                        // Or in next 12
-                        emitInstruction(new Or(dst, (lo >> 20) & 0xfff, dst), masm);
-                        shiftcnt = 0;                                     // We already shifted
+                if ((lo & 0xFFFFFC00) != 0) {                                  // done?
+                    if (((lo >> 20) & 0xfff) != 0) {                           // Any bits set?
+                        new Sllx(dst, 12, dst).emit(masm);                     // Make room for next 12 bits
+                        new Or(dst, (lo >> 20) & 0xfff, dst).emit(masm);       // Or in next 12
+                        shiftcnt = 0;                                          // We already shifted
                     } else {
                         shiftcnt = 12;
                     }
                     if (((lo >> 10) & 0x3ff) != 0) {
-                        // Make room for last 10 bits
-                        emitInstruction(new Sllx(dst, shiftcnt + 10, dst), masm);
-                        // Or in next 10
-                        emitInstruction(new Or(dst, (lo >> 10) & 0x3ff, dst), masm);
+                        new Sllx(dst, shiftcnt + 10, dst).emit(masm);          // Make room for last 10 bits
+                        new Or(dst, (lo >> 10) & 0x3ff, dst).emit(masm);       // Or in next 10
                         shiftcnt = 0;
                     } else {
                         shiftcnt = 10;
                     }
-                    // Shift leaving disp field 0'd
-                    emitInstruction(new Sllx(dst, shiftcnt + 10, dst), masm);
+                    new Sllx(dst, shiftcnt + 10, dst).emit(masm);              // Shift leaving disp field 0'd
                 } else {
-                    emitInstruction(new Sllx(dst, 32, dst), masm);
+                    new Sllx(dst, 32, dst).emit(masm);
                 }
             }
             // Pad out the instruction sequence so it can be patched later.
             if (forceRelocatable) {
                 while (masm.position() < (startPc + (INSTRUCTION_SIZE * 4))) {
-                    emitInstruction(new Nop(), masm);
+                    new Nop().emit(masm);
                 }
             }
-        }
-
-        public void emitDelayed(SPARCMacroAssembler masm) {
-            assert delayedInstruction != null;
-            delayedInstruction.emit(masm);
         }
     }
 
@@ -446,21 +408,11 @@ public class SPARCMacroAssembler extends SPARCAssembler {
         private long value;
         private Register dst;
         private boolean forceRelocatable;
-        private boolean delayed = false;
-        private boolean delayedFirstEmitted = false;
-        private Sethix sethix;
-        private AssemblerEmittable delayedAdd;
 
-        public Setx(long value, Register dst, boolean forceRelocatable, boolean delayed) {
-            assert !(forceRelocatable && delayed) : "Cannot use relocatable setx as delayable";
+        public Setx(long value, Register dst, boolean forceRelocatable) {
             this.value = value;
             this.dst = dst;
             this.forceRelocatable = forceRelocatable;
-            this.delayed = delayed;
-        }
-
-        public Setx(long value, Register dst, boolean forceRelocatable) {
-            this(value, dst, forceRelocatable, false);
         }
 
         public Setx(long value, Register dst) {
@@ -468,45 +420,11 @@ public class SPARCMacroAssembler extends SPARCAssembler {
         }
 
         public void emit(SPARCMacroAssembler masm) {
-            assert !delayed;
-            doEmit(masm);
-        }
-
-        private void doEmit(SPARCMacroAssembler masm) {
-            sethix = new Sethix(value, dst, forceRelocatable, delayed);
-            sethix.emit(masm);
+            new Sethix(value, dst, forceRelocatable).emit(masm);
             int lo = (int) (value & ~0);
             if (lo10(lo) != 0 || forceRelocatable) {
-                Add add = new Add(dst, lo10(lo), dst);
-                if (delayed) {
-                    sethix.emitDelayed(masm);
-                    sethix = null;
-                    delayedAdd = add;
-                } else {
-                    sethix = null;
-                    add.emit(masm);
-                }
+                new Add(dst, lo10(lo), dst).emit(masm);
             }
-        }
-
-        public void emitFirstPartOfDelayed(SPARCMacroAssembler masm) {
-            assert !forceRelocatable : "Cannot use delayed mode with relocatable setx";
-            assert delayed : "Can only be used in delayed mode";
-            doEmit(masm);
-            delayedFirstEmitted = true;
-        }
-
-        public void emitSecondPartOfDelayed(SPARCMacroAssembler masm) {
-            assert !forceRelocatable : "Cannot use delayed mode with relocatable setx";
-            assert delayed : "Can only be used in delayed mode";
-            assert delayedFirstEmitted : "First part has not been emitted so far.";
-            assert delayedAdd == null && sethix != null || delayedAdd != null && sethix == null : "Either add or sethix must be set";
-            if (delayedAdd != null) {
-                delayedAdd.emit(masm);
-            } else {
-                sethix.emitDelayed(masm);
-            }
-
         }
     }
 
