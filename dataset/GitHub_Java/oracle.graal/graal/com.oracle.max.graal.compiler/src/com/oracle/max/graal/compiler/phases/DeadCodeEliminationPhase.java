@@ -31,18 +31,16 @@ import com.oracle.max.graal.graph.*;
 public class DeadCodeEliminationPhase extends Phase {
 
     private NodeBitMap alive;
-    private NodeFlood flood;
+    private NodeWorklist worklist;
     private Graph graph;
-
-    public int deletedNodeCount;
 
     @Override
     protected void run(Graph graph) {
         this.graph = graph;
         this.alive = graph.createNodeBitMap();
-        this.flood = graph.createNodeFlood();
+        this.worklist = graph.createNodeWorklist();
 
-        flood.add(graph.start());
+        worklist.add(graph.start());
 
         iterateSuccessors();
         disconnectCFGNodes();
@@ -56,7 +54,7 @@ public class DeadCodeEliminationPhase extends Phase {
         new PhiSimplifier(graph);
 
         if (C1XOptions.TraceDeadCodeElimination) {
-            System.out.printf("dead code elimination: deleted %d nodes\n", deletedNodeCount);
+            System.out.printf("dead code elimination finished\n");
         }
     }
 
@@ -65,20 +63,20 @@ public class DeadCodeEliminationPhase extends Phase {
     }
 
     private void iterateSuccessors() {
-        for (Node current : flood) {
+        for (Node current : worklist) {
             for (Node successor : current.successors()) {
-                flood.add(successor);
+                worklist.add(successor);
             }
         }
     }
 
     private void disconnectCFGNodes() {
         for (Node node : graph.getNodes()) {
-            if (node != Node.Null && !flood.isMarked(node) && isCFG(node)) {
+            if (node != Node.Null && !worklist.isMarked(node) && isCFG(node)) {
                 // iterate backwards so that the predecessor indexes in removePhiPredecessor are correct
                 for (int i = node.successors().size() - 1; i >= 0; i--) {
                     Node successor = node.successors().get(i);
-                    if (successor != Node.Null && flood.isMarked(successor)) {
+                    if (successor != Node.Null && worklist.isMarked(successor)) {
                         if (successor instanceof Merge) {
                             ((Merge) successor).removePhiPredecessor(node);
                         }
@@ -92,31 +90,30 @@ public class DeadCodeEliminationPhase extends Phase {
 
     private void deleteCFGNodes() {
         for (Node node : graph.getNodes()) {
-            if (node != Node.Null && !flood.isMarked(node) && isCFG(node)) {
+            if (node != Node.Null && !worklist.isMarked(node) && isCFG(node)) {
                 node.delete();
-                deletedNodeCount++;
             }
         }
     }
 
     private void iterateInputs() {
         for (Node node : graph.getNodes()) {
-            if (node != Node.Null && flood.isMarked(node)) {
+            if (node != Node.Null && worklist.isMarked(node)) {
                 for (Node input : node.inputs()) {
-                    flood.add(input);
+                    worklist.add(input);
                 }
             }
         }
-        for (Node current : flood) {
+        for (Node current : worklist) {
             for (Node input : current.inputs()) {
-                flood.add(input);
+                worklist.add(input);
             }
         }
     }
 
     private void disconnectNonCFGNodes() {
         for (Node node : graph.getNodes()) {
-            if (node != Node.Null && !flood.isMarked(node) && !isCFG(node)) {
+            if (node != Node.Null && !worklist.isMarked(node) && !isCFG(node)) {
                 node.inputs().clearAll();
             }
         }
@@ -124,9 +121,8 @@ public class DeadCodeEliminationPhase extends Phase {
 
     private void deleteNonCFGNodes() {
         for (Node node : graph.getNodes()) {
-            if (node != Node.Null && !flood.isMarked(node) && !isCFG(node)) {
+            if (node != Node.Null && !worklist.isMarked(node) && !isCFG(node)) {
                 node.delete();
-                deletedNodeCount++;
             }
         }
     }
