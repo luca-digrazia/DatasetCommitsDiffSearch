@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -68,6 +67,7 @@ import com.oracle.svm.core.heap.SubstrateReferenceMap;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.DynamicHubSupport;
 import com.oracle.svm.core.hub.LayoutEncoding;
+import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.HostedConfiguration;
 import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.base.NumUtil;
@@ -295,6 +295,42 @@ public class UniverseBuilder {
         hUniverse.fields.put(aField, hField);
     }
 
+    private static final Comparator<HostedType> TYPE_COMPARATOR = new Comparator<HostedType>() {
+
+        private int idx(HostedType t) {
+            if (t.isInterface()) {
+                return 4;
+            } else if (t.isArray()) {
+                return 3;
+            } else if (t.isInstanceClass()) {
+                return 2;
+            } else if (t.getJavaKind() != JavaKind.Object) {
+                return 1;
+            } else {
+                throw shouldNotReachHere();
+            }
+        }
+
+        @Override
+        public int compare(HostedType t1, HostedType t2) {
+            if (t1.equals(t2)) {
+                return 0;
+            }
+            int result = idx(t1) - idx(t2);
+            if (result == 0) {
+                if (t1.getJavaKind() != JavaKind.Object) {
+                    result = t1.getJavaKind().ordinal() - t2.getJavaKind().ordinal();
+                } else if (t1.isArray()) {
+                    result = compare(t1.getComponentType(), t2.getComponentType());
+                } else {
+                    result = t1.getName().compareTo(t2.getName());
+                }
+            }
+            assert result != 0 : "Types not distinguishable: " + t1 + ", " + t2;
+            return result;
+        }
+    };
+
     public static final Comparator<HostedMethod> METHOD_COMPARATOR = (m1, m2) -> {
         if (m1.equals(m2)) {
             return 0;
@@ -308,7 +344,7 @@ public class UniverseBuilder {
         int result = Boolean.compare(m1.compilationInfo.isDeoptTarget(), m2.compilationInfo.isDeoptTarget());
 
         if (result == 0) {
-            result = m1.getDeclaringClass().compareTo(m2.getDeclaringClass());
+            result = TYPE_COMPARATOR.compare(m1.getDeclaringClass(), m2.getDeclaringClass());
         }
         if (result == 0) {
             result = m1.getName().compareTo(m2.getName());
@@ -318,14 +354,14 @@ public class UniverseBuilder {
         }
         if (result == 0) {
             for (int i = 0; i < m1.getSignature().getParameterCount(false); i++) {
-                result = ((HostedType) m1.getSignature().getParameterType(i, null)).compareTo((HostedType) m2.getSignature().getParameterType(i, null));
+                result = TYPE_COMPARATOR.compare((HostedType) m1.getSignature().getParameterType(i, null), (HostedType) m2.getSignature().getParameterType(i, null));
                 if (result != 0) {
                     break;
                 }
             }
         }
         if (result == 0) {
-            result = ((HostedType) m1.getSignature().getReturnType(null)).compareTo((HostedType) m2.getSignature().getReturnType(null));
+            result = TYPE_COMPARATOR.compare((HostedType) m1.getSignature().getReturnType(null), (HostedType) m2.getSignature().getReturnType(null));
         }
         assert result != 0;
         return result;
@@ -365,7 +401,7 @@ public class UniverseBuilder {
         for (HostedType type : hUniverse.types.values()) {
             Set<HostedType> subTypesSet = allSubTypes.get(type);
             HostedType[] subTypes = subTypesSet.toArray(new HostedType[subTypesSet.size()]);
-            Arrays.sort(subTypes);
+            Arrays.sort(subTypes, TYPE_COMPARATOR);
             type.subTypes = subTypes;
         }
     }
@@ -648,26 +684,10 @@ public class UniverseBuilder {
 
         TypeState allSynchronizedTypeState = bb.getAllSynchronizedTypeState();
         for (AnalysisType aType : allSynchronizedTypeState.types()) {
-            if (canHaveMonitorFields(aType)) {
-                final HostedInstanceClass hostedInstanceClass = (HostedInstanceClass) hUniverse.lookup(aType);
-                hostedInstanceClass.setNeedMonitorField();
-            }
+            VMError.guarantee(aType.isInstanceClass(), "Synchronization on non-instance type: " + aType);
+            final HostedInstanceClass hostedInstanceClass = (HostedInstanceClass) hUniverse.lookup(aType);
+            hostedInstanceClass.setNeedMonitorField();
         }
-    }
-
-    private boolean canHaveMonitorFields(AnalysisType aType) {
-        if (aType.isArray()) {
-            /* Monitor fields on arrays would increase the array header too much. */
-            return false;
-        }
-        if (aType.equals(aMetaAccess.lookupJavaType(String.class)) || aType.equals(aMetaAccess.lookupJavaType(DynamicHub.class))) {
-            /*
-             * We want String and DynamicHub instances to be immutable so that they can be in the
-             * read-only part of the image heap.
-             */
-            return false;
-        }
-        return true;
     }
 
     /**
@@ -713,11 +733,13 @@ public class UniverseBuilder {
                 // All receiver types of a wait/notify call need the wait/notify field.
                 for (AnalysisType type : typesNeedWaitNotify) {
                     debug.log("type %s is a receiver for a wait/notify call", type);
-                    if (canHaveMonitorFields(type)) {
+                    if (type.isInstanceClass()) {
                         HostedInstanceClass hType = (HostedInstanceClass) hUniverse.lookup(type);
                         /* Wait and notify need a monitor and a condition. */
                         hType.setNeedMonitorField();
                         hType.setNeedWaitNotifyConditionField();
+                    } else {
+                        throw VMError.unsupportedFeature("wait/notify called on non-instance type: " + type.toJavaName(true));
                     }
                 }
             }
@@ -1248,8 +1270,8 @@ public class UniverseBuilder {
     private static boolean assertSame(Collection<HostedType> c1, Collection<HostedType> c2) {
         List<HostedType> list1 = new ArrayList<>(c1);
         List<HostedType> list2 = new ArrayList<>(c2);
-        Collections.sort(list1);
-        Collections.sort(list2);
+        list1.sort(TYPE_COMPARATOR);
+        list2.sort(TYPE_COMPARATOR);
 
         for (int i = 0; i < Math.min(list1.size(), list2.size()); i++) {
             assert list1.get(i) == list2.get(i);
