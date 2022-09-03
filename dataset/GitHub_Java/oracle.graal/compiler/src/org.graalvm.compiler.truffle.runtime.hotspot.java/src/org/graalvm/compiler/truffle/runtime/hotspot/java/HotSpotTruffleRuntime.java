@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.truffle.runtime.hotspot.java;
 
-import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -38,6 +37,7 @@ import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.options.OptionsParser;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
+import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.compiler.hotspot.HotSpotTruffleCompilerImpl;
 import org.graalvm.compiler.truffle.compiler.hotspot.HotSpotTruffleCompilerImpl.Options;
 import org.graalvm.compiler.truffle.runtime.hotspot.AbstractHotSpotTruffleRuntime;
@@ -77,6 +77,9 @@ final class HotSpotTruffleRuntime extends AbstractHotSpotTruffleRuntime {
         while (optionValues.advance()) {
             final OptionKey<?> key = optionValues.getKey();
             Object value = optionValues.getValue();
+            if (value == null) {
+                value = key.getDefaultValue();
+            }
             res.put(key.getName(), value);
         }
         return res;
@@ -84,7 +87,7 @@ final class HotSpotTruffleRuntime extends AbstractHotSpotTruffleRuntime {
 
     @Override
     protected String initLazyCompilerConfigurationName() {
-        final OptionValues options = getOptions(OptionValues.class);
+        final OptionValues options = TruffleCompilerOptions.getOptions();
         String factoryName = Options.TruffleCompilerConfiguration.getValue(options);
         CompilerConfigurationFactory compilerConfigurationFactory = CompilerConfigurationFactory.selectFactory(factoryName, options);
         return compilerConfigurationFactory.getName();
@@ -96,7 +99,7 @@ final class HotSpotTruffleRuntime extends AbstractHotSpotTruffleRuntime {
     }
 
     @Override
-    protected OutputStream getDefaultLogStream() {
-        return TTY.out;
+    public void log(String message) {
+        TTY.println(message);
     }
 }

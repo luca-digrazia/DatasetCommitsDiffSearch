@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,6 @@
 package org.graalvm.compiler.hotspot;
 
 import static jdk.vm.ci.common.InitTimer.timer;
-import static jdk.vm.ci.services.Services.IS_BUILDING_NATIVE_IMAGE;
 import static org.graalvm.compiler.hotspot.HotSpotGraalOptionValues.GRAAL_OPTION_PROPERTY_PREFIX;
 
 import java.io.PrintStream;
@@ -44,7 +43,6 @@ import jdk.vm.ci.hotspot.HotSpotJVMCICompilerFactory;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotSignature;
 import jdk.vm.ci.runtime.JVMCIRuntime;
-import jdk.vm.ci.services.Services;
 
 public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFactory {
 
@@ -71,7 +69,7 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
 
     @Override
     public void onSelection() {
-        JVMCIVersionCheck.check(Services.getSavedProperties(), false);
+        JVMCIVersionCheck.check(false);
         assert options == null : "cannot select " + getClass() + " service more than once";
         options = HotSpotGraalOptionValues.defaultOptions();
         initializeGraalCompilePolicyFields(options);
@@ -82,10 +80,6 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
          */
         adjustCompilationLevelInternal(Object.class, "hashCode", "()I", CompilationLevel.FullOptimization);
         adjustCompilationLevelInternal(Object.class, "hashCode", "()I", CompilationLevel.Simple);
-        if (IS_BUILDING_NATIVE_IMAGE) {
-            // Triggers initialization of all option descriptors
-            Options.CompileGraalWithC1Only.getName();
-        }
     }
 
     private static void initializeGraalCompilePolicyFields(OptionValues options) {
