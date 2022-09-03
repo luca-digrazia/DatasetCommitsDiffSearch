@@ -50,6 +50,7 @@ import com.oracle.truffle.llvm.parser.metadata.MDString;
 import com.oracle.truffle.llvm.parser.metadata.MDSubprogram;
 import com.oracle.truffle.llvm.parser.metadata.MDSubroutine;
 import com.oracle.truffle.llvm.parser.metadata.MDVoidNode;
+import com.oracle.truffle.llvm.parser.metadata.MetadataValueList;
 import com.oracle.truffle.llvm.parser.metadata.MetadataVisitor;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceFile;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
@@ -63,20 +64,39 @@ final class DIScopeExtractor {
 
     private final Map<MDBaseNode, LLVMSourceLocation> scopes = new HashMap<>();
 
-    private final ScopeVisitor extractor = new ScopeVisitor();
-    private final DITypeIdentifier typeIdentifier;
+    // linescopes cannot have locals and are usually specific to a function, this can be cleared
+    // after the function has been parsed
+    private final Map<MDBaseNode, LLVMSourceLocation> lineScopes = new HashMap<>();
 
-    DIScopeExtractor(DITypeIdentifier typeIdentifier) {
-        this.typeIdentifier = typeIdentifier;
+    private final ScopeVisitor extractor = new ScopeVisitor();
+    private final MetadataValueList metadata;
+
+    DIScopeExtractor(MetadataValueList metadata) {
+        this.metadata = metadata;
     }
 
     LLVMSourceLocation resolve(MDBaseNode node) {
         if (node == null || node == MDVoidNode.INSTANCE) {
             return null;
-        } else if (!scopes.containsKey(node)) {
-            node.accept(extractor);
         }
-        return scopes.get(node);
+
+        if (scopes.containsKey(node)) {
+            return scopes.get(node);
+        } else if (lineScopes.containsKey(node)) {
+            return lineScopes.get(node);
+        }
+
+        node.accept(extractor);
+
+        if (scopes.containsKey(node)) {
+            return scopes.get(node);
+        } else {
+            return lineScopes.get(node);
+        }
+    }
+
+    void clearLineScopes() {
+        lineScopes.clear();
     }
 
     private final class ScopeVisitor implements MetadataVisitor {
@@ -109,7 +129,7 @@ final class DIScopeExtractor {
                 return;
             }
 
-            final LLVMSourceLocation scope = new LLVMSourceLocation(kind, line, column);
+            final LLVMSourceLocation scope = LLVMSourceLocation.create(kind, line, column);
             scopes.put(scopeRef, scope);
 
             copyFile(scope, fileRef);
@@ -126,17 +146,17 @@ final class DIScopeExtractor {
 
         @Override
         public void visit(MDLocation md) {
-            if (scopes.containsKey(md)) {
+            if (lineScopes.containsKey(md)) {
                 return;
 
             } else if (md.getInlinedAt() != MDVoidNode.INSTANCE) {
                 final LLVMSourceLocation actualLoc = resolve(md.getInlinedAt());
-                scopes.put(md, actualLoc);
+                lineScopes.put(md, actualLoc);
                 return;
             }
 
-            final LLVMSourceLocation scope = new LLVMSourceLocation(Kind.LOCATION, md.getLine(), md.getColumn());
-            scopes.put(md, scope);
+            final LLVMSourceLocation scope = LLVMSourceLocation.create(Kind.LOCATION, md.getLine(), md.getColumn());
+            lineScopes.put(md, scope);
             linkToParent(scope, md.getScope());
         }
 
@@ -146,20 +166,11 @@ final class DIScopeExtractor {
                 return;
             }
 
-            final LLVMSourceLocation scope = new LLVMSourceLocation(Kind.FILE, DEFAULT_LINE, DEFAULT_COLUMN);
+            final LLVMSourceLocation scope = LLVMSourceLocation.create(Kind.FILE, DEFAULT_LINE, DEFAULT_COLUMN);
             scopes.put(md, scope);
 
-            String name = null;
-            final MDBaseNode nameRef = md.getFile();
-            if (nameRef instanceof MDString) {
-                name = ((MDString) nameRef).getString();
-            }
-
-            String directory = null;
-            final MDBaseNode dirRef = md.getDirectory();
-            if (dirRef instanceof MDString) {
-                directory = ((MDString) dirRef).getString();
-            }
+            final String name = MDString.getIfInstance(md.getFile());
+            final String directory = MDString.getIfInstance(md.getDirectory());
 
             scope.setFile(new LLVMSourceFile(name, directory));
         }
@@ -215,7 +226,7 @@ final class DIScopeExtractor {
                 return;
             }
 
-            final LLVMSourceLocation scope = new LLVMSourceLocation(Kind.COMPILEUNIT, DEFAULT_LINE, DEFAULT_COLUMN);
+            final LLVMSourceLocation scope = LLVMSourceLocation.create(Kind.COMPILEUNIT, DEFAULT_LINE, DEFAULT_COLUMN);
             scopes.put(md, scope);
 
             final MDBaseNode fileNode = md.getFile();
@@ -225,19 +236,15 @@ final class DIScopeExtractor {
 
             } else if (fileNode instanceof MDString) {
                 // old-format metadata
-                String file = ((MDString) fileNode).getString();
-                String directory = null;
-                final MDBaseNode dirNode = md.getDirectory();
-                if (dirNode instanceof MDString) {
-                    directory = ((MDString) dirNode).getString();
-                }
+                final String file = MDString.getIfInstance(fileNode);
+                final String directory = MDString.getIfInstance(md.getDirectory());
                 scope.setFile(new LLVMSourceFile(file, directory));
                 return;
             }
 
-            final MDBaseNode splitDbgFileName = md.getSplitdebugFilename();
-            if (splitDbgFileName instanceof MDString) {
-                scope.setFile(new LLVMSourceFile(((MDString) splitDbgFileName).getString(), null));
+            final String splitDbgFileName = MDString.getIfInstance(md.getSplitdebugFilename());
+            if (splitDbgFileName != null) {
+                scope.setFile(new LLVMSourceFile(splitDbgFileName, null));
             }
         }
 
@@ -256,7 +263,7 @@ final class DIScopeExtractor {
         @Override
         public void visit(MDGlobalVariable md) {
             MDBaseNode mdScope = md.getScope();
-            if (mdScope == MDReference.VOID) {
+            if (mdScope == MDVoidNode.INSTANCE) {
                 // in LLVM 3.2 metadata globals often do not have scopes attached, we fall back to
                 // the compileunit
                 mdScope = md.getCompileUnit();
@@ -287,14 +294,10 @@ final class DIScopeExtractor {
             }
 
             scopes.put(md, null);
-            final MDCompositeType ref = typeIdentifier.identify(md.getString());
+            final MDCompositeType ref = metadata.identifyType(md.getString());
             final LLVMSourceLocation scope = resolve(ref);
             scopes.put(ref, scope);
             scopes.put(md, scope);
-        }
-
-        @Override
-        public void ifVisitNotOverwritten(MDBaseNode md) {
         }
     }
 }

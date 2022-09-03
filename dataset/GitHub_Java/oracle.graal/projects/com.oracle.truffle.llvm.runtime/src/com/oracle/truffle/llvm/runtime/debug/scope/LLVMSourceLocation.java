@@ -29,90 +29,59 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.scope;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
 
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 
 public abstract class LLVMSourceLocation {
 
-    private static final int DEFAULT_SCOPE_CAPACITY = 2;
-
-    private static final SourceSection UNAVAILABLE_SECTION;
-
-    static {
-        final Source source = Source.newBuilder("Source unavailable!").name("<unavailable>").mimeType("text/plain").build();
-        UNAVAILABLE_SECTION = source.createUnavailableSection();
-    }
-
-    private static final List<LLVMSourceSymbol> NO_SYMBOLS = Collections.emptyList();
-
     public enum Kind {
         TYPE,
-        LINE,
+        LOCATION,
         MODULE,
         BLOCK,
         FUNCTION,
         NAMESPACE,
         COMPILEUNIT,
         FILE,
-        GLOBAL,
-        LOCAL,
+        SYMBOL,
         UNKNOWN;
     }
 
-    private final LLVMSourceLocation parent;
     private final Kind kind;
-    private final String name;
+    private final int line;
+    private final int column;
 
-    private LLVMSourceLocation(LLVMSourceLocation parent, Kind kind, String name) {
+    private String name = null;
+    private LLVMSourceLocation parent = null;
+    private LLVMSourceFile file = null;
+    private LLVMSourceLocation compileUnit = null;
+
+    private LLVMSourceLocation(Kind kind, long line, long column) {
+        this.kind = kind != null ? kind : Kind.UNKNOWN;
+        this.line = (int) line;
+        this.column = (int) column;
+    }
+
+    public abstract void addChild(LLVMSourceLocation child);
+
+    public abstract void addSymbol(LLVMSourceSymbol symbol);
+
+    public abstract boolean hasSymbols();
+
+    public abstract List<LLVMSourceSymbol> getSymbols();
+
+    public void setParent(LLVMSourceLocation parent) {
         this.parent = parent;
-        this.kind = kind;
-        this.name = name;
     }
 
     public LLVMSourceLocation getParent() {
         return parent;
-    }
-
-    public Kind getKind() {
-        return kind;
-    }
-
-    public abstract SourceSection getSourceSection();
-
-    public abstract String describeFile();
-
-    public abstract String describeLocation();
-
-    public void addSymbol(@SuppressWarnings("unused") LLVMSourceSymbol symbol) {
-    }
-
-    public boolean hasSymbols() {
-        return false;
-    }
-
-    public List<LLVMSourceSymbol> getSymbols() {
-        return NO_SYMBOLS;
-    }
-
-    public LLVMSourceLocation getCompileUnit() {
-        if (kind == Kind.COMPILEUNIT) {
-            return this;
-
-        } else if (parent != null) {
-            return parent.getCompileUnit();
-
-        } else {
-            return null;
-        }
     }
 
     @TruffleBoundary
@@ -127,11 +96,20 @@ public abstract class LLVMSourceLocation {
             }
 
             case FILE: {
-                return String.format("<%s>", describeFile());
+                final LLVMSourceFile sourceFile = getScopeFile(this);
+                if (sourceFile != null) {
+                    final Source source = sourceFile.toSource();
+                    if (source != null) {
+                        return source.getName();
+                    } else {
+                        return LLVMSourceFile.getSourceName(sourceFile);
+                    }
+                }
+                return "<file>";
             }
 
             case COMPILEUNIT:
-                return "<static>";
+                return "Static";
 
             case MODULE:
                 if (name != null) {
@@ -142,7 +120,7 @@ public abstract class LLVMSourceLocation {
 
             case FUNCTION: {
                 if (name != null) {
-                    return name;
+                    return "function " + name;
                 } else {
                     return "<function>";
                 }
@@ -151,8 +129,8 @@ public abstract class LLVMSourceLocation {
             case BLOCK:
                 return "<block>";
 
-            case LINE:
-                return String.format("<%s>", describeLocation());
+            case LOCATION:
+                return "<line " + line + ">";
 
             case TYPE: {
                 if (name != null) {
@@ -162,8 +140,7 @@ public abstract class LLVMSourceLocation {
                 }
             }
 
-            case GLOBAL:
-            case LOCAL:
+            case SYMBOL:
                 if (name != null) {
                     return name;
                 } else {
@@ -175,6 +152,122 @@ public abstract class LLVMSourceLocation {
         }
     }
 
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Kind getKind() {
+        return kind;
+    }
+
+    public void setFile(LLVMSourceFile file) {
+        this.file = file;
+    }
+
+    public void copyFile(LLVMSourceLocation source) {
+        final LLVMSourceFile newFile = getScopeFile(source);
+        if (newFile != null) {
+            setFile(newFile);
+        }
+    }
+
+    public LLVMSourceLocation getCompileUnit() {
+        return compileUnit;
+    }
+
+    public void setCompileUnit(LLVMSourceLocation compileUnit) {
+        this.compileUnit = compileUnit;
+    }
+
+    private SourceSection resolvedSection = null;
+
+    public SourceSection getSourceSection() {
+        return getSourceSection(false);
+    }
+
+    public SourceSection getSourceSection(boolean needsLength) {
+        if (resolvedSection != null) {
+            return resolvedSection;
+        }
+
+        buildSection(getScopeFile(this), needsLength);
+
+        return resolvedSection;
+    }
+
+    @TruffleBoundary
+    public LLVMSourceLocation findScope(SourceSection location) {
+        // this can only be the looked for scope if its source was resolved at least once
+        if (resolvedSection != null && resolvedSection.equals(location)) {
+            return this;
+        }
+
+        return null;
+    }
+
+    @TruffleBoundary
+    private Source getSource(LLVMSourceFile scopeFile) {
+        Source source = null;
+        if (scopeFile != null) {
+            source = scopeFile.toSource();
+        }
+
+        if (source != null) {
+            return source;
+        }
+
+        // build an empty source to at least preserve the information we have
+        int startLine = line >= 0 ? line : 1;
+        final StringBuilder builder = new StringBuilder();
+        for (int i = 1; i < startLine; i++) {
+            builder.append('\n');
+        }
+        for (int i = 0; i <= column; i++) {
+            builder.append(' ');
+        }
+        builder.append('\n');
+
+        final String fileName = LLVMSourceFile.getSourceName(scopeFile);
+        final String mimeType = LLVMSourceFile.getMimeType(fileName);
+        return Source.newBuilder(builder.toString()).mimeType(mimeType).name(fileName).build();
+    }
+
+    private void buildSection(LLVMSourceFile scopeFile, boolean needsLength) {
+        try {
+            final Source source = getSource(scopeFile);
+            if (source == null) {
+                return;
+
+            } else if (line <= 0) {
+                // this happens e.g. for functions implicitly generated by llvm in section
+                // '.text.startup'
+                resolvedSection = source.createSection(1);
+
+            } else if (column <= 0) {
+                // columns in llvm 3.2 metadata are usually always 0
+                resolvedSection = source.createSection(line);
+
+            } else {
+                resolvedSection = source.createSection(line, column, 0);
+            }
+
+            if (needsLength) {
+                final int length = source.getLength() - resolvedSection.getCharIndex();
+                resolvedSection = source.createSection(line, column, length);
+            }
+        } catch (Throwable ignored) {
+            // if the source file has changed since it was last compiled the line and column
+            // information in the metadata might not be accurate anymore
+        }
+    }
+
+    @Override
+    @TruffleBoundary
+    public String toString() {
+        final LLVMSourceFile sourceFile = getScopeFile(this);
+        return String.format("%s:%d:%d", sourceFile != null ? sourceFile : "<unavailable>", line, column);
+    }
+
     @Override
     @TruffleBoundary
     public boolean equals(Object o) {
@@ -182,219 +275,142 @@ public abstract class LLVMSourceLocation {
             return true;
         }
 
-        if (o instanceof LLVMSourceLocation) {
-            final LLVMSourceLocation that = (LLVMSourceLocation) o;
-
-            if (hasSymbols() != that.hasSymbols()) {
-                return false;
-            }
-
-            if (getKind() != that.getKind()) {
-                return false;
-            }
-
-            if (!Objects.equals(describeFile(), that.describeFile())) {
-                return false;
-            }
-
-            if (!Objects.equals(describeLocation(), that.describeLocation())) {
-                return false;
-            }
-
-            return Objects.equals(getParent(), that.getParent());
+        if (o == null || getClass() != o.getClass()) {
+            return false;
         }
 
-        return false;
+        final LLVMSourceLocation location = (LLVMSourceLocation) o;
+
+        if (line != location.line || column != location.column || kind != location.kind) {
+            return false;
+        }
+
+        if (!getName().equals(location.getName())) {
+            return false;
+        }
+
+        return file != null ? file.equals(location.file) : location.file == null;
     }
 
     @Override
+    @TruffleBoundary
     public int hashCode() {
-        int result = getKind().hashCode();
-        result = 31 * result + (getName() != null ? getName().hashCode() : 0);
+        int result = kind.hashCode();
+        result = 31 * result + line;
+        result = 31 * result + column;
+        result = 31 * result + (name != null ? name.hashCode() : 0);
         return result;
     }
 
-    private static class LineScope extends LLVMSourceLocation {
+    private static LLVMSourceFile getScopeFile(LLVMSourceLocation source) {
+        for (LLVMSourceLocation scope = source; scope != null; scope = scope.parent) {
+            if (scope.file != null) {
+                return scope.file;
+            }
+        }
+        return null;
+    }
 
-        private final SourceSection sourceSection;
+    private static final class FullScope extends LLVMSourceLocation {
 
-        LineScope(LLVMSourceLocation parent, Kind kind, String name, SourceSection sourceSection) {
-            super(parent, kind, name);
-            this.sourceSection = sourceSection;
+        private List<LLVMSourceLocation> children = null;
+        private List<LLVMSourceSymbol> symbols = null;
+
+        private FullScope(Kind kind, long line, long column) {
+            super(kind, line, column);
         }
 
-        @Override
-        public SourceSection getSourceSection() {
-            return sourceSection;
-        }
-
-        @Override
-        public String describeFile() {
-            return sourceSection.getSource().getName();
-        }
-
-        @Override
         @TruffleBoundary
-        public String describeLocation() {
-            final String sourceName = sourceSection.getSource().getName();
-            final int line = sourceSection.getStartLine();
-            final int col = sourceSection.getStartColumn();
-            final StringBuilder sb = new StringBuilder(sourceName);
-            if (sourceSection.isAvailable()) {
-                if (line >= 0) {
-                    sb.append(':').append(line);
-                    if (col >= 0) {
-                        sb.append(':').append(col);
+        @Override
+        public void addChild(LLVMSourceLocation child) {
+            if (child != null) {
+                if (children == null) {
+                    children = new LinkedList<>();
+                }
+                children.add(child);
+            }
+        }
+
+        @TruffleBoundary
+        @Override
+        public void addSymbol(LLVMSourceSymbol symbol) {
+            if (symbol != null) {
+                if (symbols == null) {
+                    symbols = new LinkedList<>();
+                }
+                symbols.add(symbol);
+            }
+        }
+
+        @TruffleBoundary
+        @Override
+        public boolean hasSymbols() {
+            return symbols != null && !symbols.isEmpty();
+        }
+
+        @TruffleBoundary
+        @Override
+        public List<LLVMSourceSymbol> getSymbols() {
+            if (symbols != null) {
+                return Collections.unmodifiableList(symbols);
+            } else {
+                return Collections.emptyList();
+            }
+        }
+
+        @Override
+        public LLVMSourceLocation findScope(SourceSection location) {
+            final LLVMSourceLocation superResult = super.findScope(location);
+            if (superResult != null) {
+                return superResult;
+            }
+
+            if (children != null) {
+                for (LLVMSourceLocation child : children) {
+                    final LLVMSourceLocation searchResult = child.findScope(location);
+                    if (searchResult != null) {
+                        return searchResult;
                     }
                 }
             }
-            return sb.toString();
+            return null;
         }
     }
 
-    private static class DefaultScope extends LineScope {
+    private static final class RestrictedScope extends LLVMSourceLocation {
 
-        @CompilationFinal private List<LLVMSourceSymbol> symbols;
-
-        DefaultScope(LLVMSourceLocation parent, Kind kind, String name, SourceSection sourceSection) {
-            super(parent, kind, name, sourceSection);
-            this.symbols = null;
+        private RestrictedScope(Kind kind, long line, long column) {
+            super(kind, line, column);
         }
 
-        @TruffleBoundary
+        @Override
+        public void addChild(LLVMSourceLocation child) {
+        }
+
         @Override
         public void addSymbol(LLVMSourceSymbol symbol) {
-            CompilerAsserts.neverPartOfCompilation("Source-Scope may only grow when parsing!");
-            if (symbols == null) {
-                symbols = new ArrayList<>(DEFAULT_SCOPE_CAPACITY);
-            }
-            symbols.add(symbol);
         }
 
-        @TruffleBoundary
         @Override
         public boolean hasSymbols() {
-            return symbols != null && !symbols.isEmpty();
+            return false;
         }
 
         @Override
+        @TruffleBoundary
         public List<LLVMSourceSymbol> getSymbols() {
-            return symbols != null ? symbols : NO_SYMBOLS;
+            return Collections.emptyList();
         }
     }
 
-    private static final class FunctionScope extends DefaultScope {
-
-        private final LLVMSourceLocation compileUnit;
-
-        FunctionScope(LLVMSourceLocation parent, Kind kind, String name, SourceSection sourceSection, LLVMSourceLocation compileUnit) {
-            super(parent, kind, name, sourceSection);
-            this.compileUnit = compileUnit;
-        }
-
-        @Override
-        @TruffleBoundary
-        public String describeLocation() {
-            return String.format("%s at %s", getName(), super.describeLocation());
-        }
-
-        @Override
-        public LLVMSourceLocation getCompileUnit() {
-            return compileUnit;
-        }
-    }
-
-    private static final class UnavailableScope extends LLVMSourceLocation {
-
-        private final String file;
-        private final int line;
-        private final int col;
-        @CompilationFinal private List<LLVMSourceSymbol> symbols;
-
-        UnavailableScope(LLVMSourceLocation parent, Kind kind, String name, String file, int line, int col) {
-            super(parent, kind, name);
-            this.file = file;
-            this.line = line;
-            this.col = col;
-            this.symbols = null;
-        }
-
-        @TruffleBoundary
-        @Override
-        public void addSymbol(LLVMSourceSymbol symbol) {
-            CompilerAsserts.neverPartOfCompilation("Source-Scope may only grow when parsing!");
-            if (symbols == null) {
-                symbols = new ArrayList<>(2);
-            }
-            symbols.add(symbol);
-        }
-
-        @TruffleBoundary
-        @Override
-        public boolean hasSymbols() {
-            return symbols != null && !symbols.isEmpty();
-        }
-
-        @Override
-        public List<LLVMSourceSymbol> getSymbols() {
-            return symbols != null ? symbols : NO_SYMBOLS;
-        }
-
-        @Override
-        public SourceSection getSourceSection() {
-            return UNAVAILABLE_SECTION;
-        }
-
-        @Override
-        public String describeFile() {
-            return file != null ? file : "<unavailable file>";
-        }
-
-        @TruffleBoundary
-        @Override
-        public String describeLocation() {
-            final StringBuilder sb = new StringBuilder(describeFile());
-            if (line >= 0) {
-                sb.append(':').append(line);
-                if (col >= 0) {
-                    sb.append(':').append(col);
-                }
-            }
-            return sb.toString();
-        }
-
-    }
-
-    public static LLVMSourceLocation create(LLVMSourceLocation parent, LLVMSourceLocation.Kind kind, String name, SourceSection sourceSection, LLVMSourceLocation compileUnit) {
-        assert sourceSection != null;
-
+    public static LLVMSourceLocation create(Kind kind, long line, long column) {
         switch (kind) {
-            case LINE:
-            case GLOBAL:
-            case LOCAL:
-                return new LineScope(parent, kind, name, sourceSection);
-
-            case FUNCTION:
-                if (compileUnit != null) {
-                    return new FunctionScope(parent, kind, name, sourceSection, compileUnit);
-                } else {
-                    return new DefaultScope(parent, kind, name, sourceSection);
-                }
+            case LOCATION:
+            case SYMBOL:
+                return new RestrictedScope(kind, line, column);
 
             default:
-                return new DefaultScope(parent, kind, name, sourceSection);
+                return new FullScope(kind, line, column);
         }
-    }
-
-    public static LLVMSourceLocation createUnavailable(LLVMSourceLocation.Kind kind, String name, String file, int line, int col) {
-        return new UnavailableScope(null, kind, name, file, line, col);
-    }
-
-    public static LLVMSourceLocation createBitcodeFunction(String name, SourceSection simpleSection) {
-        return new DefaultScope(null, Kind.FUNCTION, name, simpleSection);
-    }
-
-    public static LLVMSourceLocation createUnknown(SourceSection sourceSection) {
-        return new LineScope(null, Kind.UNKNOWN, "<unknown>", sourceSection != null ? sourceSection : UNAVAILABLE_SECTION);
     }
 }
