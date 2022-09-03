@@ -22,22 +22,14 @@
  */
 package com.oracle.graal.nodes.debug;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_20;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_10;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * This node can be used to add a counter to the code that will estimate the dynamic number of calls
@@ -47,7 +39,7 @@ import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
  * A unique counter will be created for each unique name passed to the constructor. Depending on the
  * value of withContext, the name of the root method is added to the counter's name.
  */
-@NodeInfo(size = SIZE_10, cycles = CYCLES_20)
+@NodeInfo
 public class DynamicCounterNode extends FixedWithNextNode implements LIRLowerable {
 
     public static final NodeClass<DynamicCounterNode> TYPE = NodeClass.create(DynamicCounterNode.class);
@@ -93,7 +85,6 @@ public class DynamicCounterNode extends FixedWithNextNode implements LIRLowerabl
     @NodeIntrinsic
     public static native void counter(@ConstantNodeParameter String name, @ConstantNodeParameter String group, long increment, @ConstantNodeParameter boolean addContext);
 
-    @Override
     public void generate(NodeLIRBuilderTool generator) {
         LIRGeneratorTool lirGen = generator.getLIRGeneratorTool();
         String nameWithContext;
@@ -118,7 +109,7 @@ public class DynamicCounterNode extends FixedWithNextNode implements LIRLowerabl
         if (counterOp != null) {
             lirGen.append(counterOp);
         } else {
-            throw GraalError.unimplemented("Benchmark counters not enabled or not implemented by the back end.");
+            throw GraalInternalError.unimplemented("Benchmark counters not enabled or not implemented by the back end.");
         }
     }
 
