@@ -37,7 +37,7 @@ public class Parser {
 	public static final int _identifier = 1;
 	public static final int _stringLiteral = 2;
 	public static final int _numericLiteral = 3;
-	public static final int maxT = 29;
+	public static final int maxT = 28;
 
     static final boolean T = true;
     static final boolean x = false;
@@ -49,9 +49,9 @@ public class Parser {
 
     public final Scanner scanner;
     public final Errors errors;
-    private final SLNodeFactory factory;
+    private final NodeFactory factory;
     
-    public Parser(Scanner scanner, SLNodeFactory factory) {
+    public Parser(Scanner scanner, NodeFactory factory) {
         this.scanner = scanner;
         this.factory = factory;
         errors = new Errors();
@@ -133,33 +133,19 @@ public class Parser {
 		factory.startFunction(); 
 		Expect(1);
 		String name = t.val; 
-		List<String> parameterNames = new ArrayList<>(); 
-		if (la.kind == 5) {
-			Get();
-			if (la.kind == 1) {
-				Get();
-				parameterNames.add(t.val); 
-			}
-			while (la.kind == 6) {
-				Get();
-				Expect(1);
-				parameterNames.add(t.val); 
-			}
-			Expect(7);
-		}
 		StatementNode body = Block();
-		factory.createFunction(body, name, parameterNames.toArray(new String[parameterNames.size()])); 
+		factory.createFunction(body, name); 
 	}
 
 	StatementNode  Block() {
 		StatementNode  result;
 		List<StatementNode> statements = new ArrayList<>(); 
-		Expect(8);
+		Expect(5);
 		while (StartOf(1)) {
 			StatementNode statement = Statement();
 			statements.add(statement); 
 		}
-		Expect(9);
+		Expect(6);
 		result = factory.createBlock(statements); 
 		return result;
 	}
@@ -167,51 +153,58 @@ public class Parser {
 	StatementNode  Statement() {
 		StatementNode  result;
 		result = null; 
-		if (la.kind == 13) {
+		if (la.kind == 7) {
 			result = WhileStatement();
-		} else if (la.kind == 11) {
-			result = IfStatement();
-		} else if (la.kind == 14) {
+		} else if (la.kind == 1) {
+			result = AssignmentStatement();
+		} else if (la.kind == 12) {
+			result = OutputStatement();
+		} else if (la.kind == 13) {
 			result = ReturnStatement();
-		} else if (StartOf(2)) {
-			result = Expression();
-			Expect(10);
-		} else SynErr(30);
+		} else SynErr(29);
 		return result;
 	}
 
 	StatementNode  WhileStatement() {
 		StatementNode  result;
-		Expect(13);
-		Expect(5);
-		ConditionNode condition = Expression();
 		Expect(7);
+		Expect(8);
+		ConditionNode condition = Expression();
+		Expect(9);
 		StatementNode body = Block();
 		result = factory.createWhile(condition, body); 
 		return result;
 	}
 
-	StatementNode  IfStatement() {
+	StatementNode  AssignmentStatement() {
 		StatementNode  result;
+		Expect(1);
+		String name = t.val; 
+		Expect(10);
+		TypedNode rvalue = Expression();
 		Expect(11);
-		Expect(5);
-		ConditionNode condition = Expression();
-		Expect(7);
-		StatementNode thenNode = null; StatementNode elseNode = null; 
-		thenNode = Block();
-		if (la.kind == 12) {
-			Get();
-			elseNode = Block();
+		result = factory.createAssignment(name, rvalue); 
+		return result;
+	}
+
+	StatementNode  OutputStatement() {
+		StatementNode  result;
+		List<TypedNode> expressions = new ArrayList<>(); 
+		Expect(12);
+		while (StartOf(2)) {
+			TypedNode value = Expression();
+			expressions.add(value); 
 		}
-		result = factory.createIf(condition, thenNode, elseNode); 
+		Expect(11);
+		result = factory.createPrint(expressions); 
 		return result;
 	}
 
 	StatementNode  ReturnStatement() {
 		StatementNode  result;
-		Expect(14);
+		Expect(13);
 		TypedNode value = Expression();
-		Expect(10);
+		Expect(11);
 		result = factory.createReturn(value); 
 		return result;
 	}
@@ -221,6 +214,10 @@ public class Parser {
 		result = ValueExpression();
 		if (StartOf(3)) {
 			switch (la.kind) {
+			case 14: {
+				Get();
+				break;
+			}
 			case 15: {
 				Get();
 				break;
@@ -241,10 +238,6 @@ public class Parser {
 				Get();
 				break;
 			}
-			case 20: {
-				Get();
-				break;
-			}
 			}
 			String op = t.val; 
 			TypedNode right = ValueExpression();
@@ -256,8 +249,8 @@ public class Parser {
 	TypedNode  ValueExpression() {
 		TypedNode  result;
 		result = Term();
-		while (la.kind == 21 || la.kind == 22) {
-			if (la.kind == 21) {
+		while (la.kind == 20 || la.kind == 21) {
+			if (la.kind == 20) {
 				Get();
 			} else {
 				Get();
@@ -272,8 +265,8 @@ public class Parser {
 	TypedNode  Term() {
 		TypedNode  result;
 		result = Factor();
-		while (la.kind == 23 || la.kind == 24) {
-			if (la.kind == 23) {
+		while (la.kind == 22 || la.kind == 23) {
+			if (la.kind == 22) {
 				Get();
 			} else {
 				Get();
@@ -288,35 +281,49 @@ public class Parser {
 	TypedNode  Factor() {
 		TypedNode  result;
 		result = null; 
-		if (la.kind == 1) {
-			result = VariableRefOrCall();
-		} else if (la.kind == 2) {
+		switch (la.kind) {
+		case 27: {
+			result = TimeRef();
+			break;
+		}
+		case 1: {
+			result = VariableRef();
+			break;
+		}
+		case 2: {
 			result = StringLiteral();
-		} else if (la.kind == 3) {
+			break;
+		}
+		case 3: {
 			result = NumericLiteral();
-		} else if (la.kind == 25) {
+			break;
+		}
+		case 24: {
 			result = Ternary();
-		} else if (la.kind == 5) {
+			break;
+		}
+		case 8: {
 			Get();
 			result = Expression();
-			Expect(7);
-		} else SynErr(31);
+			Expect(9);
+			break;
+		}
+		default: SynErr(30); break;
+		}
 		return result;
 	}
 
-	TypedNode  VariableRefOrCall() {
+	TypedNode  TimeRef() {
 		TypedNode  result;
-		result = VariableRef();
-		if (la.kind == 5 || la.kind == 28) {
-			if (la.kind == 5) {
-				TypedNode[] parameters = Parameters();
-				result = factory.createCall(result, parameters); 
-			} else {
-				Get();
-				TypedNode assignment = Expression();
-				result = factory.createAssignment(result, assignment); 
-			}
-		}
+		Expect(27);
+		result = factory.createTime(); 
+		return result;
+	}
+
+	TypedNode  VariableRef() {
+		TypedNode  result;
+		Expect(1);
+		result = factory.createLocal(t.val); 
 		return result;
 	}
 
@@ -337,38 +344,13 @@ public class Parser {
 	TypedNode  Ternary() {
 		TypedNode  result;
 		TypedNode condition, thenPart, elsePart; 
-		Expect(25);
+		Expect(24);
 		condition = Expression();
-		Expect(26);
+		Expect(25);
 		thenPart = Expression();
-		Expect(27);
+		Expect(26);
 		elsePart = Expression();
 		result = factory.createTernary(condition, thenPart, elsePart); 
-		return result;
-	}
-
-	TypedNode  VariableRef() {
-		TypedNode  result;
-		Expect(1);
-		result = factory.createLocal(t.val); 
-		return result;
-	}
-
-	TypedNode[]  Parameters() {
-		TypedNode[]  result;
-		Expect(5);
-		List<TypedNode> parameters = new ArrayList<>(); 
-		if (StartOf(2)) {
-			TypedNode e1 = Expression();
-			parameters.add(e1); 
-			while (la.kind == 6) {
-				Get();
-				TypedNode e2 = Expression();
-				parameters.add(e2); 
-			}
-		}
-		result = parameters.toArray(new TypedNode[parameters.size()]); 
-		Expect(7);
 		return result;
 	}
 
@@ -384,10 +366,10 @@ public class Parser {
     }
 
     private static final boolean[][] set = {
-		{T,x,x,x, x,x,x,x, x,x,x,x, x,x,x,x, x,x,x,x, x,x,x,x, x,x,x,x, x,x,x},
-		{x,T,T,T, x,T,x,x, x,x,x,T, x,T,T,x, x,x,x,x, x,x,x,x, x,T,x,x, x,x,x},
-		{x,T,T,T, x,T,x,x, x,x,x,x, x,x,x,x, x,x,x,x, x,x,x,x, x,T,x,x, x,x,x},
-		{x,x,x,x, x,x,x,x, x,x,x,x, x,x,x,T, T,T,T,T, T,x,x,x, x,x,x,x, x,x,x}
+		{T,x,x,x, x,x,x,x, x,x,x,x, x,x,x,x, x,x,x,x, x,x,x,x, x,x,x,x, x,x},
+		{x,T,x,x, x,x,x,T, x,x,x,x, T,T,x,x, x,x,x,x, x,x,x,x, x,x,x,x, x,x},
+		{x,T,T,T, x,x,x,x, T,x,x,x, x,x,x,x, x,x,x,x, x,x,x,x, T,x,x,T, x,x},
+		{x,x,x,x, x,x,x,x, x,x,x,x, x,x,T,T, T,T,T,T, x,x,x,x, x,x,x,x, x,x}
 
     };
 
@@ -441,33 +423,32 @@ class Errors {
 			case 2: s = "stringLiteral expected"; break;
 			case 3: s = "numericLiteral expected"; break;
 			case 4: s = "\"function\" expected"; break;
-			case 5: s = "\"(\" expected"; break;
-			case 6: s = "\",\" expected"; break;
-			case 7: s = "\")\" expected"; break;
-			case 8: s = "\"{\" expected"; break;
-			case 9: s = "\"}\" expected"; break;
-			case 10: s = "\";\" expected"; break;
-			case 11: s = "\"if\" expected"; break;
-			case 12: s = "\"else\" expected"; break;
-			case 13: s = "\"while\" expected"; break;
-			case 14: s = "\"return\" expected"; break;
-			case 15: s = "\"<\" expected"; break;
-			case 16: s = "\">\" expected"; break;
-			case 17: s = "\"<=\" expected"; break;
-			case 18: s = "\">=\" expected"; break;
-			case 19: s = "\"==\" expected"; break;
-			case 20: s = "\"!=\" expected"; break;
-			case 21: s = "\"+\" expected"; break;
-			case 22: s = "\"-\" expected"; break;
-			case 23: s = "\"*\" expected"; break;
-			case 24: s = "\"/\" expected"; break;
-			case 25: s = "\"#\" expected"; break;
-			case 26: s = "\"?\" expected"; break;
-			case 27: s = "\":\" expected"; break;
-			case 28: s = "\"=\" expected"; break;
-			case 29: s = "??? expected"; break;
-			case 30: s = "invalid Statement"; break;
-			case 31: s = "invalid Factor"; break;
+			case 5: s = "\"{\" expected"; break;
+			case 6: s = "\"}\" expected"; break;
+			case 7: s = "\"while\" expected"; break;
+			case 8: s = "\"(\" expected"; break;
+			case 9: s = "\")\" expected"; break;
+			case 10: s = "\"=\" expected"; break;
+			case 11: s = "\";\" expected"; break;
+			case 12: s = "\"print\" expected"; break;
+			case 13: s = "\"return\" expected"; break;
+			case 14: s = "\"<\" expected"; break;
+			case 15: s = "\">\" expected"; break;
+			case 16: s = "\"<=\" expected"; break;
+			case 17: s = "\">=\" expected"; break;
+			case 18: s = "\"==\" expected"; break;
+			case 19: s = "\"!=\" expected"; break;
+			case 20: s = "\"+\" expected"; break;
+			case 21: s = "\"-\" expected"; break;
+			case 22: s = "\"*\" expected"; break;
+			case 23: s = "\"/\" expected"; break;
+			case 24: s = "\"#\" expected"; break;
+			case 25: s = "\"?\" expected"; break;
+			case 26: s = "\":\" expected"; break;
+			case 27: s = "\"time\" expected"; break;
+			case 28: s = "??? expected"; break;
+			case 29: s = "invalid Statement"; break;
+			case 30: s = "invalid Factor"; break;
             default:
                 s = "error " + n;
                 break;

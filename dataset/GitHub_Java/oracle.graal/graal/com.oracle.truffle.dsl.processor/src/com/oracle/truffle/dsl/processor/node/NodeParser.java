@@ -205,7 +205,6 @@ public class NodeParser extends TemplateParser<NodeData> {
 
             finalizeSpecializations(elements, splittedNode);
             verifyNode(splittedNode, elements);
-            expandExecutableTypeVarArgs(splittedNode);
             createPolymorphicSpecializations(splittedNode);
             assignShortCircuitsToSpecializations(splittedNode);
         }
@@ -216,26 +215,6 @@ public class NodeParser extends TemplateParser<NodeData> {
             node.setSpecializations(new ArrayList<SpecializationData>());
         }
         return node;
-    }
-
-    private static void expandExecutableTypeVarArgs(NodeData node) {
-        for (ExecutableTypeData executableMethod : node.getExecutableTypes()) {
-            if (!(executableMethod.getMethod().isVarArgs() && executableMethod.getSpecification().isVariableRequiredArguments())) {
-                continue;
-            }
-            int expandArguments = node.getSignatureSize() - executableMethod.getSignatureSize();
-            if (expandArguments > 0) {
-                int signatureSize = executableMethod.getSignatureSize();
-                ActualParameter parameter = executableMethod.getSignatureParameter(signatureSize - 1);
-                for (int i = 0; i < expandArguments; i++) {
-                    int newVarArgsIndex = parameter.getVarArgsIndex() + i + 1;
-                    int newSpecificationIndex = parameter.getSpecificationIndex() + i + 1;
-                    executableMethod.getParameters().add(
-                                    new ActualParameter(parameter.getSpecification(), parameter.getTypeSystemType(), newSpecificationIndex, newVarArgsIndex, parameter.isImplicit()));
-                }
-
-            }
-        }
     }
 
     private void createPolymorphicSpecializations(NodeData node) {
@@ -684,7 +663,7 @@ public class NodeParser extends TemplateParser<NodeData> {
 
         // calculate reachability
         SpecializationData prev = null;
-        int polymorphicCombinations = 0;
+        int specializationCount = 0;
         boolean reachable = true;
         for (SpecializationData specialization : specializations) {
             if (specialization.isUninitialized()) {
@@ -701,23 +680,14 @@ public class NodeParser extends TemplateParser<NodeData> {
                 reachable = false;
             }
             if (!specialization.isGeneric()) {
-                int combinations = 1;
-                for (ActualParameter parameter : specialization.getParameters()) {
-                    if (!parameter.getSpecification().isSignature()) {
-                        continue;
-                    }
-                    TypeData type = parameter.getTypeSystemType();
-                    combinations *= node.getTypeSystem().lookupSourceTypes(type).size();
-                }
-                polymorphicCombinations += combinations;
+                specializationCount++;
             }
-
             prev = specialization;
         }
 
         // initialize polymorphic depth
         if (node.getPolymorphicDepth() < 0) {
-            node.setPolymorphicDepth(polymorphicCombinations - 1);
+            node.setPolymorphicDepth(specializationCount - 1);
         }
 
         // reduce polymorphicness if generic is not reachable
