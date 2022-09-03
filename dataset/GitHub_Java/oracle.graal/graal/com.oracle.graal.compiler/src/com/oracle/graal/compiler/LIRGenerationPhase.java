@@ -22,23 +22,21 @@
  */
 package com.oracle.graal.compiler;
 
-import static com.oracle.graal.compiler.common.BackendOptions.ConstructionSSAlirDuringLirBuilding;
+import static com.oracle.graal.compiler.common.BackendOptions.*;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.TargetDescription;
+import jdk.internal.jvmci.code.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-import com.oracle.graal.lir.phases.LIRPhase;
-import com.oracle.graal.lir.ssa.SSAUtil;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.lir.ssa.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.schedule.*;
 
 public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGenerationContext> {
 
@@ -46,9 +44,9 @@ public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGeneratio
         private final NodeLIRBuilderTool nodeLirBuilder;
         private final LIRGeneratorTool lirGen;
         private final StructuredGraph graph;
-        private final ScheduleResult schedule;
+        private final SchedulePhase schedule;
 
-        public LIRGenerationContext(LIRGeneratorTool lirGen, NodeLIRBuilderTool nodeLirBuilder, StructuredGraph graph, ScheduleResult schedule) {
+        public LIRGenerationContext(LIRGeneratorTool lirGen, NodeLIRBuilderTool nodeLirBuilder, StructuredGraph graph, SchedulePhase schedule) {
             this.nodeLirBuilder = nodeLirBuilder;
             this.lirGen = lirGen;
             this.graph = graph;
@@ -61,12 +59,12 @@ public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGeneratio
                     LIRGenerationPhase.LIRGenerationContext context) {
         NodeLIRBuilderTool nodeLirBuilder = context.nodeLirBuilder;
         StructuredGraph graph = context.graph;
-        ScheduleResult schedule = context.schedule;
+        SchedulePhase schedule = context.schedule;
         for (B b : linearScanOrder) {
             emitBlock(nodeLirBuilder, lirGenRes, (Block) b, graph, schedule.getBlockToNodesMap());
         }
         context.lirGen.beforeRegisterAllocation();
-        assert !ConstructionSSAlirDuringLirBuilding.getValue() || SSAUtil.verifySSAForm(lirGenRes.getLIR());
+        assert !ConstructionSSAlirDuringLirBuilding.getValue() || SSAUtils.verifySSAForm(lirGenRes.getLIR());
     }
 
     private static void emitBlock(NodeLIRBuilderTool nodeLirGen, LIRGenerationResult lirGenRes, Block b, StructuredGraph graph, BlockMap<List<Node>> blockMap) {

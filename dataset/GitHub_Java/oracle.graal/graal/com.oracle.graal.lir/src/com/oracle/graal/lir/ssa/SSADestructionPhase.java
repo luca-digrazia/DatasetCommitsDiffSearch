@@ -24,23 +24,14 @@ package com.oracle.graal.lir.ssa;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
+import jdk.internal.jvmci.code.*;
+
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.JumpOp;
-import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.phases.*;
-import com.oracle.graal.options.*;
 
 public final class SSADestructionPhase extends PreAllocationOptimizationPhase {
-
-    public static class Options {
-        // @formatter:off
-        @Option(help = "Destruct SSA LIR eagerly (before other LIR phases).", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LIREagerSSADestruction = new OptionValue<>(true);
-        // @formatter:on
-    }
 
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, LIRGeneratorTool lirGen) {
@@ -53,20 +44,19 @@ public final class SSADestructionPhase extends PreAllocationOptimizationPhase {
 
     private static void doBlock(AbstractBlockBase<?> block, LIR lir, LIRGeneratorTool lirGen) {
         if (block.getPredecessorCount() > 1) {
-            LabelOp label = (LabelOp) lir.getLIRforBlock(block).get(0);
             for (AbstractBlockBase<?> pred : block.getPredecessors()) {
 
                 List<LIRInstruction> instructions = lir.getLIRforBlock(pred);
-                int insertBefore = instructions.size() - 1;
-                JumpOp jump = (JumpOp) instructions.get(insertBefore);
+
+                int insertBefore = SSAUtils.phiOutIndex(lir, pred);
 
                 PhiResolver resolver = PhiResolver.create(lirGen, new LIRInsertionBuffer(), instructions, insertBefore);
                 SSAUtils.forEachPhiValuePair(lir, block, pred, resolver::move);
                 resolver.dispose();
 
-                jump.clearOutgoingValues();
+                SSAUtils.removePhiOut(lir, pred);
             }
-            label.clearIncomingValues();
+            SSAUtils.removePhiIn(lir, block);
         }
     }
 

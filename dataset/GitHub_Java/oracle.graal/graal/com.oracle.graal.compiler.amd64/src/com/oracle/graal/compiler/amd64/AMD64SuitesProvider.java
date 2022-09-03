@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,23 @@
  */
 package com.oracle.graal.compiler.amd64;
 
-import com.oracle.graal.java.DefaultSuitesProvider;
-import com.oracle.graal.lir.amd64.phases.StackMoveOptimizationPhase;
-import com.oracle.graal.lir.phases.LIRSuites;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.phases.tiers.CompilerConfiguration;
+import static com.oracle.graal.compiler.common.BackendOptions.*;
+
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.java.*;
+import com.oracle.graal.lir.amd64.phases.*;
+import com.oracle.graal.lir.phases.*;
 
 public class AMD64SuitesProvider extends DefaultSuitesProvider {
 
-    public AMD64SuitesProvider(CompilerConfiguration compilerConfiguration, Plugins plugins) {
-        super(compilerConfiguration, plugins);
+    public AMD64SuitesProvider(Plugins plugins) {
+        super(plugins);
     }
 
     @Override
     public LIRSuites createLIRSuites() {
         LIRSuites lirSuites = super.createLIRSuites();
-        if (StackMoveOptimizationPhase.Options.LIROptStackMoveOptimizer.getValue()) {
+        if (StackMoveOptimizationPhase.Options.LIROptStackMoveOptimizer.getValue() && ShouldOptimizeStackToStackMoves.getValue()) {
             /* Note: this phase must be inserted <b>after</b> RedundantMoveElimination */
             lirSuites.getPostAllocationOptimizationStage().appendPhase(new StackMoveOptimizationPhase());
         }

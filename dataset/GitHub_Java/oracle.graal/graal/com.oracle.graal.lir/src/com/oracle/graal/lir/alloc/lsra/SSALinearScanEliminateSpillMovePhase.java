@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.compiler.common.BackendOptions.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import com.oracle.graal.debug.*;
 
 import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.*;
-import com.oracle.graal.lir.ssa.*;
+import com.oracle.graal.lir.StandardOp.LabelOp;
+import com.oracle.graal.lir.StandardOp.MoveOp;
 
 public class SSALinearScanEliminateSpillMovePhase extends LinearScanEliminateSpillMovePhase {
 
@@ -45,38 +45,23 @@ public class SSALinearScanEliminateSpillMovePhase extends LinearScanEliminateSpi
     }
 
     @Override
-    protected void beforeSpillMoveElimination() {
-        /*
-         * PHI Ins are needed for the RegisterVerifier, otherwise PHIs where the Out and In value
-         * matches (ie. there is no resolution move) are falsely detected as errors.
-         */
-        try (Scope s1 = Debug.scope("Remove Phi In")) {
-            for (AbstractBlockBase<?> toBlock : allocator.sortedBlocks) {
-                if (toBlock.getPredecessorCount() > 1) {
-                    SSAUtils.removePhiIn(allocator.ir, toBlock);
-                }
-            }
-        }
-    }
-
-    @Override
     protected boolean canEliminateSpillMove(AbstractBlockBase<?> block, MoveOp move) {
-        // SSA Linear Scan might introduce moves to stack slots
-        assert isVariable(move.getResult()) || LinearScanPhase.SSA_LSRA.getValue() : "Move should not be produced in a non-SSA compilation: " + move;
+        assert isVariable(move.getResult()) || LinearScanVariant.getValue() == LSRAVariant.SSA_LSRA : "Move should not be produced in a non-SSA compilation: " + move;
 
-        Interval curInterval = allocator.intervalFor(move.getResult());
-
-        if (!isRegister(curInterval.location()) && curInterval.alwaysInMemory() && !isPhiResolutionMove(block, move, curInterval)) {
-            assert isStackSlotValue(curInterval.location()) : "Not a stack slot: " + curInterval.location();
-            return true;
+        if (super.canEliminateSpillMove(block, move)) {
+            // SSA Linear Scan might introduce moves to stack slots
+            Interval curInterval = allocator.intervalFor(move.getResult());
+            assert !isRegister(curInterval.location()) && curInterval.alwaysInMemory();
+            if (!isPhiResolutionMove(block, move, curInterval)) {
+                assert isStackSlotValue(curInterval.location()) : "Not a stack slot: " + curInterval.location();
+                return true;
+            }
         }
         return false;
     }
 
     private boolean isPhiResolutionMove(AbstractBlockBase<?> block, MoveOp move, Interval toInterval) {
-        if (!LinearScanPhase.SSA_LSRA.getValue()) {
-            return false;
-        }
+        assert LinearScanVariant.getValue() == LSRAVariant.SSA_LSRA;
         if (!toInterval.isSplitParent()) {
             return false;
         }
