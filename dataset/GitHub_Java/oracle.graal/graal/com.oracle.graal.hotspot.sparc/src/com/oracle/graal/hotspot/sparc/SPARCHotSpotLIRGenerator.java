@@ -368,18 +368,28 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     @Override
     public LIRInstruction createBenchmarkCounter(String name, String group, Value increment) {
         if (BenchmarkCounters.enabled) {
-            return new SPARCHotSpotCounterOp(name, group, increment, getProviders().getRegisters(), config);
-        } else {
-            return null;
+            try (SPARCScratchRegister sc0 = SPARCScratchRegister.get()) {
+                RegisterValue scratch0 = sc0.getRegister().asValue(getLIRKindTool().getWordKind());
+                try (SPARCScratchRegister sc1 = SPARCScratchRegister.get()) {
+                    RegisterValue scratch1 = sc1.getRegister().asValue(getLIRKindTool().getWordKind());
+                    return new SPARCHotSpotCounterOp(name, group, increment, getProviders().getRegisters(), config, scratch0, scratch1);
+                }
+            }
         }
+        return null;
     }
 
     @Override
     public LIRInstruction createMultiBenchmarkCounter(String[] names, String[] groups, Value[] increments) {
         if (BenchmarkCounters.enabled) {
-            return new SPARCHotSpotCounterOp(names, groups, increments, getProviders().getRegisters(), config);
-        } else {
-            return null;
+            try (SPARCScratchRegister sc0 = SPARCScratchRegister.get()) {
+                RegisterValue scratch0 = sc0.getRegister().asValue(getLIRKindTool().getWordKind());
+                try (SPARCScratchRegister sc1 = SPARCScratchRegister.get()) {
+                    RegisterValue scratch1 = sc1.getRegister().asValue(getLIRKindTool().getWordKind());
+                    return new SPARCHotSpotCounterOp(names, groups, increments, getProviders().getRegisters(), config, scratch0, scratch1);
+                }
+            }
         }
+        return null;
     }
 }
