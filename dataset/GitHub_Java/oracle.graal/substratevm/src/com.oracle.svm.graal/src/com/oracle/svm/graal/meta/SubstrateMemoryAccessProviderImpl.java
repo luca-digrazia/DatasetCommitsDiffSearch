@@ -22,6 +22,12 @@
  */
 package com.oracle.svm.graal.meta;
 
+import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
+import static com.oracle.svm.core.util.VMError.unimplemented;
+
+import com.oracle.svm.core.config.ConfigurationValues;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 import org.graalvm.compiler.word.BarrieredAccess;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Platform;
@@ -30,18 +36,14 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.SignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.graal.meta.SubstrateMemoryAccessProvider;
 import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
-import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.PrimitiveConstant;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryAccessProvider {
 
@@ -101,7 +103,7 @@ public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryA
 
     private static void checkRead(JavaKind kind, long displacement, ResolvedJavaType type, Object object) {
         if (kind != JavaKind.Object) {
-            throw VMError.unimplemented();
+            throw unimplemented();
         }
 
         if (type.isArray()) {
@@ -153,7 +155,7 @@ public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryA
                     rawValue = BarrieredAccess.readLong(baseObject, offset);
                     break;
                 default:
-                    throw VMError.shouldNotReachHere();
+                    throw shouldNotReachHere();
             }
 
         } else if (baseConstant instanceof PrimitiveConstant) {
@@ -180,7 +182,7 @@ public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryA
                     rawValue = basePointer.readLong(offset);
                     break;
                 default:
-                    throw VMError.shouldNotReachHere();
+                    throw shouldNotReachHere();
             }
 
         } else {
@@ -208,7 +210,7 @@ public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryA
             case Double:
                 return JavaConstant.forDouble(Double.longBitsToDouble(rawValue));
             default:
-                throw VMError.shouldNotReachHere();
+                throw shouldNotReachHere();
         }
     }
 }
