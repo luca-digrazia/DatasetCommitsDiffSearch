@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.tck;
 
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.TruffleVM;
 import java.io.IOException;
 import java.util.Random;
@@ -45,8 +44,8 @@ public abstract class TruffleTCK {
     /**
      * This methods is called before first test is executed. It's purpose is to set a TruffleVM with
      * your language up, so it is ready for testing.
-     * {@link TruffleVM#eval(com.oracle.truffle.api.source.Source) Execute} any scripts you need,
-     * and prepare global symbols with proper names. The symbols will then be looked up by the
+     * {@link TruffleVM#eval(java.lang.String, java.lang.String) Execute} any scripts you need, and
+     * prepare global symbols with proper names. The symbols will then be looked up by the
      * infrastructure (using the names provided by you from methods like {@link #plusInt()}) and
      * used for internal testing.
      *
@@ -57,8 +56,8 @@ public abstract class TruffleTCK {
 
     /**
      * Mimetype associated with your language. The mimetype will be passed to
-     * {@link TruffleVM#eval(com.oracle.truffle.api.source.Source)} method of the
-     * {@link #prepareVM() created TruffleVM}.
+     * {@link TruffleVM#eval(java.lang.String, java.lang.String)} method of the {@link #prepareVM()
+     * created TruffleVM}.
      *
      * @return mime type of the tested language
      */
@@ -117,7 +116,7 @@ public abstract class TruffleTCK {
 
     /**
      * Return a code snippet that is invalid in your language. Its
-     * {@link TruffleVM#eval(com.oracle.truffle.api.source.Source) evaluation} should fail and yield
+     * {@link TruffleVM#eval(java.lang.String, java.lang.String) evaluation} should fail and yield
      * an exception.
      *
      * @return code snippet invalid in the tested language
@@ -139,7 +138,7 @@ public abstract class TruffleTCK {
     public void testFortyTwo() throws Exception {
         TruffleVM.Symbol fourtyTwo = findGlobalSymbol(fourtyTwo());
 
-        Object res = fourtyTwo.invoke(null).get();
+        Object res = fourtyTwo.invoke(null);
 
         assert res instanceof Number : "should yield a number, but was: " + res;
 
@@ -155,7 +154,7 @@ public abstract class TruffleTCK {
         }
         TruffleVM.Symbol retNull = findGlobalSymbol(returnsNull());
 
-        Object res = retNull.invoke(null).get();
+        Object res = retNull.invoke(null);
 
         assertNull("Should yield real Java null", res);
     }
@@ -168,7 +167,7 @@ public abstract class TruffleTCK {
 
         TruffleVM.Symbol plus = findGlobalSymbol(plusInt());
 
-        Object res = plus.invoke(null, a, b).get();
+        Object res = plus.invoke(null, a, b);
 
         assert res instanceof Number : "+ on two ints should yield a number, but was: " + res;
 
@@ -181,7 +180,7 @@ public abstract class TruffleTCK {
     public void testInvalidTestMethod() throws Exception {
         String mime = mimeType();
         String code = invalidCode();
-        Object ret = vm().eval(Source.fromText(code, "Invalid code").withMimeType(mime)).get();
+        Object ret = vm().eval(mime, code);
         fail("Should yield IOException, but returned " + ret);
     }
 
@@ -189,7 +188,7 @@ public abstract class TruffleTCK {
     public void testMaxOrMinValue() throws Exception {
         TruffleVM.Symbol apply = findGlobalSymbol(applyNumbers());
 
-        Object res = apply.invoke(null, new MaxMinObject(true)).get();
+        Object res = apply.invoke(null, new MaxMinObject(true));
 
         assert res instanceof Number : "result should be a number: " + res;
 
@@ -202,7 +201,7 @@ public abstract class TruffleTCK {
     public void testMaxOrMinValue2() throws Exception {
         TruffleVM.Symbol apply = findGlobalSymbol(applyNumbers());
 
-        Object res = apply.invoke(null, new MaxMinObject(false)).get();
+        Object res = apply.invoke(null, new MaxMinObject(false));
 
         assert res instanceof Number : "result should be a number: " + res;
 
@@ -228,12 +227,12 @@ public abstract class TruffleTCK {
         for (int i = 0; i < 10; i++) {
             int quantum = r.nextInt(10);
             for (int j = 0; j < quantum; j++) {
-                Object res = count1.invoke(null).get();
+                Object res = count1.invoke(null);
                 assert res instanceof Number : "expecting number: " + res;
                 assert ((Number) res).intValue() == ++prev1 : "expecting " + prev1 + " but was " + res;
             }
             for (int j = 0; j < quantum; j++) {
-                Object res = count2.invoke(null).get();
+                Object res = count2.invoke(null);
                 assert res instanceof Number : "expecting number: " + res;
                 assert ((Number) res).intValue() == ++prev2 : "expecting " + prev2 + " but was " + res;
             }
