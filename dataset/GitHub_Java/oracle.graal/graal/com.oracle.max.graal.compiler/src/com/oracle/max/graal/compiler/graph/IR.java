@@ -86,7 +86,21 @@ public class IR {
             new CanonicalizerPhase().apply(graph);
         }
 
-        new SplitCriticalEdgesPhase().apply(graph);
+        // Split critical edges.
+        List<Node> nodes = graph.getNodes();
+        for (int i = 0; i < nodes.size(); ++i) {
+            Node n = nodes.get(i);
+            if (Schedule.trueSuccessorCount(n) > 1) {
+                for (int j = 0; j < n.successors().size(); ++j) {
+                    Node succ = n.successors().get(j);
+                    if (Schedule.truePredecessorCount(succ) > 1) {
+                        Anchor a = new Anchor(graph);
+                        a.successors().setAndClear(1, n, j);
+                        n.successors().set(j, a);
+                    }
+                }
+            }
+        }
 
         Schedule schedule = new Schedule(graph);
         List<Block> blocks = schedule.getBlocks();
