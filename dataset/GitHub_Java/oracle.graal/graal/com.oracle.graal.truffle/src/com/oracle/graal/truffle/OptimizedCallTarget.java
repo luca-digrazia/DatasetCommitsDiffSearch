@@ -55,6 +55,7 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerOptions;
+import com.oracle.truffle.api.ExecutionContext;
 import com.oracle.truffle.api.LoopCountReceiver;
 import com.oracle.truffle.api.OptimizationFailedException;
 import com.oracle.truffle.api.ReplaceObserver;
@@ -571,11 +572,13 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     private CompilerOptions getCompilerOptions() {
-        final CompilerOptions options = rootNode.getCompilerOptions();
-        if (options != null) {
-            return options;
+        final ExecutionContext context = rootNode.getExecutionContext();
+
+        if (context == null) {
+            return DefaultCompilerOptions.INSTANCE;
         }
-        return DefaultCompilerOptions.INSTANCE;
+
+        return context.getCompilerOptions();
     }
 
     @SuppressWarnings({"unchecked", "unused"})
