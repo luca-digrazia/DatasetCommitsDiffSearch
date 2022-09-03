@@ -24,15 +24,18 @@
  */
 package org.graalvm.compiler.truffle.compiler.substitutions;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.SpeculationLog.Speculation;
+import static java.lang.Character.toUpperCase;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleLowTierCompilation;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleLowTierProfiling;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleUseFrameWithoutBoxing;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.getRuntime;
+
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.Callable;
+
 import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
@@ -95,17 +98,15 @@ import org.graalvm.compiler.truffle.compiler.nodes.frame.VirtualFrameIsNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.VirtualFrameSetNode;
 import org.graalvm.word.LocationIdentity;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.Callable;
-
-import static java.lang.Character.toUpperCase;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleLowGradeCompilation;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleLowGradeProfiling;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleUseFrameWithoutBoxing;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.getRuntime;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.SpeculationLog.Speculation;
 
 /**
  * Provides {@link InvocationPlugin}s for Truffle classes.
@@ -198,24 +199,24 @@ public class TruffleGraphBuilderPlugins {
                 return true;
             }
         });
-        r.register0("inLowGrade", new InvocationPlugin() {
+        r.register0("inLowTier", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(TruffleLowGradeCompilation.getValue(getOptions())));
+                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(TruffleLowTierCompilation.getValue(getOptions())));
                 return true;
             }
         });
-        r.register0("inInterpreterOrLowGrade", new InvocationPlugin() {
+        r.register0("inInterpreterOrLowTier", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(TruffleLowGradeCompilation.getValue(getOptions())));
+                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(TruffleLowTierCompilation.getValue(getOptions())));
                 return true;
             }
         });
-        r.register0("inInterpreterOrLowGradeWithProfiling", new InvocationPlugin() {
+        r.register0("inInterpreterOrLowTierWithProfiling", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(TruffleLowGradeProfiling.getValue(getOptions())));
+                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(TruffleLowTierProfiling.getValue(getOptions())));
                 return true;
             }
         });

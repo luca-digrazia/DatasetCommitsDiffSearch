@@ -92,25 +92,25 @@ public final class CompilerDirectives {
     }
 
     /**
-     * Returns a boolean value indicating whether the method is executed in the low-grade Truffle compilation.
+     * Returns a boolean value indicating whether the method is executed in the first tier Truffle compilation.
      *
-     * @return {@code true} when executed in the low-grade Truffle compilation, {@code false} otherwise.
+     * @return {@code true} when executed in the first tier Truffle compilation, {@code false} otherwise.
      */
-    public static boolean inLowGrade() {
+    public static boolean inLowTier() {
         return false;
     }
 
     /**
-     * This call is equivalent to calling {@code inInterpreter() || inLowGrade()}.
+     * This call is equivalent to calling {@code inInterpreter() || inLowTier()}.
      */
-    public static boolean inInterpreterOrLowGrade() {
+    public static boolean inInterpreterOrLowTier() {
         return true;
     }
 
     /**
-     * This call returns true in the interpreter or a low grade compilation that does profiling.
+     * This call returns true in the interpreter or a low tier compilation that does profiling.
      */
-    public static boolean inInterpreterOrLowGradeWithProfiling() {
+    public static boolean inInterpreterOrLowTierWithProfiling() {
         return true;
     }
     /**
