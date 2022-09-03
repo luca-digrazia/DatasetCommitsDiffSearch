@@ -212,12 +212,13 @@ public class InstrumentationPartialEvaluationTest extends PartialEvaluationTest 
         root.adoptChildren();
         Probe testProbe = result.probe();
         // A factory that could insert a AdvancedInstrumentRoot into the AST, but which never does.
-        Instrument instrument = Instrument.create(null, new AdvancedInstrumentRootFactory() {
+        Instrument instrument = Instrument.create(new AdvancedInstrumentRootFactory(null) {
 
+            @Override
             public AdvancedInstrumentRoot createInstrumentRoot(Probe probe, Node node) {
                 return null;
             }
-        }, "test AdvancedInstrument");
+        }, null);
         testProbe.attach(instrument);
 
         // It all gets compiled away
@@ -232,12 +233,13 @@ public class InstrumentationPartialEvaluationTest extends PartialEvaluationTest 
         rootTestNode.adoptChildren();
         Probe testProbe = resultTestNode.probe();
         // Factory inserts a AdvancedInstrumentRoot with empty methods into instrumentation .
-        Instrument instrument = Instrument.create(null, new AdvancedInstrumentRootFactory() {
+        Instrument instrument = Instrument.create(new AdvancedInstrumentRootFactory(null) {
 
             @Override
             public AdvancedInstrumentRoot createInstrumentRoot(Probe probe, Node node) {
                 return new AdvancedInstrumentRoot() {
 
+                    @Override
                     public String instrumentationInfo() {
                         return null;
                     }
@@ -248,7 +250,7 @@ public class InstrumentationPartialEvaluationTest extends PartialEvaluationTest 
                     }
                 };
             }
-        }, "test AdvancedInstrument");
+        }, null);
         testProbe.attach(instrument);
 
         // It all gets compiled away.
