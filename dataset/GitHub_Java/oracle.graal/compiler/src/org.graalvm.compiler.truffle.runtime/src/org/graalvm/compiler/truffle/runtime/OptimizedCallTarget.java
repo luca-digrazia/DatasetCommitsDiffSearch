@@ -307,7 +307,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     /**
-     * Returns <code>true</code> if the call target was already compiled or was compiled
+     * Returns <code>true</code> if the call target was already compiled or was compiles
      * synchronously. Returns <code>false</code> if compilation was not scheduled or is happening in
      * the background. Use {@link #isCompiling()} to find out whether it is actually compiling.
      */
