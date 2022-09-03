@@ -3289,23 +3289,19 @@ public class BytecodeParser implements GraphBuilderContext {
             }
 
             if (isNeverExecutedCode(probability)) {
-                if (!graph.isOSR() || getParent() != null || graph.getEntryBCI() != trueBlock.startBci) {
-                    append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, true));
-                    if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
-                        profilingPlugin.profileGoto(this, method, bci(), falseBlock.startBci, stateBefore);
-                    }
-                    appendGoto(falseBlock);
-                    return;
+                append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, true));
+                if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
+                    profilingPlugin.profileGoto(this, method, bci(), falseBlock.startBci, stateBefore);
                 }
+                appendGoto(falseBlock);
+                return;
             } else if (isNeverExecutedCode(1 - probability)) {
-                if (!graph.isOSR() || getParent() != null || graph.getEntryBCI() != falseBlock.startBci) {
-                    append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, false));
-                    if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
-                        profilingPlugin.profileGoto(this, method, bci(), trueBlock.startBci, stateBefore);
-                    }
-                    appendGoto(trueBlock);
-                    return;
+                append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, false));
+                if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
+                    profilingPlugin.profileGoto(this, method, bci(), trueBlock.startBci, stateBefore);
                 }
+                appendGoto(trueBlock);
+                return;
             }
 
             if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
