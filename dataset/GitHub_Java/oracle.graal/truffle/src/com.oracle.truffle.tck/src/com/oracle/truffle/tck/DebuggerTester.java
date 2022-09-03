@@ -364,8 +364,7 @@ public final class DebuggerTester implements AutoCloseable {
     public void expectKilled() {
         Throwable error = expectThrowable();
         if (error instanceof PolyglotException) {
-            Assert.assertTrue(((PolyglotException) error).isCancelled());
-            Assert.assertTrue(error.getMessage(), error.getMessage().contains("Execution cancelled by a debugging session."));
+            Assert.assertTrue(error.getMessage(), error.getMessage().contains("KillException"));
             return;
         }
         throw new AssertionError("Expected killed bug got error: " + error, error);
@@ -774,9 +773,6 @@ public final class DebuggerTester implements AutoCloseable {
         trace("Put event " + this + ": " + Thread.currentThread());
         if (event instanceof SuspendedEvent) {
             try {
-                if (handler == null) {
-                    throw new AssertionError("Expected done but got event " + event);
-                }
                 handler.onSuspend((SuspendedEvent) event);
             } catch (Throwable e) {
                 newEvent.add(e);

@@ -199,6 +199,9 @@ class DefaultNearestNodeSearch {
         if (isTaggedWith(primaryNode, tags)) {
             return primaryNode;
         }
+        if (isTaggedWith(secondaryNode, tags)) {
+            return secondaryNode;
+        }
         // Try to go in the preferred node:
         Node taggedNode = null;
         if (!haveOuterCandidate) {
@@ -208,9 +211,6 @@ class DefaultNearestNodeSearch {
         }
         if (taggedNode == null && primaryTaggedNode != null) {
             return primaryTaggedNode;
-        }
-        if (isTaggedWith(secondaryNode, tags)) {
-            return secondaryNode;
         }
         // Try to go in a node before:
         if (!haveOuterCandidate) {
