@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.runtime.nodes.api;
 
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrumentation.GenerateWrapper;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -38,6 +39,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
@@ -54,6 +56,7 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
  * operation.
  */
 @TypeSystemReference(LLVMTypes.class)
+@GenerateWrapper
 public abstract class LLVMExpressionNode extends LLVMNode implements InstrumentableNode {
 
     @Override
@@ -76,6 +79,10 @@ public abstract class LLVMExpressionNode extends LLVMNode implements Instrumenta
 
     public LLVMAddress executeLLVMAddress(VirtualFrame frame) throws UnexpectedResultException {
         return LLVMTypesGen.expectLLVMAddress(executeGeneric(frame));
+    }
+
+    public LLVMTruffleAddress executeLLVMTruffleAddress(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVMTruffleAddress(executeGeneric(frame));
     }
 
     public LLVMTruffleObject executeLLVMTruffleObject(VirtualFrame frame) throws UnexpectedResultException {

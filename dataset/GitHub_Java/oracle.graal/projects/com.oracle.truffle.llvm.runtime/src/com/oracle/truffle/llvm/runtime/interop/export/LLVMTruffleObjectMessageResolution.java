@@ -74,28 +74,6 @@ public class LLVMTruffleObjectMessageResolution {
         }
     }
 
-    @Resolve(message = "HAS_SIZE")
-    public abstract static class HasSize extends Node {
-
-        protected boolean access(LLVMTruffleObject receiver) {
-            return receiver.getExportType() instanceof LLVMInteropType.Array;
-        }
-    }
-
-    @Resolve(message = "GET_SIZE")
-    public abstract static class GetSize extends Node {
-
-        protected long access(LLVMTruffleObject receiver) {
-            if (!(receiver.getExportType() instanceof LLVMInteropType.Array)) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedMessageException.raise(Message.GET_SIZE);
-            }
-
-            LLVMInteropType.Array array = (LLVMInteropType.Array) receiver.getExportType();
-            return array.getLength();
-        }
-    }
-
     @Resolve(message = "HAS_KEYS")
     public abstract static class HasKeys extends Node {
 
@@ -140,26 +118,6 @@ public class LLVMTruffleObjectMessageResolution {
                 return KeyInfo.READABLE;
             }
         }
-
-        protected int access(LLVMTruffleObject receiver, Number key) {
-            if (!(receiver.getExportType() instanceof LLVMInteropType.Array)) {
-                return KeyInfo.NONE;
-            }
-
-            LLVMInteropType.Array array = (LLVMInteropType.Array) receiver.getExportType();
-            long idx = key.longValue();
-            if (Long.compareUnsigned(idx, array.getLength()) >= 0) {
-                // out of bounds
-                return KeyInfo.NONE;
-            } else if (array.getElementType() instanceof LLVMInteropType.Value) {
-                // primitive or pointer, can be read or written
-                return KeyInfo.READABLE | KeyInfo.MODIFIABLE;
-            } else {
-                assert array.getElementType() instanceof LLVMInteropType.Structured;
-                // array of structs or multi-dimensional array, can be read but not overwritten
-                return KeyInfo.READABLE;
-            }
-        }
     }
 
     @Resolve(message = "READ")
@@ -172,11 +130,6 @@ public class LLVMTruffleObjectMessageResolution {
             LLVMTruffleObject ptr = getElementPointer.execute(receiver.getExportType(), receiver, ident);
             return read.execute(ptr, ptr.getExportType());
         }
-
-        protected Object access(LLVMTruffleObject receiver, Number idx) {
-            LLVMTruffleObject ptr = getElementPointer.execute(receiver.getExportType(), receiver, idx.longValue());
-            return read.execute(ptr, ptr.getExportType());
-        }
     }
 
     @Resolve(message = "WRITE")
@@ -187,17 +140,7 @@ public class LLVMTruffleObjectMessageResolution {
 
         protected Object access(LLVMTruffleObject receiver, String ident, Object value) {
             LLVMTruffleObject ptr = getElementPointer.execute(receiver.getExportType(), receiver, ident);
-            doWrite(ptr, value);
-            return value;
-        }
 
-        protected Object access(LLVMTruffleObject receiver, Number idx, Object value) {
-            LLVMTruffleObject ptr = getElementPointer.execute(receiver.getExportType(), receiver, idx.longValue());
-            doWrite(ptr, value);
-            return value;
-        }
-
-        private void doWrite(LLVMTruffleObject ptr, Object value) {
             LLVMInteropType type = ptr.getExportType();
             if (!(type instanceof LLVMInteropType.Value)) {
                 // embedded structured type, write not possible
@@ -206,6 +149,7 @@ public class LLVMTruffleObjectMessageResolution {
             }
 
             write.execute(ptr, (LLVMInteropType.Value) type, value);
+            return value;
         }
     }
 

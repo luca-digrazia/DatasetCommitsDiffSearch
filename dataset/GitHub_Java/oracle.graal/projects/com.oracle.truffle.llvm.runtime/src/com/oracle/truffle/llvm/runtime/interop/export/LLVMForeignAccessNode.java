@@ -30,21 +30,23 @@
 package com.oracle.truffle.llvm.runtime.interop.export;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignAccessNodeFactory.AttachTypeNodeGen;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignAccessNodeFactory.ReadNodeGen;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignAccessNodeFactory.WriteNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public abstract class LLVMForeignAccessNode {
 
@@ -58,39 +60,60 @@ public abstract class LLVMForeignAccessNode {
 
     public abstract static class Read extends LLVMNode {
 
-        public abstract Object execute(LLVMPointer ptr, LLVMInteropType type);
+        public abstract Object execute(LLVMTruffleObject ptr, LLVMInteropType type);
 
         @Specialization
-        Object doStructured(LLVMPointer ptr, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        Object doStructured(LLVMTruffleObject ptr, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
             // inline structured value, nothing to read
             return ptr;
         }
 
         @Specialization(guards = "type.getKind() == cachedKind")
-        Object doValue(LLVMPointer ptr, LLVMInteropType.Value type,
+        Object doValue(LLVMTruffleObject ptr, LLVMInteropType.Value type,
                         @Cached("type.getKind()") @SuppressWarnings("unused") LLVMInteropType.ValueKind cachedKind,
                         @Cached("createLoadNode(cachedKind)") LLVMLoadNode load,
-                        @Cached("create()") LLVMDataEscapeNode dataEscape) {
+                        @Cached("create()") LLVMDataEscapeNode dataEscape,
+                        @Cached("create()") AttachTypeNode attachType) {
             Object ret = load.executeWithTarget(ptr);
-            return dataEscape.executeWithType(ret, type.getBaseType());
+            Object escaped = dataEscape.executeWithTarget(ret);
+            return attachType.execute(escaped, type.getBaseType());
         }
 
         LLVMLoadNode createLoadNode(LLVMInteropType.ValueKind kind) {
             CompilerAsserts.neverPartOfCompilation();
             ContextReference<LLVMContext> ctxRef = LLVMLanguage.getLLVMContextReference();
-            return ctxRef.get().getNodeFactory().createLoadNode(kind);
+            return ctxRef.get().getInteropNodeFactory().createLoadNode(kind);
         }
     }
 
-    public abstract static class Write extends LLVMNode {
+    abstract static class AttachTypeNode extends Node {
 
-        protected abstract void execute(LLVMPointer ptr, LLVMInteropType.Value type, Object value);
+        protected abstract Object execute(Object value, LLVMInteropType.Structured type);
+
+        public static AttachTypeNode create() {
+            return AttachTypeNodeGen.create();
+        }
+
+        @Specialization
+        Object doLLVMTruffleObject(LLVMTruffleObject value, LLVMInteropType.Structured type) {
+            return value.export(type);
+        }
+
+        @Fallback
+        Object doOther(Object other, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+            return other;
+        }
+    }
+
+    public abstract static class Write extends Node {
+
+        protected abstract void execute(LLVMTruffleObject ptr, LLVMInteropType.Value type, Object value);
 
         @Specialization(guards = "type.getKind() == cachedKind")
-        void doValue(LLVMPointer ptr, LLVMInteropType.Value type, Object value,
+        void doValue(LLVMTruffleObject ptr, LLVMInteropType.Value type, Object value,
                         @Cached("type.getKind()") @SuppressWarnings("unused") LLVMInteropType.ValueKind cachedKind,
                         @Cached("createStoreNode(cachedKind)") LLVMStoreNode store,
-                        @Cached("createForeignToLLVM(type)") ForeignToLLVM toLLVM) {
+                        @Cached("create(type)") ForeignToLLVM toLLVM) {
             // since we only cache type.getKind(), not type, we have to use executeWithType
             Object llvmValue = toLLVM.executeWithType(value, type.getBaseType());
             store.executeWithTarget(ptr, llvmValue);
@@ -99,12 +122,7 @@ public abstract class LLVMForeignAccessNode {
         LLVMStoreNode createStoreNode(LLVMInteropType.ValueKind kind) {
             CompilerAsserts.neverPartOfCompilation();
             ContextReference<LLVMContext> ctxRef = LLVMLanguage.getLLVMContextReference();
-            return ctxRef.get().getNodeFactory().createStoreNode(kind);
-        }
-
-        @TruffleBoundary
-        protected ForeignToLLVM createForeignToLLVM(LLVMInteropType.Value type) {
-            return getNodeFactory().createForeignToLLVM(type);
+            return ctxRef.get().getInteropNodeFactory().createStoreNode(kind);
         }
     }
 }
