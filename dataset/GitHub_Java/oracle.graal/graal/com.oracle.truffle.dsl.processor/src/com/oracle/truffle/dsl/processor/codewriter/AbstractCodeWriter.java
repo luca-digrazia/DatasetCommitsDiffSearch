@@ -274,26 +274,14 @@ public abstract class AbstractCodeWriter extends CodeElementScanner<Void, Void> 
                 }
             }
         } else {
-            Element enclosing = f.getEnclosingElement();
             writeModifiers(f.getModifiers());
+            write(useImport(f, f.asType()));
 
-            boolean varArgs = false;
-            if (enclosing.getKind() == ElementKind.METHOD) {
-                ExecutableElement method = (ExecutableElement) enclosing;
+            if (f.getEnclosingElement().getKind() == ElementKind.METHOD) {
+                ExecutableElement method = (ExecutableElement) f.getEnclosingElement();
                 if (method.isVarArgs() && method.getParameters().indexOf(f) == method.getParameters().size() - 1) {
-                    varArgs = true;
+                    write("...");
                 }
-            }
-
-            TypeMirror varType = f.asType();
-            if (varArgs) {
-                if (varType.getKind() == TypeKind.ARRAY) {
-                    varType = ((ArrayType) varType).getComponentType();
-                }
-                write(useImport(f, varType));
-                write("...");
-            } else {
-                write(useImport(f, varType));
             }
 
             write(" ");
