@@ -33,9 +33,13 @@ public interface LoweringTool {
 
     MetaAccessProvider getMetaAccess();
 
+    CodeCacheProvider getCodeCache();
+
     LoweringProvider getLowerer();
 
     ConstantReflectionProvider getConstantReflection();
+
+    ForeignCallsProvider getForeignCalls();
 
     Replacements getReplacements();
 
