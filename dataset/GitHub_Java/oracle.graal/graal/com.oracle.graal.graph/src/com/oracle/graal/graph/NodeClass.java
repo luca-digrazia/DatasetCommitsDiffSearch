@@ -27,8 +27,6 @@ import java.util.*;
 import java.util.Map.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.oracle.graal.graph.Graph.DuplicationReplacement;
-
 import sun.misc.Unsafe;
 
 public class NodeClass {
@@ -557,8 +555,6 @@ public class NodeClass {
             if (type.isPrimitive()) {
                 if (type == Integer.TYPE) {
                     value = unsafe.getInt(node, dataOffsets[i]);
-                } else if (type == Long.TYPE) {
-                    value = unsafe.getLong(node, dataOffsets[i]);
                 } else if (type == Boolean.TYPE) {
                     value = unsafe.getBoolean(node, dataOffsets[i]);
                 } else if (type == Long.TYPE) {
@@ -912,21 +908,15 @@ public class NodeClass {
         return directSuccessorCount;
     }
 
-    static Map<Node, Node> addGraphDuplicate(Graph graph, Iterable<Node> nodes, DuplicationReplacement replacements) {
+    static Map<Node, Node> addGraphDuplicate(Graph graph, Iterable<Node> nodes, Map<Node, Node> replacements) {
         Map<Node, Node> newNodes = new IdentityHashMap<>();
-        Map<Node, Node> replacementsMap = new IdentityHashMap<>();
         // create node duplicates
         for (Node node : nodes) {
-            if (node != null) {
+            if (node != null && !replacements.containsKey(node)) {
                 assert !node.isDeleted() : "trying to duplicate deleted node";
-                Node replacement = replacements.replacement(node);
-                if (replacement != node) {
-                    replacementsMap.put(node, replacement);
-                } else {
-                    Node newNode = node.clone(graph);
-                    assert newNode.getClass() == node.getClass();
-                    newNodes.put(node, newNode);
-                }
+                Node newNode = node.clone(graph);
+                assert newNode.getClass() == node.getClass();
+                newNodes.put(node, newNode);
             }
         }
         // re-wire inputs
@@ -936,29 +926,24 @@ public class NodeClass {
             for (NodeClassIterator iter = oldNode.inputs().iterator(); iter.hasNext();) {
                 Position pos = iter.nextPosition();
                 Node input = oldNode.getNodeClass().get(oldNode, pos);
-                Node target = replacementsMap.get(input);
+                Node target = replacements.get(input);
                 if (target == null) {
-                    Node replacement = replacements.replacement(input);
-                    if (replacement != input) {
-                        replacementsMap.put(input, replacement);
-                        target = replacement;
-                    } else {
-                        target = newNodes.get(input);
-                    }
+                    target = newNodes.get(input);
                 }
                 node.getNodeClass().set(node, pos, target);
             }
         }
-        for (Entry<Node, Node> entry : replacementsMap.entrySet()) {
+        for (Entry<Node, Node> entry : replacements.entrySet()) {
             Node oldNode = entry.getKey();
             Node node = entry.getValue();
+            if (oldNode == node) {
+                continue;
+            }
             for (NodeClassIterator iter = oldNode.inputs().iterator(); iter.hasNext();) {
                 Position pos = iter.nextPosition();
-                if (pos.isValidFor(node, oldNode)) {
-                    Node input = oldNode.getNodeClass().get(oldNode, pos);
-                    if (newNodes.containsKey(input)) {
-                        node.getNodeClass().set(node, pos, newNodes.get(input));
-                    }
+                Node input = oldNode.getNodeClass().get(oldNode, pos);
+                if (newNodes.containsKey(input)) {
+                    node.getNodeClass().set(node, pos, newNodes.get(input));
                 }
             }
         }
@@ -970,27 +955,24 @@ public class NodeClass {
             for (NodeClassIterator iter = oldNode.successors().iterator(); iter.hasNext();) {
                 Position pos = iter.nextPosition();
                 Node succ = oldNode.getNodeClass().get(oldNode, pos);
-                Node target = replacementsMap.get(succ);
-                Node replacement = replacements.replacement(succ);
-                if (replacement != succ) {
-                    replacementsMap.put(succ, replacement);
-                    target = replacement;
-                } else {
+                Node target = replacements.get(succ);
+                if (target == null) {
                     target = newNodes.get(succ);
                 }
                 node.getNodeClass().set(node, pos, target);
             }
         }
-        for (Entry<Node, Node> entry : replacementsMap.entrySet()) {
+        for (Entry<Node, Node> entry : replacements.entrySet()) {
             Node oldNode = entry.getKey();
             Node node = entry.getValue();
+            if (oldNode == node) {
+                continue;
+            }
             for (NodeClassIterator iter = oldNode.successors().iterator(); iter.hasNext();) {
                 Position pos = iter.nextPosition();
-                if (pos.isValidFor(node, oldNode)) {
-                    Node succ = oldNode.getNodeClass().get(oldNode, pos);
-                    if (newNodes.containsKey(succ)) {
-                        node.getNodeClass().set(node, pos, newNodes.get(succ));
-                    }
+                Node succ = oldNode.getNodeClass().get(oldNode, pos);
+                if (newNodes.containsKey(succ)) {
+                    node.getNodeClass().set(node, pos, newNodes.get(succ));
                 }
             }
         }
