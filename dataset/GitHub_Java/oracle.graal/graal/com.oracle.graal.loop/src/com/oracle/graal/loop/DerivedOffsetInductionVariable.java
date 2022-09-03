@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.loop;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 
@@ -72,7 +72,7 @@ public class DerivedOffsetInductionVariable extends InductionVariable {
 
     @Override
     public long constantStride() {
-        if (value instanceof IntegerSubNode && base.valueNode() == value.getY()) {
+        if (value instanceof IntegerSubNode && base.valueNode() == value.y()) {
             return -base.constantStride();
         }
         return base.constantStride();
@@ -85,15 +85,15 @@ public class DerivedOffsetInductionVariable extends InductionVariable {
 
     @Override
     public ValueNode strideNode() {
-        if (value instanceof IntegerSubNode && base.valueNode() == value.getY()) {
+        if (value instanceof IntegerSubNode && base.valueNode() == value.y()) {
             return graph().unique(new NegateNode(base.strideNode()));
         }
         return base.strideNode();
     }
 
     @Override
-    public ValueNode extremumNode(boolean assumePositiveTripCount, Stamp stamp) {
-        return op(base.extremumNode(assumePositiveTripCount, stamp), IntegerConvertNode.convert(offset, stamp, graph()));
+    public ValueNode extremumNode(boolean assumePositiveTripCount, Kind kind) {
+        return op(base.extremumNode(assumePositiveTripCount, kind), ConvertNode.convert(graph(), kind, offset));
     }
 
     @Override
@@ -116,10 +116,10 @@ public class DerivedOffsetInductionVariable extends InductionVariable {
             return b + o;
         }
         if (value instanceof IntegerSubNode) {
-            if (base.valueNode() == value.getX()) {
+            if (base.valueNode() == value.x()) {
                 return b - o;
             } else {
-                assert base.valueNode() == value.getY();
+                assert base.valueNode() == value.y();
                 return o - b;
             }
         }
@@ -131,17 +131,13 @@ public class DerivedOffsetInductionVariable extends InductionVariable {
             return IntegerArithmeticNode.add(graph(), b, o);
         }
         if (value instanceof IntegerSubNode) {
-            if (base.valueNode() == value.getX()) {
+            if (base.valueNode() == value.x()) {
                 return IntegerArithmeticNode.sub(graph(), b, o);
             } else {
-                assert base.valueNode() == value.getY();
+                assert base.valueNode() == value.y();
                 return IntegerArithmeticNode.sub(graph(), o, b);
             }
         }
         throw GraalInternalError.shouldNotReachHere();
-    }
-
-    @Override
-    public void deleteUnusedNodes() {
     }
 }
