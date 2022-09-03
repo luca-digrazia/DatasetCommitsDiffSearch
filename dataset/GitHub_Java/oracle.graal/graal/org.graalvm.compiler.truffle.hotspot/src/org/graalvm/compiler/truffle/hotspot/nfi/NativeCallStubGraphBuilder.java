@@ -45,8 +45,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plu
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
-import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
-import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.LateRegistration;
+import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
 import org.graalvm.compiler.options.OptionValues;
@@ -106,10 +105,8 @@ public class NativeCallStubGraphBuilder {
         this.backend = backend;
         this.factory = factory;
 
-        InvocationPlugins plugins = providers.getGraphBuilderPlugins().getInvocationPlugins();
-        try (LateRegistration r = new LateRegistration(plugins, HotSpotNativeFunctionHandle.class)) {
-            r.register(new CallPlugin(), "call", Receiver.class, Object[].class);
-        }
+        Registration r = new Registration(providers.getGraphBuilderPlugins().getInvocationPlugins(), HotSpotNativeFunctionHandle.class);
+        r.register2("call", Receiver.class, Object[].class, new CallPlugin());
 
         ResolvedJavaType stubClass = providers.getMetaAccess().lookupJavaType(NativeCallStub.class);
         ResolvedJavaMethod[] methods = stubClass.getDeclaredMethods();
