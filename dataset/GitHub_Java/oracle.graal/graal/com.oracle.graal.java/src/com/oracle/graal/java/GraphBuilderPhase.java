@@ -42,7 +42,7 @@ import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.ExceptionDispatchBlock;
 import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
-import com.oracle.graal.java.GraphBuilderPlugins.*;
+import com.oracle.graal.java.GraphBuilderPlugins.InvocationPlugin;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.calc.*;
@@ -63,12 +63,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
     private final GraphBuilderPlugins graphBuilderPlugins;
 
     public GraphBuilderPhase(GraphBuilderConfiguration config) {
-        this(config, new DefaultGraphBuilderPlugins());
-    }
-
-    public GraphBuilderPhase(GraphBuilderConfiguration config, GraphBuilderPlugins graphBuilderPlugins) {
         this.graphBuilderConfig = config;
-        this.graphBuilderPlugins = graphBuilderPlugins;
+        this.graphBuilderPlugins = new DefaultGraphBuilderPlugins();
     }
 
     @Override
@@ -779,24 +775,65 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         args[0] = TypeProfileProxyNode.proxify(args[0], profile);
                     }
                 }
+                if (GraalOptions.InlineDuringParsing.getValue() && invokeKind.isDirect()) {
 
-                if (graphBuilderPlugins != null) {
-                    InvocationPlugin plugin = graphBuilderPlugins.lookupInvocation(targetMethod);
-                    if (plugin != null) {
-                        int beforeStackSize = frameState.stackSize;
-                        if (plugin.apply(this, args)) {
-                            assert beforeStackSize + resultType.getSlotCount() == frameState.stackSize;
+                    if (graphBuilderPlugins != null) {
+                        InvocationPlugin plugin = graphBuilderPlugins.lookupInvocation(targetMethod);
+                        if (plugin != null) {
+                            int beforeStackSize = frameState.stackSize;
+                            boolean handled;
+                            if (args.length == 0) {
+                                handled = plugin.apply(this);
+                            } else if (args.length == 1) {
+                                handled = plugin.apply(this, args[0]);
+                            } else if (args.length == 2) {
+                                handled = plugin.apply(this, args[0], args[1]);
+                            } else if (args.length == 3) {
+                                handled = plugin.apply(this, args[0], args[1], args[2]);
+                            } else {
+                                throw GraalInternalError.shouldNotReachHere();
+                            }
+                            if (handled) {
+                                assert beforeStackSize + resultType.getSlotCount() == frameState.stackSize;
+                                return;
+                            }
+                            assert beforeStackSize == frameState.stackSize;
+                        }
+                    }
+
+                    if (targetMethod.canBeInlined() && targetMethod.hasBytecodes()) {
+                        if (targetMethod.getCode().length <= GraalOptions.TrivialInliningSize.getValue() && currentDepth < GraalOptions.InlineDuringParsingMaxDepth.getValue() &&
+                                        graphBuilderConfig.shouldInlineTrivial()) {
+                            BytecodeParser parser = new BytecodeParser(metaAccess, targetMethod, graphBuilderConfig, optimisticOpts, StructuredGraph.INVOCATION_ENTRY_BCI);
+                            final FrameState[] lazyFrameState = new FrameState[1];
+                            HIRFrameStateBuilder startFrameState = new HIRFrameStateBuilder(targetMethod, currentGraph, () -> {
+                                if (lazyFrameState[0] == null) {
+                                    lazyFrameState[0] = frameState.create(bci());
+                                }
+                                return lazyFrameState[0];
+                            });
+                            startFrameState.initializeFromArgumentsArray(args);
+                            parser.build(currentDepth + 1, this.lastInstr, startFrameState);
+
+                            FixedWithNextNode calleeBeforeReturnNode = parser.getBeforeReturnNode();
+                            this.lastInstr = calleeBeforeReturnNode;
+                            if (calleeBeforeReturnNode != null) {
+                                ValueNode calleeReturnValue = parser.getReturnValue();
+                                if (calleeReturnValue != null) {
+                                    frameState.push(calleeReturnValue.getKind().getStackKind(), calleeReturnValue);
+                                }
+                            }
+
+                            FixedWithNextNode calleeBeforeUnwindNode = parser.getBeforeUnwindNode();
+                            if (calleeBeforeUnwindNode != null) {
+                                ValueNode calleeUnwindValue = parser.getUnwindValue();
+                                assert calleeUnwindValue != null;
+                                calleeBeforeUnwindNode.setNext(handleException(calleeUnwindValue, bci()));
+                            }
+
                             return;
                         }
-                        assert beforeStackSize == frameState.stackSize;
                     }
-                }
-
-                InlineInvokePlugin inlineInvokePlugin = graphBuilderConfig.getInlineInvokePlugin();
-                if (inlineInvokePlugin != null && invokeKind.isDirect() && targetMethod.canBeInlined() && targetMethod.hasBytecodes() &&
-                                inlineInvokePlugin.shouldInlineInvoke(targetMethod, currentDepth)) {
-                    parseAndInlineCallee(targetMethod, args);
-                    return;
                 }
 
                 MethodCallTargetNode callTarget = currentGraph.add(createMethodCallTarget(invokeKind, targetMethod, args, returnType));
@@ -810,35 +847,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     AbstractBeginNode beginNode = currentGraph.add(new KillingBeginNode(LocationIdentity.ANY_LOCATION));
                     invoke.setNext(beginNode);
                     lastInstr = beginNode;
-                }
-            }
-
-            private void parseAndInlineCallee(ResolvedJavaMethod targetMethod, ValueNode[] args) {
-                BytecodeParser parser = new BytecodeParser(metaAccess, targetMethod, graphBuilderConfig, optimisticOpts, StructuredGraph.INVOCATION_ENTRY_BCI);
-                final FrameState[] lazyFrameState = new FrameState[1];
-                HIRFrameStateBuilder startFrameState = new HIRFrameStateBuilder(targetMethod, currentGraph, () -> {
-                    if (lazyFrameState[0] == null) {
-                        lazyFrameState[0] = frameState.create(bci());
-                    }
-                    return lazyFrameState[0];
-                });
-                startFrameState.initializeFromArgumentsArray(args);
-                parser.build(currentDepth + 1, this.lastInstr, startFrameState);
-
-                FixedWithNextNode calleeBeforeReturnNode = parser.getBeforeReturnNode();
-                this.lastInstr = calleeBeforeReturnNode;
-                if (calleeBeforeReturnNode != null) {
-                    ValueNode calleeReturnValue = parser.getReturnValue();
-                    if (calleeReturnValue != null) {
-                        frameState.push(calleeReturnValue.getKind().getStackKind(), calleeReturnValue);
-                    }
-                }
-
-                FixedWithNextNode calleeBeforeUnwindNode = parser.getBeforeUnwindNode();
-                if (calleeBeforeUnwindNode != null) {
-                    ValueNode calleeUnwindValue = parser.getUnwindValue();
-                    assert calleeUnwindValue != null;
-                    calleeBeforeUnwindNode.setNext(handleException(calleeUnwindValue, bci()));
                 }
             }
 
