@@ -256,7 +256,8 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
             } else {
                 asm.cmpq(inlineCacheKlass, src);
             }
-            AMD64Call.directConditionalJmp(tasm, asm, runtime().lookupForeignCall(IC_MISS_HANDLER), ConditionFlag.NotEqual);
+            asm.jcc(ConditionFlag.Equal, verifiedStub);
+            AMD64Call.directJmp(tasm, asm, runtime().lookupForeignCall(IC_MISS_HANDLER));
         }
 
         asm.align(config.codeEntryAlignment);
