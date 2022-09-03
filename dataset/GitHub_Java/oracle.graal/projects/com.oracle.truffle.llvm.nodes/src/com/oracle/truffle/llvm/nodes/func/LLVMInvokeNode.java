@@ -35,6 +35,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.runtime.LLVMException;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -48,23 +49,27 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
     private final int normalSuccessor;
     private final int unwindSuccessor;
 
+    protected final FrameSlot returnValueSlot;
+    protected final FrameSlot exceptionValueSlot;
+
     public static final int NORMAL_SUCCESSOR = 0;
     public static final int UNWIND_SUCCESSOR = 1;
 
     protected final FunctionType type;
 
-    private final FrameSlot resultLocation;
-
-    public LLVMInvokeNode(FunctionType type, FrameSlot resultLocation,
+    public LLVMInvokeNode(FunctionType type, FrameSlot returnValueSlot,
+                    FrameSlot exceptionValueSlot,
                     int normalSuccessor, int unwindSuccessor,
                     LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes, SourceSection sourceSection) {
         super(sourceSection);
+        assert (type.getReturnType() instanceof VoidType) || returnValueSlot != null;
         this.normalSuccessor = normalSuccessor;
         this.unwindSuccessor = unwindSuccessor;
         this.type = type;
         this.normalPhiWriteNodes = normalPhiWriteNodes;
         this.unwindPhiWriteNodes = unwindPhiWriteNodes;
-        this.resultLocation = resultLocation;
+        this.returnValueSlot = returnValueSlot;
+        this.exceptionValueSlot = exceptionValueSlot;
     }
 
     @Override
@@ -80,42 +85,8 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
         return unwindSuccessor;
     }
 
-    protected void writeResult(VirtualFrame frame, Object value) {
-        Type returnType = type.getReturnType();
-        CompilerAsserts.partialEvaluationConstant(returnType);
-        if (returnType instanceof VoidType) {
-            return;
-        }
-        if (returnType instanceof PrimitiveType) {
-            switch (((PrimitiveType) returnType).getPrimitiveKind()) {
-                case I1:
-                    frame.setBoolean(resultLocation, (boolean) value);
-                    break;
-                case I8:
-                    frame.setByte(resultLocation, (byte) value);
-                    break;
-                case I16:
-                    frame.setInt(resultLocation, (int) value);
-                    break;
-                case I32:
-                    frame.setInt(resultLocation, (int) value);
-                    break;
-                case I64:
-                    frame.setLong(resultLocation, (long) value);
-                    break;
-                case FLOAT:
-                    frame.setFloat(resultLocation, (float) value);
-                    break;
-                case DOUBLE:
-                    frame.setDouble(resultLocation, (double) value);
-                    break;
-                default:
-                    frame.setObject(resultLocation, value);
-            }
-
-        } else {
-            frame.setObject(resultLocation, value);
-        }
+    public void handleException(VirtualFrame frame, LLVMException e) {
+        frame.setObject(exceptionValueSlot, e);
     }
 
     @Override
@@ -152,20 +123,60 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
         }
     }
 
+    protected void writeResult(VirtualFrame frame, Object value) {
+        Type returnType = type.getReturnType();
+        CompilerAsserts.partialEvaluationConstant(returnType);
+        if (returnType instanceof VoidType) {
+            return;
+        }
+        if (returnType instanceof PrimitiveType) {
+            switch (((PrimitiveType) returnType).getPrimitiveKind()) {
+                case I1:
+                    frame.setBoolean(returnValueSlot, (boolean) value);
+                    break;
+                case I8:
+                    frame.setByte(returnValueSlot, (byte) value);
+                    break;
+                case I16:
+                    frame.setInt(returnValueSlot, (int) value);
+                    break;
+                case I32:
+                    frame.setInt(returnValueSlot, (int) value);
+                    break;
+                case I64:
+                    frame.setLong(returnValueSlot, (long) value);
+                    break;
+                case FLOAT:
+                    frame.setFloat(returnValueSlot, (float) value);
+                    break;
+                case DOUBLE:
+                    frame.setDouble(returnValueSlot, (double) value);
+                    break;
+                default:
+                    frame.setObject(returnValueSlot, value);
+            }
+
+        } else {
+            frame.setObject(returnValueSlot, value);
+        }
+    }
+
     public static final class LLVMSubstitutionInvokeNode extends LLVMInvokeNode {
 
         @Child private LLVMExpressionNode substitution;
 
-        public LLVMSubstitutionInvokeNode(FunctionType type, FrameSlot resultLocation, LLVMExpressionNode substitution,
+        public LLVMSubstitutionInvokeNode(FunctionType type, LLVMExpressionNode substitution, FrameSlot returnValueSlot,
+                        FrameSlot exceptionValueSlot,
                         int normalSuccessor, int unwindSuccessor,
                         LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes, SourceSection sourceSection) {
-            super(type, resultLocation, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes, sourceSection);
+            super(type, returnValueSlot, exceptionValueSlot, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes, sourceSection);
             this.substitution = substitution;
         }
 
         @Override
         public void execute(VirtualFrame frame) {
-            writeResult(frame, substitution.executeGeneric(frame));
+            Object returnValue = substitution.executeGeneric(frame);
+            writeResult(frame, returnValue);
         }
     }
 
@@ -175,10 +186,11 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
         @Children private final LLVMExpressionNode[] argumentNodes;
         @Child private LLVMLookupDispatchNode dispatchNode;
 
-        public LLVMFunctionInvokeNode(FunctionType type, FrameSlot resultLocation, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes,
+        public LLVMFunctionInvokeNode(FunctionType type, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes, FrameSlot returnValueSlot,
+                        FrameSlot exceptionValueSlot,
                         int normalSuccessor, int unwindSuccessor,
                         LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes, SourceSection sourceSection) {
-            super(type, resultLocation, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes, sourceSection);
+            super(type, returnValueSlot, exceptionValueSlot, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes, sourceSection);
             this.functionNode = functionNode;
             this.argumentNodes = argumentNodes;
             this.dispatchNode = LLVMLookupDispatchNodeGen.create(type);
@@ -188,7 +200,8 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
         public void execute(VirtualFrame frame) {
             Object function = functionNode.executeGeneric(frame);
             Object[] argValues = prepareArguments(frame);
-            writeResult(frame, dispatchNode.executeDispatch(frame, function, argValues));
+            Object returnValue = dispatchNode.executeDispatch(frame, function, argValues);
+            writeResult(frame, returnValue);
         }
 
         @ExplodeLoop
@@ -201,5 +214,4 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
         }
 
     }
-
 }
