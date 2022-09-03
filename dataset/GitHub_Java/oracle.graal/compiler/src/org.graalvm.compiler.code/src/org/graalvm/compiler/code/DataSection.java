@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -33,7 +31,6 @@ import java.util.Objects;
 import java.util.function.BiConsumer;
 
 import org.graalvm.compiler.code.DataSection.Data;
-import org.graalvm.compiler.serviceprovider.BufferUtil;
 
 import jdk.vm.ci.code.site.DataSectionReference;
 import jdk.vm.ci.meta.SerializableConstant;
@@ -377,11 +374,11 @@ public final class DataSection implements Iterable<Data> {
         assert buffer.remaining() >= sectionSize;
         int start = buffer.position();
         for (Data d : dataItems) {
-            BufferUtil.asBaseBuffer(buffer).position(start + d.ref.getOffset());
+            buffer.position(start + d.ref.getOffset());
             onEmit.accept(d.ref, d.getSize());
             d.emit(buffer, patch);
         }
-        BufferUtil.asBaseBuffer(buffer).position(start + sectionSize);
+        buffer.position(start + sectionSize);
     }
 
     public Data findData(DataSectionReference ref) {

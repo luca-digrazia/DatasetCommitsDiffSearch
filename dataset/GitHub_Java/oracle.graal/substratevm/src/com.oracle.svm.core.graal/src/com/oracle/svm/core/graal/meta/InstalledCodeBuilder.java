@@ -66,7 +66,6 @@ import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.meta.SharedMethod;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
-import com.oracle.svm.core.thread.VMOperation;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.code.TargetDescription;
@@ -340,15 +339,13 @@ public class InstalledCodeBuilder {
             metaInfoAllocator.close();
         }
 
-        VMOperation.enqueueBlockingSafepoint("Install code", () -> {
-            CodeInfoTable.getRuntimeCodeCache().addMethod(runtimeMethodInfo);
+        CodeInfoTable.getRuntimeCodeCache().addMethod(runtimeMethodInfo);
 
-            /*
-             * This call makes the new code visible, i.e., other threads can start executing it
-             * immediately. So all metadata must be registered at this point.
-             */
-            installedCode.setAddress(code.rawValue(), method);
-        });
+        /*
+         * This call makes the new code visible, i.e., other threads can start executing it
+         * immediately. So all metadata must be registered at this point.
+         */
+        installedCode.setAddress(code.rawValue(), method);
 
         compilation = null;
     }
