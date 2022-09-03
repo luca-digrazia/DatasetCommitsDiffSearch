@@ -1135,10 +1135,6 @@ public final class GraphBuilderPhase extends Phase {
                 if (cur.predecessors().size() == 0) {
                     break;
                 }
-
-                if (cur instanceof ExceptionObject) {
-                    break;
-                }
             }
 
             if (cur instanceof If) {
