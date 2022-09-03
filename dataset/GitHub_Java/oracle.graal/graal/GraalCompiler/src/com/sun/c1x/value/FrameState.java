@@ -331,7 +331,7 @@ public final class FrameState extends Value implements FrameStateAccess {
             Value x = valueAt(i);
             if (x != null) {
                 Value y = other.valueAt(i);
-                if (x != y || ((x instanceof Phi) && ((Phi) x).block() == block)) {
+                if (x != y) {
                     if (typeMismatch(x, y)) {
                         if (x instanceof Phi) {
                             Phi phi = (Phi) x;
@@ -360,20 +360,18 @@ public final class FrameState extends Value implements FrameStateAccess {
                         for (int j = 0; j < size; ++j) {
                             phi = phi.addInput(x);
                         }
-                        phi = phi.addInput((x == y) ? phi : y);
+                        phi = phi.addInput(y);
                     } else {
-                        phi = phi.addInput((x == y) ? phi : y);
+                        phi = phi.addInput(y);
                     }
-                    /*if (originalPhi != phi) {
+                    if (originalPhi != phi) {
                         for (int j = 0; j < other.localsSize() + other.stackSize(); ++j) {
                             if (other.valueAt(j) == originalPhi) {
                                 other.setValueAt(j, phi);
                             }
                         }
-                    }*/
-
-                    //assert phi.valueCount() == block.predecessors().size() + (blockAppended ? 0 : 1) : "valueCount=" + phi.valueCount() + " predSize= " + block.predecessors().size();
-               }
+                    }
+                }
             }
         }
     }

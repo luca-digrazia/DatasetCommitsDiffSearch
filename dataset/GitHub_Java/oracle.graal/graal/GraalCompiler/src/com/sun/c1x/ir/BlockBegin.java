@@ -73,7 +73,6 @@ public final class BlockBegin extends StateSplit {
      */
     public final int blockID;
 
-    public final boolean isLoopHeader;
     private int linearScanNumber;
 
     /**
@@ -88,12 +87,11 @@ public final class BlockBegin extends StateSplit {
      * @param blockID the ID of the block
      * @param graph
      */
-    public BlockBegin(int bci, int blockID, boolean isLoopHeader, Graph graph) {
+    public BlockBegin(int bci, int blockID, Graph graph) {
         super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.blockID = blockID;
         linearScanNumber = -1;
         this.bci = bci;
-        this.isLoopHeader = isLoopHeader;
     }
 
     /**
