@@ -29,33 +29,35 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
-import com.oracle.truffle.llvm.context.LLVMContext;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstruction.LLVMAllocaInstruction;
-import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstructionFactory.LLVMI32AllocaInstructionNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstructionFactory.LLVMI64AllocaInstructionNodeGen;
-import com.oracle.truffle.llvm.parser.api.util.LLVMParserRuntime;
-import com.oracle.truffle.llvm.runtime.types.LLVMBaseType;
+import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
+import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstruction.LLVMAllocaInstruction;
+import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstructionFactory.LLVMI32AllocaInstructionNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstructionFactory.LLVMI64AllocaInstructionNodeGen;
+import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 
 public class LLVMAllocFactory {
 
-    public static LLVMExpressionNode createAlloc(LLVMParserRuntime runtime, LLVMBaseType llvmType, LLVMExpressionNode numElements, int byteSize, int alignment, String name) {
+    public static LLVMExpressionNode createAlloc(LLVMParserRuntime runtime, LLVMBaseType llvmType, LLVMExpressionNode numElements, int byteSize, int alignment) {
         LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
         switch (llvmType) {
             case I32:
-                return LLVMI32AllocaInstructionNodeGen.create(numElements, byteSize, alignment, context, runtime.getStackPointerSlot(), name);
+                return LLVMI32AllocaInstructionNodeGen.create((LLVMI32Node) numElements, byteSize, alignment, context, runtime.getStackPointerSlot());
             case I64:
-                return LLVMI64AllocaInstructionNodeGen.create(numElements, byteSize, alignment, context, runtime.getStackPointerSlot(), name);
+                return LLVMI64AllocaInstructionNodeGen.create((LLVMI64Node) numElements, byteSize, alignment, context, runtime.getStackPointerSlot());
             default:
                 throw new AssertionError(llvmType);
         }
     }
 
-    public static LLVMAllocaInstruction createAlloc(LLVMParserRuntime runtime, int byteSize, int alignment, String name) {
+    public static LLVMAllocaInstruction createAlloc(LLVMParserRuntime runtime, int byteSize, int alignment) {
         LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
-        return LLVMAllocaInstructionNodeGen.create(byteSize, alignment, context, runtime.getStackPointerSlot(), name);
+        return LLVMAllocaInstructionNodeGen.create(byteSize, alignment, context, runtime.getStackPointerSlot());
     }
 
 }
