@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -130,7 +128,7 @@ public class DiscoverableReferenceProcessing {
         /* It might be a forwarding pointer. */
         if (ObjectHeaderImpl.getObjectHeaderImpl().isForwardedHeader(header)) {
             /* If the referent got forwarded, then update the referent. */
-            final Pointer forwardedPointer = ObjectHeaderImpl.getObjectHeaderImpl().getForwardingPointer(refPointer);
+            final Pointer forwardedPointer = ObjectHeaderImpl.getObjectHeaderImpl().getForwardingPointer(header);
             dr.setReferentPointer(forwardedPointer);
             trace.string("  forwarded header: updated referent: ").hex(forwardedPointer).string("]").newline();
             return true;
