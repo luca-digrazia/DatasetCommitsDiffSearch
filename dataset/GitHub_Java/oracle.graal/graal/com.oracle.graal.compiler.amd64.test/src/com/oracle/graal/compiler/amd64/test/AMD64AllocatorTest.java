@@ -22,25 +22,38 @@
  */
 package com.oracle.graal.compiler.amd64.test;
 
-import org.junit.*;
+import static com.oracle.graal.compiler.common.GraalOptions.TraceRA;
+import static com.oracle.graal.compiler.common.GraalOptions.RegisterPressure;
+import static org.junit.Assume.assumeTrue;
+import jdk.vm.ci.amd64.AMD64;
 
-import com.oracle.graal.compiler.test.backend.*;
+import org.junit.Before;
+import org.junit.Ignore;
+import org.junit.Test;
+
+import com.oracle.graal.compiler.test.backend.AllocatorTest;
 
 public class AMD64AllocatorTest extends AllocatorTest {
 
+    @Before
+    public void checkAMD64() {
+        assumeTrue("skipping AMD64 specific test", getTarget().arch instanceof AMD64);
+        assumeTrue("RegisterPressure is set -> skip", RegisterPressure.getValue() == null);
+        assumeTrue("TraceRA is set -> skip", !TraceRA.getValue());
+    }
+
     @Test
     public void test1() {
-        test("test1snippet", 2, 1, 0);
+        testAllocation("test1snippet", 3, 1, 0);
     }
 
     public static long test1snippet(long x) {
         return x + 5;
     }
 
-    @Ignore
     @Test
     public void test2() {
-        test("test2snippet", 2, 0, 0);
+        testAllocation("test2snippet", 3, 0, 0);
     }
 
     public static long test2snippet(long x) {
@@ -50,7 +63,7 @@ public class AMD64AllocatorTest extends AllocatorTest {
     @Ignore
     @Test
     public void test3() {
-        test("test3snippet", 4, 1, 0);
+        testAllocation("test3snippet", 4, 1, 0);
     }
 
     public static long test3snippet(long x) {
