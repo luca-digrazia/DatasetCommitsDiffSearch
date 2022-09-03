@@ -30,19 +30,26 @@
 package com.oracle.truffle.llvm.parser;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import org.eclipse.emf.ecore.EObject;
 
 import com.intel.llvm.ireditor.lLVM_IR.BitwiseBinaryInstruction;
 import com.intel.llvm.ireditor.lLVM_IR.FunctionDef;
+import com.intel.llvm.ireditor.lLVM_IR.FunctionHeader;
+import com.intel.llvm.ireditor.lLVM_IR.GlobalVariable;
 import com.intel.llvm.ireditor.lLVM_IR.Type;
 import com.intel.llvm.ireditor.types.ResolvedType;
-import com.intel.llvm.ireditor.types.ResolvedVectorType;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
@@ -51,14 +58,18 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction.LLVMRuntimeType;
+import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 
 /**
- * This class implements an abstract adapter that returns a default value (mostly <code>null</code>)
- * for each implemented method.
+ * This class implements an abstract adapter that returns <code>null</code> for each implemented
+ * method.
  */
-public abstract class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
+public class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
+
+    @Override
+    public void setUpFacade(LLVMParserRuntime runtime) {
+    }
 
     @Override
     public LLVMExpressionNode createInsertElement(LLVMBaseType resultType, LLVMExpressionNode vector, Type vectorType, LLVMExpressionNode element, LLVMExpressionNode index) {
@@ -111,12 +122,17 @@ public abstract class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMExpressionNode createVectorLiteralNode(List<LLVMExpressionNode> listValues, LLVMExpressionNode target, ResolvedVectorType type) {
+    public LLVMExpressionNode createVectorLiteralNode(List<LLVMExpressionNode> listValues, LLVMExpressionNode target, LLVMBaseType type) {
         return null;
     }
 
     @Override
     public LLVMNode createLLVMIntrinsic(String functionName, Object[] argNodes, FunctionDef functionDef) {
+        return null;
+    }
+
+    @Override
+    public LLVMNode createTruffleIntrinsic(String functionName, LLVMExpressionNode[] argNodes) {
         return null;
     }
 
@@ -231,12 +247,7 @@ public abstract class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMExpressionNode createAlloc(LLVMBaseType llvmType, LLVMExpressionNode numElements, int byteSize, int alignment) {
-        return null;
-    }
-
-    @Override
-    public LLVMExpressionNode createAlloc(int size, int alignment) {
+    public LLVMExpressionNode createAlloc(ResolvedType type, int byteSize, int alignment, LLVMBaseType llvmType, LLVMExpressionNode numElements) {
         return null;
     }
 
@@ -256,12 +267,7 @@ public abstract class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMExpressionNode createGetElementPtr(LLVMExpressionNode currentAddress, LLVMExpressionNode oneValueNode, int currentOffset) {
-        return null;
-    }
-
-    @Override
-    public RootNode createGlobalRootNode(LLVMNode[] staticInits, RootCallTarget mainCallTarget, LLVMAddress[] allocatedGlobalAddresses, Object... args) {
+    public RootNode createGlobalRootNode(RootCallTarget mainCallTarget, Object[] args, Source sourceFile, LLVMRuntimeType[] mainTypes) {
         return null;
     }
 
@@ -271,39 +277,80 @@ public abstract class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMExpressionNode createStructureConstantNode(boolean packed, int structSize, ResolvedType[] types, LLVMExpressionNode[] constants) {
+    public LLVMExpressionNode createStructureConstantNode(ResolvedType structType, boolean packed, ResolvedType[] types, LLVMExpressionNode[] constants) {
         return null;
     }
 
     @Override
-    public LLVMNode createMemCopyNode(LLVMExpressionNode globalVarAddress, LLVMExpressionNode constant, LLVMExpressionNode lengthNode, LLVMExpressionNode alignNode,
-                    LLVMExpressionNode isVolatileNode) {
+    public LLVMNode createBasicBlockNode(LLVMNode[] statementNodes, LLVMNode terminatorNode, int blockId, String blockName) {
         return null;
     }
 
     @Override
-    public LLVMNode createPhiNode() {
+    public LLVMExpressionNode createFunctionBlockNode(FrameSlot returnSlot, List<LLVMNode> basicBlockNodes, LLVMStackFrameNuller[][] beforeSlotNullerNodes,
+                    LLVMStackFrameNuller[][] afterSlotNullerNodes) {
         return null;
     }
 
     @Override
-    public LLVMNode createBasicBlockNode(LLVMNode[] statementNodes, LLVMNode terminatorNode) {
+    public RootNode createFunctionStartNode(LLVMExpressionNode functionBodyNode, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, SourceSection sourceSection, FrameDescriptor frameDescriptor,
+                    FunctionHeader functionHeader) {
         return null;
     }
 
     @Override
-    public LLVMExpressionNode createFunctionBlockNode(FrameSlot returnSlot, List<LLVMNode> basicBlockNodes, LLVMStackFrameNuller[][] indexToSlotNuller) {
+    public Optional<Integer> getArgStartIndex() {
+        return Optional.empty();
+    }
+
+    @Override
+    public LLVMNode createInlineAssemblerExpression(String asmExpression, String asmFlags, LLVMExpressionNode[] finalArgs, LLVMBaseType retType) {
         return null;
     }
 
     @Override
-    public RootNode createFunctionStartNode(LLVMExpressionNode functionBodyNode, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, FrameDescriptor frameDescriptor, String functionName) {
+    public Map<String, NodeFactory<? extends LLVMNode>> getFunctionSubstitutionFactories() {
         return null;
     }
 
     @Override
-    public int getArgStartIndex() {
-        return 0;
+    public LLVMNode createFunctionArgNode(int argIndex, Class<? extends Node> clazz) {
+        return null;
+    }
+
+    @Override
+    public RootNode createFunctionSubstitutionRootNode(LLVMNode intrinsicNode) {
+        return null;
+    }
+
+    @Override
+    public Object allocateGlobalVariable(GlobalVariable globalVariable) {
+        return null;
+    }
+
+    @Override
+    public RootNode createStaticInitsRootNode(LLVMNode[] staticInits) {
+        return null;
+    }
+
+    @Override
+    public Optional<Boolean> hasStackPointerArgument() {
+        return Optional.empty();
+    }
+
+    @Override
+    public LLVMStackFrameNuller createFrameNuller(String identifier, LLVMType type, FrameSlot slot) {
+        return null;
+    }
+
+    @Override
+    public LLVMFunction createFunctionDescriptor(String name, LLVMRuntimeType returnType, boolean varArgs, LLVMRuntimeType[] paramTypes, int functionIndex) {
+        return null;
+    }
+
+    @Override
+    public LLVMFunction createAndRegisterFunctionDescriptor(String name, LLVMRuntimeType convertType, boolean varArgs, LLVMRuntimeType[] convertTypes) {
+        return null;
     }
 
 }

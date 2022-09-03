@@ -29,10 +29,10 @@
  */
 package com.oracle.truffle.llvm.nodes.impl.base;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -40,84 +40,46 @@ import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.nodes.impl.func.LLVMArgNodeFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMAbortFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMACosFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMASinFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMATanFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMCosFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMExpFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMLogFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMSinFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMSqrtFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMTanFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMTanhFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCallocFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMExitFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMFreeFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMMallocFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsic.LLVMVoidIntrinsic;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsicRootNode.LLVMIntrinsicVoidNode;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsicRootNodeFactory.LLVMIntrinsicAddressNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsicRootNodeFactory.LLVMIntrinsicDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsicRootNodeFactory.LLVMIntrinsicFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsicRootNodeFactory.LLVMIntrinsicI16NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsicRootNodeFactory.LLVMIntrinsicI32NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsicRootNodeFactory.LLVMIntrinsicI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsicRootNodeFactory.LLVMIntrinsicI8NodeGen;
-import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
+import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
 import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 
 /**
  * Manages Sulong functions and intrinsified native functions.
  */
 public class LLVMFunctionRegistry {
 
-    private final Map<String, NodeFactory<? extends LLVMIntrinsic>> intrinsics = new HashMap<>();
+    private static final String ZERO_FUNCTION = "<zero function>";
 
-    public LLVMFunctionRegistry(LLVMOptimizationConfiguration optimizationConfig) {
-        initializeIntrinsics(optimizationConfig);
-    }
+    // do not start with 0, otherwise the first function
+    // pointer would be == NULL
+    private static final int REAL_FUNCTION_START_INDEX = 1;
 
-    private void initializeIntrinsics(LLVMOptimizationConfiguration optimizationConfig) {
-        // Fortran
-        intrinsics.put("@_gfortran_abort", LLVMAbortFactory.getInstance());
+    private final Map<String, NodeFactory<? extends LLVMNode>> intrinsics;
+    private final NodeFactoryFacade facade;
 
-        // C
-        intrinsics.put("@abort", LLVMAbortFactory.getInstance());
-        intrinsics.put("@exit", LLVMExitFactory.getInstance());
-
-        if (optimizationConfig.intrinsifyCLibraryFunctions()) {
-            // math.h
-            intrinsics.put("@acos", LLVMACosFactory.getInstance());
-            intrinsics.put("@asin", LLVMASinFactory.getInstance());
-            intrinsics.put("@atan", LLVMATanFactory.getInstance());
-            intrinsics.put("@cos", LLVMCosFactory.getInstance());
-            intrinsics.put("@exp", LLVMExpFactory.getInstance());
-            intrinsics.put("@log", LLVMLogFactory.getInstance());
-            intrinsics.put("@sqrt", LLVMSqrtFactory.getInstance());
-            intrinsics.put("@sin", LLVMSinFactory.getInstance());
-            intrinsics.put("@tan", LLVMTanFactory.getInstance());
-            intrinsics.put("@tanh", LLVMTanhFactory.getInstance());
-
-            // other libraries
-            intrinsics.put("@malloc", LLVMMallocFactory.getInstance());
-            intrinsics.put("@free", LLVMFreeFactory.getInstance());
-            intrinsics.put("@calloc", LLVMCallocFactory.getInstance());
-        }
-    }
+    /**
+     * The function index assigned to the next function descriptor.
+     */
+    private int currentFunctionIndex = REAL_FUNCTION_START_INDEX;
 
     /**
      * Maps a function index (see {@link LLVMFunction#getFunctionIndex()} to a call target.
      */
-    @CompilationFinal private static RootCallTarget[] functionPtrCallTargetMap;
+    @CompilationFinal private RootCallTarget[] functionPtrCallTargetMap;
+
+    /**
+     * Maps a function index (see {@link LLVMFunction#getFunctionIndex()} to a function descriptor.
+     */
+    @CompilationFinal private LLVMFunction[] functionDescriptors = new LLVMFunction[REAL_FUNCTION_START_INDEX];
+
+    public LLVMFunctionRegistry(NodeFactoryFacade facade) {
+        this.facade = facade;
+        this.intrinsics = facade.getFunctionSubstitutionFactories();
+        functionPtrCallTargetMap = new RootCallTarget[REAL_FUNCTION_START_INDEX + intrinsics.size() + 1];
+        functionDescriptors[0] = facade.createFunctionDescriptor(ZERO_FUNCTION, LLVMRuntimeType.ILLEGAL, false, new LLVMRuntimeType[0], 0);
+        registerIntrinsics();
+    }
 
     /**
      * Looks up the call target for a specific function. The lookup may return <code>null</code> if
@@ -126,84 +88,116 @@ public class LLVMFunctionRegistry {
      * @param function the function
      * @return the call target, <code>null</code> if not found.
      */
-    public static RootCallTarget lookup(LLVMFunction function) {
-        RootCallTarget result = functionPtrCallTargetMap[function.getFunctionIndex()];
-        return result;
+    public RootCallTarget lookup(LLVMFunction function) {
+        int functionIndex = function.getFunctionIndex();
+        if (functionIndex >= 0 && functionIndex < functionPtrCallTargetMap.length) {
+            RootCallTarget result = functionPtrCallTargetMap[functionIndex];
+            return result;
+        } else {
+            return null;
+        }
     }
 
     public void register(Map<LLVMFunction, RootCallTarget> functionCallTargets) {
-        functionPtrCallTargetMap = new RootCallTarget[LLVMFunction.getNumberRegisteredFunctions() + intrinsics.size()];
-        registerIntrinsics();
+        CompilerAsserts.neverPartOfCompilation();
+        int maxFunctionIndex = Math.max(maxIndex(functionCallTargets) + 1, functionPtrCallTargetMap.length);
+        RootCallTarget[] newFunctionPtrCallTargetMap = new RootCallTarget[maxFunctionIndex];
+        System.arraycopy(functionPtrCallTargetMap, 0, newFunctionPtrCallTargetMap, 0, functionPtrCallTargetMap.length);
         for (LLVMFunction func : functionCallTargets.keySet()) {
-            functionPtrCallTargetMap[func.getFunctionIndex()] = functionCallTargets.get(func);
+            if (func.getFunctionIndex() == -1) {
+                throw new AssertionError(func.getName());
+            }
+            newFunctionPtrCallTargetMap[func.getFunctionIndex()] = functionCallTargets.get(func);
         }
+        functionPtrCallTargetMap = newFunctionPtrCallTargetMap;
+    }
+
+    private static int maxIndex(Map<LLVMFunction, RootCallTarget> functionCallTargets) {
+        int maxIndex = 0;
+        for (LLVMFunction descr : functionCallTargets.keySet()) {
+            maxIndex = Math.max(maxIndex, descr.getFunctionIndex());
+        }
+        return maxIndex;
     }
 
     private void registerIntrinsics() {
         for (String intrinsicFunction : intrinsics.keySet()) {
-            LLVMFunction function = LLVMFunction.createFromName(intrinsicFunction);
-            NodeFactory<? extends LLVMIntrinsic> nodeFactory = intrinsics.get(intrinsicFunction);
+            LLVMFunction function = createFunctionDescriptor(intrinsicFunction, LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
+            NodeFactory<? extends LLVMNode> nodeFactory = intrinsics.get(intrinsicFunction);
+            RootNode functionRoot;
             List<Class<? extends Node>> executionSignature = nodeFactory.getExecutionSignature();
+
             int nrArguments = executionSignature.size();
-            LLVMNode[] args = new LLVMNode[nrArguments];
+            Object[] args = new Object[nrArguments];
+            int functionDescriptor = 0;
             for (int i = 0; i < nrArguments; i++) {
-                args[i] = getArgReadNode(executionSignature, i);
+                args[i] = facade.createFunctionArgNode(i - functionDescriptor, executionSignature.get(i));
             }
-            LLVMIntrinsic intrinsicNode = nodeFactory.createNode((Object[]) args);
-            RootNode functionRoot = getRootNode(intrinsicNode);
+            LLVMNode intrinsicNode;
+            List<Class<?>> firstNodeFactory = nodeFactory.getNodeSignatures().get(0);
+            if (firstNodeFactory.contains(LLVMFunction.class)) {
+                // node constructor expects a LLVMFunction
+                Object[] newArgs = new Object[args.length + 1];
+                newArgs[0] = function;
+                System.arraycopy(args, 0, newArgs, 1, args.length);
+                intrinsicNode = nodeFactory.createNode(newArgs);
+            } else {
+                intrinsicNode = nodeFactory.createNode(args);
+            }
+            functionRoot = facade.createFunctionSubstitutionRootNode(intrinsicNode);
             RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(functionRoot);
-            addToFunctionMap(function, callTarget);
+            assert functionPtrCallTargetMap[function.getFunctionIndex()] == null;
+            functionPtrCallTargetMap[function.getFunctionIndex()] = callTarget;
         }
     }
 
-    private static LLVMNode getArgReadNode(List<Class<? extends Node>> executionSignature, int i) {
-        Class<? extends Node> clazz = executionSignature.get(i);
-        LLVMNode argNode;
-        if (clazz.equals(LLVMI32Node.class)) {
-            argNode = LLVMArgNodeFactory.LLVMI32ArgNodeGen.create(i);
-        } else if (clazz.equals(LLVMI64Node.class)) {
-            argNode = LLVMArgNodeFactory.LLVMI64ArgNodeGen.create(i);
-        } else if (clazz.equals(LLVMFloatNode.class)) {
-            argNode = LLVMArgNodeFactory.LLVMFloatArgNodeGen.create(i);
-        } else if (clazz.equals(LLVMDoubleNode.class)) {
-            argNode = LLVMArgNodeFactory.LLVMDoubleArgNodeGen.create(i);
-        } else if (clazz.equals(LLVMAddressNode.class)) {
-            argNode = LLVMArgNodeFactory.LLVMAddressArgNodeGen.create(i);
-        } else if (clazz.equals(LLVMFunctionNode.class)) {
-            argNode = LLVMArgNodeFactory.LLVMFunctionArgNodeGen.create(i);
-        } else {
-            throw new AssertionError(clazz);
+    /**
+     * Creates an unique function descriptor identified by the given <code>name</code>.
+     *
+     * @param name the function's name
+     * @param returnType the function's return type
+     * @param paramTypes the function's
+     * @param varArgs
+     * @return the function descriptor
+     */
+    public LLVMFunction createFunctionDescriptor(String name, LLVMRuntimeType returnType, LLVMRuntimeType[] paramTypes, boolean varArgs) {
+        CompilerAsserts.neverPartOfCompilation();
+        for (int i = 0; i < functionDescriptors.length; i++) {
+            if (functionDescriptors[i].getName().equals(name)) {
+                return functionDescriptors[i];
+            }
         }
-        return argNode;
+        LLVMFunction function = facade.createFunctionDescriptor(name, returnType, varArgs, paramTypes, currentFunctionIndex++);
+        LLVMFunction[] newFunctions = new LLVMFunction[functionDescriptors.length + 1];
+        System.arraycopy(functionDescriptors, 0, newFunctions, 0, functionDescriptors.length);
+        newFunctions[function.getFunctionIndex()] = function;
+        functionDescriptors = newFunctions;
+        return function;
     }
 
-    private static RootNode getRootNode(LLVMIntrinsic intrinsicNode) throws AssertionError {
-        RootNode functionRoot;
-        if (intrinsicNode instanceof LLVMI8Node) {
-            functionRoot = LLVMIntrinsicI8NodeGen.create((LLVMI8Node) intrinsicNode);
-        } else if (intrinsicNode instanceof LLVMI16Node) {
-            functionRoot = LLVMIntrinsicI16NodeGen.create((LLVMI16Node) intrinsicNode);
-        } else if (intrinsicNode instanceof LLVMI32Node) {
-            functionRoot = LLVMIntrinsicI32NodeGen.create((LLVMI32Node) intrinsicNode);
-        } else if (intrinsicNode instanceof LLVMI64Node) {
-            functionRoot = LLVMIntrinsicI64NodeGen.create((LLVMI64Node) intrinsicNode);
-        } else if (intrinsicNode instanceof LLVMFloatNode) {
-            functionRoot = LLVMIntrinsicFloatNodeGen.create((LLVMFloatNode) intrinsicNode);
-        } else if (intrinsicNode instanceof LLVMDoubleNode) {
-            functionRoot = LLVMIntrinsicDoubleNodeGen.create((LLVMDoubleNode) intrinsicNode);
-        } else if (intrinsicNode instanceof LLVMAddressNode) {
-            functionRoot = LLVMIntrinsicAddressNodeGen.create((LLVMAddressNode) intrinsicNode);
-        } else if (intrinsicNode instanceof LLVMVoidIntrinsic) {
-            functionRoot = new LLVMIntrinsicVoidNode(((LLVMNode) intrinsicNode));
-        } else {
-            throw new AssertionError(intrinsicNode.getClass());
-        }
-        return functionRoot;
+    /**
+     * Creates a function descriptor from the given <code>index</code> that has previously been
+     * obtained by {@link LLVMFunction#getFunctionIndex()} .
+     *
+     * @param index the function index
+     * @return the function descriptor
+     */
+    public LLVMFunction createFromIndex(int index) {
+        LLVMFunction llvmFunction = facade.createFunctionDescriptor(null, LLVMRuntimeType.ILLEGAL, false, new LLVMRuntimeType[0], index);
+        assert llvmFunction != null;
+        return llvmFunction;
     }
 
-    private static void addToFunctionMap(LLVMFunction function, RootCallTarget callTarget) {
-        assert functionPtrCallTargetMap[function.getFunctionIndex()] == null;
-        functionPtrCallTargetMap[function.getFunctionIndex()] = callTarget;
+    public LLVMFunction[] getFunctionDescriptors() {
+        return functionDescriptors;
+    }
+
+    public boolean isZeroFunctionDescriptor(LLVMFunction function) {
+        return function.getName().equals(ZERO_FUNCTION);
+    }
+
+    public LLVMFunction createZeroFunctionDescriptor() {
+        return createFunctionDescriptor(ZERO_FUNCTION, LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
     }
 
 }
