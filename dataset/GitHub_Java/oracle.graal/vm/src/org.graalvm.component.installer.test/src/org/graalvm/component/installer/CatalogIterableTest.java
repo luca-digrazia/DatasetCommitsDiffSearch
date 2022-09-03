@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,28 +24,23 @@
  */
 package org.graalvm.component.installer;
 
-import org.graalvm.component.installer.remote.CatalogIterable;
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
-import java.nio.file.Path;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.jar.JarFile;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.graalvm.component.installer.DownloadURLIterable.DownloadURLParam;
-import org.graalvm.component.installer.jar.JarArchive;
-import org.graalvm.component.installer.jar.JarMetaLoader;
+import org.graalvm.component.installer.CatalogIterable.RemoteComponentParam;
 import org.graalvm.component.installer.model.ComponentInfo;
-import org.graalvm.component.installer.remote.FileDownloader;
+import org.graalvm.component.installer.model.ComponentRegistry;
 import org.graalvm.component.installer.persist.MetadataLoader;
 import org.graalvm.component.installer.persist.ProxyResource;
-import org.graalvm.component.installer.remote.RemotePropertiesStorage;
+import org.graalvm.component.installer.persist.RemoteStorage;
 import org.graalvm.component.installer.persist.test.Handler;
 import org.junit.After;
 import static org.junit.Assert.assertEquals;
@@ -57,7 +52,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 
-public class CatalogIterableTest extends CommandTestBase implements SoftwareChannel {
+public class CatalogIterableTest extends CommandTestBase implements Supplier<ComponentRegistry> {
     @Rule public final ProxyResource proxyResource = new ProxyResource();
 
     @Override
@@ -75,7 +70,7 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
 
     @Test
     public void testRemoteNames() throws Exception {
-        initRemoteComponent("persist/data/truffleruby2.jar", "test://graalvm.io/download/truffleruby.zip", "testComponent", "test");
+        initRemoteComponent("persist/data/truffleruby2.jar", "test://graal.us.oracle.com/download/truffleruby.zip", "testComponent", "test");
 
         assertEquals("test", param.getSpecification());
         assertEquals("testComponent", param.getDisplayName());
@@ -85,7 +80,7 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
 
     @Test
     public void testCreateMetaLoader() throws Exception {
-        initRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", "testComponent", "test");
+        initRemoteComponent("persist/data/truffleruby3.jar", "test://graal.us.oracle.com/download/truffleruby.zip", "testComponent", "test");
 
         MetadataLoader ldr = param.createMetaLoader();
         ldr.setNoVerifySymlinks(false);
@@ -106,7 +101,7 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
 
     @Test
     public void testCreateFileLoader() throws Exception {
-        initRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", "testComponent", "test");
+        initRemoteComponent("persist/data/truffleruby3.jar", "test://graal.us.oracle.com/download/truffleruby.zip", "testComponent", "test");
 
         MetadataLoader ldr = param.createFileLoader();
         ldr.setNoVerifySymlinks(false);
@@ -127,8 +122,8 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
 
     @Test
     public void testVerifyRemoteJars() throws Exception {
-        initRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", "testComponent", "test");
-        info.setShaDigest(RemotePropertiesStorage.toHashBytes(null, "d3a45ea326b379cc3d543cc56130ee9bd395fd1c1d51a470e8c2c8af1129829c", this));
+        initRemoteComponent("persist/data/truffleruby3.jar", "test://graal.us.oracle.com/download/truffleruby.zip", "testComponent", "test");
+        info.setShaDigest(RemoteStorage.toHashBytes(null, "d3a45ea326b379cc3d543cc56130ee9bd395fd1c1d51a470e8c2c8af1129829c", this));
 
         try {
             exception.expect(IOException.class);
@@ -147,9 +142,14 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
         }
     }
 
+    @Override
+    public ComponentRegistry get() {
+        return registry;
+    }
+
     @Test
     public void testReadComponentMetadataNoNetwork() throws Exception {
-        addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
+        addRemoteComponent("persist/data/truffleruby3.jar", "test://graal.us.oracle.com/download/truffleruby.zip", false);
         textParams.add("ruby");
         CatalogIterable cit = new CatalogIterable(this, this, this);
         assertTrue(cit.iterator().hasNext());
@@ -164,24 +164,8 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
     public void testUnknownComponentSpecified() throws Exception {
         exception.expect(FailedOperationException.class);
         exception.expectMessage("REMOTE_UnknownComponentId");
-        addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
+        addRemoteComponent("persist/data/truffleruby3.jar", "test://graal.us.oracle.com/download/truffleruby.zip", false);
         textParams.add("r");
-        CatalogIterable cit = new CatalogIterable(this, this, this);
-        assertTrue(cit.iterator().hasNext());
-        cit.iterator().next();
-    }
-
-    /**
-     * Checks that if user mistypes a filename instead of component ID, an informative note is
-     * printed.
-     */
-    @Test
-    public void testUnknownComponentButExistingFile() throws Exception {
-        exception.expect(FailedOperationException.class);
-        exception.expectMessage("REMOTE_UnknownComponentMaybeFile");
-        addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
-        File mistyped = folder.newFile("mistyped-component.jar");
-        textParams.add(mistyped.getPath());
         CatalogIterable cit = new CatalogIterable(this, this, this);
         assertTrue(cit.iterator().hasNext());
         cit.iterator().next();
@@ -189,8 +173,8 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
 
     @Test
     public void testMetaAccessesDirectURL() throws Exception {
-        addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
-        rparam = new DownloadURLParam(url, rparam.getDisplayName(), rparam.getSpecification(), this, false);
+        addRemoteComponent("persist/data/truffleruby3.jar", "test://graal.us.oracle.com/download/truffleruby.zip", false);
+        rparam = new RemoteComponentParam(url, rparam.getDisplayName(), rparam.getSpecification(), this, false);
         components.add(param);
 
         URL remoteU = rparam.createMetaLoader().getComponentInfo().getRemoteURL();
@@ -201,8 +185,8 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
 
     @Test
     public void testDirectURLAccessedJustOnce() throws Exception {
-        addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
-        rparam = new DownloadURLParam(url, rparam.getDisplayName(), rparam.getSpecification(), this, false);
+        addRemoteComponent("persist/data/truffleruby3.jar", "test://graal.us.oracle.com/download/truffleruby.zip", false);
+        rparam = new RemoteComponentParam(url, rparam.getDisplayName(), rparam.getSpecification(), this, false);
         components.add(param);
 
         URL remoteU = rparam.createMetaLoader().getComponentInfo().getRemoteURL();
@@ -212,20 +196,20 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
 
         Handler.clearVisited();
 
-        Archive jf = rparam.getArchive();
+        JarFile jf = rparam.getJarFile();
         assertNotNull(jf);
         assertFalse(Handler.isVisited(url));
     }
 
     @Test
     public void testDirectURLJarClosedAfterMeta() throws Exception {
-        addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
-        rparam = new DownloadURLParam(url, rparam.getDisplayName(), rparam.getSpecification(), this, false);
+        addRemoteComponent("persist/data/truffleruby3.jar", "test://graal.us.oracle.com/download/truffleruby.zip", false);
+        rparam = new RemoteComponentParam(url, rparam.getDisplayName(), rparam.getSpecification(), this, false);
         components.add(param);
 
         URL remoteU = rparam.createMetaLoader().getComponentInfo().getRemoteURL();
         assertEquals(url, remoteU);
-        JarArchive jf = (JarArchive) rparam.getArchive();
+        JarFile jf = rparam.getJarFile();
         assertNotNull(jf.getEntry("META-INF"));
 
         rparam.close();
@@ -236,10 +220,10 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
 
     @Test
     public void testDirectURLJarClosedAfterJar() throws Exception {
-        addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
-        rparam = new DownloadURLParam(url, rparam.getDisplayName(), rparam.getSpecification(), this, false);
+        addRemoteComponent("persist/data/truffleruby3.jar", "test://graal.us.oracle.com/download/truffleruby.zip", false);
+        rparam = new RemoteComponentParam(url, rparam.getDisplayName(), rparam.getSpecification(), this, false);
         components.add(param);
-        JarArchive jf = (JarArchive) rparam.getArchive();
+        JarFile jf = rparam.getJarFile();
         assertNotNull(jf.getEntry("META-INF"));
         rparam.close();
         exception.expect(IllegalStateException.class);
@@ -248,7 +232,7 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
 
     @Test
     public void testURLDoesNotExist() throws Exception {
-        addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
+        addRemoteComponent("persist/data/truffleruby3.jar", "test://graal.us.oracle.com/download/truffleruby.zip", false);
         textParams.add("ruby");
         Handler.bind(url.toString(), new URLConnection(url) {
             @Override
@@ -290,25 +274,5 @@ public class CatalogIterableTest extends CommandTestBase implements SoftwareChan
         exception.expectMessage("REMOTE_ErrorDownloadingNotExist");
 
         rubyComp.createFileLoader().getComponentInfo();
-    }
-
-    @Override
-    public boolean setupLocation(String urlString) {
-        // OK
-        return true;
-    }
-
-    @Override
-    public void init(CommandInput input, Feedback output) {
-    }
-
-    @Override
-    public MetadataLoader createLocalFileLoader(Path localFile, boolean verify) throws IOException {
-        return new JarMetaLoader(new JarFile(localFile.toFile(), verify), this);
-    }
-
-    @Override
-    public FileDownloader configureDownloader(FileDownloader dn) {
-        return dn;
     }
 }

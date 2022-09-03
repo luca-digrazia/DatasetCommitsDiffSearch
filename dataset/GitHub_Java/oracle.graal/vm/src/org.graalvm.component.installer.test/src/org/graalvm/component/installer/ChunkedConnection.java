@@ -26,7 +26,6 @@ package org.graalvm.component.installer;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.concurrent.Semaphore;
@@ -34,9 +33,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.graalvm.component.installer.persist.FileDownloaderTest;
 
-public class ChunkedConnection extends HttpURLConnection {
+public class ChunkedConnection extends URLConnection {
     public InputStream delegate;
-    public volatile long nextChunk = Long.MAX_VALUE;
+    public volatile long nextChunk;
     public Semaphore nextSem = new Semaphore(0);
     public Semaphore reachedSem = new Semaphore(0);
     public URLConnection original;
@@ -53,7 +52,6 @@ public class ChunkedConnection extends HttpURLConnection {
 
     @Override
     public InputStream getInputStream() throws IOException {
-        connect();
         delegate = original.getInputStream();
         return new InputStream() {
             @Override
@@ -80,15 +78,6 @@ public class ChunkedConnection extends HttpURLConnection {
     @Override
     public int getContentLength() {
         return original.getContentLength();
-    }
-
-    @Override
-    public void disconnect() {
-    }
-
-    @Override
-    public boolean usingProxy() {
-        return false;
     }
 
 }

@@ -24,10 +24,11 @@
  */
 package org.graalvm.component.installer.persist;
 
-import org.graalvm.component.installer.CommandTestBase;
+import org.graalvm.component.installer.TestBase;
 import org.junit.Rule;
 
-public class NetworkTestBase extends CommandTestBase {
+public class NetworkTestBase extends TestBase {
+
     @Rule public ProxyResource proxyResource = new ProxyResource();
 
 }

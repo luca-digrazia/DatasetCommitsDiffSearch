@@ -24,8 +24,6 @@
  */
 package org.graalvm.component.installer;
 
-import static org.graalvm.component.installer.BundleConstants.GRAALVM_CAPABILITY;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -36,10 +34,12 @@ import java.nio.channels.ReadableByteChannel;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
+import static org.graalvm.component.installer.BundleConstants.GRAALVM_CAPABILITY;
 
 public final class GenerateCatalog {
     private List<String> archives;
@@ -90,7 +90,7 @@ public final class GenerateCatalog {
         return fileDigest.digest();
     }
 
-    static String digest2String(byte[] digest) {
+    String digest2String(byte[] digest) {
         StringBuilder sb = new StringBuilder(digest.length * 3);
         for (int i = 0; i < digest.length; i++) {
             sb.append(String.format("%02x", (digest[i] & 0xff)));

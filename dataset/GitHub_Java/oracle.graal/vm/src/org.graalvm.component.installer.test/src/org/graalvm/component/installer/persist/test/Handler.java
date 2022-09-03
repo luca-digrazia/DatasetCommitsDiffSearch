@@ -25,8 +25,6 @@
 package org.graalvm.component.installer.persist.test;
 
 import java.io.IOException;
-import java.net.ConnectException;
-import java.net.Proxy;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
@@ -39,8 +37,7 @@ import java.util.Set;
 public class Handler extends URLStreamHandler {
     private static Map<String, URL> bindings = Collections.synchronizedMap(new HashMap<>());
     private static Map<String, URLConnection> connections = Collections.synchronizedMap(new HashMap<>());
-    private static Set<String> visitedURLs = Collections.synchronizedSet(new HashSet<>());
-    private static Map<String, URLConnection> httpProxyConnections = Collections.synchronizedMap(new HashMap<>());
+    private static Set<URL> visitedURLs = Collections.synchronizedSet(new HashSet<>());
 
     public Handler() {
     }
@@ -51,10 +48,6 @@ public class Handler extends URLStreamHandler {
 
     public static void bind(String s, URLConnection con) {
         connections.put(s, con);
-    }
-
-    public static void bindProxy(String s, URLConnection con) {
-        httpProxyConnections.put(s, con);
     }
 
     public static void clear() {
@@ -68,32 +61,13 @@ public class Handler extends URLStreamHandler {
     }
 
     public static boolean isVisited(URL u) {
-        return visitedURLs.contains(u.toString());
-    }
-
-    @Override
-    protected URLConnection openConnection(URL u, Proxy p) throws IOException {
-        if (p.type() == Proxy.Type.DIRECT) {
-            return openConnection(u);
-        } else if (p.type() != Proxy.Type.HTTP) {
-            return null;
-        }
-        URLConnection c = httpProxyConnections.get(u.toString());
-        if (c != null) {
-            return doOpenConnection(u, c);
-        }  else {
-            throw new ConnectException(u.toExternalForm());
-        }
+        return visitedURLs.contains(u);
     }
 
     @Override
     protected URLConnection openConnection(URL u) throws IOException {
         URLConnection c = connections.get(u.toString());
-        return doOpenConnection(u, c);
-    }
-    
-    private URLConnection doOpenConnection(URL u, URLConnection c) throws IOException {
-        visitedURLs.add(u.toString());
+        visitedURLs.add(u);
         if (c != null) {
             return c;
         }
