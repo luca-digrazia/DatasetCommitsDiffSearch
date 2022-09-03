@@ -22,88 +22,42 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.CMP;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp.TEST;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.DWORD;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.QWORD;
-import static com.oracle.graal.hotspot.HotSpotBackend.FETCH_UNROLL_INFO;
-import static com.oracle.graal.hotspot.HotSpotBackend.UNCOMMON_TRAP;
-import static com.oracle.graal.lir.LIRValueUtil.asConstant;
-import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
-import static jdk.internal.jvmci.amd64.AMD64.cpuxmmRegisters;
-import static jdk.internal.jvmci.amd64.AMD64.rbp;
+import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.*;
+import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp.*;
+import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
+import static jdk.internal.jvmci.amd64.AMD64.*;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.internal.jvmci.amd64.AMD64;
-import jdk.internal.jvmci.code.CallingConvention;
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.code.RegisterConfig;
-import jdk.internal.jvmci.code.RegisterValue;
-import jdk.internal.jvmci.code.StackSlot;
-import jdk.internal.jvmci.code.StackSlotValue;
-import jdk.internal.jvmci.code.VirtualStackSlot;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.hotspot.HotSpotCompressedNullConstant;
-import jdk.internal.jvmci.hotspot.HotSpotConstant;
-import jdk.internal.jvmci.hotspot.HotSpotMetaspaceConstant;
-import jdk.internal.jvmci.hotspot.HotSpotObjectConstant;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
-import jdk.internal.jvmci.meta.AllocatableValue;
-import jdk.internal.jvmci.meta.Constant;
-import jdk.internal.jvmci.meta.DeoptimizationAction;
-import jdk.internal.jvmci.meta.DeoptimizationReason;
-import jdk.internal.jvmci.meta.JavaConstant;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.PlatformKind;
-import jdk.internal.jvmci.meta.PrimitiveConstant;
-import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.amd64.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig.*;
+import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MIOp;
 import com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize;
-import com.oracle.graal.compiler.amd64.AMD64LIRGenerator;
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.compiler.common.spi.LIRKindTool;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.hotspot.HotSpotBackend;
-import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
-import com.oracle.graal.hotspot.HotSpotLIRGenerator;
-import com.oracle.graal.hotspot.HotSpotLockStack;
+import com.oracle.graal.compiler.amd64.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.amd64.AMD64HotSpotMove.StoreRbpOp;
-import com.oracle.graal.hotspot.debug.BenchmarkCounters;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.stubs.Stub;
-import com.oracle.graal.lir.ConstantValue;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.LabelRef;
+import com.oracle.graal.hotspot.debug.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.NoOp;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.lir.SwitchStrategy;
-import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.amd64.AMD64AddressValue;
-import com.oracle.graal.lir.amd64.AMD64BinaryConsumer;
-import com.oracle.graal.lir.amd64.AMD64CCall;
-import com.oracle.graal.lir.amd64.AMD64ControlFlow.StrategySwitchOp;
-import com.oracle.graal.lir.amd64.AMD64FrameMapBuilder;
-import com.oracle.graal.lir.amd64.AMD64LIRInstruction;
-import com.oracle.graal.lir.amd64.AMD64Move;
+import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.amd64.AMD64Move.LeaDataOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
-import com.oracle.graal.lir.amd64.AMD64RestoreRegistersOp;
-import com.oracle.graal.lir.amd64.AMD64SaveRegistersOp;
-import com.oracle.graal.lir.amd64.AMD64ZapRegistersOp;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.framemap.FrameMapBuilder;
-import com.oracle.graal.lir.gen.DefaultLIRKindTool;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.gen.*;
 
 /**
  * LIR generator specialized for AMD64 HotSpot.
@@ -150,7 +104,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
             this.placeholder = placeholder0;
             AMD64FrameMapBuilder frameMapBuilder = (AMD64FrameMapBuilder) getResult().getFrameMapBuilder();
             this.reservedSlot = frameMapBuilder.allocateRBPSpillSlot();
-            this.rescueSlot = newVariable(LIRKind.value(JavaKind.Long));
+            this.rescueSlot = newVariable(LIRKind.value(Kind.Long));
         }
 
         /**
@@ -159,13 +113,13 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
          * @param useStack specifies if rbp must be saved to the stack
          */
         public void finalize(boolean useStack) {
-            RegisterValue rbpValue = rbp.asValue(LIRKind.value(JavaKind.Long));
+            RegisterValue rbpValue = rbp.asValue(LIRKind.value(Kind.Long));
             LIRInstruction move;
             if (useStack) {
                 move = new StoreRbpOp(rescueSlot, rbpValue, reservedSlot);
             } else {
                 ((AMD64FrameMapBuilder) getResult().getFrameMapBuilder()).freeRBPSpillSlot();
-                move = new MoveFromRegOp(JavaKind.Long, rescueSlot, rbpValue);
+                move = new MoveFromRegOp(Kind.Long, rescueSlot, rbpValue);
             }
             placeholder.replace(getResult().getLIR(), move);
 
@@ -245,7 +199,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     private Register findPollOnReturnScratchRegister() {
         RegisterConfig regConfig = getProviders().getCodeCache().getRegisterConfig();
         for (Register r : regConfig.getAllocatableRegisters()) {
-            if (!r.equals(regConfig.getReturnRegister(JavaKind.Long)) && !r.equals(AMD64.rbp)) {
+            if (!r.equals(regConfig.getReturnRegister(Kind.Long)) && !r.equals(AMD64.rbp)) {
                 return r;
             }
         }
@@ -312,14 +266,14 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     public Value emitCardTableShift() {
-        Variable result = newVariable(LIRKind.value(JavaKind.Long));
+        Variable result = newVariable(LIRKind.value(Kind.Long));
         append(new AMD64HotSpotCardTableShiftOp(result, config));
         return result;
     }
 
     @Override
     public Value emitCardTableAddress() {
-        Variable result = newVariable(LIRKind.value(JavaKind.Long));
+        Variable result = newVariable(LIRKind.value(Kind.Long));
         append(new AMD64HotSpotCardTableAddressOp(result, config));
         return result;
     }
@@ -345,7 +299,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         StackSlotValue[] savedRegisterLocations = new StackSlotValue[savedRegisters.length];
         for (int i = 0; i < savedRegisters.length; i++) {
             PlatformKind kind = target().arch.getLargestStorableKind(savedRegisters[i].getRegisterCategory());
-            assert kind != JavaKind.Illegal;
+            assert kind != Kind.Illegal;
             VirtualStackSlot spillSlot = getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(kind));
             savedRegisterLocations[i] = spillSlot;
         }
@@ -422,7 +376,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
         Register thread = getProviders().getRegisters().getThreadRegister();
         append(new AMD64HotSpotCRuntimeCallPrologueOp(config.threadLastJavaSpOffset(), thread));
-        Variable result = super.emitForeignCall(linkage, null, thread.asValue(LIRKind.value(JavaKind.Long)), trapRequest);
+        Variable result = super.emitForeignCall(linkage, null, thread.asValue(LIRKind.value(Kind.Long)), trapRequest);
         append(new AMD64HotSpotCRuntimeCallEpilogueOp(config.threadLastJavaSpOffset(), config.threadLastJavaFpOffset(), thread));
 
         Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = ((AMD64HotSpotLIRGenerationResult) getResult()).getCalleeSaveInfo();
@@ -437,7 +391,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
         Register thread = getProviders().getRegisters().getThreadRegister();
         append(new AMD64HotSpotCRuntimeCallPrologueOp(config.threadLastJavaSpOffset(), thread));
-        Variable result = super.emitForeignCall(linkage, null, thread.asValue(LIRKind.value(JavaKind.Long)));
+        Variable result = super.emitForeignCall(linkage, null, thread.asValue(LIRKind.value(Kind.Long)));
         append(new AMD64HotSpotCRuntimeCallEpilogueOp(config.threadLastJavaSpOffset(), config.threadLastJavaFpOffset(), thread));
 
         Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = ((AMD64HotSpotLIRGenerationResult) getResult()).getCalleeSaveInfo();
@@ -458,7 +412,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         JavaConstant[] zapValues = new JavaConstant[zappedRegisters.length];
         for (int i = 0; i < zappedRegisters.length; i++) {
             PlatformKind kind = target().arch.getLargestStorableKind(zappedRegisters[i].getRegisterCategory());
-            assert kind != JavaKind.Illegal;
+            assert kind != Kind.Illegal;
             zapValues[i] = zapValueForKind(kind);
         }
         ((AMD64HotSpotLIRGenerationResult) getResult()).getCalleeSaveInfo().put(currentRuntimeCallInfo, emitZapRegisters(zappedRegisters, zapValues));
@@ -477,15 +431,15 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         // TODO(mg): in case a native function uses floating point varargs, the ABI requires that
         // RAX contains the length of the varargs
         PrimitiveConstant intConst = JavaConstant.forInt(numberOfFloatingPointArguments);
-        AllocatableValue numberOfFloatingPointArgumentsRegister = AMD64.rax.asValue(LIRKind.value(JavaKind.Int));
-        emitMoveConstant(numberOfFloatingPointArgumentsRegister, intConst);
+        AllocatableValue numberOfFloatingPointArgumentsRegister = AMD64.rax.asValue(intConst.getLIRKind());
+        emitMove(numberOfFloatingPointArgumentsRegister, intConst);
         for (int i = 0; i < args.length; i++) {
             Value arg = args[i];
             AllocatableValue loc = nativeCallingConvention.getArgument(i);
             emitMove(loc, arg);
             argLocations[i] = loc;
         }
-        Value ptr = emitLoadConstant(LIRKind.value(JavaKind.Long), JavaConstant.forLong(address));
+        Value ptr = emitMove(JavaConstant.forLong(address));
         append(new AMD64CCall(nativeCallingConvention.getReturn(), ptr, numberOfFloatingPointArgumentsRegister, argLocations));
     }
 
@@ -519,9 +473,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     public void emitDeoptimizeCaller(DeoptimizationAction action, DeoptimizationReason reason) {
-        Value actionAndReason = emitJavaConstant(getMetaAccess().encodeDeoptActionAndReason(action, reason, 0));
-        Value nullValue = emitConstant(LIRKind.reference(JavaKind.Long), JavaConstant.NULL_POINTER);
-        moveDeoptValuesToThread(actionAndReason, nullValue);
+        moveDeoptValuesToThread(getMetaAccess().encodeDeoptActionAndReason(action, reason, 0), JavaConstant.NULL_POINTER);
         append(new AMD64HotSpotDeoptimizeCallerOp(saveRbp.getRbpRescueSlot()));
     }
 
@@ -554,16 +506,15 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     @Override
-    protected void emitStoreConst(JavaKind kind, AMD64AddressValue address, ConstantValue value, LIRFrameState state) {
-        Constant c = value.getConstant();
-        if (c instanceof HotSpotConstant && !JavaConstant.isNull(c)) {
-            HotSpotConstant hc = (HotSpotConstant) c;
-            if (hc.isCompressed()) {
-                assert kind == JavaKind.Int;
-                if (!target().inlineObjects && hc instanceof HotSpotObjectConstant) {
+    protected void emitStoreConst(Kind kind, AMD64AddressValue address, JavaConstant value, LIRFrameState state) {
+        if (value instanceof HotSpotConstant && value.isNonNull()) {
+            HotSpotConstant c = (HotSpotConstant) value;
+            if (c.isCompressed()) {
+                assert kind == Kind.Int;
+                if (!target().inlineObjects && c instanceof HotSpotObjectConstant) {
                     emitStore(kind, address, asAllocatable(value), state);
                 } else {
-                    append(new AMD64HotSpotBinaryConsumer.MemoryConstOp(AMD64MIOp.MOV, address, hc, state));
+                    append(new AMD64HotSpotBinaryConsumer.MemoryConstOp(AMD64MIOp.MOV, address, c, state));
                 }
             } else {
                 emitStore(kind, address, asAllocatable(value), state);
@@ -576,18 +527,18 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     @Override
     public Value emitCompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
         LIRKind inputKind = pointer.getLIRKind();
-        assert inputKind.getPlatformKind() == JavaKind.Long;
+        assert inputKind.getPlatformKind() == Kind.Long || inputKind.getPlatformKind() == Kind.Object;
         if (inputKind.isReference(0)) {
             // oop
-            Variable result = newVariable(LIRKind.reference(JavaKind.Int));
+            Variable result = newVariable(LIRKind.reference(Kind.Int));
             append(new AMD64HotSpotMove.CompressPointer(result, asAllocatable(pointer), getProviders().getRegisters().getHeapBaseRegister().asValue(), encoding, nonNull));
             return result;
         } else {
             // metaspace pointer
-            Variable result = newVariable(LIRKind.value(JavaKind.Int));
+            Variable result = newVariable(LIRKind.value(Kind.Int));
             AllocatableValue base = Value.ILLEGAL;
             if (encoding.base != 0) {
-                base = emitLoadConstant(LIRKind.value(JavaKind.Long), JavaConstant.forLong(encoding.base));
+                base = emitMove(JavaConstant.forLong(encoding.base));
             }
             append(new AMD64HotSpotMove.CompressPointer(result, asAllocatable(pointer), base, encoding, nonNull));
             return result;
@@ -597,18 +548,18 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     @Override
     public Value emitUncompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
         LIRKind inputKind = pointer.getLIRKind();
-        assert inputKind.getPlatformKind() == JavaKind.Int;
+        assert inputKind.getPlatformKind() == Kind.Int;
         if (inputKind.isReference(0)) {
             // oop
-            Variable result = newVariable(LIRKind.reference(JavaKind.Long));
+            Variable result = newVariable(LIRKind.reference(Kind.Object));
             append(new AMD64HotSpotMove.UncompressPointer(result, asAllocatable(pointer), getProviders().getRegisters().getHeapBaseRegister().asValue(), encoding, nonNull));
             return result;
         } else {
             // metaspace pointer
-            Variable result = newVariable(LIRKind.value(JavaKind.Long));
+            Variable result = newVariable(LIRKind.value(Kind.Long));
             AllocatableValue base = Value.ILLEGAL;
             if (encoding.base != 0) {
-                base = emitLoadConstant(LIRKind.value(JavaKind.Long), JavaConstant.forLong(encoding.base));
+                base = emitMove(JavaConstant.forLong(encoding.base));
             }
             append(new AMD64HotSpotMove.UncompressPointer(result, asAllocatable(pointer), base, encoding, nonNull));
             return result;
@@ -616,21 +567,24 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     @Override
-    protected AMD64LIRInstruction createMoveConstant(AllocatableValue dst, Constant src) {
-        if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(src)) {
-            return super.createMoveConstant(dst, JavaConstant.INT_0);
-        } else if (src instanceof HotSpotObjectConstant) {
-            return new AMD64HotSpotMove.HotSpotLoadObjectConstantOp(dst, (HotSpotObjectConstant) src);
-        } else if (src instanceof HotSpotMetaspaceConstant) {
-            return new AMD64HotSpotMove.HotSpotLoadMetaspaceConstantOp(dst, (HotSpotMetaspaceConstant) src);
-        } else {
-            return super.createMoveConstant(dst, src);
+    protected AMD64LIRInstruction createMove(AllocatableValue dst, Value src) {
+        if (src instanceof JavaConstant) {
+            if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(src)) {
+                return super.createMove(dst, JavaConstant.INT_0);
+            }
+            if (src instanceof HotSpotObjectConstant) {
+                return new AMD64HotSpotMove.HotSpotLoadObjectConstantOp(dst, (HotSpotObjectConstant) src);
+            }
+            if (src instanceof HotSpotMetaspaceConstant) {
+                return new AMD64HotSpotMove.HotSpotLoadMetaspaceConstantOp(dst, (HotSpotMetaspaceConstant) src);
+            }
         }
+        return super.createMove(dst, src);
     }
 
     @Override
     public void emitNullCheck(Value address, LIRFrameState state) {
-        if (address.getLIRKind().getPlatformKind() == JavaKind.Int) {
+        if (address.getLIRKind().getPlatformKind() == Kind.Int) {
             CompressEncoding encoding = config.getOopEncoding();
             Value uncompressed;
             if (encoding.shift <= 3) {
@@ -647,38 +601,32 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     protected void emitCompareOp(PlatformKind cmpKind, Variable left, Value right) {
-        if (isConstantValue(right)) {
-            Constant c = asConstant(right);
-            if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(c)) {
-                append(new AMD64BinaryConsumer.Op(TEST, DWORD, left, left));
-                return;
-            } else if (c instanceof HotSpotConstant) {
-                HotSpotConstant hsc = (HotSpotConstant) c;
+        if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(right)) {
+            append(new AMD64BinaryConsumer.Op(TEST, DWORD, left, left));
+        } else if (right instanceof HotSpotConstant) {
+            HotSpotConstant c = (HotSpotConstant) right;
 
-                boolean isImmutable = GraalOptions.ImmutableCode.getValue();
-                boolean generatePIC = GraalOptions.GeneratePIC.getValue();
-                if (hsc.isCompressed() && !(isImmutable && generatePIC)) {
-                    append(new AMD64HotSpotBinaryConsumer.ConstOp(CMP.getMIOpcode(DWORD, false), left, hsc));
-                } else {
-                    OperandSize size = hsc.isCompressed() ? DWORD : QWORD;
-                    append(new AMD64BinaryConsumer.DataOp(CMP.getRMOpcode(size), size, left, hsc));
-                }
-                return;
+            boolean isImmutable = GraalOptions.ImmutableCode.getValue();
+            boolean generatePIC = GraalOptions.GeneratePIC.getValue();
+            if (c.isCompressed() && !(isImmutable && generatePIC)) {
+                append(new AMD64HotSpotBinaryConsumer.ConstOp(CMP.getMIOpcode(DWORD, false), left, c));
+            } else {
+                OperandSize size = c.isCompressed() ? DWORD : QWORD;
+                append(new AMD64BinaryConsumer.DataOp(CMP.getRMOpcode(size), size, left, c));
             }
+        } else {
+            super.emitCompareOp(cmpKind, left, right);
         }
-
-        super.emitCompareOp(cmpKind, left, right);
     }
 
     @Override
-    protected boolean emitCompareMemoryConOp(OperandSize size, ConstantValue a, AMD64AddressValue b, LIRFrameState state) {
-        if (JavaConstant.isNull(a.getConstant())) {
+    protected boolean emitCompareMemoryConOp(OperandSize size, JavaConstant a, AMD64AddressValue b, LIRFrameState state) {
+        if (a.isNull()) {
             append(new AMD64BinaryConsumer.MemoryConstOp(CMP, size, b, 0, state));
             return true;
-        } else if (a.getConstant() instanceof HotSpotConstant && size == DWORD) {
-            HotSpotConstant hc = (HotSpotConstant) a.getConstant();
-            assert hc.isCompressed();
-            append(new AMD64HotSpotBinaryConsumer.MemoryConstOp(CMP.getMIOpcode(size, false), b, hc, state));
+        } else if (a instanceof HotSpotConstant && size == DWORD) {
+            assert ((HotSpotConstant) a).isCompressed();
+            append(new AMD64HotSpotBinaryConsumer.MemoryConstOp(CMP.getMIOpcode(size, false), b, (HotSpotConstant) a, state));
             return true;
         } else {
             return super.emitCompareMemoryConOp(size, a, b, state);
@@ -717,8 +665,4 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         append(new AMD64PrefetchOp(asAddressValue(address), config.allocatePrefetchInstr));
     }
 
-    @Override
-    protected StrategySwitchOp createStrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Variable key, AllocatableValue temp) {
-        return new AMD64HotSpotStrategySwitchOp(strategy, keyTargets, defaultTarget, key, temp);
-    }
 }

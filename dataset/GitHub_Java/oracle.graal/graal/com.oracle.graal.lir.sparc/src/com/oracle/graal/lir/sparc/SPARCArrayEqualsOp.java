@@ -26,15 +26,18 @@ import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.RCondition.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
 import static jdk.internal.jvmci.common.UnsafeAccess.*;
 import static jdk.internal.jvmci.sparc.SPARC.*;
+import static jdk.internal.jvmci.sparc.SPARC.CPUFeature.*;
 
 import java.lang.reflect.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.sparc.SPARC.CPUFeature;
 
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
@@ -140,6 +143,8 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         Register tempReg1 = asRegister(temp4);
         Register tempReg2 = asRegister(temp5);
 
+        boolean hasCBcond = masm.hasFeature(CPUFeature.CBCOND);
+
         masm.sra(length, 0, length);
         masm.and(result, VECTOR_SIZE - 1, result); // tail count (in bytes)
         masm.andcc(length, ~(VECTOR_SIZE - 1), length);  // vector count (in bytes)
@@ -153,8 +158,16 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         // Compare the last element first
         masm.ldx(new SPARCAddress(array1, 0), tempReg1);
         masm.ldx(new SPARCAddress(array2, 0), tempReg2);
-        masm.compareBranch(tempReg1, tempReg2, NotEqual, Xcc, falseLabel, PREDICT_NOT_TAKEN, null);
-        masm.compareBranch(length, 0, Equal, Xcc, compareTailCorrectVectorEnd, PREDICT_NOT_TAKEN, null);
+        if (hasCBcond) {
+            masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
+            masm.cbcondx(Equal, length, 0, compareTailCorrectVectorEnd);
+        } else {
+            masm.cmp(tempReg1, tempReg2);
+            masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_NOT_TAKEN);
+            masm.nop();
+            masm.bpr(Rc_z, NOT_ANNUL, compareTailCorrectVectorEnd, PREDICT_NOT_TAKEN, length);
+            masm.nop();
+        }
 
         // Load the first value from array 1 (Later done in back branch delay-slot)
         masm.ldx(new SPARCAddress(array1, length), tempReg1);
@@ -169,7 +182,12 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         masm.ldx(new SPARCAddress(array1, length), tempReg1); // Load in delay slot
 
         // Tail count zero, therefore we can go to the end
-        masm.compareBranch(result, 0, Equal, Xcc, trueLabel, PREDICT_TAKEN, null);
+        if (hasCBcond) {
+            masm.cbcondx(Equal, result, 0, trueLabel);
+        } else {
+            masm.bpr(Rc_z, NOT_ANNUL, trueLabel, PREDICT_TAKEN, result);
+            masm.nop();
+        }
 
         masm.bind(compareTailCorrectVectorEnd);
         // Correct the array pointers
@@ -188,14 +206,28 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
 
         Register tempReg1 = asRegister(temp3);
         Register tempReg2 = asRegister(temp4);
+        boolean hasCBcond = masm.hasFeature(CBCOND);
 
         if (kind.getByteCount() <= 4) {
             // Compare trailing 4 bytes, if any.
-            masm.compareBranch(result, 4, Less, Xcc, compare2Bytes, PREDICT_NOT_TAKEN, null);
+            if (hasCBcond) {
+                masm.cbcondx(Less, result, 4, compare2Bytes);
+            } else {
+                masm.cmp(result, 4);
+                masm.bpcc(Less, NOT_ANNUL, compare2Bytes, Xcc, PREDICT_NOT_TAKEN);
+                masm.nop();
+            }
 
             masm.lduw(new SPARCAddress(array1, 0), tempReg1);
             masm.lduw(new SPARCAddress(array2, 0), tempReg2);
-            masm.compareBranch(tempReg1, tempReg2, NotEqual, Xcc, falseLabel, PREDICT_NOT_TAKEN, null);
+
+            if (hasCBcond) {
+                masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
+            } else {
+                masm.cmp(tempReg1, tempReg2);
+                masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_NOT_TAKEN);
+                masm.nop();
+            }
 
             if (kind.getByteCount() <= 2) {
                 // Move array pointers forward.
@@ -206,12 +238,24 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                 // Compare trailing 2 bytes, if any.
                 masm.bind(compare2Bytes);
 
-                masm.compareBranch(result, 2, Less, Xcc, compare1Byte, PREDICT_TAKEN, null);
+                if (hasCBcond) {
+                    masm.cbcondx(Less, result, 2, compare1Byte);
+                } else {
+                    masm.cmp(result, 2);
+                    masm.bpcc(Less, NOT_ANNUL, compare1Byte, Xcc, PREDICT_TAKEN);
+                    masm.nop();
+                }
 
                 masm.lduh(new SPARCAddress(array1, 0), tempReg1);
                 masm.lduh(new SPARCAddress(array2, 0), tempReg2);
 
-                masm.compareBranch(tempReg1, tempReg2, NotEqual, Xcc, falseLabel, PREDICT_TAKEN, null);
+                if (hasCBcond) {
+                    masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
+                } else {
+                    masm.cmp(tempReg1, tempReg2);
+                    masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_TAKEN);
+                    masm.nop();
+                }
 
                 // The one-byte tail compare is only required for boolean and byte arrays.
                 if (kind.getByteCount() <= 1) {
@@ -222,11 +266,22 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
 
                     // Compare trailing byte, if any.
                     masm.bind(compare1Byte);
-                    masm.compareBranch(result, 1, NotEqual, Xcc, trueLabel, PREDICT_TAKEN, null);
-
+                    if (hasCBcond) {
+                        masm.cbcondx(NotEqual, result, 1, trueLabel);
+                    } else {
+                        masm.cmp(result, 1);
+                        masm.bpcc(NotEqual, NOT_ANNUL, trueLabel, Xcc, PREDICT_TAKEN);
+                        masm.nop();
+                    }
                     masm.ldub(new SPARCAddress(array1, 0), tempReg1);
                     masm.ldub(new SPARCAddress(array2, 0), tempReg2);
-                    masm.compareBranch(tempReg1, tempReg2, NotEqual, Xcc, falseLabel, PREDICT_TAKEN, null);
+                    if (hasCBcond) {
+                        masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
+                    } else {
+                        masm.cmp(tempReg1, tempReg2);
+                        masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_TAKEN);
+                        masm.nop();
+                    }
                 } else {
                     masm.bind(compare1Byte);
                 }

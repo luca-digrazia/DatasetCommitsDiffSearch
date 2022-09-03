@@ -22,29 +22,25 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static jdk.internal.jvmci.code.ValueUtil.asRegister;
-import static jdk.internal.jvmci.code.ValueUtil.isRegister;
-import static jdk.internal.jvmci.sparc.SPARC.g0;
-import static jdk.internal.jvmci.sparc.SPARCKind.DWORD;
-import static jdk.internal.jvmci.sparc.SPARCKind.WORD;
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.meta.AllocatableValue;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.PlatformKind;
-import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import static jdk.internal.jvmci.sparc.SPARC.*;
 
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.gen.*;
 
 public final class SPARCBitManipulationOp extends SPARCLIRInstruction {
     public static final LIRInstructionClass<SPARCBitManipulationOp> TYPE = LIRInstructionClass.create(SPARCBitManipulationOp.class);
 
     public enum IntrinsicOpcode {
+        IPOPCNT(SizeEstimate.create(2)),
+        LPOPCNT(SizeEstimate.create(1)),
         IBSR(SizeEstimate.create(13)),
         LBSR(SizeEstimate.create(14)),
         BSF(SizeEstimate.create(4));
@@ -71,18 +67,26 @@ public final class SPARCBitManipulationOp extends SPARCLIRInstruction {
 
     @Override
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-        Register dst = asRegister(result, WORD);
+        Register dst = asIntReg(result);
         if (isRegister(input)) {
             Register src = asRegister(input);
             switch (opcode) {
+                case IPOPCNT:
+                    // clear upper word for 64 bit POPC
+                    masm.srl(src, g0, dst);
+                    masm.popc(dst, dst);
+                    break;
+                case LPOPCNT:
+                    masm.popc(src, dst);
+                    break;
                 case BSF:
-                    PlatformKind tkind = input.getPlatformKind();
-                    if (tkind == WORD) {
+                    Kind tkind = input.getKind();
+                    if (tkind == Kind.Int) {
                         masm.sub(src, 1, dst);
                         masm.andn(dst, src, dst);
                         masm.srl(dst, g0, dst);
                         masm.popc(dst, dst);
-                    } else if (tkind == DWORD) {
+                    } else if (tkind == Kind.Long) {
                         masm.sub(src, 1, dst);
                         masm.andn(dst, src, dst);
                         masm.popc(dst, dst);
@@ -91,8 +95,8 @@ public final class SPARCBitManipulationOp extends SPARCLIRInstruction {
                     }
                     break;
                 case IBSR: {
-                    PlatformKind ikind = input.getPlatformKind();
-                    assert ikind == WORD;
+                    Kind ikind = input.getKind();
+                    assert ikind == Kind.Int;
                     Register tmp = asRegister(scratch);
                     assert !tmp.equals(dst);
                     masm.srl(src, 1, tmp);
@@ -111,8 +115,8 @@ public final class SPARCBitManipulationOp extends SPARCLIRInstruction {
                     break;
                 }
                 case LBSR: {
-                    PlatformKind lkind = input.getPlatformKind();
-                    assert lkind == DWORD;
+                    Kind lkind = input.getKind();
+                    assert lkind == Kind.Long;
                     Register tmp = asRegister(scratch);
                     assert !tmp.equals(dst);
                     masm.srlx(src, 1, tmp);
@@ -134,6 +138,17 @@ public final class SPARCBitManipulationOp extends SPARCLIRInstruction {
                 default:
                     throw JVMCIError.shouldNotReachHere();
 
+            }
+        } else if (isConstant(input) && isSimm13(crb.asIntConst(input))) {
+            switch (opcode) {
+                case IPOPCNT:
+                    masm.popc(crb.asIntConst(input), dst);
+                    break;
+                case LPOPCNT:
+                    masm.popc(crb.asIntConst(input), dst);
+                    break;
+                default:
+                    throw JVMCIError.shouldNotReachHere();
             }
         } else {
             throw JVMCIError.shouldNotReachHere();

@@ -635,13 +635,13 @@ public class SPARCMove {
                     JavaConstant constant) {
         if (constant.isDefaultForKind() || constant.isNull()) {
             SPARCAddress resultAddress = (SPARCAddress) crb.asAddress(result);
-            emitStore(g0.asValue(LIRKind.combine(input)), resultAddress, result.getPlatformKind(), delaySlotLir, null, crb, masm);
+            emitStore(g0.asValue(LIRKind.combine(input)), resultAddress, input.getPlatformKind(), delaySlotLir, null, crb, masm);
         } else {
             try (ScratchRegister sc = masm.getScratchRegister()) {
                 Value scratchRegisterValue = sc.getRegister().asValue(LIRKind.combine(constant));
                 const2reg(crb, masm, scratchRegisterValue, constantTableBase, constant, SPARCDelayedControlTransfer.DUMMY);
                 SPARCAddress resultAddress = (SPARCAddress) crb.asAddress(result);
-                emitStore(scratchRegisterValue, resultAddress, result.getPlatformKind(), delaySlotLir, null, crb, masm);
+                emitStore(scratchRegisterValue, resultAddress, input.getPlatformKind(), delaySlotLir, null, crb, masm);
             }
         }
     }
@@ -652,13 +652,13 @@ public class SPARCMove {
             Value scratchRegisterValue = sc.getRegister().asValue(LIRKind.combine(input));
             emitLoad(crb, masm, inputAddress, scratchRegisterValue, false, input.getPlatformKind(), SPARCDelayedControlTransfer.DUMMY, null);
             SPARCAddress resultAddress = (SPARCAddress) crb.asAddress(result);
-            emitStore(scratchRegisterValue, resultAddress, result.getPlatformKind(), delaySlotLir, null, crb, masm);
+            emitStore(scratchRegisterValue, resultAddress, input.getPlatformKind(), delaySlotLir, null, crb, masm);
         }
     }
 
     public static void reg2stack(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, SPARCDelayedControlTransfer delaySlotLir) {
         SPARCAddress resultAddress = (SPARCAddress) crb.asAddress(result);
-        emitStore(input, resultAddress, result.getPlatformKind(), delaySlotLir, null, crb, masm);
+        emitStore(input, resultAddress, input.getPlatformKind(), delaySlotLir, null, crb, masm);
     }
 
     public static void reg2reg(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input, SPARCDelayedControlTransfer delaySlotLir) {

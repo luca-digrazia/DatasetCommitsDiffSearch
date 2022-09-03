@@ -24,9 +24,11 @@ package com.oracle.graal.lir.ssa;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
+import jdk.internal.jvmci.meta.*;
+
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
@@ -88,15 +90,87 @@ public final class SSAUtils {
         assert pred.getSuccessorCount() == 1 : String.format("Merge predecessor block %s has more than one successor? %s", pred, pred.getSuccessors());
         assert pred.getSuccessors().get(0) == merge : String.format("Predecessor block %s has wrong successor: %s, should be: %s", pred, pred.getSuccessors().get(0), merge);
 
-        List<LIRInstruction> instructions = lir.getLIRforBlock(pred);
-        JumpOp jump = (JumpOp) instructions.get(instructions.size() - 1);
-        LabelOp label = (LabelOp) lir.getLIRforBlock(merge).get(0);
+        JumpOp jump = phiOut(lir, pred);
+        LabelOp label = phiIn(lir, merge);
 
         assert label.getIncomingSize() == jump.getOutgoingSize() : String.format("Phi In/Out size mismatch: in=%d vs. out=%d", label.getIncomingSize(), jump.getOutgoingSize());
 
         for (int i = 0; i < label.getIncomingSize(); i++) {
             visitor.visit(label.getIncomingValue(i), jump.getOutgoingValue(i));
         }
+    }
+
+    private static JumpOp phiOut(LIR lir, AbstractBlockBase<?> block) {
+        assert block.getSuccessorCount() == 1;
+        List<LIRInstruction> instructions = lir.getLIRforBlock(block);
+        int index = instructions.size() - 1;
+        LIRInstruction op = instructions.get(index);
+        return (JumpOp) op;
+    }
+
+    public static int phiOutIndex(LIR lir, AbstractBlockBase<?> block) {
+        assert block.getSuccessorCount() == 1;
+        List<LIRInstruction> instructions = lir.getLIRforBlock(block);
+        int index = instructions.size() - 1;
+        assert instructions.get(index) instanceof JumpOp;
+        return index;
+    }
+
+    private static LabelOp phiIn(LIR lir, AbstractBlockBase<?> block) {
+        assert block.getPredecessorCount() > 1;
+        LabelOp label = (LabelOp) lir.getLIRforBlock(block).get(0);
+        return label;
+    }
+
+    public static void removePhiOut(LIR lir, AbstractBlockBase<?> block) {
+        JumpOp jump = phiOut(lir, block);
+        jump.clearOutgoingValues();
+    }
+
+    public static void removePhiIn(LIR lir, AbstractBlockBase<?> block) {
+        LabelOp label = phiIn(lir, block);
+        label.clearIncomingValues();
+    }
+
+    public static boolean verifySSAForm(LIR lir) {
+        return new SSAVerifier(lir).verify();
+    }
+
+    public static void verifyPhi(LIR lir, AbstractBlockBase<?> merge) {
+        assert merge.getPredecessorCount() > 1;
+        for (AbstractBlockBase<?> pred : merge.getPredecessors()) {
+            forEachPhiValuePair(lir, merge, pred, (phiIn, phiOut) -> {
+                assert phiIn.getLIRKind().equals(phiOut.getLIRKind()) ||
+                                (phiIn.getPlatformKind().equals(phiOut.getPlatformKind()) && phiIn.getLIRKind().isUnknownReference() && phiOut.getLIRKind().isValue());
+            });
+        }
+    }
+
+    public static void forEachPhiRegisterHint(LIR lir, AbstractBlockBase<?> block, LabelOp label, Value targetValue, OperandMode mode, ValueConsumer valueConsumer) {
+        assert mode == OperandMode.DEF : "Wrong operand mode: " + mode;
+        assert lir.getLIRforBlock(block).get(0).equals(label) : String.format("Block %s and Label %s do not match!", block, label);
+
+        if (!label.isPhiIn()) {
+            return;
+        }
+        int idx = indexOfValue(label, targetValue);
+        assert idx >= 0 : String.format("Value %s not in label %s", targetValue, label);
+
+        for (AbstractBlockBase<?> pred : block.getPredecessors()) {
+            JumpOp jump = phiOut(lir, pred);
+            Value sourceValue = jump.getOutgoingValue(idx);
+            valueConsumer.visitValue(jump, sourceValue, null, null);
+        }
+
+    }
+
+    private static int indexOfValue(LabelOp label, Value value) {
+        for (int i = 0; i < label.getIncomingSize(); i++) {
+            if (label.getIncomingValue(i).equals(value)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
 }

@@ -22,21 +22,14 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.LIRKind;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.replacements.Snippet;
-
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaKind;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.*;
 
 /**
  * Intrinsification for getting the address of an object. The code path(s) between a call to
@@ -44,14 +37,14 @@ import jdk.vm.ci.meta.JavaKind;
  * only be guaranteed if used in a snippet that is instantiated after frame state assignment.
  * {@link ComputeObjectAddressNode} should generally be used in preference to this node.
  */
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+@NodeInfo
 public final class GetObjectAddressNode extends FixedWithNextNode implements LIRLowerable {
     public static final NodeClass<GetObjectAddressNode> TYPE = NodeClass.create(GetObjectAddressNode.class);
 
     @Input ValueNode object;
 
     public GetObjectAddressNode(ValueNode obj) {
-        super(TYPE, StampFactory.forKind(JavaKind.Long));
+        super(TYPE, StampFactory.forKind(Kind.Long));
         this.object = obj;
     }
 
@@ -60,7 +53,7 @@ public final class GetObjectAddressNode extends FixedWithNextNode implements LIR
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        AllocatableValue obj = gen.getLIRGeneratorTool().newVariable(LIRKind.unknownReference(gen.getLIRGeneratorTool().target().arch.getWordKind()));
+        AllocatableValue obj = gen.getLIRGeneratorTool().newVariable(LIRKind.unknownReference(gen.getLIRGeneratorTool().target().wordKind));
         gen.getLIRGeneratorTool().emitMove(obj, gen.operand(object));
         gen.setResult(this, obj);
     }

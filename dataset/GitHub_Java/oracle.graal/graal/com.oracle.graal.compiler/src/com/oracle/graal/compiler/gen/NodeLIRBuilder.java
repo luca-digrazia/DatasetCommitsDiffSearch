@@ -138,8 +138,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     public ValueNode valueForOperand(Value value) {
-        assert nodeOperands != null;
-        for (Entry<Node, Value> entry : nodeOperands.entries()) {
+        for (Entry<Node, Value> entry : getNodeOperands().entries()) {
             if (entry.getValue().equals(value)) {
                 return (ValueNode) entry.getKey();
             }
@@ -632,6 +631,11 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
                 }
             }
         }
+    }
+
+    public final NodeMap<Value> getNodeOperands() {
+        assert nodeOperands != null;
+        return nodeOperands;
     }
 
     public DebugInfoBuilder getDebugInfoBuilder() {
