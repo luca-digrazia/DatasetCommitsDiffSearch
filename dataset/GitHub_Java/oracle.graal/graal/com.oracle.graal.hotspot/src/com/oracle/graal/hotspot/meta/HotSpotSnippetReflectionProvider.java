@@ -28,9 +28,9 @@ import com.oracle.graal.hotspot.*;
 
 public class HotSpotSnippetReflectionProvider implements SnippetReflectionProvider {
 
-    private final HotSpotGraalRuntimeProvider runtime;
+    private final HotSpotGraalRuntime runtime;
 
-    public HotSpotSnippetReflectionProvider(HotSpotGraalRuntimeProvider runtime) {
+    public HotSpotSnippetReflectionProvider(HotSpotGraalRuntime runtime) {
         this.runtime = runtime;
     }
 

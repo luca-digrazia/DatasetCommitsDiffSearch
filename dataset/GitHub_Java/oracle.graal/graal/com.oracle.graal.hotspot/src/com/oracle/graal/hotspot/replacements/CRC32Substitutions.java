@@ -44,9 +44,9 @@ public class CRC32Substitutions {
 
     public static class Guard implements SubstitutionGuard {
 
-        private HotSpotGraalRuntimeProvider runtime;
+        private HotSpotGraalRuntime runtime;
 
-        public Guard(HotSpotGraalRuntimeProvider runtime) {
+        public Guard(HotSpotGraalRuntime runtime) {
             this.runtime = runtime;
         }
 

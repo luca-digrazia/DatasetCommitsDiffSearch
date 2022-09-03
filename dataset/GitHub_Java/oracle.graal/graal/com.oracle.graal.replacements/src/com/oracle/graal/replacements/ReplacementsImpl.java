@@ -315,10 +315,10 @@ public class ReplacementsImpl implements Replacements {
             try {
                 Object[] args = new Object[constructor.getParameterCount()];
                 for (int i = 0; i < args.length; i++) {
-                    Object arg = snippetReflection.getSubstitutionGuardParameter(paramTypes[i]);
+                    Object arg = snippetReflection.getSubstitutionGuardParameter(paramTypes[0]);
                     if (arg != null) {
                         args[i] = arg;
-                    } else if (paramTypes[i].isInstance(target.arch)) {
+                    } else if (paramTypes[0].isInstance(target.arch)) {
                         args[i] = target.arch;
                     } else {
                         throw new GraalInternalError("Unsupported type %s in substitution guard constructor: %s", paramTypes[i].getName(), constructor);
