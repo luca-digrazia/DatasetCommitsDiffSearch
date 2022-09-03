@@ -707,8 +707,6 @@ public abstract class GraalCompilerTest extends GraalTest {
             StructuredGraph graph = new StructuredGraph(javaMethod);
             graphBuilderSuite.apply(graph, new HighTierContext(providers, null, null, graphBuilderSuite, OptimisticOptimizations.ALL));
             return graph;
-        } catch (Throwable e) {
-            throw Debug.handle(e);
         }
     }
 
