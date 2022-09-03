@@ -25,6 +25,7 @@ package com.oracle.graal.hotspot.test;
 import org.junit.*;
 
 import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.replacements.test.*;
 
 /**
@@ -36,8 +37,8 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
     public void testObjectSubstitutions() {
         TestClassA obj = new TestClassA();
 
-        testGraph("getClass0");
-        testGraph("objectHashCode");
+        test("getClass0");
+        test("objectHashCode");
 
         test("getClass0", "a string");
         test("objectHashCode", obj);
@@ -55,12 +56,12 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
 
     @Test
     public void testClassSubstitutions() {
-        testGraph("getModifiers");
-        testGraph("isInterface");
-        testGraph("isArray");
-        testGraph("isPrimitive");
-        testGraph("getSuperClass");
-        testGraph("getComponentType");
+        test("getModifiers");
+        test("isInterface");
+        test("isArray");
+        test("isPrimitive");
+        test("getSuperClass");
+        test("getComponentType");
 
         for (Class<?> c : new Class[]{getClass(), Cloneable.class, int[].class, String[][].class}) {
             test("getModifiers", c);
@@ -104,9 +105,9 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
 
     @Test
     public void testThreadSubstitutions() {
-        testGraph("currentThread");
-        testGraph("threadIsInterrupted");
-        testGraph("threadInterrupted");
+        test("currentThread");
+        test("threadIsInterrupted");
+        test("threadInterrupted");
 
         Thread currentThread = Thread.currentThread();
         test("currentThread", currentThread);
@@ -130,9 +131,11 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
 
     @Test
     public void testSystemSubstitutions() {
-        testGraph("systemTime");
-        testGraph("systemIdentityHashCode");
+        test("systemTime");
+        test("systemIdentityHashCode");
 
+        SystemSubstitutions.currentTimeMillis();
+        SystemSubstitutions.nanoTime();
         for (Object o : new Object[]{this, new int[5], new String[2][], new Object()}) {
             test("systemIdentityHashCode", o);
         }
