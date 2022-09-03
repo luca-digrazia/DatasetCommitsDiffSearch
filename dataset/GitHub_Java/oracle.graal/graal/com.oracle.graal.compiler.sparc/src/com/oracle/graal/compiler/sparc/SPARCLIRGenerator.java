@@ -74,7 +74,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
         @Override
         public LIRInstruction createStackMove(AllocatableValue result, Value input) {
-            return SPARCLIRGenerator.this.createStackMove(result, input);
+            return new SPARCStackMove(result, input);
         }
     }
 
@@ -117,10 +117,6 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         }
     }
 
-    protected LIRInstruction createStackMove(AllocatableValue result, Value input) {
-        return new SPARCStackMove(result, input);
-    }
-
     @Override
     public void emitMove(AllocatableValue dst, Value src) {
         append(createMove(dst, src));
@@ -154,15 +150,15 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 finalDisp += asConstant(index).asLong() * scale;
                 indexRegister = Value.ILLEGAL;
             } else {
-                Value longIndex = index.getKind() == Kind.Long ? index : emitSignExtend(index, 32, 64);
                 if (scale != 1) {
+                    Value longIndex = index.getKind() == Kind.Long ? index : emitSignExtend(index, 32, 64);
                     if (CodeUtil.isPowerOf2(scale)) {
                         indexRegister = emitShl(longIndex, JavaConstant.forLong(CodeUtil.log2(scale)));
                     } else {
                         indexRegister = emitMul(longIndex, JavaConstant.forLong(scale), false);
                     }
                 } else {
-                    indexRegister = asAllocatable(longIndex);
+                    indexRegister = asAllocatable(index);
                 }
             }
         } else {
