@@ -206,9 +206,4 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
         splittingStrategy.forceSplitting();
         return true;
     }
-
-    @Override
-    public String toString() {
-        return String.format("OptimizedDirectCallNode(target=%s, parent=%s)", getCurrentCallTarget().toString(), getParent());
-    }
 }

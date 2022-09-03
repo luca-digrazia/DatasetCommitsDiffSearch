@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,18 +31,20 @@ public class TruffleInliningProfile {
     private final int deepNodeCount;
     private final double frequency;
     private final boolean recursiveCall;
+    private final TruffleInliningDecision recursiveResult;
 
     private int graalDeepNodeCount = -1;
     private String failedReason;
     private int queryIndex = -1;
     private double score;
 
-    public TruffleInliningProfile(OptimizedDirectCallNode callNode, int nodeCount, int deepNodeCount, double frequency, boolean recursiveCall) {
+    public TruffleInliningProfile(OptimizedDirectCallNode callNode, int nodeCount, int deepNodeCount, double frequency, boolean recursiveCall, TruffleInliningDecision recursiveResult) {
         this.callNode = callNode;
         this.nodeCount = nodeCount;
         this.deepNodeCount = deepNodeCount;
         this.frequency = frequency;
         this.recursiveCall = recursiveCall;
+        this.recursiveResult = recursiveResult;
     }
 
     public boolean isRecursiveCall() {
@@ -59,6 +61,10 @@ public class TruffleInliningProfile {
 
     public int getNodeCount() {
         return nodeCount;
+    }
+
+    public TruffleInliningDecision getRecursiveResult() {
+        return recursiveResult;
     }
 
     public void setScore(double score) {

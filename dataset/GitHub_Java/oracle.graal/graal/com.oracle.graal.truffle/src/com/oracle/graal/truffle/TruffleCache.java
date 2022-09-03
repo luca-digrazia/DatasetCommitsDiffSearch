@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.truffle;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -39,5 +40,5 @@ public interface TruffleCache {
     /**
      * Returns a cached graph for a method with given arguments.
      */
-    StructuredGraph lookup(final ResolvedJavaMethod method, final NodeInputList<ValueNode> arguments, final CanonicalizerPhase finalCanonicalizer);
+    StructuredGraph lookup(final ResolvedJavaMethod method, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final CanonicalizerPhase finalCanonicalizer);
 }

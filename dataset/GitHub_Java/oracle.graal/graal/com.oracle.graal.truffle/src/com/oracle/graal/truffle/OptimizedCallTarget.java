@@ -26,12 +26,10 @@ import static com.oracle.graal.truffle.OptimizedCallTargetLog.*;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
 import java.io.*;
-import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.atomic.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.truffle.ContextSensitiveInlining.InliningDecision;
 import com.oracle.truffle.api.*;
@@ -128,7 +126,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return doInvoke(args);
     }
 
-    public final Object callDirect(Object... args) {
+    public Object callDirect(Object... args) {
         profileArguments(args);
         Object result = doInvoke(args);
         Class<?> klass = profiledReturnType;
@@ -136,14 +134,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             result = CompilerDirectives.unsafeCast(result, klass, true, true);
         }
         return result;
-    }
-
-    public final Object callInlined(Object... arguments) {
-        if (CompilerDirectives.inInterpreter()) {
-            compilationProfile.reportInlinedCall();
-        }
-        VirtualFrame frame = createFrame(getRootNode().getFrameDescriptor(), arguments);
-        return callProxy(frame);
     }
 
     @ExplodeLoop
@@ -226,8 +216,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
                 args1 = castArguments(args1);
             }
         }
-        VirtualFrame frame = createFrame(getRootNode().getFrameDescriptor(), args);
-        Object result = callProxy(frame);
+        Object result = callRoot(args1);
 
         // Profile call return type
         if (profiledReturnTypeAssumption == null) {
@@ -245,6 +234,11 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         }
 
         return result;
+    }
+
+    private Object callRoot(Object[] args) {
+        VirtualFrame frame = createFrame(getRootNode().getFrameDescriptor(), args);
+        return callProxy(frame);
     }
 
     @Override
@@ -411,6 +405,14 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return compilationProfile;
     }
 
+    public final Object callInlined(Object[] arguments) {
+        if (CompilerDirectives.inInterpreter()) {
+            compilationProfile.reportInlinedCall();
+        }
+        VirtualFrame frame = createFrame(getRootNode().getFrameDescriptor(), arguments);
+        return callProxy(frame);
+    }
+
     public final void performInlining() {
         if (!TruffleFunctionInlining.getValue() || TruffleContextSensitiveInlining.getValue()) {
             return;
@@ -476,22 +478,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         properties.putAll(getCompilationProfile().getDebugProperties());
         return properties;
 
-    }
-
-    public static Method getCallDirectMethod() {
-        try {
-            return OptimizedCallTarget.class.getDeclaredMethod("callDirect", Object[].class);
-        } catch (NoSuchMethodException | SecurityException e) {
-            throw new GraalInternalError(e);
-        }
-    }
-
-    public static Method getCallInlinedMethod() {
-        try {
-            return OptimizedCallTarget.class.getDeclaredMethod("callInlined", Object[].class);
-        } catch (NoSuchMethodException | SecurityException e) {
-            throw new GraalInternalError(e);
-        }
     }
 
 }
