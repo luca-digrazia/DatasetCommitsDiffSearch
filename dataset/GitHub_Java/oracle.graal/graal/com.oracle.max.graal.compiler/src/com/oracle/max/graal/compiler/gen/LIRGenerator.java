@@ -45,6 +45,7 @@ import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
+import com.sun.cri.ri.RiType.*;
 import com.sun.cri.xir.*;
 import com.sun.cri.xir.CiXirAssembler.*;
 
@@ -260,19 +261,9 @@ public abstract class LIRGenerator extends ValueVisitor {
                 }
             }
         }
-        if (block.blockSuccessors().size() >= 1 && !jumpsToNextBlock(block.lastInstruction())) {
+        if (block.blockSuccessors().size() >= 1 && (block.getInstructions().size() == 0  || !jumpsToNextBlock(block.getInstructions().get(block.getInstructions().size() - 1)))) {
             moveToPhi();
-            Node last = block.lastInstruction();
-            if (last instanceof EndNode) {
-                EndNode end = (EndNode) last;
-                block.lir().jump(getLIRBlock(end.merge()));
-            } else if (last instanceof LoopEnd) {
-                LoopEnd loopEnd = (LoopEnd) last;
-                block.lir().jump(getLIRBlock(loopEnd.loopBegin()));
-            } else {
-//                TTY.println("lastInstr: " + block.lastInstruction() + ", block=" + block.blockID());
-                block.lir().jump(getLIRBlock((FixedNode) block.lastInstruction().successors().get(0)));
-            }
+            block.lir().jump(block.blockSuccessors().get(0));
         }
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
@@ -707,7 +698,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    protected LIRBlock getLIRBlock(FixedNode b) {
+    protected LIRBlock getLIRBlock(Instruction b) {
         if (b == null) {
             return null;
         }
@@ -726,6 +717,13 @@ public abstract class LIRGenerator extends ValueVisitor {
             CiValue value = load(x.object());
             LIRDebugInfo info = stateFor(x);
             lir.nullCheck(value, info);
+        } else if (comp instanceof IsType) {
+            IsType x = (IsType) comp;
+            CiValue value = load(x.object());
+            LIRDebugInfo info = stateFor(x);
+            XirArgument clazz = toXirArgument(x.type().getEncoding(Representation.ObjectHub));
+            XirSnippet typeCheck = xir.genTypeCheck(site(x), toXirArgument(x.object()), clazz, x.type());
+            emitXir(typeCheck, x, info, compilation.method, false);
         }
     }
 
@@ -1417,59 +1415,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         // Moves all stack values into their phi position
         LIRBlock bb = currentBlock;
         if (bb.numberOfSux() == 1) {
-
-            Node lastNode = bb.lastInstruction();
-            if (lastNode instanceof EndNode || lastNode instanceof LoopEnd || lastNode instanceof Anchor) {
-                Node nextInstr = null;
-                int nextSuccIndex;
-
-                if (lastNode instanceof LoopEnd) {
-                    LoopEnd loopEnd = (LoopEnd) lastNode;
-                    nextInstr = loopEnd.loopBegin();
-                    nextSuccIndex = loopEnd.loopBegin().endCount();
-                } else if (lastNode instanceof Anchor) {
-                    assert false;
-                    nextSuccIndex = -1;
-                } else {
-                    assert lastNode instanceof EndNode;
-                    nextInstr = ((EndNode) lastNode).merge();
-                    nextSuccIndex = nextInstr.inputs().variablePart().indexOf(lastNode);
-                }
-
-                if (nextInstr instanceof Merge) {
-                    Merge merge = (Merge) nextInstr;
-                    assert nextSuccIndex >= 0 : "nextSuccIndex=" + nextSuccIndex + ", lastNode=" + lastNode + ", nextInstr=" + nextInstr + "; preds=" + nextInstr.predecessors() + "; predIndex=" + nextInstr.predecessorsIndex();
-
-                    PhiResolver resolver = new PhiResolver(this);
-                    for (Node n : merge.usages()) {
-                        if (n instanceof Phi) {
-                            Phi phi = (Phi) n;
-                            if (!phi.isDead()) {
-                                Value curVal = phi.valueAt(nextSuccIndex);
-                                if (curVal != null && curVal != phi) {
-                                    if (curVal instanceof Phi) {
-                                        operandForPhi((Phi) curVal);
-                                    }
-                                    CiValue operand = curVal.operand();
-                                    if (operand.isIllegal()) {
-                                        assert curVal instanceof Constant || curVal instanceof Local : "these can be produced lazily" + curVal + "/" + phi;
-                                        operand = operandForInstruction(curVal);
-                                    }
-                                    resolver.move(operand, operandForPhi(phi));
-                                }
-                            }
-                        }
-                    }
-                    resolver.dispose();
-                }
-                return;
-            }
-            /*
-
-            assert false : "lastNode=" + lastNode + " instr=" + bb.getInstructions();
-
-
-
             LIRBlock sux = bb.suxAt(0);
             assert sux.numberOfPreds() > 0 : "invalid CFG";
 
@@ -1508,7 +1453,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                     }
                     resolver.dispose();
                 }
-            }*/
+            }
         }
     }
 

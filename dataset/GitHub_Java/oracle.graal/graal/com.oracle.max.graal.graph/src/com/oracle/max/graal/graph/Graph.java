@@ -63,37 +63,37 @@ public class Graph {
         return Collections.unmodifiableList(nodes);
     }
 
-    public static class TypedNodeIterator<T> implements Iterator<T> {
+    public class TypedNodeIterator<T> implements Iterator<T> {
         private final Class<T> type;
-        private final Iterator<Node> iter;
-        private Node nextNode;
+        private int index;
 
-        public TypedNodeIterator(Class<T> type, Iterator<Node> iter) {
+        public TypedNodeIterator(Class<T> type) {
             this.type = type;
-            this.iter = iter;
+            this.index = -1;
             forward();
         }
 
         private void forward() {
-            do {
-                if (!iter.hasNext()) {
-                    nextNode = null;
-                    return;
+            if (index < nodes.size()) {
+                do {
+                    index++;
+                } while (index < nodes.size() && !type.isInstance(nodes.get(index)));
+                if (index >= nodes.size()) {
+                    index = Integer.MAX_VALUE;
                 }
-                nextNode = iter.next();
-            } while (nextNode == null || !type.isInstance(nextNode));
+            }
         }
 
         @Override
         public boolean hasNext() {
-            return nextNode != null;
+            return index < nodes.size();
         }
 
         @Override
         @SuppressWarnings("unchecked")
         public T next() {
             try {
-                return (T) nextNode;
+                return (T) nodes.get(index);
             } finally {
                 forward();
             }
@@ -109,7 +109,7 @@ public class Graph {
         return new Iterable<T>() {
             @Override
             public Iterator<T> iterator() {
-                return new TypedNodeIterator<T>(type, nodes.iterator());
+                return new TypedNodeIterator<T>(type);
             }
         };
     }
@@ -171,7 +171,7 @@ public class Graph {
                 if (target == null) {
                     target = newNodes.get(input);
                 }
-                node.inputs().setOrExpand(i, target);
+                node.inputs().set(i, target);
             }
         }
         for (Entry<Node, Node> entry : replacements.entrySet()) {
@@ -180,35 +180,10 @@ public class Graph {
             for (int i = 0; i < oldNode.inputs().size(); i++) {
                 Node input = oldNode.inputs().get(i);
                 if (newNodes.containsKey(input)) {
-                    node.inputs().setOrExpand(i, newNodes.get(input));
+                    node.inputs().set(i, newNodes.get(input));
                 }
             }
         }
-        
-        // re-wire successors
-        for (Entry<Node, Node> entry : newNodes.entrySet()) {
-            Node oldNode = entry.getKey();
-            Node node = entry.getValue();
-            for (int i = 0; i < oldNode.successors().size(); i++) {
-                Node succ = oldNode.successors().get(i);
-                Node target = replacements.get(succ);
-                if (target == null) {
-                    target = newNodes.get(succ);
-                }
-                node.successors().setOrExpand(i, target);
-            }
-        }
-        for (Entry<Node, Node> entry : replacements.entrySet()) {
-            Node oldNode = entry.getKey();
-            Node node = entry.getValue();
-            for (int i = 0; i < oldNode.successors().size(); i++) {
-                Node succ = oldNode.successors().get(i);
-                if (newNodes.containsKey(succ)) {
-                    node.successors().setOrExpand(i, newNodes.get(succ));
-                }
-            }
-        }
-        /*
         // re-wire successors
         for (Entry<Node, Node> entry : newNodes.entrySet()) {
             Node oldNode = entry.getKey();
@@ -233,7 +208,7 @@ public class Graph {
                     newNodes.get(pred).successors().set(predIndex, node);
                 }
             }
-        }*/
+        }
         return newNodes;
     }
 }

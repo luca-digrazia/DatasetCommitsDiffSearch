@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import java.util.*;
-
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
@@ -114,13 +112,6 @@ public final class IsType extends FloatingNode {
     @Override
     public void print(LogStream out) {
         out.print("null_check(").print(object()).print(')');
-    }
-
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("type", type);
-        return properties;
     }
 
     @Override
