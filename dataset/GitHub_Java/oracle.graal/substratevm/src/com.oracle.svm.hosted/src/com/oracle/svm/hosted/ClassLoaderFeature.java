@@ -24,22 +24,31 @@
  */
 package com.oracle.svm.hosted;
 
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.core.jdk.JavaLangSubstitutions.ClassLoaderSupport;
 
 @AutomaticFeature
 public class ClassLoaderFeature implements Feature {
+    @Override
+    public void afterRegistration(AfterRegistrationAccess access) {
+        ImageSingletons.add(ClassLoaderSupport.class, new ClassLoaderSupport());
+    }
+
+    @Override
+    public void beforeAnalysis(BeforeAnalysisAccess access) {
+        ClassLoaderSupport.getInstance().createClassLoaders(ClassLoader.getSystemClassLoader());
+        ClassLoaderSupport.getInstance().systemClassLoader = ClassLoaderSupport.getInstance().classLoaders.get(ClassLoader.getSystemClassLoader());
+    }
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
         access.registerObjectReplacer(object -> {
-            if (object instanceof NativeImageClassLoader) {
-                /* Unwrap the original AppClassLoader from the NativeImageClassLoader */
-                ClassLoader parent = ((ClassLoader) object).getParent();
-                VMError.guarantee(parent != null);
-                return parent;
+            if (object instanceof ClassLoader) {
+                ClassLoaderSupport.getInstance().createClassLoaders((ClassLoader) object);
+                return ClassLoaderSupport.getInstance().classLoaders.get(object);
             }
             return object;
         });
