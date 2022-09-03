@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.truffle;
 
-import java.util.concurrent.atomic.*;
+import static com.oracle.graal.api.meta.MetaUtil.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
@@ -33,8 +33,6 @@ import com.oracle.truffle.api.*;
  * {@linkplain Debug#scope(Object) debug scopes}.
  */
 public class TruffleDebugJavaMethod implements JavaMethod {
-    private static final AtomicInteger nextId = new AtomicInteger();
-    private final int id;
     private final RootCallTarget compilable;
 
     private static final JavaType declaringClass = new JavaType() {
@@ -72,25 +70,33 @@ public class TruffleDebugJavaMethod implements JavaMethod {
 
     private static final Signature signature = new Signature() {
 
-        @Override
         public JavaType getReturnType(ResolvedJavaType accessingClass) {
             return declaringClass;
         }
 
-        @Override
-        public int getParameterCount(boolean receiver) {
+        public Kind getReturnKind() {
+            return declaringClass.getKind();
+        }
+
+        public JavaType getParameterType(int index, ResolvedJavaType accessingClass) {
+            throw new IndexOutOfBoundsException();
+        }
+
+        public int getParameterSlots(boolean withReceiver) {
             return 0;
         }
 
-        @Override
-        public JavaType getParameterType(int index, ResolvedJavaType accessingClass) {
+        public Kind getParameterKind(int index) {
             throw new IndexOutOfBoundsException();
+        }
+
+        public int getParameterCount(boolean receiver) {
+            return 0;
         }
     };
 
     public TruffleDebugJavaMethod(RootCallTarget compilable) {
         this.compilable = compilable;
-        this.id = nextId.incrementAndGet();
     }
 
     @Override
@@ -112,7 +118,7 @@ public class TruffleDebugJavaMethod implements JavaMethod {
     }
 
     public String getName() {
-        return compilable.toString().replace('.', '_').replace(' ', '_') + "_" + id;
+        return compilable.toString().replace('.', '_').replace(' ', '_');
     }
 
     public JavaType getDeclaringClass() {
@@ -121,6 +127,6 @@ public class TruffleDebugJavaMethod implements JavaMethod {
 
     @Override
     public String toString() {
-        return format("Truffle<%n(%p)>");
+        return format("Truffle<%n(%p)>", this);
     }
 }
