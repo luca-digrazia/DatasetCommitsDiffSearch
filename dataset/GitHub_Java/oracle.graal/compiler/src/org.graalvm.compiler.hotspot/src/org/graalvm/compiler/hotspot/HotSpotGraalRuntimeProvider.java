@@ -22,14 +22,7 @@
  */
 package org.graalvm.compiler.hotspot;
 
-import java.util.Map;
-
 import org.graalvm.compiler.api.runtime.GraalRuntime;
-import org.graalvm.compiler.core.CompilationWrapper.ExceptionAction;
-import org.graalvm.compiler.core.common.CompilationIdentifier;
-import org.graalvm.compiler.debug.DebugHandlersFactory;
-import org.graalvm.compiler.debug.DiagnosticsOutputDirectory;
-import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.SnippetCounter.Group;
@@ -62,27 +55,19 @@ public interface HotSpotGraalRuntimeProvider extends GraalRuntime, RuntimeProvid
     GraalHotSpotVMConfig getVMConfig();
 
     /**
-     * Opens a debug context for compiling {@code compilable}. The {@link DebugContext#close()}
-     * method should be called on the returned object once the compilation is finished.
-     *
-     * @param compilationOptions the options used to configure the compilation debug context
-     * @param compilationId a system wide unique compilation id
-     * @param compilable the input to the compilation
-     */
-    DebugContext openDebugContext(OptionValues compilationOptions, CompilationIdentifier compilationId, Object compilable, Iterable<DebugHandlersFactory> factories);
-
-    /**
      * Gets the option values associated with this runtime.
      */
     OptionValues getOptions();
 
     /**
-     * Gets the option values associated with this runtime that are applicable for a given method.
+     * Gets the option values associated with this runtime that are applicable for given method.
      *
      * @param forMethod the method we are seeking for options for
-     * @return the options applicable for compiling {@code method}
+     * @return the options - by default same as {@link #getOptions()}
      */
-    OptionValues getOptions(ResolvedJavaMethod forMethod);
+    default OptionValues getOptions(ResolvedJavaMethod forMethod) {
+        return getOptions();
+    }
 
     /**
      * Determines if the VM is currently bootstrapping the JVMCI compiler.
@@ -95,12 +80,12 @@ public interface HotSpotGraalRuntimeProvider extends GraalRuntime, RuntimeProvid
     boolean isShutdown();
 
     /**
-     * Gets a directory into which diagnostics such crash reports and dumps should be written.
+     * Gets a directory into which diagnostics such crash reports and dumps should be written. This
+     * method will create the directory if it doesn't exist so it should only be called if
+     * diagnostics are about to be generated.
+     *
+     * @return the directory into which diagnostics can be written or {@code null} if the directory
+     *         does not exist and could not be created or has already been deleted
      */
-    DiagnosticsOutputDirectory getOutputDirectory();
-
-    /**
-     * Gets the map used to count compilation problems at each {@link ExceptionAction} level.
-     */
-    Map<ExceptionAction, Integer> getCompilationProblemsPerAction();
+    String getOutputDirectory();
 }

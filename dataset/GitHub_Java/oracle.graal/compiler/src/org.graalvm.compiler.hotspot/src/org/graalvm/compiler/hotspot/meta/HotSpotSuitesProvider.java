@@ -25,7 +25,6 @@ package org.graalvm.compiler.hotspot.meta;
 import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.core.common.GraalOptions.ImmutableCode;
 import static org.graalvm.compiler.core.common.GraalOptions.VerifyPhases;
-import static org.graalvm.compiler.core.phases.HighTier.Options.Inline;
 
 import java.util.ListIterator;
 
@@ -53,10 +52,15 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.PhaseSuite;
+import org.graalvm.compiler.phases.common.AddressLoweringPhase;
+import org.graalvm.compiler.phases.common.AddressLoweringPhase.AddressLowering;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
+import org.graalvm.compiler.phases.common.ExpandLogicPhase;
+import org.graalvm.compiler.phases.common.FixReadsPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningPhase;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
+import org.graalvm.compiler.phases.tiers.LowTierContext;
 import org.graalvm.compiler.phases.tiers.MidTierContext;
 import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.phases.tiers.SuitesCreator;
@@ -69,12 +73,14 @@ public class HotSpotSuitesProvider extends SuitesProviderBase {
     protected final GraalHotSpotVMConfig config;
     protected final HotSpotGraalRuntimeProvider runtime;
 
+    private final AddressLowering addressLowering;
     private final SuitesCreator defaultSuitesCreator;
 
-    public HotSpotSuitesProvider(SuitesCreator defaultSuitesCreator, GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime) {
+    public HotSpotSuitesProvider(SuitesCreator defaultSuitesCreator, GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, AddressLowering addressLowering) {
         this.defaultSuitesCreator = defaultSuitesCreator;
         this.config = config;
         this.runtime = runtime;
+        this.addressLowering = addressLowering;
         this.defaultGraphBuilderSuite = createGraphBuilderSuite();
     }
 
@@ -99,12 +105,10 @@ public class HotSpotSuitesProvider extends SuitesProviderBase {
                 midTierLowering.add(new ReplaceConstantNodesPhase());
 
                 // Replace inlining policy
-                if (Inline.getValue(options)) {
-                    ListIterator<BasePhase<? super HighTierContext>> iter = ret.getHighTier().findPhase(InliningPhase.class);
-                    InliningPhase inlining = (InliningPhase) iter.previous();
-                    CanonicalizerPhase canonicalizer = inlining.getCanonicalizer();
-                    iter.set(new InliningPhase(new AOTInliningPolicy(null), canonicalizer));
-                }
+                ListIterator<BasePhase<? super HighTierContext>> iter = ret.getHighTier().findPhase(InliningPhase.class);
+                InliningPhase inlining = (InliningPhase) iter.previous();
+                CanonicalizerPhase canonicalizer = inlining.getCanonicalizer();
+                iter.set(new InliningPhase(new AOTInliningPolicy(null), canonicalizer));
             }
         }
 
@@ -112,6 +116,12 @@ public class HotSpotSuitesProvider extends SuitesProviderBase {
         if (VerifyPhases.getValue(options)) {
             ret.getMidTier().appendPhase(new WriteBarrierVerificationPhase(config));
         }
+
+        ListIterator<BasePhase<? super LowTierContext>> findPhase = ret.getLowTier().findPhase(FixReadsPhase.class);
+        if (findPhase == null) {
+            findPhase = ret.getLowTier().findPhase(ExpandLogicPhase.class);
+        }
+        findPhase.add(new AddressLoweringPhase(addressLowering));
 
         return ret;
     }
@@ -136,7 +146,7 @@ public class HotSpotSuitesProvider extends SuitesProviderBase {
             protected void run(StructuredGraph graph, HighTierContext context) {
                 EncodedGraph encodedGraph = GraphEncoder.encodeSingleGraph(graph, runtime.getTarget().arch);
 
-                StructuredGraph targetGraph = new StructuredGraph.Builder(graph.getOptions(), graph.getDebug(), AllowAssumptions.YES).method(graph.method()).build();
+                StructuredGraph targetGraph = new StructuredGraph.Builder(graph.getOptions(), AllowAssumptions.YES).method(graph.method()).build();
                 SimplifyingGraphDecoder graphDecoder = new SimplifyingGraphDecoder(runtime.getTarget().arch, targetGraph, context.getMetaAccess(), context.getConstantReflection(),
                                 context.getConstantFieldProvider(), context.getStampProvider(), !ImmutableCode.getValue(graph.getOptions()));
                 graphDecoder.decode(encodedGraph);

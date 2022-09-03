@@ -136,7 +136,7 @@ public class ReplaceConstantNodesPhase extends BasePhase<PhaseContext> {
                 throw new GraalError("Type with bad fingerprint: " + type);
             }
             assert !metaspaceConstant.isCompressed() : "No support for replacing compressed metaspace constants";
-            tryToReplaceWithExisting(graph, node);
+            replaceWithInitialization(graph, node);
             if (anyUsagesNeedReplacement(node)) {
                 replaceWithResolution(graph, node);
             }
@@ -172,45 +172,45 @@ public class ReplaceConstantNodesPhase extends BasePhase<PhaseContext> {
     }
 
     /**
-     * Try to find dominating node doing the resolution that can be reused.
+     * Try to find dominating {@link InitializeKlassNode} that can be reused.
      *
      * @param graph
      * @param node {@link ConstantNode} containing a {@link HotSpotResolvedJavaType} that needs
      *            resolution.
      */
-    private static void tryToReplaceWithExisting(StructuredGraph graph, ConstantNode node) {
+    private static void replaceWithInitialization(StructuredGraph graph, ConstantNode node) {
         ScheduleResult schedule = graph.getLastSchedule();
         NodeMap<Block> nodeToBlock = schedule.getNodeToBlockMap();
         BlockMap<List<Node>> blockToNodes = schedule.getBlockToNodesMap();
 
-        EconomicMap<Block, Node> blockToExisting = EconomicMap.create();
-        for (Node n : node.usages().filter(n -> isReplacementNode(n))) {
-            blockToExisting.put(nodeToBlock.get(n), n);
+        EconomicMap<Block, Node> blockToInit = EconomicMap.create();
+        for (Node n : node.usages().filter(InitializeKlassNode.class)) {
+            blockToInit.put(nodeToBlock.get(n), n);
         }
         for (Node use : node.usages().filter(n -> !isReplacementNode(n)).snapshot()) {
             boolean replaced = false;
             Block b = nodeToBlock.get(use);
-            Node e = blockToExisting.get(b);
-            if (e != null) {
-                // There is an initialization or resolution in the same block as the use, look if
-                // the use is scheduled after it.
+            InitializeKlassNode i = (InitializeKlassNode) blockToInit.get(b);
+            if (i != null) {
+                // There is an initialization in the same block as the use, look if the use is
+                // scheduled after it.
                 for (Node n : blockToNodes.get(b)) {
                     if (n.equals(use)) {
                         // Usage is before initialization, can't use it
                         break;
                     }
-                    if (n.equals(e)) {
-                        use.replaceFirstInput(node, e);
+                    if (n.equals(i)) {
+                        use.replaceFirstInput(node, i);
                         replaced = true;
                         break;
                     }
                 }
             }
             if (!replaced) {
-                // Look for dominating blocks that have existing nodes
-                for (Block d : blockToExisting.getKeys()) {
+                // Look for dominating blocks that have initializations
+                for (Block d : blockToInit.getKeys()) {
                     if (strictlyDominates(d, b)) {
-                        use.replaceFirstInput(node, blockToExisting.get(d));
+                        use.replaceFirstInput(node, blockToInit.get(d));
                         break;
                     }
                 }

@@ -44,7 +44,6 @@ import org.graalvm.compiler.api.replacements.Snippet.NonNullParameter;
 import org.graalvm.compiler.api.replacements.Snippet.VarargsParameter;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
-import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.hotspot.nodes.type.KlassPointerStamp;
@@ -53,7 +52,6 @@ import org.graalvm.compiler.hotspot.replacements.TypeCheckSnippetUtils.Hints;
 import org.graalvm.compiler.hotspot.word.KlassPointer;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.SnippetAnchorNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -261,8 +259,8 @@ public class InstanceOfSnippets implements Snippets {
 
         private final Counters counters;
 
-        public Templates(OptionValues options, Iterable<DebugHandlersFactory> factories, SnippetCounter.Group.Factory factory, HotSpotProviders providers, TargetDescription target) {
-            super(options, factories, providers, providers.getSnippetReflection(), target);
+        public Templates(OptionValues options, SnippetCounter.Group.Factory factory, HotSpotProviders providers, TargetDescription target) {
+            super(options, providers, providers.getSnippetReflection(), target);
             this.counters = new Counters(factory);
         }
 
@@ -333,7 +331,7 @@ public class InstanceOfSnippets implements Snippets {
             } else if (replacer.instanceOf instanceof ClassIsAssignableFromNode) {
                 ClassIsAssignableFromNode isAssignable = (ClassIsAssignableFromNode) replacer.instanceOf;
                 Arguments args = new Arguments(isAssignableFrom, isAssignable.graph().getGuardsStage(), tool.getLoweringStage());
-                assert ((ObjectStamp) isAssignable.getThisClass().stamp(NodeView.DEFAULT)).nonNull();
+                assert ((ObjectStamp) isAssignable.getThisClass().stamp()).nonNull();
                 args.add("thisClassNonNull", isAssignable.getThisClass());
                 args.add("otherClass", isAssignable.getOtherClass());
                 args.add("trueValue", replacer.trueValue);

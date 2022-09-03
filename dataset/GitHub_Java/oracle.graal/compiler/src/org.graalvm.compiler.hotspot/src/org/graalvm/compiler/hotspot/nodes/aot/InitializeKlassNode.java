@@ -26,15 +26,14 @@ import static org.graalvm.compiler.nodeinfo.InputType.Memory;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_4;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_16;
 
+import org.graalvm.api.word.LocationIdentity;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.DeoptimizingFixedWithNextNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
-import org.graalvm.word.LocationIdentity;
 
 @NodeInfo(cycles = CYCLES_4, size = SIZE_16, allowedUsageTypes = {Memory})
 public class InitializeKlassNode extends DeoptimizingFixedWithNextNode implements Lowerable, MemoryCheckpoint.Single {
@@ -43,7 +42,7 @@ public class InitializeKlassNode extends DeoptimizingFixedWithNextNode implement
     @Input ValueNode value;
 
     public InitializeKlassNode(ValueNode value) {
-        super(TYPE, value.stamp(NodeView.DEFAULT));
+        super(TYPE, value.stamp());
         this.value = value;
     }
 

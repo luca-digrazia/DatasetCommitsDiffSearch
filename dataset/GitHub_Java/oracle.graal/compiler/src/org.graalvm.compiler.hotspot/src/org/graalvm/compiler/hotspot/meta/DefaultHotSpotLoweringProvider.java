@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,9 @@
 package org.graalvm.compiler.hotspot.meta;
 
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
+import static org.graalvm.api.word.LocationIdentity.any;
 import static org.graalvm.compiler.core.common.GraalOptions.AlwaysInlineVTableStubs;
+import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.core.common.GraalOptions.InlineVTableStubs;
 import static org.graalvm.compiler.core.common.GraalOptions.OmitHotExceptionStacktrace;
 import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.OSR_MIGRATION_END;
@@ -36,10 +38,10 @@ import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.HUB_WRITE_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_LAYOUT_HELPER_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION;
-import static org.graalvm.word.LocationIdentity.any;
 
 import java.lang.ref.Reference;
 
+import org.graalvm.api.word.LocationIdentity;
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
@@ -48,7 +50,6 @@ import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
-import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeInputList;
@@ -69,7 +70,6 @@ import org.graalvm.compiler.hotspot.nodes.SerialArrayRangeWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.SerialWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.aot.InitializeKlassNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveConstantNode;
-import org.graalvm.compiler.hotspot.nodes.aot.ResolveDynamicConstantNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveMethodAndLoadCountersNode;
 import org.graalvm.compiler.hotspot.nodes.profiling.ProfileNode;
 import org.graalvm.compiler.hotspot.nodes.type.HotSpotNarrowOopStamp;
@@ -155,7 +155,6 @@ import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.DefaultJavaLoweringProvider;
 import org.graalvm.compiler.replacements.nodes.AssertionNode;
-import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
@@ -200,23 +199,25 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     }
 
     @Override
-    public void initialize(OptionValues options, Iterable<DebugHandlersFactory> factories, HotSpotProviders providers, GraalHotSpotVMConfig config) {
-        super.initialize(options, factories, runtime, providers, providers.getSnippetReflection());
+    public void initialize(OptionValues options, HotSpotProviders providers, GraalHotSpotVMConfig config) {
+        super.initialize(options, runtime, providers, providers.getSnippetReflection());
 
         assert target == providers.getCodeCache().getTarget();
-        instanceofSnippets = new InstanceOfSnippets.Templates(options, factories, runtime, providers, target);
-        newObjectSnippets = new NewObjectSnippets.Templates(options, factories, runtime, providers, target, config);
-        monitorSnippets = new MonitorSnippets.Templates(options, factories, runtime, providers, target, config.useFastLocking);
-        writeBarrierSnippets = new WriteBarrierSnippets.Templates(options, factories, runtime, providers, target, config.useCompressedOops ? config.getOopEncoding() : null);
-        exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(options, factories, providers, target);
-        unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(options, factories, providers, target);
-        assertionSnippets = new AssertionSnippets.Templates(options, factories, providers, target);
-        arraycopySnippets = new ArrayCopySnippets.Templates(options, factories, runtime, providers, target);
-        stringToBytesSnippets = new StringToBytesSnippets.Templates(options, factories, providers, target);
-        hashCodeSnippets = new HashCodeSnippets.Templates(options, factories, providers, target);
-        resolveConstantSnippets = new ResolveConstantSnippets.Templates(options, factories, providers, target);
-        profileSnippets = new ProfileSnippets.Templates(options, factories, providers, target);
-        providers.getReplacements().registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(options, factories, providers, target));
+        instanceofSnippets = new InstanceOfSnippets.Templates(options, runtime, providers, target);
+        newObjectSnippets = new NewObjectSnippets.Templates(options, runtime, providers, target, config);
+        monitorSnippets = new MonitorSnippets.Templates(options, runtime, providers, target, config.useFastLocking);
+        writeBarrierSnippets = new WriteBarrierSnippets.Templates(options, runtime, providers, target, config.useCompressedOops ? config.getOopEncoding() : null);
+        exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(options, providers, target);
+        unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(options, providers, target);
+        assertionSnippets = new AssertionSnippets.Templates(options, providers, target);
+        arraycopySnippets = new ArrayCopySnippets.Templates(options, runtime, providers, target);
+        stringToBytesSnippets = new StringToBytesSnippets.Templates(options, providers, target);
+        hashCodeSnippets = new HashCodeSnippets.Templates(options, providers, target);
+        if (GeneratePIC.getValue(options)) {
+            resolveConstantSnippets = new ResolveConstantSnippets.Templates(options, providers, target);
+            profileSnippets = new ProfileSnippets.Templates(options, providers, target);
+        }
+        providers.getReplacements().registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(options, providers, target));
     }
 
     public MonitorSnippets.Templates getMonitorSnippets() {
@@ -362,10 +363,6 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             }
         } else if (n instanceof IdentityHashCodeNode) {
             hashCodeSnippets.lower((IdentityHashCodeNode) n, tool);
-        } else if (n instanceof ResolveDynamicConstantNode) {
-            if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                resolveConstantSnippets.lower((ResolveDynamicConstantNode) n, tool);
-            }
         } else if (n instanceof ResolveConstantNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 resolveConstantSnippets.lower((ResolveConstantNode) n, tool);
