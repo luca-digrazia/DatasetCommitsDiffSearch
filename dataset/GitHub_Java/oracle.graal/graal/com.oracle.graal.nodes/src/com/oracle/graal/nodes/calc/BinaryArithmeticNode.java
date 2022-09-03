@@ -86,10 +86,13 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
         return null;
     }
 
+    public Stamp tryFoldStamp(Stamp xStamp, Stamp yStamp) {
+        return getOp(getX(), getY()).foldStamp(xStamp, yStamp);
+    }
+
     @Override
-    public Stamp foldStamp(Stamp stampX, Stamp stampY) {
-        assert stampX.isCompatible(x.stamp()) && stampY.isCompatible(y.stamp());
-        return getOp(getX(), getY()).foldStamp(stampX, stampY);
+    public boolean inferStamp() {
+        return updateStamp(getOp(getX(), getY()).foldStamp(getX().stamp(), getY().stamp()));
     }
 
     public static AddNode add(StructuredGraph graph, ValueNode v1, ValueNode v2) {
