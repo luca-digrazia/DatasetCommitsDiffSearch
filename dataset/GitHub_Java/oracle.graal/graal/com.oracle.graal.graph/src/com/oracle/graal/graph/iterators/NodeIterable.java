@@ -40,6 +40,10 @@ public interface NodeIterable<T extends Node> extends Iterable<T> {
         return new FilteredNodeIterable<>(this).and(predicate);
     }
 
+    default NodeIterable<T> distinct() {
+        return new FilteredNodeIterable<>(this).distinct();
+    }
+
     default List<T> snapshot() {
         ArrayList<T> list = new ArrayList<>();
         snapshotTo(list);
@@ -79,13 +83,6 @@ public interface NodeIterable<T extends Node> extends Iterable<T> {
     }
 
     default boolean contains(T node) {
-        Iterator<T> iterator = iterator();
-        while (iterator.hasNext()) {
-            T next = iterator.next();
-            if (next == node) {
-                return true;
-            }
-        }
-        return false;
+        return this.filter(NodePredicates.equals(node)).isNotEmpty();
     }
 }
