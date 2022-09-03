@@ -73,18 +73,18 @@ public final class DefaultTruffleCompiler extends TruffleCompiler {
         PhaseSuite<HighTierContext> suite = backend.getSuites().getDefaultGraphBuilderSuite().copy();
         ListIterator<BasePhase<? super HighTierContext>> iterator = suite.findPhase(GraphBuilderPhase.class);
         iterator.remove();
-        iterator.add(new TruffleGraphBuilderPhase(config));
+        iterator.add(new InstrumentedGraphBuilderPhase(config));
         return suite;
     }
 
-    public static class TruffleGraphBuilderPhase extends GraphBuilderPhase {
-        public TruffleGraphBuilderPhase(GraphBuilderConfiguration config) {
+    public static class InstrumentedGraphBuilderPhase extends GraphBuilderPhase {
+        public InstrumentedGraphBuilderPhase(GraphBuilderConfiguration config) {
             super(config);
         }
 
         @Override
         protected void run(StructuredGraph graph, HighTierContext context) {
-            new TruffleGraphBuilderPhase.Instance(context.getMetaAccess(), context.getStampProvider(), context.getConstantReflection(), getGraphBuilderConfig(),
+            new InstrumentedGraphBuilderPhase.Instance(context.getMetaAccess(), context.getStampProvider(), context.getConstantReflection(), getGraphBuilderConfig(),
                             context.getOptimisticOptimizations(), null).run(graph);
         }
 

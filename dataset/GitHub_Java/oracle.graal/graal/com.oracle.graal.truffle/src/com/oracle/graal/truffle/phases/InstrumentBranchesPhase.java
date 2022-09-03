@@ -143,14 +143,11 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
             Point existing = pointMap.get(key);
             if (existing != null) {
                 return existing;
-            } else if (tableCount < ACCESS_TABLE.length) {
+            } else {
                 int index = tableCount++;
                 Point p = new Point(index);
                 pointMap.put(key, p);
                 return p;
-            } else {
-                System.err.println("Maximum number of branch instrumentation counters exceeded.");
-                return null;
             }
         }
 
