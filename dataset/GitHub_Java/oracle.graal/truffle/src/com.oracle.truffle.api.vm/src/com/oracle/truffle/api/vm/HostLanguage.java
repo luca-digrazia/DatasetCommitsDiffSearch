@@ -112,7 +112,7 @@ class HostLanguage extends TruffleLanguage<HostContext> {
             }
         }
 
-        private Class<?> findClassImpl(String className) {
+        Class<?> findClassImpl(String className) {
             lookupInternalContext();
             validateClass(className);
             if (className.endsWith("[]")) {
