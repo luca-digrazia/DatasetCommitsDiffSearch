@@ -25,14 +25,13 @@ package com.oracle.graal.truffle.test.nodes;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
-@NodeInfo
 public class RootTestNode extends RootNode {
 
     private final String name;
     @Child AbstractTestNode node;
 
-    public RootTestNode(FrameDescriptor descriptor, String name, AbstractTestNode node) {
-        super(null, descriptor);
+    public RootTestNode(String name, AbstractTestNode node) {
+        super(null);
         this.name = name;
         this.node = node;
     }
