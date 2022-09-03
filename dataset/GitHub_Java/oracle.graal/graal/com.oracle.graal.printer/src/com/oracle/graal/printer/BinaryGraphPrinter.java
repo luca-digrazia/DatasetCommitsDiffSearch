@@ -129,12 +129,10 @@ public class BinaryGraphPrinter implements GraphPrinter {
     private void writeGraph(Graph graph, SchedulePhase predefinedSchedule) throws IOException {
         SchedulePhase schedule = predefinedSchedule;
         if (schedule == null) {
-            if (PrintIdealGraphSchedule.getValue()) {
-                try {
-                    schedule = new SchedulePhase();
-                    schedule.apply((StructuredGraph) graph);
-                } catch (Throwable t) {
-                }
+            try {
+                schedule = new SchedulePhase();
+                schedule.apply((StructuredGraph) graph);
+            } catch (Throwable t) {
             }
         }
         ControlFlowGraph cfg = schedule == null ? null : schedule.getCFG();

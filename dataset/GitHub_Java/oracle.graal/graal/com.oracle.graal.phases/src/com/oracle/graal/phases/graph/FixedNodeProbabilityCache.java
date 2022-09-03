@@ -99,16 +99,10 @@ public class FixedNodeProbabilityCache implements ToDoubleFunction<FixedNode> {
             return cachedValue;
         }
 
-        double probability = 0.0;
+        double probability;
         if (current.predecessor() == null) {
             if (current instanceof MergeNode) {
-                MergeNode currentMerge = (MergeNode) current;
-                NodeInputList<AbstractEndNode> currentForwardEnds = currentMerge.forwardEnds();
-                for (AbstractEndNode endNode : currentForwardEnds) {
-                    probability += applyAsDouble(endNode);
-                }
-                // probability = ((MergeNode)
-// current).forwardEnds().stream().mapToDouble(this::applyAsDouble).sum();
+                probability = ((MergeNode) current).forwardEnds().stream().mapToDouble(this::applyAsDouble).sum();
                 if (current instanceof LoopBeginNode) {
                     probability *= ((LoopBeginNode) current).loopFrequency();
                 }
