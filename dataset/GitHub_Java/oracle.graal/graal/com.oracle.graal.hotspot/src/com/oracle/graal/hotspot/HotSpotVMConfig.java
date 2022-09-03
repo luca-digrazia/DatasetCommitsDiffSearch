@@ -720,7 +720,6 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMField(name = "Array<Klass*>::_data", get = HotSpotVMField.Type.OFFSET) @Stable public int metaspaceArrayBaseOffset;
 
     @HotSpotVMField(name = "InstanceKlass::_init_state", get = HotSpotVMField.Type.OFFSET) @Stable public int klassStateOffset;
-    @HotSpotVMConstant(name = "InstanceKlass::linked") @Stable public int klassStateLinked;
     @HotSpotVMConstant(name = "InstanceKlass::fully_initialized") @Stable public int klassStateFullyInitialized;
     @HotSpotVMField(name = "InstanceKlass::_constants", get = HotSpotVMField.Type.OFFSET) @Stable public int instanceKlassConstantsOffset;
 
@@ -959,11 +958,6 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMField(name = "Method::_method_data", get = HotSpotVMField.Type.OFFSET) @Stable public int methodDataOffset;
     @HotSpotVMField(name = "Method::_from_compiled_entry", get = HotSpotVMField.Type.OFFSET) @Stable public int methodCompiledEntryOffset;
 
-    @HotSpotVMField(name = "MethodData::_size", get = HotSpotVMField.Type.OFFSET) @Stable public int methodDataSize;
-    @HotSpotVMField(name = "MethodData::_data_size", get = HotSpotVMField.Type.OFFSET) @Stable public int methodDataDataSize;
-    @HotSpotVMField(name = "MethodData::_data[0]", get = HotSpotVMField.Type.OFFSET) @Stable public int methodDataOopDataOffset;
-    @HotSpotVMField(name = "MethodData::_trap_hist._array[0]", get = HotSpotVMField.Type.OFFSET) @Stable public int methodDataOopTrapHistoryOffset;
-
     @HotSpotVMField(name = "nmethod::_verified_entry_point", get = HotSpotVMField.Type.OFFSET) @Stable public int nmethodEntryOffset;
 
     @HotSpotVMType(name = "BasicLock", get = HotSpotVMType.Type.SIZE) @Stable public int basicLockSize;
@@ -1038,6 +1032,9 @@ public class HotSpotVMConfig extends CompilerObject {
     public int layoutHelperElementTypePrimitiveInPlace() {
         return (layoutHelperArrayTagTypeValue & ~layoutHelperArrayTagObjectValue) << layoutHelperArrayTagShift;
     }
+
+    @HotSpotVMField(name = "MethodData::_data[0]", get = HotSpotVMField.Type.OFFSET) @Stable public int methodDataOopDataOffset;
+    @HotSpotVMField(name = "MethodData::_trap_hist._array[0]", get = HotSpotVMField.Type.OFFSET) @Stable public int methodDataOopTrapHistoryOffset;
 
     /**
      * The DataLayout header size is the same as the cell size.
@@ -1147,7 +1144,6 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMConstant(name = "Deoptimization::Reason_constraint") @Stable public int deoptReasonConstraint;
     @HotSpotVMConstant(name = "Deoptimization::Reason_loop_limit_check") @Stable public int deoptReasonLoopLimitCheck;
     @HotSpotVMConstant(name = "Deoptimization::Reason_aliasing") @Stable public int deoptReasonAliasing;
-    @HotSpotVMConstant(name = "Deoptimization::Reason_LIMIT") @Stable public int deoptReasonOSROffset;
 
     @HotSpotVMConstant(name = "Deoptimization::Action_none") @Stable public int deoptActionNone;
     @HotSpotVMConstant(name = "Deoptimization::Action_maybe_recompile") @Stable public int deoptActionMaybeRecompile;
