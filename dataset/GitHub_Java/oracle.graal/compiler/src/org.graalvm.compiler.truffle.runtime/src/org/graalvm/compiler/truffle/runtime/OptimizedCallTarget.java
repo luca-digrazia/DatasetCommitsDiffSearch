@@ -75,7 +75,7 @@ import jdk.vm.ci.meta.SpeculationLog;
  * Note: {@code PartialEvaluator} looks up this class and a number of its methods by name.
  */
 @SuppressWarnings("deprecation")
-public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootCallTarget, ReplaceObserver, com.oracle.truffle.api.LoopCountReceiver {
+public class OptimizedCallTarget extends InstalledCode implements CompilableTruffleAST, RootCallTarget, ReplaceObserver, com.oracle.truffle.api.LoopCountReceiver {
 
     private static final String NODE_REWRITING_ASSUMPTION_NAME = "nodeRewritingAssumption";
     static final String CALL_BOUNDARY_METHOD_NAME = "callProxy";
@@ -91,7 +91,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     /** Only set for a source CallTarget with a clonable RootNode. */
     private volatile RootNode uninitializedRootNode;
-
     private volatile int cachedNonTrivialNodeCount = -1;
     private volatile SpeculationLog speculationLog;
     private volatile int callSitesKnown;
@@ -108,6 +107,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     @CompilationFinal private volatile String nameCache;
 
     public OptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode) {
+        super(null);
         assert sourceCallTarget == null || sourceCallTarget.sourceCallTarget == null : "Cannot create a clone of a cloned CallTarget";
         this.sourceCallTarget = sourceCallTarget;
         this.speculationLog = sourceCallTarget != null ? sourceCallTarget.getSpeculationLog() : null;
@@ -216,7 +216,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             getCompilationProfile().interpreterCall(this);
             if (isValid()) {
                 // Stubs were deoptimized => reinstall.
-                runtime().bypassedInstalledCode();
+                runtime().bypassedCompiledCode();
             }
         } else {
             // We come here from compiled code
@@ -247,7 +247,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             throw rethrow(compilationProfile.profileExceptionType(t));
         } catch (Throwable t) {
             Throwable profiledT = compilationProfile.profileExceptionType(t);
-            runtime().getTvmci().onThrowable(null, this, profiledT, frame);
+            runtime().getTvmci().onThrowable(rootNode, profiledT);
             throw rethrow(profiledT);
         } finally {
             // this assertion is needed to keep the values from being cleared as non-live locals
@@ -326,37 +326,15 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return false;
     }
 
-    /**
-     * Gets the address of the machine code for this call target. A non-zero return value denotes
-     * the contiguous memory block containing the machine code but does not necessarily represent an
-     * entry point for the machine code or even the address of executable instructions. This value
-     * is only for informational purposes (e.g., use in a log message).
-     */
-    public abstract long getCodeAddress();
+    @Override
+    public void invalidate() {
+        invalidate(null, null);
+    }
 
-    /**
-     * Invalidates any machine code attached to this call target.
-     */
-    protected abstract void invalidateCode();
-
-    /**
-     * Determines if this call target has valid machine code attached to it.
-     */
-    public abstract boolean isValid();
-
-    /**
-     * Invalidates this call target by invalidating any machine code attached to it.
-     *
-     * @param source the source object that caused the machine code to be invalidated. For example
-     *            the source {@link Node} object. May be {@code null}.
-     * @param reason a textual description of the reason why the machine code was invalidated. May
-     *            be {@code null}.
-     */
-    public void invalidate(Object source, CharSequence reason) {
+    protected void invalidate(Object source, CharSequence reason) {
         cachedNonTrivialNodeCount = -1;
         if (isValid()) {
-            invalidateCode();
-            runtime().getListener().onCompilationInvalidated(this, source, reason);
+            runtime().invalidateInstalledCode(this, source, reason);
         }
         runtime().cancelInstalledTask(this, source, reason);
     }
@@ -396,7 +374,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     @SuppressWarnings({"unchecked"})
-    static <E extends Throwable> RuntimeException rethrow(Throwable ex) throws E {
+    private static <E extends Throwable> RuntimeException rethrow(Throwable ex) throws E {
         throw (E) ex;
     }
 
@@ -641,5 +619,10 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     public <T> T getOptionValue(OptionKey<T> key) {
         return PolyglotCompilerOptions.getValue(rootNode, key);
+    }
+
+    @Override
+    public InstalledCode getInstalledCode() {
+        return this;
     }
 }
