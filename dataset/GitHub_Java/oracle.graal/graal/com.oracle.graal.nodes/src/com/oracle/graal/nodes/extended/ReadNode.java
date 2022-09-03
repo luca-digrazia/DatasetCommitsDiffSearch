@@ -57,7 +57,7 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.setResult(this, location().generateLoad(gen, object(), this));
+        gen.setResult(this, location().generateLoad(gen, object(), getNullCheck()));
     }
 
     @Override
