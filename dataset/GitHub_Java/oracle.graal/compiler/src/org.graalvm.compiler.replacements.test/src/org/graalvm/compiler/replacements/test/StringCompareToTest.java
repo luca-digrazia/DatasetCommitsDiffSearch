@@ -93,7 +93,6 @@ public class StringCompareToTest extends StringSubstitutionTestBase {
             needCheckNode = false;
         } else {
             List<String> vmArgs = GraalServices.getInputArguments();
-            Assume.assumeTrue(vmArgs != null);
             for (String vmArg : vmArgs) {
                 if (vmArg.equals(DISABLE_COMPACTSTRINGS_FLAG)) {
                     needCheckNode = false;
