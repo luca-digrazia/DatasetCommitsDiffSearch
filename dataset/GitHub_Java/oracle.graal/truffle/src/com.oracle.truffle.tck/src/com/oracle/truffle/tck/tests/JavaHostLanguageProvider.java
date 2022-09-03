@@ -59,37 +59,37 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
     @Override
     public Collection<? extends Snippet> createValueConstructors(final Context context) {
         final List<Snippet> result = new ArrayList<>();
-        final Primitive[] primitives = new Primitive[]{
-                        Primitive.create("boolean", false, TypeDescriptor.BOOLEAN),
-                        Primitive.create("byte", Byte.MIN_VALUE, TypeDescriptor.NUMBER),
-                        Primitive.create("short", Short.MIN_VALUE, TypeDescriptor.NUMBER),
-                        Primitive.create("char", ' ', TypeDescriptor.STRING),
-                        Primitive.create("int", Integer.MAX_VALUE, TypeDescriptor.NUMBER),  // Integer.MIN_VALUE
-                                                                                            // is NA
-                                                                                            // for
-                                                                                            // fast-r
-                        Primitive.create("long", Long.MIN_VALUE, TypeDescriptor.NUMBER),
-                        Primitive.create("float", Float.MAX_VALUE, TypeDescriptor.NUMBER),
-                        Primitive.create("double", Double.MAX_VALUE, TypeDescriptor.NUMBER),
-                        Primitive.create("java.lang.String", "TEST", TypeDescriptor.STRING)
-        };
+        final Map<Class<?>, Primitive> primitives = new HashMap<>();
+        primitives.put(Boolean.class, Primitive.create("boolean", false, TypeDescriptor.BOOLEAN));
+        primitives.put(Byte.class, Primitive.create("byte", Byte.MIN_VALUE, TypeDescriptor.NUMBER));
+        primitives.put(Short.class, Primitive.create("short", Short.MIN_VALUE, TypeDescriptor.NUMBER));
+        primitives.put(Character.class, Primitive.create("char", ' ', TypeDescriptor.STRING));
+        primitives.put(Integer.class, Primitive.create("int", Integer.MAX_VALUE, TypeDescriptor.NUMBER));   // Integer.MIN_VALUE
+                                                                                                            // is
+                                                                                                            // NA
+                                                                                                            // for
+                                                                                                            // fast-r
+        primitives.put(Long.class, Primitive.create("long", Long.MIN_VALUE, TypeDescriptor.NUMBER));
+        primitives.put(Float.class, Primitive.create("float", Float.MAX_VALUE, TypeDescriptor.NUMBER));
+        primitives.put(Double.class, Primitive.create("double", Double.MAX_VALUE, TypeDescriptor.NUMBER));
+        primitives.put(String.class, Primitive.create("java.lang.String", "TEST", TypeDescriptor.STRING));
 
         // Java primitives
-        for (Primitive primitive : primitives) {
+        for (Primitive primitive : primitives.values()) {
             result.add(createPrimitive(context, primitive));
         }
         // Arrays
         result.add(Snippet.newBuilder("Array<int>", export(context, new ValueSupplier<>(new int[]{1, 2})),
-                        TypeDescriptor.array(TypeDescriptor.NUMBER)).build());
+                        TypeDescriptor.union(TypeDescriptor.OBJECT, TypeDescriptor.array(TypeDescriptor.NUMBER))).build());
         result.add(Snippet.newBuilder("Array<java.lang.Object>", export(context, new ValueSupplier<>(new Object[]{1, "TEST"})),
-                        TypeDescriptor.ARRAY).build());
+                        TypeDescriptor.union(TypeDescriptor.OBJECT, TypeDescriptor.ARRAY)).build());
         // Primitive Proxies
-        for (Primitive primitive : primitives) {
+        for (Primitive primitive : primitives.values()) {
             result.add(createProxyPrimitive(context, primitive));
         }
         // Array Proxies
         result.add(createProxyArray(context, null));
-        for (Primitive primitive : primitives) {
+        for (Primitive primitive : primitives.values()) {
             result.add(createProxyArray(context, primitive));
         }
         // Object Proxies
@@ -102,13 +102,16 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
         result.add(Snippet.newBuilder(
                         "ProxyExecutable<...>",
                         export(context, new ValueSupplier<>(new ProxyExecutableImpl())),
-                        TypeDescriptor.EXECUTABLE).build());
+                        TypeDescriptor.union(TypeDescriptor.OBJECT, TypeDescriptor.EXECUTABLE)).build());
         // No-args execuable
         result.add(Snippet.newBuilder(
                         "ProxyExecutable<>",
                         export(context, new ValueSupplier<>(new ProxyExecutableImpl(ProxyExecutableImpl.EMPTY, 0))),
-                        TypeDescriptor.executable(TypeDescriptor.ANY)).build());
-        for (Primitive primitive : primitives) {
+                        TypeDescriptor.union(TypeDescriptor.OBJECT, TypeDescriptor.executable(TypeDescriptor.ANY))).build());
+        for (Primitive primitive : new Primitive[]{
+                        primitives.get(Boolean.class),
+                        primitives.get(Integer.class),
+                        primitives.get(String.class)}) {
             result.add(createProxyExecutable(context, primitive));
         }
         return Collections.unmodifiableCollection(result);
@@ -173,7 +176,7 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
         return Snippet.newBuilder(
                         String.format("Proxy<Array<%s>>", primitive == null ? "" : primitive.name),
                         export(context, new ValueSupplier<>(primitive == null ? ProxyArray.fromArray() : ProxyArray.fromArray(primitive.value, primitive.value))),
-                        primitive == null ? TypeDescriptor.ARRAY : TypeDescriptor.array(primitive.type)).build();
+                        TypeDescriptor.union(TypeDescriptor.OBJECT, primitive == null ? TypeDescriptor.ARRAY : TypeDescriptor.array(primitive.type))).build();
     }
 
     private static Snippet createProxyExecutable(
@@ -182,7 +185,7 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
         return Snippet.newBuilder(
                         String.format("ProxyExecutable<%s,%s>", primitive.name, primitive.name),
                         export(context, new ValueSupplier<>(new ProxyExecutableImpl(primitive, 2))),
-                        TypeDescriptor.executable(primitive.type, primitive.type, primitive.type)).build();
+                        TypeDescriptor.union(TypeDescriptor.OBJECT, TypeDescriptor.executable(primitive.type, primitive.type, primitive.type))).build();
     }
 
     private static Value export(final Context context, final Supplier<Object> s) {
@@ -285,15 +288,22 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
                 return new Consumer<Value>() {
                     @Override
                     public void accept(Value value) {
-                        if (primitive.value.getClass() == Byte.class) {
+                        if (!value.isNumber()) {
+                            throw new AssertionError(String.format("Expected NUMBER, got: %s", value));
+                        }
+                        if (value.fitsInByte()) {
                             value.asByte();
-                        } else if (primitive.value.getClass() == Short.class || primitive.value.getClass() == Integer.class) {
+                        }
+                        if (value.fitsInInt()) {
                             value.asInt();
-                        } else if (primitive.value.getClass() == Long.class) {
+                        }
+                        if (value.fitsInLong()) {
                             value.asLong();
-                        } else if (primitive.value.getClass() == Float.class) {
+                        }
+                        if (value.fitsInFloat()) {
                             value.asFloat();
-                        } else if (primitive.value.getClass() == Double.class) {
+                        }
+                        if (value.fitsInDouble()) {
                             value.asDouble();
                         }
                     }
