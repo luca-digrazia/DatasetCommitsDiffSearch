@@ -141,6 +141,4 @@ public interface NodeFactoryFacade {
 
     LLVMNode createUnreachableNode();
 
-    LLVMNode createIndirectBranch(LLVMExpressionNode value, int[] labelTargets);
-
 }

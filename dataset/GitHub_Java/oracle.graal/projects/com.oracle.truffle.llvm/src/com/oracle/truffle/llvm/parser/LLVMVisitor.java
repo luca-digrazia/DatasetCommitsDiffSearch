@@ -149,6 +149,7 @@ import com.oracle.truffle.llvm.nodes.control.LLVMBrUnconditionalNodeGen;
 import com.oracle.truffle.llvm.nodes.control.LLVMConditionalBranchNodeFactory;
 import com.oracle.truffle.llvm.nodes.control.LLVMConditionalBranchNodeFactory.LLVMBrConditionalInjectionNodeGen;
 import com.oracle.truffle.llvm.nodes.control.LLVMConditionalPhiWriteNode;
+import com.oracle.truffle.llvm.nodes.control.LLVMIndirectBranchNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI32SwitchNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI64SwitchNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI8SwitchNode;
@@ -1444,8 +1445,8 @@ public class LLVMVisitor implements LLVMParserRuntime {
         for (int i = 0; i < labelTargets.length; i++) {
             labelTargets[i] = getIndexFromBasicBlock(destinations.get(i).getRef());
         }
-        LLVMExpressionNode value = visitValueRef(instr.getAddress().getRef(), instr.getAddress().getType());
-        return factoryFacade.createIndirectBranch(value, labelTargets);
+        LLVMAddressNode value = (LLVMAddressNode) visitValueRef(instr.getAddress().getRef(), instr.getAddress().getType());
+        return new LLVMIndirectBranchNode(value, labelTargets);
     }
 
     private LLVMStatementNode visitSwitch(Instruction_switch switchInstr) {
