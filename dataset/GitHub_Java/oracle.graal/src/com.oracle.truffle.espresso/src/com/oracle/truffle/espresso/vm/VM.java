@@ -46,7 +46,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.oracle.truffle.espresso.runtime.EspressoProperties;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CallTarget;
@@ -545,7 +544,7 @@ public class VM extends NativeEnv {
 
     @VmImpl
     @JniImpl
-    public @Type(Class.class) StaticObject JVM_DefineClass(String name, @Type(ClassLoader.class) StaticObject loader, long bufPtr, int len, @Type(ProtectionDomain.class) Object pd) {
+    public @Type(Class.class) StaticObject JVM_DefineClass(String name, Object loader, long bufPtr, int len, @Type(ProtectionDomain.class) Object pd) {
         ByteBuffer buf = JniEnv.directByteBuffer(bufPtr, len, JavaKind.Byte);
         final byte[] bytes = new byte[len];
         buf.get(bytes);
@@ -555,7 +554,7 @@ public class VM extends NativeEnv {
 
     @VmImpl
     @JniImpl
-    public @Type(Class.class) StaticObject JVM_DefineClassWithSource(String name, @Type(ClassLoader.class) StaticObject loader, long bufPtr, int len,
+    public @Type(Class.class) StaticObject JVM_DefineClassWithSource(String name, Object loader, long bufPtr, int len,
                     @Type(ProtectionDomain.class) Object pd, String source) {
         // FIXME(peterssen): source is ignored.
         return JVM_DefineClass(name, loader, bufPtr, len, pd);
@@ -591,7 +590,7 @@ public class VM extends NativeEnv {
 
     @VmImpl
     @JniImpl
-    public @Type(Class.class) StaticObject JVM_FindLoadedClass(@Type(ClassLoader.class) StaticObject loader, @Type(String.class) StaticObject name) {
+    public @Type(Class.class) StaticObject JVM_FindLoadedClass(Object loader, @Type(String.class) StaticObject name) {
         EspressoContext context = EspressoLanguage.getCurrentContext();
         TypeDescriptor type = context.getTypeDescriptors().make(MetaUtil.toInternalName(Meta.toHost(name)));
         Klass klass = EspressoLanguage.getCurrentContext().getRegistries().findLoadedClass(type, loader);
@@ -695,21 +694,25 @@ public class VM extends NativeEnv {
         Meta.Method.WithInstance setProperty = meta(properties).method("setProperty", Object.class, String.class, String.class);
         OptionValues options = EspressoLanguage.getCurrentContext().getEnv().getOptions();
 
-        // Set user-defined system properties.
-        for (Map.Entry<String, String> entry : options.get(EspressoOptions.Properties).entrySet()) {
-            setProperty.invoke(entry.getKey(), entry.getValue());
+        String[] inheritedProps = {
+                        "java.home",
+                        "sun.boot.class.path",
+                        "java.library.path",
+                        "sun.boot.library.path"};
+
+        // Classpath
+        setProperty.invoke("java.class.path", options.get(EspressoOptions.Classpath));
+        if (options.hasBeenSet(EspressoOptions.BootClasspath)) {
+            setProperty.invoke("sun.boot.class.path", options.get(EspressoOptions.BootClasspath));
         }
 
-        // TODO(peterssen): Use EspressoProperties to store classpath.
-        EspressoError.guarantee(options.hasBeenSet(EspressoOptions.Classpath), "Classpath must be defined.");
-        setProperty.invoke("java.class.path", options.get(EspressoOptions.Classpath));
+        for (String prop : inheritedProps) {
+            setProperty.invoke(prop, System.getProperty(prop));
+        }
 
-        EspressoProperties props = EspressoLanguage.getCurrentContext().getVmProperties();
-        setProperty.invoke("java.home", props.getJavaHome());
-        setProperty.invoke("sun.boot.class.path", props.getBootClasspath());
-        setProperty.invoke("java.library.path", props.getJavaLibraryPath());
-        setProperty.invoke("sun.boot.library.path", props.getBootLibraryPath());
-        setProperty.invoke("java.ext.dirs", props.getExtDirs());
+        for (Map.Entry<String, String> entry : EspressoLanguage.getCurrentContext().getEnv().getOptions().get(EspressoOptions.Properties).entrySet()) {
+            setProperty.invoke(entry.getKey(), entry.getValue());
+        }
 
         return properties;
     }
@@ -782,7 +785,8 @@ public class VM extends NativeEnv {
     @JniImpl
     public @Type(Class.class) StaticObject JVM_FindClassFromBootLoader(String name) {
         EspressoContext context = EspressoLanguage.getCurrentContext();
-        Klass klass = context.getRegistries().resolveWithBootClassLoader(context.getTypeDescriptors().make(MetaUtil.toInternalName(name)));
+        Klass klass = context.getRegistries().resolve(
+                        context.getTypeDescriptors().make(MetaUtil.toInternalName(name)), null);
         if (klass == null) {
             return StaticObject.NULL;
         }

@@ -33,6 +33,7 @@ public interface StaticObject extends TruffleObject {
 
     Klass getKlass();
 
+
     static boolean isNull(Object object) {
         assert object != null;
         return object == StaticObject.NULL;
