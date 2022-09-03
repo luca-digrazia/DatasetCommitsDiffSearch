@@ -113,7 +113,7 @@ public final class IntegerEqualsNode extends CompareNode implements BinaryCommut
         }
 
         @Override
-        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue) {
+        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY) {
             if (newX.stamp() instanceof FloatStamp && newY.stamp() instanceof FloatStamp) {
                 return new FloatEqualsNode(newX, newY);
             } else if (newX.stamp() instanceof IntegerStamp && newY.stamp() instanceof IntegerStamp) {
