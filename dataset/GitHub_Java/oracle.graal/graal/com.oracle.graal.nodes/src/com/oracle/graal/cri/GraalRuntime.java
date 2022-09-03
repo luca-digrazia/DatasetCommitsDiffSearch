@@ -24,10 +24,10 @@ package com.oracle.graal.cri;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * Graal-specific extensions for the runtime interface that must be implemented by the VM.
@@ -39,4 +39,5 @@ public interface GraalRuntime extends RiRuntime {
     StructuredGraph intrinsicGraph(RiResolvedMethod caller, int bci, RiResolvedMethod method, List<? extends Node> parameters);
 
     CiTargetMethod compile(RiResolvedMethod method, StructuredGraph graph);
+
 }

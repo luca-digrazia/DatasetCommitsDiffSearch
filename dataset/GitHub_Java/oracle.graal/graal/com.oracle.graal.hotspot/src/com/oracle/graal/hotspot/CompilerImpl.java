@@ -23,12 +23,9 @@
 package com.oracle.graal.hotspot;
 
 import java.io.*;
+import java.lang.reflect.*;
 import java.net.*;
 
-import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.xir.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.graph.*;
 import com.oracle.graal.compiler.target.*;
@@ -37,6 +34,10 @@ import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.ri.*;
 import com.oracle.graal.hotspot.server.*;
+import com.oracle.max.asm.target.amd64.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
+import com.oracle.max.cri.xir.*;
 
 /**
  * Singleton class holding the instance of the GraalCompiler.
@@ -86,8 +87,8 @@ public final class CompilerImpl implements Compiler, Remote {
         return theInstance;
     }
 
-    private final CompilerToVM vmEntries;
-    private final VMToCompiler vmExits;
+    private final CompilerToVM compilerToVm;
+    private final VMToCompiler vmToCompiler;
 
     private HotSpotRuntime runtime;
     private GraalCompiler compiler;
@@ -102,32 +103,47 @@ public final class CompilerImpl implements Compiler, Remote {
 
     private CompilerImpl(CompilerToVM initialEntries) {
 
-        CompilerToVM entries = initialEntries;
-        // initialize VMEntries
-        if (entries == null) {
-            entries = new CompilerToVMImpl();
+        CompilerToVM toVM = initialEntries;
+        // initialize CompilerToVM
+        if (toVM == null) {
+            toVM = new CompilerToVMImpl();
         }
 
-        // initialize VMExits
-        VMToCompiler exits = new VMToCompilerImpl(this);
+        // initialize VmToCompiler
+        VMToCompiler toCompiler = new VMToCompilerImpl(this);
 
         // logging, etc.
         if (CountingProxy.ENABLED) {
-            exits = CountingProxy.getProxy(VMToCompiler.class, exits);
-            entries = CountingProxy.getProxy(CompilerToVM.class, entries);
+            toCompiler = CountingProxy.getProxy(VMToCompiler.class, toCompiler);
+            toVM = CountingProxy.getProxy(CompilerToVM.class, toVM);
         }
         if (Logger.ENABLED) {
-            exits = LoggingProxy.getProxy(VMToCompiler.class, exits);
-            entries = LoggingProxy.getProxy(CompilerToVM.class, entries);
+            toCompiler = LoggingProxy.getProxy(VMToCompiler.class, toCompiler);
+            toVM = LoggingProxy.getProxy(CompilerToVM.class, toVM);
         }
 
         // set the final fields
-        vmEntries = entries;
-        vmExits = exits;
+        compilerToVm = toVM;
+        vmToCompiler = toCompiler;
 
         // initialize compiler
-        config = vmEntries.getConfiguration();
+        config = compilerToVm.getConfiguration();
         config.check();
+
+        if (Boolean.valueOf(System.getProperty("graal.printconfig"))) {
+            printConfig(config);
+        }
+    }
+
+    private static void printConfig(HotSpotVMConfig config) {
+        Field[] fields = config.getClass().getDeclaredFields();
+        for (Field f : fields) {
+            f.setAccessible(true);
+            try {
+                Logger.info(String.format("%9s %-40s = %s", f.getType().getSimpleName(), f.getName(), Logger.pretty(f.get(config))));
+            } catch (Exception e) {
+            }
+        }
     }
 
     @Override
@@ -159,7 +175,7 @@ public final class CompilerImpl implements Compiler, Remote {
                 generator = LoggingProxy.getProxy(RiXirGenerator.class, generator);
             }
 
-            Backend backend = Backend.create(target.arch, runtime, target);
+            Backend backend = Backend.create(runtime, target);
             generator.initialize(backend.newXirAssembler());
 
             compiler = new GraalCompiler(getRuntime(), getTarget(), backend, generator);
@@ -176,19 +192,19 @@ public final class CompilerImpl implements Compiler, Remote {
     }
 
     @Override
-    public CompilerToVM getVMEntries() {
-        return vmEntries;
+    public CompilerToVM getCompilerToVM() {
+        return compilerToVm;
     }
 
     @Override
-    public VMToCompiler getVMExits() {
-        return vmExits;
+    public VMToCompiler getVMToCompiler() {
+        return vmToCompiler;
     }
 
     @Override
     public RiType lookupType(String returnType, HotSpotTypeResolved accessingClass, boolean eagerResolve) {
-        if (returnType.length() == 1 && vmExits instanceof VMToCompilerImpl) {
-            VMToCompilerImpl exitsNative = (VMToCompilerImpl) vmExits;
+        if (returnType.length() == 1 && vmToCompiler instanceof VMToCompilerImpl) {
+            VMToCompilerImpl exitsNative = (VMToCompilerImpl) vmToCompiler;
             CiKind kind = CiKind.fromPrimitiveOrVoidTypeChar(returnType.charAt(0));
             switch(kind) {
                 case Boolean:
@@ -217,7 +233,7 @@ public final class CompilerImpl implements Compiler, Remote {
                     return exitsNative.typeVoid;
             }
         }
-        return vmEntries.RiSignature_lookupType(returnType, accessingClass, eagerResolve);
+        return compilerToVm.RiSignature_lookupType(returnType, accessingClass, eagerResolve);
     }
 
     @Override
@@ -239,5 +255,18 @@ public final class CompilerImpl implements Compiler, Remote {
             runtime = new HotSpotRuntime(config, this);
         }
         return runtime;
+    }
+
+    public void evictDeoptedGraphs() {
+        if (cache != null) {
+            long[] deoptedGraphs = getCompilerToVM().getDeoptedLeafGraphIds();
+            if (deoptedGraphs != null) {
+                if (deoptedGraphs.length == 0) {
+                    cache.clear();
+                } else {
+                    cache.removeGraphs(deoptedGraphs);
+                }
+            }
+        }
     }
 }
