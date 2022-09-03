@@ -128,12 +128,7 @@ public class IdealGraphPrinter {
             // nothing to do here...
             //t.printStackTrace();
         }
-        List<Loop> loops = null;
-        try {
-            LoopUtil.computeLoops(graph);
-        } catch (Throwable t) {
-
-        }
+        List<Loop> loops = LoopUtil.computeLoops(graph);
 
         stream.println("  <nodes>");
         List<Edge> edges = printNodes(graph, shortNames, schedule == null ? null : schedule.getNodeToBlock(), loops, debugObjects);
@@ -161,10 +156,8 @@ public class IdealGraphPrinter {
     private List<Edge> printNodes(Graph graph, boolean shortNames, NodeMap<Block> nodeToBlock, List<Loop> loops, Map<String, Object> debugObjects) {
         ArrayList<Edge> edges = new ArrayList<Edge>();
         NodeBitMap loopExits = graph.createNodeBitMap();
-        if (loops != null) {
-            for (Loop loop : loops) {
-                loopExits.setUnion(loop.exits());
-            }
+        for (Loop loop : loops) {
+            loopExits.setUnion(loop.exits());
         }
 
         Map<Node, Set<Entry<String, Integer>>> colors = new HashMap<Node, Set<Entry<String, Integer>>>();
@@ -239,14 +232,12 @@ public class IdealGraphPrinter {
                 stream.printf("    <p name='loopExit'>true</p>%n");
             }
             StringBuilder sb = new StringBuilder();
-            if (loops != null) {
-                for (Loop loop : loops) {
-                    if (loop.nodes().isMarked(node)) {
-                        if (sb.length() > 0) {
-                            sb.append(", ");
-                        }
-                        sb.append(loop.loopBegin().id());
+            for (Loop loop : loops) {
+                if (loop.nodes().isMarked(node)) {
+                    if (sb.length() > 0) {
+                        sb.append(", ");
                     }
+                    sb.append(loop.loopBegin().id());
                 }
             }
             if (sb.length() > 0) {

@@ -28,10 +28,9 @@ import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 
-public class LoopBegin extends Merge{
+public class LoopBegin extends Merge {
     public LoopBegin(Graph graph) {
         super(graph);
-        this.addEnd(new EndNode(graph));
     }
 
     public LoopEnd loopEnd() {
@@ -43,6 +42,7 @@ public class LoopBegin extends Merge{
                 }
             }
         }
+        assert false : "LoopBegin should always have a LoopEnd";
         return null;
     }
 
@@ -63,7 +63,8 @@ public class LoopBegin extends Merge{
 
     @Override
     public Node copy(Graph into) {
-        return new LoopBegin(into);
+        LoopBegin x = new LoopBegin(into);
+        return x;
     }
 
     @Override
@@ -79,6 +80,16 @@ public class LoopBegin extends Merge{
             return 1;
         }
         throw Util.shouldNotReachHere("unknown pred : " + pred + "(sp=" + forwardEdge() + ", le=" + this.loopEnd() + ")");
+    }
+
+    @Override
+    public Node phiPredecessorAt(int index) {
+        if (index == 0) {
+            return forwardEdge();
+        } else if (index == 1) {
+            return loopEnd();
+        }
+        throw Util.shouldNotReachHere();
     }
 
     public Collection<LoopCounter> counters() {
@@ -104,6 +115,12 @@ public class LoopBegin extends Merge{
     @Override
     public String toString() {
         return "LoopBegin: " + super.toString();
+    }
+
+    @Override
+    public Node singlePredecessor() {
+        assert endCount() == 1;
+        return endAt(0).singlePredecessor();
     }
 
     @Override
