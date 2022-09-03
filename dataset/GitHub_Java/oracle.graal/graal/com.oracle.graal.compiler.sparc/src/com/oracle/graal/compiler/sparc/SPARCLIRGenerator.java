@@ -42,7 +42,6 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.sparc.*;
-import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.util.*;
 
 /**
@@ -397,7 +396,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public Value emitMathAbs(Value input) {
         Variable result = newVariable(LIRKind.derive(input));
-        append(new BinaryRegConst(DAND, result, asAllocatable(input), Constant.forDouble(Double.longBitsToDouble(0x7FFFFFFFFFFFFFFFL)), null));
+        append(new BinaryRegConst(DAND, result, asAllocatable(input), Constant.forDouble(Double.longBitsToDouble(0x7FFFFFFFFFFFFFFFL))));
         return result;
     }
 
@@ -439,7 +438,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public Value emitByteSwap(Value input) {
         Variable result = newVariable(LIRKind.derive(input));
-        append(new SPARCByteSwapOp(this, result, input));
+        append(new SPARCByteSwapOp(result, input));
         return result;
     }
 
@@ -487,17 +486,17 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         return result;
     }
 
-    private Variable emitBinary(SPARCArithmetic op, boolean commutative, Value a, Value b, LIRFrameState state) {
+    private Variable emitBinary(SPARCArithmetic op, boolean commutative, Value a, Value b) {
         if (isConstant(b)) {
-            return emitBinaryConst(op, commutative, asAllocatable(a), asConstant(b), state);
+            return emitBinaryConst(op, commutative, asAllocatable(a), asConstant(b));
         } else if (commutative && isConstant(a)) {
-            return emitBinaryConst(op, commutative, asAllocatable(b), asConstant(a), state);
+            return emitBinaryConst(op, commutative, asAllocatable(b), asConstant(a));
         } else {
-            return emitBinaryVar(op, commutative, asAllocatable(a), asAllocatable(b), state);
+            return emitBinaryVar(op, commutative, asAllocatable(a), asAllocatable(b));
         }
     }
 
-    private Variable emitBinaryConst(SPARCArithmetic op, boolean commutative, AllocatableValue a, Constant b, LIRFrameState state) {
+    private Variable emitBinaryConst(SPARCArithmetic op, boolean commutative, AllocatableValue a, Constant b) {
         switch (op) {
             case IADD:
             case LADD:
@@ -513,16 +512,16 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             case LMUL:
                 if (NumUtil.isInt(b.asLong())) {
                     Variable result = newVariable(LIRKind.derive(a, b));
-                    append(new BinaryRegConst(op, result, a, b, state));
+                    append(new BinaryRegConst(op, result, a, b));
                     return result;
                 }
                 break;
         }
 
-        return emitBinaryVar(op, commutative, a, asAllocatable(b), state);
+        return emitBinaryVar(op, commutative, a, asAllocatable(b));
     }
 
-    private Variable emitBinaryVar(SPARCArithmetic op, boolean commutative, AllocatableValue a, AllocatableValue b, LIRFrameState state) {
+    private Variable emitBinaryVar(SPARCArithmetic op, boolean commutative, AllocatableValue a, AllocatableValue b) {
         Variable result = newVariable(LIRKind.derive(a, b));
         if (commutative) {
             append(new BinaryCommutative(op, result, a, b));
@@ -536,13 +535,13 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     public Variable emitAdd(Value a, Value b) {
         switch (a.getKind().getStackKind()) {
             case Int:
-                return emitBinary(IADD, true, a, b, null);
+                return emitBinary(IADD, true, a, b);
             case Long:
-                return emitBinary(LADD, true, a, b, null);
+                return emitBinary(LADD, true, a, b);
             case Float:
-                return emitBinary(FADD, true, a, b, null);
+                return emitBinary(FADD, true, a, b);
             case Double:
-                return emitBinary(DADD, true, a, b, null);
+                return emitBinary(DADD, true, a, b);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
@@ -604,24 +603,24 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Value emitDiv(Value a, Value b, LIRFrameState state) {
-        SPARCArithmetic op = null;
+        Variable result = newVariable(LIRKind.derive(a, b));
         switch (a.getKind().getStackKind()) {
             case Int:
-                op = IDIV;
+                append(new BinaryRegReg(IDIV, result, a, loadNonConst(b)));
                 break;
             case Long:
-                op = LDIV;
+                append(new BinaryRegReg(LDIV, result, a, loadNonConst(b)));
                 break;
             case Float:
-                op = FDIV;
+                append(new Op2Stack(FDIV, result, a, loadNonConst(b)));
                 break;
             case Double:
-                op = DDIV;
+                append(new Op2Stack(DDIV, result, a, loadNonConst(b)));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere("missing: " + a.getKind());
         }
-        return emitBinary(op, false, a, b, state);
+        return result;
     }
 
     @Override
@@ -740,7 +739,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         Variable result = newVariable(LIRKind.derive(a, b).changeType(a.getPlatformKind()));
         AllocatableValue input = asAllocatable(a);
         if (isConstant(b)) {
-            append(new BinaryRegConst(op, result, input, asConstant(b), null));
+            append(new BinaryRegConst(op, result, input, asConstant(b)));
         } else {
             append(new BinaryRegReg(op, result, input, b));
         }
@@ -826,21 +825,13 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 conversionInstruction = F2I;
                 break;
             case I2D:
-            // Implemented in two steps, as this consists of sign extension and then move the
-            // bits over to the double register and then convert to double, in fact this does
-            // not generate any overhead in generated code
-            {
-                AllocatableValue tmp = emitConvert2Op(LIRKind.derive(inputVal).changeType(Kind.Long), I2L, input);
-                return emitConvert2Op(LIRKind.derive(inputVal).changeType(Kind.Double), L2D, tmp);
-            }
+                return emitConvert2Op(LIRKind.derive(inputVal).changeType(Kind.Double), I2D, input);
             case I2F:
                 return emitConvert2Op(LIRKind.derive(inputVal).changeType(Kind.Float), I2F, input);
             case L2D:
                 return emitConvert2Op(LIRKind.derive(inputVal).changeType(Kind.Double), L2D, input);
-            case L2F: {
-                AllocatableValue tmp = emitConvert2Op(LIRKind.derive(inputVal).changeType(Kind.Double), L2D, input);
-                return emitConvert2Op(LIRKind.derive(inputVal).changeType(Kind.Float), D2F, tmp);
-            }
+            case L2F:
+                return emitConvert2Op(LIRKind.derive(inputVal).changeType(Kind.Float), L2F, input);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
@@ -903,7 +894,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             assert inputVal.getKind() == Kind.Long;
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Long));
             long mask = IntegerStamp.defaultMask(fromBits);
-            append(new BinaryRegConst(SPARCArithmetic.LAND, result, asAllocatable(inputVal), Constant.forLong(mask), null));
+            append(new BinaryRegConst(SPARCArithmetic.LAND, result, asAllocatable(inputVal), Constant.forLong(mask)));
             return result;
         } else {
             assert inputVal.getKind() == Kind.Int || inputVal.getKind() == Kind.Short || inputVal.getKind() == Kind.Byte : inputVal.getKind();
@@ -911,7 +902,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             int mask = (int) IntegerStamp.defaultMask(fromBits);
             Constant constant = Constant.forInt(mask);
             if (canInlineConstant(constant)) {
-                append(new BinaryRegConst(SPARCArithmetic.IAND, result, asAllocatable(inputVal), constant, null));
+                append(new BinaryRegConst(SPARCArithmetic.IAND, result, asAllocatable(inputVal), constant));
             } else {
                 Variable maskVar = newVariable(LIRKind.derive(inputVal).changeType(Kind.Int));
                 emitMove(maskVar, constant);

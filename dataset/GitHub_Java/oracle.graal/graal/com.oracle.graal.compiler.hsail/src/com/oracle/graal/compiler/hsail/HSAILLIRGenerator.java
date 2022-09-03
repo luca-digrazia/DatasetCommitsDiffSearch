@@ -212,14 +212,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     public void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
         Variable result = emitAnd(left, right);
         Variable dummyResult = newVariable(left.getLIRKind());
-        append(new CompareBranchOp(mapKindToCompareOp(result.getKind()), Condition.EQ, result, Constant.forInt(0), dummyResult, dummyResult, trueDestination, falseDestination, false));
-    }
-
-    @Override
-    public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
-        Variable result = emitAnd(left, right);
-        append(new CondMoveOp(mapKindToCompareOp(result.getKind()), result, Constant.forInt(0), result, Condition.EQ, load(trueValue), load(falseValue)));
-        return result;
+        append(new CompareBranchOp(mapKindToCompareOp(left.getKind()), Condition.EQ, result, Constant.forInt(0), dummyResult, dummyResult, trueDestination, falseDestination, false));
     }
 
     @Override
@@ -241,6 +234,11 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
                 throw GraalInternalError.shouldNotReachHere("missing: " + left.getKind());
         }
         return result;
+    }
+
+    @Override
+    public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
+        throw GraalInternalError.unimplemented();
     }
 
     /**

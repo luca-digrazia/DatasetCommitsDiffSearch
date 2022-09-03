@@ -158,15 +158,13 @@ public enum SPARCArithmetic {
         @Opcode private final SPARCArithmetic opcode;
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue x;
-        @State protected LIRFrameState state;
         protected Constant y;
 
-        public BinaryRegConst(SPARCArithmetic opcode, AllocatableValue result, AllocatableValue x, Constant y, LIRFrameState state) {
+        public BinaryRegConst(SPARCArithmetic opcode, AllocatableValue result, AllocatableValue x, Constant y) {
             this.opcode = opcode;
             this.result = result;
             this.x = x;
             this.y = y;
-            this.state = state;
         }
 
         @Override
@@ -276,16 +274,15 @@ public enum SPARCArithmetic {
             switch (opcode) {
                 case ISUB:
                     assert isSimm13(crb.asIntConst(src1));
-                    new Sub(SPARC.g0, asIntReg(src2), asIntReg(src2)).emit(masm);
-                    new Add(asIntReg(src2), crb.asIntConst(src1), asIntReg(dst)).emit(masm);
+                    new Add(asIntReg(src2), -(crb.asIntConst(src1)), asIntReg(dst)).emit(masm);
                     break;
                 case IAND:
                     throw GraalInternalError.unimplemented();
                 case IDIV:
-                    new Setx(((PrimitiveConstant) src1).asInt(), asIntReg(dst), false).emit(masm);
-                    exceptionOffset = masm.position();
-                    new Sdivx(asIntReg(dst), asIntReg(src2), asIntReg(dst)).emit(masm);
-                    break;
+                    assert isSimm13(crb.asIntConst(src1));
+                    throw GraalInternalError.unimplemented();
+                    // new Sdivx(masm, asIntReg(src1), asIntReg(src2),
+                    // asIntReg(dst));
                 case LDIV:
                     int c = crb.asIntConst(src1);
                     assert isSimm13(c);
@@ -300,7 +297,7 @@ public enum SPARCArithmetic {
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }
-        } else if (!isConstant(src1) && isConstant(src2)) {
+        } else if (isConstant(src2)) {
             switch (opcode) {
                 case IADD:
                     assert isSimm13(crb.asIntConst(src2));
@@ -316,6 +313,7 @@ public enum SPARCArithmetic {
                     break;
                 case IDIV:
                     assert isSimm13(crb.asIntConst(src2));
+                    new Signx(asIntReg(src1), asIntReg(src1)).emit(masm);
                     new Sdivx(asIntReg(src1), crb.asIntConst(src2), asIntReg(dst)).emit(masm);
                     break;
                 case IAND:

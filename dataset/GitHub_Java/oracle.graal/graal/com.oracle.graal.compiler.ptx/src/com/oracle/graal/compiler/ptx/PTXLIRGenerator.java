@@ -33,6 +33,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.gen.*;
@@ -708,13 +709,13 @@ public class PTXLIRGenerator extends LIRGenerator {
         } else if (fromBits > 32) {
             assert inputVal.getKind() == Kind.Long;
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Long));
-            long mask = CodeUtil.mask(fromBits);
+            long mask = IntegerStamp.defaultMask(fromBits);
             append(new Op2Stack(LAND, result, inputVal, Constant.forLong(mask)));
             return result;
         } else {
             assert inputVal.getKind() == Kind.Int;
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Int));
-            int mask = (int) CodeUtil.mask(fromBits);
+            int mask = (int) IntegerStamp.defaultMask(fromBits);
             append(new Op2Stack(IAND, result, inputVal, Constant.forInt(mask)));
             if (toBits > 32) {
                 Variable longResult = newVariable(LIRKind.derive(inputVal).changeType(Kind.Long));

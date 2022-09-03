@@ -926,16 +926,16 @@ public enum AMD64Arithmetic {
                     break;
 
                 case B2I:
-                    masm.movsbl(asIntReg(dst), (AMD64Address) crb.asByteAddr(src));
+                    masm.movsbl(asIntReg(dst), (AMD64Address) crb.asIntAddr(src));
                     break;
                 case S2I:
-                    masm.movswl(asIntReg(dst), (AMD64Address) crb.asShortAddr(src));
+                    masm.movswl(asIntReg(dst), (AMD64Address) crb.asIntAddr(src));
                     break;
                 case B2L:
-                    masm.movsbq(asLongReg(dst), (AMD64Address) crb.asByteAddr(src));
+                    masm.movsbq(asLongReg(dst), (AMD64Address) crb.asIntAddr(src));
                     break;
                 case S2L:
-                    masm.movswq(asLongReg(dst), (AMD64Address) crb.asShortAddr(src));
+                    masm.movswq(asLongReg(dst), (AMD64Address) crb.asIntAddr(src));
                     break;
                 case I2L:
                     masm.movslq(asLongReg(dst), (AMD64Address) crb.asIntAddr(src));
