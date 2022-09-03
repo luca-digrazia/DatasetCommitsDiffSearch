@@ -24,7 +24,7 @@ package com.oracle.graal.lir.framemap;
 
 import java.util.*;
 
-import com.oracle.jvmci.code.*;
+import com.oracle.graal.api.code.*;
 
 /**
  * A {@link FrameMapBuilder} that allows access to the underlying {@link FrameMap}.

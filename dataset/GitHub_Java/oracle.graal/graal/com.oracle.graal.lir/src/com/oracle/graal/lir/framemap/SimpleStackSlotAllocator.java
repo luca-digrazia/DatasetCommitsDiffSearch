@@ -22,15 +22,20 @@
  */
 package com.oracle.graal.lir.framemap;
 
-import java.util.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.gen.*;
 
-public class SimpleStackSlotAllocator {
+public class SimpleStackSlotAllocator implements StackSlotAllocator {
 
-    FrameMappingTool allocateStackSlots(DelayedFrameMapBuilder builder) {
-        HashMap<VirtualStackSlot, StackSlot> mapping = new HashMap<>();
+    public void allocateStackSlots(FrameMapBuilderTool builder, LIRGenerationResult res) {
+        StackSlot[] mapping = new StackSlot[builder.getNumberOfStackSlots()];
         for (VirtualStackSlot virtualSlot : builder.getStackSlots()) {
             final StackSlot slot;
             if (virtualSlot instanceof SimpleVirtualStackSlot) {
@@ -40,16 +45,42 @@ public class SimpleStackSlotAllocator {
             } else {
                 throw GraalInternalError.shouldNotReachHere("Unknown VirtualStackSlot: " + virtualSlot);
             }
-            mapping.put(virtualSlot, slot);
+            mapping[virtualSlot.getId()] = slot;
         }
-        return mapping::get;
+        updateLIR(res, mapping);
     }
 
-    protected StackSlot mapSimpleVirtualStackSlot(DelayedFrameMapBuilder builder, SimpleVirtualStackSlot virtualStackSlot) {
-        return builder.frameMap.allocateSpillSlot(virtualStackSlot.getLIRKind());
+    protected void updateLIR(LIRGenerationResult res, StackSlot[] mapping) {
+        try (Scope scope = Debug.scope("StackSlotMappingLIR")) {
+            ValueProcedure updateProc = (value, mode, flags) -> {
+                if (isVirtualStackSlot(value)) {
+                    StackSlot stackSlot = mapping[asVirtualStackSlot(value).getId()];
+                    Debug.log("map %s -> %s", value, stackSlot);
+                    return stackSlot;
+                }
+                return value;
+            };
+            for (AbstractBlock<?> block : res.getLIR().getControlFlowGraph().getBlocks()) {
+                try (Indent indent0 = Debug.logAndIndent("block: %s", block)) {
+                    for (LIRInstruction inst : res.getLIR().getLIRforBlock(block)) {
+                        try (Indent indent1 = Debug.logAndIndent("Inst: %d: %s", inst.id(), inst)) {
+                            inst.forEachAlive(updateProc);
+                            inst.forEachInput(updateProc);
+                            inst.forEachOutput(updateProc);
+                            inst.forEachTemp(updateProc);
+                            inst.forEachState(updateProc);
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    protected StackSlot mapVirtualStackSlotRange(DelayedFrameMapBuilder builder, VirtualStackSlotRange virtualStackSlot) {
-        return builder.frameMap.allocateStackSlots(virtualStackSlot.getSlots(), virtualStackSlot.getObjects());
+    protected StackSlot mapSimpleVirtualStackSlot(FrameMapBuilderTool builder, SimpleVirtualStackSlot virtualStackSlot) {
+        return builder.getFrameMap().allocateSpillSlot(virtualStackSlot.getLIRKind());
+    }
+
+    protected StackSlot mapVirtualStackSlotRange(FrameMapBuilderTool builder, VirtualStackSlotRange virtualStackSlot) {
+        return builder.getFrameMap().allocateStackSlots(virtualStackSlot.getSlots(), virtualStackSlot.getObjects());
     }
 }
