@@ -101,6 +101,14 @@ public interface CompilerToVM {
     void initializeMethod(long metaspaceMethod, HotSpotResolvedJavaMethod method);
 
     /**
+     * Initializes a {@link HotSpotMethodData} object from a metaspace MethodData object.
+     * 
+     * @param metaspaceMethodData the metaspace MethodData object
+     * @param methodData the object to initialize from the metaspace object
+     */
+    void initializeMethodData(long metaspaceMethodData, HotSpotMethodData methodData);
+
+    /**
      * Converts a name to a Java type.
      * 
      * @param name a well formed Java type in {@linkplain JavaType#getName() internal} format
@@ -199,6 +207,8 @@ public interface CompilerToVM {
 
     JavaMethod resolveMethod(HotSpotResolvedObjectType klass, String name, String signature);
 
+    boolean isTypeInitialized(HotSpotResolvedObjectType klass);
+
     void initializeType(HotSpotResolvedObjectType klass);
 
     ResolvedJavaType getResolvedType(Class<?> javaClass);
@@ -262,6 +272,8 @@ public interface CompilerToVM {
     void reprofile(long metaspaceMethod);
 
     void invalidateInstalledCode(HotSpotInstalledCode hotspotInstalledCode);
+
+    boolean isTypeLinked(HotSpotResolvedObjectType hotSpotResolvedObjectType);
 
     /**
      * Collects the current values of all Graal benchmark counters, summed up over all threads.
