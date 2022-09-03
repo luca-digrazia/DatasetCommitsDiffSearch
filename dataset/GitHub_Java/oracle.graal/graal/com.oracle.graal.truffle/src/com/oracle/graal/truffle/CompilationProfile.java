@@ -26,6 +26,9 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
 public class CompilationProfile {
 
+    private int invokeCounter;
+    private int originalInvokeCounter;
+    private int loopAndInvokeCounter;
     /**
      * Number of times an installed code for this tree was invalidated.
      */
@@ -38,30 +41,17 @@ public class CompilationProfile {
 
     private long previousTimestamp;
 
+    private final int compilationThreshold;
     private final String name;
 
-    private int callCount;
-    private int callAndLoopCount;
-    private int compilationCallThreshold;
-    private int compilationCallAndLoopThreshold;
-
-    private final int originalInvokeCounter;
-    private final int originalCompilationThreshold;
-
     public CompilationProfile(final int compilationThreshold, final int initialInvokeCounter, final String name) {
+        this.invokeCounter = initialInvokeCounter;
+        this.loopAndInvokeCounter = compilationThreshold;
+        this.originalInvokeCounter = compilationThreshold;
         this.previousTimestamp = System.nanoTime();
-        this.compilationCallThreshold = initialInvokeCounter;
-        this.compilationCallAndLoopThreshold = compilationThreshold;
-        this.originalInvokeCounter = initialInvokeCounter;
-        this.originalCompilationThreshold = compilationThreshold;
-        this.name = name;
-    }
 
-    public void reset() {
-        callCount = 0;
-        callAndLoopCount = 0;
-        compilationCallAndLoopThreshold = originalCompilationThreshold;
-        compilationCallThreshold = originalInvokeCounter;
+        this.compilationThreshold = compilationThreshold;
+        this.name = name;
     }
 
     public long getPreviousTimestamp() {
@@ -80,64 +70,54 @@ public class CompilationProfile {
         return nodeReplaceCount;
     }
 
-    public int getCallAndLoopCount() {
-        return callAndLoopCount;
+    public int getInvokeCounter() {
+        return invokeCounter;
     }
 
-    public int getCallCount() {
-        return callCount;
+    public int getOriginalInvokeCounter() {
+        return originalInvokeCounter;
     }
 
-    public int getCompilationCallAndLoopThreshold() {
-        return compilationCallAndLoopThreshold;
-    }
-
-    public int getCompilationCallThreshold() {
-        return compilationCallThreshold;
-    }
-
-    void ensureProfiling(int calls, int callsAndLoop) {
-        int increaseCallAndLoopThreshold = callsAndLoop - (this.compilationCallAndLoopThreshold - this.callAndLoopCount);
-        if (increaseCallAndLoopThreshold > 0) {
-            this.compilationCallAndLoopThreshold += increaseCallAndLoopThreshold;
-        }
-
-        int increaseCallsThreshold = calls - (this.compilationCallThreshold - this.callCount);
-        if (increaseCallsThreshold > 0) {
-            this.compilationCallThreshold += increaseCallsThreshold;
-        }
+    public int getLoopAndInvokeCounter() {
+        return loopAndInvokeCounter;
     }
 
     void reportTiminingFailed(long timestamp) {
-        ensureProfiling(0, originalCompilationThreshold);
+        this.loopAndInvokeCounter = compilationThreshold;
+        this.originalInvokeCounter = compilationThreshold;
         this.previousTimestamp = timestamp;
     }
 
     void reportInvalidated() {
         invalidationCount++;
-        int reprofile = TruffleInvalidationReprofileCount.getValue();
-        ensureProfiling(reprofile, reprofile);
+        int invalidationReprofileCount = TruffleInvalidationReprofileCount.getValue();
+        invokeCounter = invalidationReprofileCount;
+        originalInvokeCounter += invalidationReprofileCount;
     }
 
     void reportInterpreterCall() {
-        callCount++;
-        callAndLoopCount++;
+        invokeCounter--;
+        loopAndInvokeCounter--;
     }
 
-    void reportInterpreterCalls(int calls) {
-        this.callCount += calls;
-        this.callAndLoopCount += calls;
+    void reportInliningPerformed(TruffleInlining inlining) {
+        invokeCounter = inlining.getInvocationReprofileCount();
+        int inliningReprofileCount = inlining.getReprofileCount();
+        loopAndInvokeCounter = inliningReprofileCount;
+        originalInvokeCounter = inliningReprofileCount;
     }
 
     void reportLoopCount(int count) {
-        callAndLoopCount += count;
+        loopAndInvokeCounter = Math.max(0, loopAndInvokeCounter - count);
     }
 
     void reportNodeReplaced() {
         nodeReplaceCount++;
         // delay compilation until tree is deemed stable enough
         int replaceBackoff = TruffleReplaceReprofileCount.getValue();
-        ensureProfiling(1, replaceBackoff);
+        if (loopAndInvokeCounter < replaceBackoff) {
+            loopAndInvokeCounter = replaceBackoff;
+        }
     }
 
 }
