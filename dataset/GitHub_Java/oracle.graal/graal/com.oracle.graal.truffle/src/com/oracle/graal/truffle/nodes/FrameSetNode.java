@@ -52,7 +52,7 @@ public class FrameSetNode extends FrameAccessNode implements IterableNodeType, V
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (!isConstantFrameSlot()) {
+        if (!isFrameSlotConstant()) {
             return;
         }
         assert isValidAccessKind();
