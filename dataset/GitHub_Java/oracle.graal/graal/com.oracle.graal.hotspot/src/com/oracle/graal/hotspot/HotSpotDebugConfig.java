@@ -23,6 +23,7 @@
 package com.oracle.graal.hotspot;
 
 import java.util.*;
+import java.util.regex.*;
 
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
@@ -30,24 +31,21 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.printer.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
-import com.oracle.max.criutils.*;
 
 public class HotSpotDebugConfig implements DebugConfig {
 
-    private final DebugFilter logFilter;
-    private final DebugFilter meterFilter;
-    private final DebugFilter timerFilter;
-    private final DebugFilter dumpFilter;
+    private final String logFilter;
+    private final String meterFilter;
+    private final String timerFilter;
+    private final String dumpFilter;
     private final MethodFilter[] methodFilter;
     private final List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
 
-
-
     public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter) {
-        this.logFilter = DebugFilter.parse(logFilter);
-        this.meterFilter = DebugFilter.parse(meterFilter);
-        this.timerFilter = DebugFilter.parse(timerFilter);
-        this.dumpFilter = DebugFilter.parse(dumpFilter);
+        this.logFilter = logFilter;
+        this.meterFilter = meterFilter;
+        this.timerFilter = timerFilter;
+        this.dumpFilter = dumpFilter;
         if (methodFilter == null || methodFilter.isEmpty()) {
             this.methodFilter = null;
         } else {
@@ -55,14 +53,9 @@ public class HotSpotDebugConfig implements DebugConfig {
             this.methodFilter = new MethodFilter[filters.length];
             for (int i = 0; i < filters.length; i++) {
                 this.methodFilter[i] = new MethodFilter(filters[i]);
+                // com.oracle.max.criutils.TTY.println(this.methodFilter[i].toString());
             }
         }
-
-        // Report the filters that have been configured so the user can verify it's what they expect
-        if (logFilter != null || meterFilter != null || timerFilter != null || dumpFilter != null || methodFilter != null) {
-            TTY.println(this.toString());
-        }
-
         if (GraalOptions.PrintIdealGraphFile) {
             dumpHandlers.add(new IdealGraphPrinterDumpHandler());
         } else {
@@ -87,12 +80,19 @@ public class HotSpotDebugConfig implements DebugConfig {
         return isEnabled(timerFilter);
     }
 
-    private boolean isEnabled(DebugFilter filter) {
-        return checkDebugFilter(Debug.currentScope(), filter) && checkMethodFilter();
+    private boolean isEnabled(String filter) {
+        return filter != null && checkContains(Debug.currentScope(), filter) && checkMethodFilter();
     }
 
-    private static boolean checkDebugFilter(String currentScope, DebugFilter filter) {
-        return filter != null && filter.matches(currentScope);
+    private static boolean checkContains(String currentScope, String filter) {
+        if (filter.contains("*")) {
+            /*filter = filter.replace("*", ".*");
+            filter = filter.replace("[", "\\[");
+            filter = filter.replace("]", "\\]");
+            filter = filter.replace(":", "\\:");*/
+            return Pattern.matches(filter, currentScope);
+        }
+        return currentScope.contains(filter);
     }
 
     private boolean checkMethodFilter() {
@@ -120,20 +120,16 @@ public class HotSpotDebugConfig implements DebugConfig {
         add(sb, "Meter", meterFilter);
         add(sb, "Time", timerFilter);
         add(sb, "Dump", dumpFilter);
-        add(sb, "MethodFilter", methodFilter);
+        add(sb, "MethodFilter", Arrays.toString(methodFilter));
         return sb.toString();
     }
 
-    private static void add(StringBuilder sb, String name, Object filter) {
+    private static void add(StringBuilder sb, String name, String filter) {
         if (filter != null) {
             sb.append(' ');
             sb.append(name);
             sb.append('=');
-            if (filter instanceof Object[]) {
-                sb.append(Arrays.toString((Object[]) filter));
-            } else {
-                sb.append(String.valueOf(filter));
-            }
+            sb.append(filter);
         }
     }
 
