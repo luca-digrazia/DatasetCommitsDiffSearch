@@ -162,7 +162,7 @@ public abstract class Source {
      * <p>
      * The system tries to deduce appropriate {@link Source#getMimeType()} by consulting registered
      * {@link FileTypeDetector file type detectors}.
-     *
+     * 
      * @param file the location of the file to load content from
      * @return new instance of builder
      * @since 0.15
@@ -1124,14 +1124,12 @@ public abstract class Source {
          * {@link SourceSnippets#fromURLWithOwnContent}
          *
          * @param code the code to be available via {@link Source#getCode()}
-         * @return instance of this builder - which's {@link #build()} method
-         *   no longer throws an {@link IOException}
+         * @return instance of this builder
          * @since 0.15
          */
-        @SuppressWarnings("unchecked")
-        public Builder<R, RuntimeException> content(String code) {
+        public Builder<R, E> content(String code) {
             this.content = code;
-            return (Builder<R, RuntimeException>) this;
+            return this;
         }
 
         Builder<R, E> content(byte[] arr, int offset, int length, Charset encoding) {
@@ -1174,9 +1172,6 @@ public abstract class Source {
                 String type = this.mime == null ? holder.findMimeType() : this.mime;
                 if (type == null) {
                     throw new IllegalStateException("Unknown mime type for " + origin);
-                }
-                if (content != null) {
-                    holder.code = content;
                 }
                 SourceImpl ret = new SourceImpl(holder, type, name, internal);
                 return (R) ret;
