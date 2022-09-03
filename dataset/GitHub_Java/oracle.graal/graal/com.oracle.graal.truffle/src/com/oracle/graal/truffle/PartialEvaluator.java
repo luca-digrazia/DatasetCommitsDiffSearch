@@ -243,11 +243,21 @@ public class PartialEvaluator {
 
     private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final boolean canonicalizeReads) {
 
-        final StructuredGraph graph = truffleCache.lookup(targetMethod, arguments);
+        final StructuredGraph graph = truffleCache.lookup(targetMethod, arguments).copy();
         Debug.scope("parseGraph", targetMethod, new Runnable() {
 
             @Override
             public void run() {
+                // Pass on constant arguments.
+                for (LocalNode local : graph.getNodes(LocalNode.class)) {
+                    ValueNode arg = arguments.get(local.index());
+                    if (arg.isConstant()) {
+                        Constant constant = arg.asConstant();
+                        local.replaceAndDelete(ConstantNode.forConstant(constant, metaAccessProvider, graph));
+                    } else {
+                        local.setStamp(arg.stamp());
+                    }
+                }
 
                 // Canonicalize / constant propagate.
                 new CanonicalizerPhase.Instance(metaAccessProvider, assumptions, canonicalizeReads, null, customCanonicalizer).apply(graph);
