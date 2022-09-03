@@ -26,6 +26,8 @@ package com.oracle.truffle.nfi;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.nfi.types.NativeSignature;
 import java.util.HashMap;
@@ -33,6 +35,8 @@ import java.util.Map;
 
 final class LookupAndBind extends RootNode {
     @Child private RootNode libraryNode;
+    @Child Node lookupSymbol = Message.READ.createNode();
+    @Child Node bind = Message.createInvoke(1).createNode();
     @CompilerDirectives.CompilationFinal private LibFFILibrary cached;
     private final Map<String, NativeSignature> bindings;
 
@@ -47,7 +51,6 @@ final class LookupAndBind extends RootNode {
         if (cached != null) {
             return cached;
         }
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         LibFFILibrary library = (LibFFILibrary) libraryNode.execute(frame);
         return cached = initializeLib(library);
     }

@@ -56,13 +56,11 @@ import java.util.List;
  * <pre>
  * Signature ::= '(' [ Type { ',' Type } ] [ '...' Type { ',' Type } ] ')' ':' Type
  *
- * Type ::= Signature | SimpleType | ArrayType | EnvType
+ * Type ::= Signature | SimpleType | ArrayType
  *
  * SimpleType ::= ident
  *
  * ArrayType ::= '[' SimpleType ']'
- *
- * EnvType ::= 'env'
  * </pre>
  */
 public final class Parser {
@@ -81,13 +79,6 @@ public final class Parser {
         return ret;
     }
 
-    public static NativeSource parseNFISource(CharSequence source) {
-        Parser parser = new Parser(source);
-        NativeSource ret = parser.parseNFISource();
-        parser.expect(Token.EOF);
-        return ret;
-    }
-
     private final Lexer lexer;
 
     private Parser(CharSequence source) {
@@ -100,20 +91,25 @@ public final class Parser {
         }
     }
 
-    private NativeSource parseNFISource() {
-        String nfiId = null;
-        if (lexer.peek() == Token.IDENTIFIER && lexer.peekValue().equalsIgnoreCase("with")) {
-            lexer.next();
-            if (lexer.next() != Token.IDENTIFIER) {
-                throw new IllegalArgumentException("Expecting NFI impementation identifier");
+    private NativeLibraryDescriptor parseLibraryDescriptor() {
+        NativeLibraryDescriptor ret;
+
+        Token token = lexer.next();
+        String keyword = lexer.currentValue();
+        LIBRARY_DEFINITION: {
+            if (token == Token.IDENTIFIER) {
+                switch (keyword) {
+                    case "load":
+                        ret = parseLoadLibrary();
+                        break LIBRARY_DEFINITION;
+                    case "default":
+                        ret = parseDefaultLibrary();
+                        break LIBRARY_DEFINITION;
+                }
             }
-            nfiId = lexer.currentValue();
+            throw new IllegalArgumentException(String.format("expected 'load' or 'default', but got '%s'", keyword));
         }
 
-        lexer.mark();
-        parseLibraryDescriptor();
-
-        NativeSource ret = new NativeSource(nfiId, lexer.markedValue());
         if (lexer.next() == Token.OPENBRACE) {
             for (;;) {
                 Token closeOrId = lexer.next();
@@ -124,32 +120,14 @@ public final class Parser {
                     throw new IllegalArgumentException("Expecting identifier in library body");
                 }
                 String ident = lexer.currentValue();
-
-                lexer.mark();
-                parseSignature();
-                ret.register(ident, lexer.markedValue());
-
+                NativeSignature sig = parseSignature();
+                ret.register(ident, sig);
                 if (lexer.next() != Token.SEMICOLON) {
                     throw new IllegalArgumentException("Expecting semicolon");
                 }
             }
         }
-
         return ret;
-    }
-
-    private NativeLibraryDescriptor parseLibraryDescriptor() {
-        Token token = lexer.next();
-        String keyword = lexer.currentValue();
-        if (token == Token.IDENTIFIER) {
-            switch (keyword) {
-                case "load":
-                    return parseLoadLibrary();
-                case "default":
-                    return parseDefaultLibrary();
-            }
-        }
-        throw new IllegalArgumentException(String.format("expected 'load' or 'default', but got '%s'", keyword));
     }
 
     private static NativeLibraryDescriptor parseDefaultLibrary() {
@@ -202,7 +180,7 @@ public final class Parser {
             case OPENBRACKET:
                 return parseArrayType();
             case IDENTIFIER:
-                return parseSimpleType(true);
+                return parseSimpleType();
             default:
                 throw new IllegalArgumentException(String.format("expected type, but got '%s'", lexer.currentValue()));
         }
@@ -247,20 +225,16 @@ public final class Parser {
 
     private NativeArrayTypeMirror parseArrayType() {
         expect(Token.OPENBRACKET);
-        NativeTypeMirror elementType = parseSimpleType(false);
+        NativeSimpleTypeMirror elementType = parseSimpleType();
         expect(Token.CLOSEBRACKET);
 
         return new NativeArrayTypeMirror(elementType);
     }
 
-    private NativeTypeMirror parseSimpleType(boolean envAllowed) {
+    private NativeSimpleTypeMirror parseSimpleType() {
         expect(Token.IDENTIFIER);
         String identifier = lexer.currentValue();
-        if (envAllowed && "env".equalsIgnoreCase(identifier)) {
-            return new NativeEnvTypeMirror();
-        } else {
-            NativeSimpleType simpleType = NativeSimpleType.valueOf(identifier.toUpperCase());
-            return new NativeSimpleTypeMirror(simpleType);
-        }
+        NativeSimpleType simpleType = NativeSimpleType.valueOf(identifier.toUpperCase());
+        return new NativeSimpleTypeMirror(simpleType);
     }
 }
