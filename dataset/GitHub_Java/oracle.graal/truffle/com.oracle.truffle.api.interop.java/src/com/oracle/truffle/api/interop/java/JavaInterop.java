@@ -253,7 +253,7 @@ public final class JavaInterop {
                 // OK, not an object method
             }
             if (found != null) {
-                return null;
+                throw new IllegalArgumentException();
             }
             found = m;
         }
