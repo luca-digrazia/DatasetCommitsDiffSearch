@@ -24,11 +24,8 @@ package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
-import java.lang.reflect.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 
 /**
  * Implementation of {@link InstalledCode} for code installed as an nmethod. The nmethod stores a
@@ -41,64 +38,65 @@ import com.oracle.graal.graph.*;
  */
 public class HotSpotNmethod extends HotSpotInstalledCode {
 
-    private static final long serialVersionUID = -1784683588947054103L;
-
+    /**
+     * This (indirect) Method* reference is safe since class redefinition preserves all methods
+     * associated with nmethods in the code cache.
+     */
     private final HotSpotResolvedJavaMethod method;
-    private final boolean isDefault;
-    private final Graph graph;
 
-    public HotSpotNmethod(HotSpotResolvedJavaMethod method, Graph graph, boolean isDefault) {
+    private final boolean isDefault;
+    private final boolean isExternal;
+
+    public HotSpotNmethod(HotSpotResolvedJavaMethod method, String name, boolean isDefault) {
+        this(method, name, isDefault, false);
+    }
+
+    public HotSpotNmethod(HotSpotResolvedJavaMethod method, String name, boolean isDefault, boolean isExternal) {
+        super(name);
         this.method = method;
-        this.graph = graph;
         this.isDefault = isDefault;
+        this.isExternal = isExternal;
     }
 
     public boolean isDefault() {
         return isDefault;
     }
 
-    public Graph getGraph() {
-        return graph;
+    public boolean isExternal() {
+        return isExternal;
     }
 
-    @Override
     public ResolvedJavaMethod getMethod() {
         return method;
     }
 
     @Override
-    public boolean isValid() {
-        return graalRuntime().getCompilerToVM().isInstalledCodeValid(codeBlob);
-    }
-
-    @Override
     public void invalidate() {
-        graalRuntime().getCompilerToVM().invalidateInstalledCode(codeBlob);
+        runtime().getCompilerToVM().invalidateInstalledCode(this);
     }
 
     @Override
     public String toString() {
-        return String.format("InstalledNmethod[method=%s, codeBlob=0x%x, isDefault=%b]", method, codeBlob, isDefault);
+        return String.format("InstalledNmethod[method=%s, codeBlob=0x%x, isDefault=%b, name=%s]", method, getAddress(), isDefault, name);
     }
 
-    @Override
-    public Object execute(Object arg1, Object arg2, Object arg3) throws InvalidInstalledCodeException {
-        assert method.getSignature().getParameterCount(!Modifier.isStatic(method.getModifiers())) == 3;
+    protected boolean checkThreeObjectArgs() {
+        assert method.getSignature().getParameterCount(!method.isStatic()) == 3;
         assert method.getSignature().getParameterKind(0) == Kind.Object;
         assert method.getSignature().getParameterKind(1) == Kind.Object;
-        assert !Modifier.isStatic(method.getModifiers()) || method.getSignature().getParameterKind(2) == Kind.Object;
-        return graalRuntime().getCompilerToVM().executeCompiledMethod(arg1, arg2, arg3, codeBlob);
+        assert !method.isStatic() || method.getSignature().getParameterKind(2) == Kind.Object;
+        return true;
     }
 
     private boolean checkArgs(Object... args) {
-        JavaType[] sig = MetaUtil.signatureToTypes(method);
-        assert args.length == sig.length : MetaUtil.format("%H.%n(%p): expected ", method) + sig.length + " args, got " + args.length;
+        JavaType[] sig = method.toParameterTypes();
+        assert args.length == sig.length : method.format("%H.%n(%p): expected ") + sig.length + " args, got " + args.length;
         for (int i = 0; i < sig.length; i++) {
             Object arg = args[i];
             if (arg == null) {
-                assert sig[i].getKind() == Kind.Object : MetaUtil.format("%H.%n(%p): expected arg ", method) + i + " to be Object, not " + sig[i];
+                assert sig[i].getKind() == Kind.Object : method.format("%H.%n(%p): expected arg ") + i + " to be Object, not " + sig[i];
             } else if (sig[i].getKind() != Kind.Object) {
-                assert sig[i].getKind().toBoxedJavaClass() == arg.getClass() : MetaUtil.format("%H.%n(%p): expected arg ", method) + i + " to be " + sig[i] + ", not " + arg.getClass();
+                assert sig[i].getKind().toBoxedJavaClass() == arg.getClass() : method.format("%H.%n(%p): expected arg ") + i + " to be " + sig[i] + ", not " + arg.getClass();
             }
         }
         return true;
@@ -107,11 +105,17 @@ public class HotSpotNmethod extends HotSpotInstalledCode {
     @Override
     public Object executeVarargs(Object... args) throws InvalidInstalledCodeException {
         assert checkArgs(args);
-        return graalRuntime().getCompilerToVM().executeCompiledMethodVarargs(args, codeBlob);
+        assert !isExternal();
+        return runtime().getCompilerToVM().executeCompiledMethodVarargs(args, this);
     }
 
     @Override
     public long getStart() {
-        return isValid() ? start : 0;
+        return isValid() ? super.getStart() : 0;
     }
+
+    public JavaConstant asConstant() {
+        return HotSpotObjectConstantImpl.forObject(this);
+    }
+
 }
