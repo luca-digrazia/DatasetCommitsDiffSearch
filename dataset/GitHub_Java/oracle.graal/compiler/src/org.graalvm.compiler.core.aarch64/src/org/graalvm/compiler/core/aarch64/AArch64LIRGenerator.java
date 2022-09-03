@@ -61,7 +61,6 @@ import org.graalvm.compiler.lir.aarch64.AArch64AtomicMove.CompareAndSwapOp;
 import org.graalvm.compiler.lir.aarch64.AArch64AtomicMove.AtomicReadAndWriteOp;
 import org.graalvm.compiler.lir.aarch64.AArch64Move.MembarOp;
 import org.graalvm.compiler.lir.aarch64.AArch64PauseOp;
-import org.graalvm.compiler.lir.aarch64.AArch64SpeculativeBarrier;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGenerator;
 import org.graalvm.compiler.phases.util.Providers;
@@ -514,9 +513,4 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     }
 
     public abstract void emitCCall(long address, CallingConvention nativeCallingConvention, Value[] args);
-
-    @Override
-    public void emitSpeculationFence() {
-        append(new AArch64SpeculativeBarrier());
-    }
 }
