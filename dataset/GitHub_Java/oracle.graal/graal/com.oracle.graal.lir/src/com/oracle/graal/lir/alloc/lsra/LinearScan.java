@@ -61,6 +61,7 @@ import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
 import com.oracle.graal.options.OptionValue;
 
+import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterArray;
 import jdk.vm.ci.code.RegisterAttributes;
@@ -620,7 +621,8 @@ public class LinearScan {
             }
             return result;
         }
-        throw new GraalError("LinearScan: interval is null");
+
+        throw new BailoutException("LinearScan: interval is null");
     }
 
     static AllocatableValue canonicalSpillOpr(Interval interval) {
@@ -820,8 +822,12 @@ public class LinearScan {
                     Value l1 = i1.location();
                     Value l2 = i2.location();
                     if (i1.intersects(i2) && !isIllegal(l1) && (l1.equals(l2))) {
-                        throw GraalError.shouldNotReachHere(String.format("Intervals %d and %d overlap and have the same register assigned\n%s\n%s", i1.operandNumber, i2.operandNumber,
-                                        i1.logString(this), i2.logString(this)));
+                        if (DetailedAsserts.getValue()) {
+                            Debug.log("Intervals %d and %d overlap and have the same register assigned", i1.operandNumber, i2.operandNumber);
+                            Debug.log(i1.logString(this));
+                            Debug.log(i2.logString(this));
+                        }
+                        throw new BailoutException("");
                     }
                 }
             }

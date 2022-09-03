@@ -22,8 +22,10 @@
  */
 package com.oracle.graal.graph.spi;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.Node;
+
+import jdk.vm.ci.meta.MetaAccessProvider;
 
 /**
  * Nodes can implement {@link Canonicalizable} or one of the two sub-interfaces {@link Unary} and
@@ -46,7 +48,8 @@ public interface Canonicalizable {
     /**
      * Implementations of this method can provide local optimizations like constant folding and
      * strength reduction. Implementations should look at the properties and inputs of the current
-     * node and determine if there is a more optimal and always semantically correct replacement.<br/>
+     * node and determine if there is a more optimal and always semantically correct replacement.
+     * <br/>
      * The return value determines the effect that the canonicalization will have:
      * <ul>
      * <li>Returning an pre-existing node will replace the current node with the given one.</li>
@@ -67,8 +70,8 @@ public interface Canonicalizable {
     /**
      * This sub-interface of {@link Canonicalizable} is intended for nodes that have exactly one
      * input. It has an additional {@link #canonical(CanonicalizerTool, Node)} method that looks at
-     * the given input instead of the current input of the node - which can be used to ask
-     * "what if this input is change to this node" - questions.
+     * the given input instead of the current input of the node - which can be used to ask "what if
+     * this input is changed to this node" - questions.
      *
      * @param <T> the common supertype of all inputs of this node
      */
@@ -88,8 +91,10 @@ public interface Canonicalizable {
          */
         T getValue();
 
-        default Node canonical(CanonicalizerTool tool) {
-            return canonical(tool, getValue());
+        @SuppressWarnings("unchecked")
+        @Override
+        default T canonical(CanonicalizerTool tool) {
+            return (T) canonical(tool, getValue());
         }
     }
 
@@ -97,7 +102,7 @@ public interface Canonicalizable {
      * This sub-interface of {@link Canonicalizable} is intended for nodes that have exactly two
      * inputs. It has an additional {@link #canonical(CanonicalizerTool, Node, Node)} method that
      * looks at the given inputs instead of the current inputs of the node - which can be used to
-     * ask "what if this input is change to this node" - questions.
+     * ask "what if this input is changed to this node" - questions.
      *
      * @param <T> the common supertype of all inputs of this node
      */
@@ -124,8 +129,28 @@ public interface Canonicalizable {
          */
         T getY();
 
-        default Node canonical(CanonicalizerTool tool) {
-            return canonical(tool, getX(), getY());
+        @SuppressWarnings("unchecked")
+        @Override
+        default T canonical(CanonicalizerTool tool) {
+            return (T) canonical(tool, getX(), getY());
         }
+    }
+
+    /**
+     * This sub-interface of {@link Canonicalizable.Binary} is for nodes with two inputs where the
+     * operation is commutative. It is used to improve GVN by trying to merge nodes with the same
+     * inputs in different order.
+     */
+    public interface BinaryCommutative<T extends Node> extends Binary<T> {
+
+        /**
+         * Ensure a canonical ordering of inputs for commutative nodes to improve GVN results. Order
+         * the inputs by increasing {@link Node#id} and call {@link Graph#findDuplicate(Node)} on
+         * the node if it's currently in a graph. It's assumed that if there was a constant on the
+         * left it's been moved to the right by other code and that ordering is left alone.
+         *
+         * @return the original node or another node with the same input ordering
+         */
+        Node maybeCommuteInputs();
     }
 }
