@@ -47,9 +47,7 @@ class SaveHandler extends DataHandler {
      */
     boolean ignoreAssociations = false;
 
-    ContentValues values;
-
-    /**
+	/**
 	 * Initialize {@link org.litepal.crud.DataHandler#mDatabase} for operating database. Do not
 	 * allow to create instance of SaveHandler out of CRUD package.
 	 * 
@@ -57,7 +55,6 @@ class SaveHandler extends DataHandler {
 	 *            The instance of SQLiteDatabase.
 	 */
 	SaveHandler(SQLiteDatabase db) {
-        values = new ContentValues();
 		mDatabase = db;
 	}
 
@@ -179,7 +176,7 @@ class SaveHandler extends DataHandler {
 	private void doSaveAction(DataSupport baseObj, List<Field> supportedFields)
 			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
 			IllegalAccessException, InvocationTargetException {
-		values.clear();
+		ContentValues values = new ContentValues();
 		beforeSave(baseObj, supportedFields, values);
 		long id = saving(baseObj, values);
 		afterSave(baseObj, supportedFields, id);
@@ -258,7 +255,7 @@ class SaveHandler extends DataHandler {
 	private void doUpdateAction(DataSupport baseObj, List<Field> supportedFields)
 			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
 			IllegalAccessException, InvocationTargetException {
-		values.clear();
+		ContentValues values = new ContentValues();
 		beforeUpdate(baseObj, supportedFields, values);
 		updating(baseObj, values);
 		afterUpdate(baseObj);
