@@ -29,7 +29,7 @@ import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.hotspot.meta.HotSpotCodeCacheProvider.MarkId;
+import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.amd64.AMD64Call.IndirectCallOp;
@@ -43,7 +43,6 @@ import com.oracle.graal.lir.asm.*;
  */
 @Opcode("CALL_INDIRECT")
 final class AMD64IndirectCallOp extends IndirectCallOp {
-    public static final LIRInstructionClass<AMD64IndirectCallOp> TYPE = LIRInstructionClass.create(AMD64IndirectCallOp.class);
 
     /**
      * Vtable stubs expect the metaspace Method in RBX.
@@ -53,20 +52,20 @@ final class AMD64IndirectCallOp extends IndirectCallOp {
     @Use({REG}) protected Value metaspaceMethod;
 
     AMD64IndirectCallOp(ResolvedJavaMethod targetMethod, Value result, Value[] parameters, Value[] temps, Value metaspaceMethod, Value targetAddress, LIRFrameState state) {
-        super(TYPE, targetMethod, result, parameters, temps, targetAddress, state);
+        super(targetMethod, result, parameters, temps, targetAddress, state);
         this.metaspaceMethod = metaspaceMethod;
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-        MarkId.recordMark(crb, MarkId.INLINE_INVOKE);
+    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+        tasm.recordMark(Marks.MARK_INLINE_INVOKE);
         Register callReg = asRegister(targetAddress);
         assert !callReg.equals(METHOD);
-        AMD64Call.indirectCall(crb, masm, callReg, callTarget, state);
+        AMD64Call.indirectCall(tasm, masm, callReg, callTarget, state);
     }
 
     @Override
-    public void verify() {
+    protected void verify() {
         super.verify();
         assert asRegister(metaspaceMethod).equals(METHOD);
     }

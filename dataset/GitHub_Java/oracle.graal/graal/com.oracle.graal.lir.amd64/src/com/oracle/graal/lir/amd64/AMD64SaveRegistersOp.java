@@ -99,9 +99,7 @@ public class AMD64SaveRegistersOp extends AMD64RegistersPreservationOp {
                 }
             }
             assert mapIndex == preserved;
-            if (debugInfo != null) {
-                debugInfo.setCalleeSaveInfo(new RegisterSaveLayout(keys, values));
-            }
+            debugInfo.setCalleeSaveInfo(new RegisterSaveLayout(keys, values));
         }
     }
 }

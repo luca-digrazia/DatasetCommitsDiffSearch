@@ -29,6 +29,7 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
@@ -59,6 +60,6 @@ final class AMD64HotSpotUnwindOp extends AMD64HotSpotEpilogueOp {
         Register returnAddress = asRegister(cc.getArgument(1));
         masm.movq(returnAddress, new AMD64Address(rsp, 0));
 
-        AMD64Call.directJmp(tasm, masm, linkage);
+        AMD64Call.directJmp(tasm, masm, tasm.runtime.lookupForeignCall(HotSpotBackend.UNWIND_EXCEPTION_TO_CALLER));
     }
 }

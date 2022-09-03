@@ -24,12 +24,13 @@ package com.oracle.graal.lir.amd64;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.lir.LIRInstruction.Opcode;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.max.asm.amd64.*;
 
 @Opcode("BSWAP")
 public class AMD64ByteSwapOp extends AMD64LIRInstruction {
+
     @Def({OperandFlag.REG, OperandFlag.HINT}) protected Value result;
     @Use protected Value input;
 
@@ -41,7 +42,7 @@ public class AMD64ByteSwapOp extends AMD64LIRInstruction {
     @Override
     public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
         AMD64Move.move(tasm, masm, result, input);
-        switch(input.getKind()) {
+        switch (input.getKind()) {
             case Int:
                 masm.bswapl(ValueUtil.asIntReg(result));
                 break;

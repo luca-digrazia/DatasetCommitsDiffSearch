@@ -32,11 +32,7 @@ import com.oracle.graal.lir.asm.*;
 public class PTXBitManipulationOp extends PTXLIRInstruction {
 
     public enum IntrinsicOpcode {
-        IPOPCNT,
-        LPOPCNT,
-        IBSR,
-        LBSR,
-        BSF;
+        IPOPCNT, LPOPCNT, IBSR, LBSR, BSF;
     }
 
     @Opcode private final IntrinsicOpcode opcode;
@@ -50,7 +46,7 @@ public class PTXBitManipulationOp extends PTXLIRInstruction {
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+    public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
         Register dst = ValueUtil.asIntReg(result);
         Register src = ValueUtil.asRegister(input);
         switch (opcode) {

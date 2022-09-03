@@ -38,7 +38,7 @@ final class AMD64HotSpotCRuntimeCallEpilogueOp extends AMD64LIRInstruction {
     public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
         // reset last Java frame:
         HotSpotVMConfig config = graalRuntime().getConfig();
-        Register thread = graalRuntime().getProviders().getRegisters().getThreadRegister();
+        Register thread = graalRuntime().getRuntime().threadRegister();
 
         masm.movslq(new AMD64Address(thread, config.threadLastJavaSpOffset), 0);
         masm.movslq(new AMD64Address(thread, config.threadLastJavaFpOffset), 0);
