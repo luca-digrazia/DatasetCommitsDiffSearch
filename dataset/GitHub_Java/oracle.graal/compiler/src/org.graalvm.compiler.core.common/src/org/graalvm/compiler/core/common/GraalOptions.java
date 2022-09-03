@@ -233,9 +233,6 @@ public final class GraalOptions {
     public static final OptionKey<Boolean> OptScheduleOutOfLoops = new OptionKey<>(true);
 
     @Option(help = "", type = OptionType.Debug)
-    public static final OptionKey<Boolean> GuardPriorities = new OptionKey<>(true);
-
-    @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> OptEliminateGuards = new OptionKey<>(true);
 
     @Option(help = "", type = OptionType.Debug)

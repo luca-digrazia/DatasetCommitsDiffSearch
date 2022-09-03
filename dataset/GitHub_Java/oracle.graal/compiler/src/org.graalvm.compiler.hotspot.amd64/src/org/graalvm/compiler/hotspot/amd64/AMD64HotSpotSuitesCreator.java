@@ -23,15 +23,14 @@
 package org.graalvm.compiler.hotspot.amd64;
 
 import org.graalvm.compiler.core.amd64.AMD64SuitesCreator;
-import org.graalvm.compiler.core.common.GraalOptions;
+import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.hotspot.lir.HotSpotZapRegistersPhase;
 import org.graalvm.compiler.lir.phases.LIRSuites;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.tiers.CompilerConfiguration;
 
-public class AMD64HotSpotSuitesCreator extends AMD64SuitesCreator
-{
+public class AMD64HotSpotSuitesCreator extends AMD64SuitesCreator {
 
     public AMD64HotSpotSuitesCreator(CompilerConfiguration compilerConfiguration, Plugins plugins) {
         super(compilerConfiguration, plugins);
@@ -40,7 +39,7 @@ public class AMD64HotSpotSuitesCreator extends AMD64SuitesCreator
     @Override
     public LIRSuites createLIRSuites(OptionValues options) {
         LIRSuites lirSuites = super.createLIRSuites(options);
-        if (GraalOptions.DetailedAsserts.getValue(options)) {
+        if (Assertions.detailedAssertionsEnabled(options)) {
             lirSuites.getPostAllocationOptimizationStage().appendPhase(new HotSpotZapRegistersPhase());
         }
         return lirSuites;

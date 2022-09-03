@@ -41,12 +41,6 @@ public class Assertions {
         return enabled;
     }
 
-    /**
-     * Determines if detailed assertions are enabled. This requires that the normal assertions are
-     * also enabled.
-     *
-     * @param values the current OptionValues that might define a value for DetailAsserts.
-     */
     public static boolean detailedAssertionsEnabled(OptionValues values) {
         return assertionsEnabled() && Options.DetailedAsserts.getValue(values);
     }
@@ -54,7 +48,7 @@ public class Assertions {
     // @formatter:off
     public static class Options {
 
-        @Option(help = "Enable expensive assertions. (Require normal assertions enabled)", type = OptionType.Debug)
+        @Option(help = "Enable expensive assertions.", type = OptionType.Debug)
         public static final OptionKey<Boolean> DetailedAsserts = new OptionKey<>(true);
 
     }
