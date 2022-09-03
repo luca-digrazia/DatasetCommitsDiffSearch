@@ -40,6 +40,9 @@
  */
 package com.oracle.truffle.sl.test;
 
+import static org.junit.Assume.assumeFalse;
+
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -49,6 +52,11 @@ public class SLSimpleTestSuite {
 
     public static void main(String[] args) throws Exception {
         SLTestRunner.runInMain(SLSimpleTestSuite.class, args);
+    }
+
+    @BeforeClass
+    public static void before() {
+        assumeFalse("Crashes on AArch64 in C2 (GR-8733)", System.getProperty("os.arch").equalsIgnoreCase("aarch64"));
     }
 
     /*

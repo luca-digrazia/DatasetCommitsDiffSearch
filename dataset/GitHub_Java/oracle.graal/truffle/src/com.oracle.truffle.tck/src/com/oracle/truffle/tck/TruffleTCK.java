@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,9 +32,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeFalse;
 
-import java.lang.ref.Reference;
-import java.lang.ref.WeakReference;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -43,9 +43,12 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.DoubleBinaryOperator;
 
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.TruffleLanguage;
@@ -53,9 +56,10 @@ import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
 import com.oracle.truffle.api.debug.SuspendedCallback;
 import com.oracle.truffle.api.debug.SuspendedEvent;
+import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.interop.ForeignAccess.Factory26;
+import com.oracle.truffle.api.interop.ForeignAccess.StandardFactory;
 import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -74,7 +78,6 @@ import com.oracle.truffle.tck.impl.LongBinaryOperation;
 import com.oracle.truffle.tck.impl.ObjectBinaryOperation;
 import com.oracle.truffle.tck.impl.TckInstrument;
 import com.oracle.truffle.tck.impl.TestObject;
-import java.lang.reflect.Field;
 
 /**
  * Test compatibility kit (the <em>TCK</em>) is a collection of tests to certify your
@@ -124,7 +127,7 @@ import java.lang.reflect.Field;
  * interop package} defines what types of data can be interchanged between the languages and the
  * <em>TCK</em> does its best to make sure all these data are really accepted as an input on a
  * boundary of your {@link TruffleLanguage language implementation}. That doesn't mean such data
- * need to be used internally, many languages do conversions in their {@link Factory26 foreign
+ * need to be used internally, many languages do conversions in their {@link StandardFactory foreign
  * access} {@link RootNode nodes} to more suitable internal representation. Such conversion is fully
  * acceptable as nobody prescribes what is the actual type of output after executing a function/code
  * snippet in your language.
@@ -136,9 +139,12 @@ import java.lang.reflect.Field;
  * @since 0.8 or earlier
  */
 public abstract class TruffleTCK {
+
+    private static volatile PolyglotEngine previousVMReference;
+
     private static final Random RANDOM = new Random();
-    private static Reference<PolyglotEngine> previousVMReference = new WeakReference<>(null);
     private PolyglotEngine tckVM;
+    private Object prev;
 
     /** @since 0.8 or earlier */
     protected TruffleTCK() {
@@ -151,19 +157,27 @@ public abstract class TruffleTCK {
      */
     @AfterClass
     public static void disposePreviousVM() {
-        replacePreviousVM(null);
-
+        if (previousVMReference != null) {
+            previousVMReference.dispose();
+            previousVMReference = null;
+        }
     }
 
-    private static void replacePreviousVM(PolyglotEngine newVM) {
-        PolyglotEngine vm = previousVMReference.get();
-        if (vm == newVM) {
-            return;
-        }
-        if (vm != null) {
-            vm.dispose();
-        }
-        previousVMReference = new WeakReference<>(newVM);
+    /**
+     * @since 0.30
+     */
+    @Before
+    public final void enterTCK() throws Exception {
+        PolyglotEngine vm = vm();
+        this.prev = TruffleTCKAccessor.engineAccess().legacyTckEnter(vm);
+    }
+
+    /**
+     * @since 0.30
+     */
+    @After
+    public final void afterTCK() throws Exception {
+        TruffleTCKAccessor.engineAccess().legacyTckLeave(vm(), this.prev);
     }
 
     /**
@@ -403,7 +417,7 @@ public abstract class TruffleTCK {
      * @since 0.16
      */
     protected String objectWithValueAndAddProperty() {
-        throw new UnsupportedOperationException("implement objectWithValueProperty() method");
+        throw new UnsupportedOperationException("implement objectWithValueAndAddProperty() method");
     }
 
     /**
@@ -417,15 +431,16 @@ public abstract class TruffleTCK {
     }
 
     /**
-     * Name of a function that returns an object supporting {@link Message#KEY_INFO} and having five
-     * properties named "ro", "wo", "rw", "invocable" and "intern". The "ro" property should be
-     * read-only (readable and not writable), the "wo" property should be write-only (writable and
-     * not readable), "rw" property readable and writable, "invocable" property should return an
-     * "invoked" String on {@link Message#createInvoke(int) invoke message} and the "ii" property
-     * should be internal. The object should support {@link Message#KEYS KEYS message} as well and
-     * it should provide the "ii" property iff it gets a boolean true as an argument. When the
-     * language does not support some attribute, it can return <code>0</code> as the key info
-     * instead.
+     * Name of a function that returns an object supporting {@link Message#KEY_INFO} and having six
+     * properties named "ro", "wo", "rw", "rm", "invocable" and "intern". The "ro" property should
+     * be read-only (readable and not writable), the "wo" property should be write-only (writable
+     * and not readable), "rw" property readable and writable, "rm" property should be removable,
+     * "invocable" property should return an "invoked" String on {@link Message#createInvoke(int)
+     * invoke message} and the "intern" property should be internal. The object should support
+     * {@link Message#KEYS KEYS message} as well and it should provide the "intern" property iff it
+     * gets a boolean true as an argument. When the language does not support some attribute, it can
+     * skip the appropriate property (that should result in returning <code>0</code> as the key info
+     * of such skipped property).
      *
      * @since 0.26
      */
@@ -727,11 +742,11 @@ public abstract class TruffleTCK {
     }
 
     private PolyglotEngine vm() throws Exception {
-        if (tckVM == null) {
-            tckVM = prepareVM();
-            replacePreviousVM(tckVM);
+        if (previousVMReference != null) {
+            return previousVMReference;
         }
-        return tckVM;
+        previousVMReference = prepareVM();
+        return previousVMReference;
     }
 
     //
@@ -1379,8 +1394,7 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        TruffleObject fn = JavaInterop.asTruffleFunction(LongBinaryOperation.class, new MaxMinObject(true));
-
+        Object fn = new Object();
         Object ret = apply.execute(fn).get();
         assertSameTruffleObject("The same value returned", fn, ret);
     }
@@ -1438,6 +1452,7 @@ public abstract class TruffleTCK {
         PolyglotEngine.Value function = vm().findGlobalSymbol(globalObjectFunction);
         Object global = function.execute().get();
         assertEquals("Global from the language same with Java obtained one", language.getGlobalObject().get(), global);
+        assertIsObjectOfLanguage(global);
     }
 
     /** @since 0.8 or earlier */
@@ -1515,7 +1530,9 @@ public abstract class TruffleTCK {
     @Test
     public void testPropertiesInteropMessage() throws Exception {
         PolyglotEngine.Value values = findGlobalSymbol(valuesObject());
-        Map<?, ?> res = values.execute().as(Map.class);
+        Value valueObj = values.execute();
+        assertIsObjectOfLanguage(valueObj.get());
+        Map<?, ?> res = valueObj.as(Map.class);
 
         Map<String, Object> expected = new HashMap<>();
         expected.put("intValue", 0);
@@ -1775,6 +1792,7 @@ public abstract class TruffleTCK {
      */
     @Test
     public void timeOutTest() throws Exception {
+        assumeFalse("Crashes on AArch64 in C2 (GR-8733)", System.getProperty("os.arch").equalsIgnoreCase("aarch64"));
         final ExecWithTimeOut timeOutExecution = new ExecWithTimeOut();
         ScheduledExecutorService executor = new MockExecutorService();
 
@@ -1823,7 +1841,9 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, (TruffleObject) apply.execute().get());
+        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
+        assertIsObjectOfLanguage(truffleObject);
+        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, truffleObject);
 
         Assert.assertEquals(42.0, object.value(), 0.1);
     }
@@ -1837,7 +1857,9 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        List<?> object = JavaInterop.asJavaObject(List.class, (TruffleObject) apply.execute().get());
+        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
+        assertIsObjectOfLanguage(truffleObject);
+        List<?> object = JavaInterop.asJavaObject(List.class, truffleObject);
 
         Assert.assertEquals(42.0, ((Number) object.get(2)).doubleValue(), 0.1);
     }
@@ -1851,7 +1873,9 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, (TruffleObject) apply.execute().get());
+        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
+        assertIsObjectOfLanguage(truffleObject);
+        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, truffleObject);
         Assert.assertEquals(42.0, object.value(), 0.1);
         object.value(13.0);
         Assert.assertEquals(13.0, object.value(), 0.1);
@@ -1866,8 +1890,10 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
+        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
+        assertIsObjectOfLanguage(truffleObject);
         @SuppressWarnings("unchecked")
-        List<Object> object = JavaInterop.asJavaObject(List.class, (TruffleObject) apply.execute().get());
+        List<Object> object = JavaInterop.asJavaObject(List.class, truffleObject);
 
         Assert.assertEquals(42.0, ((Number) object.get(2)).doubleValue(), 0.1);
         object.set(2, 13.0);
@@ -1883,8 +1909,7 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        @SuppressWarnings("unchecked")
-        List<Object> object = JavaInterop.asJavaObject(List.class, (TruffleObject) apply.execute().get());
+        List<?> object = JavaInterop.asJavaObject(List.class, (TruffleObject) apply.execute().get());
 
         Assert.assertEquals(4, object.size());
     }
@@ -1926,7 +1951,10 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        MessageInterface object = JavaInterop.asJavaObject(MessageInterface.class, (TruffleObject) apply.execute().get());
+        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
+        assertIsObjectOfLanguage(truffleObject);
+
+        MessageInterface object = JavaInterop.asJavaObject(MessageInterface.class, truffleObject);
 
         Assert.assertEquals(true, object.isExecutable());
     }
@@ -1955,7 +1983,9 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, (TruffleObject) apply.execute().get());
+        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
+        assertIsObjectOfLanguage(truffleObject);
+        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, truffleObject);
         object.add(20.0);
         object.add(22.0);
 
@@ -1982,13 +2012,11 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        FunctionFooInterface object = JavaInterop.asJavaFunction(FunctionFooInterface.class, (TruffleObject) apply.execute().get());
+        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
+        assertIsObjectOfLanguage(truffleObject);
+        DoubleBinaryOperator object = JavaInterop.asJavaFunction(DoubleBinaryOperator.class, truffleObject);
 
-        Assert.assertEquals(42.0, object.eval(20.0, 22.0), 0.1);
-    }
-
-    private interface FunctionFooInterface {
-        double eval(double a, double b);
+        Assert.assertEquals(42.0, object.applyAsDouble(20.0, 22.0), 0.1);
     }
 
     /** @since 0.26 */
@@ -2001,23 +2029,35 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
         TruffleObject obj = (TruffleObject) apply.execute().get();
+        assertIsObjectOfLanguage(obj);
         KeyInfoInterface object = JavaInterop.asJavaObject(KeyInfoInterface.class, obj);
 
         int numKeys = 0;
         assertEquals("An unknown property", 0, object.unknown());
         int ro = object.ro();
         if (ro != 0) {
-            assertEquals("Read-only property", 0b00011, ro);
+            assertTrue(KeyInfo.isReadable(ro));
+            assertFalse(KeyInfo.isWritable(ro));
+            assertFalse(KeyInfo.isInternal(ro));
             numKeys++;
         }
         int wo = object.wo();
         if (wo != 0) {
-            assertEquals("Write-only property", 0b00101, wo);
+            assertFalse(KeyInfo.isReadable(wo));
+            assertTrue(KeyInfo.isWritable(wo));
+            assertFalse(KeyInfo.isInternal(wo));
             numKeys++;
         }
         int rw = object.rw();
         if (rw != 0) {
-            assertEquals("Read-only property", 0b00111, rw);
+            assertTrue(KeyInfo.isReadable(rw));
+            assertTrue(KeyInfo.isWritable(rw));
+            assertFalse(KeyInfo.isInternal(rw));
+            numKeys++;
+        }
+        int rm = object.rm();
+        if (rm != 0) {
+            assertTrue(KeyInfo.isRemovable(rm));
             numKeys++;
         }
         int invocable = object.invocable();
@@ -2041,6 +2081,9 @@ public abstract class TruffleTCK {
         }
         if (rw != 0) {
             assertTrue(map.containsKey("rw"));
+        }
+        if (rm != 0) {
+            assertTrue(map.containsKey("rm"));
         }
         if (invocable != 0) {
             assertTrue(map.containsKey("invocable"));
@@ -2066,6 +2109,9 @@ public abstract class TruffleTCK {
 
         @MethodMessage(message = "KEY_INFO")
         int rw();
+
+        @MethodMessage(message = "KEY_INFO")
+        int rm();
 
         @MethodMessage(message = "KEY_INFO")
         int invocable();
@@ -2173,9 +2219,9 @@ public abstract class TruffleTCK {
             return;
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
-        boolean result = (boolean) apply.execute(JavaInterop.asTruffleFunction(FunctionFooInterface.class, new FunctionFooInterface() {
+        boolean result = (boolean) apply.execute(JavaInterop.asTruffleFunction(DoubleBinaryOperator.class, new DoubleBinaryOperator() {
 
-            public double eval(double a, double b) {
+            public double applyAsDouble(double a, double b) {
                 if (a != 41.0 || b != 42.0) {
                     throw new AssertionError("Expected [41.5, 42.5] but was [" + a + "," + b + "]");
                 }
@@ -2193,9 +2239,9 @@ public abstract class TruffleTCK {
             return;
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
-        apply.execute(JavaInterop.asTruffleFunction(FunctionFooInterface.class, new FunctionFooInterface() {
+        apply.execute(JavaInterop.asTruffleFunction(DoubleBinaryOperator.class, new DoubleBinaryOperator() {
 
-            public double eval(double a, double b) {
+            public double applyAsDouble(double a, double b) {
                 if (a != 41.0 || b != 42.0) {
                     throw new AssertionError("Expected [41.0, 42.0] but was [" + a + "," + b + "]");
                 }
@@ -2293,6 +2339,7 @@ public abstract class TruffleTCK {
         PolyglotEngine.Value s = vm().findGlobalSymbol(compoundObjectName);
         assert s != null : "Symbol " + compoundObjectName + " is not found!";
         final PolyglotEngine.Value value = s.execute();
+        assertIsObjectOfLanguage(value.get());
         CompoundObject obj = value.as(CompoundObject.class);
         assertNotNull("Compound object for " + value + " found", obj);
         int traverse = RANDOM.nextInt(10);
@@ -2307,6 +2354,13 @@ public abstract class TruffleTCK {
         Object unExpected = unwrapTruffleObject(expected);
         Object unAction = unwrapTruffleObject(actual);
         assertSame(msg, unExpected, unAction);
+    }
+
+    private void assertIsObjectOfLanguage(Object obj) throws Exception {
+        enterTCK(); // hack to ensure entered
+        PolyglotRuntime.Instrument instr = vm().getRuntime().getInstruments().get(TckInstrument.ID);
+        TruffleLanguage.Env env = TruffleTCKAccessor.engineAccess().getEnvForInstrument(instr, null, mimeType());
+        assertTrue(obj.toString(), TruffleTCKAccessor.langAccess().isObjectOfLanguage(env, obj));
     }
 
     private static Object unwrapTruffleObject(Object obj) {
@@ -2375,5 +2429,19 @@ public abstract class TruffleTCK {
 
         @MethodMessage(message = "WRITE")
         void booleanValue(boolean v);
+    }
+
+    static final TruffleTCKAccessor ACCESSOR = new TruffleTCKAccessor();
+
+    static final class TruffleTCKAccessor extends Accessor {
+
+        static Accessor.LanguageSupport langAccess() {
+            return ACCESSOR.languageSupport();
+        }
+
+        static Accessor.EngineSupport engineAccess() {
+            return ACCESSOR.engineSupport();
+        }
+
     }
 }

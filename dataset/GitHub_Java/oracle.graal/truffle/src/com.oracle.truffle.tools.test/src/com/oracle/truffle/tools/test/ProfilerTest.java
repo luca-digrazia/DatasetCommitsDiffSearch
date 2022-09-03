@@ -32,17 +32,18 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Map;
 
-import org.graalvm.polyglot.Source;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.truffle.api.instrumentation.test.AbstractInstrumentationTest;
+import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.tools.*;
+import com.oracle.truffle.tools.Profiler;
+import com.oracle.truffle.tools.Profiler.Counter;
+import org.graalvm.polyglot.Source;
 
-@SuppressWarnings("deprecation")
 public class ProfilerTest extends AbstractInstrumentationTest {
 
     private Profiler profiler;
@@ -68,7 +69,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         profiler.setCollecting(true);
         profiler.setTiming(false);
-        Map<SourceSection, Profiler.Counter> counters = profiler.getCounters();
+        Map<SourceSection, Counter> counters = profiler.getCounters();
         Assert.assertEquals(0, counters.size());
         Assert.assertTrue(profiler.isCollecting());
         Assert.assertFalse(profiler.isTiming());
@@ -88,17 +89,17 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         final SourceSection leafSection = sourceImpl.createSection(17, 16);
         final SourceSection callfooSection = sourceImpl.createSection(47, 27);
         final SourceSection callbarSection = sourceImpl.createSection(88, 27);
-        Profiler.Counter root = counters.get(rootSection);
-        Profiler.Counter leaf = counters.get(leafSection);
-        Profiler.Counter callfoo = counters.get(callfooSection);
-        Profiler.Counter callbar = counters.get(callbarSection);
+        Counter root = counters.get(rootSection);
+        Counter leaf = counters.get(leafSection);
+        Counter callfoo = counters.get(callfooSection);
+        Counter callbar = counters.get(callbarSection);
 
         Assert.assertNotNull(root);
         Assert.assertNotNull(leaf);
         Assert.assertNotNull(callfoo);
         Assert.assertNotNull(callbar);
 
-        final Profiler.Counter.TimeKind testTimeKind = Profiler.Counter.TimeKind.INTERPRETED_AND_COMPILED;
+        final Counter.TimeKind testTimeKind = Counter.TimeKind.INTERPRETED_AND_COMPILED;
         Assert.assertEquals(1L, root.getInvocations(testTimeKind));
         Assert.assertEquals(200L, leaf.getInvocations(testTimeKind));
         Assert.assertEquals(20L, callfoo.getInvocations(testTimeKind));
@@ -179,6 +180,9 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         profiler.printHistograms(new PrintStream(out));
         String o = getOut();
         Assert.assertTrue(o != null && o.trim().length() > 0);
+
+        engine.close();
+        engine = null;
     }
 
     @Test
@@ -186,7 +190,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         profiler.setCollecting(true);
         profiler.setTiming(false);
-        Map<SourceSection, Profiler.Counter> counters = profiler.getCounters();
+        Map<SourceSection, Counter> counters = profiler.getCounters();
         Assert.assertEquals(0, counters.size());
         Assert.assertTrue(profiler.isCollecting());
         Assert.assertFalse(profiler.isTiming());
@@ -206,17 +210,17 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         final SourceSection leafSection = sourceImpl.createSection(17, 16);
         final SourceSection callfooSection = sourceImpl.createSection(47, 27);
         final SourceSection callbarSection = sourceImpl.createSection(88, 27);
-        Profiler.Counter root = counters.get(rootSection);
-        Profiler.Counter leaf = counters.get(leafSection);
-        Profiler.Counter callfoo = counters.get(callfooSection);
-        Profiler.Counter callbar = counters.get(callbarSection);
+        Counter root = counters.get(rootSection);
+        Counter leaf = counters.get(leafSection);
+        Counter callfoo = counters.get(callfooSection);
+        Counter callbar = counters.get(callbarSection);
 
         Assert.assertNotNull(root);
         Assert.assertNotNull(leaf);
         Assert.assertNotNull(callfoo);
         Assert.assertNotNull(callbar);
 
-        final Profiler.Counter.TimeKind testTimeKind = Profiler.Counter.TimeKind.INTERPRETED_AND_COMPILED;
+        final Counter.TimeKind testTimeKind = Counter.TimeKind.INTERPRETED_AND_COMPILED;
 
         Assert.assertEquals(0, root.getTotalTime(testTimeKind));
         Assert.assertEquals(0, leaf.getTotalTime(testTimeKind));
@@ -305,7 +309,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         profiler.setCollecting(true);
         profiler.setTiming(false);
-        Map<SourceSection, Profiler.Counter> counters = profiler.getCounters();
+        Map<SourceSection, Counter> counters = profiler.getCounters();
         Assert.assertEquals(0, counters.size());
         Assert.assertTrue(profiler.isCollecting());
         Assert.assertFalse(profiler.isTiming());
@@ -320,10 +324,10 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         final SourceSection leafSection = sourceImpl.createSection(17, 16);
         final SourceSection callfooSection = sourceImpl.createSection(47, 27);
         final SourceSection callbarSection = sourceImpl.createSection(88, 27);
-        Profiler.Counter root = counters.get(rootSection);
-        Profiler.Counter leaf = counters.get(leafSection);
-        Profiler.Counter callfoo = counters.get(callfooSection);
-        Profiler.Counter callbar = counters.get(callbarSection);
+        Counter root = counters.get(rootSection);
+        Counter leaf = counters.get(leafSection);
+        Counter callfoo = counters.get(callfooSection);
+        Counter callbar = counters.get(callbarSection);
 
         Assert.assertEquals("", root.getName());
         Assert.assertEquals("foo", leaf.getName());
@@ -345,6 +349,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertTrue(profiler.hasData());
 
         profiler.clearData();
+        profiler.setMimeTypes(new String[]{InstrumentationTestLanguage.MIME_TYPE});
 
         Assert.assertFalse(profiler.hasData());
 
@@ -353,6 +358,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertTrue(profiler.hasData());
 
         profiler.clearData();
+        profiler.setMimeTypes(new String[]{"foo", InstrumentationTestLanguage.MIME_TYPE});
 
         Assert.assertFalse(profiler.hasData());
 
