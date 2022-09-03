@@ -256,20 +256,17 @@ public final class FrameState extends Value implements FrameStateAccess {
      * @param block the block begin for which we are creating the phi
      * @param i the index into the stack for which to create a phi
      */
-    public Phi setupPhiForStack(BlockBegin block, int i) {
+    public void setupPhiForStack(BlockBegin block, int i) {
         Value p = stackAt(i);
         if (p != null) {
             if (p instanceof Phi) {
                 Phi phi = (Phi) p;
                 if (phi.block() == block && phi.isOnStack() && phi.stackIndex() == i) {
-                    return phi;
+                    return;
                 }
             }
-            Phi phi = new Phi(p.kind, block, -i - 1, graph());
-            inputs().set(localsSize + i, phi);
-            return phi;
+            inputs().set(localsSize + i, new Phi(p.kind, block, -i - 1, graph()));
         }
-        return null;
     }
 
     /**
@@ -277,17 +274,15 @@ public final class FrameState extends Value implements FrameStateAccess {
      * @param block the block begin for which we are creating the phi
      * @param i the index of the local variable for which to create the phi
      */
-    public Phi setupPhiForLocal(BlockBegin block, int i) {
+    public void setupPhiForLocal(BlockBegin block, int i) {
         Value p = localAt(i);
         if (p instanceof Phi) {
             Phi phi = (Phi) p;
             if (phi.block() == block && phi.isLocal() && phi.localIndex() == i) {
-                return phi;
+                return;
             }
         }
-        Phi phi = new Phi(p.kind, block, i, graph());
-        storeLocal(i, phi);
-        return phi;
+        storeLocal(i, new Phi(p.kind, block, i, graph()));
     }
 
     /**
@@ -317,6 +312,28 @@ public final class FrameState extends Value implements FrameStateAccess {
         return localsSize + stackSize;
     }
 
+    public void checkPhis(BlockBegin block, FrameState other) {
+        checkSize(other);
+        for (int i = 0; i < valuesSize(); i++) {
+            Value x = valueAt(i);
+            Value y = other.valueAt(i);
+            if (x != null && x != y) {
+                if (x instanceof Phi) {
+                    Phi phi = (Phi) x;
+                    if (phi.block() == block) {
+                        for (int j = 0; j < phi.phiInputCount(); j++) {
+                            if (phi.inputIn(other) == null) {
+                                throw new CiBailout("phi " + phi + " has null operand at new predecessor");
+                            }
+                        }
+                        continue;
+                    }
+                }
+                throw new CiBailout("instruction is not a phi or null at " + i);
+            }
+        }
+    }
+
     private void checkSize(FrameStateAccess other) {
         if (other.stackSize() != stackSize()) {
             throw new CiBailout("stack sizes do not match");
@@ -325,7 +342,7 @@ public final class FrameState extends Value implements FrameStateAccess {
         }
     }
 
-    public void merge(BlockBegin block, FrameStateAccess other, boolean blockAppended) {
+    public void merge(BlockBegin block, FrameStateAccess other) {
         checkSize(other);
         for (int i = 0; i < valuesSize(); i++) {
             Value x = valueAt(i);
@@ -342,34 +359,12 @@ public final class FrameState extends Value implements FrameStateAccess {
                         inputs().set(i, null);
                         continue;
                     }
-                    Phi phi = null;
                     if (i < localsSize) {
                         // this a local
-                        phi = setupPhiForLocal(block, i);
+                        setupPhiForLocal(block, i);
                     } else {
                         // this is a stack slot
-                        phi = setupPhiForStack(block, i - localsSize);
-                    }
-
-                    Phi originalPhi = phi;
-                    if (phi.phiInputCount() == 0) {
-                        int size = block.predecessors().size();
-                        if (blockAppended) {
-                            size--;
-                        }
-                        for (int j = 0; j < size; ++j) {
-                            phi = phi.addInput(x);
-                        }
-                        phi = phi.addInput(y);
-                    } else {
-                        phi = phi.addInput(y);
-                    }
-                    if (originalPhi != phi) {
-                        for (int j = 0; j < other.localsSize() + other.stackSize(); ++j) {
-                            if (other.valueAt(j) == originalPhi) {
-                                other.setValueAt(j, phi);
-                            }
-                        }
+                        setupPhiForStack(block, i - localsSize);
                     }
                 }
             }
@@ -471,10 +466,5 @@ public final class FrameState extends Value implements FrameStateAccess {
 
     public void visitFrameState(FrameState i) {
         // nothing to do for now
-    }
-
-    @Override
-    public void setValueAt(int j, Value v) {
-        inputs().set(j, v);
     }
 }
