@@ -462,14 +462,10 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected void test(String name, Object... args) {
-        try {
-            Method method = getMethod(name);
-            Object receiver = Modifier.isStatic(method.getModifiers()) ? null : this;
-            test(method, receiver, args);
-        } catch (AssumptionViolatedException e) {
-            // Suppress so that subsequent calls to this method within the
-            // same Junit @Test annotated method can proceed.
-        }
+        Method method = getMethod(name);
+        Object receiver = Modifier.isStatic(method.getModifiers()) ? null : this;
+
+        test(method, receiver, args);
     }
 
     protected void test(Method method, Object receiver, Object... args) {
@@ -582,7 +578,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected InstalledCode addMethod(final ResolvedJavaMethod method, final CompilationResult compResult) {
-        return getCodeCache().addMethod(method, compResult, null);
+        return getCodeCache().addMethod(method, compResult);
     }
 
     /**
