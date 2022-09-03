@@ -1904,14 +1904,12 @@ public class FlatNodeGenFactory {
         CodeTreeBuilder builder = parent.create();
 
         boolean hasFallthrough = false;
-        boolean hasImplicitCast = false;
         List<IfTriple> cachedTriples = new ArrayList<>();
         for (TypeGuard guard : group.getTypeGuards()) {
             IfTriple triple = createTypeCheckOrCast(frameState, group, guard, mode, false, true);
             if (triple != null) {
                 cachedTriples.add(triple);
             }
-            hasImplicitCast = hasImplicitCast || node.getTypeSystem().hasImplicitSourceTypes(guard.getType());
             if (!mode.isGuardFallback()) {
                 triple = createTypeCheckOrCast(frameState, group, guard, mode, true, true);
                 if (triple != null) {
@@ -2121,7 +2119,7 @@ public class FlatNodeGenFactory {
 
             cachedTriples = IfTriple.optimize(cachedTriples);
 
-            if (!useClass && specialization != null && !hasImplicitCast) {
+            if (!useClass && specialization != null) {
                 IfTriple singleCondition = null;
                 if (cachedTriples.size() == 1) {
                     singleCondition = cachedTriples.get(0);
