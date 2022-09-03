@@ -26,7 +26,6 @@ import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.sparc.SPARC.*;
 
 import java.util.*;
-import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
@@ -34,7 +33,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.sparc.*;
 
 public class SPARCHotSpotRegisterConfig implements RegisterConfig {
@@ -43,7 +42,7 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
 
     private final Register[] allocatable;
 
-    private final Map<PlatformKind, Register[]> categorized = new ConcurrentHashMap<>(20);
+    private final HashMap<PlatformKind, Register[]> categorized = new HashMap<>();
 
     private final RegisterAttributes[] attributesMap;
 
@@ -76,7 +75,7 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
             }
         }
 
-        Register[] ret = list.toArray(new Register[list.size()]);
+        Register[] ret = list.toArray(new Register[0]);
         categorized.put(kind, ret);
         return ret;
     }

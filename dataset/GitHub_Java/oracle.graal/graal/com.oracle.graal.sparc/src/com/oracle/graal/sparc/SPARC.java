@@ -25,7 +25,6 @@ package com.oracle.graal.sparc;
 import static com.oracle.graal.api.code.MemoryBarriers.*;
 
 import java.nio.*;
-import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.Register.RegisterCategory;
@@ -223,11 +222,8 @@ public class SPARC extends Architecture {
      */
     public static final int MEMORY_ACCESS_ALIGN = 4;
 
-    public final Set<CPUFeature> features;
-
-    public SPARC(Set<CPUFeature> features) {
+    public SPARC() {
         super("SPARC", 8, ByteOrder.BIG_ENDIAN, false, allRegisters, LOAD_STORE | STORE_STORE, 1, r31.encoding + FLOAT_REGISTER_COUNT + 1, 8);
-        this.features = features;
     }
 
     @Override
@@ -285,15 +281,5 @@ public class SPARC extends Architecture {
 
     public static boolean isDoubleFloatRegister(Register r) {
         return r.name.startsWith("d");
-    }
-
-    public Set<CPUFeature> getFeatures() {
-        return features;
-    }
-
-    public enum CPUFeature {
-        VIS1,
-        VIS2,
-        VIS3
     }
 }

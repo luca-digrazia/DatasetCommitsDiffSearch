@@ -224,6 +224,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                     double trueDestinationProbability) {
         boolean mirrored = emitCompare(cmpKind, left, right);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
+        boolean finalUnorderedIsTrue = mirrored ? !unorderedIsTrue : unorderedIsTrue;
 
         Kind kind = left.getKind().getStackKind();
         switch (kind) {
@@ -234,7 +235,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 break;
             case Float:
             case Double:
-                append(new BranchOp(finalCondition, trueDestination, falseDestination, kind, unorderedIsTrue));
+                append(new BranchOp(finalCondition, trueDestination, falseDestination, kind, finalUnorderedIsTrue));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere("" + left.getKind());
