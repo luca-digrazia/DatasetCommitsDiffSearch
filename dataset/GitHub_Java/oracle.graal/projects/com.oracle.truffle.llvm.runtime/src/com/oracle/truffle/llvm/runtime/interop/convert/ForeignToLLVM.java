@@ -121,7 +121,6 @@ public abstract class ForeignToLLVM extends LLVMNode {
                 case 64:
                     return ForeignToLLVMType.I64;
                 default:
-                    CompilerDirectives.transferToInterpreter();
                     throw new IllegalStateException("There is no integer type with " + bitWidth + " bits defined");
             }
         }
@@ -141,7 +140,6 @@ public abstract class ForeignToLLVM extends LLVMNode {
                 case POINTER:
                     return 8;
                 default:
-                    CompilerDirectives.transferToInterpreter();
                     throw new IllegalStateException("getSizeInBytes undefined on non-primitive type " + this);
             }
         }
