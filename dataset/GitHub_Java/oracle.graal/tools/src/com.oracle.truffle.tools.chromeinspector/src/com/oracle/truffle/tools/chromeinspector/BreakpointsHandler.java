@@ -30,8 +30,8 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
-import com.oracle.truffle.tools.utils.json.JSONArray;
-import com.oracle.truffle.tools.utils.json.JSONObject;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.DebuggerSession;
@@ -118,19 +118,21 @@ final class BreakpointsHandler {
             bp.setCondition(condition);
         }
         bp = ds.install(bp);
-        Location resolvedLocation = location;
+        JSONArray locations = new JSONArray();
         long id;
         synchronized (bpIDs) {
             id = ++lastID;
             bpIDs.put(bp, id);
             SourceSection section = resolvedBreakpoints.remove(bp);
             if (section != null) {
-                resolvedLocation = new Location(location.getScriptId(), section.getStartLine(), section.getStartColumn());
+                Location resolvedLocation = new Location(location.getScriptId(), section.getStartLine(), section.getStartColumn());
+                locations.put(resolvedLocation.toJSON());
             }
         }
         JSONObject json = new JSONObject();
         json.put("breakpointId", Long.toString(id));
-        json.put("actualLocation", resolvedLocation.toJSON());
+        locations.put(location.toJSON());
+        json.put("locations", locations);
         return new Params(json);
     }
 
