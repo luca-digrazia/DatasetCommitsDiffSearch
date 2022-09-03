@@ -28,7 +28,7 @@ package com.oracle.graal.api.meta;
  * @see <a href="http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.3.3">Method
  *      Descriptors</a>
  */
-public interface Signature {
+public interface Signature extends Remote {
 
     /**
      * Returns the number of parameters in this signature, adding 1 for a receiver if requested.
@@ -59,9 +59,7 @@ public interface Signature {
      * @param index the index into the parameters, with {@code 0} indicating the first parameter
      * @return the kind of the parameter at the specified position
      */
-    default Kind getParameterKind(int index) {
-        return getParameterType(index, null).getKind();
-    }
+    Kind getParameterKind(int index);
 
     /**
      * Gets the return type of this signature.
@@ -79,9 +77,16 @@ public interface Signature {
      * Gets the return kind of this signature. This is the same as calling {@link #getReturnType}.
      * {@link JavaType#getKind getKind}.
      */
-    default Kind getReturnKind() {
-        return getReturnType(null).getKind();
-    }
+    Kind getReturnKind();
+
+    /**
+     * Gets the size, in Java slots, of the parameters to this signature.
+     *
+     * @param withReceiver {@code true} if to add a slot for a receiver object; {@code false} not to
+     *            include the receiver
+     * @return the size of the parameters in slots
+     */
+    int getParameterSlots(boolean withReceiver);
 
     /**
      * Gets the <a

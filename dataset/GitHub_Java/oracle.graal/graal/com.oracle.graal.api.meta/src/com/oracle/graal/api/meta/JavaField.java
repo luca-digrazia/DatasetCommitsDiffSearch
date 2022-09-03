@@ -28,7 +28,7 @@ import java.util.*;
  * Represents a reference to a Java field, either resolved or unresolved fields. Fields, like
  * methods and types, are resolved through {@link ConstantPool constant pools}.
  */
-public interface JavaField {
+public interface JavaField extends Remote {
 
     /**
      * Returns the name of this field.
@@ -44,9 +44,7 @@ public interface JavaField {
      * Returns the kind of this field. This is the same as calling {@link #getType}.
      * {@link JavaType#getKind getKind}.
      */
-    default Kind getKind() {
-        return getType().getKind();
-    }
+    Kind getKind();
 
     /**
      * Returns the {@link JavaType} object representing the class or interface that declares this

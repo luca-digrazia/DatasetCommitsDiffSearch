@@ -22,12 +22,13 @@
  */
 package com.oracle.graal.api.meta;
 
+import java.lang.invoke.*;
 import java.lang.reflect.*;
 
 /**
  * Provides access to the metadata of a class typically provided in a class file.
  */
-public interface MetaAccessProvider {
+public interface MetaAccessProvider extends Remote {
 
     /**
      * Returns the resolved Java type representing a given Java class.
@@ -52,10 +53,14 @@ public interface MetaAccessProvider {
     }
 
     /**
-     * Provides the {@link ResolvedJavaMethod} for a {@link Method} or {@link Constructor} obtained
-     * via reflection.
+     * Provides the {@link ResolvedJavaMethod} for a {@link Method} obtained via reflection.
      */
-    ResolvedJavaMethod lookupJavaMethod(Executable reflectionMethod);
+    ResolvedJavaMethod lookupJavaMethod(Method reflectionMethod);
+
+    /**
+     * Provides the {@link ResolvedJavaMethod} for a {@link Constructor} obtained via reflection.
+     */
+    ResolvedJavaMethod lookupJavaConstructor(Constructor<?> reflectionConstructor);
 
     /**
      * Provides the {@link ResolvedJavaField} for a {@link Field} obtained via reflection.
@@ -76,6 +81,11 @@ public interface MetaAccessProvider {
      * @return the number of bytes occupied by this constant
      */
     long getMemorySize(JavaConstant constant);
+
+    /**
+     * Gets access to the internals of {@link MethodHandle}.
+     */
+    MethodHandleAccessProvider getMethodHandleAccess();
 
     /**
      * Parses a <a

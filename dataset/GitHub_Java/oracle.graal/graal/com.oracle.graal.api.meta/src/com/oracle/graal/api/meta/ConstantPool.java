@@ -27,7 +27,7 @@ package com.oracle.graal.api.meta;
  * parsing bytecode. Provides methods to look up a constant pool entry without performing
  * resolution. They are used during compilation.
  */
-public interface ConstantPool {
+public interface ConstantPool extends Remote {
 
     /**
      * Returns the number of entries the constant pool.
