@@ -62,7 +62,7 @@ public final class ObjectArrayBuffer extends AbstractArrayBuffer implements Iter
     }
 
     @Override
-    int getBufferLength() {
+    int getBufferSize() {
         return buf.length;
     }
 
@@ -76,25 +76,25 @@ public final class ObjectArrayBuffer extends AbstractArrayBuffer implements Iter
     }
 
     public void add(Object o) {
-        if (length == buf.length) {
-            grow(length * 2);
+        if (size == buf.length) {
+            grow(size * 2);
         }
-        buf[length] = o;
-        length++;
+        buf[size] = o;
+        size++;
     }
 
     @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] a) {
-        if (a.length < length) {
-            return (T[]) Arrays.copyOf(buf, length, a.getClass());
+        if (a.length < size) {
+            return (T[]) Arrays.copyOf(buf, size, a.getClass());
         }
-        System.arraycopy(buf, 0, a, 0, length);
+        System.arraycopy(buf, 0, a, 0, size);
         return a;
     }
 
     @Override
     public Iterator<Object> iterator() {
-        return new ObjectBufferIterator(buf, length);
+        return new ObjectBufferIterator(buf, size);
     }
 
     private static final class ObjectBufferIterator implements Iterator<Object> {

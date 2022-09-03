@@ -59,7 +59,7 @@ public class ShortArrayBuffer extends AbstractArrayBuffer {
     }
 
     @Override
-    int getBufferLength() {
+    int getBufferSize() {
         return buf.length;
     }
 
@@ -73,20 +73,20 @@ public class ShortArrayBuffer extends AbstractArrayBuffer {
     }
 
     public void add(short s) {
-        if (length == buf.length) {
-            grow(length * 2);
+        if (size == buf.length) {
+            grow(size * 2);
         }
-        buf[length] = s;
-        length++;
+        buf[size] = s;
+        size++;
     }
 
-    public void addAll(short[] values, int valuesLength) {
-        ensureCapacity(length + valuesLength);
-        System.arraycopy(values, 0, buf, length, valuesLength);
-        length += valuesLength;
+    public void addAll(short[] values, int length) {
+        ensureCapacity(size + length);
+        System.arraycopy(values, 0, buf, size, length);
+        size += length;
     }
 
     public short[] toArray() {
-        return Arrays.copyOf(buf, length);
+        return Arrays.copyOf(buf, size);
     }
 }

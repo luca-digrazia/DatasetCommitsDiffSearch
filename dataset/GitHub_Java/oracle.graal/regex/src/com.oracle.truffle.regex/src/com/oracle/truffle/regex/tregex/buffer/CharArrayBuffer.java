@@ -33,7 +33,7 @@ import java.util.Arrays;
  * <p>
  * Usage Example:
  * </p>
- *
+ * 
  * <pre>
  * CharArrayBuffer buf = new CharArrayBuffer();
  * List<char[]> results = new ArrayList<>();
@@ -48,14 +48,14 @@ import java.util.Arrays;
  */
 public class CharArrayBuffer extends AbstractArrayBuffer {
 
-    protected char[] buf;
+    private char[] buf;
 
     public CharArrayBuffer(int initialSize) {
         buf = new char[initialSize];
     }
 
     @Override
-    int getBufferLength() {
+    int getBufferSize() {
         return buf.length;
     }
 
@@ -69,13 +69,13 @@ public class CharArrayBuffer extends AbstractArrayBuffer {
     }
 
     public void add(char c) {
-        if (length == buf.length) {
-            grow(length * 2);
+        if (size == buf.length) {
+            grow(size * 2);
         }
-        buf[length++] = c;
+        buf[size++] = c;
     }
 
     public char[] toArray() {
-        return Arrays.copyOf(buf, length);
+        return Arrays.copyOf(buf, size);
     }
 }

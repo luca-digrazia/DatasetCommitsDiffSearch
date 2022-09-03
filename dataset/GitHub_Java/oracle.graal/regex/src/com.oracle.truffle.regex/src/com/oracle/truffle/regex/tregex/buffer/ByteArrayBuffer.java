@@ -58,7 +58,7 @@ public class ByteArrayBuffer extends AbstractArrayBuffer {
     }
 
     @Override
-    int getBufferLength() {
+    int getBufferSize() {
         return buf.length;
     }
 
@@ -72,14 +72,14 @@ public class ByteArrayBuffer extends AbstractArrayBuffer {
     }
 
     public void add(byte b) {
-        if (length == buf.length) {
-            grow(length * 2);
+        if (size == buf.length) {
+            grow(size * 2);
         }
-        buf[length] = b;
-        length++;
+        buf[size] = b;
+        size++;
     }
 
     public byte[] toArray() {
-        return Arrays.copyOf(buf, length);
+        return Arrays.copyOf(buf, size);
     }
 }

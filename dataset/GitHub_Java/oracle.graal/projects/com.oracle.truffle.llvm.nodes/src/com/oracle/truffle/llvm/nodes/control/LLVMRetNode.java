@@ -48,7 +48,6 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
@@ -95,7 +94,7 @@ public abstract class LLVMRetNode extends LLVMControlFlowNode implements Instrum
     }
 
     @Override
-    public LLVMStatementNode getPhiNode(int successorIndex) {
+    public LLVMExpressionNode getPhiNode(int successorIndex) {
         assert successorIndex == 0;
         return null;
     }

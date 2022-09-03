@@ -29,35 +29,35 @@ package com.oracle.truffle.regex.tregex.buffer;
  */
 public abstract class AbstractArrayBuffer {
 
-    int length;
+    int size;
 
     public void clear() {
-        length = 0;
+        size = 0;
     }
 
     public boolean isEmpty() {
-        return length == 0;
+        return size == 0;
     }
 
-    public int length() {
-        return length;
+    public int size() {
+        return size;
     }
 
-    public void setLength(int size) {
-        this.length = size;
+    public void setSize(int size) {
+        this.size = size;
     }
 
-    public void ensureCapacity(int newLength) {
-        if (getBufferLength() < newLength) {
-            int newBufferLength = getBufferLength() * 2;
-            while (newBufferLength < newLength) {
-                newBufferLength *= 2;
+    public void ensureCapacity(int newSize) {
+        if (getBufferSize() < newSize) {
+            int newBufferSize = getBufferSize() * 2;
+            while (newBufferSize < newSize) {
+                newBufferSize *= 2;
             }
-            grow(newBufferLength);
+            grow(newBufferSize);
         }
     }
 
-    abstract int getBufferLength();
+    abstract int getBufferSize();
 
-    abstract void grow(int newLength);
+    abstract void grow(int newSize);
 }
