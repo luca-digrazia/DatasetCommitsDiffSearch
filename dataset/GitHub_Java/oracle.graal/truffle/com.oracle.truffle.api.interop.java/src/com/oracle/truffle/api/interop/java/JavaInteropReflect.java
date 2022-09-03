@@ -28,13 +28,10 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import static com.oracle.truffle.api.interop.java.ToJavaNode.message;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.lang.reflect.Constructor;
@@ -45,6 +42,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 final class JavaInteropReflect {
@@ -234,8 +232,9 @@ final class JavaInteropReflect {
         @Override
         public Object invoke(Object proxy, Method method, Object[] arguments) throws Throwable {
             CompilerAsserts.neverPartOfCompilation();
-
+            TypeAndClass<?> convertTo = TypeAndClass.forReturnType(method);
             Object[] args = arguments == null ? EMPTY : arguments;
+            Object val;
             for (int i = 0; i < args.length; i++) {
                 args[i] = JavaInterop.asTruffleValue(args[i]);
             }
@@ -244,124 +243,89 @@ final class JavaInteropReflect {
                 return method.invoke(obj, args);
             }
 
-            CallTarget call = JavaInterop.ACCESSOR.engine().registerInteropTarget(obj, null, method);
-            if (call == null) {
-                Message message = findMessage(method, method.getAnnotation(MethodMessage.class), args.length);
-                TypeAndClass<?> convertTo = TypeAndClass.forReturnType(method);
-                MethodNode methodNode = new MethodNode(obj, method.getName(), message, convertTo);
-                call = JavaInterop.ACCESSOR.engine().registerInteropTarget(obj, methodNode, method);
-            }
-
-            return call.call(args);
-        }
-
-    }
-
-    private static final class MethodNode extends RootNode {
-        private final TruffleObject obj;
-        private final String name;
-        private final TypeAndClass<?> returnType;
-        @CompilerDirectives.CompilationFinal private Message message;
-        @Child private ToJavaNode toJavaNode;
-        @Child private Node node;
-
-        MethodNode(TruffleObject obj, String name, Message message, TypeAndClass<?> returnType) {
-            super(TruffleLanguage.class, null, null);
-            this.obj = obj;
-            this.name = name;
-            this.toJavaNode = ToJavaNodeGen.create();
-            this.message = message;
-            this.returnType = returnType;
-        }
-
-        @Override
-        public Object execute(VirtualFrame frame) {
-            try {
-                Object res = handleMessage(frame.getArguments());
-                return toJavaNode.execute(res, returnType);
-            } catch (InteropException ex) {
-                throw ex.raise();
-            }
-        }
-
-        private Object handleMessage(Object[] args) throws InteropException {
+            String name = method.getName();
+            Message message = findMessage(method.getAnnotation(MethodMessage.class));
             if (message == Message.WRITE) {
-                ForeignAccess.sendWrite(node(), obj, name, args[0]);
+                if (args.length != 1) {
+                    throw new IllegalStateException("Method needs to have a single argument to handle WRITE message " + method);
+                }
+                message(null, Message.WRITE, obj, name, args[0]);
                 return null;
             }
             if (message == Message.HAS_SIZE || message == Message.IS_BOXED || message == Message.IS_EXECUTABLE || message == Message.IS_NULL || message == Message.GET_SIZE) {
-                return ForeignAccess.send(node(), obj);
+                return message(null, message, obj);
             }
 
             if (message == Message.READ) {
-                return ForeignAccess.sendRead(node(), obj, name);
+                val = message(convertTo, Message.READ, obj, name);
+                return toJava(val, method);
             }
 
             if (message == Message.UNBOX) {
-                return ForeignAccess.sendUnbox(node(), obj);
+                val = message(null, Message.UNBOX, obj);
+                return toJava(val, method);
             }
 
             if (Message.createExecute(0).equals(message)) {
-                return ForeignAccess.sendExecute(node(), obj, args);
+                List<Object> copy = new ArrayList<>(args.length);
+                copy.addAll(Arrays.asList(args));
+                message = Message.createExecute(copy.size());
+                val = message(convertTo, message, obj, copy.toArray());
+                return toJava(val, method);
             }
 
             if (Message.createInvoke(0).equals(message)) {
-                return ForeignAccess.sendInvoke(node(), obj, name, args);
+                List<Object> copy = new ArrayList<>(args.length + 1);
+                copy.add(name);
+                copy.addAll(Arrays.asList(args));
+                message = Message.createInvoke(args.length);
+                val = message(convertTo, message, obj, copy.toArray());
+                return toJava(val, method);
             }
 
             if (Message.createNew(0).equals(message)) {
-                return ForeignAccess.sendNew(node(), obj, args);
+                message = Message.createNew(args.length);
+                val = message(convertTo, message, obj, args);
+                return toJava(val, method);
             }
 
             if (message == null) {
+                Object ret;
                 try {
-                    message = Message.createInvoke(args.length);
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    return ForeignAccess.sendInvoke(node(), obj, name, args);
+                    List<Object> callArgs = new ArrayList<>(args.length);
+                    callArgs.add(name);
+                    callArgs.addAll(Arrays.asList(args));
+                    ret = message(convertTo, Message.createInvoke(args.length), obj, callArgs.toArray());
                 } catch (InteropException ex) {
-                    message = Message.READ;
-                    node = null;
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    Object val = ForeignAccess.sendRead(node(), obj, name);
-                    Object primitiveVal = ToPrimitiveNode.shared().toPrimitive(val, returnType.clazz);
+                    val = message(null, Message.READ, obj, name);
+                    Object primitiveVal = ToPrimitiveNode.shared().toPrimitive(val, method.getReturnType());
                     if (primitiveVal != null) {
                         return primitiveVal;
                     }
                     TruffleObject attr = (TruffleObject) val;
-                    val = ForeignAccess.sendIsExecutable(Message.IS_EXECUTABLE.createNode(), attr);
-                    if (Boolean.FALSE.equals(val)) {
+                    if (Boolean.FALSE.equals(message(null, Message.IS_EXECUTABLE, attr))) {
                         if (args.length == 0) {
-                            return attr;
+                            return toJava(attr, method);
                         }
-                        throw ArityException.raise(0, args.length);
+                        throw new IllegalArgumentException(attr + " cannot be invoked with " + args.length + " parameters");
                     }
-                    message = Message.createExecute(args.length);
-                    node = null;
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    return ForeignAccess.sendExecute(node(), attr, args);
+                    List<Object> callArgs = new ArrayList<>(args.length);
+                    callArgs.addAll(Arrays.asList(args));
+                    ret = message(convertTo, Message.createExecute(callArgs.size()), attr, callArgs.toArray());
                 }
+                return toJava(ret, method);
             }
-            throw UnsupportedMessageException.raise(message);
+            throw new IllegalArgumentException("Unknown message: " + message);
         }
 
-        private Node node() {
-            if (node == null) {
-                this.node = insert(message.createNode());
-            }
-            return node;
-        }
     }
 
-    private static Message findMessage(Method method, MethodMessage mm, int arity) {
+    private static Message findMessage(MethodMessage mm) {
         CompilerAsserts.neverPartOfCompilation();
         if (mm == null) {
             return null;
         }
-        Message message = Message.valueOf(mm.message());
-        if (message == Message.WRITE && arity != 1) {
-            throw new IllegalStateException("Method needs to have a single argument to handle WRITE message " + method);
-        }
-        return message;
+        return Message.valueOf(mm.message());
     }
 
     private static Object toJava(Object ret, Method method) {
