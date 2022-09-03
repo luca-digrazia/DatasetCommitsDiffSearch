@@ -45,6 +45,7 @@ import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.test.*;
+import com.oracle.graal.hotspot.phases.WriteBarrierAdditionPhase;
 
 /**
  * Base class for Graal compiler unit tests.
@@ -399,6 +400,7 @@ public abstract class GraalCompilerTest extends GraalTest {
                 PhasePlan phasePlan = new PhasePlan();
                 GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
                 phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
+                phasePlan.addPhase(PhasePosition.LOW_LEVEL, new WriteBarrierAdditionPhase());
                 editPhasePlan(method, graph, phasePlan);
                 CompilationResult compResult = GraalCompiler.compileMethod(runtime(), replacements, backend, runtime().getTarget(), method, graph, null, phasePlan, OptimisticOptimizations.ALL,
                                 new SpeculationLog());
@@ -443,41 +445,25 @@ public abstract class GraalCompilerTest extends GraalTest {
      * Parses a Java method to produce a graph.
      */
     protected StructuredGraph parse(Method m) {
-        return parse0(m, GraphBuilderConfiguration.getEagerDefault());
+        ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(m);
+        StructuredGraph graph = new StructuredGraph(javaMethod);
+        new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
+        return graph;
     }
 
     /**
      * Parses a Java method to produce a graph.
      */
     protected StructuredGraph parseProfiled(Method m) {
-        return parse0(m, GraphBuilderConfiguration.getDefault());
-    }
-
-    /**
-     * Parses a Java method in debug mode to produce a graph with extra infopoints.
-     */
-    protected StructuredGraph parseDebug(Method m) {
-        GraphBuilderConfiguration gbConf = GraphBuilderConfiguration.getEagerDefault();
-        gbConf.setEagerInfopointMode(true);
-        return parse0(m, gbConf);
-    }
-
-    private StructuredGraph parse0(Method m, GraphBuilderConfiguration conf) {
         ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(m);
         StructuredGraph graph = new StructuredGraph(javaMethod);
-        new GraphBuilderPhase(runtime, conf, OptimisticOptimizations.ALL).apply(graph);
+        new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL).apply(graph);
         return graph;
     }
 
     protected PhasePlan getDefaultPhasePlan() {
-        return getDefaultPhasePlan(false);
-    }
-
-    protected PhasePlan getDefaultPhasePlan(boolean eagerInfopointMode) {
         PhasePlan plan = new PhasePlan();
-        GraphBuilderConfiguration gbConf = GraphBuilderConfiguration.getEagerDefault();
-        gbConf.setEagerInfopointMode(eagerInfopointMode);
-        plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, gbConf, OptimisticOptimizations.ALL));
+        plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL));
         return plan;
     }
 }

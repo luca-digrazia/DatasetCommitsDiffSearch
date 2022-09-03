@@ -152,18 +152,10 @@ public class VMToCompilerImpl implements VMToCompiler {
 
                 @Override
                 public void run() {
-                    ServiceLoader<ReplacementsProvider> serviceLoader = ServiceLoader.loadInstalled(ReplacementsProvider.class);
-                    for (ReplacementsProvider provider : serviceLoader) {
+                    for (ReplacementsProvider provider : ServiceLoader.loadInstalled(ReplacementsProvider.class)) {
                         provider.registerReplacements(replacements);
                     }
                     runtime.registerReplacements(replacements);
-                    if (GraalOptions.BootstrapReplacements) {
-                        for (ResolvedJavaMethod method : replacements.getAllReplacements()) {
-                            replacements.getMacroSubstitution(method);
-                            replacements.getMethodSubstitution(method);
-                            replacements.getSnippet(method);
-                        }
-                    }
                 }
             });
 
@@ -446,8 +438,8 @@ public class VMToCompilerImpl implements VMToCompiler {
         phaseTransition("final");
 
         if (graalRuntime.getConfig().ciTime) {
-            parsedBytecodesPerSecond.printAll("ParsedBytecodesPerSecond", System.out);
-            inlinedBytecodesPerSecond.printAll("InlinedBytecodesPerSecond", System.out);
+            parsedBytecodesPerSecond.printAll("ParsedBytecodesPerSecond");
+            inlinedBytecodesPerSecond.printAll("InlinedBytecodesPerSecond");
         }
 
         SnippetCounter.printGroups(TTY.out().out());

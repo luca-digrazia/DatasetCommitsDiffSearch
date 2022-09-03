@@ -53,7 +53,7 @@ public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable,
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         if (isLowered()) {
             return;
         }
