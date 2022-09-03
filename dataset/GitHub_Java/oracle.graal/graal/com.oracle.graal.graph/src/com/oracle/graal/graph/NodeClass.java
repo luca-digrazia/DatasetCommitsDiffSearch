@@ -27,6 +27,7 @@ import static com.oracle.graal.graph.Edges.*;
 import static com.oracle.graal.graph.InputEdges.*;
 import static com.oracle.graal.graph.Node.*;
 import static com.oracle.graal.graph.util.CollectionsAccess.*;
+import static java.lang.reflect.Modifier.*;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
@@ -38,7 +39,6 @@ import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.Edges.Type;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.Node.Input;
-import com.oracle.graal.graph.Node.OptionalInput;
 import com.oracle.graal.graph.Node.Successor;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
@@ -89,12 +89,23 @@ public final class NodeClass extends FieldIntrospection {
                     value = (NodeClass) allClasses.get(key);
                     if (value == null) {
                         Class<?> superclass = c.getSuperclass();
-                        NodeClass superNodeClass = null;
-                        if (superclass != NODE_CLASS) {
-                            // Ensure NodeClass for superclass exists
-                            superNodeClass = get(superclass);
+                        if (GeneratedNode.class.isAssignableFrom(c)) {
+                            Class<? extends Node> originalNodeClass = (Class<? extends Node>) superclass;
+                            value = (NodeClass) allClasses.get(originalNodeClass);
+                            assert value != null;
+                            if (value.genClass == null) {
+                                value.genClass = (Class<? extends Node>) c;
+                            } else {
+                                assert value.genClass == c;
+                            }
+                        } else {
+                            NodeClass superNodeClass = null;
+                            if (superclass != NODE_CLASS) {
+                                // Ensure NodeClass for superclass exists
+                                superNodeClass = get(superclass);
+                            }
+                            value = new NodeClass(key, superNodeClass);
                         }
-                        value = new NodeClass(key, superNodeClass);
                         Object old = allClasses.putIfAbsent(key, value);
                         assert old == null : old + "   " + key;
                     }
@@ -121,6 +132,13 @@ public final class NodeClass extends FieldIntrospection {
     private final EnumSet<InputType> allowedUsageTypes;
     private int[] iterableIds;
 
+    /**
+     * The {@linkplain GeneratedNode generated} node class denoted by this object. This value is
+     * lazily initialized to avoid class initialization circularity issues. A sentinel value of
+     * {@code Node.class} is used to denote absence of a generated class.
+     */
+    private Class<? extends Node> genClass;
+
     private static final DebugMetric ITERABLE_NODE_TYPES = Debug.metric("IterableNodeTypes");
     private final DebugMetric nodeIterableCount;
 
@@ -136,10 +154,10 @@ public final class NodeClass extends FieldIntrospection {
     private final boolean isLeafNode;
 
     public NodeClass(Class<?> clazz, NodeClass superNodeClass) {
-        this(clazz, superNodeClass, new FieldsScanner.DefaultCalcOffset(), null, 0);
+        this(clazz, superNodeClass, new DefaultCalcOffset(), null, 0);
     }
 
-    public NodeClass(Class<?> clazz, NodeClass superNodeClass, FieldsScanner.CalcOffset calcOffset, int[] presetIterableIds, int presetIterableId) {
+    public NodeClass(Class<?> clazz, NodeClass superNodeClass, CalcOffset calcOffset, int[] presetIterableIds, int presetIterableId) {
         super(clazz);
         this.superNodeClass = superNodeClass;
         assert NODE_CLASS.isAssignableFrom(clazz);
@@ -151,9 +169,9 @@ public final class NodeClass extends FieldIntrospection {
 
         this.isSimplifiable = Simplifiable.class.isAssignableFrom(clazz);
 
-        NodeFieldsScanner fs = new NodeFieldsScanner(calcOffset, superNodeClass);
+        FieldScanner fs = new FieldScanner(calcOffset, superNodeClass);
         try (TimerCloseable t = Init_FieldScanning.start()) {
-            fs.scan(clazz, clazz.getSuperclass(), false);
+            fs.scan(clazz, false);
         }
 
         try (TimerCloseable t1 = Init_Edges.start()) {
@@ -202,6 +220,30 @@ public final class NodeClass extends FieldIntrospection {
         nodeIterableCount = Debug.metric("NodeIterable_%s", clazz);
     }
 
+    /**
+     * Gets the {@linkplain GeneratedNode generated} node class (if any) described by the object.
+     */
+    @SuppressWarnings("unchecked")
+    public Class<? extends Node> getGenClass() {
+        if (USE_GENERATED_NODES) {
+            if (genClass == null) {
+                if (!isAbstract(getClazz().getModifiers())) {
+                    String genClassName = getClazz().getName().replace('$', '_') + "Gen";
+                    try {
+                        genClass = (Class<? extends Node>) Class.forName(genClassName);
+                    } catch (ClassNotFoundException e) {
+                        throw new GraalInternalError("Could not find generated class " + genClassName + " for " + getClazz());
+                    }
+                } else {
+                    // Sentinel value denoting no generated class
+                    genClass = Node.class;
+                }
+            }
+            return genClass.equals(Node.class) ? null : genClass;
+        }
+        return null;
+    }
+
     private static boolean containsId(int iterableId, int[] iterableIds) {
         for (int i : iterableIds) {
             if (i == iterableId) {
@@ -209,6 +251,26 @@ public final class NodeClass extends FieldIntrospection {
             }
         }
         return false;
+    }
+
+    /**
+     * Determines if a given {@link Node} class is described by this {@link NodeClass} object. This
+     * is useful for doing an exact type test (as opposed to an instanceof test) on a node. For
+     * example:
+     *
+     * <pre>
+     *     if (node.getNodeClass().is(BeginNode.class)) { ... }
+     * 
+     *     // Due to generated Node classes, the test below
+     *     // is *not* the same as the test above:
+     *     if (node.getClass() == BeginNode.class) { ... }
+     * </pre>
+     *
+     * @param nodeClass a {@linkplain GeneratedNode non-generated} {@link Node} class
+     */
+    public boolean is(Class<? extends Node> nodeClass) {
+        assert !GeneratedNode.class.isAssignableFrom(nodeClass) : "cannot test NodeClass against generated " + nodeClass;
+        return nodeClass == getClazz();
     }
 
     private String shortName;
@@ -266,7 +328,7 @@ public final class NodeClass extends FieldIntrospection {
     /**
      * Describes a field representing an input or successor edge in a node.
      */
-    protected static class EdgeInfo extends FieldsScanner.FieldInfo {
+    protected static class EdgeInfo extends FieldInfo {
 
         public EdgeInfo(long offset, String name, Class<?> type) {
             super(offset, name, type);
@@ -276,7 +338,7 @@ public final class NodeClass extends FieldIntrospection {
          * Sorts non-list edges before list edges.
          */
         @Override
-        public int compareTo(FieldsScanner.FieldInfo o) {
+        public int compareTo(FieldInfo o) {
             if (NodeList.class.isAssignableFrom(o.type)) {
                 if (!NodeList.class.isAssignableFrom(type)) {
                     return -1;
@@ -309,14 +371,14 @@ public final class NodeClass extends FieldIntrospection {
         }
     }
 
-    protected static class NodeFieldsScanner extends FieldsScanner {
+    protected static class FieldScanner extends BaseFieldScanner {
 
         public final ArrayList<InputInfo> inputs = new ArrayList<>();
         public final ArrayList<EdgeInfo> successors = new ArrayList<>();
         int directInputs;
         int directSuccessors;
 
-        protected NodeFieldsScanner(FieldsScanner.CalcOffset calc, NodeClass superNodeClass) {
+        protected FieldScanner(CalcOffset calc, NodeClass superNodeClass) {
             super(calc);
             if (superNodeClass != null) {
                 translateInto(superNodeClass.inputs, inputs);
@@ -372,7 +434,7 @@ public final class NodeClass extends FieldIntrospection {
                     GraalInternalError.guarantee(!NODE_CLASS.isAssignableFrom(type) || field.getName().equals("Null"), "suspicious node field: %s", field);
                     GraalInternalError.guarantee(!INPUT_LIST_CLASS.isAssignableFrom(type), "suspicious node input list field: %s", field);
                     GraalInternalError.guarantee(!SUCCESSOR_LIST_CLASS.isAssignableFrom(type), "suspicious node successor list field: %s", field);
-                    super.scanField(field, offset);
+                    data.add(new FieldInfo(offset, field.getName(), type));
                 }
             }
         }

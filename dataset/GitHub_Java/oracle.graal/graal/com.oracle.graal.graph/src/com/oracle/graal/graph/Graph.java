@@ -40,7 +40,7 @@ import com.oracle.graal.options.*;
 public class Graph {
 
     static class Options {
-        @Option(help = "Verify graphs often during compilation when assertions are turned on", type = OptionType.Debug)//
+        @Option(help = "Verify graphs often during compilation when assertions are turned on")//
         public static final OptionValue<Boolean> VerifyGraalGraphs = new OptionValue<>(true);
     }
 
@@ -68,9 +68,8 @@ public class Graph {
 
     // these two arrays contain one entry for each NodeClass, indexed by NodeClass.iterableId.
     // they contain the first and last pointer to a linked list of all nodes with this type.
-    private final ArrayList<Node> iterableNodesFirst;
-    private final ArrayList<Node> iterableNodesLast;
-
+    private final ArrayList<Node> nodeCacheFirst;
+    private final ArrayList<Node> nodeCacheLast;
     private int nodesDeletedSinceLastCompression;
     private int nodesDeletedBeforeLastCompression;
 
@@ -108,7 +107,7 @@ public class Graph {
 
         @Override
         public int hashCode() {
-            return node.getNodeClass().valueNumber(node);
+            return Node.USE_GENERATED_VALUE_NUMBER ? node.valueNumberLeaf() : node.getNodeClass().valueNumber(node);
         }
 
         @Override
@@ -154,8 +153,8 @@ public class Graph {
      */
     public Graph(String name) {
         nodes = new Node[INITIAL_NODES_SIZE];
-        iterableNodesFirst = new ArrayList<>(NodeClass.allocatedNodeIterabledIds());
-        iterableNodesLast = new ArrayList<>(NodeClass.allocatedNodeIterabledIds());
+        nodeCacheFirst = new ArrayList<>(NodeClass.cacheSize());
+        nodeCacheLast = new ArrayList<>(NodeClass.cacheSize());
         this.name = name;
         if (MODIFICATION_COUNTS_ENABLED) {
             nodeModCounts = new int[INITIAL_NODES_SIZE];
@@ -629,7 +628,7 @@ public class Graph {
         }
     }
 
-    static final Node PLACE_HOLDER = new PlaceHolderNode();
+    static final Node PLACE_HOLDER = USE_GENERATED_NODES ? new Graph_PlaceHolderNodeGen() : new PlaceHolderNode();
 
     /**
      * When the percent of live nodes in {@link #nodes} fall below this number, a call to
@@ -709,7 +708,7 @@ public class Graph {
     }
 
     Node getStartNode(int iterableId) {
-        Node start = iterableNodesFirst.size() <= iterableId ? null : iterableNodesFirst.get(iterableId);
+        Node start = nodeCacheFirst.size() <= iterableId ? null : nodeCacheFirst.get(iterableId);
         return start;
     }
 
@@ -743,47 +742,24 @@ public class Graph {
         nodes[id] = node;
         nodesSize++;
 
-        updateNodeCaches(node);
+        int nodeClassId = node.getNodeClass().iterableId();
+        if (nodeClassId != Node.NOT_ITERABLE) {
+            while (nodeCacheFirst.size() <= nodeClassId) {
+                nodeCacheFirst.add(null);
+                nodeCacheLast.add(null);
+            }
+            Node prev = nodeCacheLast.get(nodeClassId);
+            if (prev != null) {
+                prev.typeCacheNext = node;
+            } else {
+                nodeCacheFirst.set(nodeClassId, node);
+            }
+            nodeCacheLast.set(nodeClassId, node);
+        }
 
         node.id = id;
         if (nodeEventListener != null) {
             nodeEventListener.nodeAdded(node);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    private void postDeserialization() {
-        recomputeIterableNodeLists();
-    }
-
-    /**
-     * Rebuilds the lists used to support {@link #getNodes(Class)}. This is useful for serialization
-     * where the underlying {@linkplain NodeClass#iterableId() iterable ids} may have changed.
-     */
-    private void recomputeIterableNodeLists() {
-        iterableNodesFirst.clear();
-        iterableNodesLast.clear();
-        for (Node node : nodes) {
-            if (node != null && node.isAlive()) {
-                updateNodeCaches(node);
-            }
-        }
-    }
-
-    private void updateNodeCaches(Node node) {
-        int nodeClassId = node.getNodeClass().iterableId();
-        if (nodeClassId != Node.NOT_ITERABLE) {
-            while (iterableNodesFirst.size() <= nodeClassId) {
-                iterableNodesFirst.add(null);
-                iterableNodesLast.add(null);
-            }
-            Node prev = iterableNodesLast.get(nodeClassId);
-            if (prev != null) {
-                prev.typeCacheNext = node;
-            } else {
-                iterableNodesFirst.set(nodeClassId, node);
-            }
-            iterableNodesLast.set(nodeClassId, node);
         }
     }
 
