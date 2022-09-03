@@ -28,12 +28,8 @@ import static com.oracle.truffle.api.vm.VMAccessor.LANGUAGE;
 
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.source.Source;
@@ -42,47 +38,28 @@ final class PolyglotSourceCache {
 
     private final ConcurrentHashMap<Object, CallTarget> sourceCache;
     private final ReferenceQueue<Source> deadSources = new ReferenceQueue<>();
-    private final List<SourceReference> weakReferences = new LinkedList<>();
 
     PolyglotSourceCache() {
         this.sourceCache = new ConcurrentHashMap<>();
     }
 
-    CallTarget parseCached(PolyglotLanguageContext context, Source source, String[] argumentNames) throws AssertionError {
+    CallTarget parseCached(PolyglotLanguageContext context, Source source, String[] argumentNames) {
         cleanupStaleEntries();
 
         CallTarget target;
         if (source.isCached()) {
             Object sourceId = VMAccessor.SOURCE.getSourceIdentifier(source);
-            if (argumentNames != null && argumentNames.length > 0) {
-                sourceId = new ArgumentSourceId(sourceId, argumentNames);
-            }
-
-            target = sourceCache.get(sourceId);
+            WeakSourceKey ref = new WeakSourceKey(sourceId, source, argumentNames, deadSources);
+            target = sourceCache.get(ref);
             if (target == null) {
-                target = sourceCache.computeIfAbsent(sourceId, new Function<Object, CallTarget>() {
-                    @Override
-                    public CallTarget apply(Object o) {
-                        /*
-                         * We need to capture every source as weak reference to get notified when
-                         * sources are collected. We also need to ensure that weak references
-                         * instances are not collected before the source reference hence the list of
-                         * weak references is needed here.
-                         */
-                        synchronized (weakReferences) {
-                            weakReferences.add(new SourceReference(o, source, deadSources));
-                        }
-
-                        /*
-                         * We pass in for parsing only a copy of the original source. This allows us
-                         * to keep a strong reference to CallTarget while keeping the source
-                         * collectible. If the source is collected then the deadSources queue will
-                         * be updated and the call target entry will be removed to clean the cache.
-                         */
-                        Source weakSource = VMAccessor.SOURCE.copySource(source);
-                        return parseImpl(context, argumentNames, weakSource);
-                    }
-                });
+                target = parseImpl(context, argumentNames, VMAccessor.SOURCE.copySource(source));
+                CallTarget prev = sourceCache.putIfAbsent(ref, target);
+                if (prev != null) {
+                    /*
+                     * Parsed twice -> discard the one not in the cache.
+                     */
+                    target = prev;
+                }
             }
         } else {
             target = parseImpl(context, argumentNames, source);
@@ -90,71 +67,50 @@ final class PolyglotSourceCache {
         return target;
     }
 
-    private static CallTarget parseImpl(PolyglotLanguageContext context, String[] argumentNames, Source source) throws AssertionError {
+    private static CallTarget parseImpl(PolyglotLanguageContext context, String[] argumentNames, Source source) {
         CallTarget parsedTarget = LANGUAGE.parse(context.requireEnv(), source, null, argumentNames);
         if (parsedTarget == null) {
-            throw new AssertionError(String.format("Parsing resulted in a null CallTarget for %s.", source));
+            throw new IllegalStateException(String.format("Parsing resulted in a null CallTarget for %s.", source));
         }
         return parsedTarget;
     }
 
     private void cleanupStaleEntries() {
-        List<SourceReference> references = null;
-        SourceReference sourceRef = null;
-        while ((sourceRef = (SourceReference) deadSources.poll()) != null) {
-            sourceCache.remove(sourceRef.key);
-            if (references == null) {
-                references = new ArrayList<>();
-            }
-            references.add(sourceRef);
-        }
-        if (references != null) {
-            synchronized (weakReferences) {
-                weakReferences.removeAll(references);
-            }
+        WeakSourceKey sourceRef = null;
+        while ((sourceRef = (WeakSourceKey) deadSources.poll()) != null) {
+            sourceCache.remove(sourceRef);
         }
     }
 
-    private static final class SourceReference extends WeakReference<Source> {
+    private static final class WeakSourceKey extends WeakReference<Source> {
 
         final Object key;
-
-        SourceReference(Object key, Source value, ReferenceQueue<? super Source> q) {
-            super(value, q);
-            this.key = key;
-        }
-
-    }
-
-    private static class ArgumentSourceId {
-
-        private final Object sourceId;
         private final String[] arguments;
 
-        ArgumentSourceId(Object sourceId, String[] arguments) {
-            this.sourceId = sourceId;
-            this.arguments = arguments;
+        WeakSourceKey(Object key, Source value, String[] arguments, ReferenceQueue<? super Source> q) {
+            super(value, q);
+            this.key = key;
+            this.arguments = arguments != null && arguments.length == 0 ? null : arguments;
         }
 
         @Override
         public int hashCode() {
             final int prime = 31;
             int result = 1;
-            result = prime * result + ((sourceId == null) ? 0 : sourceId.hashCode());
+            result = prime * result + key.hashCode();
             result = prime * result + Arrays.hashCode(arguments);
             return result;
         }
 
         @Override
         public boolean equals(Object obj) {
-            if (!(obj instanceof ArgumentSourceId)) {
+            if (obj instanceof WeakSourceKey) {
+                WeakSourceKey other = (WeakSourceKey) obj;
+                return key.equals(other.key) && Arrays.equals(arguments, other.arguments);
+            } else {
                 return false;
             }
-            ArgumentSourceId other = (ArgumentSourceId) obj;
-            return sourceId.equals(other.sourceId) &&
-                            Arrays.equals(arguments, other.arguments);
         }
-
     }
 
 }
