@@ -120,10 +120,10 @@ public class TruffleCompilerImpl {
         compilationNotify.notifyCompilationStarted(compilable);
 
         try {
-            PhaseSuite<HighTierContext> graphBuilderSuite = createGraphBuilderSuite();
+            GraphBuilderSuiteInfo info = createGraphBuilderSuite();
 
             try (TimerCloseable a = PartialEvaluationTime.start(); Closeable c = PartialEvaluationMemUse.start()) {
-                graph = partialEvaluator.createGraph(compilable, AllowAssumptions.YES);
+                graph = partialEvaluator.createGraph(compilable, AllowAssumptions.YES, info.plugins);
             }
 
             if (Thread.currentThread().isInterrupted()) {
@@ -138,7 +138,7 @@ public class TruffleCompilerImpl {
             }
 
             compilationNotify.notifyCompilationTruffleTierFinished(compilable, graph);
-            CompilationResult compilationResult = compileMethodHelper(graph, compilable.toString(), graphBuilderSuite, compilable.getSpeculationLog(), compilable);
+            CompilationResult compilationResult = compileMethodHelper(graph, compilable.toString(), info.suite, compilable.getSpeculationLog(), compilable);
             compilationNotify.notifyCompilationSuccess(compilable, graph, compilationResult);
         } catch (Throwable t) {
             compilationNotify.notifyCompilationFailed(compilable, graph, t);
@@ -158,8 +158,8 @@ public class TruffleCompilerImpl {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
             CompilationResult compilationResult = new CompilationResult(name);
-            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, graphBuilderSuite, Optimizations, getProfilingInfo(graph), speculationLog, suites,
-                            lirSuites, compilationResult, CompilationResultBuilderFactory.Default);
+            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, graphBuilderSuite == null ? createGraphBuilderSuite().suite : graphBuilderSuite,
+                            Optimizations, getProfilingInfo(graph), speculationLog, suites, lirSuites, compilationResult, CompilationResultBuilderFactory.Default);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
@@ -203,12 +203,24 @@ public class TruffleCompilerImpl {
         return result;
     }
 
-    private PhaseSuite<HighTierContext> createGraphBuilderSuite() {
+    static class GraphBuilderSuiteInfo {
+        final PhaseSuite<HighTierContext> suite;
+        final GraphBuilderPlugins plugins;
+
+        public GraphBuilderSuiteInfo(PhaseSuite<HighTierContext> suite, GraphBuilderPlugins plugins) {
+            this.suite = suite;
+            this.plugins = plugins;
+        }
+    }
+
+    private GraphBuilderSuiteInfo createGraphBuilderSuite() {
         PhaseSuite<HighTierContext> suite = backend.getSuites().getDefaultGraphBuilderSuite().copy();
         ListIterator<BasePhase<? super HighTierContext>> iterator = suite.findPhase(GraphBuilderPhase.class);
+        GraphBuilderPhase graphBuilderPhase = (GraphBuilderPhase) iterator.previous();
         iterator.remove();
-        iterator.add(new GraphBuilderPhase(config));
-        return suite;
+        GraphBuilderPlugins plugins = graphBuilderPhase.getGraphBuilderPlugins();
+        iterator.add(new GraphBuilderPhase(config, plugins));
+        return new GraphBuilderSuiteInfo(suite, plugins);
     }
 
     public void processAssumption(Set<Assumption> newAssumptions, Assumption assumption, List<AssumptionValidAssumption> manual) {
@@ -224,5 +236,9 @@ public class TruffleCompilerImpl {
 
     public PartialEvaluator getPartialEvaluator() {
         return partialEvaluator;
+    }
+
+    public GraphBuilderPlugins createGraphBuilderSuitePlugins() {
+        return this.createGraphBuilderSuite().plugins;
     }
 }

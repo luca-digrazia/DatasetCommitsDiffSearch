@@ -22,28 +22,28 @@
  */
 package com.oracle.graal.truffle.test;
 
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.*;
-
 import org.junit.*;
 
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.printer.*;
 import com.oracle.graal.truffle.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
 
 public class PartialEvaluationTest extends GraalCompilerTest {
-    private final TruffleCompiler truffleCompiler;
+    private final TruffleCompilerImpl truffleCompiler;
 
     public PartialEvaluationTest() {
         // Make sure Truffle runtime is initialized.
         Assert.assertTrue(Truffle.getRuntime() != null);
-        this.truffleCompiler = DefaultTruffleCompiler.create();
+        this.truffleCompiler = new TruffleCompilerImpl();
 
         DebugEnvironment.initialize(System.out);
     }
@@ -55,14 +55,14 @@ public class PartialEvaluationTest extends GraalCompilerTest {
     protected OptimizedCallTarget compileHelper(String methodName, RootNode root, Object[] arguments) {
         final OptimizedCallTarget compilable = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(root);
         StructuredGraph actual = partialEval(compilable, arguments, AllowAssumptions.YES);
-        truffleCompiler.compileMethodHelper(actual, methodName, null, compilable);
+        truffleCompiler.compileMethodHelper(actual, methodName, null, getSpeculationLog(), compilable);
         return compilable;
     }
 
     protected OptimizedCallTarget assertPartialEvalEquals(String methodName, RootNode root, Object[] arguments) {
         final OptimizedCallTarget compilable = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(root);
         StructuredGraph actual = partialEval(compilable, arguments, AllowAssumptions.YES);
-        truffleCompiler.compileMethodHelper(actual, methodName, null, compilable);
+        truffleCompiler.compileMethodHelper(actual, methodName, null, getSpeculationLog(), compilable);
         removeFrameStates(actual);
         StructuredGraph expected = parseForComparison(methodName);
         Assert.assertEquals(getCanonicalGraphString(expected, true, true), getCanonicalGraphString(actual, true, true));
@@ -77,7 +77,7 @@ public class PartialEvaluationTest extends GraalCompilerTest {
         final OptimizedCallTarget compilable = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(root);
         StructuredGraph actual = partialEval(compilable, arguments, AllowAssumptions.YES);
         removeFrameStates(actual);
-        for (MethodCallTargetNode node : actual.getNodes(MethodCallTargetNode.TYPE)) {
+        for (MethodCallTargetNode node : actual.getNodes(MethodCallTargetNode.class)) {
             Assert.fail("Found invalid method call target node: " + node);
         }
     }
@@ -89,18 +89,18 @@ public class PartialEvaluationTest extends GraalCompilerTest {
         compilable.call(arguments);
 
         try (Scope s = Debug.scope("TruffleCompilation", new TruffleDebugJavaMethod(compilable))) {
-            return truffleCompiler.getPartialEvaluator().createGraph(compilable, allowAssumptions);
+            return truffleCompiler.getPartialEvaluator().createGraph(compilable, allowAssumptions, truffleCompiler.createGraphBuilderSuitePlugins());
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
     }
 
     protected void removeFrameStates(StructuredGraph graph) {
-        for (FrameState frameState : graph.getNodes(FrameState.TYPE)) {
+        for (FrameState frameState : graph.getNodes(FrameState.class)) {
             frameState.replaceAtUsages(null);
             frameState.safeDelete();
         }
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
         new DeadCodeEliminationPhase().apply(graph);
     }
 
