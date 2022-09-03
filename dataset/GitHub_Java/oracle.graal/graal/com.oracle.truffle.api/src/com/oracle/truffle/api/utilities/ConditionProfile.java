@@ -51,7 +51,7 @@ import com.oracle.truffle.api.nodes.*;
  * @see #createCountingProfile()
  * @see #createBinaryProfile()
  */
-public abstract class ConditionProfile extends NodeCloneable {
+public abstract class ConditionProfile implements NodeCloneable {
 
     public abstract boolean profile(boolean value);
 
@@ -79,5 +79,14 @@ public abstract class ConditionProfile extends NodeCloneable {
      */
     public static ConditionProfile createBinaryProfile() {
         return new BinaryConditionProfile();
+    }
+
+    @Override
+    public final Object clone() {
+        try {
+            return super.clone();
+        } catch (CloneNotSupportedException e) {
+            throw new AssertionError(e);
+        }
     }
 }
