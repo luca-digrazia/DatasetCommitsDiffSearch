@@ -23,14 +23,16 @@
 package com.oracle.truffle.codegen.processor.node;
 
 import java.lang.annotation.*;
+import java.util.*;
 
 import javax.lang.model.element.*;
+import javax.lang.model.type.*;
 
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
 
-public class GenericParser extends MethodParser<SpecializationData> {
+public class GenericParser extends NodeMethodParser<SpecializationData> {
 
     public GenericParser(ProcessorContext context, NodeData node) {
         super(context, node);
@@ -38,26 +40,34 @@ public class GenericParser extends MethodParser<SpecializationData> {
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        return createDefaultMethodSpec(null);
+        return createDefaultMethodSpec(method, mirror, true, null);
     }
 
     @Override
-    protected ParameterSpec createValueParameterSpec(String valueName, NodeData nodeData) {
-        return new ParameterSpec(valueName, nodeData.findGenericExecutableType(getContext()).getType().getPrimitiveType(), false);
+    protected ParameterSpec createValueParameterSpec(String valueName, NodeData nodeData, int evaluatedCount) {
+        List<ExecutableTypeData> execTypes = nodeData.findGenericExecutableTypes(getContext(), evaluatedCount);
+        List<TypeMirror> types = new ArrayList<>();
+        for (ExecutableTypeData type : execTypes) {
+            types.add(type.getType().getPrimitiveType());
+        }
+        ParameterSpec spec = new ParameterSpec(valueName, types);
+        spec.setSignature(true);
+        return spec;
     }
 
     @Override
     protected ParameterSpec createReturnParameterSpec() {
-        return super.createValueParameterSpec("returnValue", getNode());
+        return super.createValueParameterSpec("returnValue", getNode(), 0);
     }
 
     @Override
     public SpecializationData create(TemplateMethod method) {
-        return new SpecializationData(method, true, false);
+        SpecializationData data = new SpecializationData(method, true, false, false);
+        return data;
     }
 
     @Override
-    public Class< ? extends Annotation> getAnnotationType() {
+    public Class<? extends Annotation> getAnnotationType() {
         return Generic.class;
     }
 

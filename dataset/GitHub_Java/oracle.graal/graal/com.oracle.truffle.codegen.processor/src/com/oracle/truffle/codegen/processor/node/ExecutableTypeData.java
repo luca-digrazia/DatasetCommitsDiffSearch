@@ -28,14 +28,13 @@ import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
 import com.oracle.truffle.codegen.processor.typesystem.*;
 
-
 public class ExecutableTypeData extends TemplateMethod {
 
     private final TypeSystemData typeSystem;
     private final TypeData type;
 
-    public ExecutableTypeData(TemplateMethod method, TypeSystemData typeSystem, TypeData type) {
-        super(method);
+    public ExecutableTypeData(TemplateMethod method, ExecutableElement executable, TypeSystemData typeSystem, TypeData type) {
+        super(method, executable);
         this.typeSystem = typeSystem;
         this.type = type;
     }
@@ -58,6 +57,20 @@ public class ExecutableTypeData extends TemplateMethod {
 
     public boolean isFinal() {
         return getMethod().getModifiers().contains(Modifier.FINAL);
+    }
+
+    public boolean isAbstract() {
+        return getMethod().getModifiers().contains(Modifier.ABSTRACT);
+    }
+
+    public int getEvaluatedCount() {
+        int count = 0;
+        for (ActualParameter parameter : getParameters()) {
+            if (parameter.getSpecification().isSignature()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     @Override

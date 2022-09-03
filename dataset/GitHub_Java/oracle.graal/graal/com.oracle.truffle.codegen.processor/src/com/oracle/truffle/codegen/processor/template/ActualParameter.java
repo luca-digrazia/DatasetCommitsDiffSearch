@@ -29,22 +29,79 @@ import com.oracle.truffle.codegen.processor.typesystem.*;
 public class ActualParameter {
 
     private final ParameterSpec specification;
-    private final TypeMirror actualType;
+    private TypeData typeSystemType;
+    private TemplateMethod method;
+    private final String localName;
+    private final int index;
+    private final boolean implicit;
+    private final TypeMirror type;
 
-    public ActualParameter(ParameterSpec specification, TypeMirror actualType) {
+    public ActualParameter(ParameterSpec specification, TypeMirror actualType, int index, boolean implicit) {
         this.specification = specification;
-        this.actualType = actualType;
+        this.type = actualType;
+        this.typeSystemType = null;
+
+        this.index = index;
+        this.implicit = implicit;
+        String valueName = specification.getName() + "Value";
+
+        if (specification.isIndexed()) {
+            valueName += index;
+        }
+        this.localName = valueName;
+    }
+
+    public ActualParameter(ParameterSpec specification, TypeData actualType, int index, boolean implicit) {
+        this(specification, actualType.getPrimitiveType(), index, implicit);
+        this.typeSystemType = actualType;
+    }
+
+    public ActualParameter(ActualParameter parameter, TypeData otherType) {
+        this(parameter.specification, otherType, parameter.index, parameter.implicit);
+    }
+
+    public ActualParameter(ActualParameter parameter) {
+        this.specification = parameter.specification;
+        this.type = parameter.type;
+        this.typeSystemType = parameter.typeSystemType;
+        this.index = parameter.index;
+        this.implicit = parameter.implicit;
+        this.localName = parameter.localName;
+    }
+
+    public boolean isImplicit() {
+        return implicit;
+    }
+
+    public int getIndex() {
+        return index;
+    }
+
+    public String getLocalName() {
+        return localName;
+    }
+
+    void setMethod(TemplateMethod method) {
+        this.method = method;
     }
 
     public ParameterSpec getSpecification() {
         return specification;
     }
 
-    public TypeMirror getActualType() {
-        return actualType;
+    public TemplateMethod getMethod() {
+        return method;
     }
 
-    public TypeData getActualTypeData(TypeSystemData typeSystem) {
-        return typeSystem.findTypeData(actualType);
+    public TypeMirror getType() {
+        return type;
+    }
+
+    public TypeData getTypeSystemType() {
+        return typeSystemType;
+    }
+
+    public ActualParameter getPreviousParameter() {
+        return method.getPreviousParam(this);
     }
 }
