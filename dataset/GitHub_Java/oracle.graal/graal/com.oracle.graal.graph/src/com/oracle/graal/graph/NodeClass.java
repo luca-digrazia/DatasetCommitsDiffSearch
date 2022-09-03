@@ -111,8 +111,8 @@ public final class NodeClass extends FieldIntrospection {
 
     private final Edges inputs;
     private final Edges successors;
-    private final Fields properties;
 
+    private final Class<?>[] dataTypes;
     private final boolean canGVN;
     private final int startGVNNumber;
     private final String shortName;
@@ -174,7 +174,11 @@ public final class NodeClass extends FieldIntrospection {
             inputs = new InputEdges(clazz, fs.inputOffsets.size(), sortedOffsets(fs.inputOffsets, fs.inputListOffsets), fs.fieldNames, fs.fieldTypes, fs.types, fs.optionalInputs);
         }
         try (TimerCloseable t1 = Init_Data.start()) {
-            properties = new Fields(clazz, sortedLongCopy(fs.dataOffsets), fs.fieldNames, fs.fieldTypes);
+            dataOffsets = sortedLongCopy(fs.dataOffsets);
+            dataTypes = new Class[dataOffsets.length];
+            for (int i = 0; i < dataOffsets.length; i++) {
+                dataTypes[i] = fs.fieldTypes.get(dataOffsets[i]);
+            }
         }
 
         isLeafNode = inputs.getCount() + successors.getCount() == 0;
@@ -284,7 +288,7 @@ public final class NodeClass extends FieldIntrospection {
      *
      * <pre>
      *     if (node.getNodeClass().is(BeginNode.class)) { ... }
-     *
+     * 
      *     // Due to generated Node classes, the test below
      *     // is *not* the same as the test above:
      *     if (node.getClass() == BeginNode.class) { ... }
@@ -398,11 +402,13 @@ public final class NodeClass extends FieldIntrospection {
     public String toString() {
         StringBuilder str = new StringBuilder();
         str.append("NodeClass ").append(getClazz().getSimpleName()).append(" [");
-        inputs.appendFields(str);
+        inputs.appendOffsets(str);
         str.append("] [");
-        successors.appendFields(str);
+        successors.appendOffsets(str);
         str.append("] [");
-        properties.appendFields(str);
+        for (int i = 0; i < dataOffsets.length; i++) {
+            str.append(i == 0 ? "" : ", ").append(dataOffsets[i]);
+        }
         str.append("]");
         return str.toString();
     }
@@ -437,41 +443,41 @@ public final class NodeClass extends FieldIntrospection {
         int number = 0;
         if (canGVN) {
             number = startGVNNumber;
-            for (int i = 0; i < properties.getCount(); ++i) {
-                Class<?> type = properties.getType(i);
+            for (int i = 0; i < dataOffsets.length; ++i) {
+                Class<?> type = dataTypes[i];
                 if (type.isPrimitive()) {
                     if (type == Integer.TYPE) {
-                        int intValue = properties.getInt(n, i);
+                        int intValue = unsafe.getInt(n, dataOffsets[i]);
                         number += intValue;
                     } else if (type == Long.TYPE) {
-                        long longValue = properties.getLong(n, i);
+                        long longValue = unsafe.getLong(n, dataOffsets[i]);
                         number += longValue ^ (longValue >>> 32);
                     } else if (type == Boolean.TYPE) {
-                        boolean booleanValue = properties.getBoolean(n, i);
+                        boolean booleanValue = unsafe.getBoolean(n, dataOffsets[i]);
                         if (booleanValue) {
                             number += 7;
                         }
                     } else if (type == Float.TYPE) {
-                        float floatValue = properties.getFloat(n, i);
+                        float floatValue = unsafe.getFloat(n, dataOffsets[i]);
                         number += Float.floatToRawIntBits(floatValue);
                     } else if (type == Double.TYPE) {
-                        double doubleValue = properties.getDouble(n, i);
+                        double doubleValue = unsafe.getDouble(n, dataOffsets[i]);
                         long longValue = Double.doubleToRawLongBits(doubleValue);
                         number += longValue ^ (longValue >>> 32);
                     } else if (type == Short.TYPE) {
-                        short shortValue = properties.getShort(n, i);
+                        short shortValue = unsafe.getShort(n, dataOffsets[i]);
                         number += shortValue;
                     } else if (type == Character.TYPE) {
-                        char charValue = properties.getChar(n, i);
+                        char charValue = unsafe.getChar(n, dataOffsets[i]);
                         number += charValue;
                     } else if (type == Byte.TYPE) {
-                        byte byteValue = properties.getByte(n, i);
+                        byte byteValue = unsafe.getByte(n, dataOffsets[i]);
                         number += byteValue;
                     } else {
                         assert false : "unhandled property type: " + type;
                     }
                 } else {
-                    Object o = properties.getObject(n, i, Object.class);
+                    Object o = unsafe.getObject(n, dataOffsets[i]);
                     number += deepHashCode0(o);
                 }
                 number *= 13;
@@ -511,54 +517,54 @@ public final class NodeClass extends FieldIntrospection {
         if (a.getClass() != b.getClass()) {
             return a == b;
         }
-        for (int i = 0; i < properties.getCount(); ++i) {
-            Class<?> type = properties.getType(i);
+        for (int i = 0; i < dataOffsets.length; ++i) {
+            Class<?> type = dataTypes[i];
             if (type.isPrimitive()) {
                 if (type == Integer.TYPE) {
-                    int aInt = properties.getInt(a, i);
-                    int bInt = properties.getInt(b, i);
+                    int aInt = unsafe.getInt(a, dataOffsets[i]);
+                    int bInt = unsafe.getInt(b, dataOffsets[i]);
                     if (aInt != bInt) {
                         return false;
                     }
                 } else if (type == Boolean.TYPE) {
-                    boolean aBoolean = properties.getBoolean(a, i);
-                    boolean bBoolean = properties.getBoolean(b, i);
+                    boolean aBoolean = unsafe.getBoolean(a, dataOffsets[i]);
+                    boolean bBoolean = unsafe.getBoolean(b, dataOffsets[i]);
                     if (aBoolean != bBoolean) {
                         return false;
                     }
                 } else if (type == Long.TYPE) {
-                    long aLong = properties.getLong(a, i);
-                    long bLong = properties.getLong(b, i);
+                    long aLong = unsafe.getLong(a, dataOffsets[i]);
+                    long bLong = unsafe.getLong(b, dataOffsets[i]);
                     if (aLong != bLong) {
                         return false;
                     }
                 } else if (type == Float.TYPE) {
-                    float aFloat = properties.getFloat(a, i);
-                    float bFloat = properties.getFloat(b, i);
+                    float aFloat = unsafe.getFloat(a, dataOffsets[i]);
+                    float bFloat = unsafe.getFloat(b, dataOffsets[i]);
                     if (aFloat != bFloat) {
                         return false;
                     }
                 } else if (type == Double.TYPE) {
-                    double aDouble = properties.getDouble(a, i);
-                    double bDouble = properties.getDouble(b, i);
+                    double aDouble = unsafe.getDouble(a, dataOffsets[i]);
+                    double bDouble = unsafe.getDouble(b, dataOffsets[i]);
                     if (aDouble != bDouble) {
                         return false;
                     }
                 } else if (type == Short.TYPE) {
-                    short aShort = properties.getShort(a, i);
-                    short bShort = properties.getShort(b, i);
+                    short aShort = unsafe.getShort(a, dataOffsets[i]);
+                    short bShort = unsafe.getShort(b, dataOffsets[i]);
                     if (aShort != bShort) {
                         return false;
                     }
                 } else if (type == Character.TYPE) {
-                    char aChar = properties.getChar(a, i);
-                    char bChar = properties.getChar(b, i);
+                    char aChar = unsafe.getChar(a, dataOffsets[i]);
+                    char bChar = unsafe.getChar(b, dataOffsets[i]);
                     if (aChar != bChar) {
                         return false;
                     }
                 } else if (type == Byte.TYPE) {
-                    byte aByte = properties.getByte(a, i);
-                    byte bByte = properties.getByte(b, i);
+                    byte aByte = unsafe.getByte(a, dataOffsets[i]);
+                    byte bByte = unsafe.getByte(b, dataOffsets[i]);
                     if (aByte != bByte) {
                         return false;
                     }
@@ -566,8 +572,8 @@ public final class NodeClass extends FieldIntrospection {
                     assert false : "unhandled type: " + type;
                 }
             } else {
-                Object objectA = properties.getObject(a, i, Object.class);
-                Object objectB = properties.getObject(b, i, Object.class);
+                Object objectA = unsafe.getObject(a, dataOffsets[i]);
+                Object objectB = unsafe.getObject(b, dataOffsets[i]);
                 if (objectA != objectB) {
                     if (objectA != null && objectB != null) {
                         if (!deepEquals0(objectA, objectB)) {
@@ -593,14 +599,74 @@ public final class NodeClass extends FieldIntrospection {
         if (pos.getIndex() >= fromEdges.getCount()) {
             return false;
         }
-        return toEdges.isSame(fromEdges, pos.getIndex());
+        return toEdges.isSameEdge(fromEdges, pos.getIndex());
     }
 
-    /**
-     * Gets the non-edge properties defined by this node class.
-     */
-    public Fields getProperties() {
-        return properties;
+    public String getPropertyName(int pos) {
+        return fieldNames.get(dataOffsets[pos]);
+    }
+
+    public Class<?> getPropertyType(int pos) {
+        return fieldTypes.get(dataOffsets[pos]);
+    }
+
+    public Object getProperty(Node node, int pos) {
+        long dataOffset = dataOffsets[pos];
+        Class<?> type = fieldTypes.get(dataOffset);
+        Object value = null;
+        if (type.isPrimitive()) {
+            if (type == Integer.TYPE) {
+                value = unsafe.getInt(node, dataOffset);
+            } else if (type == Long.TYPE) {
+                value = unsafe.getLong(node, dataOffset);
+            } else if (type == Boolean.TYPE) {
+                value = unsafe.getBoolean(node, dataOffset);
+            } else if (type == Float.TYPE) {
+                value = unsafe.getFloat(node, dataOffset);
+            } else if (type == Double.TYPE) {
+                value = unsafe.getDouble(node, dataOffset);
+            } else if (type == Short.TYPE) {
+                value = unsafe.getShort(node, dataOffset);
+            } else if (type == Character.TYPE) {
+                value = unsafe.getChar(node, dataOffset);
+            } else if (type == Byte.TYPE) {
+                value = unsafe.getByte(node, dataOffset);
+            } else {
+                assert false : "unhandled property type: " + type;
+            }
+        } else {
+            value = unsafe.getObject(node, dataOffset);
+        }
+        return value;
+    }
+
+    public void setProperty(Node node, int pos, Object value) {
+        long dataOffset = dataOffsets[pos];
+        Class<?> type = fieldTypes.get(dataOffset);
+        if (type.isPrimitive()) {
+            if (type == Integer.TYPE) {
+                unsafe.putInt(node, dataOffset, (Integer) value);
+            } else if (type == Long.TYPE) {
+                unsafe.putLong(node, dataOffset, (Long) value);
+            } else if (type == Boolean.TYPE) {
+                unsafe.putBoolean(node, dataOffset, (Boolean) value);
+            } else if (type == Float.TYPE) {
+                unsafe.putFloat(node, dataOffset, (Float) value);
+            } else if (type == Double.TYPE) {
+                unsafe.putDouble(node, dataOffset, (Double) value);
+            } else if (type == Short.TYPE) {
+                unsafe.putShort(node, dataOffset, (Short) value);
+            } else if (type == Character.TYPE) {
+                unsafe.putChar(node, dataOffset, (Character) value);
+            } else if (type == Byte.TYPE) {
+                unsafe.putByte(node, dataOffset, (Byte) value);
+            } else {
+                assert false : "unhandled property type: " + type;
+            }
+        } else {
+            assert value == null || !value.getClass().isPrimitive();
+            unsafe.putObject(node, dataOffset, value);
+        }
     }
 
     static void updateEdgesInPlace(Node node, InplaceUpdateClosure duplicationReplacement, Edges edges) {
@@ -651,6 +717,36 @@ public final class NodeClass extends FieldIntrospection {
      */
     public Edges getEdges(Edges.Type type) {
         return type == Edges.Type.Inputs ? inputs : successors;
+    }
+
+    public Collection<Integer> getPropertyPositions() {
+        return new AbstractCollection<Integer>() {
+            @Override
+            public Iterator<Integer> iterator() {
+                return new Iterator<Integer>() {
+                    int i = 0;
+
+                    @Override
+                    public void remove() {
+                        throw new UnsupportedOperationException();
+                    }
+
+                    public Integer next() {
+                        Integer pos = i++;
+                        return pos;
+                    }
+
+                    public boolean hasNext() {
+                        return i < dataOffsets.length;
+                    }
+                };
+            }
+
+            @Override
+            public int size() {
+                return dataOffsets.length;
+            }
+        };
     }
 
     /**
