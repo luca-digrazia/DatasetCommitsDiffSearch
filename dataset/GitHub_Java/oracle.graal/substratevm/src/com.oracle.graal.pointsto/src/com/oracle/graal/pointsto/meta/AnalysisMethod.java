@@ -200,12 +200,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
         if (implementationInvokedBy != null && invoke != null) {
             implementationInvokedBy.put(invoke, Boolean.TRUE);
         }
-
-        /*
-         * The class constant of the declaring class is used for exception metadata, so marking a
-         * method as invoked also makes the declaring class reachable.
-         */
-        getDeclaringClass().registerAsInTypeCheck();
     }
 
     public List<AnalysisMethod> getJavaInvocations() {
@@ -230,12 +224,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
 
     public void registerAsRootMethod() {
         isRootMethod = true;
-
-        /*
-         * The class constant of the declaring class is used for exception metadata, so marking a
-         * method as invoked also makes the declaring class reachable.
-         */
-        getDeclaringClass().registerAsInTypeCheck();
     }
 
     public boolean isRootMethod() {
