@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import org.litepal.LitePalApplication;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.text.TextUtils;
 
 /**
  * LitePal used shared preferences a lot for storing versions and a lot of other
@@ -38,27 +39,61 @@ public class SharedUtil {
 	/**
 	 * Each time database upgrade, the version of database stored in shared
 	 * preference will update.
-	 * 
-	 * @param context
+	 * @param extraKeyName
+	 * 			Pass the name of the using database usually. Pass null if it's default database.
 	 * @param newVersion
+     *          new version of database
 	 */
-	public static void updateVersion(int newVersion) {
+	public static void updateVersion(String extraKeyName, int newVersion) {
 		SharedPreferences.Editor sEditor = LitePalApplication.getContext()
 				.getSharedPreferences(LITEPAL_PREPS, Context.MODE_PRIVATE).edit();
-		sEditor.putInt(VERSION, newVersion);
-		sEditor.commit();
+		if (TextUtils.isEmpty(extraKeyName)) {
+			sEditor.putInt(VERSION, newVersion);
+		} else {
+            if (extraKeyName.endsWith(Const.Config.DB_NAME_SUFFIX)) {
+                extraKeyName = extraKeyName.replace(Const.Config.DB_NAME_SUFFIX, "");
+            }
+			sEditor.putInt(VERSION + "_" + extraKeyName, newVersion);
+		}
+		sEditor.apply();
 	}
 
 	/**
 	 * Get the last database version.
-	 * 
+	 * @param extraKeyName
+	 * 			Pass the name of the using database usually. Pass null if it's default database.
 	 * @return the last database version
 	 */
-	public static int getLastVersion() {
+	public static int getLastVersion(String extraKeyName) {
 		SharedPreferences sPref = LitePalApplication.getContext().getSharedPreferences(
 				LITEPAL_PREPS, Context.MODE_PRIVATE);
-		int version = sPref.getInt(VERSION, 0);
-		return version;
+		if (TextUtils.isEmpty(extraKeyName)) {
+			return sPref.getInt(VERSION, 0);
+		} else {
+            if (extraKeyName.endsWith(Const.Config.DB_NAME_SUFFIX)) {
+                extraKeyName = extraKeyName.replace(Const.Config.DB_NAME_SUFFIX, "");
+            }
+			return sPref.getInt(VERSION + "_" + extraKeyName, 0);
+		}
 	}
+
+    /**
+     * Remove the version with specified extra key name.
+     * @param extraKeyName
+     * 			Pass the name of the using database usually. Pass null if it's default database.
+     */
+    public static void removeVersion(String extraKeyName) {
+        SharedPreferences.Editor sEditor = LitePalApplication.getContext()
+                .getSharedPreferences(LITEPAL_PREPS, Context.MODE_PRIVATE).edit();
+        if (TextUtils.isEmpty(extraKeyName)) {
+            sEditor.remove(VERSION);
+        } else {
+            if (extraKeyName.endsWith(Const.Config.DB_NAME_SUFFIX)) {
+                extraKeyName = extraKeyName.replace(Const.Config.DB_NAME_SUFFIX, "");
+            }
+            sEditor.remove(VERSION + "_" + extraKeyName);
+        }
+        sEditor.apply();
+    }
 
 }
