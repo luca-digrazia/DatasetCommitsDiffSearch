@@ -22,100 +22,174 @@
  */
 package com.oracle.graal.graphbuilderconf;
 
+import java.lang.invoke.*;
 import java.lang.reflect.*;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
+
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Plugin for handling a specific method invocation.
  */
 public interface InvocationPlugin extends GraphBuilderPlugin {
+
     /**
-     * @see #execute
+     * The receiver in a non-static method. The class literal for this interface must be used with
+     * {@link InvocationPlugins#put(InvocationPlugin, boolean, boolean, Class, String, Class...)} to
+     * denote the receiver argument for such a non-static method.
      */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod) {
-        throw invalidHandler(b, targetMethod);
+    public interface Receiver {
+        /**
+         * Gets the receiver value, null checking it first if necessary.
+         *
+         * @return the receiver value with a {@linkplain StampTool#isPointerNonNull(ValueNode)
+         *         non-null} stamp
+         */
+        ValueNode get();
+
+        /**
+         * Determines if the receiver is constant.
+         */
+        default boolean isConstant() {
+            return false;
+        }
     }
 
     /**
-     * @see #execute
+     * Determines if this plugin is for a method with a polymorphic signature (e.g.
+     * {@link MethodHandle#invokeExact(Object...)}).
      */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode arg) {
-        throw invalidHandler(b, targetMethod, arg);
+    default boolean isSignaturePolymorphic() {
+        return false;
     }
 
     /**
-     * @see #execute
+     * Determines if this plugin can only be used when inlining the method is it associated with.
+     * That is, this plugin cannot be used when the associated method is the compilation root.
      */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode arg1, ValueNode arg2) {
-        throw invalidHandler(b, targetMethod, arg1, arg2);
+    default boolean inlineOnly() {
+        return isSignaturePolymorphic();
     }
 
     /**
-     * @see #execute
-     */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
-        throw invalidHandler(b, targetMethod, arg1, arg2, arg3);
-    }
-
-    /**
-     * @see #execute
-     */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4) {
-        throw invalidHandler(b, targetMethod, arg1, arg2, arg3, arg4);
-    }
-
-    /**
-     * @see #execute
-     */
-    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4, ValueNode arg5) {
-        throw invalidHandler(b, targetMethod, arg1, arg2, arg3, arg4, arg5);
-    }
-
-    default ResolvedJavaMethod getSubstitute() {
-        return null;
-    }
-
-    boolean ALLOW_INVOCATION_PLUGIN_TO_DO_INLINING = false;
-
-    /**
-     * Executes a given plugin against a set of invocation arguments by dispatching to the
-     * {@code apply(...)} method that matches the number of arguments.
+     * Handles invocation of a signature polymorphic method.
      *
-     * @param targetMethod the method for which plugin is being applied
-     * @return {@code true} if the plugin handled the invocation of {@code targetMethod}
+     * @param receiver access to the receiver, {@code null} if {@code targetMethod} is static
+     * @param argsIncludingReceiver all arguments to the invocation include the raw receiver in
+     *            position 0 if {@code targetMethod} is not static
+     * @see #execute
+     */
+    default boolean applyPolymorphic(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode... argsIncludingReceiver) {
+        return defaultHandler(b, targetMethod, receiver, argsIncludingReceiver);
+    }
+
+    /**
+     * @see #execute
+     */
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver) {
+        return defaultHandler(b, targetMethod, receiver);
+    }
+
+    /**
+     * @see #execute
+     */
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg) {
+        return defaultHandler(b, targetMethod, receiver, arg);
+    }
+
+    /**
+     * @see #execute
+     */
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg1, ValueNode arg2) {
+        return defaultHandler(b, targetMethod, receiver, arg1, arg2);
+    }
+
+    /**
+     * @see #execute
+     */
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
+        return defaultHandler(b, targetMethod, receiver, arg1, arg2, arg3);
+    }
+
+    /**
+     * @see #execute
+     */
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4) {
+        return defaultHandler(b, targetMethod, receiver, arg1, arg2, arg3, arg4);
+    }
+
+    /**
+     * @see #execute
+     */
+    default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4, ValueNode arg5) {
+        return defaultHandler(b, targetMethod, receiver, arg1, arg2, arg3, arg4, arg5);
+    }
+
+    /**
+     * Executes this plugin against a set of invocation arguments.
+     *
+     * The default implementation in {@link InvocationPlugin} dispatches to the {@code apply(...)}
+     * method that matches the number of arguments or to {@link #applyPolymorphic} if {@code plugin}
+     * is {@linkplain #isSignaturePolymorphic() signature polymorphic}.
+     *
+     * @param targetMethod the method for which this plugin is being applied
+     * @param receiver access to the receiver, {@code null} if {@code targetMethod} is static
+     * @param argsIncludingReceiver all arguments to the invocation include the receiver in position
+     *            0 if {@code targetMethod} is not static
+     * @return {@code true} if this plugin handled the invocation of {@code targetMethod}
      *         {@code false} if the graph builder should process the invoke further (e.g., by
      *         inlining it or creating an {@link Invoke} node). A plugin that does not handle an
      *         invocation must not modify the graph being constructed.
      */
-    static boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin plugin, ValueNode[] args) {
-// if (ALLOW_INVOCATION_PLUGIN_TO_DO_INLINING) {
-// ResolvedJavaMethod subst = plugin.getSubstitute();
-// if (subst != null) {
-// return ((BytecodeParser) b).inline(null, targetMethod, new InlineInfo(subst, false), args);
-// }
-// }
-        if (args.length == 0) {
-            return plugin.apply(b, targetMethod);
-        } else if (args.length == 1) {
-            return plugin.apply(b, targetMethod, args[0]);
-        } else if (args.length == 2) {
-            return plugin.apply(b, targetMethod, args[0], args[1]);
-        } else if (args.length == 3) {
-            return plugin.apply(b, targetMethod, args[0], args[1], args[2]);
-        } else if (args.length == 4) {
-            return plugin.apply(b, targetMethod, args[0], args[1], args[2], args[3]);
-        } else if (args.length == 5) {
-            return plugin.apply(b, targetMethod, args[0], args[1], args[2], args[3], args[4]);
+    default boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode[] argsIncludingReceiver) {
+        if (isSignaturePolymorphic()) {
+            return applyPolymorphic(b, targetMethod, receiver, argsIncludingReceiver);
+        } else if (receiver != null) {
+            assert !targetMethod.isStatic();
+            assert argsIncludingReceiver.length > 0;
+            if (argsIncludingReceiver.length == 1) {
+                return apply(b, targetMethod, receiver);
+            } else if (argsIncludingReceiver.length == 2) {
+                return apply(b, targetMethod, receiver, argsIncludingReceiver[1]);
+            } else if (argsIncludingReceiver.length == 3) {
+                return apply(b, targetMethod, receiver, argsIncludingReceiver[1], argsIncludingReceiver[2]);
+            } else if (argsIncludingReceiver.length == 4) {
+                return apply(b, targetMethod, receiver, argsIncludingReceiver[1], argsIncludingReceiver[2], argsIncludingReceiver[3]);
+            } else if (argsIncludingReceiver.length == 5) {
+                return apply(b, targetMethod, receiver, argsIncludingReceiver[1], argsIncludingReceiver[2], argsIncludingReceiver[3], argsIncludingReceiver[4]);
+            } else {
+                return defaultHandler(b, targetMethod, receiver, argsIncludingReceiver);
+            }
         } else {
-            throw plugin.invalidHandler(b, targetMethod, args);
+            assert targetMethod.isStatic();
+            if (argsIncludingReceiver.length == 0) {
+                return apply(b, targetMethod, null);
+            } else if (argsIncludingReceiver.length == 1) {
+                return apply(b, targetMethod, null, argsIncludingReceiver[0]);
+            } else if (argsIncludingReceiver.length == 2) {
+                return apply(b, targetMethod, null, argsIncludingReceiver[0], argsIncludingReceiver[1]);
+            } else if (argsIncludingReceiver.length == 3) {
+                return apply(b, targetMethod, null, argsIncludingReceiver[0], argsIncludingReceiver[1], argsIncludingReceiver[2]);
+            } else if (argsIncludingReceiver.length == 4) {
+                return apply(b, targetMethod, null, argsIncludingReceiver[0], argsIncludingReceiver[1], argsIncludingReceiver[2], argsIncludingReceiver[3]);
+            } else if (argsIncludingReceiver.length == 5) {
+                return apply(b, targetMethod, null, argsIncludingReceiver[0], argsIncludingReceiver[1], argsIncludingReceiver[2], argsIncludingReceiver[3], argsIncludingReceiver[4]);
+            } else {
+                return defaultHandler(b, targetMethod, receiver, argsIncludingReceiver);
+            }
+
         }
     }
 
-    default Error invalidHandler(@SuppressWarnings("unused") GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode... args) {
-        return new GraalInternalError("Invocation plugin for %s does not handle invocations with %d arguments", targetMethod.format("%H.%n(%p)"), args.length);
+    /**
+     * Handles an invocation when a specific {@code apply} method is not available.
+     */
+    default boolean defaultHandler(@SuppressWarnings("unused") GraphBuilderContext b, ResolvedJavaMethod targetMethod, @SuppressWarnings("unused") InvocationPlugin.Receiver receiver,
+                    ValueNode... args) {
+        throw new JVMCIError("Invocation plugin for %s does not handle invocations with %d arguments", targetMethod.format("%H.%n(%p)"), args.length);
     }
 
     default StackTraceElement getApplySourceLocation(MetaAccessProvider metaAccess) {
@@ -123,8 +197,10 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
         for (Method m : c.getDeclaredMethods()) {
             if (m.getName().equals("apply")) {
                 return metaAccess.lookupJavaMethod(m).asStackTraceElement(0);
+            } else if (m.getName().equals("defaultHandler")) {
+                return metaAccess.lookupJavaMethod(m).asStackTraceElement(0);
             }
         }
-        throw new GraalInternalError("could not find method named \"apply\" in " + c.getName());
+        throw new JVMCIError("could not find method named \"apply\" or \"defaultHandler\" in " + c.getName());
     }
 }
