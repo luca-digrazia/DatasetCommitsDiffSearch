@@ -45,7 +45,6 @@ import org.junit.Test;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.KeyInfo;
@@ -54,8 +53,6 @@ import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.interop.java.MethodMessage;
 import com.oracle.truffle.api.nodes.Node;
@@ -96,13 +93,6 @@ public class JavaInteropTest {
     }
 
     @Test
-    public void conversionToClassYieldsTheClass() {
-        TruffleObject expected = JavaInterop.asTruffleObject(Data.class);
-        TruffleObject computed = JavaInterop.toJavaClass(obj);
-        assertEquals("Both class objects are the same", expected, computed);
-    }
-
-    @Test
     public void doubleWrap() {
         data.x = 32;
         data.y = 10.1;
@@ -137,14 +127,6 @@ public class JavaInteropTest {
         assertTrue("Contains arr " + list, list.contains("arr"));
         assertTrue("Contains value " + list, list.contains("value"));
         assertTrue("Contains map " + list, list.contains("map"));
-
-        assertFalse("No object fields " + list, list.contains("notifyAll"));
-        assertFalse("No object fields " + list, list.contains("notify"));
-        assertFalse("No object fields " + list, list.contains("wait"));
-        assertFalse("No object fields " + list, list.contains("hashCode"));
-        assertFalse("No object fields " + list, list.contains("equals"));
-        assertFalse("No object fields " + list, list.contains("toString"));
-        assertFalse("No object fields " + list, list.contains("getClass"));
     }
 
     @Test
@@ -165,54 +147,12 @@ public class JavaInteropTest {
 
     @Test
     public void readUnknownField() throws Exception {
-        assertNoRead("unknown");
-    }
-
-    private void assertNoRead(final String name) throws UnsupportedMessageException {
         try {
-            ForeignAccess.sendRead(Message.READ.createNode(), obj, name);
-            fail("Exception thrown when reading " + name + " field");
+            ForeignAccess.sendRead(Message.READ.createNode(), obj, "unknown");
+            fail("Exception thrown when reading unknown field");
         } catch (UnknownIdentifierException ex) {
-            assertEquals(name, ex.getUnknownIdentifier());
+            assertEquals("unknown", ex.getUnknownIdentifier());
         }
-    }
-
-    private void assertNoInvoke(final String name) throws UnsupportedMessageException {
-        for (int arity = 0;; arity++) {
-            try {
-                ForeignAccess.sendInvoke(Message.createInvoke(arity).createNode(), obj, name);
-                fail("Exception thrown when reading " + name + " field");
-            } catch (UnknownIdentifierException ex) {
-                assertEquals(name, ex.getUnknownIdentifier());
-                break;
-            } catch (UnsupportedTypeException ex) {
-                fail("Types are OK");
-            } catch (ArityException ex) {
-                assertEquals(arity, ex.getExpectedArity());
-            }
-        }
-    }
-
-    @Test
-    public void readJavaLangObjectFields() throws Exception {
-        assertNoRead("notify");
-        assertNoRead("notifyAll");
-        assertNoRead("wait");
-        assertNoRead("hashCode");
-        assertNoRead("equals");
-        assertNoRead("toString");
-        assertNoRead("getClass");
-    }
-
-    @Test
-    public void invokeJavaLangObjectFields() throws Exception {
-        assertNoInvoke("notify");
-        assertNoInvoke("notifyAll");
-        assertNoInvoke("wait");
-        assertNoInvoke("hashCode");
-        assertNoInvoke("equals");
-        assertNoInvoke("toString");
-        assertNoInvoke("getClass");
     }
 
     static CallTarget sendKeys() {
@@ -645,26 +585,6 @@ public class JavaInteropTest {
         assertFalse(KeyInfo.isInvocable(keyInfo));
         keyInfo = JavaInterop.getKeyInfo(ipobj, "p7");
         assertEquals(0, keyInfo);
-
-        TruffleObject aobj = new ArrayTruffleObject(100);
-        for (int i = 0; i < 100; i += 10) {
-            keyInfo = JavaInterop.getKeyInfo(aobj, i);
-            assertTrue(KeyInfo.isReadable(keyInfo));
-            assertTrue(KeyInfo.isWritable(keyInfo));
-            assertFalse(KeyInfo.isInvocable(keyInfo));
-            assertFalse(KeyInfo.isInternal(keyInfo));
-            keyInfo = JavaInterop.getKeyInfo(aobj, (long) i);
-            assertTrue(KeyInfo.isReadable(keyInfo));
-            keyInfo = JavaInterop.getKeyInfo(aobj, (double) i);
-            assertTrue(KeyInfo.isReadable(keyInfo));
-        }
-        assertEquals(0, JavaInterop.getKeyInfo(aobj, 100));
-        assertEquals(0, JavaInterop.getKeyInfo(aobj, 1.12));
-        assertEquals(0, JavaInterop.getKeyInfo(aobj, -1));
-        assertEquals(0, JavaInterop.getKeyInfo(aobj, 1000));
-        assertEquals(0, JavaInterop.getKeyInfo(aobj, Double.NEGATIVE_INFINITY));
-        assertEquals(0, JavaInterop.getKeyInfo(aobj, Double.NaN));
-        assertEquals(0, JavaInterop.getKeyInfo(aobj, Double.POSITIVE_INFINITY));
     }
 
     @Test
@@ -829,56 +749,6 @@ public class JavaInteropTest {
                 public Object access(NoKeyInfoObject receiver) {
                     assert receiver != null;
                     return JavaInterop.asTruffleObject(new String[]{"p1", "p2", "p3", "p4", "p5", "p6"});
-                }
-            }
-        }
-    }
-
-    static final class ArrayTruffleObject implements TruffleObject {
-
-        private final int size;
-
-        ArrayTruffleObject(int size) {
-            this.size = size;
-        }
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return ArrayTruffleObjectMessageResolutionForeign.ACCESS;
-        }
-
-        public static boolean isInstance(TruffleObject obj) {
-            return obj instanceof ArrayTruffleObject;
-        }
-
-        @MessageResolution(receiverType = ArrayTruffleObject.class)
-        static final class ArrayTruffleObjectMessageResolution {
-
-            @Resolve(message = "HAS_SIZE")
-            public abstract static class ArrayHasSizeNode extends Node {
-
-                public Object access(ArrayTruffleObject receiver) {
-                    assert receiver != null;
-                    return true;
-                }
-            }
-
-            @Resolve(message = "GET_SIZE")
-            public abstract static class ArrayGetSizeNode extends Node {
-
-                public Object access(ArrayTruffleObject receiver) {
-                    return receiver.size;
-                }
-            }
-
-            @Resolve(message = "READ")
-            public abstract static class ArrayReadSizeNode extends Node {
-
-                public Object access(ArrayTruffleObject receiver, int index) {
-                    if (index < 0 || index >= receiver.size) {
-                        throw new ArrayIndexOutOfBoundsException(index);
-                    }
-                    return receiver.size - index;
                 }
             }
         }

@@ -35,7 +35,6 @@ import static org.junit.Assert.fail;
 
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -44,7 +43,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.function.DoubleBinaryOperator;
 
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -55,7 +53,6 @@ import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
 import com.oracle.truffle.api.debug.SuspendedCallback;
 import com.oracle.truffle.api.debug.SuspendedEvent;
-import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.ForeignAccess.Factory26;
@@ -77,6 +74,7 @@ import com.oracle.truffle.tck.impl.LongBinaryOperation;
 import com.oracle.truffle.tck.impl.ObjectBinaryOperation;
 import com.oracle.truffle.tck.impl.TckInstrument;
 import com.oracle.truffle.tck.impl.TestObject;
+import java.lang.reflect.Field;
 
 /**
  * Test compatibility kit (the <em>TCK</em>) is a collection of tests to certify your
@@ -405,7 +403,7 @@ public abstract class TruffleTCK {
      * @since 0.16
      */
     protected String objectWithValueAndAddProperty() {
-        throw new UnsupportedOperationException("implement objectWithValueAndAddProperty() method");
+        throw new UnsupportedOperationException("implement objectWithValueProperty() method");
     }
 
     /**
@@ -1440,7 +1438,6 @@ public abstract class TruffleTCK {
         PolyglotEngine.Value function = vm().findGlobalSymbol(globalObjectFunction);
         Object global = function.execute().get();
         assertEquals("Global from the language same with Java obtained one", language.getGlobalObject().get(), global);
-        assertIsObjectOfLanguage(global);
     }
 
     /** @since 0.8 or earlier */
@@ -1518,9 +1515,7 @@ public abstract class TruffleTCK {
     @Test
     public void testPropertiesInteropMessage() throws Exception {
         PolyglotEngine.Value values = findGlobalSymbol(valuesObject());
-        Value valueObj = values.execute();
-        assertIsObjectOfLanguage(valueObj.get());
-        Map<?, ?> res = valueObj.as(Map.class);
+        Map<?, ?> res = values.execute().as(Map.class);
 
         Map<String, Object> expected = new HashMap<>();
         expected.put("intValue", 0);
@@ -1828,9 +1823,7 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
-        assertIsObjectOfLanguage(truffleObject);
-        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, truffleObject);
+        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, (TruffleObject) apply.execute().get());
 
         Assert.assertEquals(42.0, object.value(), 0.1);
     }
@@ -1844,9 +1837,7 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
-        assertIsObjectOfLanguage(truffleObject);
-        List<?> object = JavaInterop.asJavaObject(List.class, truffleObject);
+        List<?> object = JavaInterop.asJavaObject(List.class, (TruffleObject) apply.execute().get());
 
         Assert.assertEquals(42.0, ((Number) object.get(2)).doubleValue(), 0.1);
     }
@@ -1860,9 +1851,7 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
-        assertIsObjectOfLanguage(truffleObject);
-        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, truffleObject);
+        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, (TruffleObject) apply.execute().get());
         Assert.assertEquals(42.0, object.value(), 0.1);
         object.value(13.0);
         Assert.assertEquals(13.0, object.value(), 0.1);
@@ -1877,10 +1866,8 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
-        assertIsObjectOfLanguage(truffleObject);
         @SuppressWarnings("unchecked")
-        List<Object> object = JavaInterop.asJavaObject(List.class, truffleObject);
+        List<Object> object = JavaInterop.asJavaObject(List.class, (TruffleObject) apply.execute().get());
 
         Assert.assertEquals(42.0, ((Number) object.get(2)).doubleValue(), 0.1);
         object.set(2, 13.0);
@@ -1939,9 +1926,7 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
-        assertIsObjectOfLanguage(truffleObject);
-        MessageInterface object = JavaInterop.asJavaObject(MessageInterface.class, truffleObject);
+        MessageInterface object = JavaInterop.asJavaObject(MessageInterface.class, (TruffleObject) apply.execute().get());
 
         Assert.assertEquals(true, object.isExecutable());
     }
@@ -1970,9 +1955,7 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
-        assertIsObjectOfLanguage(truffleObject);
-        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, truffleObject);
+        ObjectWithValueInterface object = JavaInterop.asJavaObject(ObjectWithValueInterface.class, (TruffleObject) apply.execute().get());
         object.add(20.0);
         object.add(22.0);
 
@@ -1999,11 +1982,13 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        TruffleObject truffleObject = (TruffleObject) apply.execute().get();
-        assertIsObjectOfLanguage(truffleObject);
-        DoubleBinaryOperator object = JavaInterop.asJavaFunction(DoubleBinaryOperator.class, truffleObject);
+        FunctionFooInterface object = JavaInterop.asJavaFunction(FunctionFooInterface.class, (TruffleObject) apply.execute().get());
 
-        Assert.assertEquals(42.0, object.applyAsDouble(20.0, 22.0), 0.1);
+        Assert.assertEquals(42.0, object.eval(20.0, 22.0), 0.1);
+    }
+
+    private interface FunctionFooInterface {
+        double eval(double a, double b);
     }
 
     /** @since 0.26 */
@@ -2016,7 +2001,6 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
         TruffleObject obj = (TruffleObject) apply.execute().get();
-        assertIsObjectOfLanguage(obj);
         KeyInfoInterface object = JavaInterop.asJavaObject(KeyInfoInterface.class, obj);
 
         int numKeys = 0;
@@ -2189,9 +2173,9 @@ public abstract class TruffleTCK {
             return;
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
-        boolean result = (boolean) apply.execute(JavaInterop.asTruffleFunction(DoubleBinaryOperator.class, new DoubleBinaryOperator() {
+        boolean result = (boolean) apply.execute(JavaInterop.asTruffleFunction(FunctionFooInterface.class, new FunctionFooInterface() {
 
-            public double applyAsDouble(double a, double b) {
+            public double eval(double a, double b) {
                 if (a != 41.0 || b != 42.0) {
                     throw new AssertionError("Expected [41.5, 42.5] but was [" + a + "," + b + "]");
                 }
@@ -2209,9 +2193,9 @@ public abstract class TruffleTCK {
             return;
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
-        apply.execute(JavaInterop.asTruffleFunction(DoubleBinaryOperator.class, new DoubleBinaryOperator() {
+        apply.execute(JavaInterop.asTruffleFunction(FunctionFooInterface.class, new FunctionFooInterface() {
 
-            public double applyAsDouble(double a, double b) {
+            public double eval(double a, double b) {
                 if (a != 41.0 || b != 42.0) {
                     throw new AssertionError("Expected [41.0, 42.0] but was [" + a + "," + b + "]");
                 }
@@ -2309,7 +2293,6 @@ public abstract class TruffleTCK {
         PolyglotEngine.Value s = vm().findGlobalSymbol(compoundObjectName);
         assert s != null : "Symbol " + compoundObjectName + " is not found!";
         final PolyglotEngine.Value value = s.execute();
-        assertIsObjectOfLanguage(value.get());
         CompoundObject obj = value.as(CompoundObject.class);
         assertNotNull("Compound object for " + value + " found", obj);
         int traverse = RANDOM.nextInt(10);
@@ -2324,12 +2307,6 @@ public abstract class TruffleTCK {
         Object unExpected = unwrapTruffleObject(expected);
         Object unAction = unwrapTruffleObject(actual);
         assertSame(msg, unExpected, unAction);
-    }
-
-    private void assertIsObjectOfLanguage(Object obj) throws Exception {
-        PolyglotRuntime.Instrument instr = vm().getRuntime().getInstruments().get(TckInstrument.ID);
-        TruffleLanguage.Env env = TruffleTCKAccessor.engineAccess().getEnvForInstrument(instr, mimeType());
-        assertTrue(obj.toString(), TruffleTCKAccessor.langAccess().isObjectOfLanguage(env, obj));
     }
 
     private static Object unwrapTruffleObject(Object obj) {
@@ -2398,19 +2375,5 @@ public abstract class TruffleTCK {
 
         @MethodMessage(message = "WRITE")
         void booleanValue(boolean v);
-    }
-
-    static final TruffleTCKAccessor ACCESSOR = new TruffleTCKAccessor();
-
-    static final class TruffleTCKAccessor extends Accessor {
-
-        static Accessor.LanguageSupport langAccess() {
-            return ACCESSOR.languageSupport();
-        }
-
-        static Accessor.EngineSupport engineAccess() {
-            return ACCESSOR.engineSupport();
-        }
-
     }
 }
