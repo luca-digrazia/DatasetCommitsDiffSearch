@@ -50,6 +50,7 @@ import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
@@ -73,6 +74,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     private TruffleCompilerImpl truffleCompiler;
+    private Replacements truffleReplacements;
     private Map<OptimizedCallTarget, Future<?>> compilations = newIdentityMap();
     private final ThreadPoolExecutor compileQueue;
 
@@ -81,6 +83,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
     private HotSpotTruffleRuntime() {
         installOptimizedCallTargetCallMethod();
+        installOptimizedCallTargetCallDirect();
         lookupCallMethods(getGraalProviders().getMetaAccess());
 
         installDefaultListeners();
@@ -112,6 +115,12 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
     }
 
+    private static void installOptimizedCallTargetCallDirect() {
+        if (TruffleCompilerOptions.TruffleFunctionInlining.getValue() && !TruffleCompilerOptions.FastPE.getValue()) {
+            ((HotSpotResolvedJavaMethod) getGraalProviders().getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod())).setNotInlineable();
+        }
+    }
+
     @Override
     public String getName() {
         return "Graal Truffle Runtime";
@@ -139,6 +148,14 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     @Override
     public RootCallTarget createClonedCallTarget(OptimizedCallTarget source, RootNode root) {
         return createCallTargetImpl(source, root);
+    }
+
+    @Override
+    public Replacements getReplacements() {
+        if (truffleReplacements == null) {
+            truffleReplacements = HotSpotTruffleReplacements.makeInstance();
+        }
+        return truffleReplacements;
     }
 
     public static void installOptimizedCallTargetCallMethod() {
@@ -186,8 +203,8 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
         Backend backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
         CompilationResultBuilderFactory factory = getOptimizedCallTargetInstrumentationFactory(backend.getTarget().arch.getName(), javaMethod);
-        return compileGraph(graph, cc, javaMethod, providers, backend, providers.getCodeCache().getTarget(), graphBuilderSuite, OptimisticOptimizations.ALL, getProfilingInfo(graph), null, suites,
-                        lirSuites, new CompilationResult(), factory);
+        return compileGraph(graph, cc, javaMethod, providers, backend, providers.getCodeCache().getTarget(), null, graphBuilderSuite, OptimisticOptimizations.ALL, getProfilingInfo(graph), null,
+                        suites, lirSuites, new CompilationResult(), factory);
     }
 
     private static HotSpotProviders getGraalProviders() {
@@ -215,15 +232,11 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         Runnable r = new Runnable() {
             @Override
             public void run() {
-                boolean success = true;
                 try (Scope s = Debug.scope("Truffle", new TruffleDebugJavaMethod(optimizedCallTarget))) {
                     truffleCompiler.compileMethod(optimizedCallTarget);
+                    optimizedCallTarget.notifyCompilationFinished();
                 } catch (Throwable e) {
                     optimizedCallTarget.notifyCompilationFailed(e);
-                    success = false;
-                } finally {
-                    optimizedCallTarget.notifyCompilationFinished(success);
-
                 }
             }
         };
@@ -252,10 +265,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         if (codeTask != null && isCompiling(optimizedCallTarget)) {
             this.compilations.remove(optimizedCallTarget);
             boolean result = codeTask.cancel(true);
-            if (result) {
-                optimizedCallTarget.notifyCompilationFinished(false);
-                getCompilationNotify().notifyCompilationDequeued(optimizedCallTarget, source, reason);
-            }
+            getCompilationNotify().notifyCompilationDequeued(optimizedCallTarget, source, reason);
             return result;
         }
         return false;
