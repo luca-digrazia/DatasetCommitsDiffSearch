@@ -156,7 +156,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
      * @param obj instance of node
      * @return non-null instance of the node's class object
      */
-    protected abstract NodeClass findClassForNode(Node obj);
+    protected abstract NodeClass getNodeClass(Node obj);
 
     /**
      * Find a Java class. The returned object must be acceptable by
@@ -406,7 +406,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         writeInt(size);
         int cnt = 0;
         for (Node node : findNodes(info)) {
-            NodeClass nodeClass = findClassForNode(node);
+            NodeClass nodeClass = getNodeClass(node);
             if (nodeClass == null) {
                 throw new IOException("No class for " + node);
             }
@@ -428,7 +428,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
     }
 
     private void writeEdges(Graph graph, Node node, boolean dumpInputs) throws IOException {
-        NodeClass clazz = findClassForNode(node);
+        NodeClass clazz = getNodeClass(node);
         if (clazz == null) {
             throw new IOException("No class for " + node);
         }
@@ -506,8 +506,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
     }
 
     @SuppressWarnings("all")
-    private void addPoolEntry(Object obj) throws IOException {
-        Object object = obj;
+    private void addPoolEntry(Object object) throws IOException {
         ResolvedJavaField field;
         String typeName;
         Signature signature;
@@ -545,21 +544,6 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
             }
             writePoolObject(findNodeSourcePositionCaller(pos));
         } else {
-            Node node = findNode(object);
-            if (node != null) {
-                if (versionMajor >= 5) {
-                    writeByte(POOL_NODE);
-                    writeInt(findNodeId(node));
-                    writePoolObject(findClassForNode(node));
-                    return;
-                }
-                if (versionMajor == 4) {
-                    object = findClassForNode(node);
-                    if (object == null) {
-                        throw new IOException("class node for " + node + " is null");
-                    }
-                }
-            }
             NodeClass nodeClass = findNodeClass(object);
             if (nodeClass != null) {
                 writeByte(POOL_NODE_CLASS);
@@ -574,6 +558,13 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
                 }
                 writeEdgesInfo(nodeClass, true);
                 writeEdgesInfo(nodeClass, false);
+                return;
+            }
+            Node node = versionMajor >= 5 ? findNode(object) : null;
+            if (node != null) {
+                writeByte(POOL_NODE);
+                writeInt(findNodeId(node));
+                writePoolObject(getNodeClass(node));
                 return;
             }
             ResolvedJavaMethod method = findMethod(object);
