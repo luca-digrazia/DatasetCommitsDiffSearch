@@ -116,12 +116,13 @@ public class SLTCKLanguageProvider implements LanguageProvider {
     @Override
     public Collection<? extends Snippet> createExpressions(Context context) {
         final Collection<Snippet> res = new ArrayList<>();
+        final TypeDescriptor any = TypeDescriptor.union(TypeDescriptor.BOOLEAN, TypeDescriptor.NUMBER, TypeDescriptor.STRING, TypeDescriptor.OBJECT);
         final Value fnc = eval(context, String.format(PATTERN_BIN_OP_FNC, "add", "+"), "add");
         Snippet.Builder opb = Snippet.newBuilder("+", fnc, TypeDescriptor.NUMBER).parameterTypes(TypeDescriptor.NUMBER, TypeDescriptor.NUMBER);
         res.add(opb.build());
-        opb = Snippet.newBuilder("+", fnc, TypeDescriptor.STRING).parameterTypes(TypeDescriptor.STRING, TypeDescriptor.ANY);
+        opb = Snippet.newBuilder("+", fnc, TypeDescriptor.STRING).parameterTypes(TypeDescriptor.STRING, any);
         res.add(opb.build());
-        opb = Snippet.newBuilder("+", fnc, TypeDescriptor.STRING).parameterTypes(TypeDescriptor.ANY, TypeDescriptor.STRING);
+        opb = Snippet.newBuilder("+", fnc, TypeDescriptor.STRING).parameterTypes(any, TypeDescriptor.STRING);
         res.add(opb.build());
         res.add(createBinaryOperator(context, "-", "sub", TypeDescriptor.NUMBER, TypeDescriptor.NUMBER, TypeDescriptor.NUMBER).build());
         res.add(createBinaryOperator(context, "*", "mul", TypeDescriptor.NUMBER, TypeDescriptor.NUMBER, TypeDescriptor.NUMBER).build());
@@ -137,13 +138,13 @@ public class SLTCKLanguageProvider implements LanguageProvider {
                 Assert.assertTrue(TypeDescriptor.NUMBER.isAssignable(TypeDescriptor.forValue(snippetRun.getResult())));
             }
         }).build());
-        res.add(createBinaryOperator(context, "==", "eq", TypeDescriptor.BOOLEAN, TypeDescriptor.ANY, TypeDescriptor.ANY).build());
-        res.add(createBinaryOperator(context, "!=", "neq", TypeDescriptor.BOOLEAN, TypeDescriptor.ANY, TypeDescriptor.ANY).build());
+        res.add(createBinaryOperator(context, "==", "eq", TypeDescriptor.BOOLEAN, any, any).build());
+        res.add(createBinaryOperator(context, "!=", "neq", TypeDescriptor.BOOLEAN, any, any).build());
         res.add(createBinaryOperator(context, "<=", "le", TypeDescriptor.BOOLEAN, TypeDescriptor.NUMBER, TypeDescriptor.NUMBER).build());
         res.add(createBinaryOperator(context, ">=", "ge", TypeDescriptor.BOOLEAN, TypeDescriptor.NUMBER, TypeDescriptor.NUMBER).build());
         res.add(createBinaryOperator(context, "<", "l", TypeDescriptor.BOOLEAN, TypeDescriptor.NUMBER, TypeDescriptor.NUMBER).build());
         res.add(createBinaryOperator(context, ">", "g", TypeDescriptor.BOOLEAN, TypeDescriptor.NUMBER, TypeDescriptor.NUMBER).build());
-        res.add(createBinaryOperator(context, "||", "or", TypeDescriptor.BOOLEAN, TypeDescriptor.BOOLEAN, TypeDescriptor.ANY).resultVerifier((snippetRun) -> {
+        res.add(createBinaryOperator(context, "||", "or", TypeDescriptor.BOOLEAN, TypeDescriptor.BOOLEAN, any).resultVerifier((snippetRun) -> {
             final Value firstParam = snippetRun.getParameters().get(0);
             final Value secondParam = snippetRun.getParameters().get(1);
             final PolyglotException exception = snippetRun.getException();
@@ -155,7 +156,7 @@ public class SLTCKLanguageProvider implements LanguageProvider {
                 Assert.assertTrue(TypeDescriptor.BOOLEAN.isAssignable(TypeDescriptor.forValue(snippetRun.getResult())));
             }
         }).build());
-        res.add(createBinaryOperator(context, "&&", "land", TypeDescriptor.BOOLEAN, TypeDescriptor.BOOLEAN, TypeDescriptor.ANY).resultVerifier((snippetRun) -> {
+        res.add(createBinaryOperator(context, "&&", "land", TypeDescriptor.BOOLEAN, TypeDescriptor.BOOLEAN, any).resultVerifier((snippetRun) -> {
             final Value firstParam = snippetRun.getParameters().get(0);
             final Value secondParam = snippetRun.getParameters().get(1);
             final PolyglotException exception = snippetRun.getException();
@@ -176,9 +177,10 @@ public class SLTCKLanguageProvider implements LanguageProvider {
     @Override
     public Collection<? extends Snippet> createStatements(Context context) {
         final Collection<Snippet> res = new ArrayList<>();
+        final TypeDescriptor any = TypeDescriptor.union(TypeDescriptor.BOOLEAN, TypeDescriptor.NUMBER, TypeDescriptor.STRING, TypeDescriptor.OBJECT);
         res.add(createStatement(context, "if", "iffnc", "if ({1}) '{'\n{0}=1;\n'}' else '{'\n{0}=0;\n'}'", TypeDescriptor.NUMBER, TypeDescriptor.BOOLEAN));
         res.add(createStatement(context, "while", "whilefnc", "while ({1}) '{'break;\n'}'", TypeDescriptor.NUMBER, TypeDescriptor.BOOLEAN));
-        res.add(createStatement(context, "assign", "assignfnc", "{1} = {0};", TypeDescriptor.ANY, TypeDescriptor.ANY));
+        res.add(createStatement(context, "assign", "assignfnc", "{1} = {0};", any, any));
         return res;
     }
 

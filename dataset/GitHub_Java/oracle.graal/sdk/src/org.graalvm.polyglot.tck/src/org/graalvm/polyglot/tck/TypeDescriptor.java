@@ -322,9 +322,6 @@ public final class TypeDescriptor {
         if (value.isHostObject()) {
             descs.add(HOST_OBJECT);
         }
-        if (value.canExecute()) {
-            descs.add(EXECUTABLE);
-        }
         switch (descs.size()) {
             case 0:
                 throw new IllegalArgumentException("Unknown type of: " + value);
