@@ -35,10 +35,9 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteTupelNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
-@NodeChildren({@NodeChild(value = "left", type = LLVMExpressionNode.class), @NodeChild(value = "right", type = LLVMExpressionNode.class)})
-public abstract class LLVMAMD64XchgNode extends LLVMStatementNode {
+@NodeChildren({@NodeChild("left"), @NodeChild("right")})
+public abstract class LLVMAMD64XchgNode extends LLVMExpressionNode {
     @Child protected LLVMAMD64WriteTupelNode out;
 
     public LLVMAMD64XchgNode(LLVMAMD64WriteTupelNode out) {
@@ -51,8 +50,9 @@ public abstract class LLVMAMD64XchgNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, byte a, byte b) {
+        protected Object execute(VirtualFrame frame, byte a, byte b) {
             out.execute(frame, b, a);
+            return null;
         }
     }
 
@@ -62,8 +62,9 @@ public abstract class LLVMAMD64XchgNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, short a, short b) {
+        protected Object execute(VirtualFrame frame, short a, short b) {
             out.execute(frame, b, a);
+            return null;
         }
     }
 
@@ -73,8 +74,9 @@ public abstract class LLVMAMD64XchgNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, int a, int b) {
+        protected Object execute(VirtualFrame frame, int a, int b) {
             out.execute(frame, b, a);
+            return null;
         }
     }
 
@@ -84,8 +86,9 @@ public abstract class LLVMAMD64XchgNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, long a, long b) {
+        protected Object execute(VirtualFrame frame, long a, long b) {
             out.execute(frame, b, a);
+            return null;
         }
     }
 }

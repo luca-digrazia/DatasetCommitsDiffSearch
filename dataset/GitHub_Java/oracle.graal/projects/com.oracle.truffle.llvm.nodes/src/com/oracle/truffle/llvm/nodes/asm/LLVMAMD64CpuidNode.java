@@ -30,24 +30,19 @@
 package com.oracle.truffle.llvm.nodes.asm;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.profiles.IntValueProfile;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteValueNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
-@NodeChild(value = "level", type = LLVMExpressionNode.class)
-public abstract class LLVMAMD64CpuidNode extends LLVMStatementNode {
+@NodeChild("level")
+public abstract class LLVMAMD64CpuidNode extends LLVMExpressionNode {
     public static final String BRAND = "Sulong"; // at most 48 characters
     public static final String VENDOR_ID = "SulongLLVM64"; // exactly 12 characters
 
-    @CompilationFinal(dimensions = 1) public static final int[] BRAND_I32 = getI32(BRAND, 12);
-    @CompilationFinal(dimensions = 1) public static final int[] VENDOR_ID_I32 = getI32(VENDOR_ID, 3);
-
-    private IntValueProfile profile;
+    public static final int[] BRAND_I32 = getI32(BRAND, 12);
+    public static final int[] VENDOR_ID_I32 = getI32(VENDOR_ID, 3);
 
     private static int[] getI32(String s, int len) {
         CompilerAsserts.neverPartOfCompilation();
@@ -77,31 +72,30 @@ public abstract class LLVMAMD64CpuidNode extends LLVMStatementNode {
     @Child private LLVMAMD64WriteValueNode edx;
 
     // FN=1: EDX
-    public static final int TSC_IS_SUPPORTED = 1 << 4;
+    public static final int TSC = 1 << 4;
     // FN=1: ECX
-    public static final int RDRND_IS_SUPPORTED = 1 << 30;
+    public static final int RDRND = 1 << 30;
     // FN=7/0: EBX
-    public static final int RDSEED_IS_SUPPORTED = 1 << 18;
+    public static final int RDSEED = 1 << 18;
     // FN=80000001h: EDX
-    public static final int LM_IS_SUPPORTED = (1 << 29);
+    public static final int LM = (1 << 29);
     // FN=80000001h: ECX
-    public static final int LAHF_LM_IS_SUPPORTED = 1;
+    public static final int LAHF_LM = 1;
 
     public LLVMAMD64CpuidNode(LLVMAMD64WriteValueNode eax, LLVMAMD64WriteValueNode ebx, LLVMAMD64WriteValueNode ecx, LLVMAMD64WriteValueNode edx) {
         this.eax = eax;
         this.ebx = ebx;
         this.ecx = ecx;
         this.edx = edx;
-        profile = IntValueProfile.createIdentityProfile();
     }
 
     @Specialization
-    protected void doOp(VirtualFrame frame, int level) {
+    public Object execute(VirtualFrame frame, int level) {
         int a;
         int b;
         int c;
         int d;
-        switch (profile.profile(level)) {
+        switch (level) {
             case 0:
                 // Get Vendor ID/Highest Function Parameter
                 a = 7; // max supported function
@@ -120,13 +114,13 @@ public abstract class LLVMAMD64CpuidNode extends LLVMStatementNode {
                 // 27:20 - Extended Family
                 a = 0;
                 b = 0;
-                c = RDRND_IS_SUPPORTED;
-                d = TSC_IS_SUPPORTED;
+                c = RDRND;
+                d = TSC;
                 break;
             case 7:
                 // Extended Features (FIXME: assumption is ECX=0)
                 a = 0;
-                b = RDSEED_IS_SUPPORTED;
+                b = RDSEED;
                 c = 0;
                 d = 0;
                 break;
@@ -141,8 +135,8 @@ public abstract class LLVMAMD64CpuidNode extends LLVMStatementNode {
                 // Extended Processor Info and Feature Bits
                 a = 0;
                 b = 0;
-                c = LAHF_LM_IS_SUPPORTED;
-                d = LM_IS_SUPPORTED;
+                c = LAHF_LM;
+                d = LM;
                 break;
             case 0x80000002:
                 // Processor Brand String
@@ -176,5 +170,6 @@ public abstract class LLVMAMD64CpuidNode extends LLVMStatementNode {
         ebx.execute(frame, b);
         ecx.execute(frame, c);
         edx.execute(frame, d);
+        return null;
     }
 }

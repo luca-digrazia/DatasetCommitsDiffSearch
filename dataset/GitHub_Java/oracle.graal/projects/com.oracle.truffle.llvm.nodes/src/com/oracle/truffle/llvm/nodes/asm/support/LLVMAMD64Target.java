@@ -29,32 +29,38 @@
  */
 package com.oracle.truffle.llvm.nodes.asm.support;
 
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.api.frame.FrameUtil;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-public abstract class LLVMAMD64RegisterToLongNode extends Node {
-    public abstract long execute(VirtualFrame frame, FrameSlot slot);
+public class LLVMAMD64Target {
+    private final Object location;
+    private final int shift;
 
-    @Specialization(guards = "isLong(frame, slot)")
-    protected long readLong(VirtualFrame frame, FrameSlot slot) {
-        return FrameUtil.getLongSafe(frame, slot);
+    public LLVMAMD64Target(FrameSlot location) {
+        this(location, 0);
     }
 
-    @Specialization(guards = "isAddress(frame, slot)")
-    protected long readAddress(VirtualFrame frame, FrameSlot slot) {
-        return ((LLVMAddress) FrameUtil.getObjectSafe(frame, slot)).getVal();
+    public LLVMAMD64Target(FrameSlot location, int shift) {
+        this.location = location;
+        this.shift = shift;
     }
 
-    protected boolean isLong(@SuppressWarnings("unused") VirtualFrame frame, FrameSlot slot) {
-        return slot.getKind() == FrameSlotKind.Long;
+    public LLVMAMD64Target(LLVMExpressionNode src) {
+        location = src;
+        shift = 0;
     }
 
-    protected boolean isAddress(@SuppressWarnings("unused") VirtualFrame frame, FrameSlot slot) {
-        return slot.getKind() == FrameSlotKind.Object;
+    public LLVMExpressionNode createInput() {
+        if (location instanceof LLVMExpressionNode) {
+            return (LLVMExpressionNode) location;
+        } else if (location instanceof FrameSlot) {
+            return LLVMAMD64FrameSlotNodeGen.create((FrameSlot) location);
+        } else {
+            throw new IllegalStateException();
+        }
+    }
+
+    public LLVMAMD64WriteNode createTarget() {
+        return LLVMAMD64WriteNodeGen.create(shift);
     }
 }

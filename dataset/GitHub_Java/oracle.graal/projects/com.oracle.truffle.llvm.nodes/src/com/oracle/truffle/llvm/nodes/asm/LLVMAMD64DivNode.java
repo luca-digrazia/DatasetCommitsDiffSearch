@@ -36,24 +36,16 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.support.LongDivision;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteTupelNode;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteValueNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
-public abstract class LLVMAMD64DivNode extends LLVMStatementNode {
-    private static final String DIV_BY_ZERO = "division by zero";
-    private static final String QUOTIENT_TOO_LARGE = "quotient too large";
+public abstract class LLVMAMD64DivNode extends LLVMExpressionNode {
+    public static final String DIV_BY_ZERO = "division by zero";
+    public static final String QUOTIENT_TOO_LARGE = "quotient too large";
 
     @NodeChildren({@NodeChild(value = "left", type = LLVMExpressionNode.class), @NodeChild(value = "right", type = LLVMExpressionNode.class)})
-    public abstract static class LLVMAMD64DivbNode extends LLVMAMD64DivNode {
-        @Child private LLVMAMD64WriteValueNode out;
-
-        public LLVMAMD64DivbNode(LLVMAMD64WriteValueNode out) {
-            this.out = out;
-        }
-
+    public abstract static class LLVMAMD64DivbNode extends LLVMExpressionNode {
         @Specialization
-        protected void doOp(VirtualFrame frame, short left, byte right) {
+        protected short execute(short left, byte right) {
             if (right == 0) {
                 CompilerDirectives.transferToInterpreter();
                 throw new ArithmeticException(DIV_BY_ZERO);
@@ -64,13 +56,12 @@ public abstract class LLVMAMD64DivNode extends LLVMStatementNode {
                 CompilerDirectives.transferToInterpreter();
                 throw new ArithmeticException(QUOTIENT_TOO_LARGE);
             }
-            out.execute(frame, (short) ((quotient & LLVMExpressionNode.I8_MASK) | ((remainder & LLVMExpressionNode.I8_MASK) << LLVMExpressionNode.I8_SIZE_IN_BITS)));
+            return (short) ((quotient & LLVMExpressionNode.I8_MASK) | ((remainder & LLVMExpressionNode.I8_MASK) << LLVMExpressionNode.I8_SIZE_IN_BITS));
         }
     }
 
-    @NodeChildren({@NodeChild(value = "high", type = LLVMExpressionNode.class), @NodeChild(value = "left", type = LLVMExpressionNode.class),
-                    @NodeChild(value = "right", type = LLVMExpressionNode.class)})
-    public abstract static class LLVMAMD64DivwNode extends LLVMAMD64DivNode {
+    @NodeChildren({@NodeChild("high"), @NodeChild("left"), @NodeChild("right")})
+    public abstract static class LLVMAMD64DivwNode extends LLVMExpressionNode {
         @Child private LLVMAMD64WriteTupelNode out;
 
         public LLVMAMD64DivwNode(LLVMAMD64WriteTupelNode out) {
@@ -78,7 +69,7 @@ public abstract class LLVMAMD64DivNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, short high, short left, short right) {
+        protected Object execute(VirtualFrame frame, short high, short left, short right) {
             if (right == 0) {
                 CompilerDirectives.transferToInterpreter();
                 throw new ArithmeticException(DIV_BY_ZERO);
@@ -91,12 +82,12 @@ public abstract class LLVMAMD64DivNode extends LLVMStatementNode {
                 throw new ArithmeticException(QUOTIENT_TOO_LARGE);
             }
             out.execute(frame, (short) quotient, (short) remainder);
+            return null;
         }
     }
 
-    @NodeChildren({@NodeChild(value = "high", type = LLVMExpressionNode.class), @NodeChild(value = "left", type = LLVMExpressionNode.class),
-                    @NodeChild(value = "right", type = LLVMExpressionNode.class)})
-    public abstract static class LLVMAMD64DivlNode extends LLVMAMD64DivNode {
+    @NodeChildren({@NodeChild("high"), @NodeChild("left"), @NodeChild("right")})
+    public abstract static class LLVMAMD64DivlNode extends LLVMExpressionNode {
         @Child private LLVMAMD64WriteTupelNode out;
 
         public LLVMAMD64DivlNode(LLVMAMD64WriteTupelNode out) {
@@ -104,7 +95,7 @@ public abstract class LLVMAMD64DivNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, int high, int left, int right) {
+        protected Object execute(VirtualFrame frame, int high, int left, int right) {
             if (right == 0) {
                 CompilerDirectives.transferToInterpreter();
                 throw new ArithmeticException(DIV_BY_ZERO);
@@ -117,12 +108,12 @@ public abstract class LLVMAMD64DivNode extends LLVMStatementNode {
                 throw new ArithmeticException(QUOTIENT_TOO_LARGE);
             }
             out.execute(frame, (int) quotient, (int) remainder);
+            return null;
         }
     }
 
-    @NodeChildren({@NodeChild(value = "high", type = LLVMExpressionNode.class), @NodeChild(value = "left", type = LLVMExpressionNode.class),
-                    @NodeChild(value = "right", type = LLVMExpressionNode.class)})
-    public abstract static class LLVMAMD64DivqNode extends LLVMAMD64DivNode {
+    @NodeChildren({@NodeChild("high"), @NodeChild("left"), @NodeChild("right")})
+    public abstract static class LLVMAMD64DivqNode extends LLVMExpressionNode {
         @Child private LLVMAMD64WriteTupelNode out;
 
         public LLVMAMD64DivqNode(LLVMAMD64WriteTupelNode out) {
@@ -130,19 +121,17 @@ public abstract class LLVMAMD64DivNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void doOp(VirtualFrame frame, long high, long left, long right) {
+        protected Object execute(VirtualFrame frame, long high, long left, long right) {
             if (right == 0) {
                 CompilerDirectives.transferToInterpreter();
                 throw new ArithmeticException(DIV_BY_ZERO);
             }
             LongDivision.Result result = LongDivision.divu128by64(high, left, right);
-            if (result.isInvalid()) {
-                CompilerDirectives.transferToInterpreter();
-                throw new ArithmeticException(QUOTIENT_TOO_LARGE);
-            }
+            // TODO: error on quotient too large
             long quotient = result.quotient;
             long remainder = result.remainder;
             out.execute(frame, quotient, remainder);
+            return null;
         }
     }
 }
