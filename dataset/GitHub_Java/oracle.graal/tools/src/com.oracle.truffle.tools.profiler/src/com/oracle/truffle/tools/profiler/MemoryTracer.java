@@ -32,7 +32,9 @@ import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.nodes.LanguageInfo;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.tools.profiler.impl.MemoryTracerInstrument;
 import com.oracle.truffle.tools.profiler.impl.ProfilerToolFactory;
 
@@ -41,9 +43,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Engine;
 
 import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
@@ -61,7 +60,7 @@ import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
  * <p>
  * Usage example: {@link MemoryTracerSnippets#example}
  * </p>
- *
+ * 
  * @since 0.30
  */
 public final class MemoryTracer implements Closeable {
@@ -122,22 +121,8 @@ public final class MemoryTracer implements Closeable {
      * @param engine the engine to find debugger for
      * @return an instance of associated {@link MemoryTracer}
      * @since 0.30
-     * @deprecated use {@link #find(Engine)} instead.
      */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public static MemoryTracer find(com.oracle.truffle.api.vm.PolyglotEngine engine) {
-        return MemoryTracerInstrument.getTracer(engine);
-    }
-
-    /**
-     * Finds {@link MemoryTracer} associated with given engine.
-     *
-     * @param engine the engine to find debugger for
-     * @return an instance of associated {@link MemoryTracer}
-     * @since 1.0
-     */
-    public static MemoryTracer find(Engine engine) {
+    public static MemoryTracer find(PolyglotEngine engine) {
         return MemoryTracerInstrument.getTracer(engine);
     }
 
@@ -281,7 +266,8 @@ public final class MemoryTracer implements Closeable {
                 stackOverflowed = true;
                 return;
             }
-            LanguageInfo languageInfo = event.getLanguage();
+            Node instrumentedNode = stack.getStack()[stack.getStackIndex()].getInstrumentedNode();
+            LanguageInfo languageInfo = instrumentedNode.getRootNode().getLanguageInfo();
             String metaObjectString;
             Object metaObject = env.findMetaObject(languageInfo, event.getValue());
             if (metaObject != null) {
@@ -289,7 +275,7 @@ public final class MemoryTracer implements Closeable {
             } else {
                 metaObjectString = "null";
             }
-            AllocationEventInfo info = new AllocationEventInfo(languageInfo, event.getNewSize() - event.getOldSize(), event.getOldSize() != 0, metaObjectString);
+            AllocationEventInfo info = new AllocationEventInfo(event.getLanguage(), event.getNewSize() - event.getOldSize(), event.getOldSize() != 0, metaObjectString);
             handleEvent(stack, info);
         }
 
@@ -429,11 +415,17 @@ class MemoryTracerSnippets {
     public void example() {
         // @formatter:off
         // BEGIN: MemoryTracerSnippets#example
-        Context context = Context.create();
+        PolyglotEngine engine = PolyglotEngine.
+                newBuilder().
+                build();
 
-        MemoryTracer tracer = MemoryTracer.find(context.getEngine());
+        MemoryTracer tracer = MemoryTracer.find(engine);
         tracer.setCollecting(true);
-        context.eval("...", "...");
+        Source someCode = Source.
+                newBuilder("...").
+                mimeType("...").
+                name("example").build();
+        engine.eval(someCode);
         tracer.setCollecting(false);
         // rootNodes is the recorded profile of the execution in tree form.
 

@@ -25,9 +25,6 @@
 package com.oracle.truffle.api.instrumentation;
 
 import java.io.PrintStream;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
 
@@ -106,11 +103,6 @@ public final class ProbeNode extends Node {
 
     // returned from chain nodes whose bindings ignore the unwind
     private static final Object UNWIND_ACTION_IGNORED = new Object();
-
-    // when the property 'truffle.instrumentation.propagateExceptions' is set to 'true' the
-    // exceptions thrown by an instrument
-    // are propagated rather than logged into err.
-    private static final boolean PROPAGATE_INSTRUMENT_EXCEPTIONS = Boolean.getBoolean("truffle.instrumentation.propagateExceptions");
 
     private final InstrumentationHandler handler;
     @CompilationFinal private volatile EventContext context;
@@ -389,39 +381,6 @@ public final class ProbeNode extends Node {
         return null;
     }
 
-    Iterator<ExecutionEventNode> lookupExecutionEventNodes(Collection<EventBinding<? extends ExecutionEventNodeFactory>> bindings) {
-        return new Iterator<ExecutionEventNode>() {
-
-            private EventChainNode chainNode = ProbeNode.this.chain;
-            private EventProviderChainNode nextNode;
-
-            @Override
-            public boolean hasNext() {
-                if (nextNode == null) {
-                    while (chainNode != null) {
-                        if (chainNode instanceof EventProviderChainNode && bindings.contains(chainNode.binding)) {
-                            nextNode = (EventProviderChainNode) chainNode;
-                            chainNode = chainNode.next;
-                            break;
-                        }
-                        chainNode = chainNode.next;
-                    }
-                }
-                return nextNode != null;
-            }
-
-            @Override
-            public ExecutionEventNode next() {
-                EventProviderChainNode node = nextNode;
-                if (node == null) {
-                    throw new NoSuchElementException();
-                }
-                nextNode = null;
-                return node.eventNode;
-            }
-        };
-    }
-
     EventChainNode createParentEventChainCallback(VirtualFrame frame, EventBinding.Source<?> binding, RootNode rootNode, Set<Class<?>> providedTags) {
         EventChainNode parent = findParentChain(frame, binding);
         if (!(parent instanceof EventProviderWithInputChainNode)) {
@@ -564,9 +523,6 @@ public final class ProbeNode extends Node {
             // Terminates guest language execution immediately
             throw (ThreadDeath) t;
         }
-        if (PROPAGATE_INSTRUMENT_EXCEPTIONS) {
-            sthrow(RuntimeException.class, t);
-        }
         // Exception is a failure in (non-language) instrumentation code; log and continue
         InstrumentClientInstrumenter instrumenter = (InstrumentClientInstrumenter) b.getInstrumenter();
         Class<?> instrumentClass = instrumenter.getInstrumentClass();
@@ -626,11 +582,6 @@ public final class ProbeNode extends Node {
             return UNWIND_ACTION_REENTER;
         }
         return r1; // The first one wins
-    }
-
-    @SuppressWarnings({"unchecked", "unused"})
-    private static <T extends Throwable> void sthrow(Class<T> type, Throwable t) throws T {
-        throw (T) t;
     }
 
     private static class InputChildContextLookup extends InstrumentableChildVisitor {
@@ -1277,7 +1228,7 @@ public final class ProbeNode extends Node {
             return inputValues;
         }
 
-        static final class SavedInputValueID {
+        private static final class SavedInputValueID {
 
             private final EventBinding<?> binding;
             private final int index;
