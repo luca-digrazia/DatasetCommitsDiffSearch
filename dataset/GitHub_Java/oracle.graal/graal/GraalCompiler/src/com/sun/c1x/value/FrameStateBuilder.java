@@ -22,16 +22,15 @@
  */
 package com.sun.c1x.value;
 
+import static com.sun.c1x.value.ValueUtil.*;
+import static java.lang.reflect.Modifier.*;
+
 import java.util.*;
 
 import com.oracle.graal.graph.*;
-import com.sun.c1x.graph.*;
 import com.sun.c1x.ir.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
-
-import static com.sun.c1x.value.ValueUtil.*;
-import static java.lang.reflect.Modifier.*;
 
 
 public class FrameStateBuilder implements FrameStateAccess {
@@ -44,18 +43,24 @@ public class FrameStateBuilder implements FrameStateAccess {
 
     private int stackIndex;
 
+    private final RiMethod method;
+
     public FrameStateBuilder(RiMethod method, Graph graph) {
+        this.method = method;
         this.graph = graph;
         this.locals = new Value[method.maxLocals()];
         this.stack = new Value[method.maxStackSize()];
 
+        int javaIndex = 0;
         int index = 0;
         if (!isStatic(method.accessFlags())) {
             // add the receiver and assume it is non null
-            Local local = new Local(method.holder().kind(), index, graph);
-            local.setFlag(Value.Flag.NonNull, true);
+            Local local = new Local(method.holder().kind(), javaIndex, graph);
+            local.inputs().set(0, graph.start());
+            local.setNonNull(true);
             local.setDeclaredType(method.holder());
-            storeLocal(index, local);
+            storeLocal(javaIndex, local);
+            javaIndex = 1;
             index = 1;
         }
         RiSignature sig = method.signature();
@@ -65,11 +70,13 @@ public class FrameStateBuilder implements FrameStateAccess {
             RiType type = sig.argumentTypeAt(i, accessingClass);
             CiKind kind = type.kind().stackKind();
             Local local = new Local(kind, index, graph);
+            local.inputs().set(0, graph.start());
             if (type.isResolved()) {
                 local.setDeclaredType(type);
             }
-            storeLocal(index, local);
-            index += kind.sizeInSlots();
+            storeLocal(javaIndex, local);
+            javaIndex += kind.sizeInSlots();
+            index++;
         }
         this.locks = new ArrayList<Value>();
     }
@@ -92,7 +99,14 @@ public class FrameStateBuilder implements FrameStateAccess {
     }
 
     public FrameState create(int bci) {
-        return new FrameState(bci, locals, stack, stackIndex, locks, graph);
+        return new FrameState(method, bci, locals, stack, stackIndex, locks, graph);
+    }
+
+    @Override
+    public FrameState duplicateWithEmptyStack(int bci) {
+        FrameState frameState = new FrameState(method, bci, locals, new Value[0], 0, locks, graph);
+        frameState.setOuterFrameState(outerFrameState());
+        return frameState;
     }
 
     /**
@@ -113,6 +127,7 @@ public class FrameStateBuilder implements FrameStateAccess {
      * @param x the instruction to push onto the stack
      */
     public void xpush(Value x) {
+        assert x == null || !x.isDeleted();
         stack[stackIndex++] = x;
     }
 
@@ -187,6 +202,7 @@ public class FrameStateBuilder implements FrameStateAccess {
      * @return the instruction on the top of the stack
      */
     public Value pop(CiKind kind) {
+        assert kind != CiKind.Void;
         if (kind.sizeInSlots() == 2) {
             xpop();
         }
@@ -198,7 +214,9 @@ public class FrameStateBuilder implements FrameStateAccess {
      * @return x the instruction popped off the stack
      */
     public Value xpop() {
-        return stack[--stackIndex];
+        Value result = stack[--stackIndex];
+        assert result == null || !result.isDeleted();
+        return result;
     }
 
     /**
@@ -310,7 +328,7 @@ public class FrameStateBuilder implements FrameStateAccess {
     public Value loadLocal(int i) {
         Value x = locals[i];
         if (x != null) {
-            if (x.isIllegal()) {
+            if (x instanceof Phi && ((Phi) x).isDead()) {
                 return null;
             }
             assert x.kind.isSingleWord() || locals[i + 1] == null || locals[i + 1] instanceof Phi;
@@ -345,9 +363,8 @@ public class FrameStateBuilder implements FrameStateAccess {
      * @param scope the IRScope in which this locking operation occurs
      * @param obj the object being locked
      */
-    public void lock(IR ir, Value obj, int totalNumberOfLocks) {
+    public void lock(Value obj) {
         locks.add(obj);
-        ir.updateMaxLocks(totalNumberOfLocks);
     }
 
     /**
@@ -471,4 +488,19 @@ public class FrameStateBuilder implements FrameStateAccess {
         }
     }
 
+    @Override
+    public void setValueAt(int i, Value v) {
+        if (i < locals.length) {
+            locals[i] = v;
+        } else if (i < locals.length + stackIndex) {
+            stack[i - locals.length] = v;
+        } else {
+            locks.set(i - locals.length - stack.length, v);
+        }
+    }
+
+    @Override
+    public FrameState outerFrameState() {
+        return null;
+    }
 }

@@ -42,6 +42,7 @@ import com.sun.c1x.ir.*;
 import com.sun.c1x.lir.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
+import com.sun.cri.bytecode.*;
 import com.sun.cri.bytecode.Bytecodes.MemoryBarriers;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -425,7 +426,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
-    public void visitIfOp(Conditional i) {
+    public void visitIfOp(IfOp i) {
         Value x = i.x();
         Value y = i.y();
         CiKind xtype = x.kind;
@@ -1396,7 +1397,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     protected void preGCWriteBarrier(CiValue addrOpr, boolean patch, LIRDebugInfo info) {
     }
 
-    protected void setNoResult(Value x) {
+    protected void setNoResult(Instruction x) {
         x.clearOperand();
     }
 
@@ -1589,6 +1590,10 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
 
         public boolean isNonNull(XirArgument argument) {
+            if (argument.constant == null && argument.object instanceof LIRItem) {
+                // check the flag on the original value
+                return ((LIRItem) argument.object).instruction.isNonNull();
+            }
             return false;
         }
 

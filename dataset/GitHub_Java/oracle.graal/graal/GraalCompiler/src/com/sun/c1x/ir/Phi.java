@@ -22,74 +22,64 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
 /**
  * The {@code Phi} instruction represents the merging of dataflow
  * in the instruction graph. It refers to a join block and a variable.
- *
- * @author Ben L. Titzer
  */
 public final class Phi extends Value {
 
-    private final BlockBegin block;
-    private final int index;
+    private static final int DEFAULT_MAX_VALUES = 2;
+
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_BLOCK = 0;
+
+    private final int maxValues;
+
+    private static final int SUCCESSOR_COUNT = 0;
+
+    private int usedInputCount;
+    private boolean isDead;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT + maxValues;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    /**
+     * The join block for this phi.
+     */
+    public Merge block() {
+        return (Merge) inputs().get(super.inputCount() + INPUT_BLOCK);
+    }
+
+    public Value setBlock(Value n) {
+        return (Merge) inputs().set(super.inputCount() + INPUT_BLOCK, n);
+    }
 
     /**
      * Create a new Phi for the specified join block and local variable (or operand stack) slot.
      * @param kind the type of the variable
      * @param block the join point
-     * @param index the index into the stack (if < 0) or local variables
+     * @param graph
      */
-    public Phi(CiKind kind, BlockBegin block, int index) {
-        super(kind);
-        this.block = block;
-        this.index = index;
+    public Phi(CiKind kind, Merge block, Graph graph) {
+        this(kind, block, DEFAULT_MAX_VALUES, graph);
     }
 
-    /**
-     * Get the join block for this phi.
-     * @return the join block of this phi
-     */
-    @Override
-    public BlockBegin block() {
-        return block;
-    }
-
-    /**
-     * Check whether this phi corresponds to a local variable.
-     * @return {@code true} if this phi refers to a local variable
-     */
-    public boolean isLocal() {
-        return index >= 0;
-    }
-
-    /**
-     * Check whether this phi corresponds to a stack location.
-     * @return {@code true} if this phi refers to a stack location
-     */
-    public boolean isOnStack() {
-        return index < 0;
-    }
-
-    /**
-     * Get the local index of this phi.
-     * @return the local index
-     */
-    public int localIndex() {
-        assert isLocal();
-        return index;
-    }
-
-    /**
-     * Get the stack index of this phi.
-     * @return the stack index of this phi
-     */
-    public int stackIndex() {
-        assert isOnStack();
-        return -(index + 1);
+    public Phi(CiKind kind, Merge block, int maxValues, Graph graph) {
+        super(kind, INPUT_COUNT + maxValues, SUCCESSOR_COUNT, graph);
+        this.maxValues = maxValues;
+        usedInputCount = 1;
+        setBlock(block);
     }
 
     /**
@@ -98,40 +88,16 @@ public final class Phi extends Value {
      * @param i the index of the predecessor
      * @return the instruction that produced the value in the i'th predecessor
      */
-    public Value inputAt(int i) {
-        FrameState state;
-        if (block.isExceptionEntry()) {
-            state = block.exceptionHandlerStates().get(i);
-        } else {
-            state = block.blockPredecessors().get(i).end().stateAfter();
-        }
-        return inputIn(state);
-    }
-
-    /**
-     * Gets the instruction that produces the value for this phi in the specified state.
-     * @param state the state to access
-     * @return the instruction producing the value
-     */
-    public Value inputIn(FrameState state) {
-        if (isLocal()) {
-            return state.localAt(localIndex());
-        } else {
-            return state.stackAt(stackIndex());
-        }
+    public Value valueAt(int i) {
+        return (Value) inputs().get(i + INPUT_COUNT);
     }
 
     /**
      * Get the number of inputs to this phi (i.e. the number of predecessors to the join block).
      * @return the number of inputs in this phi
      */
-    @Override
-    public int inputCount() {
-        if (block.isExceptionEntry()) {
-            return block.exceptionHandlerStates().size();
-        } else {
-            return block.blockPredecessors().size();
-        }
+    public int valueCount() {
+        return usedInputCount - 1;
     }
 
     @Override
@@ -143,12 +109,67 @@ public final class Phi extends Value {
      * Make this phi illegal if types were not merged correctly.
      */
     public void makeDead() {
-        setFlag(Flag.PhiCannotSimplify);
-        setFlag(Flag.PhiDead);
+        isDead = true;
+    }
+
+    public boolean isDead() {
+        return isDead;
     }
 
     @Override
     public void print(LogStream out) {
-        out.print("phi function");
+        out.print("phi function (");
+        for (int i = 0; i < inputs().size(); ++i) {
+            if (i != 0) {
+                out.print(' ');
+            }
+            out.print((Value) inputs().get(i));
+        }
+        out.print(')');
+    }
+
+    @Override
+    public String shortName() {
+        StringBuilder str = new StringBuilder();
+        for (int i = 0; i < valueCount(); ++i) {
+            if (i != 0) {
+                str.append(' ');
+            }
+            str.append(valueAt(i) == null ? "-" : valueAt(i).id());
+        }
+        return "Phi: (" + str + ")";
+    }
+
+    public Phi addInput(Node y) {
+        assert !this.isDeleted() && !y.isDeleted();
+        Phi phi = this;
+        if (usedInputCount == inputs().size()) {
+            phi = new Phi(kind, block(), usedInputCount * 2, graph());
+            for (int i = 0; i < valueCount(); ++i) {
+                phi.addInput(valueAt(i));
+            }
+            phi.addInput(y);
+            this.replace(phi);
+        } else {
+            phi.inputs().set(usedInputCount++, y);
+        }
+        return phi;
+    }
+
+    public void removeInput(int index) {
+        inputs().set(index, null);
+        for (int i = index + 1; i < usedInputCount; ++i) {
+            inputs().set(i - 1, inputs().get(i));
+        }
+        usedInputCount--;
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        Phi x = new Phi(kind, null, maxValues, into);
+        x.usedInputCount = usedInputCount;
+        x.isDead = isDead;
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

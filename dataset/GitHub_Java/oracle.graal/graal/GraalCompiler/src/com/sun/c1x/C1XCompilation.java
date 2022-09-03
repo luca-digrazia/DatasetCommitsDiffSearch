@@ -25,24 +25,23 @@ package com.sun.c1x;
 
 import java.util.*;
 
+import com.oracle.graal.graph.*;
+import com.oracle.max.asm.*;
 import com.sun.c1x.alloc.*;
 import com.sun.c1x.asm.*;
+import com.sun.c1x.debug.*;
 import com.sun.c1x.gen.*;
-import com.sun.c1x.gen.LIRGenerator.DeoptimizationStub;
+import com.sun.c1x.gen.LIRGenerator.*;
 import com.sun.c1x.graph.*;
-import com.sun.c1x.ir.*;
 import com.sun.c1x.lir.*;
 import com.sun.c1x.observer.*;
 import com.sun.c1x.value.*;
-import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * This class encapsulates global information about the compilation of a particular method,
  * including a reference to the runtime, statistics about the compiled code, etc.
- *
- * @author Ben L. Titzer
  */
 public final class C1XCompilation {
 
@@ -54,9 +53,10 @@ public final class C1XCompilation {
     public final RiMethod method;
     public final RiRegisterConfig registerConfig;
     public final CiStatistics stats;
-    public final int osrBCI;
     public final CiAssumptions assumptions = new CiAssumptions();
     public final FrameState placeholderState;
+
+    public CompilerGraph graph = new CompilerGraph();
 
     private boolean hasExceptionHandlers;
     private final C1XCompilation parent;
@@ -70,7 +70,7 @@ public final class C1XCompilation {
     private int nextID = 1;
 
     private FrameMap frameMap;
-    private AbstractAssembler assembler;
+    private TargetMethodAssembler assembler;
 
     private IR hir;
 
@@ -85,16 +85,18 @@ public final class C1XCompilation {
      * @param stats externally supplied statistics object to be used if not {@code null}
      */
     public C1XCompilation(C1XCompiler compiler, RiMethod method, int osrBCI, CiStatistics stats) {
+        if (osrBCI != -1) {
+            throw new CiBailout("No OSR supported");
+        }
         this.parent = currentCompilation.get();
         currentCompilation.set(this);
         this.compiler = compiler;
         this.target = compiler.target;
         this.runtime = compiler.runtime;
         this.method = method;
-        this.osrBCI = osrBCI;
         this.stats = stats == null ? new CiStatistics() : stats;
         this.registerConfig = method == null ? compiler.globalStubRegisterConfig : runtime.getRegisterConfig(method);
-        this.placeholderState = method != null && method.minimalDebugInfo() ? new MutableFrameState(new IRScope(null, null, method, -1), 0, 0, 0) : null;
+        this.placeholderState = method != null && method.minimalDebugInfo() ? new FrameState(method, 0, 0, 0, 0, graph) : null;
 
         if (compiler.isObserved()) {
             compiler.fireCompilationStarted(new CompilationEvent(this));
@@ -114,23 +116,6 @@ public final class C1XCompilation {
      */
     public void setHasExceptionHandlers() {
         hasExceptionHandlers = true;
-    }
-
-    /**
-     * Records that this compilation encountered an instruction (e.g. {@link Bytecodes#UNSAFE_CAST})
-     * that breaks the type safety invariant of the input bytecode.
-     */
-    public void setNotTypesafe() {
-        typesafe = false;
-    }
-
-    /**
-     * Checks whether this compilation is for an on-stack replacement.
-     *
-     * @return {@code true} if this compilation is for an on-stack replacement
-     */
-    public boolean isOsrCompilation() {
-        return osrBCI >= 0;
     }
 
     /**
@@ -155,15 +140,6 @@ public final class C1XCompilation {
     }
 
     /**
-     * Gets the frame which describes the layout of the OSR interpreter frame for this method.
-     *
-     * @return the OSR frame
-     */
-    public RiOsrFrame getOsrFrame() {
-        return runtime.getOsrFrame(method, osrBCI);
-    }
-
-    /**
      * Records an assumption that the specified type has no finalizable subclasses.
      *
      * @param receiverType the type that is assumed to have no finalizable subclasses
@@ -180,9 +156,6 @@ public final class C1XCompilation {
      */
     @Override
     public String toString() {
-        if (isOsrCompilation()) {
-            return "osr-compile @ " + osrBCI + ": " + method;
-        }
         return "compile: " + method;
     }
 
@@ -193,25 +166,14 @@ public final class C1XCompilation {
      * @param osrBCI the OSR bytecode index; {@code -1} if this is not an OSR
      * @return the block map for the specified method
      */
-    public BlockMap getBlockMap(RiMethod method, int osrBCI) {
-        // PERF: cache the block map for methods that are compiled or inlined often
-        BlockMap map = new BlockMap(method, hir.numberOfBlocks());
-        boolean isOsrCompilation = false;
-        if (osrBCI >= 0) {
-            map.addEntrypoint(osrBCI, BlockBegin.BlockFlag.OsrEntry);
-            isOsrCompilation = true;
+    public BlockMap getBlockMap(RiMethod method) {
+        BlockMap map = new BlockMap(method);
+        map.build();
+        if (compiler.isObserved()) {
+            String label = CiUtil.format("BlockListBuilder %f %r %H.%n(%p)", method, true);
+            compiler.fireCompilationEvent(new CompilationEvent(this, label, map, method.code().length));
         }
-        if (!map.build(!isOsrCompilation && C1XOptions.PhiLoopStores)) {
-            throw new CiBailout("build of BlockMap failed for " + method);
-        } else {
-            if (compiler.isObserved()) {
-                String label = CiUtil.format("BlockListBuilder %f %r %H.%n(%p)", method, true);
-                compiler.fireCompilationEvent(new CompilationEvent(this, label, map, method.code().length));
-            }
-        }
-        map.cleanup();
-        stats.bytecodeCount += map.numberOfBytes();
-        stats.blockCount += map.numberOfBlocks();
+        stats.bytecodeCount += method.code().length;
         return map;
     }
 
@@ -223,9 +185,10 @@ public final class C1XCompilation {
         return frameMap;
     }
 
-    public AbstractAssembler masm() {
+    public TargetMethodAssembler assembler() {
         if (assembler == null) {
-            assembler = compiler.backend.newAssembler(registerConfig);
+            AbstractAssembler asm = compiler.backend.newAssembler(registerConfig);
+            assembler = new TargetMethodAssembler(asm);
             assembler.setFrameSize(frameMap.frameSize());
             assembler.targetMethod.setCustomStackAreaOffset(frameMap.offsetToCustomArea());
         }
@@ -234,14 +197,6 @@ public final class C1XCompilation {
 
     public boolean hasExceptionHandlers() {
         return hasExceptionHandlers;
-    }
-
-    /**
-     * Determines if this compilation has encountered any instructions (e.g. {@link Bytecodes#UNSAFE_CAST})
-     * that break the type safety invariant of the input bytecode.
-     */
-    public boolean isTypesafe() {
-        return typesafe;
     }
 
     public CiResult compile() {
@@ -257,7 +212,11 @@ public final class C1XCompilation {
         } catch (CiBailout b) {
             return new CiResult(null, b, stats);
         } catch (Throwable t) {
-            return new CiResult(null, new CiBailout("Exception while compiling: " + method, t), stats);
+            if (C1XOptions.BailoutOnException) {
+                return new CiResult(null, new CiBailout("Exception while compiling: " + method, t), stats);
+            } else {
+                throw new RuntimeException(t);
+            }
         } finally {
             if (compiler.isObserved()) {
                 compiler.fireCompilationFinished(new CompilationEvent(this));
@@ -283,15 +242,20 @@ public final class C1XCompilation {
                 C1XTimers.LIR_CREATE.start();
             }
 
-            initFrameMap(hir.topScope.maxLocks());
+            initFrameMap(hir.maxLocks());
 
             lirGenerator = compiler.backend.newLIRGenerator(this);
-            for (BlockBegin begin : hir.linearScanOrder()) {
+
+            for (LIRBlock begin : hir.linearScanOrder()) {
                 lirGenerator.doBlock(begin);
             }
 
             if (C1XOptions.PrintTimers) {
                 C1XTimers.LIR_CREATE.stop();
+            }
+
+            if (C1XOptions.PrintLIR && !TTY.isSuppressed()) {
+                LIRList.printLIR(hir.linearScanOrder());
             }
 
             new LinearScan(this, hir, lirGenerator, frameMap()).allocate();
@@ -306,9 +270,6 @@ public final class C1XCompilation {
             // generate code for slow cases
             lirAssembler.emitLocalStubs();
 
-            // generate exception adapters
-            lirAssembler.emitExceptionEntries();
-
             // generate deoptimization stubs
             ArrayList<DeoptimizationStub> deoptimizationStubs = lirGenerator.deoptimizationStubs();
             if (deoptimizationStubs != null) {
@@ -320,13 +281,13 @@ public final class C1XCompilation {
             // generate traps at the end of the method
             lirAssembler.emitTraps();
 
-            CiTargetMethod targetMethod = masm().finishTargetMethod(method, runtime, lirAssembler.registerRestoreEpilogueOffset, false);
+            CiTargetMethod targetMethod = assembler().finishTargetMethod(method, runtime, lirAssembler.registerRestoreEpilogueOffset, false);
             if (assumptions.count() > 0) {
                 targetMethod.setAssumptions(assumptions);
             }
 
             if (compiler.isObserved()) {
-                compiler.fireCompilationEvent(new CompilationEvent(this, "After code generation", hir.startBlock, false, true, targetMethod));
+                compiler.fireCompilationEvent(new CompilationEvent(this, "After code generation", graph, false, true, targetMethod));
             }
 
             if (C1XOptions.PrintTimers) {
@@ -346,9 +307,5 @@ public final class C1XCompilation {
         C1XCompilation compilation = currentCompilation.get();
         assert compilation != null;
         return compilation;
-    }
-
-    public static C1XCompilation compilationOrNull() {
-        return currentCompilation.get();
     }
 }

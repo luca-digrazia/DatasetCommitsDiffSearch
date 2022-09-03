@@ -27,20 +27,19 @@ import static java.lang.reflect.Modifier.*;
 
 import java.util.*;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.*;
 import com.sun.c1x.alloc.Interval.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.gen.*;
 import com.sun.c1x.graph.*;
 import com.sun.c1x.ir.*;
-import com.sun.c1x.ir.BlockBegin.BlockFlag;
 import com.sun.c1x.lir.*;
-import com.sun.c1x.lir.LIRInstruction.OperandMode;
+import com.sun.c1x.lir.LIRInstruction.*;
 import com.sun.c1x.observer.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
-import com.sun.c1x.value.FrameState.PhiProcedure;
-import com.sun.c1x.value.FrameState.ValueProcedure;
+import com.sun.c1x.value.FrameState.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
@@ -67,7 +66,7 @@ public final class LinearScan {
     /**
      * List of blocks in linear-scan order. This is only correct as long as the CFG does not change.
      */
-    final BlockBegin[] sortedBlocks;
+    final LIRBlock[] sortedBlocks;
 
     final OperandPool operands;
 
@@ -110,10 +109,10 @@ public final class LinearScan {
 
     /**
      * Map from an instruction {@linkplain LIRInstruction#id id} to the {@linkplain
-     * BlockBegin block} containing the instruction. Entries should be retrieved with
+     * LIRBlock block} containing the instruction. Entries should be retrieved with
      * {@link #blockForId(int)} as the id is not simply an index into this array.
      */
-    BlockBegin[] opIdToBlockMap;
+    LIRBlock[] opIdToBlockMap;
 
     /**
      * Bit set for each variable that is contained in each loop.
@@ -127,7 +126,7 @@ public final class LinearScan {
         this.frameMap = frameMap;
         this.maxSpills = frameMap.initialSpillSlot();
         this.unusedSpillSlot = null;
-        this.sortedBlocks = ir.linearScanOrder().toArray(new BlockBegin[ir.linearScanOrder().size()]);
+        this.sortedBlocks = ir.linearScanOrder().toArray(new LIRBlock[ir.linearScanOrder().size()]);
         CiRegister[] allocatableRegisters = compilation.registerConfig.getAllocatableRegisters();
         this.registers = new CiRegister[CiRegister.maxRegisterNumber(allocatableRegisters) + 1];
         for (CiRegister reg : allocatableRegisters) {
@@ -265,7 +264,7 @@ public final class LinearScan {
         return sortedBlocks.length;
     }
 
-    BlockBegin blockAt(int index) {
+    LIRBlock blockAt(int index) {
         assert sortedBlocks[index] == ir.linearScanOrder().get(index) : "invalid cached block list";
         return sortedBlocks[index];
     }
@@ -329,7 +328,7 @@ public final class LinearScan {
      * @param opId an instruction {@linkplain LIRInstruction#id id}
      * @return the block containing the instruction denoted by {@code opId}
      */
-    BlockBegin blockForId(int opId) {
+    LIRBlock blockForId(int opId) {
         assert opIdToBlockMap.length > 0 && opId >= 0 && opId <= maxOpId() + 1 : "opId out of range";
         return opIdToBlockMap[opIdToIndex(opId)];
     }
@@ -453,7 +452,7 @@ public final class LinearScan {
         LIRInsertionBuffer insertionBuffer = new LIRInsertionBuffer();
         int numBlocks = blockCount();
         for (int i = 0; i < numBlocks; i++) {
-            BlockBegin block = blockAt(i);
+            LIRBlock block = blockAt(i);
             List<LIRInstruction> instructions = block.lir().instructionsList();
             int numInst = instructions.size();
             boolean hasNew = false;
@@ -556,13 +555,13 @@ public final class LinearScan {
 
         // initialize with correct length
         opIdToInstructionMap = new LIRInstruction[numInstructions];
-        opIdToBlockMap = new BlockBegin[numInstructions];
+        opIdToBlockMap = new LIRBlock[numInstructions];
 
         int opId = 0;
         int index = 0;
 
         for (int i = 0; i < numBlocks; i++) {
-            BlockBegin block = blockAt(i);
+            LIRBlock block = blockAt(i);
             block.setFirstLirInstructionId(opId);
             List<LIRInstruction> instructions = block.lir().instructionsList();
 
@@ -578,7 +577,7 @@ public final class LinearScan {
                 index++;
                 opId += 2; // numbering of lirOps by two
             }
-            block.setLastLirInstructionId(opId - 2);
+            block.setLastLirInstructionId((opId - 2));
         }
         assert index == numInstructions : "must match";
         assert (index << 1) == opId : "must match: " + (index << 1);
@@ -595,20 +594,9 @@ public final class LinearScan {
 
         // iterate all blocks
         for (int i = 0; i < numBlocks; i++) {
-            BlockBegin block = blockAt(i);
+            LIRBlock block = blockAt(i);
             final CiBitMap liveGen = new CiBitMap(liveSize);
             final CiBitMap liveKill = new CiBitMap(liveSize);
-
-            if (block.isExceptionEntry()) {
-                // Phi functions at the begin of an exception handler are
-                // implicitly defined (= killed) at the beginning of the block.
-                block.stateBefore().forEachLivePhi(block, new PhiProcedure() {
-                    public boolean doPhi(Phi phi) {
-                        liveKill.set(operandNumber(phi.operand()));
-                        return true;
-                    }
-                });
-            }
 
             List<LIRInstruction> instructions = block.lir().instructionsList();
             int numInst = instructions.size();
@@ -653,7 +641,7 @@ public final class LinearScan {
                                 if (!liveKill.get(operandNum)) {
                                     liveGen.set(operandNum);
                                     if (C1XOptions.TraceLinearScanLevel >= 4) {
-                                        TTY.println("  Setting liveGen for value %s, LIR opId %d, operand %d", Util.valueString(value), op.id, operandNum);
+                                        TTY.println("  Setting liveGen for value %s, LIR opId %d, operand %d because of state for " + op.toString(), Util.valueString(value), op.id, operandNum);
                                     }
                                 }
                             } else if (operand.isRegister()) {
@@ -707,15 +695,14 @@ public final class LinearScan {
                 }
             } // end of instruction iteration
 
-            LIRBlock lirBlock = block.lirBlock();
-            lirBlock.liveGen = liveGen;
-            lirBlock.liveKill = liveKill;
-            lirBlock.liveIn = new CiBitMap(liveSize);
-            lirBlock.liveOut = new CiBitMap(liveSize);
+            block.liveGen = liveGen;
+            block.liveKill = liveKill;
+            block.liveIn = new CiBitMap(liveSize);
+            block.liveOut = new CiBitMap(liveSize);
 
             if (C1XOptions.TraceLinearScanLevel >= 4) {
-                TTY.println("liveGen  B%d %s", block.blockID, block.lirBlock.liveGen);
-                TTY.println("liveKill B%d %s", block.blockID, block.lirBlock.liveKill);
+                TTY.println("liveGen  B%d %s", block.blockID(), block.liveGen);
+                TTY.println("liveKill B%d %s", block.blockID(), block.liveKill);
             }
         } // end of block iteration
 
@@ -733,7 +720,7 @@ public final class LinearScan {
         }
     }
 
-    private void verifyInput(BlockBegin block, CiBitMap liveKill, CiValue operand) {
+    private void verifyInput(LIRBlock block, CiBitMap liveKill, CiValue operand) {
         // fixed intervals are never live at block boundaries, so
         // they need not be processed in live sets.
         // this is checked by these assertions to be sure about it.
@@ -759,39 +746,32 @@ public final class LinearScan {
 
         // Perform a backward dataflow analysis to compute liveOut and liveIn for each block.
         // The loop is executed until a fixpoint is reached (no changes in an iteration)
-        // Exception handlers must be processed because not all live values are
-        // present in the state array, e.g. because of global value numbering
         do {
             changeOccurred = false;
 
             // iterate all blocks in reverse order
             for (int i = numBlocks - 1; i >= 0; i--) {
-                BlockBegin block = blockAt(i);
-                LIRBlock lirBlock = block.lirBlock();
+                LIRBlock block = blockAt(i);
 
                 changeOccurredInBlock = false;
 
                 // liveOut(block) is the union of liveIn(sux), for successors sux of block
                 int n = block.numberOfSux();
-                int e = block.numberOfExceptionHandlers();
-                if (n + e > 0) {
+                if (n > 0) {
                     // block has successors
                     if (n > 0) {
-                        liveOut.setFrom(block.suxAt(0).lirBlock.liveIn);
+                        liveOut.setFrom(block.suxAt(0).liveIn);
                         for (int j = 1; j < n; j++) {
-                            liveOut.setUnion(block.suxAt(j).lirBlock.liveIn);
+                            liveOut.setUnion(block.suxAt(j).liveIn);
                         }
                     } else {
                         liveOut.clearAll();
                     }
-                    for (int j = 0; j < e; j++) {
-                        liveOut.setUnion(block.exceptionHandlerAt(j).lirBlock.liveIn);
-                    }
 
-                    if (!lirBlock.liveOut.isSame(liveOut)) {
+                    if (!block.liveOut.isSame(liveOut)) {
                         // A change occurred. Swap the old and new live out sets to avoid copying.
-                        CiBitMap temp = lirBlock.liveOut;
-                        lirBlock.liveOut = liveOut;
+                        CiBitMap temp = block.liveOut;
+                        block.liveOut = liveOut;
                         liveOut = temp;
 
                         changeOccurred = true;
@@ -802,10 +782,10 @@ public final class LinearScan {
                 if (iterationCount == 0 || changeOccurredInBlock) {
                     // liveIn(block) is the union of liveGen(block) with (liveOut(block) & !liveKill(block))
                     // note: liveIn has to be computed only in first iteration or if liveOut has changed!
-                    CiBitMap liveIn = lirBlock.liveIn;
-                    liveIn.setFrom(lirBlock.liveOut);
-                    liveIn.setDifference(lirBlock.liveKill);
-                    liveIn.setUnion(lirBlock.liveGen);
+                    CiBitMap liveIn = block.liveIn;
+                    liveIn.setFrom(block.liveOut);
+                    liveIn.setDifference(block.liveKill);
+                    liveIn.setUnion(block.liveGen);
                 }
 
                 if (C1XOptions.TraceLinearScanLevel >= 4) {
@@ -824,11 +804,15 @@ public final class LinearScan {
         }
 
         // check that the liveIn set of the first block is empty
-        CiBitMap liveInArgs = new CiBitMap(ir.startBlock.lirBlock.liveIn.size());
-        if (!ir.startBlock.lirBlock.liveIn.isSame(liveInArgs)) {
+        LIRBlock startBlock = ir.startBlock;
+        CiBitMap liveInArgs = new CiBitMap(startBlock.liveIn.size());
+        if (!startBlock.liveIn.isSame(liveInArgs)) {
             if (C1XOptions.DetailedAsserts) {
                 reportFailure(numBlocks);
             }
+
+            TTY.println("preds=" + startBlock.blockPredecessors().size() + ", succs=" + startBlock.blockSuccessors().size());
+            TTY.println("startBlock-ID: " + startBlock.blockID());
 
             // bailout of if this occurs in product mode.
             throw new CiBailout("liveIn set of first block must be empty");
@@ -836,24 +820,42 @@ public final class LinearScan {
     }
 
     private void reportFailure(int numBlocks) {
+        TTY.println(compilation.method.toString());
         TTY.println("Error: liveIn set of first block must be empty (when this fails, variables are used before they are defined)");
         TTY.print("affected registers:");
-        TTY.println(ir.startBlock.lirBlock.liveIn.toString());
+        TTY.println(ir.startBlock.liveIn.toString());
 
         // print some additional information to simplify debugging
-        for (int operandNum = 0; operandNum < ir.startBlock.lirBlock.liveIn.size(); operandNum++) {
-            if (ir.startBlock.lirBlock.liveIn.get(operandNum)) {
+        for (int operandNum = 0; operandNum < ir.startBlock.liveIn.size(); operandNum++) {
+            if (ir.startBlock.liveIn.get(operandNum)) {
                 CiValue operand = operands.operandFor(operandNum);
                 Value instr = operand.isVariable() ? gen.operands.instructionForResult(((CiVariable) operand)) : null;
                 TTY.println(" var %d (HIR instruction %s)", operandNum, instr == null ? " " : instr.toString());
 
-                for (int j = 0; j < numBlocks; j++) {
-                    BlockBegin block = blockAt(j);
-                    if (block.lirBlock.liveGen.get(operandNum)) {
-                        TTY.println("  used in block B%d", block.blockID);
+                if (instr instanceof Phi) {
+                    Phi phi = (Phi) instr;
+                    TTY.println("phi block begin: " + phi.block());
+                    TTY.println("pred count on blockbegin: " + phi.block().predecessors().size());
+                    TTY.println("phi values: " + phi.valueCount());
+                    TTY.println("phi block preds:");
+                    for (Node n : phi.block().predecessors()) {
+                        TTY.println(n.toString());
                     }
-                    if (block.lirBlock.liveKill.get(operandNum)) {
-                        TTY.println("  defined in block B%d", block.blockID);
+                }
+
+                for (int j = 0; j < numBlocks; j++) {
+                    LIRBlock block = blockAt(j);
+                    if (block.liveGen.get(operandNum)) {
+                        TTY.println("  used in block B%d", block.blockID());
+                        for (LIRInstruction ins : block.lir().instructionsList()) {
+                            TTY.println(ins.id + ": " + ins.result() + " " + ins.toString());
+                        }
+                    }
+                    if (block.liveKill.get(operandNum)) {
+                        TTY.println("  defined in block B%d", block.blockID());
+                        for (LIRInstruction ins : block.lir().instructionsList()) {
+                            TTY.println(ins.id + ": " + ins.result() + " " + ins.toString());
+                        }
                     }
                 }
             }
@@ -864,21 +866,21 @@ public final class LinearScan {
         // check that fixed intervals are not live at block boundaries
         // (live set must be empty at fixed intervals)
         for (int i = 0; i < numBlocks; i++) {
-            BlockBegin block = blockAt(i);
+            LIRBlock block = blockAt(i);
             for (int j = 0; j <= operands.maxRegisterNumber(); j++) {
-                assert !block.lirBlock.liveIn.get(j) : "liveIn  set of fixed register must be empty";
-                assert !block.lirBlock.liveOut.get(j) : "liveOut set of fixed register must be empty";
-                assert !block.lirBlock.liveGen.get(j) : "liveGen set of fixed register must be empty";
+                assert !block.liveIn.get(j) : "liveIn  set of fixed register must be empty";
+                assert !block.liveOut.get(j) : "liveOut set of fixed register must be empty";
+                assert !block.liveGen.get(j) : "liveGen set of fixed register must be empty";
             }
         }
     }
 
-    private void traceLiveness(boolean changeOccurredInBlock, int iterationCount, BlockBegin block) {
+    private void traceLiveness(boolean changeOccurredInBlock, int iterationCount, LIRBlock block) {
         char c = iterationCount == 0 || changeOccurredInBlock ? '*' : ' ';
-        TTY.print("(%d) liveIn%c  B%d ", iterationCount, c, block.blockID);
-        TTY.println(block.lirBlock.liveIn.toString());
-        TTY.print("(%d) liveOut%c B%d ", iterationCount, c, block.blockID);
-        TTY.println(block.lirBlock.liveOut.toString());
+        TTY.print("(%d) liveIn%c  B%d ", iterationCount, c, block.blockID());
+        TTY.println(block.liveIn.toString());
+        TTY.print("(%d) liveOut%c B%d ", iterationCount, c, block.blockID());
+        TTY.println(block.liveOut.toString());
     }
 
     Interval addUse(CiValue operand, int from, int to, RegisterPriority registerPriority, CiKind kind) {
@@ -1004,14 +1006,6 @@ public final class LinearScan {
                 // method argument (condition must be equal to handleMethodArguments)
                 return RegisterPriority.None;
 
-            } else if (move.operand().isVariableOrRegister() && move.result().isVariableOrRegister()) {
-                // Move from register to register
-                if (blockForId(op.id).checkBlockFlag(BlockBegin.BlockFlag.OsrEntry)) {
-                    // special handling of phi-function moves inside osr-entry blocks
-                    // input operand must have a register instead of output operand (leads to better register
-                    // allocation)
-                    return RegisterPriority.ShouldHaveRegister;
-                }
             }
         }
 
@@ -1039,14 +1033,6 @@ public final class LinearScan {
                 return RegisterPriority.MustHaveRegister;
 
             } else if (move.operand().isVariableOrRegister() && move.result().isVariableOrRegister()) {
-                // Move from register to register
-                if (blockForId(op.id).checkBlockFlag(BlockBegin.BlockFlag.OsrEntry)) {
-                    // special handling of phi-function moves inside osr-entry blocks
-                    // input operand must have a register instead of output operand (leads to better register
-                    // allocation)
-                    return RegisterPriority.MustHaveRegister;
-                }
-
                 // The input operand is not forced to a register (moves from stack to register are allowed),
                 // but it is faster if the input operand is in a register
                 return RegisterPriority.ShouldHaveRegister;
@@ -1188,7 +1174,7 @@ public final class LinearScan {
 
         // iterate all blocks in reverse order
         for (int i = blockCount() - 1; i >= 0; i--) {
-            BlockBegin block = blockAt(i);
+            LIRBlock block = blockAt(i);
             List<LIRInstruction> instructions = block.lir().instructionsList();
             final int blockFrom = block.firstLirInstructionId();
             int blockTo = block.lastLirInstructionId();
@@ -1197,7 +1183,7 @@ public final class LinearScan {
             assert blockTo == instructions.get(instructions.size() - 1).id;
 
             // Update intervals for operands live at the end of this block;
-            CiBitMap live = block.lirBlock.liveOut;
+            CiBitMap live = block.liveOut;
             for (int operandNum = live.nextSetBit(0); operandNum >= 0; operandNum = live.nextSetBit(operandNum + 1)) {
                 assert live.get(operandNum) : "should not stop here otherwise";
                 CiValue operand = operands.operandFor(operandNum);
@@ -1211,7 +1197,7 @@ public final class LinearScan {
                 // interval is used anywhere inside this loop. It's possible
                 // that the block was part of a non-natural loop, so it might
                 // have an invalid loop index.
-                if (block.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd) && block.loopIndex() != -1 && isIntervalInLoop(operandNum, block.loopIndex())) {
+                if (block.isLinearScanLoopEnd() && block.loopIndex() != -1 && isIntervalInLoop(operandNum, block.loopIndex())) {
                     intervalFor(operand).addUsePos(blockTo + 1, RegisterPriority.LiveAtLoopEnd);
                 }
             }
@@ -1296,22 +1282,6 @@ public final class LinearScan {
                 addRegisterHints(op);
 
             } // end of instruction iteration
-
-            // (tw) Make sure that no spill store optimization is applied for phi instructions that flow into exception handlers.
-            if (block.isExceptionEntry()) {
-                FrameState stateBefore = block.stateBefore();
-                stateBefore.forEachLivePhi(block, new PhiProcedure() {
-                    @Override
-                    public boolean doPhi(Phi phi) {
-                        Interval interval = intervalFor(phi.operand());
-                        if (interval != null) {
-                            interval.setSpillState(SpillState.NoOptimization);
-                        }
-                        return true;
-                    }
-                });
-            }
-
         } // end of block iteration
 
         // add the range [0, 1] to all fixed intervals.
@@ -1539,14 +1509,14 @@ public final class LinearScan {
         throw new CiBailout("LinearScan: interval is null");
     }
 
-    Interval intervalAtBlockBegin(BlockBegin block, CiValue operand) {
+    Interval intervalAtBlockBegin(LIRBlock block, CiValue operand) {
         assert operand.isVariable() : "register number out of bounds";
         assert intervalFor(operand) != null : "no interval found";
 
         return splitChildAtOpId(intervalFor(operand), block.firstLirInstructionId(), LIRInstruction.OperandMode.Output);
     }
 
-    Interval intervalAtBlockEnd(BlockBegin block, CiValue operand) {
+    Interval intervalAtBlockEnd(LIRBlock block, CiValue operand) {
         assert operand.isVariable() : "register number out of bounds";
         assert intervalFor(operand) != null : "no interval found";
 
@@ -1560,16 +1530,16 @@ public final class LinearScan {
         return splitChildAtOpId(intervalFor(operand), opId, LIRInstruction.OperandMode.Input);
     }
 
-    void resolveCollectMappings(BlockBegin fromBlock, BlockBegin toBlock, MoveResolver moveResolver) {
+    void resolveCollectMappings(LIRBlock fromBlock, LIRBlock toBlock, MoveResolver moveResolver) {
         assert moveResolver.checkEmpty();
 
         int numOperands = operands.size();
-        CiBitMap liveAtEdge = toBlock.lirBlock.liveIn;
+        CiBitMap liveAtEdge = toBlock.liveIn;
 
         // visit all variables for which the liveAtEdge bit is set
         for (int operandNum = liveAtEdge.nextSetBit(0); operandNum >= 0; operandNum = liveAtEdge.nextSetBit(operandNum + 1)) {
             assert operandNum < numOperands : "live information set for not exisiting interval";
-            assert fromBlock.lirBlock.liveOut.get(operandNum) && toBlock.lirBlock.liveIn.get(operandNum) : "interval not live at this edge";
+            assert fromBlock.liveOut.get(operandNum) && toBlock.liveIn.get(operandNum) : "interval not live at this edge";
 
             CiValue liveOperand = operands.operandFor(operandNum);
             Interval fromInterval = intervalAtBlockEnd(fromBlock, liveOperand);
@@ -1582,10 +1552,10 @@ public final class LinearScan {
         }
     }
 
-    void resolveFindInsertPos(BlockBegin fromBlock, BlockBegin toBlock, MoveResolver moveResolver) {
+    void resolveFindInsertPos(LIRBlock fromBlock, LIRBlock toBlock, MoveResolver moveResolver) {
         if (fromBlock.numberOfSux() <= 1) {
             if (C1XOptions.TraceLinearScanLevel >= 4) {
-                TTY.println("inserting moves at end of fromBlock B%d", fromBlock.blockID);
+                TTY.println("inserting moves at end of fromBlock B%d", fromBlock.blockID());
             }
 
             List<LIRInstruction> instructions = fromBlock.lir().instructionsList();
@@ -1601,7 +1571,7 @@ public final class LinearScan {
 
         } else {
             if (C1XOptions.TraceLinearScanLevel >= 4) {
-                TTY.println("inserting moves at beginning of toBlock B%d", toBlock.blockID);
+                TTY.println("inserting moves at beginning of toBlock B%d", toBlock.blockID());
             }
 
             if (C1XOptions.DetailedAsserts) {
@@ -1632,24 +1602,24 @@ public final class LinearScan {
 
         int i;
         for (i = 0; i < numBlocks; i++) {
-            BlockBegin block = blockAt(i);
+            LIRBlock block = blockAt(i);
 
             // check if block has only one predecessor and only one successor
-            if (block.numberOfPreds() == 1 && block.numberOfSux() == 1 && block.numberOfExceptionHandlers() == 0 && !block.isExceptionEntry()) {
+            if (block.numberOfPreds() == 1 && block.numberOfSux() == 1) {
                 List<LIRInstruction> instructions = block.lir().instructionsList();
                 assert instructions.get(0).code == LIROpcode.Label : "block must start with label";
-                assert instructions.get(instructions.size() - 1).code == LIROpcode.Branch : "block with successors must end with branch";
+                assert instructions.get(instructions.size() - 1).code == LIROpcode.Branch : "block with successors must end with branch (" + block + "), " + instructions.get(instructions.size() - 1);
                 assert ((LIRBranch) instructions.get(instructions.size() - 1)).cond() == Condition.TRUE : "block with successor must end with unconditional branch";
 
                 // check if block is empty (only label and branch)
                 if (instructions.size() == 2) {
-                    BlockBegin pred = block.predAt(0);
-                    BlockBegin sux = block.suxAt(0);
+                    LIRBlock pred = block.predAt(0);
+                    LIRBlock sux = block.suxAt(0);
 
                     // prevent optimization of two consecutive blocks
                     if (!blockCompleted.get(pred.linearScanNumber()) && !blockCompleted.get(sux.linearScanNumber())) {
                         if (C1XOptions.TraceLinearScanLevel >= 3) {
-                            TTY.println(" optimizing empty block B%d (pred: B%d, sux: B%d)", block.blockID, pred.blockID, sux.blockID);
+                            TTY.println(" optimizing empty block B%d (pred: B%d, sux: B%d)", block.blockID(), pred.blockID(), sux.blockID());
                         }
                         blockCompleted.set(block.linearScanNumber());
 
@@ -1666,17 +1636,17 @@ public final class LinearScan {
 
         for (i = 0; i < numBlocks; i++) {
             if (!blockCompleted.get(i)) {
-                BlockBegin fromBlock = blockAt(i);
+                LIRBlock fromBlock = blockAt(i);
                 alreadyResolved.setFrom(blockCompleted);
 
                 int numSux = fromBlock.numberOfSux();
                 for (int s = 0; s < numSux; s++) {
-                    BlockBegin toBlock = fromBlock.suxAt(s);
+                    LIRBlock toBlock = fromBlock.suxAt(s);
 
                     // check for duplicate edges between the same blocks (can happen with switch blocks)
                     if (!alreadyResolved.get(toBlock.linearScanNumber())) {
                         if (C1XOptions.TraceLinearScanLevel >= 3) {
-                            TTY.println(" processing edge between B%d and B%d", fromBlock.blockID, toBlock.blockID);
+                            TTY.println(" processing edge between B%d and B%d", fromBlock.blockID(), toBlock.blockID());
                         }
                         alreadyResolved.set(toBlock.linearScanNumber());
 
@@ -1687,191 +1657,6 @@ public final class LinearScan {
                             moveResolver.resolveAndAppendMoves();
                         }
                     }
-                }
-            }
-        }
-    }
-
-    void resolveExceptionEntry(BlockBegin block, CiValue operand, MoveResolver moveResolver) {
-        if (intervalFor(operand) == null) {
-            // if a phi function is never used, no interval is created . ignore this
-            return;
-        }
-
-        Interval interval = intervalAtBlockBegin(block, operand);
-        CiValue location = interval.location();
-
-        if (location.isRegister() && interval.alwaysInMemory()) {
-            // the interval is split to get a short range that is located on the stack
-            // in the following two cases:
-            // * the interval started in memory (e.g. method parameter), but is currently in a register
-            // this is an optimization for exception handling that reduces the number of moves that
-            // are necessary for resolving the states when an exception uses this exception handler
-            // * the interval would be on the fpu stack at the begin of the exception handler
-            // this is not allowed because of the complicated fpu stack handling on Intel
-
-            // range that will be spilled to memory
-            int fromOpId = block.firstLirInstructionId();
-            int toOpId = fromOpId + 1; // short live range of length 1
-            assert interval.from() <= fromOpId && interval.to() >= toOpId : "no split allowed between exception entry and first instruction";
-
-            if (interval.from() != fromOpId) {
-                // the part before fromOpId is unchanged
-                interval = interval.split(fromOpId, this);
-                interval.assignLocation(location);
-            }
-            assert interval.from() == fromOpId : "must be true now";
-
-            Interval spilledPart = interval;
-            if (interval.to() != toOpId) {
-                // the part after toOpId is unchanged
-                spilledPart = interval.splitFromStart(toOpId, this);
-                moveResolver.addMapping(spilledPart, interval);
-            }
-            assignSpillSlot(spilledPart);
-
-            assert spilledPart.from() == fromOpId && spilledPart.to() == toOpId : "just checking";
-        }
-    }
-
-    void resolveExceptionEntry(final BlockBegin block, final MoveResolver moveResolver) {
-        assert block.checkBlockFlag(BlockBegin.BlockFlag.ExceptionEntry) : "should not call otherwise";
-        assert moveResolver.checkEmpty();
-
-        // visit all registers where the liveIn bit is set
-        for (int operandNum = block.lirBlock.liveIn.nextSetBit(0); operandNum >= 0; operandNum = block.lirBlock.liveIn.nextSetBit(operandNum + 1)) {
-            resolveExceptionEntry(block, operands.operandFor(operandNum), moveResolver);
-        }
-
-        // the liveIn bits are not set for phi functions of the xhandler entry, so iterate them separately
-        block.stateBefore().forEachLivePhi(block, new PhiProcedure() {
-            public boolean doPhi(Phi phi) {
-                resolveExceptionEntry(block, phi.operand(), moveResolver);
-                return true;
-            }
-        });
-
-        if (moveResolver.hasMappings()) {
-            // insert moves after first instruction
-            moveResolver.setInsertPosition(block.lir(), 0);
-            moveResolver.resolveAndAppendMoves();
-        }
-    }
-
-    void resolveExceptionEdge(ExceptionHandler handler, int throwingOpId, CiValue operand, Phi phi, MoveResolver moveResolver) {
-        if (intervalFor(operand) == null) {
-            // if a phi function is never used, no interval is created . ignore this
-            return;
-        }
-
-        // the computation of toInterval is equal to resolveCollectMappings,
-        // but fromInterval is more complicated because of phi functions
-        BlockBegin toBlock = handler.entryBlock();
-        Interval toInterval = intervalAtBlockBegin(toBlock, operand);
-
-        if (phi != null) {
-            // phi function of the exception entry block
-            // no moves are created for this phi function in the LIRGenerator, so the
-            // interval at the throwing instruction must be searched using the operands
-            // of the phi function
-            Value fromValue = phi.inputAt(handler.phiOperand());
-            Constant con = null;
-            if (fromValue instanceof Constant) {
-                con = (Constant) fromValue;
-            }
-            if (con != null && (con.operand().isIllegal() || con.operand().isConstant())) {
-                // unpinned constants may have no register, so add mapping from constant to interval
-                moveResolver.addMapping(con.asConstant(), toInterval);
-            } else {
-                // search split child at the throwing opId
-                Interval fromInterval = intervalAtOpId(fromValue.operand(), throwingOpId);
-                if (fromInterval != toInterval) {
-                    moveResolver.addMapping(fromInterval, toInterval);
-                    // with phi functions it can happen that the same fromValue is used in
-                    // multiple mappings, so notify move-resolver that this is allowed
-                    moveResolver.setMultipleReadsAllowed();
-                }
-            }
-        } else {
-            // no phi function, so use regNum also for fromInterval
-            // search split child at the throwing opId
-            Interval fromInterval = intervalAtOpId(operand, throwingOpId);
-            if (fromInterval != toInterval) {
-                // optimization to reduce number of moves: when toInterval is on stack and
-                // the stack slot is known to be always correct, then no move is necessary
-                if (!fromInterval.alwaysInMemory() || fromInterval.spillSlot() != toInterval.location()) {
-                    moveResolver.addMapping(fromInterval, toInterval);
-                }
-            }
-        }
-    }
-
-    void resolveExceptionEdge(final ExceptionHandler handler, final int throwingOpId, final MoveResolver moveResolver) {
-        if (C1XOptions.TraceLinearScanLevel >= 4) {
-            TTY.println("resolving exception handler B%d: throwingOpId=%d", handler.entryBlock().blockID, throwingOpId);
-        }
-
-        assert moveResolver.checkEmpty();
-        assert handler.lirOpId() == -1 : "already processed this xhandler";
-        handler.setLirOpId(throwingOpId);
-        assert handler.entryCode() == null : "code already present";
-
-        // visit all registers where the liveIn bit is set
-        BlockBegin block = handler.entryBlock();
-        for (int operandNum = block.lirBlock.liveIn.nextSetBit(0); operandNum >= 0; operandNum = block.lirBlock.liveIn.nextSetBit(operandNum + 1)) {
-            resolveExceptionEdge(handler, throwingOpId, operands.operandFor(operandNum), null, moveResolver);
-        }
-
-        // the liveIn bits are not set for phi functions of the xhandler entry, so iterate them separately
-        block.stateBefore().forEachLivePhi(block, new PhiProcedure() {
-            public boolean doPhi(Phi phi) {
-                resolveExceptionEdge(handler, throwingOpId, phi.operand(), phi, moveResolver);
-                return true;
-            }
-        });
-
-        if (moveResolver.hasMappings()) {
-            LIRList entryCode = new LIRList(gen);
-            moveResolver.setInsertPosition(entryCode, 0);
-            moveResolver.resolveAndAppendMoves();
-
-            entryCode.jump(handler.entryBlock());
-            handler.setEntryCode(entryCode);
-        }
-    }
-
-    void resolveExceptionHandlers() {
-        MoveResolver moveResolver = new MoveResolver(this);
-        //LIRVisitState visitor = new LIRVisitState();
-        int numBlocks = blockCount();
-
-        int i;
-        for (i = 0; i < numBlocks; i++) {
-            BlockBegin block = blockAt(i);
-            if (block.checkBlockFlag(BlockFlag.ExceptionEntry)) {
-                resolveExceptionEntry(block, moveResolver);
-            }
-        }
-
-        for (i = 0; i < numBlocks; i++) {
-            BlockBegin block = blockAt(i);
-            LIRList ops = block.lir();
-            int numOps = ops.length();
-
-            // iterate all instructions of the block. skip the first because it is always a label
-            assert !ops.at(0).hasOperands() : "first operation must always be a label";
-            for (int j = 1; j < numOps; j++) {
-                LIRInstruction op = ops.at(j);
-                int opId = op.id;
-
-                if (opId != -1 && op.info != null) {
-                    // visit operation to collect all operands
-                    for (ExceptionHandler handler : op.exceptionEdges()) {
-                        resolveExceptionEdge(handler, opId, moveResolver);
-                    }
-
-                } else if (C1XOptions.DetailedAsserts) {
-                    assert op.exceptionEdges().size() == 0 : "missed exception handler";
                 }
             }
         }
@@ -1943,7 +1728,7 @@ public final class LinearScan {
 
         if (opId != -1) {
             if (C1XOptions.DetailedAsserts) {
-                BlockBegin block = blockForId(opId);
+                LIRBlock block = blockForId(opId);
                 if (block.numberOfSux() <= 1 && opId == block.lastLirInstructionId()) {
                     // check if spill moves could have been appended at the end of this block, but
                     // before the branch instruction. So the split child information for this branch would
@@ -1951,7 +1736,7 @@ public final class LinearScan {
                     LIRInstruction instr = block.lir().instructionsList().get(block.lir().instructionsList().size() - 1);
                     if (instr instanceof LIRBranch) {
                         LIRBranch branch = (LIRBranch) instr;
-                        if (block.lirBlock.liveOut.get(operandNumber(operand))) {
+                        if (block.liveOut.get(operandNumber(operand))) {
                             assert branch.cond() == Condition.TRUE : "block does not end with an unconditional jump";
                             throw new CiBailout("can't get split child for the last branch of a block because the information would be incorrect (moves are inserted before the branch in resolveDataFlow)");
                         }
@@ -2061,16 +1846,9 @@ public final class LinearScan {
 
             assert con == null || operand.isVariable() || operand.isConstant() || operand.isIllegal() : "Constant instructions have only constant operands (or illegal if constant is optimized away)";
 
-            if (con != null && !con.isLive() && !operand.isConstant()) {
-                // Unpinned constants may have a variable operand for a part of the lifetime
-                // or may be illegal when it was optimized away,
-                // so always use a constant operand
-                operand = con.asConstant();
-            }
-
             if (operand.isVariable()) {
                 OperandMode mode = OperandMode.Input;
-                BlockBegin block = blockForId(opId);
+                LIRBlock block = blockForId(opId);
                 if (block.numberOfSux() == 1 && opId == block.lastLirInstructionId()) {
                     // generating debug information for the last instruction of a block.
                     // if this instruction is a branch, spill moves are inserted before this branch
@@ -2079,7 +1857,7 @@ public final class LinearScan {
                     // Solution: use the first opId of the branch target block instead.
                     final LIRInstruction instr = block.lir().instructionsList().get(block.lir().instructionsList().size() - 1);
                     if (instr instanceof LIRBranch) {
-                        if (block.lirBlock.liveOut.get(operandNumber(operand))) {
+                        if (block.liveOut.get(operandNumber(operand))) {
                             opId = block.suxAt(0).firstLirInstructionId();
                             mode = OperandMode.Output;
                         }
@@ -2093,7 +1871,7 @@ public final class LinearScan {
                 assert !hasCall(opId) || operand.isStackSlot() || !isCallerSave(operand) : "cannot have caller-save register operands at calls";
                 return operand;
             } else if (operand.isRegister()) {
-                assert value instanceof LoadRegister;
+                assert false : "must not reach here";
                 return operand;
             } else {
                 assert value instanceof Constant;
@@ -2106,15 +1884,7 @@ public final class LinearScan {
         }
     }
 
-    CiFrame computeFrameForState(int opId, FrameState state, CiBitMap frameRefMap) {
-        CiFrame callerFrame = null;
-
-        FrameState callerState = state.callerState();
-        if (callerState != null) {
-            // process recursively to compute outermost scope first
-            callerFrame = computeFrameForState(opId, callerState, frameRefMap);
-        }
-
+    CiFrame computeFrameForState(FrameState state, int opId, CiBitMap frameRefMap) {
         CiValue[] values = new CiValue[state.valuesSize() + state.locksSize()];
         int valueIndex = 0;
 
@@ -2139,8 +1909,11 @@ public final class LinearScan {
                 }
             }
         }
-
-        return new CiFrame(callerFrame, state.scope().method, state.bci, values, state.localsSize(), state.stackSize(), state.locksSize());
+        CiFrame caller = null;
+        if (state.outerFrameState() != null) {
+            caller = computeFrameForState(state.outerFrameState(), opId, frameRefMap);
+        }
+        return new CiFrame(caller, state.method, state.bci, values, state.localsSize(), state.stackSize(), state.locksSize());
     }
 
     private void computeDebugInfo(IntervalWalker iw, LIRInstruction op) {
@@ -2176,7 +1949,7 @@ public final class LinearScan {
         if (C1XOptions.TraceLinearScanLevel >= 3) {
             TTY.println("creating debug information at opId %d", opId);
         }
-        return computeFrameForState(opId, state, frameRefMap);
+        return computeFrameForState(state, opId, frameRefMap);
     }
 
     private void assignLocations(List<LIRInstruction> instructions, IntervalWalker iw) {
@@ -2202,15 +1975,6 @@ public final class LinearScan {
             }
 
             if (op.info != null) {
-                // exception handling
-                if (compilation.hasExceptionHandlers()) {
-                    for (ExceptionHandler handler : op.exceptionEdges()) {
-                        if (handler.entryCode() != null) {
-                            assignLocations(handler.entryCode().instructionsList(), null);
-                        }
-                    }
-                }
-
                 // compute reference map and debug information
                 computeDebugInfo(iw, op);
             }
@@ -2248,7 +2012,7 @@ public final class LinearScan {
 
     private void assignLocations() {
         IntervalWalker iw = initComputeOopMaps();
-        for (BlockBegin block : sortedBlocks) {
+        for (LIRBlock block : sortedBlocks) {
             assignLocations(block.lir().instructionsList(), iw);
         }
     }
@@ -2283,9 +2047,6 @@ public final class LinearScan {
         }
 
         resolveDataFlow();
-        if (compilation.hasExceptionHandlers()) {
-            resolveExceptionHandlers();
-        }
 
         if (C1XOptions.PrintTimers) {
             C1XTimers.RESOLUTION.stop();
@@ -2319,12 +2080,8 @@ public final class LinearScan {
         }
 
         printLir("After register number assignment", true);
-
         EdgeMoveOptimizer.optimize(ir.linearScanOrder());
-        if (C1XOptions.OptControlFlow) {
-            ControlFlowOptimizer.optimize(ir);
-        }
-
+        ControlFlowOptimizer.optimize(ir);
         printLir("After control flow optimization", false);
     }
 
@@ -2343,8 +2100,8 @@ public final class LinearScan {
             TTY.println();
             TTY.println("--- Basic Blocks ---");
             for (i = 0; i < blockCount(); i++) {
-                BlockBegin block = blockAt(i);
-                TTY.print("B%d [%d, %d, %d, %d] ", block.blockID, block.firstLirInstructionId(), block.lastLirInstructionId(), block.loopIndex(), block.loopDepth());
+                LIRBlock block = blockAt(i);
+                TTY.print("B%d [%d, %d, %d, %d] ", block.blockID(), block.firstLirInstructionId(), block.lastLirInstructionId(), block.loopIndex(), block.loopDepth());
             }
             TTY.println();
             TTY.println();
@@ -2364,7 +2121,7 @@ public final class LinearScan {
         }
 
         if (compilation.compiler.isObserved()) {
-            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, label, compilation.hir().startBlock, hirValid, true));
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, label, compilation.graph, hirValid, true));
         }
     }
 
@@ -2490,7 +2247,7 @@ public final class LinearScan {
         IntervalWalker iw = new IntervalWalker(this, fixedIntervals, otherIntervals);
 
         for (int i = 0; i < blockCount(); i++) {
-            BlockBegin block = blockAt(i);
+            LIRBlock block = blockAt(i);
 
             List<LIRInstruction> instructions = block.lir().instructionsList();
 
@@ -2535,13 +2292,13 @@ public final class LinearScan {
         int numBlocks = blockCount();
 
         for (int i = 0; i < numBlocks; i++) {
-            BlockBegin block = blockAt(i);
-            CiBitMap liveAtEdge = block.lirBlock.liveIn;
+            LIRBlock block = blockAt(i);
+            CiBitMap liveAtEdge = block.liveIn;
 
             // visit all operands where the liveAtEdge bit is set
             for (int operandNum = liveAtEdge.nextSetBit(0); operandNum >= 0; operandNum = liveAtEdge.nextSetBit(operandNum + 1)) {
                 if (C1XOptions.TraceLinearScanLevel >= 4) {
-                    TTY.println("checking interval %d of block B%d", operandNum, block.blockID);
+                    TTY.println("checking interval %d of block B%d", operandNum, block.blockID());
                 }
                 CiValue operand = operands.operandFor(operandNum);
                 assert operand.isVariable() : "value must have variable operand";

@@ -1,164 +1,180 @@
+/*
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.graal.graph;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-/**
- * @author Gilles Duboscq
- *
- */
 public abstract class Node {
-	private final Graph graph;
-	private final int id;
-	private final NodeArray inputs;
-	private final NodeArray successors;
-	private final ArrayList<Node> usages;
-	private final ArrayList<Node> predecessors;
-	
-	public Node(Node[] inputs, Node[] successors, Graph graph) {
-		this.graph = graph;
-		if(graph != null) {
-			this.id = graph.nextId(this); //this pointer escaping in a constructor..
-		}else {
-			this.id = -1;
-		}
-		this.inputs = new NodeArray(inputs);
-		this.successors = new NodeArray(successors);
-		this.predecessors = new ArrayList<Node>();
-		this.usages = new ArrayList<Node>();
-	}
-	
-	public Node(int inputs, int successors, Graph graph) {
-		this(nullNodes(inputs, graph), nullNodes(successors, graph), graph);
-	}
-	
-	public class NodeArray implements Iterable<Node>{
-		private final Node[] nodes;
-		
-		public NodeArray(Node[] nodes) {
-			this.nodes = nodes;
-		}
-		
-		@Override
-		public Iterator<Node> iterator() {
-			return Arrays.asList(this.nodes).iterator();
-		}
-		
-		public Node set(int index, Node node) {
-			if(node.graph != Node.this.graph) {
-				// fail ?
-			}
-			Node old = nodes[index];
-			nodes[index] = node;
-			if(Node.this.inputs == this) { // :-/
-				old.usages.remove(Node.this);
-				node.usages.add(Node.this);
-			}else /*if(Node.this.successors == this)*/{
-				old.predecessors.remove(Node.this);
-				node.predecessors.add(Node.this);
-			}
-			
-			return old;
-		}
-		
-		public boolean contains(Node n) {
-			for(int i = 0; i < nodes.length; i++)
-				if(nodes[i] == n) //equals?
-					return true;
-			return false;
-		}
-		
-		public boolean replace(Node toReplace, Node replacement) {
-			for(int i = 0; i < nodes.length; i++) {
-				if(nodes[i] == toReplace) { // equals?
-					this.set(i, replacement);
-					return true; //replace only one occurrence
-				}
-			}
-			return false;
-		}
-		
-		public Node[] asArray() {
-			Node[] copy = new Node[nodes.length];
-			System.arraycopy(nodes, 0, copy, 0, nodes.length);
-			return copy;
-		}
-	}
-	
-	public Collection<Node> getPredecessors() {
-		return Collections.unmodifiableCollection(predecessors);
-	}
-	
-	public Collection<Node> getUsages() {
-		return Collections.unmodifiableCollection(usages);
-	}
-	
-	public NodeArray getInputs() {
-		return inputs;
-	}
-	
-	public NodeArray getSuccessors() {
-		return successors;
-	}
-	
-	public int getId() {
-		return id;
-	}
-	
-	public Graph getGraph() {
-		return graph;
-	}
-	
-	public void replace(Node other) {
-		if(other.graph != this.graph) {
-			other = other.cloneNode(this.graph);
-		}
-		Node[] myInputs = inputs.nodes;
-		for(int i = 0; i < myInputs.length; i++) {
-			other.inputs.set(i, myInputs[i]);
-		}
-		for(Node usage : usages) {
-			usage.inputs.replace(this, other);
-		}
-		
-		Node[] mySuccessors = successors.nodes;
-		for(int i = 0; i < mySuccessors.length; i++) {
-			other.successors.set(i, mySuccessors[i]);
-		}
-		for(Node predecessor : predecessors) {
-			predecessor.successors.replace(this, other);
-		}
-	}
-	
-	public abstract Node cloneNode(Graph into);
 
-	@Override
-	public boolean equals(Object obj) {
-		if(obj == this)
-			return true;
-		if(obj.getClass() == this.getClass()) {
-			Node other  = (Node)obj;
-			if(other.id == this.id && other.graph == this.graph)
-				return true;
-		}
-		return false;
-	}
-	
-	protected Node getInput(int index) {
-		return this.inputs.nodes[index];
-	}
-	
-	protected Node getSuccessor(int index) {
-		return this.successors.nodes[index];
-	}
+    public static final Node Null = null;
+    public static final int DeletedID = -1;
 
-	private static Node[] nullNodes(int number, Graph graph) {
-		Node[] nodes = new Node[number];
-		for(int i = 0; i < number; i++)
-			nodes[i] = new NullNode(0, 0, graph);
-		return nodes;
-	}
+    final Graph graph;
+    private int id;
+    final NodeArray inputs;
+    final NodeArray successors;
+    final ArrayList<Node> usages;
+    final ArrayList<Node> predecessors;
+    final ArrayList<Integer> predecessorsIndex;
+
+    public Node(int inputCount, int successorCount, Graph graph) {
+        assert graph != null;
+        this.graph = graph;
+        this.id = graph.register(this);
+        this.inputs = new NodeArray(this, inputCount);
+        this.successors = new NodeArray(this, successorCount);
+        this.predecessors = new ArrayList<Node>();
+        this.usages = new ArrayList<Node>();
+        this.predecessorsIndex = new ArrayList<Integer>();
+    }
+
+    public List<Node> predecessors() {
+        return Collections.unmodifiableList(predecessors);
+    }
+
+    public List<Integer> predecessorsIndex() {
+        return Collections.unmodifiableList(predecessorsIndex);
+    }
+
+    public List<Node> usages() {
+        return Collections.unmodifiableList(usages);
+    }
+
+    public NodeArray inputs() {
+        return inputs;
+    }
+
+    public NodeArray successors() {
+        return successors;
+    }
+
+    public int id() {
+        return id;
+    }
+
+    public Graph graph() {
+        return graph;
+    }
+
+    public <T extends Op> T lookup(Class<T> clazz) {
+        return null;
+    }
+
+    public String shortName() {
+        return getClass().getSimpleName();
+    }
+
+    public Node replace(Node other) {
+        assert !isDeleted() && (other == null || !other.isDeleted());
+        assert other == null || other.graph == graph;
+        for (Node usage : usages) {
+            usage.inputs.replaceFirstOccurrence(this, other);
+        }
+        int z = 0;
+        for (Node predecessor : predecessors) {
+            int predIndex = predecessorsIndex.get(z);
+            predecessor.successors.nodes[predIndex] = other;
+            ++z;
+        }
+        if (other != null) {
+            other.usages.addAll(usages);
+            other.predecessors.addAll(predecessors);
+            other.predecessorsIndex.addAll(predecessorsIndex);
+        }
+        usages.clear();
+        predecessors.clear();
+        predecessorsIndex.clear();
+        delete();
+        return other;
+    }
+
+    public boolean isDeleted() {
+        return id == DeletedID;
+    }
+
+    public void delete() {
+        assert !isDeleted();
+        assert usages.size() == 0 && predecessors.size() == 0 : "usages: " + usages.size() + ", predecessors: " + predecessors().size();
+        assert predecessorsIndex.size() == 0;
+        for (int i = 0; i < inputs.size(); ++i) {
+            inputs.set(i, Null);
+        }
+        for (int i = 0; i < successors.size(); ++i) {
+            successors.set(i, Null);
+        }
+        assert predecessors().size() == 0 && usages().size() == 0;
+        // make sure its not connected. pred usages
+        graph.unregister(this);
+        id = DeletedID;
+        assert isDeleted();
+    }
+
+    public Node copy() {
+        return copy(graph);
+    }
+
+    /**
+     * 
+     * @param into
+     * @return
+     */
+    public abstract Node copy(Graph into);
+
+    /**
+     * 
+     * @return
+     */
+    protected int inputCount() {
+        return 0;
+    }
+
+    /**
+     * 
+     * @return
+     */
+    protected int successorCount() {
+        return 0;
+    }
+
+    /**
+     * Provides a {@link Map} of properties of this node for use in debugging (e.g., to view in the ideal graph
+     * visualizer). Subclasses overriding this method should add to the map returned by their superclass.
+     */
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> map = new HashMap<Object, Object>();
+        map.put("inputCount", inputCount());
+        map.put("usageCount", usages.size());
+        map.put("successorCount", successorCount());
+        map.put("predecessorCount", predecessors.size());
+        return map;
+    }
+
+    @Override
+    public String toString() {
+        return this.getClass().getSimpleName() + "-" + this.id();
+    }
 }

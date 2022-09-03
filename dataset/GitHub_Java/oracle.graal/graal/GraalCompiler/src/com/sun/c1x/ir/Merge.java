@@ -126,12 +126,12 @@ public class Merge extends StateSplit {
         //}
 
         // print predecessors
-        if (!blockPredecessors().isEmpty()) {
-            out.print(" pred:");
-            for (Instruction pred : blockPredecessors()) {
-                out.print(pred.block());
-            }
-        }
+//        if (!blockPredecessors().isEmpty()) {
+//            out.print(" pred:");
+//            for (Instruction pred : blockPredecessors()) {
+//                out.print(pred.block());
+//            }
+//        }
     }
 
     @Override
@@ -150,7 +150,7 @@ public class Merge extends StateSplit {
             while (!hasPhisOnStack && i < state.stackSize()) {
                 Value value = state.stackAt(i);
                 hasPhisOnStack = isPhiAtBlock(value);
-                if (value != null && !value.isIllegal()) {
+                if (value != null && !(value instanceof Phi && ((Phi) value).isDead())) {
                     i += value.kind.sizeInSlots();
                 } else {
                     i++;
@@ -161,7 +161,7 @@ public class Merge extends StateSplit {
                 Value value = state.localAt(i);
                 hasPhisInLocals = isPhiAtBlock(value);
                 // also ignore illegal HiWords
-                if (value != null && !value.isIllegal()) {
+                if (value != null && !(value instanceof Phi && ((Phi) value).isDead())) {
                     i += value.kind.sizeInSlots();
                 } else {
                     i++;
@@ -180,7 +180,11 @@ public class Merge extends StateSplit {
                 if (value != null) {
                     out.println(stateString(j, value));
                     // also ignore illegal HiWords
-                    j += value.isIllegal() ? 1 : value.kind.sizeInSlots();
+                    if (value instanceof Phi && ((Phi) value).isDead()) {
+                        j +=  1;
+                    } else {
+                        j += value.kind.sizeInSlots();
+                    }
                 } else {
                     j++;
                 }
@@ -254,5 +258,26 @@ public class Merge extends StateSplit {
     @Override
     public String shortName() {
         return "Merge #" + id();
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        assert getClass() == Merge.class : "copy of " + getClass();
+        Merge x = new Merge(into);
+        x.setNonNull(isNonNull());
+        return x;
+    }
+
+    public void removePhiPredecessor(ExceptionDispatch successor) {
+        int predIndex = predecessors().indexOf(successor);
+        assert predIndex != -1;
+
+        for (Node usage : usages()) {
+            if (usage instanceof Phi) {
+                Phi phi = (Phi) usage;
+                assert phi.valueCount() == predecessors().size();
+                phi.removeInput(predIndex + 1);
+            }
+        }
     }
 }
