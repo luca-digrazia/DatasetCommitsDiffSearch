@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -148,7 +149,7 @@ public class UniverseBuilder {
             hUniverse.orderedMethods = new ArrayList<>(hUniverse.methods.values());
             Collections.sort(hUniverse.orderedMethods);
             hUniverse.orderedFields = new ArrayList<>(hUniverse.fields.values());
-            Collections.sort(hUniverse.orderedFields);
+            hUniverse.orderedFields.sort(FIELD_COMPARATOR);
             profilingInformationBuildTask.join();
         }
     }
@@ -518,6 +519,30 @@ public class UniverseBuilder {
         }
     }
 
+    private static final Comparator<HostedField> FIELD_COMPARATOR = (field1, field2) -> {
+        if (field1.equals(field2)) {
+            return 0;
+        }
+        /*
+         * Order by JavaKind. This is required, since we want instance fields of the same size and
+         * kind consecutive.
+         */
+        int result = field2.getJavaKind().ordinal() - field1.getJavaKind().ordinal();
+
+        if (result == 0) {
+            /*
+             * Make the field order deterministic by sorting by name. This is arbitrary, we can come
+             * up with any better ordering.
+             */
+            result = field1.getDeclaringClass().getName().compareTo(field2.getDeclaringClass().getName());
+            if (result == 0) {
+                result = field1.getName().compareTo(field2.getName());
+            }
+        }
+        assert result != 0 : "Fields not distinguishable: " + field1 + ", " + field2;
+        return result;
+    };
+
     // @formatter:off
 //    /**
 //     * New version of the method that uses the static analysis results collected by the static
@@ -745,7 +770,7 @@ public class UniverseBuilder {
         }
 
         // Sort so that a) all Object fields are consecutive, and b) bigger types come first.
-        Collections.sort(rawFields);
+        rawFields.sort(FIELD_COMPARATOR);
 
         int nextOffset = startSize;
         while (rawFields.size() > 0) {
@@ -837,7 +862,7 @@ public class UniverseBuilder {
         }
 
         // Sort so that a) all Object fields are consecutive, and b) bigger types come first.
-        Collections.sort(fields);
+        fields.sort(FIELD_COMPARATOR);
 
         ObjectLayout layout = ConfigurationValues.getObjectLayout();
 
