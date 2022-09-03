@@ -23,7 +23,6 @@
 package com.oracle.graal.compiler.phases;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
 
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.options.*;
@@ -64,6 +63,6 @@ public class LowTier extends PhaseSuite<LowTierContext> {
 
         appendPhase(new UseTrappingNullChecksPhase());
 
-        appendPhase(new DeadCodeEliminationPhase(REQUIRED));
+        appendPhase(new DeadCodeEliminationPhase());
     }
 }
