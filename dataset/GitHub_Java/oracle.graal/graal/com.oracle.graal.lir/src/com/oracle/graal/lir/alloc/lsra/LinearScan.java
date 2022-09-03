@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -45,6 +45,10 @@ import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.options.NestedBooleanOptionValue;
+import jdk.vm.ci.options.Option;
+import jdk.vm.ci.options.OptionType;
+import jdk.vm.ci.options.OptionValue;
 
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
@@ -64,10 +68,6 @@ import com.oracle.graal.lir.framemap.FrameMapBuilder;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
-import com.oracle.graal.options.NestedBooleanOptionValue;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
 
 /**
  * An implementation of the linear scan register allocator algorithm described in <a
@@ -338,10 +338,9 @@ public class LinearScan {
             firstDerivedIntervalIndex = intervalsSize;
         }
         if (intervalsSize == intervals.length) {
-            intervals = Arrays.copyOf(intervals, intervals.length + (intervals.length >> SPLIT_INTERVALS_CAPACITY_RIGHT_SHIFT) + 1);
+            intervals = Arrays.copyOf(intervals, intervals.length + (intervals.length >> SPLIT_INTERVALS_CAPACITY_RIGHT_SHIFT));
         }
         intervalsSize++;
-        assert intervalsSize <= intervals.length;
         Variable variable = new Variable(source.kind(), ir.nextVariable());
 
         Interval interval = createInterval(variable);
