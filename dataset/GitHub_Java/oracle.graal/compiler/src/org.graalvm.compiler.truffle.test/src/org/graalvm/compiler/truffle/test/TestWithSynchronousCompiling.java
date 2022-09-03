@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,10 +26,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
-import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.TruffleCompilerOptions;
+import org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleOptionsOverrideScope;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
@@ -47,20 +44,17 @@ import org.junit.BeforeClass;
  */
 public abstract class TestWithSynchronousCompiling {
 
-    private static TruffleRuntimeOptionsOverrideScope backgroundCompilationScope;
-    private static TruffleRuntimeOptionsOverrideScope compilationThresholdScope;
-    private static TruffleRuntimeOptionsOverrideScope immediateCompilationScope;
+    private static TruffleOptionsOverrideScope backgroundCompilationScope;
+    private static TruffleOptionsOverrideScope compilationThresholdScope;
 
     @BeforeClass
     public static void before() {
-        backgroundCompilationScope = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleBackgroundCompilation, false);
-        compilationThresholdScope = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleCompilationThreshold, 10);
-        immediateCompilationScope = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleCompileImmediately,false);
+        backgroundCompilationScope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleBackgroundCompilation, false);
+        compilationThresholdScope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleCompilationThreshold, 10);
     }
 
     @AfterClass
     public static void after() {
-        immediateCompilationScope.close();
         backgroundCompilationScope.close();
         compilationThresholdScope.close();
     }
