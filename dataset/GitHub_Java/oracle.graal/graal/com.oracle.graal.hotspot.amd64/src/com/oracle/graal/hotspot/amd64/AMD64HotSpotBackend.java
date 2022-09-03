@@ -64,7 +64,7 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
 
     @Override
     public LIRGenerator newLIRGenerator(StructuredGraph graph, FrameMap frameMap, ResolvedJavaMethod method, LIR lir) {
-        return new AMD64HotSpotLIRGenerator(graph, runtime(), target, frameMap, method, lir);
+        return new HotSpotAMD64LIRGenerator(graph, runtime(), target, frameMap, method, lir);
     }
 
     /**
@@ -141,7 +141,7 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         // - has no callee-saved registers
         // - has no incoming arguments passed on the stack
         // - has no instructions with debug info
-        AMD64HotSpotLIRGenerator gen = (AMD64HotSpotLIRGenerator) lirGen;
+        HotSpotAMD64LIRGenerator gen = (HotSpotAMD64LIRGenerator) lirGen;
         FrameMap frameMap = gen.frameMap;
         LIR lir = gen.lir;
         boolean omitFrame = CanOmitFrame && !frameMap.frameNeedsAllocating() && !lir.hasArgInCallerFrame();
@@ -190,9 +190,10 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         boolean frameOmitted = tasm.frameContext == null;
         if (!frameOmitted) {
             tasm.recordMark(Marks.MARK_EXCEPTION_HANDLER_ENTRY);
-            AMD64Call.directCall(tasm, asm, runtime().lookupRuntimeCall(EXCEPTION_HANDLER), null, false, null);
+            AMD64Call.directCall(tasm, asm, runtime().lookupRuntimeCall(EXCEPTION_HANDLER), null);
+
             tasm.recordMark(Marks.MARK_DEOPT_HANDLER_ENTRY);
-            AMD64Call.directCall(tasm, asm, runtime().lookupRuntimeCall(DEOPT_HANDLER), null, false, null);
+            AMD64Call.directCall(tasm, asm, runtime().lookupRuntimeCall(DEOPT_HANDLER), null);
         } else {
             // No need to emit the stubs for entries back into the method since
             // it has no calls that can cause such "return" entries
