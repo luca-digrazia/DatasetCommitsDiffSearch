@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,13 @@
  */
 package com.oracle.graal.loop;
 
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.type.*;
-
+import com.oracle.graal.nodes.util.*;
 
 public class DerivedScaledInductionVariable extends InductionVariable {
+
     private InductionVariable base;
     private ValueNode scale;
     private ValueNode value;
@@ -44,6 +45,11 @@ public class DerivedScaledInductionVariable extends InductionVariable {
         this.base = base;
         this.scale = ConstantNode.forInt(-1, value.graph());
         this.value = value;
+    }
+
+    @Override
+    public StructuredGraph graph() {
+        return base.graph();
     }
 
     @Override
@@ -67,12 +73,12 @@ public class DerivedScaledInductionVariable extends InductionVariable {
 
     @Override
     public ValueNode initNode() {
-        return IntegerArithmeticNode.mul(base.initNode(), scale);
+        return BinaryArithmeticNode.mul(graph(), base.initNode(), scale);
     }
 
     @Override
     public ValueNode strideNode() {
-        return IntegerArithmeticNode.mul(base.strideNode(), scale);
+        return BinaryArithmeticNode.mul(graph(), base.strideNode(), scale);
     }
 
     @Override
@@ -87,17 +93,22 @@ public class DerivedScaledInductionVariable extends InductionVariable {
 
     @Override
     public long constantInit() {
-        return base.constantInit() * scale.asConstant().asLong();
+        return base.constantInit() * scale.asJavaConstant().asLong();
     }
 
     @Override
     public long constantStride() {
-        return base.constantStride() * scale.asConstant().asLong();
+        return base.constantStride() * scale.asJavaConstant().asLong();
     }
 
     @Override
-    public ValueNode extremumNode() {
-        return IntegerArithmeticNode.mul(base.extremumNode(), scale);
+    public ValueNode extremumNode(boolean assumePositiveTripCount, Stamp stamp) {
+        return BinaryArithmeticNode.mul(graph(), base.extremumNode(assumePositiveTripCount, stamp), IntegerConvertNode.convert(scale, stamp, graph()));
+    }
+
+    @Override
+    public ValueNode exitValueNode() {
+        return BinaryArithmeticNode.mul(graph(), base.exitValueNode(), scale);
     }
 
     @Override
@@ -107,6 +118,18 @@ public class DerivedScaledInductionVariable extends InductionVariable {
 
     @Override
     public long constantExtremum() {
-        return base.constantExtremum() * scale.asConstant().asLong();
+        return base.constantExtremum() * scale.asJavaConstant().asLong();
+    }
+
+    @Override
+    public void deleteUnusedNodes() {
+        if (scale.isAlive() && scale.hasNoUsages()) {
+            GraphUtil.killWithUnusedFloatingInputs(scale);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return String.format("DerivedScaleInductionVariable base (%s) %s %s", base, value.getNodeClass().shortName(), scale);
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,17 @@
  */
 package com.oracle.graal.loop;
 
-import static com.oracle.graal.loop.MathUtil.*;
-import jdk.internal.jvmci.common.*;
-
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 
 public class BasicInductionVariable extends InductionVariable {
 
-    private final ValuePhiNode phi;
-    private final ValueNode init;
-    private final ValueNode rawStride;
-    private final BinaryArithmeticNode<?> op;
+    private ValuePhiNode phi;
+    private ValueNode init;
+    private ValueNode rawStride;
+    private BinaryArithmeticNode<?> op;
 
     public BasicInductionVariable(LoopEx loop, ValuePhiNode phi, ValueNode init, ValueNode rawStride, BinaryArithmeticNode<?> op) {
         super(loop);
@@ -94,7 +92,7 @@ public class BasicInductionVariable extends InductionVariable {
         if (op instanceof SubNode) {
             return graph().unique(new NegateNode(rawStride));
         }
-        throw JVMCIError.shouldNotReachHere();
+        throw GraalInternalError.shouldNotReachHere();
     }
 
     @Override
@@ -120,7 +118,7 @@ public class BasicInductionVariable extends InductionVariable {
         if (op instanceof SubNode) {
             return -rawStride.asJavaConstant().asLong();
         }
-        throw JVMCIError.shouldNotReachHere();
+        throw GraalInternalError.shouldNotReachHere();
     }
 
     @Override
@@ -133,18 +131,21 @@ public class BasicInductionVariable extends InductionVariable {
             stride = IntegerConvertNode.convert(stride, stamp, graph());
             initNode = IntegerConvertNode.convert(initNode, stamp, graph());
         }
-        ValueNode maxTripCount = loop.counted().maxTripCountNode(assumePositiveTripCount, stride, initNode);
-        return add(graph, mul(graph, stride, sub(graph, maxTripCount, ConstantNode.forIntegerStamp(stamp, 1, graph))), initNode);
+        ValueNode maxTripCount = loop.counted().maxTripCountNode(assumePositiveTripCount);
+        if (!maxTripCount.stamp().isCompatible(stamp)) {
+            maxTripCount = IntegerConvertNode.convert(maxTripCount, stamp, graph());
+        }
+        return BinaryArithmeticNode.add(graph, BinaryArithmeticNode.mul(graph, stride, BinaryArithmeticNode.sub(graph, maxTripCount, ConstantNode.forIntegerStamp(stamp, 1, graph))), initNode);
     }
 
     @Override
     public ValueNode exitValueNode() {
         Stamp stamp = phi.stamp();
-        ValueNode maxTripCount = loop.counted().maxTripCountNode();
+        ValueNode maxTripCount = loop.counted().maxTripCountNode(false);
         if (!maxTripCount.stamp().isCompatible(stamp)) {
             maxTripCount = IntegerConvertNode.convert(maxTripCount, stamp, graph());
         }
-        return add(graph(), mul(graph(), strideNode(), maxTripCount), initNode());
+        return BinaryArithmeticNode.add(graph(), BinaryArithmeticNode.mul(graph(), strideNode(), maxTripCount), initNode());
     }
 
     @Override
