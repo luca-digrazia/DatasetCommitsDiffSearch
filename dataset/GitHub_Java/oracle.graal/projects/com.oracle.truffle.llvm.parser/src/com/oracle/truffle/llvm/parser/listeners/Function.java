@@ -769,31 +769,29 @@ public final class Function implements ParserListener {
         } else {
             vectorType = function.getValueType(vector);
         }
-
+        Type type = ((VectorType) vectorType).getElementType();
         int index = getIndex(args[i]);
 
-        final Type elementType = ((VectorType) vectorType).getElementType();
-        emit(ExtractElementInstruction.fromSymbols(function.getSymbols(), elementType, vector, index));
+        emit(ExtractElementInstruction.fromSymbols(function.getSymbols(), type, vector, index));
     }
 
     private void createExtractValue(long[] args) {
         int i = 0;
         int aggregate = getIndex(args[i++]);
-        Type aggregateType = null;
+        Type type = null;
         if (function.isValueForwardRef(aggregate)) {
-            aggregateType = types.get(args[i++]);
+            type = types.get(i++);
         }
         int index = (int) args[i++];
-        if (aggregateType == null) {
-            aggregateType = function.getValueType(aggregate);
+        if (type == null) {
+            type = ((AggregateType) function.getValueType(aggregate)).getElementType(index);
         }
 
         if (i != args.length) {
             throw new UnsupportedOperationException("Multiple indices are not yet supported!");
         }
 
-        final Type elementType = ((AggregateType) aggregateType).getElementType(index);
-        emit(ExtractValueInstruction.fromSymbols(function.getSymbols(), elementType, aggregate, index));
+        emit(ExtractValueInstruction.fromSymbols(function.getSymbols(), type, aggregate, index));
     }
 
     private void createGetElementPointer(long[] args) {
@@ -845,7 +843,7 @@ public final class Function implements ParserListener {
         int vector = getIndex(args[i++]);
         Type type;
         if (function.isValueForwardRef(vector)) {
-            type = types.get(args[i++]);
+            type = types.get(i++);
         } else {
             type = function.getValueType(vector);
         }
@@ -862,7 +860,7 @@ public final class Function implements ParserListener {
         int aggregate = getIndex(args[i++]);
         Type type;
         if (function.isValueForwardRef(aggregate)) {
-            type = types.get(args[i++]);
+            type = types.get(i++);
         } else {
             type = function.getValueType(aggregate);
         }
@@ -926,7 +924,7 @@ public final class Function implements ParserListener {
         int vector1 = getIndex(args[i++]);
         Type vectorType;
         if (function.isValueForwardRef(vector1)) {
-            vectorType = types.get(args[i++]);
+            vectorType = types.get(i++);
         } else {
             vectorType = function.getValueType(vector1);
         }
