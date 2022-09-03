@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.runtime.options;
 
 import java.io.PrintStream;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -90,10 +91,6 @@ public final class SulongEngineOption {
     public static final String ENABLE_LVI_NAME = "llvm.enableLVI";
     public static final String ENABLE_LVI_INFO = "Enable source-level inspection of local variables.";
 
-    public static final OptionKey<Boolean> LAZY_PARSING = new OptionKey<>(true);
-    public static final String LAZY_PARSING_NAME = "llvm.lazyParsing";
-    public static final String LAZY_PARSING_INFO = "Enable lazy parsing of LLVM bitcode files.";
-
     public static final OptionKey<Boolean> STACKTRACE_ON_ABORT = new OptionKey<>(false);
     public static final String STACKTRACE_ON_ABORT_NAME = "llvm.printStackTraceOnAbort";
     public static final String STACKTRACE_ON_ABORT_INFO = "Prints a C stack trace when abort() is called.";
@@ -110,7 +107,6 @@ public final class SulongEngineOption {
         options.add(OptionDescriptor.newBuilder(PRINT_LIFE_TIME_ANALYSIS_STATS, PRINT_LIFE_TIME_ANALYSIS_STATS_NAME).help(PRINT_LIFE_TIME_ANALYSIS_STATS_INFO).category(OptionCategory.USER).build());
         options.add(OptionDescriptor.newBuilder(PARSE_ONLY, PARSE_ONLY_NAME).help(PARSE_ONLY_INFO).category(OptionCategory.EXPERT).build());
         options.add(OptionDescriptor.newBuilder(ENABLE_LVI, ENABLE_LVI_NAME).help(ENABLE_LVI_INFO).category(OptionCategory.DEBUG).build());
-        options.add(OptionDescriptor.newBuilder(LAZY_PARSING, LAZY_PARSING_NAME).help(LAZY_PARSING_INFO).category(OptionCategory.EXPERT).build());
         options.add(OptionDescriptor.newBuilder(STACKTRACE_ON_ABORT, STACKTRACE_ON_ABORT_NAME).help(STACKTRACE_ON_ABORT_INFO).category(OptionCategory.DEBUG).build());
         return options;
     }
@@ -128,9 +124,18 @@ public final class SulongEngineOption {
     }
 
     public static List<String> getPolyglotOptionSearchPaths(TruffleLanguage.Env env) {
+        String graalHome = System.getProperty("graalvm.home");
         String libraryPathOption = env.getOptions().get(LIBRARY_PATH);
         String[] libraryPath = libraryPathOption.equals("") ? new String[0] : libraryPathOption.split(OPTION_ARRAY_SEPARATOR);
-        return Arrays.asList(libraryPath);
+
+        List<String> path = new ArrayList<>();
+        path.addAll(Arrays.asList(libraryPath));
+
+        if (graalHome != null && !graalHome.equals("")) {
+            String[] graalHomePath = new String[]{Paths.get(graalHome).toString(), Paths.get(graalHome, "jre", "languages", "llvm").toString()};
+            path.addAll(Arrays.asList(graalHomePath));
+        }
+        return path;
     }
 
     public static List<String> getPolyglotOptionExternalLibraries(TruffleLanguage.Env env) {
