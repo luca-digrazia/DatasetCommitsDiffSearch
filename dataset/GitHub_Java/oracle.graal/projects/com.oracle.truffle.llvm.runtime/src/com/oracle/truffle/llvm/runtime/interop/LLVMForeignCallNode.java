@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -38,37 +38,42 @@ import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMGetStackNode;
-import com.oracle.truffle.llvm.runtime.NodeFactory;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.SlowPathForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 /**
  * Used when an LLVM bitcode method is called from another language.
  */
-public abstract class LLVMForeignCallNode extends LLVMNode {
+public abstract class LLVMForeignCallNode extends Node {
 
     @Child protected LLVMDataEscapeNode prepareValueForEscape = LLVMDataEscapeNode.create();
 
-    static class PackForeignArgumentsNode extends LLVMNode {
+    protected LLVMMemory getLLVMMemory() {
+        return LLVMLanguage.getLanguage().getCapability(LLVMMemory.class);
+    }
+
+    public static class PackForeignArgumentsNode extends Node {
         @Children private final ForeignToLLVM[] toLLVM;
 
-        PackForeignArgumentsNode(NodeFactory nodeFactory, Type[] parameterTypes, int argumentsLength) {
+        PackForeignArgumentsNode(Type[] parameterTypes, int argumentsLength) {
             this.toLLVM = new ForeignToLLVM[argumentsLength];
             for (int i = 0; i < parameterTypes.length; i++) {
-                toLLVM[i] = nodeFactory.createForeignToLLVM(ForeignToLLVM.convert(parameterTypes[i]));
+                toLLVM[i] = ForeignToLLVM.create(parameterTypes[i]);
             }
             for (int i = parameterTypes.length; i < argumentsLength; i++) {
-                toLLVM[i] = nodeFactory.createForeignToLLVM(ForeignToLLVMType.ANY);
+                toLLVM[i] = ForeignToLLVM.create(ForeignToLLVMType.ANY);
             }
         }
 
@@ -84,27 +89,23 @@ public abstract class LLVMForeignCallNode extends LLVMNode {
         }
     }
 
-    public static LLVMForeignCallNode create() {
-        return LLVMForeignCallNodeGen.create();
-    }
-
-    protected PackForeignArgumentsNode createFastPackArguments(LLVMFunctionDescriptor descriptor, int length) {
+    public static PackForeignArgumentsNode createFastPackArguments(LLVMFunctionDescriptor descriptor, int length) {
         checkArgLength(descriptor.getType().getArgumentTypes().length, length);
-        return new PackForeignArgumentsNode(getNodeFactory(), descriptor.getType().getArgumentTypes(), length);
+        return new PackForeignArgumentsNode(descriptor.getType().getArgumentTypes(), length);
     }
 
-    protected static class SlowPackForeignArgumentsNode extends LLVMNode {
+    protected static class SlowPackForeignArgumentsNode extends Node {
         @Child private SlowPathForeignToLLVM slowConvert = ForeignToLLVM.createSlowPathNode();
 
-        Object[] pack(LLVMFunctionDescriptor function, Object[] arguments, StackPointer stackPointer) {
+        Object[] pack(LLVMFunctionDescriptor function, LLVMMemory memory, Object[] arguments, StackPointer stackPointer) {
             int actualArgumentsLength = Math.max(arguments.length, function.getType().getArgumentTypes().length);
             final Object[] packedArguments = new Object[1 + actualArgumentsLength];
             packedArguments[0] = stackPointer;
             for (int i = 0; i < function.getType().getArgumentTypes().length; i++) {
-                packedArguments[i + 1] = slowConvert.convert(function.getType().getArgumentTypes()[i], arguments[i]);
+                packedArguments[i + 1] = slowConvert.convert(function.getType().getArgumentTypes()[i], memory, arguments[i]);
             }
             for (int i = function.getType().getArgumentTypes().length; i < arguments.length; i++) {
-                packedArguments[i + 1] = slowConvert.convert(ForeignToLLVMType.ANY, arguments[i]);
+                packedArguments[i + 1] = slowConvert.convert(memory, ForeignToLLVMType.ANY, arguments[i]);
             }
             return packedArguments;
         }
@@ -152,12 +153,13 @@ public abstract class LLVMForeignCallNode extends LLVMNode {
     protected Object callIndirect(LLVMFunctionDescriptor function, Object[] arguments,
                     @Cached("create()") IndirectCallNode callNode,
                     @Cached("createSlowPackArguments()") SlowPackForeignArgumentsNode slowPack,
-                    @Cached("create()") LLVMGetStackNode getStack) {
+                    @Cached("create()") LLVMGetStackNode getStack,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         assert !(function.getType().getReturnType() instanceof StructureType);
         LLVMStack stack = getStack.executeWithTarget(function.getContext().getThreadingStack(), Thread.currentThread());
         Object result;
         try (StackPointer stackPointer = stack.newFrame()) {
-            result = callNode.call(getCallTarget(function), slowPack.pack(function, arguments, stackPointer));
+            result = callNode.call(getCallTarget(function), slowPack.pack(function, memory, arguments, stackPointer));
         }
         return prepareValueForEscape.executeWithTarget(result);
     }
@@ -165,7 +167,7 @@ public abstract class LLVMForeignCallNode extends LLVMNode {
     protected CallTarget getCallTarget(LLVMFunctionDescriptor function) {
         if (function.isLLVMIRFunction()) {
             return function.getLLVMIRFunction();
-        } else if (function.isIntrinsicFunction()) {
+        } else if (function.isNativeIntrinsicFunction()) {
             return function.getNativeIntrinsic().cachedCallTarget(function.getType());
         } else {
             CompilerDirectives.transferToInterpreter();
