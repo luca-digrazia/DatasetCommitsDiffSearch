@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -28,6 +28,8 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 package com.oracle.truffle.llvm.parser.elf;
+
+import java.nio.ByteBuffer;
 
 public final class ElfHeader {
 
@@ -114,15 +116,15 @@ public final class ElfHeader {
         return version;
     }
 
-    public static ElfHeader create(ElfReader buffer) {
-        if (buffer.is64Bit()) {
+    public static ElfHeader create(ByteBuffer buffer, boolean is64Bit) {
+        if (is64Bit) {
             return readHeader64(buffer);
         } else {
             return readHeader32(buffer);
         }
     }
 
-    private static ElfHeader readHeader32(ElfReader buffer) {
+    private static ElfHeader readHeader32(ByteBuffer buffer) {
         short type = buffer.getShort();
         short machine = buffer.getShort();
         int version = buffer.getInt();
@@ -139,7 +141,7 @@ public final class ElfHeader {
         return new ElfHeader(type, machine, version, entry, phoff, shoff, flags, ehsize, phentsize, phnum, shentsize, shnum, shstrndx);
     }
 
-    private static ElfHeader readHeader64(ElfReader buffer) {
+    private static ElfHeader readHeader64(ByteBuffer buffer) {
         short type = buffer.getShort();
         short machine = buffer.getShort();
         int version = buffer.getInt();
@@ -155,4 +157,5 @@ public final class ElfHeader {
         short shstrndx = buffer.getShort();
         return new ElfHeader(type, machine, version, entry, phoff, shoff, flags, ehsize, phentsize, phnum, shentsize, shnum, shstrndx);
     }
+
 }
