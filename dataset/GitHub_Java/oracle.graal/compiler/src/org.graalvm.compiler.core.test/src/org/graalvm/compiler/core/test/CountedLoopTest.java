@@ -30,7 +30,6 @@ import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.loop.InductionVariable;
 import org.graalvm.compiler.loop.LoopsData;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -53,47 +52,25 @@ public class CountedLoopTest extends GraalCompilerTest {
         ValueNode get(InductionVariable iv);
     }
 
-    @FunctionalInterface
-    private interface StaticIVProperty {
-        long get(InductionVariable iv);
-    }
-
-    @FunctionalInterface
-    private interface IVPredicate {
-        boolean test(InductionVariable iv);
-    }
-
     /**
      * Get a property of an induction variable.
+     *
+     * @param property
      */
-    private static int get(@SuppressWarnings("unused") IVProperty property, @SuppressWarnings("unused") StaticIVProperty staticProperty, @SuppressWarnings("unused") IVPredicate constantCheck,
-                    int iv) {
-        return iv;
-    }
-
-    private static int get(@SuppressWarnings("unused") IVProperty property, int iv) {
-        return iv;
-    }
-
-    private static long get(@SuppressWarnings("unused") IVProperty property, @SuppressWarnings("unused") StaticIVProperty staticProperty, @SuppressWarnings("unused") IVPredicate constantCheck,
-                    long iv) {
-        return iv;
-    }
-
-    private static long get(@SuppressWarnings("unused") IVProperty property, long iv) {
+    private static int get(IVProperty property, int iv) {
         return iv;
     }
 
     private static class Result {
-        public long extremum;
-        public long exitValue;
+        public int extremum;
+        public int exitValue;
 
         @Override
         public int hashCode() {
             final int prime = 31;
             int result = 1;
-            result = prime * result + Long.hashCode(exitValue);
-            result = prime * result + Long.hashCode(extremum);
+            result = prime * result + exitValue;
+            result = prime * result + extremum;
             return result;
         }
 
@@ -118,7 +95,7 @@ public class CountedLoopTest extends GraalCompilerTest {
         Result ret = new Result();
         for (i = start; i < limit; i += inc) {
             GraalDirectives.controlFlowAnchor();
-            ret.extremum = get(InductionVariable::extremumNode, InductionVariable::constantExtremum, InductionVariable::isConstantExtremum, i);
+            ret.extremum = get(InductionVariable::extremumNode, i);
         }
         ret.exitValue = get(InductionVariable::exitValueNode, i);
         return ret;
@@ -126,42 +103,32 @@ public class CountedLoopTest extends GraalCompilerTest {
 
     @Test
     public void increment1() {
-        testCounted("incrementSnippet", 0, 256, 1);
+        test("incrementSnippet", 0, 256, 1);
     }
 
     @Test
     public void increment2() {
-        testCounted("incrementSnippet", 0, 256, 2);
+        test("incrementSnippet", 0, 256, 2);
     }
 
     @Test
     public void increment3() {
-        testCounted("incrementSnippet", 0, 256, 3);
+        test("incrementSnippet", 0, 256, 3);
     }
 
     @Test
     public void increment4() {
-        testCounted("incrementSnippet", -10, 1, Integer.MAX_VALUE);
+        test("incrementSnippet", -10, Integer.MAX_VALUE, 1);
     }
 
     @Test
     public void increment5() {
-        testCounted("incrementSnippet", 256, 256, 1);
+        test("incrementSnippet", 256, 256, 1);
     }
 
     @Test
     public void increment6() {
-        testCounted("incrementSnippet", 257, 256, 1);
-    }
-
-    @Test
-    public void increment7() {
-        testCounted("incrementSnippet", -10, Integer.MAX_VALUE, 1);
-    }
-
-    @Test
-    public void increment8() {
-        testCounted("incrementSnippet", -10, Integer.MAX_VALUE - 1, 2);
+        test("incrementSnippet", 257, 256, 1);
     }
 
     public static Result incrementEqSnippet(int start, int limit, int step) {
@@ -170,7 +137,7 @@ public class CountedLoopTest extends GraalCompilerTest {
         Result ret = new Result();
         for (i = start; i <= limit; i += inc) {
             GraalDirectives.controlFlowAnchor();
-            ret.extremum = get(InductionVariable::extremumNode, InductionVariable::constantExtremum, InductionVariable::isConstantExtremum, i);
+            ret.extremum = get(InductionVariable::extremumNode, i);
         }
         ret.exitValue = get(InductionVariable::exitValueNode, i);
         return ret;
@@ -178,42 +145,32 @@ public class CountedLoopTest extends GraalCompilerTest {
 
     @Test
     public void incrementEq1() {
-        testCounted("incrementEqSnippet", 0, 256, 1);
+        test("incrementEqSnippet", 0, 256, 1);
     }
 
     @Test
     public void incrementEq2() {
-        testCounted("incrementEqSnippet", 0, 256, 2);
+        test("incrementEqSnippet", 0, 256, 2);
     }
 
     @Test
     public void incrementEq3() {
-        testCounted("incrementEqSnippet", 0, 256, 3);
+        test("incrementEqSnippet", 0, 256, 3);
     }
 
     @Test
     public void incrementEq4() {
-        testCounted("incrementEqSnippet", -10, 0, Integer.MAX_VALUE);
+        test("incrementEqSnippet", -10, 0, Integer.MAX_VALUE);
     }
 
     @Test
     public void incrementEq5() {
-        testCounted("incrementEqSnippet", 256, 256, 1);
+        test("incrementEqSnippet", 256, 256, 1);
     }
 
     @Test
     public void incrementEq6() {
-        testCounted("incrementEqSnippet", 257, 256, 1);
-    }
-
-    @Test
-    public void incrementEq7() {
-        testCounted("incrementEqSnippet", -10, Integer.MAX_VALUE - 1, 1);
-    }
-
-    @Test
-    public void incrementEq8() {
-        testCounted("incrementEqSnippet", -10, Integer.MAX_VALUE - 2, 2);
+        test("incrementEqSnippet", 257, 256, 1);
     }
 
     public static Result decrementSnippet(int start, int limit, int step) {
@@ -222,7 +179,7 @@ public class CountedLoopTest extends GraalCompilerTest {
         Result ret = new Result();
         for (i = start; i > limit; i -= dec) {
             GraalDirectives.controlFlowAnchor();
-            ret.extremum = get(InductionVariable::extremumNode, InductionVariable::constantExtremum, InductionVariable::isConstantExtremum, i);
+            ret.extremum = get(InductionVariable::extremumNode, i);
         }
         ret.exitValue = get(InductionVariable::exitValueNode, i);
         return ret;
@@ -230,27 +187,17 @@ public class CountedLoopTest extends GraalCompilerTest {
 
     @Test
     public void decrement1() {
-        testCounted("decrementSnippet", 256, 0, 1);
+        test("decrementSnippet", 256, 0, 1);
     }
 
     @Test
     public void decrement2() {
-        testCounted("decrementSnippet", 256, 0, 2);
+        test("decrementSnippet", 256, 0, 2);
     }
 
     @Test
     public void decrement3() {
-        testCounted("decrementSnippet", 256, 0, 3);
-    }
-
-    @Test
-    public void decrement4() {
-        testCounted("decrementSnippet", Integer.MAX_VALUE, -10, 1);
-    }
-
-    @Test
-    public void decrement5() {
-        testCounted("decrementSnippet", Integer.MAX_VALUE, -10, 2);
+        test("decrementSnippet", 256, 0, 3);
     }
 
     public static Result decrementEqSnippet(int start, int limit, int step) {
@@ -259,7 +206,7 @@ public class CountedLoopTest extends GraalCompilerTest {
         Result ret = new Result();
         for (i = start; i >= limit; i -= dec) {
             GraalDirectives.controlFlowAnchor();
-            ret.extremum = get(InductionVariable::extremumNode, InductionVariable::constantExtremum, InductionVariable::isConstantExtremum, i);
+            ret.extremum = get(InductionVariable::extremumNode, i);
         }
         ret.exitValue = get(InductionVariable::exitValueNode, i);
         return ret;
@@ -267,32 +214,22 @@ public class CountedLoopTest extends GraalCompilerTest {
 
     @Test
     public void decrementEq1() {
-        testCounted("decrementEqSnippet", 256, 0, 1);
+        test("decrementEqSnippet", 256, 0, 1);
     }
 
     @Test
     public void decrementEq2() {
-        testCounted("decrementEqSnippet", 256, 0, 2);
+        test("decrementEqSnippet", 256, 0, 2);
     }
 
     @Test
     public void decrementEq3() {
-        testCounted("decrementEqSnippet", 256, 0, 3);
+        test("decrementEqSnippet", 256, 0, 3);
     }
 
     @Test
     public void decrementEq4() {
-        testCounted("decrementEqSnippet", -10, 0, Integer.MAX_VALUE);
-    }
-
-    @Test
-    public void decrementEq5() {
-        testCounted("decrementEqSnippet", Integer.MAX_VALUE, -10, 1);
-    }
-
-    @Test
-    public void decrementEq6() {
-        testCounted("decrementEqSnippet", Integer.MAX_VALUE, -10, 2);
+        test("decrementEqSnippet", -10, 0, Integer.MAX_VALUE);
     }
 
     public static Result twoVariablesSnippet() {
@@ -301,7 +238,7 @@ public class CountedLoopTest extends GraalCompilerTest {
         for (int i = 0; i < 1024; i++) {
             j += 5;
             GraalDirectives.controlFlowAnchor();
-            ret.extremum = get(InductionVariable::extremumNode, InductionVariable::constantExtremum, InductionVariable::isConstantExtremum, j);
+            ret.extremum = get(InductionVariable::extremumNode, j);
         }
         ret.exitValue = get(InductionVariable::exitValueNode, j);
         return ret;
@@ -309,83 +246,7 @@ public class CountedLoopTest extends GraalCompilerTest {
 
     @Test
     public void testTwoVariables() {
-        testCounted("twoVariablesSnippet");
-    }
-
-    public static Result incrementNeqSnippet(int limit) {
-        int i;
-        int posLimit = ((limit - 1) & 0xFFFF) + 1; // make sure limit is always strictly positive
-        Result ret = new Result();
-        for (i = 0; i != posLimit; i++) {
-            GraalDirectives.controlFlowAnchor();
-            ret.extremum = get(InductionVariable::extremumNode, InductionVariable::constantExtremum, InductionVariable::isConstantExtremum, i);
-        }
-        ret.exitValue = get(InductionVariable::exitValueNode, i);
-        return ret;
-    }
-
-    @Test
-    public void decrementNeq() {
-        testCounted("decrementNeqSnippet", 256);
-    }
-
-    public static Result decrementNeqSnippet(int limit) {
-        int i;
-        int posLimit = ((limit - 1) & 0xFFFF) + 1; // make sure limit is always strictly positive
-        Result ret = new Result();
-        for (i = posLimit; i != 0; i--) {
-            GraalDirectives.controlFlowAnchor();
-            ret.extremum = get(InductionVariable::extremumNode, InductionVariable::constantExtremum, InductionVariable::isConstantExtremum, i);
-        }
-        ret.exitValue = get(InductionVariable::exitValueNode, i);
-        return ret;
-    }
-
-    @Test
-    public void incrementNeq() {
-        testCounted("incrementNeqSnippet", 256);
-    }
-
-    public static Result incrementLongSnippet(long start, long limit, long step) {
-        long i;
-        long inc = ((step - 1) & 0xFFFF) + 1; // make sure this value is always strictly positive
-        Result ret = new Result();
-        for (i = start; i < limit; i += inc) {
-            GraalDirectives.controlFlowAnchor();
-            ret.extremum = get(InductionVariable::extremumNode, InductionVariable::constantExtremum, InductionVariable::isConstantExtremum, i);
-        }
-        ret.exitValue = get(InductionVariable::exitValueNode, i);
-        return ret;
-    }
-
-    @Test
-    public void incrementLong1() {
-        testCounted("incrementLongSnippet", 0L, 256L, 1L);
-    }
-
-    @Test
-    public void incrementLong2() {
-        testCounted("incrementLongSnippet", 0L, 256L, 2L);
-    }
-
-    @Test
-    public void incrementLong3() {
-        testCounted("incrementLongSnippet", 0L, 256L, 3L);
-    }
-
-    @Test
-    public void incrementLong4() {
-        testCounted("incrementLongSnippet", -10L, 1L, Long.MAX_VALUE);
-    }
-
-    @Test
-    public void incrementLong5() {
-        testCounted("incrementLongSnippet", 256L, 256L, 1L);
-    }
-
-    @Test
-    public void incrementLong6() {
-        testCounted("incrementLongSnippet", 257L, 256L, 1L);
+        test("twoVariablesSnippet");
     }
 
     @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
@@ -394,31 +255,18 @@ public class CountedLoopTest extends GraalCompilerTest {
         public static final NodeClass<IVPropertyNode> TYPE = NodeClass.create(IVPropertyNode.class);
 
         private final IVProperty property;
-        private final StaticIVProperty staticProperty;
-        private final IVPredicate staticCheck;
         @Input private ValueNode iv;
 
-        protected IVPropertyNode(IVProperty property, StaticIVProperty staticProperty, IVPredicate staticCheck, ValueNode iv) {
+        protected IVPropertyNode(IVProperty property, ValueNode iv) {
             super(TYPE, iv.stamp(NodeView.DEFAULT).unrestricted());
             this.property = property;
-            this.staticProperty = staticProperty;
-            this.staticCheck = staticCheck;
             this.iv = iv;
         }
 
         public void rewrite(LoopsData loops) {
             InductionVariable inductionVariable = loops.getInductionVariable(iv);
             assert inductionVariable != null;
-            ValueNode node = null;
-            if (staticCheck != null) {
-                assert staticProperty != null;
-                if (staticCheck.test(inductionVariable)) {
-                    node = ConstantNode.forLong(staticProperty.get(inductionVariable), graph());
-                }
-            }
-            if (node == null) {
-                node = property.get(inductionVariable);
-            }
+            ValueNode node = property.get(inductionVariable);
             replaceAtUsagesAndDelete(node);
         }
 
@@ -431,13 +279,7 @@ public class CountedLoopTest extends GraalCompilerTest {
     @Override
     protected void registerInvocationPlugins(InvocationPlugins invocationPlugins) {
         Registration r = new Registration(invocationPlugins, CountedLoopTest.class);
-        registerPlugins(r, JavaKind.Int);
-        registerPlugins(r, JavaKind.Long);
-        super.registerInvocationPlugins(invocationPlugins);
-    }
-
-    private void registerPlugins(Registration r, JavaKind ivKind) {
-        r.register2("get", IVProperty.class, ivKind.toJavaClass(), new InvocationPlugin() {
+        r.register2("get", IVProperty.class, int.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg1, ValueNode arg2) {
                 IVProperty property = null;
@@ -445,36 +287,14 @@ public class CountedLoopTest extends GraalCompilerTest {
                     property = getSnippetReflection().asObject(IVProperty.class, arg1.asJavaConstant());
                 }
                 if (property != null) {
-                    b.addPush(ivKind, new IVPropertyNode(property, null, null, arg2));
+                    b.addPush(JavaKind.Int, new IVPropertyNode(property, arg2));
                     return true;
                 } else {
                     return false;
                 }
             }
         });
-        r.register4("get", IVProperty.class, StaticIVProperty.class, IVPredicate.class, ivKind.toJavaClass(), new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4) {
-                IVProperty property = null;
-                StaticIVProperty staticProperty = null;
-                IVPredicate staticCheck = null;
-                if (arg1.isConstant()) {
-                    property = getSnippetReflection().asObject(IVProperty.class, arg1.asJavaConstant());
-                }
-                if (arg2.isConstant()) {
-                    staticProperty = getSnippetReflection().asObject(StaticIVProperty.class, arg2.asJavaConstant());
-                }
-                if (arg3.isConstant()) {
-                    staticCheck = getSnippetReflection().asObject(IVPredicate.class, arg3.asJavaConstant());
-                }
-                if (property != null && staticProperty != null && staticCheck != null) {
-                    b.addPush(ivKind, new IVPropertyNode(property, staticProperty, staticCheck, arg4));
-                    return true;
-                } else {
-                    return false;
-                }
-            }
-        });
+        super.registerInvocationPlugins(invocationPlugins);
     }
 
     @Override
@@ -488,17 +308,37 @@ public class CountedLoopTest extends GraalCompilerTest {
         return true;
     }
 
-    private Object[] argsToBind;
-
-    @Override
-    protected Object[] getArgumentToBind() {
-        return argsToBind;
+    public static Result incrementNeqSnippet(int limit) {
+        int i;
+        int posLimit = ((limit - 1) & 0xFFFF) + 1; // make sure limit is always strictly positive
+        Result ret = new Result();
+        for (i = 0; i != posLimit; i++) {
+            GraalDirectives.controlFlowAnchor();
+            ret.extremum = get(InductionVariable::extremumNode, i);
+        }
+        ret.exitValue = get(InductionVariable::exitValueNode, i);
+        return ret;
     }
 
-    public void testCounted(String snippetName, Object... args) {
-        test(snippetName, args);
-        argsToBind = args;
-        test(snippetName, args);
-        argsToBind = null;
+    @Test
+    public void decrementNeq() {
+        test("decrementNeqSnippet", 256);
+    }
+
+    public static Result decrementNeqSnippet(int limit) {
+        int i;
+        int posLimit = ((limit - 1) & 0xFFFF) + 1; // make sure limit is always strictly positive
+        Result ret = new Result();
+        for (i = posLimit; i != 0; i--) {
+            GraalDirectives.controlFlowAnchor();
+            ret.extremum = get(InductionVariable::extremumNode, i);
+        }
+        ret.exitValue = get(InductionVariable::exitValueNode, i);
+        return ret;
+    }
+
+    @Test
+    public void incrementNeq() {
+        test("incrementNeqSnippet", 256);
     }
 }

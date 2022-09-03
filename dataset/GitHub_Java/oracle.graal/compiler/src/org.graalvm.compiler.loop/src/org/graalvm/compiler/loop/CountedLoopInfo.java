@@ -23,12 +23,11 @@
 package org.graalvm.compiler.loop;
 
 import static org.graalvm.compiler.loop.MathUtil.add;
+import static org.graalvm.compiler.loop.MathUtil.divBefore;
 import static org.graalvm.compiler.loop.MathUtil.sub;
-import static org.graalvm.compiler.loop.MathUtil.unsignedDivBefore;
 
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
-import org.graalvm.compiler.core.common.util.UnsignedLong;
 import org.graalvm.compiler.loop.InductionVariable.Direction;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -40,7 +39,6 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
 import org.graalvm.compiler.nodes.calc.IntegerLessThanNode;
-import org.graalvm.compiler.nodes.calc.NegateNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
 
 import jdk.vm.ci.code.CodeUtil;
@@ -66,58 +64,38 @@ public class CountedLoopInfo {
         this.ifNode = ifNode;
     }
 
-    /**
-     * Returns a node that computes the maximum trip count of this loop. That is the trip count of
-     * this loop assuming it is not exited by an other exit than the {@linkplain #getLimitTest()
-     * count check}.
-     *
-     * This count is exact if {@link #isExactTripCount()} returns true.
-     *
-     * THIS VALUE SHOULD BE TREATED AS UNSIGNED.
-     */
     public ValueNode maxTripCountNode() {
         return maxTripCountNode(false);
     }
 
-    /**
-     * Returns a node that computes the maximum trip count of this loop. That is the trip count of
-     * this loop assuming it is not exited by an other exit than the {@linkplain #getLimitTest()
-     * count check}.
-     *
-     * This count is exact if {@link #isExactTripCount()} returns true.
-     *
-     * THIS VALUE SHOULD BE TREATED AS UNSIGNED.
-     *
-     * @param assumePositive if true the check that the loop is entered at all will be omitted.
-     */
     public ValueNode maxTripCountNode(boolean assumePositive) {
         StructuredGraph graph = iv.valueNode().graph();
         Stamp stamp = iv.valueNode().stamp(NodeView.DEFAULT);
+        ValueNode range = sub(graph, end, iv.initNode());
 
         ValueNode max;
         ValueNode min;
-        ValueNode range;
-        ValueNode absStride;
+        ValueNode oneDirection;
         if (iv.direction() == Direction.Up) {
-            absStride = iv.strideNode();
-            range = sub(graph, end, iv.initNode());
+            oneDirection = ConstantNode.forIntegerStamp(stamp, 1, graph);
             max = end;
             min = iv.initNode();
         } else {
             assert iv.direction() == Direction.Down;
-            absStride = graph.maybeAddOrUnique(NegateNode.create(iv.strideNode(), NodeView.DEFAULT));
-            range = sub(graph, iv.initNode(), end);
+            oneDirection = ConstantNode.forIntegerStamp(stamp, -1, graph);
             max = iv.initNode();
             min = end;
         }
-
-        ConstantNode one = ConstantNode.forIntegerStamp(stamp, 1, graph);
         if (oneOff) {
-            range = add(graph, range, one);
+            range = add(graph, range, oneDirection);
         }
         // round-away-from-zero divison: (range + stride -/+ 1) / stride
-        ValueNode denominator = add(graph, range, sub(graph, absStride, one));
-        ValueNode div = unsignedDivBefore(graph, loop.entryPoint(), denominator, absStride);
+        ValueNode denominator = range;
+        if (!oneDirection.stamp(NodeView.DEFAULT).equals(iv.strideNode().stamp(NodeView.DEFAULT))) {
+            ValueNode subedRanged = sub(graph, range, oneDirection);
+            denominator = add(graph, subedRanged, iv.strideNode());
+        }
+        ValueNode div = divBefore(graph, loop.entryPoint(), denominator, iv.strideNode());
 
         if (assumePositive) {
             return div;
@@ -127,44 +105,49 @@ public class CountedLoopInfo {
     }
 
     /**
-     * @return true if the loop has constant bounds.
+     * @return true if the loop has constant bounds and the trip count is representable as a
+     *         positive integer.
      */
     public boolean isConstantMaxTripCount() {
-        return end instanceof ConstantNode && iv.isConstantInit() && iv.isConstantStride();
-    }
-
-    public UnsignedLong constantMaxTripCount() {
-        assert isConstantMaxTripCount();
-        return new UnsignedLong(rawConstantMaxTripCount());
+        /*
+         * It's possible that the iteration range is too large to treat this as constant because it
+         * will overflow.
+         */
+        return (hasConstantBounds() && rawConstantMaxTripCount() >= 0);
     }
 
     /**
-     * Compute the raw value of the trip count for this loop. THIS IS AN UNSIGNED VALUE;
+     * @return true if the bounds on the iteration space are all constants.
      */
-    private long rawConstantMaxTripCount() {
+    public boolean hasConstantBounds() {
+        return end instanceof ConstantNode && iv.isConstantInit() && iv.isConstantStride();
+    }
+
+    public long constantMaxTripCount() {
+        assert isConstantMaxTripCount();
+        return rawConstantMaxTripCount();
+    }
+
+    /**
+     * Compute the raw value of the trip count for this loop. Since we don't have unsigned values
+     * this may be outside representable positive values.
+     */
+    protected long rawConstantMaxTripCount() {
         assert iv.direction() != null;
-        long endValue = end.asJavaConstant().asLong();
-        long initValue = iv.constantInit();
-        long range;
-        long absStride;
-        if (iv.direction() == Direction.Up) {
-            if (endValue < initValue) {
-                return 0;
-            }
-            range = endValue - iv.constantInit();
-            absStride = iv.constantStride();
-        } else {
-            if (initValue < endValue) {
-                return 0;
-            }
-            range = iv.constantInit() - endValue;
-            absStride = -iv.constantStride();
+        long off = oneOff ? iv.direction() == Direction.Up ? 1 : -1 : 0;
+        long endValue = ((ConstantNode) end).asJavaConstant().asLong();
+        try {
+            // If no overflow occurs then negative values represent a trip count of 0
+            long max = Math.subtractExact(Math.addExact(endValue, off), iv.constantInit()) / iv.constantStride();
+            return Math.max(0, max);
+        } catch (ArithmeticException e) {
+            /*
+             * The computation overflowed to return a negative value. It's possible some
+             * optimization could handle this value as an unsigned and produce the right answer but
+             * we hide this value by default.
+             */
+            return -1;
         }
-        if (oneOff) {
-            range += 1;
-        }
-        long denominator = range + absStride - 1;
-        return Long.divideUnsigned(denominator, absStride);
     }
 
     public boolean isExactTripCount() {
@@ -181,7 +164,7 @@ public class CountedLoopInfo {
         return isConstantMaxTripCount();
     }
 
-    public UnsignedLong constantExactTripCount() {
+    public long constantExactTripCount() {
         assert isExactTripCount();
         return constantMaxTripCount();
     }
