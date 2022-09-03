@@ -69,7 +69,7 @@ public class BranchProbabilityNode extends FixedWithNextNode implements Simplifi
             }
             BeginNode begin = (BeginNode) current;
             if (!(begin.predecessor() instanceof IfNode)) {
-                return;
+                throw new GraalInternalError("Injected branch probability cannot follow a merge, only if nodes");
             }
             IfNode ifNode = (IfNode) begin.predecessor();
             if (ifNode.trueSuccessor() == begin) {
@@ -92,11 +92,7 @@ public class BranchProbabilityNode extends FixedWithNextNode implements Simplifi
 
     @Override
     public void lower(LoweringTool tool, LoweringType loweringType) {
-        if (probability.isConstant()) {
-            throw new GraalInternalError("Injected branch probability must follow an if node.");
-        } else {
-            throw new GraalInternalError("Branch probability could not be injected, because the probability value did not reduce to a constant value.");
-        }
+        throw new GraalInternalError("Branch probability could not be injected, because the probability value did not reduce to a constant value.");
     }
 
 }
