@@ -23,16 +23,12 @@
 package com.oracle.graal.replacements;
 
 import static com.oracle.graal.nodes.java.ArrayLengthNode.*;
-import static jdk.internal.jvmci.code.MemoryBarriers.*;
-import static jdk.internal.jvmci.meta.DeoptimizationAction.*;
-import static jdk.internal.jvmci.meta.DeoptimizationReason.*;
-import static jdk.internal.jvmci.meta.LocationIdentity.*;
+import static com.oracle.jvmci.code.MemoryBarriers.*;
+import static com.oracle.jvmci.meta.DeoptimizationAction.*;
+import static com.oracle.jvmci.meta.DeoptimizationReason.*;
+import static com.oracle.jvmci.meta.LocationIdentity.*;
 
 import java.util.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.type.*;
@@ -50,6 +46,9 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * VM-independent lowerings for standard Java nodes. VM-specific methods are abstract and must be
@@ -211,7 +210,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         Kind elementKind = loadIndexed.elementKind();
         Stamp loadStamp = loadStamp(loadIndexed.stamp(), elementKind);
 
-        PiNode pi = getBoundsCheckedIndex(loadIndexed, tool, null);
+        PiNode pi = getBoundsCheckedIndex(loadIndexed, tool);
         ValueNode checkedIndex = pi;
         if (checkedIndex == null) {
             checkedIndex = loadIndexed.index();
@@ -232,8 +231,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     protected void lowerStoreIndexedNode(StoreIndexedNode storeIndexed, LoweringTool tool) {
         StructuredGraph graph = storeIndexed.graph();
 
-        GuardingNode[] nullCheckReturn = new GuardingNode[1];
-        PiNode pi = getBoundsCheckedIndex(storeIndexed, tool, nullCheckReturn);
+        PiNode pi = getBoundsCheckedIndex(storeIndexed, tool);
         ValueNode checkedIndex;
         GuardingNode boundsCheck;
         if (pi == null) {
@@ -264,13 +262,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                     value = storeCheck;
                 }
             } else {
-                /*
-                 * The guard on the read hub should be the null check of the array that was
-                 * introduced earlier.
-                 */
-                GuardingNode nullCheck = nullCheckReturn[0];
-                assert nullCheckReturn[0] != null || createNullCheck(array, storeIndexed, tool) == null;
-                ValueNode arrayClass = createReadHub(graph, array, nullCheck);
+                ValueNode arrayClass = createReadHub(graph, array, boundsCheck);
                 ValueNode componentHub = createReadArrayComponentHub(graph, arrayClass, storeIndexed);
                 checkCastNode = graph.add(new CheckCastDynamicNode(componentHub, value, true));
                 graph.addBeforeFixed(storeIndexed, checkCastNode);
@@ -676,7 +668,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     protected abstract ValueNode createReadArrayComponentHub(StructuredGraph graph, ValueNode arrayHub, FixedNode anchor);
 
-    protected PiNode getBoundsCheckedIndex(AccessIndexedNode n, LoweringTool tool, GuardingNode[] nullCheckReturn) {
+    protected PiNode getBoundsCheckedIndex(AccessIndexedNode n, LoweringTool tool) {
         StructuredGraph graph = n.graph();
         ValueNode array = n.array();
         ValueNode arrayLength = readArrayLength(array, tool.getConstantReflection());
@@ -685,11 +677,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             AddressNode address = createOffsetAddress(graph, array, arrayLengthOffset());
             ReadNode readArrayLength = graph.add(new ReadNode(address, ARRAY_LENGTH_LOCATION, stamp, BarrierType.NONE));
             graph.addBeforeFixed(n, readArrayLength);
-            GuardingNode nullCheck = createNullCheck(array, readArrayLength, tool);
-            if (nullCheckReturn != null) {
-                nullCheckReturn[0] = nullCheck;
-            }
-            readArrayLength.setGuard(nullCheck);
+            readArrayLength.setGuard(createNullCheck(array, readArrayLength, tool));
             arrayLength = readArrayLength;
         } else {
             arrayLength = arrayLength.isAlive() ? arrayLength : graph.addOrUniqueWithInputs(arrayLength);
@@ -729,5 +717,16 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         int shift = CodeUtil.log2(arrayScalingFactor(elementKind));
         ValueNode ret = graph.unique(new RightShiftNode(scaledIndex, ConstantNode.forInt(shift, graph)));
         return IntegerConvertNode.convert(ret, StampFactory.forKind(Kind.Int), graph);
+    }
+
+    @Override
+    public int getSizeInBytes(Stamp stamp) {
+        if (stamp instanceof PrimitiveStamp) {
+            return ((PrimitiveStamp) stamp).getBits() / 8;
+        } else if (stamp instanceof AbstractPointerStamp) {
+            return target.wordSize;
+        } else {
+            throw JVMCIError.shouldNotReachHere("stamp " + stamp + " has no size");
+        }
     }
 }

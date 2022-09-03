@@ -22,58 +22,27 @@
  */
 package com.oracle.graal.phases.common;
 
-import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.vm.ci.meta.DeoptimizationReason.UnreachedCode;
+import com.oracle.jvmci.meta.JavaConstant;
+import com.oracle.jvmci.meta.TriState;
+import static com.oracle.jvmci.meta.DeoptimizationAction.*;
+import static com.oracle.jvmci.meta.DeoptimizationReason.*;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.Iterator;
-import java.util.List;
-import java.util.function.Function;
+import java.util.*;
+import java.util.function.*;
 
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.TriState;
-
-import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.BeginNode;
-import com.oracle.graal.nodes.BinaryOpLogicNode;
-import com.oracle.graal.nodes.ConditionAnchorNode;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.FixedGuardNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.GuardNode;
-import com.oracle.graal.nodes.GuardProxyNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.ShortCircuitOrNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.UnaryOpLogicNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.extended.IntegerSwitchNode;
-import com.oracle.graal.nodes.extended.LoadHubNode;
-import com.oracle.graal.nodes.extended.ValueAnchorNode;
-import com.oracle.graal.nodes.java.CheckCastNode;
-import com.oracle.graal.nodes.java.TypeSwitchNode;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.Phase;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.LoweringPhase.Frame;
-import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.phases.schedule.*;
+import com.oracle.jvmci.debug.*;
 
 public class DominatorConditionalEliminationPhase extends Phase {
 
@@ -472,7 +441,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
                 if (result != node.isNegated()) {
                     node.replaceAndDelete(guard);
                 } else {
-                    DeoptimizeNode deopt = node.graph().add(new DeoptimizeNode(node.action(), node.reason(), node.getSpeculation()));
+                    DeoptimizeNode deopt = node.graph().add(new DeoptimizeNode(node.action(), node.reason()));
                     AbstractBeginNode beginNode = (AbstractBeginNode) node.getAnchor();
                     FixedNode next = beginNode.next();
                     beginNode.setNext(deopt);

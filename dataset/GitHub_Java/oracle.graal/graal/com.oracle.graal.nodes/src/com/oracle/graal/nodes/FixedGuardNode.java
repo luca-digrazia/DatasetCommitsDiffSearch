@@ -22,18 +22,12 @@
  */
 package com.oracle.graal.nodes;
 
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.extended.ValueAnchorNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.jvmci.meta.*;
 
 @NodeInfo(nameTemplate = "FixedGuard(!={p#negated}) {p#reason/s}", allowedUsageTypes = {InputType.Guard})
 public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowerable, IterableNodeType {
@@ -55,8 +49,8 @@ public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowe
     public void simplify(SimplifierTool tool) {
         super.simplify(tool);
 
-        if (getCondition() instanceof LogicConstantNode) {
-            LogicConstantNode c = (LogicConstantNode) getCondition();
+        if (condition() instanceof LogicConstantNode) {
+            LogicConstantNode c = (LogicConstantNode) condition();
             if (c.getValue() == isNegated()) {
                 FixedNode currentNext = this.next();
                 if (currentNext != null) {
@@ -69,8 +63,8 @@ public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowe
             }
             this.replaceAtUsages(null);
             graph().removeFixed(this);
-        } else if (getCondition() instanceof ShortCircuitOrNode) {
-            ShortCircuitOrNode shortCircuitOr = (ShortCircuitOrNode) getCondition();
+        } else if (condition() instanceof ShortCircuitOrNode) {
+            ShortCircuitOrNode shortCircuitOr = (ShortCircuitOrNode) condition();
             if (isNegated() && hasNoUsages()) {
                 graph().addAfterFixed(this, graph().add(new FixedGuardNode(shortCircuitOr.getY(), getReason(), getAction(), getSpeculation(), !shortCircuitOr.isYNegated())));
                 graph().replaceFixedWithFixed(this, graph().add(new FixedGuardNode(shortCircuitOr.getX(), getReason(), getAction(), getSpeculation(), !shortCircuitOr.isXNegated())));
@@ -90,7 +84,7 @@ public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowe
              * case.
              */
             if (getAction() != DeoptimizationAction.None || getReason() != DeoptimizationReason.RuntimeConstraint) {
-                ValueNode guard = tool.createGuard(this, getCondition(), getReason(), getAction(), getSpeculation(), isNegated()).asNode();
+                ValueNode guard = tool.createGuard(this, condition(), getReason(), getAction(), getSpeculation(), isNegated()).asNode();
                 this.replaceAtUsages(guard);
                 ValueAnchorNode newAnchor = graph().add(new ValueAnchorNode(guard.asNode()));
                 graph().replaceFixedWithFixed(this, newAnchor);

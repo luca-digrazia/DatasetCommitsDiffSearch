@@ -22,58 +22,30 @@
  */
 package com.oracle.graal.phases.common;
 
-import static com.oracle.graal.compiler.common.GraalOptions.OptEliminateGuards;
-import static com.oracle.graal.phases.common.LoweringPhase.ProcessBlockState.ST_ENTER;
-import static com.oracle.graal.phases.common.LoweringPhase.ProcessBlockState.ST_ENTER_ALWAYS_REACHED;
-import static com.oracle.graal.phases.common.LoweringPhase.ProcessBlockState.ST_LEAVE;
-import static com.oracle.graal.phases.common.LoweringPhase.ProcessBlockState.ST_PROCESS;
-import static com.oracle.graal.phases.common.LoweringPhase.ProcessBlockState.ST_PROCESS_ALWAYS_REACHED;
+import com.oracle.jvmci.meta.ConstantReflectionProvider;
+import com.oracle.jvmci.meta.DeoptimizationReason;
+import com.oracle.jvmci.meta.JavaConstant;
+import com.oracle.jvmci.meta.DeoptimizationAction;
+import com.oracle.jvmci.meta.MetaAccessProvider;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.common.LoweringPhase.ProcessBlockState.*;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.MetaAccessProvider;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.DebugCloseable;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.Graph.Mark;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.BeginNode;
-import com.oracle.graal.nodes.FixedGuardNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.GuardNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.extended.AnchoringNode;
-import com.oracle.graal.nodes.extended.GuardedNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringProvider;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.Replacements;
-import com.oracle.graal.nodes.spi.StampProvider;
-import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.Phase;
-import com.oracle.graal.phases.schedule.SchedulePhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.jvmci.common.*;
 
 /**
  * Processes all {@link Lowerable} nodes to do their lowering.
@@ -211,7 +183,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
      */
     private boolean checkPostLowering(StructuredGraph graph, PhaseContext context) {
         Mark expectedMark = graph.getMark();
-        lower(graph, context, LoweringMode.VERIFY_LOWERING);
+        lower(graph, context, 1);
         Mark mark = graph.getMark();
         assert mark.equals(expectedMark) : graph + ": a second round in the current lowering phase introduced these new nodes: " + graph.getNewNodes(expectedMark).snapshot();
         return true;
@@ -219,13 +191,13 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
     @Override
     protected void run(final StructuredGraph graph, PhaseContext context) {
-        lower(graph, context, LoweringMode.LOWERING);
+        lower(graph, context, 0);
         assert checkPostLowering(graph, context);
     }
 
-    private void lower(StructuredGraph graph, PhaseContext context, LoweringMode mode) {
+    private void lower(StructuredGraph graph, PhaseContext context, int i) {
         IncrementalCanonicalizerPhase<PhaseContext> incrementalCanonicalizer = new IncrementalCanonicalizerPhase<>(canonicalizer);
-        incrementalCanonicalizer.appendPhase(new Round(context, mode));
+        incrementalCanonicalizer.appendPhase(new Round(i, context));
         incrementalCanonicalizer.apply(graph, context);
         assert graph.verify();
     }
@@ -264,48 +236,26 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         return true;
     }
 
-    private enum LoweringMode {
-        LOWERING,
-        VERIFY_LOWERING
-    }
-
     private final class Round extends Phase {
 
         private final PhaseContext context;
-        private final LoweringMode mode;
-        private ScheduleResult schedule;
-        private final SchedulePhase schedulePhase;
+        private final SchedulePhase schedule;
+        private final int iteration;
 
-        private Round(PhaseContext context, LoweringMode mode) {
+        private Round(int iteration, PhaseContext context) {
+            this.iteration = iteration;
             this.context = context;
-            this.mode = mode;
-
-            /*
-             * In VERIFY_LOWERING, we want to verify whether the lowering itself changes the graph.
-             * Make sure we're not detecting spurious changes because the SchedulePhase modifies the
-             * graph.
-             */
-            boolean immutableSchedule = mode == LoweringMode.VERIFY_LOWERING;
-
-            this.schedulePhase = new SchedulePhase(immutableSchedule);
+            this.schedule = new SchedulePhase();
         }
 
         @Override
         protected CharSequence createName() {
-            switch (mode) {
-                case LOWERING:
-                    return "LoweringRound";
-                case VERIFY_LOWERING:
-                    return "VerifyLoweringRound";
-                default:
-                    throw JVMCIError.shouldNotReachHere();
-            }
+            return "LoweringIteration" + iteration;
         }
 
         @Override
         public void run(StructuredGraph graph) {
-            schedulePhase.apply(graph, false);
-            schedule = graph.getLastSchedule();
+            schedule.apply(graph, false);
             schedule.getCFG().computePostdominators();
             Block startBlock = schedule.getCFG().getStartBlock();
             ProcessFrame rootFrame = new ProcessFrame(startBlock, graph.createNodeBitMap(), startBlock.getBeginNode(), null);
@@ -355,7 +305,6 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             }
         }
 
-        @SuppressWarnings("try")
         private AnchoringNode process(final Block b, final NodeBitMap activeGuards, final AnchoringNode startAnchor) {
 
             final LoweringToolImpl loweringTool = new LoweringToolImpl(context, startAnchor, activeGuards, b.getBeginNode());
@@ -382,9 +331,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                     Collection<Node> unscheduledUsages = null;
                     assert (unscheduledUsages = getUnscheduledUsages(node)) != null;
                     Mark preLoweringMark = node.graph().getMark();
-                    try (DebugCloseable s = node.graph().withNodeContext(node)) {
-                        ((Lowerable) node).lower(loweringTool);
-                    }
+                    ((Lowerable) node).lower(loweringTool);
                     if (loweringTool.guardAnchor.asNode().isDeleted()) {
                         // TODO nextNode could be deleted but this is not currently supported
                         assert nextNode.isAlive();

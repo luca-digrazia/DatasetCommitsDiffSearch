@@ -22,15 +22,19 @@
  */
 package com.oracle.graal.nodes.java;
 
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * This the base class of all array operations.
  */
+@NodeInfo
 public abstract class AccessArrayNode extends FixedWithNextNode {
 
-    @Input private ValueNode array;
+    public static final NodeClass<AccessArrayNode> TYPE = NodeClass.create(AccessArrayNode.class);
+    @Input protected ValueNode array;
 
     public ValueNode array() {
         return array;
@@ -38,12 +42,16 @@ public abstract class AccessArrayNode extends FixedWithNextNode {
 
     /**
      * Creates a new AccessArrayNode.
-     * @param kind the type of the result of this instruction
+     *
      * @param array the instruction that produces the array object value
      */
-    public AccessArrayNode(Stamp stamp, ValueNode array) {
-        super(stamp);
+    public AccessArrayNode(NodeClass<? extends AccessArrayNode> c, Stamp stamp, ValueNode array) {
+        super(c, stamp);
         this.array = array;
     }
 
+    public void setArray(ValueNode array) {
+        updateUsages(this.array, array);
+        this.array = array;
+    }
 }

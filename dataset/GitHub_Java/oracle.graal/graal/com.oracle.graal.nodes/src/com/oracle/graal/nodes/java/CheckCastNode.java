@@ -23,10 +23,8 @@
 package com.oracle.graal.nodes.java;
 
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
-import static jdk.internal.jvmci.meta.DeoptimizationAction.*;
-import static jdk.internal.jvmci.meta.DeoptimizationReason.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.meta.Assumptions.*;
+import static com.oracle.jvmci.meta.DeoptimizationAction.*;
+import static com.oracle.jvmci.meta.DeoptimizationReason.*;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -37,6 +35,8 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.meta.Assumptions.AssumptionResult;
 
 /**
  * Implements a type check against a compile-time known type.
@@ -240,9 +240,11 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(object);
-        if (tryFold(alias.stamp()) == TriState.TRUE) {
-            tool.replaceWith(alias);
+        State state = tool.getObjectState(object);
+        if (state != null && state.getState() == EscapeState.Virtual) {
+            if (type.isAssignableFrom(state.getVirtualObject().type())) {
+                tool.replaceWithVirtual(state.getVirtualObject());
+            }
         }
     }
 

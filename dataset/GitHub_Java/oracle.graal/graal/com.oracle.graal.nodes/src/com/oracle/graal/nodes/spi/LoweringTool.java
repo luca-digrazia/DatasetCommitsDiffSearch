@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,51 @@
  */
 package com.oracle.graal.nodes.spi;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.jvmci.meta.*;
 
 public interface LoweringTool {
-    GraalCodeCacheProvider getRuntime();
-    ValueNode createNullCheckGuard(ValueNode object, long leafGraphId);
-    ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, long leafGraphId);
-    ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated, long leafGraphId);
-    Assumptions assumptions();
+
+    MetaAccessProvider getMetaAccess();
+
+    LoweringProvider getLowerer();
+
+    ConstantReflectionProvider getConstantReflection();
+
+    Replacements getReplacements();
+
+    StampProvider getStampProvider();
+
+    GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action);
+
+    GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, JavaConstant speculation, boolean negated);
 
     /**
      * Gets the closest fixed node preceding the node currently being lowered.
      */
     FixedWithNextNode lastFixedNode();
-}
 
+    AnchoringNode getCurrentGuardAnchor();
+
+    /**
+     * Marker interface lowering stages.
+     */
+    interface LoweringStage {
+    }
+
+    /**
+     * The lowering stages used in a standard Graal phase plan. Lowering is called 3 times, during
+     * every tier of compilation.
+     */
+    enum StandardLoweringStage implements LoweringStage {
+        HIGH_TIER,
+        MID_TIER,
+        LOW_TIER
+    }
+
+    /**
+     * Returns current lowering stage.
+     */
+    LoweringStage getLoweringStage();
+}

@@ -22,19 +22,13 @@
  */
 package com.oracle.graal.nodes;
 
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Simplifiable;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.jvmci.meta.*;
 
 @NodeInfo
 public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNode implements Simplifiable, GuardingNode {
@@ -102,7 +96,7 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
     public DeoptimizeNode lowerToIf() {
         FixedNode currentNext = next();
         setNext(null);
-        DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason, speculation));
+        DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason));
         deopt.setStateBefore(stateBefore());
         IfNode ifNode;
         AbstractBeginNode noDeoptSuccessor;
