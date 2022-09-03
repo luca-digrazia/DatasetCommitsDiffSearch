@@ -104,15 +104,6 @@ public final class SourceSectionFilter {
         return usedTags;
     }
 
-    boolean isSourceOnly() {
-        for (EventFilterExpression eventFilterExpression : expressions) {
-            if (!eventFilterExpression.isSourceOnly()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     boolean isInstrumentedRoot(Set<Class<?>> providedTags, SourceSection rootSourceSection) {
         for (EventFilterExpression exp : expressions) {
             if (!exp.isRootIncluded(providedTags, rootSourceSection)) {
@@ -128,19 +119,6 @@ public final class SourceSectionFilter {
         }
         for (EventFilterExpression exp : expressions) {
             if (!exp.isIncluded(providedTags, instrumentedNode, sourceSection)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    boolean isInstrumentedSource(Source source) {
-        if (source == null) {
-            return false;
-        }
-        for (EventFilterExpression exp : expressions) {
-            assert exp.isSourceOnly();
-            if (!exp.isSourceIncluded(source)) {
                 return false;
             }
         }
@@ -477,17 +455,9 @@ public final class SourceSectionFilter {
             // default implementation does nothing
         }
 
-        boolean isSourceIncluded(@SuppressWarnings("unused") Source source) {
-            return false;
-        }
-
         abstract boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection);
 
         abstract boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection);
-
-        boolean isSourceOnly() {
-            return false;
-        }
 
         public final int compareTo(EventFilterExpression o) {
             return o.getOrder() - getOrder();
@@ -510,31 +480,22 @@ public final class SourceSectionFilter {
             }
 
             @Override
-            boolean isSourceOnly() {
-                return true;
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection) {
+                if (rootSourceSection == null) {
+                    return true;
+                }
+                return isIncluded(null, null, rootSourceSection);
             }
 
             @Override
-            boolean isSourceIncluded(Source src) {
+            boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
+                Source src = sourceSection.getSource();
                 for (Source otherSource : sources) {
                     if (src == otherSource) {
                         return true;
                     }
                 }
                 return false;
-            }
-
-            @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection) {
-                if (rootSourceSection == null) {
-                    return true;
-                }
-                return isSourceIncluded(rootSourceSection.getSource());
-            }
-
-            @Override
-            boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
-                return isSourceIncluded(sourceSection.getSource());
             }
 
             @Override
@@ -561,17 +522,12 @@ public final class SourceSectionFilter {
                 if (rootSourceSection == null) {
                     return true;
                 }
-                return isSourceIncluded(rootSourceSection.getSource());
+                return isIncluded(null, null, rootSourceSection);
             }
 
             @Override
-            boolean isSourceOnly() {
-                return true;
-            }
-
-            @Override
-            boolean isSourceIncluded(Source source) {
-                String mimeType = source.getMimeType();
+            boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
+                String mimeType = sourceSection.getSource().getMimeType();
                 if (mimeType != null) {
                     for (String otherMimeType : mimeTypes) {
                         if (otherMimeType.equals(mimeType)) {
@@ -580,11 +536,6 @@ public final class SourceSectionFilter {
                     }
                 }
                 return false;
-            }
-
-            @Override
-            boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
-                return isSourceIncluded(sourceSection.getSource());
             }
 
             @Override
@@ -943,16 +894,6 @@ public final class SourceSectionFilter {
 
         Not(EventFilterExpression delegate) {
             this.delegate = delegate;
-        }
-
-        @Override
-        boolean isSourceOnly() {
-            return delegate.isSourceOnly();
-        }
-
-        @Override
-        boolean isSourceIncluded(Source source) {
-            return !delegate.isSourceIncluded(source);
         }
 
         @Override
