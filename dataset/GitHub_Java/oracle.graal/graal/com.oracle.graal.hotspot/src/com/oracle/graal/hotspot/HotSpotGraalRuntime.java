@@ -109,7 +109,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
 
         this.compilerToVm = toVM;
 
-        TTY.initialize(Options.LogFile.getStream(compilerToVm));
+        TTY.initialize(Options.LogFile.getStream());
 
         if (Log.getValue() == null && Meter.getValue() == null && Time.getValue() == null && Dump.getValue() == null && Verify.getValue() == null) {
             if (MethodFilter.getValue() != null) {
@@ -118,7 +118,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
         }
 
         if (Debug.isEnabled()) {
-            DebugEnvironment.initialize(TTY.cachedOut);
+            DebugEnvironment.initialize(LogFile.getStream());
 
             String summary = DebugValueSummary.getValue();
             if (summary != null) {
@@ -276,9 +276,16 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
 
         CompileTheWorld.Options.overrideWithNativeOptions(config);
 
-        // Only set HotSpotPrintInlining if it still has its default value (false).
+        // Only set HotSpotPrintCompilation and HotSpotPrintInlining if they still have their
+        // default value (false).
+        if (HotSpotPrintCompilation.getValue() == false) {
+            HotSpotPrintCompilation.setValue(config.printCompilation);
+        }
         if (HotSpotPrintInlining.getValue() == false) {
             HotSpotPrintInlining.setValue(config.printInlining);
+        }
+        if (HotSpotCIPrintCompilerName.getValue() == false) {
+            HotSpotCIPrintCompilerName.setValue(config.printCompilerName);
         }
 
         if (Boolean.valueOf(System.getProperty("graal.printconfig"))) {

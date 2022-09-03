@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.api.instrument;
 
-import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
 
 /**
@@ -46,41 +45,34 @@ import com.oracle.truffle.api.source.*;
  * attached instruments seldom changes. The assumption is invalidated when instruments are added or
  * removed, but some instruments may change their internal state in such a way that the assumption
  * should also be invalidated.
+ * <p>
+ * <strong>Disclaimer:</strong> experimental interface under development. In particular, the
+ * <em>notify</em> methods must be migrated to another interface.
  *
  * @see Instrument
  * @see Wrapper
  */
-public interface Probe extends ExecutionEvents, SyntaxTagged, NodeInterface {
+public interface Probe extends ExecutionEvents, SyntaxTagged {
 
     /**
-     * Get the {@link SourceSection} in some Truffle AST associated with this probe.
-     *
-     * @return The source associated with this probe.
+     * The source location with which this probe is (presumably uniquely) associated.
      */
     SourceSection getSourceLocation();
 
     /**
-     * Mark this probe as belonging to some tool-related category that can be used to guide tool
-     * behavior at an associated AST node. For example, a debugger might add the tag
-     * {@link StandardSyntaxTag#STATEMENT} as a way of configuring where execution should stop when
-     * stepping.
+     * Mark this probe as being associated with an AST node in some category useful for debugging
+     * and other tools.
      */
     void tagAs(SyntaxTag tag);
 
     /**
-     * Adds an {@link Instrument} to this probe's collection. No check is made to see if the same
-     * instrument has already been added.
-     *
-     * @param newInstrument The instrument to add to this probe.
+     * Adds an instrument to this probe.
      */
     void addInstrument(Instrument newInstrument);
 
     /**
-     * Removes the given instrument from the probe's collection.
-     *
-     * @param oldInstrument The instrument to remove from this probe.
-     * @throws RuntimeException if no matching instrument has been attached.
+     * Removes an instrument from this probe.
      */
-    void removeInstrument(Instrument oldInstrument) throws RuntimeException;
+    void removeInstrument(Instrument oldInstrument);
 
 }

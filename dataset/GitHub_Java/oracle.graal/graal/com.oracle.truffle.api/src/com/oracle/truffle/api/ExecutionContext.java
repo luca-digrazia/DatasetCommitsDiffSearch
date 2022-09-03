@@ -26,7 +26,6 @@ package com.oracle.truffle.api;
 
 import java.util.*;
 
-import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.instrument.impl.*;
 import com.oracle.truffle.api.source.*;
@@ -46,9 +45,6 @@ public abstract class ExecutionContext {
     protected ExecutionContext() {
     }
 
-    /**
-     * Sets up the {@link SourceCallback} for this execution context.
-     */
     public void initialize() {
         setSourceCallback(new SourceCallback() {
 
@@ -103,13 +99,23 @@ public abstract class ExecutionContext {
     }
 
     /**
-     * Return a newly created, untagged, {@link Probe} associated with a particular source section,
-     * with no requirement that the association be unique.
+     * Return the (possibly newly created) {@link Probe} uniquely associated with a particular
+     * source code location. A newly created probe carries no tags.
      *
-     * @return a probe associated with an extent of guest language source code.
+     * @return a probe uniquely associated with an extent of guest language source code.
      */
-    public final Probe createProbe(SourceSection source) {
-        return probeManager.createProbe(source);
+    public final Probe getProbe(SourceSection sourceSection) {
+        return probeManager.getProbe(sourceSection);
+    }
+
+    /**
+     * Has a {@link Probe} been created that is uniquely associated with a particular source code
+     * location.
+     *
+     * @return a probe uniquely associated with an extent of guest language source code.
+     */
+    public final boolean hasProbe(SourceSection sourceSection) {
+        return probeManager.hasProbe(sourceSection);
     }
 
     /**
@@ -118,6 +124,14 @@ public abstract class ExecutionContext {
      */
     public final Collection<Probe> findProbesTaggedAs(SyntaxTag tag) {
         return probeManager.findProbesTaggedAs(tag);
+    }
+
+    /**
+     * Returns all existing probes with first character on a specified line; empty collection if no
+     * probes found.
+     */
+    public final Collection<Probe> findProbesByLine(LineLocation lineLocation) {
+        return probeManager.findProbesByLine(lineLocation);
     }
 
     /**
@@ -162,15 +176,8 @@ public abstract class ExecutionContext {
     public abstract String getLanguageShortName();
 
     /**
-     * Establishes source event reporting.
+     * Establishes source event reporting
      */
     protected abstract void setSourceCallback(SourceCallback sourceCallback);
-
-    /**
-     * Get compiler options specific to this <code>ExecutionContext</code>.
-     */
-    public CompilerOptions getCompilerOptions() {
-        return DefaultCompilerOptions.INSTANCE;
-    }
 
 }
