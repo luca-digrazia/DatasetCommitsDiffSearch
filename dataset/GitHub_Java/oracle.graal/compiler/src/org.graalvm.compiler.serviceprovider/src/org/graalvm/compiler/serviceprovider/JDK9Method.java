@@ -61,16 +61,12 @@ public final class JDK9Method {
      */
     public static final boolean Java8OrEarlier = JAVA_SPECIFICATION_VERSION <= 8;
 
-    private static Error unreachable() {
-        throw new InternalError("Cannot use API introduced in Java 9 or later on Java " + JAVA_SPECIFICATION_VERSION);
-    }
-
     /**
      * Wrapper for {@code Class.getModule()}.
      */
     @SuppressWarnings("unused")
     public static Object getModule(Class<?> clazz) {
-        throw unreachable();
+        throw new InternalError();
     }
 
     /**
@@ -78,7 +74,7 @@ public final class JDK9Method {
      */
     @SuppressWarnings("unused")
     public static Set<String> getPackages(Object module) {
-        throw unreachable();
+        throw new InternalError();
     }
 
     /**
@@ -86,7 +82,7 @@ public final class JDK9Method {
      */
     @SuppressWarnings("unused")
     public static InputStream getResourceAsStream(Object module, String resource) {
-        throw unreachable();
+        throw new InternalError();
     }
 
     /**
@@ -94,7 +90,7 @@ public final class JDK9Method {
      */
     @SuppressWarnings("unused")
     static void addOpens(Object thisModule, String packageName, Object otherModule) {
-        throw unreachable();
+        throw new InternalError();
     }
 
     /**
@@ -102,6 +98,6 @@ public final class JDK9Method {
      */
     @SuppressWarnings("unused")
     public static boolean isOpenTo(Object module1, String pkg, Object module2) {
-        throw unreachable();
+        throw new InternalError();
     }
 }
