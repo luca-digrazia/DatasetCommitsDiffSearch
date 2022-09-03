@@ -35,7 +35,7 @@ import java.util.*;
  * <ul>
  * <li><strong>Literal:</strong> A named text string. These are not indexed and should be considered
  * value objects; equality is defined based on contents. <br>
- * See {@link Source#fromText(CharSequence, String)}</li>
+ * See {@link Source#fromText(String, String)}</li>
  * <p>
  * <li><strong>File:</strong> Each file is represented as a canonical object, indexed by the
  * absolute, canonical path name of the file. File contents are <em>read lazily</em> and contents
@@ -53,7 +53,7 @@ import java.util.*;
  * <p>
  * <li><strong>Pseudo File:</strong> A literal text string that can be retrieved by name as if it
  * were a file, unlike literal sources; useful for testing. <br>
- * See {@link Source#asPseudoFile(CharSequence, String)}</li>
+ * See {@link Source#asPseudoFile(String, String)}</li>
  * </ul>
  * <p>
  * <strong>File cache:</strong>
@@ -122,28 +122,27 @@ public abstract class Source {
     }
 
     /**
-     * Creates a non-canonical source from literal text. If an already created literal source must
-     * be retrievable by name, use {@link #asPseudoFile(CharSequence, String)}.
+     * Creates a non-canonical source from literal text.
      *
-     * @param chars textual source code
+     * @param code textual source code
      * @param description a note about the origin, for error messages and debugging
      * @return a newly created, non-indexed source representation
      */
-    public static Source fromText(CharSequence chars, String description) {
-        assert chars != null;
-        return new LiteralSource(description, chars.toString());
+    public static Source fromText(String code, String description) {
+        assert code != null;
+        return new LiteralSource(description, code);
     }
 
     /**
      * Creates a source whose contents will be read immediately from a URL and cached.
      *
      * @param url
-     * @param description identifies the origin, possibly useful for debugging
+     * @param name identifies the origin, possibly useful for debugging
      * @return a newly created, non-indexed source representation
      * @throws IOException if reading fails
      */
-    public static Source fromURL(URL url, String description) throws IOException {
-        return URLSource.get(url, description);
+    public static Source fromURL(URL url, String name) throws IOException {
+        return URLSource.get(url, name);
     }
 
     /**
@@ -193,12 +192,12 @@ public abstract class Source {
      * Creates a source from literal text, but which acts as a file and can be retrieved by name
      * (unlike other literal sources); intended for testing.
      *
-     * @param chars textual source code
+     * @param code textual source code
      * @param pseudoFileName string to use for indexing/lookup
      * @return a newly created, source representation, canonical with respect to its name
      */
-    public static Source asPseudoFile(CharSequence chars, String pseudoFileName) {
-        final Source source = new LiteralSource(pseudoFileName, chars.toString());
+    public static Source asPseudoFile(String code, String pseudoFileName) {
+        final Source source = new LiteralSource(pseudoFileName, code);
         filePathToSource.put(pseudoFileName, new WeakReference<>(source));
         return source;
     }
@@ -213,12 +212,11 @@ public abstract class Source {
     }
 
     private static String read(Reader reader) throws IOException {
-        final BufferedReader bufferedReader = new BufferedReader(reader);
         final StringBuilder builder = new StringBuilder();
         final char[] buffer = new char[1024];
 
         while (true) {
-            final int n = bufferedReader.read(buffer);
+            final int n = reader.read(buffer);
             if (n == -1) {
                 break;
             }
@@ -775,52 +773,52 @@ public abstract class Source {
         }
 
         @Override
-        public Source getSource() {
+        public final Source getSource() {
             return source;
         }
 
         @Override
-        public int getStartLine() {
+        public final int getStartLine() {
             return startLine;
         }
 
         @Override
-        public LineLocation getLineLocation() {
+        public final LineLocation getLineLocation() {
             return source.createLineLocation(startLine);
         }
 
         @Override
-        public int getStartColumn() {
+        public final int getStartColumn() {
             return startColumn;
         }
 
         @Override
-        public int getCharIndex() {
+        public final int getCharIndex() {
             return charIndex;
         }
 
         @Override
-        public int getCharLength() {
+        public final int getCharLength() {
             return charLength;
         }
 
         @Override
-        public int getCharEndIndex() {
+        public final int getCharEndIndex() {
             return charIndex + charLength;
         }
 
         @Override
-        public String getIdentifier() {
+        public final String getIdentifier() {
             return identifier;
         }
 
         @Override
-        public String getCode() {
+        public final String getCode() {
             return getSource().getCode(charIndex, charLength);
         }
 
         @Override
-        public String getShortDescription() {
+        public final String getShortDescription() {
             return String.format("%s:%d", source.getShortName(), startLine);
         }
 
@@ -906,13 +904,8 @@ public abstract class Source {
         }
 
         @Override
-        public String getShortDescription() {
-            return source.getShortName() + ":" + line;
-        }
-
-        @Override
         public String toString() {
-            return "Line[" + getShortDescription() + "]";
+            return "SourceLine [" + source.getName() + ", " + line + "]";
         }
 
         @Override
