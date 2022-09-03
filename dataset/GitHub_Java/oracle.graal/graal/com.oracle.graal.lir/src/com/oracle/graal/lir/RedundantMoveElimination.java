@@ -44,8 +44,7 @@ import com.oracle.graal.lir.phases.*;
 public final class RedundantMoveElimination extends PostAllocationOptimizationPhase {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
-                    BenchmarkCounterFactory counterFactory) {
+    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
         Optimization redundantMoveElimination = new Optimization();
         redundantMoveElimination.doOptimize(lirGenRes.getLIR(), lirGenRes.getFrameMap());
     }
@@ -88,7 +87,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
 
     private static final class Optimization {
 
-        Map<AbstractBlockBase<?>, BlockData> blockData = CollectionsFactory.newMap();
+        Map<AbstractBlock<?>, BlockData> blockData = CollectionsFactory.newMap();
 
         Register[] callerSaveRegs;
 
@@ -143,7 +142,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
 
         private void initBlockData(LIR lir) {
 
-            List<? extends AbstractBlockBase<?>> blocks = lir.linearScanOrder();
+            List<? extends AbstractBlock<?>> blocks = lir.linearScanOrder();
             numRegs = 0;
 
             int maxStackLocations = COMPLEXITY_LIMIT / blocks.size();
@@ -152,7 +151,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
              * Search for relevant locations which can be optimized. These are register or stack
              * slots which occur as destinations of move instructions.
              */
-            for (AbstractBlockBase<?> block : blocks) {
+            for (AbstractBlock<?> block : blocks) {
                 List<LIRInstruction> instructions = lir.getLIRforBlock(block);
                 for (LIRInstruction op : instructions) {
                     if (isEligibleMove(op)) {
@@ -177,7 +176,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
              */
             int numLocations = numRegs + stackIndices.size();
             Debug.log("num locations = %d (regs = %d, stack = %d)", numLocations, numRegs, stackIndices.size());
-            for (AbstractBlockBase<?> block : blocks) {
+            for (AbstractBlock<?> block : blocks) {
                 BlockData data = new BlockData(numLocations);
                 blockData.put(block, data);
             }
@@ -192,7 +191,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
 
             try (Indent indent = Debug.logAndIndent("solve data flow")) {
 
-                List<? extends AbstractBlockBase<?>> blocks = lir.linearScanOrder();
+                List<? extends AbstractBlock<?>> blocks = lir.linearScanOrder();
 
                 int numIter = 0;
 
@@ -206,7 +205,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
                     changed = false;
                     try (Indent indent2 = Debug.logAndIndent("new iteration")) {
 
-                        for (AbstractBlockBase<?> block : blocks) {
+                        for (AbstractBlock<?> block : blocks) {
 
                             BlockData data = blockData.get(block);
                             /*
@@ -236,7 +235,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
                                 /*
                                  * Merge the states of predecessor blocks
                                  */
-                                for (AbstractBlockBase<?> predecessor : block.getPredecessors()) {
+                                for (AbstractBlock<?> predecessor : block.getPredecessors()) {
                                     BlockData predData = blockData.get(predecessor);
                                     newState |= mergeState(data.entryState, predData.exitState, valueNum);
                                 }
@@ -292,9 +291,9 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
 
             try (Indent indent = Debug.logAndIndent("eliminate moves")) {
 
-                List<? extends AbstractBlockBase<?>> blocks = lir.linearScanOrder();
+                List<? extends AbstractBlock<?>> blocks = lir.linearScanOrder();
 
-                for (AbstractBlockBase<?> block : blocks) {
+                for (AbstractBlock<?> block : blocks) {
 
                     try (Indent indent2 = Debug.logAndIndent("eliminate moves in block %d", block.getId())) {
 

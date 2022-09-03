@@ -22,36 +22,31 @@
  */
 package com.oracle.graal.truffle.nodes;
 
-import jdk.vm.ci.meta.JavaKind;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.extended.BoxNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
 public final class IsCompilationConstantNode extends FloatingNode implements Lowerable, Canonicalizable {
 
-    public static final NodeClass<IsCompilationConstantNode> TYPE = NodeClass.create(IsCompilationConstantNode.class);
+    public static final NodeClass<IsCompilationConstantNode> TYPE = NodeClass.get(IsCompilationConstantNode.class);
 
     @Input ValueNode value;
 
     public IsCompilationConstantNode(ValueNode value) {
-        super(TYPE, StampFactory.forKind(JavaKind.Boolean));
+        super(TYPE, StampFactory.forKind(Kind.Boolean));
         this.value = value;
     }
 
     @Override
     public void lower(LoweringTool tool) {
-        replaceAtUsagesAndDelete(ConstantNode.forBoolean(false, graph()));
+        graph().replaceFloating(this, ConstantNode.forBoolean(false, graph()));
     }
 
     @Override

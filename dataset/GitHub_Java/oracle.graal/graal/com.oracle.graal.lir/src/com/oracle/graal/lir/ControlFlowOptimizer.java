@@ -41,13 +41,12 @@ public final class ControlFlowOptimizer extends PostAllocationOptimizationPhase 
      * Performs control flow optimizations on the given LIR graph.
      */
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
-                    BenchmarkCounterFactory counterFactory) {
+    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
         LIR lir = lirGenRes.getLIR();
         new Optimizer<B>(lir).deleteEmptyBlocks(codeEmittingOrder);
     }
 
-    private static final class Optimizer<B extends AbstractBlockBase<B>> {
+    private static final class Optimizer<B extends AbstractBlock<B>> {
 
         private final LIR lir;
 
@@ -98,7 +97,7 @@ public final class ControlFlowOptimizer extends PostAllocationOptimizationPhase 
                 if (canDeleteBlock(block)) {
                     // adjust successor and predecessor lists
                     B other = block.getSuccessors().iterator().next();
-                    for (AbstractBlockBase<B> pred : block.getPredecessors()) {
+                    for (AbstractBlock<B> pred : block.getPredecessors()) {
                         Collections.replaceAll(pred.getSuccessors(), block, other);
                     }
                     for (int i = 0; i < other.getPredecessorCount(); i++) {

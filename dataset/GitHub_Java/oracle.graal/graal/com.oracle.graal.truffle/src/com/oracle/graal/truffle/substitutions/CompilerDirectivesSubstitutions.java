@@ -24,13 +24,13 @@ package com.oracle.graal.truffle.substitutions;
 
 import java.util.concurrent.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.truffle.nodes.*;
+import com.oracle.graal.truffle.nodes.frame.*;
 import com.oracle.truffle.api.*;
 
 @ClassSubstitution(CompilerDirectives.class)
@@ -38,7 +38,22 @@ public class CompilerDirectivesSubstitutions {
 
     @MethodSubstitution
     public static void transferToInterpreter() {
-        DeoptimizeNode.deopt(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.UnreachedCode);
+        DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.TransferToInterpreter);
+    }
+
+    @MethodSubstitution
+    public static void transferToInterpreterAndInvalidate() {
+        DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.TransferToInterpreter);
+    }
+
+    @MethodSubstitution
+    public static boolean inInterpreter() {
+        return false;
+    }
+
+    @MethodSubstitution
+    public static boolean inCompiledCode() {
+        return true;
     }
 
     @MethodSubstitution
@@ -57,4 +72,14 @@ public class CompilerDirectivesSubstitutions {
 
     @MacroSubstitution(macro = BailoutNode.class, isStatic = true)
     public static native void bailout(String reason);
+
+    @MethodSubstitution
+    public static boolean isCompilationConstant(Object value) {
+        return IsCompilationConstantNode.check(value);
+    }
+
+    @MethodSubstitution
+    public static void materialize(Object obj) {
+        ForceMaterializeNode.force(obj);
+    }
 }

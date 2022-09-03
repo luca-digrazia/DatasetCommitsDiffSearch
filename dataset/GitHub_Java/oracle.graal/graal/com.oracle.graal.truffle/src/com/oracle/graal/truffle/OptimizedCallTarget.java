@@ -56,7 +56,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     protected final CompilationPolicy compilationPolicy;
     private final OptimizedCallTarget sourceCallTarget;
     private final AtomicInteger callSitesKnown = new AtomicInteger(0);
-    private final ValueProfile exceptionProfile = ValueProfile.createClassProfile();
 
     @CompilationFinal private Class<?>[] profiledArgumentTypes;
     @CompilationFinal private Assumption profiledArgumentTypesAssumption;
@@ -92,6 +91,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         this.compilationPolicy = compilationPolicy;
         this.rootNode.adoptChildren();
         this.rootNode.applyInstrumentation();
+        this.rootNode.setCallTarget(this);
         this.uninitializedRootNode = sourceCallTarget == null ? cloneRootNode(rootNode) : sourceCallTarget.uninitializedRootNode;
         if (TruffleCallTargetProfiling.getValue()) {
             this.compilationProfile = new TraceCompilationProfile();
@@ -233,16 +233,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     protected Object doInvoke(Object[] args) {
-        try {
-            return callBoundary(args);
-        } catch (Throwable t) {
-            t = exceptionProfile.profile(t);
-            if (t instanceof RuntimeException) {
-                throw (RuntimeException) t;
-            } else {
-                throw new RuntimeException(t);
-            }
-        }
+        return callBoundary(args);
     }
 
     @TruffleCallBoundary
