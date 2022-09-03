@@ -297,9 +297,8 @@ class MultiLanguageShell {
             return language;
         }
 
-        @SuppressWarnings("sync-override")
         @Override
-        public final Throwable fillInStackTrace() {
+        public synchronized Throwable fillInStackTrace() {
             return this;
         }
     }
