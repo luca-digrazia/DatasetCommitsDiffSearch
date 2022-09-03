@@ -29,7 +29,11 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleTransf
 import static com.oracle.graal.truffle.hotspot.UnsafeAccess.UNSAFE;
 
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.ListIterator;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -74,6 +78,7 @@ import com.oracle.graal.truffle.hotspot.nfi.HotSpotNativeFunctionInterface;
 import com.oracle.graal.truffle.hotspot.nfi.RawNativeCallNodeFactory;
 import com.oracle.nfi.api.NativeFunctionInterface;
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.nodes.RootNode;
 
 import jdk.vm.ci.code.CodeCacheProvider;
@@ -93,6 +98,8 @@ import jdk.vm.ci.runtime.JVMCI;
  * Implementation of the Truffle runtime when running on top of Graal.
  */
 public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
+
+    private final Map<RootCallTarget, Void> callTargets = Collections.synchronizedMap(new WeakHashMap<RootCallTarget, Void>());
 
     static class Lazy extends BackgroundCompileQueue {
         private StackIntrospection stackIntrospection;
@@ -161,14 +168,25 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
-    protected OptimizedCallTarget createOptimizedCallTarget(OptimizedCallTarget source, RootNode rootNode) {
-        /* No HotSpot-specific subclass is currently necessary for call targets. */
-        return new OptimizedCallTarget(source, rootNode);
+    public RootCallTarget createCallTarget(RootNode rootNode) {
+        return createCallTargetImpl(null, rootNode);
+    }
+
+    @Override
+    protected RootCallTarget createCallTargetImpl(OptimizedCallTarget source, RootNode rootNode) {
+        RootCallTarget target = super.createCallTargetImpl(source, rootNode);
+        callTargets.put(target, null);
+        return target;
     }
 
     @Override
     public SpeculationLog createSpeculationLog() {
         return new HotSpotSpeculationLog();
+    }
+
+    @Override
+    public RootCallTarget createClonedCallTarget(OptimizedCallTarget source, RootNode root) {
+        return createCallTargetImpl(source, root);
     }
 
     public static void setDontInlineCallBoundaryMethod() {
@@ -303,6 +321,12 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
             lookupCallMethods(JVMCI.getRuntime().getHostJVMCIBackend().getMetaAccess());
         }
         return callMethods;
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public Collection<RootCallTarget> getCallTargets() {
+        return Collections.unmodifiableSet(callTargets.keySet());
     }
 
     @Override
