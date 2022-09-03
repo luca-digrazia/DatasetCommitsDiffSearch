@@ -937,10 +937,5 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     @Override
     protected void afterRegister(Node node) {
         assert hasValueProxies() || !(node instanceof ValueProxyNode);
-        if (GraalOptions.TraceInlining.getValue(getOptions()).isTracing()) {
-            if (node instanceof Invokable) {
-                ((Invokable) node).updateInliningLogAfterRegister(this);
-            }
-        }
     }
 }
