@@ -23,6 +23,7 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -32,8 +33,15 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "|%|")
 public class UnsignedRemNode extends FixedBinaryNode implements Canonicalizable, Lowerable, LIRLowerable {
 
-    public UnsignedRemNode(ValueNode x, ValueNode y) {
-        super(x.stamp().unrestricted(), x, y);
+    /**
+     * Used by {@code NodeIntrinsic} in {@code UnsignedMathSubstitutions}.
+     */
+    private UnsignedRemNode(Kind kind, ValueNode x, ValueNode y) {
+        this(StampFactory.forKind(kind), x, y);
+    }
+
+    public UnsignedRemNode(Stamp stamp, ValueNode x, ValueNode y) {
+        super(stamp, x, y);
     }
 
     @Override
@@ -49,7 +57,7 @@ public class UnsignedRemNode extends FixedBinaryNode implements Canonicalizable,
             if (c == 1) {
                 return ConstantNode.forIntegerStamp(stamp(), 0, graph());
             } else if (CodeUtil.isPowerOf2(c)) {
-                return graph().unique(new AndNode(x(), ConstantNode.forIntegerStamp(stamp(), c - 1, graph())));
+                return graph().unique(new AndNode(stamp(), x(), ConstantNode.forIntegerStamp(stamp(), c - 1, graph())));
             }
         }
         return this;
@@ -71,8 +79,8 @@ public class UnsignedRemNode extends FixedBinaryNode implements Canonicalizable,
     }
 
     @NodeIntrinsic
-    public static native int unsignedRemainder(int a, int b);
+    public static native int unsignedRemainder(@ConstantNodeParameter Kind kind, int a, int b);
 
     @NodeIntrinsic
-    public static native long unsignedRemainder(long a, long b);
+    public static native long unsignedRemainder(@ConstantNodeParameter Kind kind, long a, long b);
 }

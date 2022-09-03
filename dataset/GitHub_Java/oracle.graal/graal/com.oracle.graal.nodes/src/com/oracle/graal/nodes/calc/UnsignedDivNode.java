@@ -23,6 +23,7 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -32,8 +33,15 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "|/|")
 public class UnsignedDivNode extends FixedBinaryNode implements Canonicalizable, Lowerable, LIRLowerable {
 
-    public UnsignedDivNode(ValueNode x, ValueNode y) {
-        super(x.stamp().unrestricted(), x, y);
+    /**
+     * Used by {@code NodeIntrinsic} in {@code UnsignedMathSubstitutions}.
+     */
+    private UnsignedDivNode(Kind kind, ValueNode x, ValueNode y) {
+        this(StampFactory.forKind(kind), x, y);
+    }
+
+    public UnsignedDivNode(Stamp stamp, ValueNode x, ValueNode y) {
+        super(stamp, x, y);
     }
 
     @Override
@@ -50,7 +58,7 @@ public class UnsignedDivNode extends FixedBinaryNode implements Canonicalizable,
                 return x();
             }
             if (CodeUtil.isPowerOf2(c)) {
-                return graph().unique(new UnsignedRightShiftNode(x(), ConstantNode.forInt(CodeUtil.log2(c), graph())));
+                return graph().unique(new UnsignedRightShiftNode(stamp(), x(), ConstantNode.forInt(CodeUtil.log2(c), graph())));
             }
         }
         return this;
@@ -72,8 +80,8 @@ public class UnsignedDivNode extends FixedBinaryNode implements Canonicalizable,
     }
 
     @NodeIntrinsic
-    public static native int unsignedDivide(int a, int b);
+    public static native int unsignedDivide(@ConstantNodeParameter Kind kind, int a, int b);
 
     @NodeIntrinsic
-    public static native long unsignedDivide(long a, long b);
+    public static native long unsignedDivide(@ConstantNodeParameter Kind kind, long a, long b);
 }
