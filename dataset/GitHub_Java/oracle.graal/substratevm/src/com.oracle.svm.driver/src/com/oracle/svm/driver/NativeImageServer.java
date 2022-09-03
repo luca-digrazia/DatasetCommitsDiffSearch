@@ -143,34 +143,54 @@ final class NativeImageServer extends NativeImage {
 
         void sendBuildRequest(LinkedHashSet<Path> imageCP, LinkedHashSet<String> imageArgs) {
             withLockDirFileChannel(serverDir, lockFileChannel -> {
-                try (FileLock lock = lockFileChannel.tryLock()) {
-                    if (lock == null) {
-                        showError("A previous build is still in progress. Try again later.");
-                    }
+                boolean abortedOnce = false;
+                boolean finished = false;
+                while (!finished) {
+                    try (FileLock lock = lockFileChannel.tryLock()) {
+                        if (lock != null) {
+                            finished = true;
+                            if (abortedOnce) {
+                                showMessage("DONE.");
+                            }
+                        } else {
+                            /* Cancel strategy */
+                            if (!abortedOnce) {
+                                showMessagePart("A previous build is in progress. Aborting previous build...");
+                                abortTask();
+                                abortedOnce = true;
+                            }
+                            try {
+                                Thread.sleep(3_000);
+                            } catch (InterruptedException e) {
+                                showError("Woke up from waiting for previous build to abort", e);
+                            }
+                            continue;
+                        }
 
-                    /* Now we have the server-lock and can send the build-request */
-                    List<String> command = new ArrayList<>();
-                    command.add("-task=" + "com.oracle.svm.hosted.NativeImageGeneratorRunner");
-                    LinkedHashSet<Path> imagecp = new LinkedHashSet<>(serverClasspath);
-                    imagecp.addAll(imageCP);
-                    command.addAll(Arrays.asList("-imagecp", imagecp.stream().map(Path::toString).collect(Collectors.joining(":"))));
-                    command.addAll(imageArgs);
-                    showVerboseMessage(isVerbose(), "SendBuildRequest [");
-                    showVerboseMessage(isVerbose(), command.stream().collect(Collectors.joining("\n")));
-                    showVerboseMessage(isVerbose(), "]");
-                    try {
-                        /* logfile main purpose is to know when was the last build request */
-                        String logFileEntry = command.stream().collect(Collectors.joining(" ", Instant.now().toString() + ": ", "\n"));
-                        Files.write(serverDir.resolve(buildRequestLog), logFileEntry.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-                        updateLastBuildRequest();
+                        /* Now we have the server-lock and can send the build-request */
+                        List<String> command = new ArrayList<>();
+                        command.add("-task=" + "com.oracle.svm.hosted.NativeImageGeneratorRunner");
+                        LinkedHashSet<Path> imagecp = new LinkedHashSet<>(serverClasspath);
+                        imagecp.addAll(imageCP);
+                        command.addAll(Arrays.asList("-imagecp", imagecp.stream().map(Path::toString).collect(Collectors.joining(":"))));
+                        command.addAll(imageArgs);
+                        showVerboseMessage(isVerbose(), "SendBuildRequest [");
+                        showVerboseMessage(isVerbose(), command.stream().collect(Collectors.joining("\n")));
+                        showVerboseMessage(isVerbose(), "]");
+                        try {
+                            /* logfile main purpose is to know when was the last build request */
+                            String logFileEntry = command.stream().collect(Collectors.joining(" ", Instant.now().toString() + ": ", "\n"));
+                            Files.write(serverDir.resolve(buildRequestLog), logFileEntry.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                            updateLastBuildRequest();
+                        } catch (IOException e) {
+                            showError("Could not read/write into build-request log file", e);
+                        }
+                        // Checkstyle: stop
+                        sendRequest(System.out::print, System.err::print, "build", command.toArray(new String[command.size()]));
+                        // Checkstyle: resume
                     } catch (IOException e) {
-                        showError("Could not read/write into build-request log file", e);
+                        showError("Locking ServerDir " + serverDir + " failed", e);
                     }
-                    // Checkstyle: stop
-                    sendRequest(System.out::print, System.err::print, "build", command.toArray(new String[command.size()]));
-                    // Checkstyle: resume
-                } catch (IOException e) {
-                    showError("Error while trying to lock ServerDir " + serverDir, e);
                 }
             });
         }
@@ -180,6 +200,12 @@ final class NativeImageServer extends NativeImage {
             boolean alive = sendRequest(sb::append, sb::append, "version") == NativeImageBuildClient.EXIT_SUCCESS;
             showVerboseMessage(verboseServer, "Server version response: " + sb);
             return alive;
+        }
+
+        void abortTask() {
+            StringBuilder sb = new StringBuilder();
+            sendRequest(sb::append, sb::append, "abort");
+            showVerboseMessage(verboseServer, "Server abort response: " + sb);
         }
 
         void shutdown() {
