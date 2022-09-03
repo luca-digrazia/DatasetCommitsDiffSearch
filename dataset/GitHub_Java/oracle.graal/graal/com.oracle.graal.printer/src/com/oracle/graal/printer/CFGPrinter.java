@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import com.oracle.graal.bytecode.BytecodeDisassembler;
-import com.oracle.graal.bytecode.Bytecode;
 import com.oracle.graal.compiler.common.alloc.Trace;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
@@ -68,6 +67,7 @@ import com.oracle.graal.nodes.cfg.ControlFlowGraph;
 import jdk.vm.ci.code.DebugInfo;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.Value;
 
@@ -287,8 +287,6 @@ class CFGPrinter extends CompilationPrinter {
             out.print("loop_index ").println(block.getLoop().getIndex());
             out.print("loop_depth ").println(block.getLoop().getDepth());
         }
-
-        out.print("probability ").println(Double.doubleToRawLongBits(block.probability()));
     }
 
     private void printNodes(Block block) {
@@ -424,7 +422,7 @@ class CFGPrinter extends CompilationPrinter {
         StringBuilder buf = new StringBuilder();
         FrameState curState = state;
         do {
-            buf.append(Bytecode.toLocation(curState.getCode(), curState.bci)).append('\n');
+            buf.append(MetaUtil.toLocation(curState.method(), curState.bci)).append('\n');
 
             if (curState.stackSize() > 0) {
                 buf.append("stack: ");
