@@ -31,6 +31,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Lduw;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.sparc.*;
@@ -68,7 +69,7 @@ final class SPARCHotSpotJumpToExceptionHandlerInCallerOp extends SPARCHotSpotEpi
         SPARCAddress dst = new SPARCAddress(thread, isMethodHandleReturnOffset);
         try (SPARCScratchRegister scratch = SPARCScratchRegister.get()) {
             Register scratchReg = scratch.getRegister();
-            masm.lduw(dst, scratchReg);
+            new Lduw(dst, scratchReg).emit(masm);
             masm.cmp(scratchReg, scratchReg);
             masm.movcc(ConditionFlag.NotZero, CC.Icc, l7, sp);
         }
