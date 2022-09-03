@@ -38,17 +38,17 @@ import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMGlobalRootNode;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
+import com.oracle.truffle.llvm.types.LLVMFunction.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 import com.oracle.truffle.llvm.types.memory.LLVMMemory;
 
 public class LLVMRootNodeFactory {
 
-    public static LLVMGlobalRootNode createGlobalRootNode(LLVMParserRuntime runtime, LLVMNode[] staticInits, RootCallTarget mainCallTarget, LLVMNode[] staticDestructors, Object[] args,
+    public static LLVMGlobalRootNode createGlobalRootNode(LLVMParserRuntime runtime, LLVMNode[] staticInits, RootCallTarget mainCallTarget, LLVMAddress[] allocatedGlobalAddresses, Object[] args,
                     Source sourceFile, LLVMRuntimeType[] mainTypes) {
         return new LLVMGlobalRootNode(runtime.getStackPointerSlot(), runtime.getGlobalFrameDescriptor(), LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0()),
                         staticInits,
-                        mainCallTarget, staticDestructors,
+                        mainCallTarget, allocatedGlobalAddresses,
                         createArgs(sourceFile, args, mainTypes));
     }
 
