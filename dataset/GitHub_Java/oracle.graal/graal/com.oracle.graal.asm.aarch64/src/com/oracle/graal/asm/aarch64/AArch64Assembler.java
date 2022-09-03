@@ -1013,12 +1013,13 @@ public abstract class AArch64Assembler extends Assembler {
      *
      * @param size size of memory read in bits. Must be 8, 16, 32 or 64.
      * @param rt general purpose register. May not be null or stackpointer.
-     * @param rn general purpose register.
+     * @param address Has to be {@link AddressingMode#BASE_REGISTER_ONLY BASE_REGISTER_ONLY}. May
+     *            not be null.
      */
-    protected void ldxr(int size, Register rt, Register rn) {
+    protected void ldxr(int size, Register rt, AArch64Address address) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
         int transferSize = NumUtil.log2Ceil(size / 8);
-        exclusiveLoadInstruction(LDXR, rt, rn, transferSize);
+        exclusiveLoadInstruction(LDXR, rt, address, transferSize);
     }
 
     /**
@@ -1029,12 +1030,13 @@ public abstract class AArch64Assembler extends Assembler {
      * @param rs general purpose register. Set to exclusive access status. 0 means success,
      *            everything else failure. May not be null, or stackpointer.
      * @param rt general purpose register. May not be null or stackpointer.
-     * @param rn general purpose register.
+     * @param address Has to be {@link AddressingMode#BASE_REGISTER_ONLY BASE_REGISTER_ONLY}. May
+     *            not be null.
      */
-    protected void stxr(int size, Register rs, Register rt, Register rn) {
+    protected void stxr(int size, Register rs, Register rt, AArch64Address address) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
         int transferSize = NumUtil.log2Ceil(size / 8);
-        exclusiveStoreInstruction(STXR, rs, rt, rn, transferSize);
+        exclusiveStoreInstruction(STXR, rs, rt, address, transferSize);
     }
 
     /* Load-Acquire/Store-Release (5.3.7) */
@@ -1045,12 +1047,13 @@ public abstract class AArch64Assembler extends Assembler {
      *
      * @param size size of memory read in bits. Must be 8, 16, 32 or 64.
      * @param rt general purpose register. May not be null or stackpointer.
-     * @param rn general purpose register.
+     * @param address Has to be {@link AddressingMode#BASE_REGISTER_ONLY BASE_REGISTER_ONLY}. May
+     *            not be null.
      */
-    protected void ldar(int size, Register rt, Register rn) {
+    protected void ldar(int size, Register rt, AArch64Address address) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
         int transferSize = NumUtil.log2Ceil(size / 8);
-        exclusiveLoadInstruction(LDAR, rt, rn, transferSize);
+        exclusiveLoadInstruction(LDAR, rt, address, transferSize);
     }
 
     /**
@@ -1058,13 +1061,14 @@ public abstract class AArch64Assembler extends Assembler {
      *
      * @param size size of bits written to memory. Must be 8, 16, 32 or 64.
      * @param rt general purpose register. May not be null or stackpointer.
-     * @param rn general purpose register.
+     * @param address Has to be {@link AddressingMode#BASE_REGISTER_ONLY BASE_REGISTER_ONLY}. May
+     *            not be null.
      */
-    protected void stlr(int size, Register rt, Register rn) {
+    protected void stlr(int size, Register rt, AArch64Address address) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
         int transferSize = NumUtil.log2Ceil(size / 8);
         // Hack: Passing the zero-register means it is ignored when building the encoding.
-        exclusiveStoreInstruction(STLR, r0, rt, rn, transferSize);
+        exclusiveStoreInstruction(STLR, r0, rt, address, transferSize);
     }
 
     /* exclusive access */
@@ -1073,12 +1077,13 @@ public abstract class AArch64Assembler extends Assembler {
      *
      * @param size size of memory read in bits. Must be 8, 16, 32 or 64.
      * @param rt general purpose register. May not be null or stackpointer.
-     * @param rn general purpose register.
+     * @param address Has to be {@link AddressingMode#BASE_REGISTER_ONLY BASE_REGISTER_ONLY}. May
+     *            not be null.
      */
-    public void ldaxr(int size, Register rt, Register rn) {
+    public void ldaxr(int size, Register rt, AArch64Address address) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
         int transferSize = NumUtil.log2Ceil(size / 8);
-        exclusiveLoadInstruction(LDAXR, rt, rn, transferSize);
+        exclusiveLoadInstruction(LDAXR, rt, address, transferSize);
     }
 
     /**
@@ -1089,19 +1094,21 @@ public abstract class AArch64Assembler extends Assembler {
      * @param rs general purpose register. Set to exclusive access status. 0 means success,
      *            everything else failure. May not be null, or stackpointer.
      * @param rt general purpose register. May not be null or stackpointer.
-     * @param rn general purpose register.
+     * @param address Has to be {@link AddressingMode#BASE_REGISTER_ONLY BASE_REGISTER_ONLY}. May
+     *            not be null.
      */
-    public void stlxr(int size, Register rs, Register rt, Register rn) {
+    public void stlxr(int size, Register rs, Register rt, AArch64Address address) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
         int transferSize = NumUtil.log2Ceil(size / 8);
-        exclusiveStoreInstruction(STLXR, rs, rt, rn, transferSize);
+        exclusiveStoreInstruction(STLXR, rs, rt, address, transferSize);
     }
 
-    private void exclusiveLoadInstruction(Instruction instr, Register reg, Register rn, int log2TransferSize) {
+    private void exclusiveLoadInstruction(Instruction instr, Register reg, AArch64Address address, int log2TransferSize) {
+        assert address.getAddressingMode() == AddressingMode.BASE_REGISTER_ONLY;
         assert log2TransferSize >= 0 && log2TransferSize < 4;
         assert reg.getRegisterCategory().equals(CPU);
         int transferSizeEncoding = log2TransferSize << LoadStoreTransferSizeOffset;
-        emitInt(transferSizeEncoding | instr.encoding | 1 << ImmediateSizeOffset | rn(rn) | rt(reg));
+        emitInt(transferSizeEncoding | instr.encoding | 1 << ImmediateSizeOffset | rt(reg) | rs1(address.getBase()));
     }
 
     /**
@@ -1111,14 +1118,16 @@ public abstract class AArch64Assembler extends Assembler {
      *            be null.
      * @param rt general purpose register containing data to be written to memory at address. May
      *            not be null
-     * @param rn general purpose register containing the address specifying where rt is written to.
+     * @param address Address in base register without offset form specifying where rt is written
+     *            to.
      * @param log2TransferSize log2Ceil of memory transfer size.
      */
-    private void exclusiveStoreInstruction(Instruction instr, Register rs, Register rt, Register rn, int log2TransferSize) {
+    private void exclusiveStoreInstruction(Instruction instr, Register rs, Register rt, AArch64Address address, int log2TransferSize) {
+        assert address.getAddressingMode() == AddressingMode.BASE_REGISTER_ONLY;
         assert log2TransferSize >= 0 && log2TransferSize < 4;
         assert rt.getRegisterCategory().equals(CPU) && rs.getRegisterCategory().equals(CPU) && !rs.equals(rt);
         int transferSizeEncoding = log2TransferSize << LoadStoreTransferSizeOffset;
-        emitInt(transferSizeEncoding | instr.encoding | rs2(rs) | rn(rn) | rt(rt));
+        emitInt(transferSizeEncoding | instr.encoding | rs2(rs) | rt(rt) | rs1(address.getBase()));
     }
 
     /* PC-relative Address Calculation (5.4.4) */
