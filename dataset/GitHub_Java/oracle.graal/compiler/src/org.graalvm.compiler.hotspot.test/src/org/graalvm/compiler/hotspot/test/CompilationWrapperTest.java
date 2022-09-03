@@ -223,19 +223,25 @@ public class CompilationWrapperTest extends GraalCompilerTest {
             Assert.assertTrue(zip.toString(), zip.exists());
             Assert.assertTrue(zip + " not in " + dumpPathEntries, dumpPathEntries.contains(zip.getName()));
             try {
-                int bgvOrCfgFiles = 0;
+                int bgv = 0;
+                int cfg = 0;
                 ZipFile dd = new ZipFile(diagnosticOutputZip);
                 List<String> entries = new ArrayList<>();
                 for (Enumeration<? extends ZipEntry> e = dd.entries(); e.hasMoreElements();) {
                     ZipEntry ze = e.nextElement();
                     String name = ze.getName();
                     entries.add(name);
-                    if (name.endsWith(".bgv") || name.endsWith(".cfg")) {
-                        bgvOrCfgFiles++;
+                    if (name.endsWith(".bgv")) {
+                        bgv++;
+                    } else if (name.endsWith(".cfg")) {
+                        cfg++;
                     }
                 }
-                if (bgvOrCfgFiles == 0) {
-                    Assert.fail(String.format("Expected at least one .bgv or .cfg file in %s: %s%n%s", diagnosticOutputZip, entries, proc));
+                if (bgv == 0) {
+                    Assert.fail(String.format("Expected at least one .bgv file in %s: %s%n%s", diagnosticOutputZip, entries, proc));
+                }
+                if (cfg == 0) {
+                    Assert.fail(String.format("Expected at least one .cfg file in %s: %s%n%s", diagnosticOutputZip, entries, proc));
                 }
             } finally {
                 zip.delete();
