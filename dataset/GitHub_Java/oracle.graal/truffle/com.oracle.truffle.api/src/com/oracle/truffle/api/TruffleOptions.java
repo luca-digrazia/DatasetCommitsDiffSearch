@@ -24,21 +24,18 @@
  */
 package com.oracle.truffle.api;
 
-import java.security.*;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.NodeCost;
+import com.oracle.truffle.api.nodes.NodeInfo;
 
 /**
  * Class containing general Truffle options.
  */
-public class TruffleOptions {
-
-    /**
-     * Force truffle to run in interpreter mode.
-     * <p>
-     * Can be set with {@code -Dtruffle.ForceInterpreter=true}.
-     */
-    public static final boolean ForceInterpreter = Boolean.getBoolean("truffle.ForceInterpreter");
+public final class TruffleOptions {
+    private TruffleOptions() {
+    }
 
     /**
      * Enables/disables the rewriting of traces in the Truffle runtime to stdout.
@@ -88,6 +85,11 @@ public class TruffleOptions {
      */
     public static final boolean TraceASTJSON;
 
+    /**
+     * Forces ahead-of-time initialization.
+     */
+    public static final boolean AOT;
+
     private static NodeCost parseNodeInfoKind(String kind) {
         if (kind == null) {
             return null;
@@ -97,7 +99,7 @@ public class TruffleOptions {
     }
 
     static {
-        final boolean[] values = new boolean[3];
+        final boolean[] values = new boolean[4];
         AccessController.doPrivileged(new PrivilegedAction<Void>() {
             public Void run() {
                 values[0] = Boolean.getBoolean("truffle.TraceRewrites");
@@ -106,11 +108,13 @@ public class TruffleOptions {
                 TraceRewritesFilterToCost = parseNodeInfoKind(System.getProperty("truffle.TraceRewritesFilterToCost"));
                 values[1] = Boolean.getBoolean("truffle.DetailedRewriteReasons");
                 values[2] = Boolean.getBoolean("truffle.TraceASTJSON");
+                values[3] = Boolean.getBoolean("com.oracle.truffle.aot");
                 return null;
             }
         });
         TraceRewrites = values[0];
         DetailedRewriteReasons = values[1];
         TraceASTJSON = values[2];
+        AOT = values[3];
     }
 }
