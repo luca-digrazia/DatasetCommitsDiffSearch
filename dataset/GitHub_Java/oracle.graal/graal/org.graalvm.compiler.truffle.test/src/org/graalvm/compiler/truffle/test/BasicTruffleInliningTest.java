@@ -161,7 +161,7 @@ public class BasicTruffleInliningTest extends TruffleInliningTest {
                 .build();
         // @formatter:on
         assertInlined(decisions, "callee");
-        Assert.assertEquals(decisions.getCallSites().get(0).getProfile().getFrequency(), 0.5, 0);
+        assert (decisions.getCallSites().get(0).getProfile().getFrequency() == 0.5);
     }
 
     @Test
