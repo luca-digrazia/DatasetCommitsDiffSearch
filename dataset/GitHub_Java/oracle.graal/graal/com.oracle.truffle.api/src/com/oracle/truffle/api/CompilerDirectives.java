@@ -65,9 +65,6 @@ public final class CompilerDirectives {
      * insert a transfer to the interpreter.
      */
     public static void transferToInterpreter() {
-        if (inInterpreter()) {
-            Truffle.getRuntime().notifyTransferToInterpreter();
-        }
     }
 
     /**
@@ -75,9 +72,6 @@ public final class CompilerDirectives {
      * insert a transfer to the interpreter, invalidating the currently executing machine code.
      */
     public static void transferToInterpreterAndInvalidate() {
-        if (inInterpreter()) {
-            Truffle.getRuntime().notifyTransferToInterpreter();
-        }
     }
 
     /**
@@ -95,32 +89,6 @@ public final class CompilerDirectives {
      * @return {@code false} when executed in the interpreter, {@code true} in compiled code.
      */
     public static boolean inCompiledCode() {
-        return false;
-    }
-
-    /**
-     * Returns a boolean indicating whether or not a given value is seen as constant in optimized
-     * code. If this method is called in the interpreter this method will always return
-     * <code>false</code>. This API may be used in combination with {@link #inCompiledCode()} to
-     * implement compilation constant assertions in the following way:
-     *
-     * <pre>
-     * <code>
-     * void assertCompilationConstant(Object value) {
-     *   if (inCompiledCode()) {
-     *     if (!isCompilationConstant(value)) {
-     *       throw new AssertionError("Given value is not constant");
-     *     }
-     *   }
-     * }
-     * </code>
-     * </pre>
-     *
-     * @param value
-     * @return {@code true} when given value is seen as compilation constant, {@code false} if not
-     *         compilation constant.
-     */
-    public static boolean isCompilationConstant(Object value) {
         return false;
     }
 
