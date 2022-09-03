@@ -52,6 +52,12 @@ class CPUSamplerCLI extends ProfilerCLI {
         CALLTREE
     }
 
+    enum Mode {
+        COMPILED,
+        ROOTS,
+        STATEMENTS
+    }
+
     static final OptionType<Output> CLI_OUTPUT_TYPE = new OptionType<>("Output",
                     Output.HISTOGRAM,
                     new Function<String, Output>() {
@@ -65,13 +71,13 @@ class CPUSamplerCLI extends ProfilerCLI {
                         }
                     });
 
-    static final OptionType<CPUSampler.Mode> CLI_MODE_TYPE = new OptionType<>("Mode",
-                    CPUSampler.Mode.COMPILED,
-                    new Function<String, CPUSampler.Mode>() {
+    static final OptionType<Mode> CLI_MODE_TYPE = new OptionType<>("Mode",
+                    Mode.COMPILED,
+                    new Function<String, Mode>() {
                         @Override
-                        public CPUSampler.Mode apply(String s) {
+                        public Mode apply(String s) {
                             try {
-                                return CPUSampler.Mode.valueOf(s.toUpperCase());
+                                return Mode.valueOf(s.toUpperCase());
                             } catch (IllegalArgumentException e) {
                                 throw new IllegalArgumentException("Mode can be: compiled, roots or statements.");
                             }
@@ -79,7 +85,7 @@ class CPUSamplerCLI extends ProfilerCLI {
                     });
 
     static final OptionKey<Boolean> ENABLED = new OptionKey<>(false);
-    static final OptionKey<CPUSampler.Mode> MODE = new OptionKey<>(CPUSampler.Mode.COMPILED, CLI_MODE_TYPE);
+    static final OptionKey<Mode> MODE = new OptionKey<>(Mode.COMPILED, CLI_MODE_TYPE);
     static final OptionKey<Long> SAMPLE_PERIOD = new OptionKey<>(1L);
     static final OptionKey<Long> DELAY_PERIOD = new OptionKey<>(0L);
     static final OptionKey<Integer> STACK_LIMIT = new OptionKey<>(10000);
