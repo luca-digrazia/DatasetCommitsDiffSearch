@@ -35,7 +35,11 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "+")
 public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArithmeticNode {
 
-    public AddNode(ValueNode x, ValueNode y) {
+    public static AddNode create(ValueNode x, ValueNode y) {
+        return new AddNode(x, y);
+    }
+
+    protected AddNode(ValueNode x, ValueNode y) {
         super(ArithmeticOpTable::getAdd, x, y);
     }
 
@@ -47,7 +51,7 @@ public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArit
         }
 
         if (forX.isConstant() && !forY.isConstant()) {
-            return new AddNode(forY, forX);
+            return AddNode.create(forY, forX);
         }
         BinaryOp<Add> op = getOp(forX, forY);
         boolean associative = op.isAssociative();
@@ -98,6 +102,6 @@ public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArit
             op1 = op2;
             op2 = tmp;
         }
-        builder.setResult(this, gen.emitAdd(op1, op2));
+        builder.setResult(this, gen.emitAdd(op1, op2, false));
     }
 }

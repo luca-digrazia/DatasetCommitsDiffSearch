@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,84 +31,51 @@ import static com.oracle.graal.lir.hsail.HSAILCompare.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
+import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.hsail.*;
-import com.oracle.graal.lir.hsail.HSAILArithmetic.Op1Stack;
+import com.oracle.graal.lir.hsail.HSAILArithmetic.ConvertOp;
+import com.oracle.graal.lir.hsail.HSAILArithmetic.Op1Reg;
 import com.oracle.graal.lir.hsail.HSAILArithmetic.Op2Reg;
-import com.oracle.graal.lir.hsail.HSAILArithmetic.Op2Stack;
 import com.oracle.graal.lir.hsail.HSAILArithmetic.ShiftOp;
 import com.oracle.graal.lir.hsail.HSAILControlFlow.CompareBranchOp;
 import com.oracle.graal.lir.hsail.HSAILControlFlow.CondMoveOp;
-import com.oracle.graal.lir.hsail.HSAILControlFlow.FloatCompareBranchOp;
 import com.oracle.graal.lir.hsail.HSAILControlFlow.FloatCondMoveOp;
 import com.oracle.graal.lir.hsail.HSAILControlFlow.ReturnOp;
-import com.oracle.graal.lir.hsail.HSAILControlFlow.ForeignCallNoArgOp;
-import com.oracle.graal.lir.hsail.HSAILControlFlow.ForeignCall1ArgOp;
+import com.oracle.graal.lir.hsail.HSAILControlFlow.StrategySwitchOp;
 import com.oracle.graal.lir.hsail.HSAILMove.LeaOp;
-import com.oracle.graal.lir.hsail.HSAILMove.LoadOp;
+import com.oracle.graal.lir.hsail.HSAILMove.MembarOp;
 import com.oracle.graal.lir.hsail.HSAILMove.MoveFromRegOp;
 import com.oracle.graal.lir.hsail.HSAILMove.MoveToRegOp;
-import com.oracle.graal.lir.hsail.HSAILMove.StoreOp;
-import com.oracle.graal.lir.hsail.HSAILMove.LoadCompressedPointer;
-import com.oracle.graal.lir.hsail.HSAILMove.StoreCompressedPointer;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.phases.util.*;
 
 /**
  * This class implements the HSAIL specific portion of the LIR generator.
  */
-public class HSAILLIRGenerator extends LIRGenerator {
+public abstract class HSAILLIRGenerator extends LIRGenerator {
 
-    private HotSpotRuntime runtime() {
-        return (HotSpotRuntime) runtime;
-    }
-
-    public static class HSAILSpillMoveFactory implements LIR.SpillMoveFactory {
+    public class HSAILSpillMoveFactory implements LIR.SpillMoveFactory {
 
         @Override
         public LIRInstruction createMove(AllocatableValue dst, Value src) {
-            if (src instanceof HSAILAddressValue) {
-                return new LeaOp(dst, (HSAILAddressValue) src);
-            } else if (isRegister(src) || isStackSlot(dst)) {
-                return new MoveFromRegOp(dst, src);
-            } else {
-                return new MoveToRegOp(dst, src);
-            }
+            return HSAILLIRGenerator.this.createMove(dst, src);
         }
     }
 
-    public HSAILLIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, CallingConvention cc, LIR lir) {
-        super(graph, runtime, target, frameMap, cc, lir);
-        lir.spillMoveFactory = new HSAILSpillMoveFactory();
+    public HSAILLIRGenerator(LIRKindTool lirKindTool, Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
+        super(lirKindTool, providers, cc, lirGenRes);
+        lirGenRes.getLIR().setSpillMoveFactory(new HSAILSpillMoveFactory());
     }
 
     @Override
-    protected void emitNode(ValueNode node) {
-        if (node instanceof LIRGenLowerable) {
-            ((LIRGenLowerable) node).generate(this);
-        } else {
-            super.emitNode(node);
-        }
-    }
-
-    @Override
-    public boolean canStoreConstant(Constant c) {
-        // Operand b must be in the .reg state space.
-        return false;
-    }
-
-    @Override
-    public boolean canInlineConstant(Constant c) {
+    public boolean canInlineConstant(JavaConstant c) {
         switch (c.getKind()) {
             case Long:
-                return NumUtil.isInt(c.asLong()) && !runtime.needsDataPatch(c);
+                return NumUtil.isInt(c.asLong()) && !getCodeCache().needsDataPatch(c);
             case Object:
                 return c.isNull();
             default:
@@ -116,23 +83,26 @@ public class HSAILLIRGenerator extends LIRGenerator {
         }
     }
 
-    @Override
-    public Variable emitMove(Value input) {
-        Variable result = newVariable(input.getKind());
-        emitMove(result, input);
-        return result;
+    protected HSAILLIRInstruction createMove(AllocatableValue dst, Value src) {
+        if (src instanceof HSAILAddressValue) {
+            return new LeaOp(dst, (HSAILAddressValue) src);
+        } else if (isRegister(src) || isStackSlotValue(dst)) {
+            return new MoveFromRegOp(dst.getKind(), dst, src);
+        } else {
+            return new MoveToRegOp(dst.getKind(), dst, src);
+        }
     }
 
     @Override
     public void emitMove(AllocatableValue dst, Value src) {
-        if (isRegister(src) || isStackSlot(dst)) {
-            append(new MoveFromRegOp(dst, src));
-        } else {
-            append(new MoveToRegOp(dst, src));
-        }
+        append(createMove(dst, src));
     }
 
-    protected HSAILAddressValue asAddressValue(Value address) {
+    public void emitData(AllocatableValue dst, byte[] data) {
+        throw GraalInternalError.unimplemented();
+    }
+
+    public HSAILAddressValue asAddressValue(Value address) {
         if (address instanceof HSAILAddressValue) {
             return (HSAILAddressValue) address;
         } else {
@@ -153,68 +123,37 @@ public class HSAILLIRGenerator extends LIRGenerator {
             } else {
                 baseRegister = load(base);
             }
-        } else if (base == Value.ILLEGAL) {
+        } else if (base.equals(Value.ILLEGAL)) {
             baseRegister = Value.ILLEGAL;
         } else {
             baseRegister = asAllocatable(base);
         }
-        if (index != Value.ILLEGAL) {
+        if (!index.equals(Value.ILLEGAL)) {
             if (isConstant(index)) {
                 finalDisp += asConstant(index).asLong() * scale;
             } else {
                 Value indexRegister;
-                Value convertedIndex;
-                convertedIndex = this.emitConvert(ConvertNode.Op.I2L, index);
+                Value convertedIndex = index.getKind() == Kind.Long ? index : this.emitSignExtend(index, 32, 64);
                 if (scale != 1) {
-                    indexRegister = emitUMul(convertedIndex, Constant.forInt(scale));
+                    indexRegister = emitUMul(convertedIndex, JavaConstant.forInt(scale));
                 } else {
                     indexRegister = convertedIndex;
                 }
-                if (baseRegister == Value.ILLEGAL) {
+                if (baseRegister.equals(Value.ILLEGAL)) {
                     baseRegister = asAllocatable(indexRegister);
                 } else {
-                    baseRegister = emitAdd(baseRegister, indexRegister);
+                    baseRegister = emitAdd(baseRegister, indexRegister, false);
                 }
             }
         }
-        return new HSAILAddressValue(target().wordKind, baseRegister, finalDisp);
-    }
 
-    private static boolean isCompressCandidate(DeoptimizingNode access) {
-        return access != null && ((HeapAccess) access).compress();
-    }
-
-    @Override
-    public Variable emitLoad(Kind kind, Value address, DeoptimizingNode access) {
-        HSAILAddressValue loadAddress = asAddressValue(address);
-        Variable result = newVariable(kind);
-        LIRFrameState state = access != null ? state(access) : null;
-        assert access == null || access instanceof HeapAccess;
-        if (runtime().config.useCompressedOops && isCompressCandidate(access)) {
-            Variable scratch = newVariable(Kind.Long);
-            append(new LoadCompressedPointer(kind, result, scratch, loadAddress, state, runtime().config.narrowOopBase, runtime().config.narrowOopShift, runtime().config.logMinObjAlignment));
-        } else {
-            append(new LoadOp(kind, result, loadAddress, state));
-        }
-        return result;
+        LIRKind resultKind = getAddressKind(base, displacement, index);
+        return new HSAILAddressValue(resultKind, baseRegister, finalDisp);
     }
 
     @Override
-    public void emitStore(Kind kind, Value address, Value inputVal, DeoptimizingNode access) {
-        HSAILAddressValue storeAddress = asAddressValue(address);
-        LIRFrameState state = access != null ? state(access) : null;
-        Variable input = load(inputVal);
-        if (runtime().config.useCompressedOops && isCompressCandidate(access)) {
-            Variable scratch = newVariable(Kind.Long);
-            append(new StoreCompressedPointer(kind, storeAddress, input, scratch, state, runtime().config.narrowOopBase, runtime().config.narrowOopShift, runtime().config.logMinObjAlignment));
-        } else {
-            append(new StoreOp(kind, storeAddress, input, state));
-        }
-    }
-
-    @Override
-    public Variable emitAddress(StackSlot address) {
-        throw new InternalError("NYI");
+    public Variable emitAddress(StackSlotValue address) {
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
@@ -222,7 +161,7 @@ public class HSAILLIRGenerator extends LIRGenerator {
         append(new JumpOp(label));
     }
 
-    private static HSAILCompare mapKindToCompareOp(Kind kind) {
+    public static HSAILCompare mapKindToCompareOp(Kind kind) {
         switch (kind) {
             case Int:
                 return ICMP;
@@ -240,20 +179,21 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label) {
-        // We don't have top worry about mirroring the condition on HSAIL.
+    public void emitCompareBranch(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
+                    double trueDestinationProbability) {
+        // We don't have to worry about mirroring the condition on HSAIL.
         Condition finalCondition = cond;
-        Variable result = newVariable(left.getKind());
+        Variable result = newVariable(left.getLIRKind());
         Kind kind = left.getKind().getStackKind();
         switch (kind) {
             case Int:
             case Long:
             case Object:
-                append(new CompareBranchOp(mapKindToCompareOp(kind), finalCondition, left, right, result, result, label));
+                append(new CompareBranchOp(mapKindToCompareOp(kind), finalCondition, left, right, result, result, trueDestination, falseDestination, false));
                 break;
             case Float:
             case Double:
-                append(new FloatCompareBranchOp(mapKindToCompareOp(kind), finalCondition, left, right, result, result, label, unorderedIsTrue));
+                append(new CompareBranchOp(mapKindToCompareOp(kind), finalCondition, left, right, result, result, trueDestination, falseDestination, unorderedIsTrue));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere("" + left.getKind());
@@ -261,19 +201,28 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitOverflowCheckBranch(LabelRef label, boolean negated) {
-        throw new InternalError("NYI");
+    public void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, LIRKind cmpLIRKind, double overflowProbability) {
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public void emitIntegerTestBranch(Value left, Value right, boolean negated, LabelRef label) {
-        throw new InternalError("NYI");
+    public void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
+        Variable result = emitAnd(left, right);
+        Variable dummyResult = newVariable(left.getLIRKind());
+        append(new CompareBranchOp(mapKindToCompareOp(result.getKind()), Condition.EQ, result, JavaConstant.forInt(0), dummyResult, dummyResult, trueDestination, falseDestination, false));
     }
 
     @Override
-    public Variable emitConditionalMove(Value left, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
+    public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
+        Variable result = emitAnd(left, right);
+        append(new CondMoveOp(mapKindToCompareOp(result.getKind()), result, JavaConstant.forInt(0), result, Condition.EQ, load(trueValue), load(falseValue)));
+        return result;
+    }
+
+    @Override
+    public Variable emitConditionalMove(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
         Condition finalCondition = cond;
-        Variable result = newVariable(trueValue.getKind());
+        Variable result = newVariable(trueValue.getLIRKind());
         Kind kind = left.getKind().getStackKind();
         switch (kind) {
             case Int:
@@ -291,17 +240,54 @@ public class HSAILLIRGenerator extends LIRGenerator {
         return result;
     }
 
-    @Override
-    public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
-        throw new InternalError("NYI");
-    }
-
+    /**
+     * Generates the LIR instruction for a negation operation.
+     *
+     * @param input the value that is being negated
+     * @return Variable that represents the result of the negation
+     */
     @Override
     public Variable emitNegate(Value input) {
-        Variable result = newVariable(input.getKind());
+        Variable result = newVariable(LIRKind.derive(input));
         switch (input.getKind()) {
             case Int:
-                append(new Op1Stack(INEG, result, input));
+                // Note: The Int case also handles the negation of shorts, bytes, and chars because
+                // Java treats these types as ints at the bytecode level.
+                append(new Op1Reg(INEG, result, input));
+                break;
+            case Long:
+                append(new Op1Reg(LNEG, result, input));
+                break;
+            case Double:
+                append(new Op1Reg(DNEG, result, input));
+                break;
+            case Float:
+                append(new Op1Reg(FNEG, result, input));
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+
+    }
+
+    /**
+     * Generates the LIR instruction for a bitwise NOT operation.
+     *
+     * @param input the source operand
+     * @return Variable that represents the result of the operation
+     */
+    @Override
+    public Variable emitNot(Value input) {
+        Variable result = newVariable(LIRKind.derive(input));
+        switch (input.getKind()) {
+            case Int:
+                // Note: The Int case also covers other primitive integral types smaller than an int
+                // (char, byte, short) because Java treats these types as ints.
+                append(new Op1Reg(INOT, result, input));
+                break;
+            case Long:
+                append(new Op1Reg(LNOT, result, input));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -311,19 +297,19 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     public Variable emitTestAddressAdd(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
+        Variable result = newVariable(LIRKind.derive(a, b));
         switch (a.getKind()) {
             case Int:
-                append(new Op2Stack(IADD, result, a, loadNonConst(b)));
+                append(new Op2Reg(IADD, result, a, loadNonConst(b)));
                 break;
             case Long:
-                append(new Op2Stack(LADD, result, a, loadNonConst(b)));
+                append(new Op2Reg(LADD, result, a, loadNonConst(b)));
                 break;
             case Float:
-                append(new Op2Stack(FADD, result, a, loadNonConst(b)));
+                append(new Op2Reg(FADD, result, a, loadNonConst(b)));
                 break;
             case Double:
-                append(new Op2Stack(DADD, result, a, loadNonConst(b)));
+                append(new Op2Reg(DADD, result, a, loadNonConst(b)));
                 break;
             case Object:
                 throw GraalInternalError.shouldNotReachHere();
@@ -335,23 +321,23 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitAdd(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
+    public Variable emitAdd(Value a, Value b, boolean setFlags) {
+        Variable result = newVariable(LIRKind.derive(a, b));
         switch (a.getKind()) {
             case Int:
-                append(new Op2Stack(IADD, result, a, loadNonConst(b)));
+                append(new Op2Reg(IADD, result, a, loadNonConst(b)));
                 break;
             case Long:
-                append(new Op2Stack(LADD, result, a, loadNonConst(b)));
+                append(new Op2Reg(LADD, result, a, loadNonConst(b)));
                 break;
             case Float:
-                append(new Op2Stack(FADD, result, a, loadNonConst(b)));
+                append(new Op2Reg(FADD, result, a, loadNonConst(b)));
                 break;
             case Double:
-                append(new Op2Stack(DADD, result, a, loadNonConst(b)));
+                append(new Op2Reg(DADD, result, a, loadNonConst(b)));
                 break;
             case Object:
-                append(new Op2Stack(OADD, result, a, loadNonConst(b)));
+                append(new Op2Reg(OADD, result, a, loadNonConst(b)));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -360,20 +346,20 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitSub(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
+    public Variable emitSub(Value a, Value b, boolean setFlags) {
+        Variable result = newVariable(LIRKind.derive(a, b));
         switch (a.getKind()) {
             case Int:
-                append(new Op2Stack(ISUB, result, a, loadNonConst(b)));
+                append(new Op2Reg(ISUB, result, a, loadNonConst(b)));
                 break;
             case Float:
-                append(new Op2Stack(FSUB, result, a, loadNonConst(b)));
+                append(new Op2Reg(FSUB, result, a, loadNonConst(b)));
                 break;
             case Long:
-                append(new Op2Stack(LSUB, result, a, loadNonConst(b)));
+                append(new Op2Reg(LSUB, result, a, loadNonConst(b)));
                 break;
             case Double:
-                append(new Op2Stack(DSUB, result, a, loadNonConst(b)));
+                append(new Op2Reg(DSUB, result, a, loadNonConst(b)));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -382,8 +368,8 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitMul(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
+    public Variable emitMul(Value a, Value b, boolean setFlags) {
+        Variable result = newVariable(LIRKind.derive(a, b));
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(IMUL, result, a, loadNonConst(b)));
@@ -404,7 +390,7 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     public Variable emitUMul(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
+        Variable result = newVariable(LIRKind.derive(a, b));
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(LUMUL, result, a, loadNonConst(b)));
@@ -419,26 +405,30 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected boolean peephole(ValueNode valueNode) {
-        // No peephole optimizations for now.
-        return false;
+    public Value emitMulHigh(Value a, Value b) {
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public Value emitDiv(Value a, Value b, DeoptimizingNode deopting) {
-        Variable result = newVariable(a.getKind());
+    public Value emitUMulHigh(Value a, Value b) {
+        throw GraalInternalError.unimplemented();
+    }
+
+    @Override
+    public Value emitDiv(Value a, Value b, LIRFrameState state) {
+        Variable result = newVariable(LIRKind.derive(a, b));
         switch (a.getKind()) {
             case Int:
-                append(new Op2Stack(IDIV, result, a, loadNonConst(b)));
+                append(new Op2Reg(IDIV, result, a, loadNonConst(b)));
                 break;
             case Long:
-                append(new Op2Stack(LDIV, result, a, loadNonConst(b)));
+                append(new Op2Reg(LDIV, result, a, loadNonConst(b)));
                 break;
             case Float:
-                append(new Op2Stack(FDIV, result, a, loadNonConst(b)));
+                append(new Op2Reg(FDIV, result, a, loadNonConst(b)));
                 break;
             case Double:
-                append(new Op2Stack(DDIV, result, a, loadNonConst(b)));
+                append(new Op2Reg(DDIV, result, a, loadNonConst(b)));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -448,20 +438,20 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Value emitRem(Value a, Value b, DeoptimizingNode deopting) {
-        Variable result = newVariable(a.getKind());
+    public Value emitRem(Value a, Value b, LIRFrameState state) {
+        Variable result = newVariable(LIRKind.derive(a, b));
         switch (a.getKind()) {
             case Int:
-                append(new Op2Stack(IREM, result, a, loadNonConst(b)));
+                append(new Op2Reg(IREM, result, a, loadNonConst(b)));
                 break;
             case Long:
-                append(new Op2Stack(LREM, result, a, loadNonConst(b)));
+                append(new Op2Reg(LREM, result, a, loadNonConst(b)));
                 break;
             case Float:
-                append(new Op2Stack(FREM, result, a, loadNonConst(b)));
+                append(new Op2Reg(FREM, result, a, loadNonConst(b)));
                 break;
             case Double:
-                append(new Op2Stack(DREM, result, a, loadNonConst(b)));
+                append(new Op2Reg(DREM, result, a, loadNonConst(b)));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -470,24 +460,24 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitUDiv(Value a, Value b, DeoptimizingNode deopting) {
-        throw new InternalError("NYI");
+    public Variable emitUDiv(Value a, Value b, LIRFrameState state) {
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public Variable emitURem(Value a, Value b, DeoptimizingNode deopting) {
-        throw new InternalError("NYI");
+    public Variable emitURem(Value a, Value b, LIRFrameState state) {
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
     public Variable emitAnd(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
+        Variable result = newVariable(LIRKind.derive(a, b));
         switch (a.getKind()) {
             case Int:
-                append(new Op2Stack(IAND, result, a, loadNonConst(b)));
+                append(new Op2Reg(IAND, result, a, loadNonConst(b)));
                 break;
             case Long:
-                append(new Op2Stack(LAND, result, a, loadNonConst(b)));
+                append(new Op2Reg(LAND, result, a, loadNonConst(b)));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -497,19 +487,50 @@ public class HSAILLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitOr(Value a, Value b) {
-        throw new InternalError("NYI");
+        Variable result = newVariable(LIRKind.derive(a, b));
+        switch (a.getKind()) {
+            case Int:
+                append(new Op2Reg(IOR, result, a, loadNonConst(b)));
+                break;
+            case Long:
+                append(new Op2Reg(LOR, result, a, loadNonConst(b)));
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
     }
 
     @Override
     public Variable emitXor(Value a, Value b) {
-        throw new InternalError("NYI");
-    }
-
-    @Override
-    public Variable emitShl(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
+        Variable result = newVariable(LIRKind.derive(a, b));
         switch (a.getKind()) {
             case Int:
+                append(new Op2Reg(IXOR, result, a, loadNonConst(b)));
+                break;
+            case Long:
+                append(new Op2Reg(LXOR, result, a, loadNonConst(b)));
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+    }
+
+    /**
+     * Generates the LIR instruction for a shift left operation.
+     *
+     * @param a The value that is being shifted
+     * @param b The shift amount
+     * @return Variable that represents the result of the operation
+     */
+    @Override
+    public Variable emitShl(Value a, Value b) {
+        Variable result = newVariable(LIRKind.derive(a, b).changeType(a.getPlatformKind()));
+        switch (a.getKind()) {
+            case Int:
+                // Note: The Int case also covers the shifting of bytes, shorts and chars because
+                // Java treats these types as ints at the bytecode level.
                 append(new ShiftOp(ISHL, result, a, b));
                 break;
             case Long:
@@ -521,14 +542,41 @@ public class HSAILLIRGenerator extends LIRGenerator {
         return result;
     }
 
+    /**
+     * Generates the LIR instruction for a shift right operation.
+     *
+     * @param a The value that is being shifted
+     * @param b The shift amount
+     * @return Variable that represents the result of the operation
+     */
     @Override
     public Variable emitShr(Value a, Value b) {
-        throw new InternalError("NYI");
+        Variable result = newVariable(LIRKind.derive(a, b).changeType(a.getPlatformKind()));
+        switch (a.getKind()) {
+            case Int:
+                // Note: The Int case also covers the shifting of bytes, shorts and chars because
+                // Java treats these types as ints at the bytecode level.
+                append(new ShiftOp(ISHR, result, a, b));
+                break;
+            case Long:
+                append(new ShiftOp(LSHR, result, a, b));
+                break;
+            default:
+                GraalInternalError.shouldNotReachHere();
+        }
+        return result;
     }
 
+    /**
+     * Generates the LIR instruction for an unsigned shift right operation.
+     *
+     * @param a The value that is being shifted
+     * @param b The shift amount
+     * @return Variable that represents the result of the operation
+     */
     @Override
     public Variable emitUShr(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
+        Variable result = newVariable(LIRKind.derive(a, b).changeType(a.getPlatformKind()));
         switch (a.getKind()) {
             case Int:
                 append(new ShiftOp(IUSHR, result, a, b));
@@ -543,182 +591,284 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitConvert(ConvertNode.Op opcode, Value inputVal) {
+    public Value emitFloatConvert(FloatConvert op, Value inputVal) {
         Variable input = load(inputVal);
-        Variable result = newVariable(opcode.to);
-        switch (opcode) {
-            case I2F:
-                append(new Op1Stack(I2F, result, input));
-                break;
-            case I2L:
-                append(new Op1Stack(I2L, result, input));
-                break;
-            case I2D:
-                append(new Op1Stack(I2D, result, input));
-                break;
+
+        String from;
+        switch (op) {
+            case D2F:
             case D2I:
-                append(new Op1Stack(D2I, result, input));
-                break;
-            case L2I:
-                append(new Op1Stack(L2I, result, input));
+            case D2L:
+                from = "f64";
                 break;
             case F2D:
-                append(new Op1Stack(F2D, result, input));
+            case F2I:
+            case F2L:
+                from = "f32";
                 break;
-            case D2F:
-                append(new Op1Stack(D2F, result, input));
+            case I2D:
+            case I2F:
+                from = "s32";
+                break;
+            case L2D:
+            case L2F:
+                from = "s64";
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
+
+        Variable result;
+        String to;
+        switch (op) {
+            case D2I:
+            case F2I:
+                to = "s32";
+                result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Int));
+                break;
+            case D2L:
+            case F2L:
+                to = "s64";
+                result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Long));
+                break;
+            case F2D:
+            case I2D:
+            case L2D:
+                to = "f64";
+                result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Double));
+                break;
+            case D2F:
+            case I2F:
+            case L2F:
+                to = "f32";
+                result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Float));
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
+
+        append(new ConvertOp(result, input, to, from));
         return result;
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizingNode deopting) {
+    public Value emitNarrow(Value inputVal, int bits) {
+        Variable input = load(inputVal);
+        Variable result = newVariable(LIRKind.derive(inputVal).changeType(bits > 32 ? Kind.Long : Kind.Int));
+        append(new ConvertOp(result, input, "s" + bits, input.getKind() == Kind.Long ? "s64" : "s32"));
+        return result;
+    }
+
+    @Override
+    public Value emitSignExtend(Value inputVal, int fromBits, int toBits) {
+        Variable input = load(inputVal);
+        Variable result = newVariable(LIRKind.derive(inputVal).changeType(toBits > 32 ? Kind.Long : Kind.Int));
+        append(new ConvertOp(result, input, "s" + toBits, "s" + fromBits));
+        return result;
+    }
+
+    @Override
+    public Value emitZeroExtend(Value inputVal, int fromBits, int toBits) {
+        Variable input = load(inputVal);
+        Variable result = newVariable(LIRKind.derive(inputVal).changeType(toBits > 32 ? Kind.Long : Kind.Int));
+        append(new ConvertOp(result, input, "u" + toBits, "u" + fromBits));
+        return result;
+    }
+
+    @Override
+    public Value emitReinterpret(LIRKind to, Value inputVal) {
+        Variable result = newVariable(to);
+        emitMove(result, inputVal);
+        return result;
+    }
+
+    @Override
+    public void emitDeoptimize(Value actionAndReason, Value speculation, LIRFrameState state) {
         append(new ReturnOp(Value.ILLEGAL));
     }
 
     @Override
     public void emitMembar(int barriers) {
-        throw new InternalError("NYI");
+        int necessaryBarriers = target().arch.requiredBarriers(barriers);
+        append(new MembarOp(necessaryBarriers));
     }
 
     @Override
-    protected void emitDirectCall(DirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-        throw new InternalError("NYI");
-    }
-
-    @Override
-    protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-        throw new InternalError("NYI");
-    }
-
-    @Override
-    protected void emitForeignCall(ForeignCallLinkage linkage, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
-        String callName = linkage.getDescriptor().getName();
-        if (callName.equals("createOutOfBoundsException") || callName.equals("createNullPointerException")) {
-            // hack Alert !!
-            switch (arguments.length) {
-                case 0:
-                    append(new ForeignCallNoArgOp(callName, result));
-                    break;
-                case 1:
-                    append(new ForeignCall1ArgOp(callName, result, arguments[0]));
-                    break;
-                default:
-                    throw new InternalError("NYI emitForeignCall");
-            }
-
-        } else {
-            throw new InternalError("NYI emitForeignCall");
-        }
-    }
-
-    @Override
-    public void emitBitCount(Variable result, Value value) {
+    public Value emitBitCount(Value value) {
+        Variable result = newVariable(LIRKind.derive(value).changeType(Kind.Int));
         if (value.getKind().getStackKind() == Kind.Int) {
             append(new HSAILBitManipulationOp(IPOPCNT, result, value));
         } else {
             append(new HSAILBitManipulationOp(LPOPCNT, result, value));
         }
+        return result;
     }
 
     @Override
-    public void emitBitScanForward(Variable result, Value value) {
-        throw new InternalError("NYI");
+    public Value emitBitScanForward(Value value) {
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public void emitBitScanReverse(Variable result, Value value) {
-        throw new InternalError("NYI");
+    public Value emitBitScanReverse(Value value) {
+        throw GraalInternalError.unimplemented();
+    }
+
+    /**
+     * Emits the LIR code for the {@link HSAILArithmetic#ABS} operation.
+     *
+     * @param input the source operand
+     * @return Value representing the result of the operation
+     */
+    @Override
+    public Value emitMathAbs(Value input) {
+        Variable result = newVariable(LIRKind.derive(input));
+        append(new Op1Reg(ABS, result, input));
+        return result;
+    }
+
+    /**
+     * Emits the LIR code for the {@link HSAILArithmetic#CEIL} operation.
+     *
+     * @param input the source operand
+     * @return Value representing the result of the operation
+     */
+    public Value emitMathCeil(Value input) {
+        Variable result = newVariable(LIRKind.derive(input));
+        append(new Op1Reg(CEIL, result, input));
+        return result;
+    }
+
+    /**
+     * Emits the LIR code for the {@link HSAILArithmetic#FLOOR} operation.
+     *
+     * @param input the source operand
+     * @return Value representing the result of the operation
+     */
+    public Value emitMathFloor(Value input) {
+        Variable result = newVariable(LIRKind.derive(input));
+        append(new Op1Reg(FLOOR, result, input));
+        return result;
+    }
+
+    /**
+     * Emits the LIR code for the {@link HSAILArithmetic#RINT} operation.
+     *
+     * @param input the source operand
+     * @return Value representing the result of the operation
+     */
+    public Value emitMathRint(Value input) {
+        Variable result = newVariable(LIRKind.derive(input));
+        append(new Op1Reg(RINT, result, input));
+        return result;
+    }
+
+    /**
+     * Emits the LIR code for the {@link HSAILArithmetic#SQRT} operation.
+     *
+     * @param input the source operand
+     * @return value representing the result of the operation
+     */
+    @Override
+    public Value emitMathSqrt(Value input) {
+        Variable result = newVariable(LIRKind.derive(input));
+        append(new Op1Reg(SQRT, result, input));
+        return result;
     }
 
     @Override
-    public void emitMathAbs(Variable result, Variable input) {
-        throw new InternalError("NYI");
+    public Value emitMathLog(Value input, boolean base10) {
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public void emitMathSqrt(Variable result, Variable input) {
-        append(new Op1Stack(SQRT, result, input));
+    public Value emitMathCos(Value input) {
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public void emitMathLog(Variable result, Variable input, boolean base10) {
-        throw new InternalError("NYI");
+    public Value emitMathSin(Value input) {
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public void emitMathCos(Variable result, Variable input) {
-        throw new InternalError("NYI");
+    public Value emitMathTan(Value input) {
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public void emitMathSin(Variable result, Variable input) {
-        throw new InternalError("NYI");
+    public Value emitByteSwap(Value input) {
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public void emitMathTan(Variable result, Variable input) {
-        throw new InternalError("NYI");
+    public Value emitArrayEquals(Kind kind, Value array1, Value array2, Value length) {
+        // TODO Auto-generated method stub
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public void emitByteSwap(Variable result, Value input) {
-        throw new InternalError("NYI");
+    public void emitReturn(Value input) {
+        AllocatableValue operand = Value.ILLEGAL;
+        if (input != null) {
+            operand = resultOperandFor(input.getLIRKind());
+            emitMove(operand, input);
+        }
+        append(new ReturnOp(operand));
     }
 
+    /**
+     * This routine handles the LIR code generation for switch nodes by calling
+     * emitSequentialSwitch.
+     *
+     * This routine overrides LIRGenerator.emitSwitch( ) which calls emitSequentialSwitch or
+     * emitTableSwitch based on a heuristic.
+     *
+     * The recommended approach in HSAIL for generating performant code for switch statements is to
+     * emit a series of cascading compare and branches. Thus this routines always calls
+     * emitSequentialSwitch, which implements this approach.
+     *
+     * Note: Only IntegerSwitchNodes are currently supported. The IntegerSwitchNode is the node that
+     * Graal generates for any switch construct appearing in Java bytecode.
+     */
     @Override
-    protected void emitReturn(Value input) {
-        append(new ReturnOp(input));
+    public void emitStrategySwitch(JavaConstant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value) {
+        emitStrategySwitch(new SwitchStrategy.SequentialStrategy(keyProbabilities, keyConstants), value, keyTargets, defaultTarget);
     }
 
+    /**
+     * Generates the LIR instruction for a switch construct that is meant to be assembled into a
+     * series of cascading compare and branch instructions. This is currently the recommended way of
+     * generating performant HSAIL code for switch constructs.
+     *
+     * @param strategy the strategy used for this switch.
+     * @param keyTargets array of branch targets for each of the cases.
+     * @param defaultTarget the branch target for the default case.
+     * @param key the key that is compared against the key constants in the case statements.
+     */
     @Override
-    protected void emitSequentialSwitch(Constant[] keyConstants, LabelRef[] keyTargets, LabelRef defaultTarget, Value key) {
-        throw new InternalError("NYI");
-    }
-
-    @Override
-    protected void emitSwitchRanges(int[] lowKeys, int[] highKeys, LabelRef[] targets, LabelRef defaultTarget, Value key) {
-        throw new InternalError("NYI");
+    public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
+        switch (key.getKind()) {
+            case Int:
+            case Long:
+            case Object:
+                // Append the LIR instruction for generating compare and branch instructions.
+                append(new StrategySwitchOp(strategy, keyTargets, defaultTarget, key));
+                break;
+            default:
+                // Throw an exception if the key kind is anything else.
+                throw GraalInternalError.unimplemented("Switch statements not supported for keys of type " + key.getKind());
+        }
     }
 
     @Override
     protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key) {
-        throw new InternalError("NYI");
-    }
-
-    @Override
-    public void visitCompareAndSwap(CompareAndSwapNode node) {
-        throw new InternalError("NYI");
-    }
-
-    @Override
-    public void visitBreakpointNode(BreakpointNode node) {
-        throw new InternalError("NYI");
-    }
-
-    @Override
-    public void visitSafepointNode(SafepointNode i) {
-        Debug.log("visitSafePointNode unimplemented");
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
     public void emitUnwind(Value operand) {
-        throw new InternalError("NYI");
+        throw GraalInternalError.unimplemented();
     }
 
-    @Override
-    public void emitNullCheck(ValueNode v, DeoptimizingNode deopting) {
-        assert v.kind() == Kind.Object;
-        Variable obj = newVariable(Kind.Object);
-        emitMove(obj, operand(v));
-        append(new HSAILMove.NullCheckOp(obj, state(deopting)));
-    }
-
-    @Override
-    public void visitInfopointNode(InfopointNode i) {
-        throw new InternalError("NYI");
-    }
 }

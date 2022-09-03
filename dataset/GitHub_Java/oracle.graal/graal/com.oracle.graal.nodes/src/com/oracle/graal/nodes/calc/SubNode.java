@@ -36,7 +36,11 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo(shortName = "-")
 public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArithmeticNode {
 
-    public SubNode(ValueNode x, ValueNode y) {
+    public static SubNode create(ValueNode x, ValueNode y) {
+        return new SubNode(x, y);
+    }
+
+    protected SubNode(ValueNode x, ValueNode y) {
         super(ArithmeticOpTable::getSub, x, y);
     }
 
@@ -71,18 +75,18 @@ public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArit
                 SubNode x = (SubNode) forX;
                 if (x.getX() == forY) {
                     // (a - b) - a
-                    return new NegateNode(x.getY());
+                    return NegateNode.create(x.getY());
                 }
             }
             if (forY instanceof AddNode) {
                 AddNode y = (AddNode) forY;
                 if (y.getX() == forX) {
                     // a - (a + b)
-                    return new NegateNode(y.getY());
+                    return NegateNode.create(y.getY());
                 }
                 if (y.getY() == forX) {
                     // b - (a + b)
-                    return new NegateNode(y.getX());
+                    return NegateNode.create(y.getX());
                 }
             } else if (forY instanceof SubNode) {
                 SubNode y = (SubNode) forY;
@@ -119,7 +123,7 @@ public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArit
                  * have to test for the neutral element of +, because we are doing this
                  * transformation: 0 - x == (-x) + 0 == -x.
                  */
-                return new NegateNode(forY);
+                return NegateNode.create(forY);
             }
             if (associative) {
                 return reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
@@ -133,6 +137,6 @@ public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArit
 
     @Override
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitSub(builder.operand(getX()), builder.operand(getY())));
+        builder.setResult(this, gen.emitSub(builder.operand(getX()), builder.operand(getY()), false));
     }
 }

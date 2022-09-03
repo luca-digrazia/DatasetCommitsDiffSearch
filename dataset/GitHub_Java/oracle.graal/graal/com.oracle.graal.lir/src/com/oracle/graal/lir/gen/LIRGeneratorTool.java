@@ -32,11 +32,6 @@ import com.oracle.graal.lir.*;
 
 public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
-    public interface SpillMoveFactory {
-
-        LIRInstruction createMove(AllocatableValue result, Value input);
-    }
-
     CodeGenProviders getProviders();
 
     TargetDescription target();
@@ -51,8 +46,6 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     LIRGenerationResult getResult();
 
-    SpillMoveFactory getSpillMoveFactory();
-
     boolean hasBlockEnd(AbstractBlock<?> block);
 
     void doBlockStart(AbstractBlock<?> block);
@@ -61,13 +54,13 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     Value emitLoadConstant(LIRKind kind, Constant constant);
 
-    Variable emitLoad(LIRKind kind, Value address, LIRFrameState state);
+    Value emitLoad(LIRKind kind, Value address, LIRFrameState state);
 
     void emitStore(LIRKind kind, Value address, Value input, LIRFrameState state);
 
     void emitNullCheck(Value address, LIRFrameState state);
 
-    Variable emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue);
+    Value emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue);
 
     /**
      * Emit an atomic read-and-add instruction.
@@ -119,7 +112,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     Value emitAddress(Value base, long displacement, Value index, int scale);
 
-    Variable emitAddress(StackSlotValue slot);
+    Value emitAddress(StackSlotValue slot);
 
     void emitMembar(int barriers);
 
@@ -144,6 +137,12 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
     Variable load(Value value);
 
     Value loadNonConst(Value value);
+
+    /**
+     * Returns true if the redundant move elimination optimization should be done after register
+     * allocation.
+     */
+    boolean canEliminateRedundantMoves();
 
     /**
      * Determines if only oop maps are required for the code generated from the LIR.
@@ -180,17 +179,15 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     CallingConvention getCallingConvention();
 
-    Variable emitBitCount(Value operand);
+    Value emitBitCount(Value operand);
 
-    Variable emitBitScanForward(Value operand);
+    Value emitBitScanForward(Value operand);
 
-    Variable emitBitScanReverse(Value operand);
+    Value emitBitScanReverse(Value operand);
 
-    Variable emitByteSwap(Value operand);
+    Value emitByteSwap(Value operand);
 
-    Variable emitArrayEquals(Kind kind, Value array1, Value array2, Value length);
-
-    void emitBlackhole(Value operand);
+    Value emitArrayEquals(Kind kind, Value array1, Value array2, Value length);
 
     @SuppressWarnings("unused")
     default Value emitCountLeadingZeros(Value value) {

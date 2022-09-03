@@ -29,6 +29,7 @@ import java.util.*;
 import com.oracle.graal.alloc.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
@@ -44,7 +45,6 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.stackslotalloc.*;
 import com.oracle.graal.phases.*;
 
 public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, BaselineFrameStateBuilder> implements BytecodeParserTool {
@@ -73,17 +73,17 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
     }
 
     public BaselineBytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
-                    BaselineFrameStateBuilder frameState, Backend backend) {
+                    BaselineFrameStateBuilder frameState, BytecodeStream stream, ProfilingInfo profilingInfo, ConstantPool constantPool, int entryBCI, Backend backend) {
 
-        super(metaAccess, method, graphBuilderConfig, optimisticOpts);
+        super(metaAccess, method, graphBuilderConfig, optimisticOpts, frameState, stream, profilingInfo, constantPool, entryBCI);
         this.backend = backend;
-        this.setCurrentFrameState(frameState);
     }
 
     public LIRGenerationResult getLIRGenerationResult() {
         return lirGenRes;
     }
 
+    @Override
     protected void build() {
         if (PrintProfilingInformation.getValue()) {
             TTY.println("Profiling info for " + method.format("%H.%n(%p)"));
@@ -95,7 +95,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             BciBlockMapping blockMap;
             try (Scope ds = Debug.scope("BciBlockMapping")) {
                 // compute the block map, setup exception handlers and get the entrypoint(s)
-                blockMap = BciBlockMapping.create(method, graphBuilderConfig.doLivenessAnalysis(), false);
+                blockMap = BciBlockMapping.create(method, graphBuilderConfig.doLivenessAnalysis());
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
@@ -103,6 +103,12 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             loopHeaders = blockMap.getLoopHeaders();
             liveness = blockMap.liveness;
             blockVisited = new BciBlockBitMap(blockMap);
+            // add predecessors
+            for (BciBlock block : blockMap.getBlocks()) {
+                for (BciBlock successor : block.getSuccessors()) {
+                    successor.getPredecessors().add(block);
+                }
+            }
 
             if (method.isSynchronized()) {
                 throw GraalInternalError.unimplemented("Handle synchronized methods");
@@ -129,6 +135,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
 
             RegisterConfig registerConfig = null;
             FrameMapBuilder frameMapBuilder = backend.newFrameMapBuilder(registerConfig);
+            frameMapBuilder.requireMapping(lir);
             TargetDescription target = backend.getTarget();
             CallingConvention cc = CodeUtil.getCallingConvention(backend.getProviders().getCodeCache(), CallingConvention.Type.JavaCallee, method, false);
             this.lirGenRes = backend.newLIRGenerationResult(lir, frameMapBuilder, method, null);
@@ -153,17 +160,22 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
                 try (Scope s = Debug.scope("Allocator")) {
                     if (backend.shouldAllocateRegisters()) {
                         LinearScan.allocate(target, lirGenRes);
+                    } else if (!LocationMarker.Options.UseLocationMarker.getValue()) {
+                        // build frame map for targets that do not allocate registers
+                        lirGenRes.buildFrameMap();
                     }
                 }
-                try (Scope s1 = Debug.scope("BuildFrameMap")) {
-                    // build frame map
-                    lirGenRes.buildFrameMap(new SimpleStackSlotAllocator());
-                    Debug.dump(lir, "After FrameMap building");
-                }
-                try (Scope s1 = Debug.scope("MarkLocations")) {
-                    if (backend.shouldAllocateRegisters()) {
-                        // currently we mark locations only if we do register allocation
-                        LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
+                if (LocationMarker.Options.UseLocationMarker.getValue()) {
+                    try (Scope s1 = Debug.scope("BuildFrameMap")) {
+                        // build frame map
+                        lirGenRes.buildFrameMap();
+                        Debug.dump(lir, "After FrameMap building");
+                    }
+                    try (Scope s1 = Debug.scope("MarkLocations")) {
+                        if (backend.shouldAllocateRegisters()) {
+                            // currently we mark locations only if we do register allocation
+                            LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
+                        }
                     }
                 }
 
@@ -714,6 +726,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
         resolver.dispose();
     }
 
+    @Override
     protected void processBlock(BciBlock block) {
         frameState = (BaselineFrameStateBuilder) block.entryState;
         setCurrentFrameState(frameState);

@@ -249,11 +249,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     public abstract Variable emitIntegerTestMove(Value leftVal, Value right, Value trueValue, Value falseValue);
 
-    /**
-     * Emits the single call operation at the heart of generating LIR for a
-     * {@linkplain #emitForeignCall(ForeignCallLinkage, LIRFrameState, Value...) foreign call}.
-     */
-    protected abstract void emitForeignCallOp(ForeignCallLinkage linkage, Value result, Value[] arguments, Value[] temps, LIRFrameState info);
+    protected abstract void emitForeignCall(ForeignCallLinkage linkage, Value result, Value[] arguments, Value[] temps, LIRFrameState info);
 
     public static AllocatableValue toStackKind(AllocatableValue value) {
         if (value.getKind().getStackKind() != value.getKind()) {
@@ -295,7 +291,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
             argLocations[i] = loc;
         }
         res.setForeignCall(true);
-        emitForeignCallOp(linkage, linkageCc.getReturn(), argLocations, linkage.getTemporaries(), state);
+        emitForeignCall(linkage, linkageCc.getReturn(), argLocations, linkage.getTemporaries(), state);
 
         if (isLegal(linkageCc.getReturn())) {
             return emitMove(linkageCc.getReturn());
@@ -396,9 +392,5 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     public LIRGenerationResult getResult() {
         return res;
-    }
-
-    public void emitBlackhole(Value operand) {
-        append(new StandardOp.BlackholeOp(operand));
     }
 }

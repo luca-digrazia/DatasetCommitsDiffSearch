@@ -185,7 +185,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
         gen.append(op);
     }
 
-    public void doBlock(Block block, StructuredGraph graph, BlockMap<List<ValueNode>> blockMap) {
+    public void doBlock(Block block, StructuredGraph graph, BlockMap<List<ScheduledNode>> blockMap) {
         gen.doBlockStart(block);
 
         if (block == gen.getResult().getLIR().getControlFlowGraph().getStartBlock()) {
@@ -195,41 +195,44 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
             assert block.getPredecessorCount() > 0;
         }
 
-        List<ValueNode> nodes = blockMap.get(block);
+        List<ScheduledNode> nodes = blockMap.get(block);
 
         // Allow NodeLIRBuilder subclass to specialize code generation of any interesting groups
         // of instructions
         matchComplexExpressions(nodes);
 
         for (int i = 0; i < nodes.size(); i++) {
-            ValueNode valueNode = nodes.get(i);
+            Node instr = nodes.get(i);
             if (Options.TraceLIRGeneratorLevel.getValue() >= 3) {
-                TTY.println("LIRGen for " + valueNode);
+                TTY.println("LIRGen for " + instr);
             }
-            Value operand = getOperand(valueNode);
-            if (operand == null) {
-                if (!peephole(valueNode)) {
-                    try {
-                        doRoot(valueNode);
-                    } catch (GraalInternalError e) {
-                        throw GraalGraphInternalError.transformAndAddContext(e, valueNode);
-                    } catch (Throwable e) {
-                        throw new GraalGraphInternalError(e).addContext(valueNode);
+            if (instr instanceof ValueNode) {
+                ValueNode valueNode = (ValueNode) instr;
+                Value operand = getOperand(valueNode);
+                if (operand == null) {
+                    if (!peephole(valueNode)) {
+                        try {
+                            doRoot((ValueNode) instr);
+                        } catch (GraalInternalError e) {
+                            throw GraalGraphInternalError.transformAndAddContext(e, instr);
+                        } catch (Throwable e) {
+                            throw new GraalGraphInternalError(e).addContext(instr);
+                        }
                     }
+                } else if (ComplexMatchValue.INTERIOR_MATCH.equals(operand)) {
+                    // Doesn't need to be evaluated
+                    Debug.log("interior match for %s", valueNode);
+                } else if (operand instanceof ComplexMatchValue) {
+                    Debug.log("complex match for %s", valueNode);
+                    ComplexMatchValue match = (ComplexMatchValue) operand;
+                    operand = match.evaluate(this);
+                    if (operand != null) {
+                        setResult(valueNode, operand);
+                    }
+                } else {
+                    // There can be cases in which the result of an instruction is already set
+                    // before by other instructions.
                 }
-            } else if (ComplexMatchValue.INTERIOR_MATCH.equals(operand)) {
-                // Doesn't need to be evaluated
-                Debug.log("interior match for %s", valueNode);
-            } else if (operand instanceof ComplexMatchValue) {
-                Debug.log("complex match for %s", valueNode);
-                ComplexMatchValue match = (ComplexMatchValue) operand;
-                operand = match.evaluate(this);
-                if (operand != null) {
-                    setResult(valueNode, operand);
-                }
-            } else {
-                // There can be cases in which the result of an instruction is already set
-                // before by other instructions.
             }
         }
 
@@ -250,19 +253,23 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
         gen.doBlockEnd(block);
     }
 
-    protected void matchComplexExpressions(List<ValueNode> nodes) {
+    protected void matchComplexExpressions(List<ScheduledNode> nodes) {
         if (matchRules != null) {
             try (Scope s = Debug.scope("MatchComplexExpressions")) {
                 if (LogVerbose.getValue()) {
                     int i = 0;
-                    for (ValueNode node : nodes) {
+                    for (ScheduledNode node : nodes) {
                         Debug.log("%d: (%s) %1S", i++, node.usages().count(), node);
                     }
                 }
 
                 // Match the nodes in backwards order to encourage longer matches.
                 for (int index = nodes.size() - 1; index >= 0; index--) {
-                    ValueNode node = nodes.get(index);
+                    ScheduledNode snode = nodes.get(index);
+                    if (!(snode instanceof ValueNode)) {
+                        continue;
+                    }
+                    ValueNode node = (ValueNode) snode;
                     if (getOperand(node) != null) {
                         continue;
                     }
