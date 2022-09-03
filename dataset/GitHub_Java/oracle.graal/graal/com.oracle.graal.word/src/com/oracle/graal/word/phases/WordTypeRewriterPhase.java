@@ -114,8 +114,8 @@ public class WordTypeRewriterPhase extends Phase {
         if (isWord(node)) {
             if (node.isConstant()) {
                 ConstantNode oldConstant = (ConstantNode) node;
-                assert oldConstant.getValue().getKind() == Kind.Object;
-                WordBase value = (WordBase) oldConstant.getValue().asObject();
+                assert oldConstant.value.getKind() == Kind.Object;
+                WordBase value = (WordBase) oldConstant.value.asObject();
                 ConstantNode newConstant = ConstantNode.forIntegerKind(wordKind, value.rawValue(), node.graph());
                 graph.replaceFloating(oldConstant, newConstant);
 
