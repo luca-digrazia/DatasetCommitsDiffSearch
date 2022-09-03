@@ -22,25 +22,24 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.api.meta.JavaType.Representation;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Loads an object's {@linkplain Representation#ObjectHub hub}, null-checking the object first.
  */
-public final class LoadHubNode extends FixedWithNextNode implements Lowerable, Canonicalizable, Virtualizable {
+public final class LoadHubNode extends FixedWithNextNode implements Lowerable, Canonicalizable {
     @Input private ValueNode object;
 
     public ValueNode object() {
         return object;
     }
 
-    public LoadHubNode(ValueNode object, Kind kind) {
-        super(StampFactory.forKind(kind));
+    public LoadHubNode(ValueNode object) {
+        super(StampFactory.objectNonNull());
         this.object = object;
     }
 
@@ -58,8 +57,8 @@ public final class LoadHubNode extends FixedWithNextNode implements Lowerable, C
             ResolvedJavaType exactType;
             if (stamp.isExactType()) {
                 exactType = stamp.type();
-            } else if (stamp.type() != null && tool.assumptions().useOptimisticAssumptions()) {
-                exactType = stamp.type().findUniqueConcreteSubtype();
+            } else if (stamp.type() != null && tool.assumptions() != null) {
+                exactType = stamp.type().uniqueConcreteSubtype();
                 if (exactType != null) {
                     tool.assumptions().recordConcreteSubtype(stamp.type(), exactType);
                 }
@@ -74,11 +73,6 @@ public final class LoadHubNode extends FixedWithNextNode implements Lowerable, C
         return this;
     }
 
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        VirtualObjectNode virtual = tool.getVirtualState(object());
-        if (virtual != null) {
-            tool.replaceWithValue(ConstantNode.forConstant(virtual.type().getEncoding(Representation.ObjectHub), tool.getMetaAccessProvider(), graph()));
-        }
-    }
+    @NodeIntrinsic
+    public static native Object loadHub(Object object);
 }
