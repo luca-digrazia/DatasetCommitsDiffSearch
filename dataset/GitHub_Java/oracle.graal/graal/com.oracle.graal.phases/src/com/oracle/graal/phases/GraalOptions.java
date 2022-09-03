@@ -49,6 +49,7 @@ public final class GraalOptions {
     public static boolean LimitInlinedRelevance              = true;
     public static float   BoostInliningForEscapeAnalysis     = 2f;
     public static float   RelevanceCapForInlining            = 1f;
+    public static boolean IterativeInlining                  = true;
 
     public static int     TrivialBytecodeSize                = 10;
     public static int     NormalBytecodeSize                 = 150;
@@ -67,6 +68,7 @@ public final class GraalOptions {
     public static int     EscapeAnalysisIterations           = 2;
     public static String  EscapeAnalyzeOnly                  = null;
     public static int     MaximumEscapeAnalysisArrayLength   = 32;
+    public static boolean PEAReadCache                       = true;
 
     public static double  TailDuplicationProbability         = 0.5;
     public static int     TailDuplicationTrivialSize         = 1;
@@ -105,7 +107,6 @@ public final class GraalOptions {
     public static int     LoopUnswitchUncertaintyBoost       = 5;
 
     // debugging settings
-    public static int     MethodEndBreakpointGuards          = 2;
     public static boolean ZapStackOnMethodEntry              = ____;
     public static boolean DeoptALot                          = ____;
     public static boolean VerifyPhases                       = true;
@@ -114,7 +115,7 @@ public final class GraalOptions {
 
     // Debug settings:
     public static boolean Debug                              = true;
-    public static boolean DebugSnippets                      = false;
+    public static boolean DebugReplacements                      = false;
     public static boolean PerThreadDebugValues               = ____;
     public static boolean SummarizeDebugValues               = ____;
     public static boolean SummarizePerPhase                  = ____;
@@ -125,6 +126,8 @@ public final class GraalOptions {
     public static String  LogFile                            = null;
     public static String  MethodFilter                       = null;
     public static boolean DumpOnError                        = ____;
+    public static boolean GenericDynamicCounters             = ____;
+    public static boolean BenchmarkDynamicCounters           = ____;
 
     // Ideal graph visualizer output settings
     public static boolean PrintBinaryGraphs                  = true;
@@ -157,7 +160,7 @@ public final class GraalOptions {
     public static boolean UseProfilingInformation            = true;
            static boolean RemoveNeverExecutedCode            = true;
            static boolean UseExceptionProbability            = true;
-    public static boolean AllowExplicitExceptionChecks       = true;
+           static boolean UseExceptionProbabilityForOperations = true;
     public static boolean OmitHotExceptionStacktrace         = ____;
     public static boolean GenSafepoints                      = true;
     public static boolean GenLoopSafepoints                  = true;
@@ -167,7 +170,7 @@ public final class GraalOptions {
     public static boolean GenAssertionCode                   = ____;
     public static boolean AlignCallsForPatching              = true;
     public static boolean ResolveClassBeforeStaticInvoke     = ____;
-    public static boolean CanOmitFrame                       = false;
+    public static boolean CanOmitFrame                       = true;
     public static int     SafepointPollOffset                = 256;
 
     public static boolean MemoryAwareScheduling              = true;
@@ -185,6 +188,7 @@ public final class GraalOptions {
     public static boolean SupportJsrBytecodes                = true;
 
     public static boolean OptAssumptions                     = true;
+    public static boolean OptConvertDeoptsToGuards           = true;
     public static boolean OptReadElimination                 = true;
     public static boolean OptCanonicalizer                   = true;
     public static boolean OptScheduleOutOfLoops              = true;

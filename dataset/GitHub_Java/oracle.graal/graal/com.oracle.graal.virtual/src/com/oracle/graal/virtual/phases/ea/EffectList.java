@@ -53,8 +53,8 @@ public class EffectList implements Iterable<EffectList.Effect> {
                     try {
                         field.setAccessible(true);
                         str.append(str.length() > 0 ? ", " : "").append(name).append("=").append(format(field.get(this)));
-                    } catch (SecurityException | IllegalAccessException e) {
-                        throw new RuntimeException(e);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
                 }
             }
