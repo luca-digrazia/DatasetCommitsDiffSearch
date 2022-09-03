@@ -26,6 +26,7 @@ package com.oracle.truffle.api.interop.java.test;
 
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.vm.PolyglotEngine;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -41,7 +42,7 @@ public class JavaFunctionTest {
     private PolyglotEngine engine;
 
     @Test
-    public void invokeRunnable() throws Exception {
+    public void invokeRunnable() throws IOException {
         final boolean[] called = {false};
 
         engine = PolyglotEngine.newBuilder().globalSymbol("test", JavaInterop.asTruffleFunction(Runnable.class, new Runnable() {
@@ -56,7 +57,7 @@ public class JavaFunctionTest {
     }
 
     @Test
-    public void invokeIterable() throws Exception {
+    public void invokeIterable() throws IOException {
         final boolean[] called = {false};
 
         engine = PolyglotEngine.newBuilder().globalSymbol("test", JavaInterop.asTruffleFunction(Iterable.class, new Iterable<Object>() {
@@ -72,7 +73,7 @@ public class JavaFunctionTest {
     }
 
     @Test
-    public void invokeHashableInterface() throws Exception {
+    public void invokeHashableInterface() throws IOException {
         final boolean[] called = {false};
 
         engine = PolyglotEngine.newBuilder().globalSymbol("test", JavaInterop.asTruffleFunction(Hashable.class, new Hashable() {
@@ -88,7 +89,7 @@ public class JavaFunctionTest {
     }
 
     @Test
-    public void invokeComparator() throws Exception {
+    public void invokeComparator() throws IOException {
         final boolean[] called = {false};
 
         engine = PolyglotEngine.newBuilder().globalSymbol("test", JavaInterop.asTruffleFunction(Comparator.class, new Comparator<Integer>() {
