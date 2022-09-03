@@ -382,11 +382,7 @@ public class SPARCMove {
                         }
                         break;
                     case Char:
-                        if (signExtend) {
-                            masm.ldsh(addr, dst);
-                        } else {
-                            masm.lduh(addr, dst);
-                        }
+                        masm.lduh(addr, dst);
                         break;
                     case Int:
                         if (signExtend) {
