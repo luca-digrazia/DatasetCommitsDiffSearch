@@ -62,12 +62,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     protected ValueNode canonicalizeSymmetricConstant(CanonicalizerTool tool, Constant constant, ValueNode nonConstant, boolean mirrored) {
         ResolvedJavaType type = tool.getConstantReflection().asJavaType(constant);
         if (type != null && nonConstant instanceof GetClassNode) {
-            if (type.getKind() == Kind.Void) {
-                return LogicConstantNode.forBoolean(false);
-            }
-            if (type.isConcrete() || type.isArray()) {
-                return TypeCheckNode.create(type, ((GetClassNode) nonConstant).getObject());
-            }
+            return new TypeCheckNode(type, ((GetClassNode) nonConstant).getObject());
         }
         return super.canonicalizeSymmetricConstant(tool, constant, nonConstant, mirrored);
     }
