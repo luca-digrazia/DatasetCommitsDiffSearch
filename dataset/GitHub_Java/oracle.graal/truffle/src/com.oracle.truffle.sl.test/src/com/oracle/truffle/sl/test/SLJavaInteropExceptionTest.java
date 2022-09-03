@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -60,34 +60,30 @@ import org.graalvm.polyglot.Value;
 import org.junit.Assert;
 import org.junit.Test;
 
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.sl.SLLanguage;
-import org.graalvm.polyglot.HostAccess;
 
 public class SLJavaInteropExceptionTest {
     public static class Validator {
-        @HostAccess.Export
         public int validateException() {
             throw new NoSuchElementException();
         }
 
-        @HostAccess.Export
         public void validateNested() throws Exception {
             String sourceText = "function test(validator) {\n" +
                             "  return validator.validateException();\n" +
                             "}";
             try (Context context = Context.newBuilder(SLLanguage.ID).build()) {
                 context.eval(Source.newBuilder(SLLanguage.ID, sourceText, "Test").build());
-                Value test = context.getBindings(SLLanguage.ID).getMember("test");
+                Value test = context.lookup(SLLanguage.ID, "test");
                 test.execute(Validator.this);
             }
         }
 
-        @HostAccess.Export
         public long validateFunction(Supplier<Long> function) {
             return function.get();
         }
 
-        @HostAccess.Export
         public void validateMap(Map<String, Object> map) {
             Assert.assertNull(map.get(null));
         }
@@ -100,7 +96,7 @@ public class SLJavaInteropExceptionTest {
                         "}";
         try (Context context = Context.newBuilder(SLLanguage.ID).build()) {
             context.eval(Source.newBuilder(SLLanguage.ID, sourceText, "Test").build());
-            Value test = context.getBindings(SLLanguage.ID).getMember("test");
+            Value test = context.lookup(SLLanguage.ID, "test");
             try {
                 test.execute(new Validator());
                 fail("expected a PolyglotException but did not throw");
@@ -119,7 +115,7 @@ public class SLJavaInteropExceptionTest {
                         "}";
         try (Context context = Context.newBuilder(SLLanguage.ID).build()) {
             context.eval(Source.newBuilder(SLLanguage.ID, sourceText, "Test").build());
-            Value test = context.getBindings(SLLanguage.ID).getMember("test");
+            Value test = context.lookup(SLLanguage.ID, "test");
             try {
                 test.execute(new Validator());
                 fail("expected a PolyglotException but did not throw");
@@ -132,7 +128,7 @@ public class SLJavaInteropExceptionTest {
     }
 
     private static void assertNoJavaInteropStackFrames(PolyglotException ex) {
-        String javaInteropPackageName = "com.oracle.truffle.api.interop.java";
+        String javaInteropPackageName = JavaInterop.class.getName().substring(0, JavaInterop.class.getName().lastIndexOf('.') + 1);
         assertFalse("expected no java interop stack trace elements", Arrays.stream(ex.getStackTrace()).anyMatch(ste -> ste.getClassName().startsWith(javaInteropPackageName)));
     }
 
@@ -148,7 +144,7 @@ public class SLJavaInteropExceptionTest {
                         "}";
         try (Context context = Context.newBuilder(SLLanguage.ID).build()) {
             context.eval(Source.newBuilder(SLLanguage.ID, sourceText, "Test").build());
-            Value test = context.getBindings(SLLanguage.ID).getMember("test");
+            Value test = context.lookup(SLLanguage.ID, "test");
             try {
                 test.execute(new Validator());
                 fail("expected a PolyglotException but did not throw");
@@ -178,7 +174,7 @@ public class SLJavaInteropExceptionTest {
                         "}";
         try (Context context = Context.newBuilder(SLLanguage.ID).build()) {
             context.eval(Source.newBuilder(SLLanguage.ID, sourceText, "Test").build());
-            Value test = context.getBindings(SLLanguage.ID).getMember("test");
+            Value test = context.lookup(SLLanguage.ID, "test");
             test.execute(new Validator());
         }
     }

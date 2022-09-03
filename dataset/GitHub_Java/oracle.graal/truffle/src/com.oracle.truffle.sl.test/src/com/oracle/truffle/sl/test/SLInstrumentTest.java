@@ -57,6 +57,7 @@ import java.io.PrintStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Semaphore;
 
 import org.graalvm.polyglot.Context;
@@ -81,13 +82,10 @@ import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.StandardTags.CallTag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.KeyInfo;
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
@@ -136,7 +134,7 @@ public class SLInstrumentTest {
             Instrument envInstr = engine.getInstruments().get("testEnvironmentHandlerInstrument");
             TruffleInstrument.Env env = envInstr.lookup(Environment.class).env;
             throwables = new ArrayList<>();
-            env.getInstrumenter().attachExecutionEventListener(SourceSectionFilter.newBuilder().lineIn(1, source.getLineCount()).build(), new ExecutionEventListener() {
+            env.getInstrumenter().attachListener(SourceSectionFilter.newBuilder().lineIn(1, source.getLineCount()).build(), new ExecutionEventListener() {
                 @Override
                 public void onEnter(EventContext context, VirtualFrame frame) {
                     Node node = context.getInstrumentedNode();
@@ -457,43 +455,20 @@ public class SLInstrumentTest {
         assertFalse(node.getClass().getName(), node instanceof RootNode);
     }
 
-    private static boolean contains(TruffleObject vars, String key) {
-        return KeyInfo.isExisting(ForeignAccess.sendKeyInfo(Message.KEY_INFO.createNode(), vars, key));
-    }
-
-    private static Object read(TruffleObject vars, String key) {
-        try {
-            return ForeignAccess.sendRead(Message.READ.createNode(), vars, key);
-        } catch (UnknownIdentifierException | UnsupportedMessageException e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    private static boolean isNull(TruffleObject vars) {
-        return ForeignAccess.sendIsNull(Message.IS_NULL.createNode(), vars);
-    }
-
-    private static int keySize(TruffleObject vars) {
-        try {
-            Object keys = ForeignAccess.sendKeys(Message.KEYS.createNode(), vars);
-            return ((Number) ForeignAccess.sendGetSize(Message.GET_SIZE.createNode(), (TruffleObject) keys)).intValue();
-        } catch (UnsupportedMessageException e) {
-            throw new AssertionError(e);
-        }
-    }
-
+    @SuppressWarnings("rawtypes")
     private static void checkVars(TruffleObject vars, Object... expected) {
+        Map map = JavaInterop.asJavaObject(Map.class, vars);
         for (int i = 0; i < expected.length; i += 2) {
             String name = (String) expected[i];
             Object value = expected[i + 1];
-            assertTrue(name, contains(vars, name));
+            assertTrue(name, map.containsKey(name));
             if (value != null) {
-                assertEquals(name, value, read(vars, name));
+                assertEquals(name, value, map.get(name));
             } else {
-                assertTrue(isNull((TruffleObject) read(vars, name)));
+                assertNull(map.get(name));
             }
         }
-        assertEquals(expected.length / 2, keySize(vars));
+        assertEquals(map.keySet().toString(), expected.length / 2, map.size());
     }
 
     @Test
@@ -636,7 +611,7 @@ public class SLInstrumentTest {
         protected void onCreate(Env env) {
             env.registerService(env.getInstrumenter());
             env.registerService(this);
-            env.getInstrumenter().attachExecutionEventListener(SourceSectionFilter.ANY, new ExecutionEventListener() {
+            env.getInstrumenter().attachListener(SourceSectionFilter.ANY, new ExecutionEventListener() {
                 @Override
                 public void onEnter(EventContext context, VirtualFrame frame) {
                     if ("readln".equals(context.getInstrumentedSourceSection().getCharacters())) {
@@ -779,7 +754,7 @@ public class SLInstrumentTest {
         @Override
         protected void onCreate(Env env) {
             env.registerService(this);
-            env.getInstrumenter().attachExecutionEventListener(SourceSectionFilter.newBuilder().tagIs(CallTag.class).build(), new ExecutionEventListener() {
+            env.getInstrumenter().attachListener(SourceSectionFilter.newBuilder().tagIs(CallTag.class).build(), new ExecutionEventListener() {
                 @Override
                 public void onEnter(EventContext context, VirtualFrame frame) {
                 }
@@ -842,7 +817,7 @@ public class SLInstrumentTest {
         }
 
         void attachAt(SourceSection ss) {
-            env.getInstrumenter().attachExecutionEventListener(SourceSectionFilter.newBuilder().sourceSectionEquals(ss).build(), new ExecutionEventListener() {
+            env.getInstrumenter().attachListener(SourceSectionFilter.newBuilder().sourceSectionEquals(ss).build(), new ExecutionEventListener() {
                 @Override
                 public void onEnter(EventContext context, VirtualFrame frame) {
                 }
@@ -885,7 +860,7 @@ public class SLInstrumentTest {
 
                     @SuppressWarnings("unused")
                     public Object access(ReplacedTruffleObject ato) {
-                        return new KeysArray(new String[]{"rp1, rp2"});
+                        return JavaInterop.asTruffleObject(new String[]{"rp1, rp2"});
                     }
                 }
 
@@ -899,55 +874,6 @@ public class SLInstrumentTest {
                 }
             }
         }
-    }
-
-    @MessageResolution(receiverType = KeysArray.class)
-    static final class KeysArray implements TruffleObject {
-
-        private final String[] keys;
-
-        KeysArray(String[] keys) {
-            this.keys = keys;
-        }
-
-        @Resolve(message = "HAS_SIZE")
-        abstract static class HasSize extends Node {
-
-            public Object access(@SuppressWarnings("unused") KeysArray receiver) {
-                return true;
-            }
-        }
-
-        @Resolve(message = "GET_SIZE")
-        abstract static class GetSize extends Node {
-
-            public Object access(KeysArray receiver) {
-                return receiver.keys.length;
-            }
-        }
-
-        @Resolve(message = "READ")
-        abstract static class Read extends Node {
-
-            public Object access(KeysArray receiver, int index) {
-                try {
-                    return receiver.keys[index];
-                } catch (IndexOutOfBoundsException e) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw UnknownIdentifierException.raise(String.valueOf(index));
-                }
-            }
-        }
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return KeysArrayForeign.ACCESS;
-        }
-
-        static boolean isInstance(TruffleObject array) {
-            return array instanceof KeysArray;
-        }
-
     }
 
     /**
@@ -991,7 +917,7 @@ public class SLInstrumentTest {
         }
 
         void attachOn(String error) {
-            EventBinding<ExecutionEventListener> reenterBinding = env.getInstrumenter().attachExecutionEventListener(SourceSectionFilter.newBuilder().tagIs(StandardTags.RootTag.class).build(),
+            EventBinding<ExecutionEventListener> reenterBinding = env.getInstrumenter().attachListener(SourceSectionFilter.newBuilder().tagIs(StandardTags.RootTag.class).build(),
                             new ExecutionEventListener() {
                                 @Override
                                 public void onEnter(EventContext context, VirtualFrame frame) {
@@ -1012,7 +938,7 @@ public class SLInstrumentTest {
                                 }
 
                             });
-            env.getInstrumenter().attachExecutionEventListener(SourceSectionFilter.newBuilder().tagIs(StandardTags.StatementTag.class).build(), new ExecutionEventListener() {
+            env.getInstrumenter().attachListener(SourceSectionFilter.newBuilder().tagIs(StandardTags.StatementTag.class).build(), new ExecutionEventListener() {
                 @Override
                 public void onEnter(EventContext context, VirtualFrame frame) {
                     SourceSection ss = context.getInstrumentedSourceSection();

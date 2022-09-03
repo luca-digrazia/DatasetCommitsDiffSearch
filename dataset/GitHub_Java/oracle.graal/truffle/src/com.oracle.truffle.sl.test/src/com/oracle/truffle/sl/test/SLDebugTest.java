@@ -71,7 +71,6 @@ import com.oracle.truffle.api.debug.DebugStackFrame;
 import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
-import com.oracle.truffle.api.debug.SuspendAnchor;
 import com.oracle.truffle.api.debug.SuspendedCallback;
 import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.source.SourceSection;
@@ -117,7 +116,7 @@ public class SLDebugTest {
         Assert.assertEquals(expectedLineNumber, actualLineNumber);
         final String actualCode = suspendedEvent.getSourceSection().getCharacters().toString();
         Assert.assertEquals(expectedCode, actualCode);
-        final boolean actualIsBefore = (suspendedEvent.getSuspendAnchor() == SuspendAnchor.BEFORE);
+        final boolean actualIsBefore = suspendedEvent.isHaltedBefore();
         Assert.assertEquals(expectedIsBefore, actualIsBefore);
 
         checkStack(suspendedEvent.getTopStackFrame(), name, expectedFrame);
@@ -161,8 +160,8 @@ public class SLDebugTest {
     @Test
     public void testBreakpoint() throws Throwable {
         /*
-         * Wrappers need to remain inserted for recursive functions to work for debugging. Like in this test
-         * case when the breakpoint is in the exit condition and we want to step out.
+         * Wrappers need to remain inserted for recursive functions to work for debugging. Like in
+         * this test case when the breakpoint is in the exit condition and we want to step out.
          */
         final Source factorial = slCode("function main() {\n" +
                         "  return fac(5);\n" +
@@ -627,12 +626,7 @@ public class SLDebugTest {
                 assertEquals("main", dsf.getName());
                 assertEquals(2, dsf.getSourceSection().getStartLine());
                 assertFalse(dsf.isInternal());
-
-                // skip internal frames
-                while (sfIt.hasNext()) {
-                    dsf = sfIt.next();
-                    assertTrue(dsf.isInternal());
-                }
+                assertFalse(sfIt.hasNext());
             });
             expectDone();
         }
