@@ -64,8 +64,8 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
     }
 
     @Override
-    public LIRGenerator newLIRGenerator(StructuredGraph graph, FrameMap frameMap, ResolvedJavaMethod method, CallingConvention cc, LIR lir) {
-        return new AMD64HotSpotLIRGenerator(graph, runtime(), target, frameMap, method, cc, lir);
+    public LIRGenerator newLIRGenerator(StructuredGraph graph, FrameMap frameMap, ResolvedJavaMethod method, LIR lir) {
+        return new AMD64HotSpotLIRGenerator(graph, runtime(), target, frameMap, method, lir);
     }
 
     /**
@@ -144,11 +144,6 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
     }
 
     @Override
-    protected AbstractAssembler createAssembler(FrameMap frameMap) {
-        return new AMD64MacroAssembler(target, frameMap.registerConfig);
-    }
-
-    @Override
     public TargetMethodAssembler newAssembler(LIRGenerator lirGen, CompilationResult compilationResult) {
         // Omit the frame if the method:
         // - has no spill slots or other slots allocated during register allocation
@@ -161,7 +156,7 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         boolean omitFrame = CanOmitFrame && !frameMap.frameNeedsAllocating() && !lir.hasArgInCallerFrame();
 
         Stub stub = runtime().asStub(lirGen.method());
-        AbstractAssembler masm = createAssembler(frameMap);
+        AbstractAssembler masm = new AMD64MacroAssembler(target, frameMap.registerConfig);
         HotSpotFrameContext frameContext = omitFrame ? null : new HotSpotFrameContext(stub != null);
         TargetMethodAssembler tasm = new TargetMethodAssembler(target, runtime(), frameMap, masm, frameContext, compilationResult);
         tasm.setFrameSize(frameMap.frameSize());
@@ -173,13 +168,13 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         if (stub != null) {
 
             final Set<Register> definedRegisters = gatherDefinedRegisters(lir);
-            stub.initDestroyedRegisters(definedRegisters);
+            stub.initDefinedRegisters(definedRegisters);
 
             // Eliminate unnecessary register preservation and
             // record where preserved registers are saved
-            for (Map.Entry<LIRFrameState, AMD64RegistersPreservationOp> e : gen.calleeSaveInfo.entrySet()) {
-                AMD64RegistersPreservationOp save = e.getValue();
-                save.update(definedRegisters, e.getKey().debugInfo(), frameMap);
+            for (Map.Entry<LIRFrameState, AMD64SaveRegistersOp> e : gen.calleeSaveInfo.entrySet()) {
+                AMD64SaveRegistersOp save = e.getValue();
+                save.updateAndDescribePreservation(definedRegisters, e.getKey().debugInfo(), frameMap);
             }
         }
 

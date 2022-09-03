@@ -24,8 +24,8 @@ package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.compiler.amd64.AMD64LIRGenerator.*;
-import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotUnwindOp.*;
+import static com.oracle.graal.hotspot.nodes.IdentityHashCodeStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorEnterStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorExitStubCall.*;
 import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
@@ -55,11 +55,6 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
         Kind word = graalRuntime.getTarget().wordKind;
 
         // @formatter:off
-        addStubCall(EXCEPTION_HANDLER,
-               /*             ret */ ret(Kind.Void),
-               /* arg0: exception */ rax.asValue(Kind.Object),
-             /* arg1: exceptionPc */ rdx.asValue(word));
-
         addRuntimeCall(UNWIND_EXCEPTION, config.unwindExceptionStub,
                /*           temps */ null,
                /*             ret */ ret(Kind.Void),
@@ -110,6 +105,11 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /* arg0:  where */ javaCallingConvention(Kind.Object,
                 /* arg1: format */                       Kind.Object,
                 /* arg2:  value */                       Kind.Long));
+
+        addRuntimeCall(IDENTITY_HASHCODE, config.identityHashCodeStub,
+                /*        temps */ null,
+                /*          ret */ rax.asValue(Kind.Int),
+                /* arg0:    obj */ javaCallingConvention(Kind.Object));
 
         addRuntimeCall(ENCRYPT_BLOCK, config.aescryptEncryptBlockStub,
                 /*        temps */ null,
