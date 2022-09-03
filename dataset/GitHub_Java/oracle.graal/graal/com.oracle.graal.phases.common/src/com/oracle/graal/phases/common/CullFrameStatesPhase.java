@@ -31,17 +31,20 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.graph.*;
 
 /**
- * This phase culls unused FrameStates from the graph.
- * It does a post order iteration over the graph, and
+ * This phase culls unused FrameStates from the graph. It does a post order iteration over the
+ * graph, and
  */
 public class CullFrameStatesPhase extends Phase {
 
     private static final DebugMetric metricFrameStatesCulled = Debug.metric("FrameStatesCulled");
+    private static final DebugMetric metricNodesRemoved = Debug.metric("NodesRemoved");
     private static final DebugMetric metricMergesTraversed = Debug.metric("MergesTraversed");
 
     @Override
     protected void run(StructuredGraph graph) {
+        int initialNodes = graph.getNodeCount();
         new CullFrameStates(graph.start(), new State(null)).apply();
+        metricNodesRemoved.add(initialNodes - graph.getNodeCount());
     }
 
     public static class State implements MergeableState<State> {
@@ -87,7 +90,7 @@ public class CullFrameStatesPhase extends Phase {
         }
 
         @Override
-        public void afterSplit(FixedNode node) {
+        public void afterSplit(BeginNode node) {
         }
 
         @Override
