@@ -39,7 +39,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     @Input private FrameState stateAfter;
     private final int bci;
     // megamorph should only be true when the compiler is sure that the call site is megamorph, and false when in doubt
-    private boolean megamorphic;
+    private boolean megamorph;
     private boolean useForInlining;
     private final long leafGraphId;
 
@@ -48,17 +48,17 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
      * @param blockSuccessors
      * @param branchProbability
      */
-    public InvokeWithExceptionNode(MethodCallTargetNode callTarget, DispatchBeginNode exceptionEdge, int bci, long leafGraphId) {
+    public InvokeWithExceptionNode(MethodCallTargetNode callTarget, BeginNode exceptionEdge, int bci, long leafGraphId) {
         super(callTarget.returnStamp(), new BeginNode[]{null, exceptionEdge}, new double[]{1.0, 0.0});
         this.bci = bci;
         this.callTarget = callTarget;
         this.leafGraphId = leafGraphId;
-        this.megamorphic = true;
+        this.megamorph = true;
         this.useForInlining = true;
     }
 
-    public DispatchBeginNode exceptionEdge() {
-        return (DispatchBeginNode) blockSuccessor(EXCEPTION_EDGE);
+    public BeginNode exceptionEdge() {
+        return blockSuccessor(EXCEPTION_EDGE);
     }
 
     public void setExceptionEdge(BeginNode x) {
@@ -78,13 +78,13 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     @Override
-    public boolean isMegamorphic() {
-        return megamorphic;
+    public boolean megamorph() {
+        return megamorph;
     }
 
     @Override
-    public void setMegamorphic(boolean value) {
-        this.megamorphic = value;
+    public void setMegamorph(boolean megamorph) {
+        this.megamorph = megamorph;
     }
 
     @Override
@@ -185,7 +185,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
             assert kind() == CiKind.Void && usages().isEmpty();
             ((StructuredGraph) graph()).removeSplit(this, NORMAL_EDGE);
         } else if (node instanceof DeoptimizeNode) {
-            this.replaceAtPredecessor(node);
+            this.replaceAtPredecessors(node);
             this.replaceAtUsages(null);
             GraphUtil.killCFG(this);
             return;

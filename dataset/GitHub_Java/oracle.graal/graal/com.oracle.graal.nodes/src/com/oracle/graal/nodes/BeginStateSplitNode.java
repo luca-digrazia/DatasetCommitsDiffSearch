@@ -25,7 +25,7 @@ package com.oracle.graal.nodes;
 /**
  * Base class for {@link BeginNode}s that are associated with a frame state.
  */
-public abstract class BeginStateSplitNode extends BeginNode implements StateSplit {
+public class BeginStateSplitNode extends BeginNode implements StateSplit {
 
     /**
      * A begin node has no side effect.
