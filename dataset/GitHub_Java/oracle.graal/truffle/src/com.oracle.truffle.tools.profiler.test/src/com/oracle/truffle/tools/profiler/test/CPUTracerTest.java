@@ -24,17 +24,15 @@
  */
 package com.oracle.truffle.tools.profiler.test;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.tools.profiler.CPUTracer;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.PolyglotRuntime;
-import com.oracle.truffle.tools.profiler.CPUTracer;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 public class CPUTracerTest extends AbstractProfilerTest {
 
@@ -42,12 +40,7 @@ public class CPUTracerTest extends AbstractProfilerTest {
 
     @Before
     public void setupTracer() {
-        for (PolyglotRuntime.Instrument instrument : engine.getRuntime().getInstruments().values()) {
-            tracer = instrument.lookup(CPUTracer.class);
-            if (tracer != null) {
-                break;
-            }
-        }
+        tracer = CPUTracer.find(engine);
         Assert.assertNotNull(tracer);
     }
 
@@ -58,12 +51,12 @@ public class CPUTracerTest extends AbstractProfilerTest {
 
         tracer.setCollecting(true);
 
-        Assert.assertEquals(0, tracer.getCounters().size());
+        Assert.assertEquals(0, tracer.getPayloads().size());
         Assert.assertTrue(tracer.isCollecting());
 
         execute(defaultSource);
 
-        Assert.assertNotEquals(0, tracer.getCounters().size());
+        Assert.assertNotEquals(0, tracer.getPayloads().size());
         Assert.assertTrue(tracer.isCollecting());
 
         tracer.setCollecting(false);
@@ -72,7 +65,7 @@ public class CPUTracerTest extends AbstractProfilerTest {
 
         tracer.clearData();
 
-        Assert.assertEquals(0, tracer.getCounters().size());
+        Assert.assertEquals(0, tracer.getPayloads().size());
     }
 
     @Test
@@ -131,7 +124,8 @@ public class CPUTracerTest extends AbstractProfilerTest {
         synchronized (tracer) {
             tracer.setFilter(NO_INTERNAL_ROOT_TAG_FILTER);
         }
-        executeAndCheckRootNameCounters(defaultRecursiveSource, expectedCountMap);
+        executeAndCheckRootNameCounters(defaultRecursiveSource,
+                        expectedCountMap);
     }
 
     @Test
@@ -144,7 +138,8 @@ public class CPUTracerTest extends AbstractProfilerTest {
         synchronized (tracer) {
             tracer.setFilter(NO_INTERNAL_CALL_TAG_FILTER);
         }
-        executeAndCheckRootNameCounters(defaultRecursiveSource, expectedCountMap);
+        executeAndCheckRootNameCounters(defaultRecursiveSource,
+                        expectedCountMap);
     }
 
     @Test
@@ -157,49 +152,59 @@ public class CPUTracerTest extends AbstractProfilerTest {
         synchronized (tracer) {
             tracer.setFilter(NO_INTERNAL_STATEMENT_TAG_FILTER);
         }
-        executeAndCheckStatementCounters(defaultRecursiveSource, expectedCountMap);
+        executeAndCheckStatementCounters(defaultRecursiveSource,
+                        expectedCountMap);
     }
 
     // Works only assuming unique root names in counters
     // This is, for example, not true for statement tracing
-    private void executeAndCheckRootNameCounters(Source recursiveSource, Map<String, Long> expectedCountMap) {
+    private void executeAndCheckRootNameCounters(Source recursiveSource,
+                    Map<String, Long> expectedCountMap) {
         final int longExecutionCount = 1000;
 
         tracer.setCollecting(true);
         execute(recursiveSource);
-        Collection<CPUTracer.Counter> counters = tracer.getCounters();
-        Assert.assertEquals("Total number of counters does not match after one elxecution", expectedCountMap.size(), counters.size());
+        Collection<CPUTracer.Payload> payloads = tracer.getPayloads();
+        Assert.assertEquals(
+                        "Total number of counters does not match after one elxecution",
+                        expectedCountMap.size(), payloads.size());
 
-        for (CPUTracer.Counter counter : counters) {
-            final long expectedCount = expectedCountMap.get(counter.getRootName());
-            final long count = counter.getCount();
-            Assert.assertEquals(counter.getRootName() + " count not correct", expectedCount, count);
+        for (CPUTracer.Payload payload : payloads) {
+            final long expectedCount = expectedCountMap.get(payload.getRootName());
+            final long count = payload.getCount();
+            Assert.assertEquals(payload.getRootName() + " count not correct",
+                            expectedCount, count);
         }
 
         for (int i = 1; i < longExecutionCount; i++) {
             execute(recursiveSource);
         }
 
-        counters = tracer.getCounters();
-        Assert.assertEquals("Total number of counters does not match after one execution", expectedCountMap.size(), counters.size());
+        payloads = tracer.getPayloads();
+        Assert.assertEquals(
+                        "Total number of counters does not match after one execution",
+                        expectedCountMap.size(), payloads.size());
 
-        for (CPUTracer.Counter counter : counters) {
-            final long expectedCount = longExecutionCount * expectedCountMap.get(counter.getRootName());
-            final long count = counter.getCount();
-            Assert.assertEquals(counter.getRootName() + " count not correct", expectedCount, count);
+        for (CPUTracer.Payload payload : payloads) {
+            final long expectedCount = longExecutionCount * expectedCountMap.get(payload.getRootName());
+            final long count = payload.getCount();
+            Assert.assertEquals(payload.getRootName() + " count not correct",
+                            expectedCount, count);
         }
     }
 
-    private void executeAndCheckStatementCounters(Source source, Map<String, Long> expectedCountMap) {
+    private void executeAndCheckStatementCounters(Source source,
+                    Map<String, Long> expectedCountMap) {
         tracer.setCollecting(true);
         execute(source);
-        Collection<CPUTracer.Counter> counters = tracer.getCounters();
+        Collection<CPUTracer.Payload> payloads = tracer.getPayloads();
 
-        Assert.assertEquals("Total number of counters does not match", expectedCountMap.size(), counters.size());
+        Assert.assertEquals("Total number of counters does not match",
+                        expectedCountMap.size(), payloads.size());
 
-        for (CPUTracer.Counter counter : counters) {
-            Long expected = expectedCountMap.get(counter.getRootName());
-            Assert.assertEquals(expected.longValue(), counter.getCount());
+        for (CPUTracer.Payload payload : payloads) {
+            Long expected = expectedCountMap.get(payload.getRootName());
+            Assert.assertEquals(expected.longValue(), payload.getCount());
         }
 
     }

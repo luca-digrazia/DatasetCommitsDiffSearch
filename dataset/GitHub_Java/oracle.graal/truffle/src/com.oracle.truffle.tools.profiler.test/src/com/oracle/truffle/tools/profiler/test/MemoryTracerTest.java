@@ -24,9 +24,8 @@
  */
 package com.oracle.truffle.tools.profiler.test;
 
-import com.oracle.truffle.api.vm.PolyglotRuntime;
-import com.oracle.truffle.tools.profiler.CallTreeNode;
 import com.oracle.truffle.tools.profiler.MemoryTracer;
+import com.oracle.truffle.tools.profiler.ProfilerNode;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -39,12 +38,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
 
     @Before
     public void setupTracer() {
-        for (PolyglotRuntime.Instrument instrument : engine.getRuntime().getInstruments().values()) {
-            tracer = instrument.lookup(MemoryTracer.class);
-            if (tracer != null) {
-                break;
-            }
-        }
+        tracer = MemoryTracer.find(engine);
         Assert.assertNotNull(tracer);
     }
 
@@ -62,7 +56,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
 
-        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
+        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
         Assert.assertEquals("More allocations found", 0, rootNodes.size());
     }
 
@@ -80,18 +74,14 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
 
-        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
+        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
         Assert.assertEquals("More allocations found", 0, rootNodes.size());
     }
 
     @Test
     public void testOneAllocationInRoot() {
-        final String oneAllocationSource = "ROOT(" +
-                        "DEFINE(foo,ROOT(STATEMENT))," +
-                        "DEFINE(bar,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(foo)))))," +
-                        "DEFINE(baz,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(bar)))))," +
-                        "ALLOCATION,CALL(baz),CALL(bar)" +
-                        ")";
+        final String oneAllocationSource = "ROOT(" + "DEFINE(foo,ROOT(STATEMENT))," + "DEFINE(bar,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(foo)))))," +
+                        "DEFINE(baz,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(bar)))))," + "ALLOCATION,CALL(baz),CALL(bar)" + ")";
 
         Assert.assertFalse(tracer.isCollecting());
 
@@ -105,9 +95,9 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertTrue(tracer.hasData());
 
-        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
+        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
         Assert.assertEquals("More allocations found", 1, rootNodes.size());
-        CallTreeNode<MemoryTracer.AllocationPayload> node = rootNodes.iterator().next();
+        ProfilerNode<MemoryTracer.Payload> node = rootNodes.iterator().next();
         if (node.getChildren() != null) {
             Assert.assertEquals("Nested allocations found!", 0, node.getChildren().size());
         }
@@ -121,9 +111,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
 
     @Test
     public void testOneAllocationInRootRecursive() {
-        final String oneAllocationSource = "ROOT(" +
-                        "DEFINE(foo,ROOT(BLOCK(STATEMENT,RECURSIVE_CALL(foo))))," +
-                        "DEFINE(bar,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(foo)))))," +
+        final String oneAllocationSource = "ROOT(" + "DEFINE(foo,ROOT(BLOCK(STATEMENT,RECURSIVE_CALL(foo, 10))))," + "DEFINE(bar,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(foo)))))," +
                         "ALLOCATION,CALL(bar)" +
                         ")";
 
@@ -139,9 +127,9 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertTrue(tracer.hasData());
 
-        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
+        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
         Assert.assertEquals("More allocations found", 1, rootNodes.size());
-        CallTreeNode<MemoryTracer.AllocationPayload> node = rootNodes.iterator().next();
+        ProfilerNode<MemoryTracer.Payload> node = rootNodes.iterator().next();
         if (node.getChildren() != null) {
             Assert.assertEquals("Nested allocations found!", 0, node.getChildren().size());
         }
@@ -155,12 +143,8 @@ public class MemoryTracerTest extends AbstractProfilerTest {
 
     @Test
     public void testMultipleAllocation() {
-        final String oneAllocationSource = "ROOT(" +
-                        "DEFINE(foo,ROOT(ALLOCATION,STATEMENT))," +
-                        "DEFINE(bar,ROOT(BLOCK(ALLOCATION,STATEMENT,LOOP(10, CALL(foo)))))," +
-                        "DEFINE(baz,ROOT(BLOCK(ALLOCATION,STATEMENT,LOOP(10, CALL(bar)))))," +
-                        "ALLOCATION,CALL(baz),CALL(bar)" +
-                        ")";
+        final String oneAllocationSource = "ROOT(" + "DEFINE(foo,ROOT(ALLOCATION,STATEMENT))," + "DEFINE(bar,ROOT(BLOCK(ALLOCATION,STATEMENT,LOOP(10, CALL(foo)))))," +
+                        "DEFINE(baz,ROOT(BLOCK(ALLOCATION,STATEMENT,LOOP(10, CALL(bar)))))," + "ALLOCATION,CALL(baz),CALL(bar)" + ")";
 
         Assert.assertFalse(tracer.isCollecting());
 
@@ -175,8 +159,8 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.hasData());
 
         // ROOT
-        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
-        CallTreeNode<MemoryTracer.AllocationPayload> node = rootNodes.iterator().next();
+        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
+        ProfilerNode<MemoryTracer.Payload> node = rootNodes.iterator().next();
         Assert.assertEquals("Incorrect number of allocations found", 123, node.getPayload().getTotalAllocations());
         Assert.assertEquals("Incorrect number of events found", 1, node.getPayload().getEvents().size());
 
@@ -198,17 +182,15 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertEquals("Incorrect number of allocations found", 100, node.getPayload().getTotalAllocations());
         Assert.assertEquals("Incorrect number of events found", 100, node.getPayload().getEvents().size());
 
-        Assert.assertTrue("Children too deep found!", node.getChildren() == null || node.getChildren().isEmpty());
+        Assert.assertTrue("Children too deep found!",
+                        node.getChildren() == null || node.getChildren().isEmpty());
 
     }
 
     @Test
     public void testMultipleAllocationRecursive() {
-        final String oneAllocationSource = "ROOT(" +
-                        "DEFINE(foo,ROOT(BLOCK(ALLOCATION,STATEMENT,RECURSIVE_CALL(foo))))," +
-                        "DEFINE(bar,ROOT(BLOCK(ALLOCATION,STATEMENT,LOOP(10, CALL(foo)))))," +
-                        "ALLOCATION,CALL(bar)" +
-                        ")";
+        final String oneAllocationSource = "ROOT(" + "DEFINE(foo,ROOT(BLOCK(ALLOCATION,STATEMENT,RECURSIVE_CALL(foo, 10))))," + "DEFINE(bar,ROOT(BLOCK(ALLOCATION,STATEMENT,LOOP(10, CALL(foo)))))," +
+                        "ALLOCATION,CALL(bar)" + ")";
 
         Assert.assertFalse(tracer.isCollecting());
 
@@ -225,22 +207,26 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         final int totalAllocationsExpected = 112;
 
         // ROOT
-        Collection<CallTreeNode<MemoryTracer.AllocationPayload>> rootNodes = tracer.getRootNodes();
-        CallTreeNode<MemoryTracer.AllocationPayload> node = rootNodes.iterator().next();
-        Assert.assertEquals("Incorrect number of allocations found", totalAllocationsExpected, node.getPayload().getTotalAllocations());
+        Collection<ProfilerNode<MemoryTracer.Payload>> rootNodes = tracer.getRootNodes();
+        ProfilerNode<MemoryTracer.Payload> node = rootNodes.iterator().next();
+        Assert.assertEquals("Incorrect number of allocations found",
+                        totalAllocationsExpected, node.getPayload().getTotalAllocations());
         Assert.assertEquals("Incorrect number of events found", 1, node.getPayload().getEvents().size());
 
         // BAR
         node = node.getChildren().iterator().next();
-        Assert.assertEquals("Incorrect number of allocations found", totalAllocationsExpected - 1, node.getPayload().getTotalAllocations());
+        Assert.assertEquals("Incorrect number of allocations found",
+                        totalAllocationsExpected - 1, node.getPayload().getTotalAllocations());
         Assert.assertEquals("Incorrect number of events found", 1, node.getPayload().getEvents().size());
 
         // FOO - 11 times because RECURSIVE_CALL goes to recursion depth of 10
         for (int i = 0; i < 11; i++) {
             node = node.getChildren().iterator().next();
-            Assert.assertEquals("Incorrect number of allocations found", totalAllocationsExpected - 2 - (10 * i), node.getPayload().getTotalAllocations());
+            Assert.assertEquals("Incorrect number of allocations found",
+                            totalAllocationsExpected - 2 - (10 * i), node.getPayload().getTotalAllocations());
             Assert.assertEquals("Incorrect number of events found", 10, node.getPayload().getEvents().size());
         }
-        Assert.assertTrue("Children too deep found!", node.getChildren() == null || node.getChildren().isEmpty());
+        Assert.assertTrue("Children too deep found!",
+                        node.getChildren() == null || node.getChildren().isEmpty());
     }
 }
