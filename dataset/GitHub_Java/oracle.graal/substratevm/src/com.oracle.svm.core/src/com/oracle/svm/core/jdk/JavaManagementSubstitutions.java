@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -34,11 +32,8 @@ import java.lang.management.ThreadMXBean;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
 
 import javax.management.ObjectName;
 
@@ -56,7 +51,6 @@ import com.oracle.svm.core.heap.PhysicalMemory;
 import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
-
 //Checkstyle: stop
 import sun.management.Util;
 //Checkstyle: resume
@@ -147,14 +141,7 @@ final class SubstrateRuntimeMXBean implements RuntimeMXBean {
 
     private static final String MSG = "RuntimeMXBean methods";
 
-    private long startMillis = 0;
-
     SubstrateRuntimeMXBean() {
-    }
-
-    /** Set the start time of the VM. */
-    void setStartMillis() {
-        startMillis = System.currentTimeMillis();
     }
 
     @Override
@@ -226,7 +213,7 @@ final class SubstrateRuntimeMXBean implements RuntimeMXBean {
 
     @Override
     public String getClassPath() {
-        return System.getProperty("java.class.path");
+        throw VMError.unsupportedFeature(MSG);
     }
 
     @Override
@@ -246,50 +233,17 @@ final class SubstrateRuntimeMXBean implements RuntimeMXBean {
 
     @Override
     public long getUptime() {
-        return System.currentTimeMillis() - startMillis;
+        throw VMError.unsupportedFeature(MSG);
     }
 
     @Override
     public long getStartTime() {
-        assert startMillis > 0 : "SubstrateRuntimeMXBean.getStartTime: Should have set SubstrateRuntimeMXBean.startMillis.";
-        return startMillis;
+        throw VMError.unsupportedFeature(MSG);
     }
 
-    /** Copied from {@code sun.management.RuntimeImpl#getSystemProperties()}. */
     @Override
     public Map<String, String> getSystemProperties() {
-        Properties sysProps = System.getProperties();
-        Map<String, String> map = new HashMap<>();
-
-        // Properties.entrySet() does not include the entries in
-        // the default properties. So use Properties.stringPropertyNames()
-        // to get the list of property keys including the default ones.
-        Set<String> keys = sysProps.stringPropertyNames();
-        for (String k : keys) {
-            String value = sysProps.getProperty(k);
-            map.put(k, value);
-        }
-
-        return map;
-    }
-}
-
-@AutomaticFeature
-class RuntimeMXBeanFeature implements Feature {
-
-    @Override
-    public void beforeAnalysis(BeforeAnalysisAccess access) {
-        RuntimeSupport.getRuntimeSupport().addStartupHook(new Runnable() {
-
-            @Override
-            public void run() {
-                final RuntimeMXBean runtimeMXBean = ManagementFactory.getRuntimeMXBean();
-                if (runtimeMXBean instanceof SubstrateRuntimeMXBean) {
-                    final SubstrateRuntimeMXBean substrateRuntimeMXBean = (SubstrateRuntimeMXBean) runtimeMXBean;
-                    substrateRuntimeMXBean.setStartMillis();
-                }
-            }
-        });
+        throw VMError.unsupportedFeature(MSG);
     }
 }
 
