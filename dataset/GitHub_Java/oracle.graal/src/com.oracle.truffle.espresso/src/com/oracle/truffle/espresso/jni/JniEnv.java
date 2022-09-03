@@ -171,6 +171,9 @@ public class JniEnv extends NativeEnv {
                 throw EspressoError.shouldNotReachHere(targetEx);
             } catch (IllegalAccessException e) {
                 throw EspressoError.shouldNotReachHere(e);
+            } catch (IllegalArgumentException iae) {
+                iae.printStackTrace();
+                throw iae;
             }
         });
     }

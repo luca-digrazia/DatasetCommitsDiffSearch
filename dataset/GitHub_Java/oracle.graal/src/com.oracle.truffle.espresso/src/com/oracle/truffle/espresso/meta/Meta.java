@@ -22,18 +22,8 @@
  */
 package com.oracle.truffle.espresso.meta;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.impl.FieldInfo;
-import com.oracle.truffle.espresso.impl.MethodInfo;
-import com.oracle.truffle.espresso.intrinsics.Type;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.EspressoException;
-import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.StaticObjectArray;
-import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
-import com.oracle.truffle.espresso.types.SignatureDescriptor;
-import com.oracle.truffle.espresso.vm.InterpreterToVM;
+import static java.util.stream.Collectors.collectingAndThen;
+import static java.util.stream.Collectors.toList;
 
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
@@ -46,8 +36,18 @@ import java.util.function.Consumer;
 import java.util.function.IntFunction;
 import java.util.stream.Stream;
 
-import static java.util.stream.Collectors.collectingAndThen;
-import static java.util.stream.Collectors.toList;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.impl.FieldInfo;
+import com.oracle.truffle.espresso.impl.MethodInfo;
+import com.oracle.truffle.espresso.intrinsics.Type;
+import com.oracle.truffle.espresso.runtime.EspressoContext;
+import com.oracle.truffle.espresso.runtime.EspressoException;
+import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.runtime.StaticObjectArray;
+import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
+import com.oracle.truffle.espresso.types.SignatureDescriptor;
+import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
 /**
  * Introspection API to access the guest world from the host. Provides seamless conversions from

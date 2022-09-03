@@ -544,7 +544,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
                         setDoubleLocal(frame, bs.readLocalIndex(curBCI), stack.popDouble());
                         break;
                     case ASTORE:
-                        setObjectLocal(frame, bs.readLocalIndex(curBCI), stack.popObject());
+                        setObjectLocal(frame, bs.readLocalIndex(curBCI), stack.popReturnAddressOrObject());
                         break;
                     case ISTORE_0:
                         setIntLocal(frame, 0, stack.popInt());
@@ -1533,11 +1533,11 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         return switchHelper.defaultTarget(curBCI);
     }
 
-    private Object checkCast(Object instance, Klass typeToCheck) {
+    private StaticObject checkCast(StaticObject instance, Klass typeToCheck) {
         return vm.checkCast(instance, typeToCheck);
     }
 
-    private Object allocateInstance(Klass klass) {
+    private StaticObject allocateInstance(Klass klass) {
         klass.initialize();
         return vm.newObject(klass);
     }
