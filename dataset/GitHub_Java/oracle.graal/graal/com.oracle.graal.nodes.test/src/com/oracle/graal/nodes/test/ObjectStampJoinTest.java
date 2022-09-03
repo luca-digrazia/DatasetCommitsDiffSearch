@@ -26,16 +26,34 @@ import org.junit.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.type.*;
 
-public class ObjectStampJoinTest extends AbstractObjectStampTest {
+public class ObjectStampJoinTest extends GraalCompilerTest {
 
-    // class A
-    // class B extends A
-    // class C extends B implements I
-    // class D extends A
-    // abstract class E extends A
-    // interface I
+    private static class A {
+
+    }
+
+    private static class B extends A {
+
+    }
+
+    private static class C extends B implements I {
+
+    }
+
+    private static class D extends A {
+
+    }
+
+    private abstract static class E extends A {
+
+    }
+
+    private interface I {
+
+    }
 
     @Test
     public void testJoin0() {
@@ -124,14 +142,14 @@ public class ObjectStampJoinTest extends AbstractObjectStampTest {
     @Test
     public void testJoinInterface0() {
         Stamp a = StampFactory.declared(getType(A.class));
-        Stamp i = StampFactory.declared(getType(I.class), false, true);
-        Assert.assertNotSame(StampFactory.illegal(Kind.Object), join(a, i));
+        Stamp b = StampFactory.declared(getType(I.class));
+        Assert.assertNotSame(StampFactory.illegal(Kind.Object), join(a, b));
     }
 
     @Test
     public void testJoinInterface1() {
         Stamp aNonNull = StampFactory.declaredNonNull(getType(A.class));
-        Stamp i = StampFactory.declared(getType(I.class), false, true);
+        Stamp i = StampFactory.declared(getType(I.class));
         Stamp join = join(aNonNull, i);
         Assert.assertTrue(join instanceof ObjectStamp);
         Assert.assertTrue(((ObjectStamp) join).nonNull());
@@ -140,16 +158,19 @@ public class ObjectStampJoinTest extends AbstractObjectStampTest {
     @Test
     public void testJoinInterface2() {
         Stamp bExact = StampFactory.exactNonNull(getType(B.class));
-        Stamp i = StampFactory.declared(getType(I.class), false, true);
+        Stamp i = StampFactory.declared(getType(I.class));
         Stamp join = join(i, bExact);
         Assert.assertEquals(StampFactory.illegal(Kind.Object), join);
     }
 
-    @Test
-    public void testJoinInterface3() {
-        Stamp bExact = StampFactory.exactNonNull(getType(B.class));
-        Stamp i = StampFactory.declared(getType(I.class)); // not trusted
-        Stamp join = join(i, bExact);
-        Assert.assertEquals(bExact, join);
+    private static Stamp join(Stamp a, Stamp b) {
+        Stamp ab = a.join(b);
+        Stamp ba = b.join(a);
+        Assert.assertEquals(ab, ba);
+        return ab;
+    }
+
+    private ResolvedJavaType getType(Class<?> clazz) {
+        return getMetaAccess().lookupJavaType(clazz);
     }
 }
