@@ -68,7 +68,6 @@ public final class GraalOptions {
 
     // escape analysis settings
     public static boolean PartialEscapeAnalysis              = true;
-    public static boolean EscapeAnalysisHistogram            = ____;
     public static int     EscapeAnalysisIterations           = 2;
     public static String  EscapeAnalyzeOnly                  = null;
 
@@ -133,15 +132,14 @@ public final class GraalOptions {
     public static boolean DumpOnError                        = ____;
 
     // Ideal graph visualizer output settings
-    public static boolean PrintBinaryGraphs                  = true;
-    public static boolean PrintCFG                           = ____;
+    public static boolean PrintBinaryGraphs                  = ____;
+    public static boolean PrintCFG                           = true;
     public static boolean PrintIdealGraphFile                = ____;
     public static String  PrintIdealGraphAddress             = "127.0.0.1";
     public static int     PrintIdealGraphPort                = 4444;
     public static int     PrintBinaryGraphPort               = 4445;
 
     // Other printing settings
-    public static boolean PrintAddressMap                    = ____;
     public static boolean PrintQueue                         = ____;
     public static boolean PrintCompilation                   = ____;
     public static boolean PrintProfilingInformation          = ____;
