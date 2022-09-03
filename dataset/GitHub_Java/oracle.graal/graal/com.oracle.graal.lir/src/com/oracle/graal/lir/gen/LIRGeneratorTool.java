@@ -173,7 +173,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     Variable emitIntegerTestMove(Value leftVal, Value right, Value trueValue, Value falseValue);
 
-    void emitStrategySwitch(JavaConstant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value);
+    void emitStrategySwitch(Constant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value);
 
     void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget);
 
@@ -188,15 +188,5 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
     Value emitByteSwap(Value operand);
 
     Value emitArrayEquals(Kind kind, Value array1, Value array2, Value length);
-
-    @SuppressWarnings("unused")
-    default Value emitCountLeadingZeros(Value value) {
-        throw GraalInternalError.unimplemented();
-    }
-
-    @SuppressWarnings("unused")
-    default Value emitCountTrailingZeros(Value value) {
-        throw GraalInternalError.unimplemented();
-    }
 
 }

@@ -29,6 +29,7 @@ import java.util.*;
 import com.oracle.graal.alloc.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.common.*;
@@ -132,12 +133,10 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             List<? extends AbstractBlock<?>> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blockMap.blocks.size(), blockMap.startBlock);
             LIR lir = new LIR(cfg, linearScanOrder, codeEmittingOrder);
 
-            RegisterConfig registerConfig = null;
-            FrameMapBuilder frameMapBuilder = backend.newFrameMapBuilder(registerConfig);
-            frameMapBuilder.requireMapping(lir);
+            FrameMap frameMap = backend.newFrameMap(null);
             TargetDescription target = backend.getTarget();
             CallingConvention cc = CodeUtil.getCallingConvention(backend.getProviders().getCodeCache(), CallingConvention.Type.JavaCallee, method, false);
-            this.lirGenRes = backend.newLIRGenerationResult(lir, frameMapBuilder, method, null);
+            this.lirGenRes = backend.newLIRGenerationResult(lir, frameMap, method, null);
             this.gen = backend.newLIRGenerator(cc, lirGenRes);
             this.lirBuilder = backend.newBytecodeLIRBuilder(gen, this);
 
@@ -159,7 +158,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
                 try (Scope s = Debug.scope("Allocator")) {
 
                     if (backend.shouldAllocateRegisters()) {
-                        LinearScan.allocate(target, lirGenRes);
+                        LinearScan.allocate(target, lir, frameMap);
                     }
                 } catch (Throwable e) {
                     throw Debug.handle(e);
@@ -232,7 +231,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
     }
 
     @Override
-    protected void handleUnresolvedExceptionType(JavaType type) {
+    protected void handleUnresolvedExceptionType(Representation representation, JavaType type) {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
     }
@@ -505,18 +504,18 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
         int numLocals = state.localsSize();
         int numStack = state.stackSize();
         int numLocks = state.lockDepth();
-        JavaValue[] values = new JavaValue[numLocals + numStack + numLocks];
+        Value[] values = new Value[numLocals + numStack + numLocks];
 
         for (int i = 0; i < numLocals; i++) {
-            values[i] = (JavaValue) state.localAt(i);
+            values[i] = state.localAt(i);
         }
 
         for (int i = 0; i < numStack; i++) {
-            values[numLocals + i] = (JavaValue) state.stackAt(i);
+            values[numLocals + i] = state.stackAt(i);
         }
 
         for (int i = 0; i < numStack; i++) {
-            values[numLocals + numStack + i] = (JavaValue) state.lockAt(i);
+            values[numLocals + numStack + i] = state.lockAt(i);
         }
 
         BytecodeFrame frame = new BytecodeFrame(caller, method, bci(), state.rethrowException(), duringCall, values, numLocals, numStack, numLocks);
@@ -595,7 +594,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
     }
 
     @Override
-    protected Value appendConstant(JavaConstant constant) {
+    protected Value appendConstant(Constant constant) {
         return gen.emitLoadConstant(constant.getLIRKind(), constant);
     }
 
@@ -665,7 +664,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
         Debug.log("moveConstantsToVariables: framestate before: %s", frameState);
         for (int i = 0; i < frameState.stackSize(); i++) {
             Value src = frameState.stackAt(i);
-            if (src instanceof JavaConstant) {
+            if (src instanceof Constant) {
                 AllocatableValue dst = gen.newVariable(src.getLIRKind());
                 gen.emitMove(dst, src);
                 frameState.storeStack(i, dst);
@@ -674,7 +673,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
         }
         for (int i = 0; i < frameState.localsSize(); i++) {
             Value src = frameState.localAt(i);
-            if (src instanceof JavaConstant) {
+            if (src instanceof Constant) {
                 AllocatableValue dst = gen.newVariable(src.getLIRKind());
                 gen.emitMove(dst, src);
                 frameState.storeLocal(i, dst);
