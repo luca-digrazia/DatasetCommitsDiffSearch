@@ -1,48 +1,31 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.api.debug.test;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.function.Predicate;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -192,7 +175,7 @@ public class SuspensionFilterTest extends AbstractDebugTest {
             });
             expectSuspended((SuspendedEvent event) -> {
                 Assert.assertFalse(event.isLanguageContextInitialized());
-                checkState(event, 8, true, "STATEMENT(CONSTANT(1))", "loopIndex0", String.valueOf(0), "loopResult0", "Null").prepareContinue();
+                checkState(event, 8, true, "STATEMENT(CONSTANT(1))").prepareContinue();
             });
             expectDone();
         }
@@ -204,8 +187,10 @@ public class SuspensionFilterTest extends AbstractDebugTest {
                         "  STATEMENT(EXPRESSION),\n" +
                         "  STATEMENT(CONSTANT(42))\n" +
                         ")\n", "test").internal(true).build();
-        // No suspension filter is necessary, internal sources are ignored by default
+        SuspensionFilter.Builder filterBuilder = SuspensionFilter.newBuilder().ignoreInternal(true);
+        SuspensionFilter suspensionFilter = filterBuilder.build();
         try (DebuggerSession session = startSession()) {
+            session.setSteppingFilter(suspensionFilter);
             session.suspendNextExecution();
             startEval(source);
             // does not stop in internal source
@@ -219,15 +204,15 @@ public class SuspensionFilterTest extends AbstractDebugTest {
                         "  DEFINE(intern, \n" +
                         "    STATEMENT(EXPRESSION),\n" +
                         "    STATEMENT(CONSTANT(42))\n" +
-                        "  ),\n" +
-                        "  CALL(intern)\n" +
+                        "  )\n" +
                         ")\n", "intern").internal(true).build();
         final Source source = testSource("ROOT(\n" +
                         "  STATEMENT(CALL(intern)),\n" +
                         "  STATEMENT(CONSTANT(1)),\n" +
                         "  STATEMENT(CALL(intern))\n" +
                         ")\n");
-        SuspensionFilter suspensionFilter = SuspensionFilter.newBuilder().includeInternal(false).build();
+        SuspensionFilter.Builder filterBuilder = SuspensionFilter.newBuilder().ignoreInternal(true);
+        SuspensionFilter suspensionFilter = filterBuilder.build();
         try (DebuggerSession session = startSession()) {
             session.setSteppingFilter(suspensionFilter);
             session.suspendNextExecution();
@@ -250,142 +235,6 @@ public class SuspensionFilterTest extends AbstractDebugTest {
             // Breakpoint stops there:
             expectSuspended((SuspendedEvent event) -> {
                 checkState(event, 3, true, "STATEMENT(EXPRESSION)");
-                event.prepareContinue();
-            });
-            expectDone();
-        }
-    }
-
-    @Test
-    public void testInternalSteppingChange() throws Exception {
-        final Source internSource = Source.newBuilder(InstrumentationTestLanguage.ID, "ROOT(\n" +
-                        "  DEFINE(intern, \n" +
-                        "    STATEMENT(EXPRESSION),\n" +
-                        "    STATEMENT(CONSTANT(42))\n" +
-                        "  ),\n" +
-                        "  CALL(intern)\n" +
-                        ")\n", "intern").internal(true).build();
-        final Source source = testSource("ROOT(\n" +
-                        "  LOOP(5,\n" +
-                        "    STATEMENT(CALL(intern))\n" +
-                        "  )\n" +
-                        ")\n");
-        SuspensionFilter suspensionFilter = SuspensionFilter.newBuilder().includeInternal(true).build();
-        try (DebuggerSession session = startSession()) {
-            session.setSteppingFilter(suspensionFilter);
-            session.suspendNextExecution();
-            startEval(internSource);
-            // we stop in the internal source as the filter does not ignore internal sources now
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 3, true, "STATEMENT(EXPRESSION)");
-                event.prepareStepOver(1);
-            });
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 4, true, "STATEMENT(CONSTANT(42))");
-                event.prepareContinue();
-            });
-            expectDone();
-
-            // Ignore internal sources now
-            suspensionFilter = SuspensionFilter.newBuilder().includeInternal(false).build();
-            session.setSteppingFilter(suspensionFilter);
-            session.suspendNextExecution();
-            startEval(source);
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 3, true, "STATEMENT(CALL(intern))", "loopIndex0", String.valueOf(0), "loopResult0", "Null");
-                event.prepareStepInto(1);
-            });
-            // Step into does not go into the internal source:
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 3, true, "STATEMENT(CALL(intern))", "loopIndex0", String.valueOf(1), "loopResult0", "42");
-                // do not ignore instenal sources again
-                session.setSteppingFilter(SuspensionFilter.newBuilder().includeInternal(true).build());
-                event.prepareStepInto(1);
-            });
-            // Stopped in an internal source again
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 3, true, "STATEMENT(EXPRESSION)");
-                event.prepareContinue();
-            });
-            expectDone();
-        }
-    }
-
-    @Test
-    public void testSourceFilter() {
-        final Source source1 = Source.newBuilder(InstrumentationTestLanguage.ID, "ROOT(\n" +
-                        "  DEFINE(foo1,\n" +
-                        "    STATEMENT(CONSTANT(43))\n" +
-                        "  ))\n", "Source1").buildLiteral();
-        final Source source2 = Source.newBuilder(InstrumentationTestLanguage.ID, "ROOT(\n" +
-                        "  DEFINE(foo2,\n" +
-                        "    STATEMENT(CONSTANT(44))\n" +
-                        "  ))\n", "Source2").buildLiteral();
-        final Source source3 = testSource("ROOT(\n" +
-                        "  CALL(foo1),\n" +
-                        "  CALL(foo2),\n" +
-                        "  STATEMENT(CALL(foo1)),\n" +
-                        "  STATEMENT(CALL(foo2)),\n" +
-                        "  STATEMENT(CALL(foo1)),\n" +
-                        "  STATEMENT(CALL(foo2)),\n" +
-                        "  STATEMENT(CONSTANT(100))\n" +
-                        ")\n");
-        try (DebuggerSession session = startSession()) {
-            // Filter out all sections
-            SuspensionFilter suspensionFilter = SuspensionFilter.newBuilder().sourceIs(s -> false).build();
-            session.setSteppingFilter(suspensionFilter);
-            session.suspendNextExecution();
-            startEval(source1);
-            expectDone();
-            startEval(source2);
-            expectDone();
-            startEval(source3);
-            expectDone();
-
-            Predicate<com.oracle.truffle.api.source.Source> filterSource1 = source -> {
-                return source.getName().indexOf("Source1") < 0;
-            };
-            suspensionFilter = SuspensionFilter.newBuilder().sourceIs(filterSource1).build();
-            session.setSteppingFilter(suspensionFilter);
-            session.suspendNextExecution();
-            startEval(source3);
-
-            // Skip foo1 and suspend in foo2:
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 3, true, "STATEMENT(CONSTANT(44))");
-                event.prepareStepOver(1);
-            });
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 3, false, "CALL(foo2)");
-                event.prepareStepInto(1);
-            });
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 4, true, "STATEMENT(CALL(foo1))");
-                event.prepareStepInto(1);
-            });
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 5, true, "STATEMENT(CALL(foo2))");
-                event.prepareStepInto(1);
-            });
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 3, true, "STATEMENT(CONSTANT(44))");
-                event.prepareStepInto(2);
-            });
-            // Change the filter to filter Source2 out:
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 6, true, "STATEMENT(CALL(foo1))");
-                Predicate<com.oracle.truffle.api.source.Source> filterSource2 = source -> {
-                    return source.getName().indexOf("Source2") < 0;
-                };
-                session.setSteppingFilter(SuspensionFilter.newBuilder().sourceIs(filterSource2).build());
-                event.prepareStepInto(1);
-            });
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 3, true, "STATEMENT(CONSTANT(43))");
-                event.prepareStepOut(1).prepareStepOver(1).prepareStepInto(1);
-            });
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 8, true, "STATEMENT(CONSTANT(100))");
                 event.prepareContinue();
             });
             expectDone();
