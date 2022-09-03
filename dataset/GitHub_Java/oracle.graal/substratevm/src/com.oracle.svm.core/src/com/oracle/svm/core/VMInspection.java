@@ -29,7 +29,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionType;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.IsolateThread;
 
@@ -74,7 +73,7 @@ public class VMInspection implements Feature {
 }
 
 class VMInspectionOptions {
-    @Option(help = "Enables features that allow the VM to be inspected during runtime.", type = OptionType.User) //
+    @Option(help = "Enables features that allow the VM to be inspected during runtime.") //
     public static final HostedOptionKey<Boolean> AllowVMInspection = new HostedOptionKey<>(false);
 }
 
