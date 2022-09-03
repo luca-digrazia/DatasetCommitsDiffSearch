@@ -171,13 +171,11 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
 
     @Override
     protected void processLoopExit(LoopExitNode exitNode, ReadEliminationBlockState initialState, ReadEliminationBlockState exitState, GraphEffectList effects) {
-        if (exitNode.graph().hasValueProxies()) {
-            for (Map.Entry<CacheEntry<?>, ValueNode> entry : exitState.getReadCache().entrySet()) {
-                if (initialState.getReadCache().get(entry.getKey()) != entry.getValue()) {
-                    ProxyNode proxy = new ValueProxyNode(exitState.getCacheEntry(entry.getKey()), exitNode);
-                    effects.addFloatingNode(proxy, "readCacheProxy");
-                    entry.setValue(proxy);
-                }
+        for (Map.Entry<CacheEntry<?>, ValueNode> entry : exitState.getReadCache().entrySet()) {
+            if (initialState.getReadCache().get(entry.getKey()) != entry.getValue()) {
+                ProxyNode proxy = new ValueProxyNode(exitState.getCacheEntry(entry.getKey()), exitNode);
+                effects.addFloatingNode(proxy, "readCacheProxy");
+                entry.setValue(proxy);
             }
         }
     }
