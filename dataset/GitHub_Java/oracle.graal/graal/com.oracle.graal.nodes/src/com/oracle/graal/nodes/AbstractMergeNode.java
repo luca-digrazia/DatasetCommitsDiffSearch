@@ -22,10 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.InputType.Association;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
-
 import java.util.List;
 
 import com.oracle.graal.debug.Debug;
@@ -36,6 +32,7 @@ import com.oracle.graal.graph.NodeInputList;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.graph.spi.Simplifiable;
 import com.oracle.graal.graph.spi.SimplifierTool;
+import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.spi.LIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
@@ -44,7 +41,7 @@ import com.oracle.graal.nodes.util.GraphUtil;
 /**
  * Denotes the merging of multiple control-flow paths.
  */
-@NodeInfo(allowedUsageTypes = Association, cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo(allowedUsageTypes = {InputType.Association})
 public abstract class AbstractMergeNode extends BeginStateSplitNode implements IterableNodeType, Simplifiable, LIRLowerable {
     public static final NodeClass<AbstractMergeNode> TYPE = NodeClass.create(AbstractMergeNode.class);
 
@@ -52,7 +49,7 @@ public abstract class AbstractMergeNode extends BeginStateSplitNode implements I
         super(c);
     }
 
-    @Input(Association) protected NodeInputList<EndNode> ends = new NodeInputList<>(this);
+    @Input(InputType.Association) protected NodeInputList<EndNode> ends = new NodeInputList<>(this);
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {

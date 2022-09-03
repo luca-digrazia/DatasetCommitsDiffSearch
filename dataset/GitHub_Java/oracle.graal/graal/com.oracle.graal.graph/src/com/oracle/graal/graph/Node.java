@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
 import jdk.vm.ci.code.BytecodePosition;
@@ -317,41 +318,16 @@ public abstract class Node implements Cloneable, Formattable {
      * @return an {@link NodeClassIterable iterable} for all non-null input edges.
      */
     public NodeClassIterable inputs() {
-        return nodeClass.getInputIterable(this);
+        return nodeClass.getInputEdges().getIterable(this);
     }
 
     /**
-     * Returns an {@link NodeClassIterable iterable} which can be used to traverse all non-null
-     * input edges of this node.
+     * Applies the given consumer to all inputs of this node.
      *
-     * @return an {@link NodeClassIterable iterable} for all non-null input edges.
+     * @param consumer the consumer to be applied to the inputs
      */
-    public Iterable<Position> inputPositions() {
-        return nodeClass.getInputEdges().getPositionsIterable(this);
-    }
-
-    public abstract static class EdgeVisitor {
-
-        public abstract Node apply(Node source, Node target);
-
-    }
-
-    /**
-     * Applies the given visitor to all inputs of this node.
-     *
-     * @param visitor the visitor to be applied to the inputs
-     */
-    public void applyInputs(EdgeVisitor visitor) {
-        nodeClass.applyInputs(this, visitor);
-    }
-
-    /**
-     * Applies the given visitor to all successors of this node.
-     *
-     * @param visitor the visitor to be applied to the successors
-     */
-    public void applySuccessors(EdgeVisitor visitor) {
-        nodeClass.applySuccessors(this, visitor);
+    public void acceptInputs(BiConsumer<Node, Node> consumer) {
+        nodeClass.getInputEdges().accept(this, consumer);
     }
 
     /**
@@ -361,18 +337,16 @@ public abstract class Node implements Cloneable, Formattable {
      * @return an {@link NodeClassIterable iterable} for all non-null successor edges.
      */
     public NodeClassIterable successors() {
-        assert !this.isDeleted();
-        return nodeClass.getSuccessorIterable(this);
+        return nodeClass.getSuccessorEdges().getIterable(this);
     }
 
     /**
-     * Returns an {@link NodeClassIterable iterable} which can be used to traverse all successor
-     * edge positions of this node.
+     * Applies the given consumer to all successors of this node.
      *
-     * @return an {@link NodeClassIterable iterable} for all successor edge positoins.
+     * @param consumer the consumer to be applied to the inputs
      */
-    public Iterable<Position> successorPositions() {
-        return nodeClass.getSuccessorEdges().getPositionsIterable(this);
+    public void acceptSuccessors(BiConsumer<Node, Node> consumer) {
+        nodeClass.getSuccessorEdges().accept(this, consumer);
     }
 
     /**
@@ -425,7 +399,7 @@ public abstract class Node implements Cloneable, Formattable {
      *
      * @param node the node to add
      */
-    void addUsage(Node node) {
+    private void addUsage(Node node) {
         incUsageModCount();
         if (usage0 == null) {
             usage0 = node;
@@ -573,7 +547,7 @@ public abstract class Node implements Cloneable, Formattable {
         assert graph == null || !graph.isFrozen();
         if (oldSuccessor != newSuccessor) {
             if (oldSuccessor != null) {
-                assert assertTrue(newSuccessor == null || oldSuccessor.predecessor == this, "wrong predecessor in old successor (%s): %s, should be %s", oldSuccessor, oldSuccessor.predecessor, this);
+                assert assertTrue(oldSuccessor.predecessor == this, "wrong predecessor in old successor (%s): %s, should be %s", oldSuccessor, oldSuccessor.predecessor, this);
                 oldSuccessor.predecessor = null;
             }
             if (newSuccessor != null) {
@@ -587,8 +561,18 @@ public abstract class Node implements Cloneable, Formattable {
         assert assertTrue(id == INITIAL_ID, "unexpected id: %d", id);
         this.graph = newGraph;
         newGraph.register(this);
-        this.getNodeClass().registerAtInputsAsUsage(this);
-        this.getNodeClass().registerAtSuccessorsAsPredecessor(this);
+        this.acceptInputs((n, i) -> {
+            if (!i.isAlive()) {
+                throw new IllegalStateException(String.format("Input %s of newly created node %s is not alive.", i, n));
+            }
+            n.updateUsages(null, i);
+        });
+        this.acceptSuccessors((n, s) -> {
+            if (!s.isAlive()) {
+                throw new IllegalStateException(String.format("Successor %s of newly created node %s is not alive.", s, n));
+            }
+            n.updatePredecessor(null, s);
+        });
     }
 
     /**
@@ -715,7 +699,7 @@ public abstract class Node implements Cloneable, Formattable {
         while (i < this.getUsageCount()) {
             Node usage = this.getUsageAt(i);
             if (filter == null || filter.test(usage)) {
-                boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
+                boolean result = usage.getNodeClass().getInputEdges().replaceFirst(usage, this, other);
                 assert assertTrue(result, "not found in inputs, usage: %s", usage);
                 /*
                  * Don't notify for nodes which are about to be deleted.
@@ -749,7 +733,7 @@ public abstract class Node implements Cloneable, Formattable {
         while (index < this.getUsageCount()) {
             Node usage = getUsageAt(index);
             if (usagePredicate.apply(usage)) {
-                boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
+                boolean result = usage.getNodeClass().getInputEdges().replaceFirst(usage, this, other);
                 assert assertTrue(result, "not found in inputs, usage: %s", usage);
                 if (other != null) {
                     maybeNotifyInputChanged(usage);
@@ -765,7 +749,9 @@ public abstract class Node implements Cloneable, Formattable {
     public void replaceAtUsages(InputType type, Node other) {
         assert checkReplaceWith(other);
         for (Node usage : usages().snapshot()) {
-            for (Position pos : usage.inputPositions()) {
+            NodePosIterator iter = usage.inputs().iterator();
+            while (iter.hasNext()) {
+                Position pos = iter.nextPosition();
                 if (pos.getInputType() == type && pos.get(usage) == this) {
                     pos.set(usage, other);
                 }
@@ -786,7 +772,7 @@ public abstract class Node implements Cloneable, Formattable {
         }
     }
 
-    void maybeNotifyZeroUsages(Node node) {
+    private void maybeNotifyZeroUsages(Node node) {
         if (graph != null) {
             assert !graph.isFrozen();
             NodeEventListener listener = graph.nodeEventListener;
@@ -802,7 +788,7 @@ public abstract class Node implements Cloneable, Formattable {
     public void replaceAtPredecessor(Node other) {
         assert checkReplaceWith(other);
         if (predecessor != null) {
-            boolean result = predecessor.getNodeClass().replaceFirstSuccessor(predecessor, this, other);
+            boolean result = predecessor.getNodeClass().getSuccessorEdges().replaceFirst(predecessor, this, other);
             assert assertTrue(result, "not found in successors, predecessor: %s", predecessor);
             predecessor.updatePredecessor(this, other);
         }
@@ -811,35 +797,54 @@ public abstract class Node implements Cloneable, Formattable {
     public void replaceAndDelete(Node other) {
         assert checkReplaceWith(other);
         assert other != null;
+        clearInputs();
+        clearSuccessors();
         replaceAtUsages(other);
         replaceAtPredecessor(other);
-        this.safeDelete();
+        safeDelete();
     }
 
     public void replaceFirstSuccessor(Node oldSuccessor, Node newSuccessor) {
-        if (nodeClass.replaceFirstSuccessor(this, oldSuccessor, newSuccessor)) {
+        if (nodeClass.getSuccessorEdges().replaceFirst(this, oldSuccessor, newSuccessor)) {
             updatePredecessor(oldSuccessor, newSuccessor);
         }
     }
 
     public void replaceFirstInput(Node oldInput, Node newInput) {
-        if (nodeClass.replaceFirstInput(this, oldInput, newInput)) {
+        if (nodeClass.getInputEdges().replaceFirst(this, oldInput, newInput)) {
             updateUsages(oldInput, newInput);
         }
     }
 
-    public void clearInputs() {
-        assert assertFalse(isDeleted(), "cannot clear inputs of deleted node");
-        getNodeClass().unregisterAtInputsAsUsage(this);
+    private void unregisterInputs() {
+        acceptInputs((node, input) -> {
+            node.removeThisFromUsages(input);
+            if (input.hasNoUsages()) {
+                node.maybeNotifyZeroUsages(input);
+            }
+        });
     }
 
-    boolean removeThisFromUsages(Node n) {
+    public void clearInputs() {
+        assert assertFalse(isDeleted(), "cannot clear inputs of deleted node");
+
+        unregisterInputs();
+        getNodeClass().getInputEdges().clear(this);
+    }
+
+    private boolean removeThisFromUsages(Node n) {
         return n.removeUsage(this);
+    }
+
+    private void unregisterSuccessors() {
+        this.acceptSuccessors((n, successor) -> successor.predecessor = null);
     }
 
     public void clearSuccessors() {
         assert assertFalse(isDeleted(), "cannot clear successors of deleted node");
-        getNodeClass().unregisterAtSuccessorsAsPredecessor(this);
+
+        unregisterSuccessors();
+        getNodeClass().getSuccessorEdges().clear(this);
     }
 
     private boolean checkDeletion() {
@@ -855,8 +860,8 @@ public abstract class Node implements Cloneable, Formattable {
      */
     public void safeDelete() {
         assert checkDeletion();
-        this.clearInputs();
-        this.clearSuccessors();
+        unregisterInputs();
+        unregisterSuccessors();
         markDeleted();
     }
 
@@ -1014,13 +1019,17 @@ public abstract class Node implements Cloneable, Formattable {
         for (Node usage : usages()) {
             assertFalse(usage.isDeleted(), "usage %s must never be deleted", usage);
             assertTrue(usage.inputs().contains(this), "missing input in usage %s", usage);
-            for (Position pos : usage.inputPositions()) {
+            NodePosIterator iterator = usage.inputs().iterator();
+            while (iterator.hasNext()) {
+                Position pos = iterator.nextPosition();
                 if (pos.get(usage) == this && pos.getInputType() != InputType.Unchecked) {
                     assertTrue(isAllowedUsageType(pos.getInputType()), "invalid input of type " + pos.getInputType() + " from " + usage + " to " + this + " (" + pos.getName() + ")");
                 }
             }
         }
-        for (Position pos : this.inputPositions()) {
+        NodePosIterator iterator = inputs().withNullIterator();
+        while (iterator.hasNext()) {
+            Position pos = iterator.nextPosition();
             assert pos.isInputOptional() || pos.get(this) != null : "non-optional input " + pos.getName() + " cannot be null in " + this + " (fix nullness or use @OptionalInput)";
         }
         if (predecessor != null) {
@@ -1061,7 +1070,8 @@ public abstract class Node implements Cloneable, Formattable {
     /**
      * Returns an iterator that will provide all control-flow successors of this node. Normally this
      * will be the contents of all fields marked as NodeSuccessor, but some node classes (like
-     * EndNode) may return different nodes.
+     * EndNode) may return different nodes. Note that the iterator may generate null values if the
+     * fields contain them.
      */
     public Iterable<? extends Node> cfgSuccessors() {
         return successors();
@@ -1171,7 +1181,9 @@ public abstract class Node implements Cloneable, Formattable {
                 formatter.format("}");
             }
 
-            for (Position position : this.inputPositions()) {
+            NodePosIterator inputIter = inputs().iterator();
+            while (inputIter.hasNext()) {
+                Position position = inputIter.nextPosition();
                 Node input = position.get(this);
                 if (input != null) {
                     formatter.format(" ");
@@ -1197,7 +1209,9 @@ public abstract class Node implements Cloneable, Formattable {
                 formatter.format("}");
             }
 
-            for (Position position : this.successorPositions()) {
+            NodePosIterator succIter = successors().iterator();
+            while (succIter.hasNext()) {
+                Position position = succIter.nextPosition();
                 Node successor = position.get(this);
                 if (successor != null) {
                     formatter.format(" ");
@@ -1225,6 +1239,6 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     public final void pushInputs(NodeStack stack) {
-        getNodeClass().pushInputs(this, stack);
+        getNodeClass().getInputEdges().pushAll(this, stack);
     }
 }

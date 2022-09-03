@@ -22,10 +22,17 @@
  */
 package com.oracle.graal.lir.constopt;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
-import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
+import com.oracle.graal.compiler.common.cfg.BlockMap;
+import com.oracle.graal.compiler.common.cfg.PrintableDominatorOptimizationProblem;
+import com.oracle.graal.compiler.common.cfg.PropertyConsumable;
 
 /**
  * Represents a dominator (sub-)tree for a constant definition.
@@ -99,7 +106,7 @@ public class ConstantTree extends PrintableDominatorOptimizationProblem<Constant
         tree.forEach(u -> getOrInitList(u.getBlock()).add(u));
     }
 
-    private List<UseEntry> getOrInitList(AbstractBlock<?> block) {
+    private List<UseEntry> getOrInitList(AbstractBlockBase<?> block) {
         List<UseEntry> list = blockMap.get(block);
         if (list == null) {
             list = new ArrayList<>();
@@ -108,7 +115,7 @@ public class ConstantTree extends PrintableDominatorOptimizationProblem<Constant
         return list;
     }
 
-    public List<UseEntry> getUsages(AbstractBlock<?> block) {
+    public List<UseEntry> getUsages(AbstractBlockBase<?> block) {
         List<UseEntry> list = blockMap.get(block);
         if (list == null) {
             return Collections.emptyList();
@@ -120,7 +127,7 @@ public class ConstantTree extends PrintableDominatorOptimizationProblem<Constant
      * Returns the cost object associated with {@code block}. If there is none, a new cost object is
      * created.
      */
-    NodeCost getOrInitCost(AbstractBlock<?> block) {
+    NodeCost getOrInitCost(AbstractBlockBase<?> block) {
         NodeCost cost = getCost(block);
         if (cost == null) {
             cost = new NodeCost(block.probability(), blockMap.get(block), 1);
@@ -145,7 +152,7 @@ public class ConstantTree extends PrintableDominatorOptimizationProblem<Constant
     }
 
     @Override
-    public void forEachPropertyPair(AbstractBlock<?> block, BiConsumer<String, String> action) {
+    public void forEachPropertyPair(AbstractBlockBase<?> block, BiConsumer<String, String> action) {
         if (get(Flags.SUBTREE, block) && (block.getDominator() == null || !get(Flags.SUBTREE, block.getDominator()))) {
             action.accept("hasDefinition", "true");
         }
@@ -156,31 +163,40 @@ public class ConstantTree extends PrintableDominatorOptimizationProblem<Constant
         return stream(Flags.SUBTREE).count();
     }
 
-    public AbstractBlock<?> getStartBlock() {
+    public AbstractBlockBase<?> getStartBlock() {
         return stream(Flags.SUBTREE).findFirst().get();
     }
 
     public void markBlocks() {
-        stream(Flags.USAGE).forEach(block -> setDominatorPath(Flags.SUBTREE, block));
+        for (AbstractBlockBase<?> block : getBlocks()) {
+            if (get(Flags.USAGE, block)) {
+                setDominatorPath(Flags.SUBTREE, block);
+            }
+        }
     }
 
-    public boolean isMarked(AbstractBlock<?> block) {
+    public boolean isMarked(AbstractBlockBase<?> block) {
         return get(Flags.SUBTREE, block);
     }
 
-    public boolean isLeafBlock(AbstractBlock<?> block) {
-        return block.getDominated().stream().noneMatch(this::isMarked);
+    public boolean isLeafBlock(AbstractBlockBase<?> block) {
+        for (AbstractBlockBase<?> dom : block.getDominated()) {
+            if (isMarked(dom)) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    public void setSolution(AbstractBlock<?> block) {
+    public void setSolution(AbstractBlockBase<?> block) {
         set(Flags.MATERIALIZE, block);
     }
 
     public int size() {
-        return getBlocks().size();
+        return getBlocks().length;
     }
 
-    public void traverseTreeWhileTrue(AbstractBlock<?> block, Predicate<AbstractBlock<?>> action) {
+    public void traverseTreeWhileTrue(AbstractBlockBase<?> block, Predicate<AbstractBlockBase<?>> action) {
         assert block != null : "block must not be null!";
         if (action.test(block)) {
             block.getDominated().stream().filter(this::isMarked).forEach(dominated -> traverseTreeWhileTrue(dominated, action));

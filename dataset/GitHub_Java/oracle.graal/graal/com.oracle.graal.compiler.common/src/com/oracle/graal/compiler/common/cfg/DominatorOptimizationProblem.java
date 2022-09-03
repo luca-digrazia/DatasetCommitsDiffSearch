@@ -22,8 +22,11 @@
  */
 package com.oracle.graal.compiler.common.cfg;
 
-import java.util.*;
-import java.util.stream.*;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.EnumMap;
+import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * This class represents a dominator tree problem, i.e. a problem which can be solved by traversing
@@ -36,7 +39,7 @@ import java.util.stream.*;
  */
 public abstract class DominatorOptimizationProblem<E extends Enum<E>, C> {
 
-    private List<? extends AbstractBlock<?>> blocks;
+    private AbstractBlockBase<?>[] blocks;
     private EnumMap<E, BitSet> flags;
     private BlockMap<C> costs;
 
@@ -47,9 +50,9 @@ public abstract class DominatorOptimizationProblem<E extends Enum<E>, C> {
         assert verify(blocks);
     }
 
-    private static boolean verify(List<? extends AbstractBlock<?>> blocks) {
-        for (int i = 0; i < blocks.size(); i++) {
-            AbstractBlock<?> block = blocks.get(i);
+    private static boolean verify(AbstractBlockBase<?>[] blocks) {
+        for (int i = 0; i < blocks.length; i++) {
+            AbstractBlockBase<?> block = blocks[i];
             if (i != block.getId()) {
                 assert false : String.format("Id index mismatch @ %d vs. %s.getId()==%d", i, block, block.getId());
                 return false;
@@ -58,12 +61,12 @@ public abstract class DominatorOptimizationProblem<E extends Enum<E>, C> {
         return true;
     }
 
-    public final List<? extends AbstractBlock<?>> getBlocks() {
+    public final AbstractBlockBase<?>[] getBlocks() {
         return blocks;
     }
 
-    public final AbstractBlock<?> getBlockForId(int id) {
-        AbstractBlock<?> block = blocks.get(id);
+    public final AbstractBlockBase<?> getBlockForId(int id) {
+        AbstractBlockBase<?> block = blocks[id];
         assert block.getId() == id : "wrong block-to-id mapping";
         return block;
     }
@@ -71,10 +74,10 @@ public abstract class DominatorOptimizationProblem<E extends Enum<E>, C> {
     /**
      * Sets a flag for a block.
      */
-    public final void set(E flag, AbstractBlock<?> block) {
+    public final void set(E flag, AbstractBlockBase<?> block) {
         BitSet bitSet = flags.get(flag);
         if (bitSet == null) {
-            bitSet = new BitSet(blocks.size());
+            bitSet = new BitSet(blocks.length);
             flags.put(flag, bitSet);
         }
         bitSet.set(block.getId());
@@ -83,7 +86,7 @@ public abstract class DominatorOptimizationProblem<E extends Enum<E>, C> {
     /**
      * Checks whether a flag is set for a block.
      */
-    public final boolean get(E flag, AbstractBlock<?> block) {
+    public final boolean get(E flag, AbstractBlockBase<?> block) {
         BitSet bitSet = flags.get(flag);
         return bitSet == null ? false : bitSet.get(block.getId());
     }
@@ -91,14 +94,14 @@ public abstract class DominatorOptimizationProblem<E extends Enum<E>, C> {
     /**
      * Returns a {@linkplain Stream} of blocks for which {@code flag} is set.
      */
-    public final Stream<? extends AbstractBlock<?>> stream(E flag) {
-        return getBlocks().stream().filter(block -> get(flag, block));
+    public final Stream<? extends AbstractBlockBase<?>> stream(E flag) {
+        return Arrays.asList(getBlocks()).stream().filter(block -> get(flag, block));
     }
 
     /**
      * Returns the cost object associated with {@code block}. Might return {@code null} if not set.
      */
-    public final C getCost(AbstractBlock<?> block) {
+    public final C getCost(AbstractBlockBase<?> block) {
         C cost = costs.get(block);
         return cost;
     }
@@ -106,7 +109,7 @@ public abstract class DominatorOptimizationProblem<E extends Enum<E>, C> {
     /**
      * Sets the cost for a {@code block}.
      */
-    public final void setCost(AbstractBlock<?> block, C cost) {
+    public final void setCost(AbstractBlockBase<?> block, C cost) {
         costs.put(block, cost);
     }
 
@@ -114,13 +117,13 @@ public abstract class DominatorOptimizationProblem<E extends Enum<E>, C> {
      * Sets {@code flag} for all blocks along the dominator path from {@code block} to the root
      * until a block it finds a block where {@code flag} is already set.
      */
-    public final void setDominatorPath(E flag, AbstractBlock<?> block) {
+    public final void setDominatorPath(E flag, AbstractBlockBase<?> block) {
         BitSet bitSet = flags.get(flag);
         if (bitSet == null) {
-            bitSet = new BitSet(blocks.size());
+            bitSet = new BitSet(blocks.length);
             flags.put(flag, bitSet);
         }
-        for (AbstractBlock<?> b = block; b != null && !bitSet.get(b.getId()); b = b.getDominator()) {
+        for (AbstractBlockBase<?> b = block; b != null && !bitSet.get(b.getId()); b = b.getDominator()) {
             // mark block
             bitSet.set(b.getId());
         }
@@ -129,7 +132,7 @@ public abstract class DominatorOptimizationProblem<E extends Enum<E>, C> {
     /**
      * Returns a {@link Stream} of flags associated with {@code block}.
      */
-    public final Stream<E> getFlagsForBlock(AbstractBlock<?> block) {
+    public final Stream<E> getFlagsForBlock(AbstractBlockBase<?> block) {
         return getFlags().stream().filter(flag -> get(flag, block));
     }
 

@@ -22,6 +22,9 @@
  */
 package com.oracle.graal.salver.dumper;
 
+import static com.oracle.graal.compiler.common.GraalOptions.PrintGraphProbabilities;
+import static com.oracle.graal.compiler.common.GraalOptions.PrintIdealGraphSchedule;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -33,7 +36,6 @@ import com.oracle.graal.compiler.common.Fields;
 import com.oracle.graal.compiler.common.cfg.BlockMap;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.GraalDebugConfig.Options;
 import com.oracle.graal.graph.Edges;
 import com.oracle.graal.graph.Edges.Type;
 import com.oracle.graal.graph.Graph;
@@ -108,7 +110,7 @@ public class GraphDumper extends AbstractMethodScopeDumper {
             if (scheduleResult == null) {
 
                 // Also provide a schedule when an error occurs
-                if (Options.PrintIdealGraphSchedule.getValue() || Debug.contextLookup(Throwable.class) != null) {
+                if (PrintIdealGraphSchedule.getValue() || Debug.contextLookup(Throwable.class) != null) {
                     try {
                         SchedulePhase schedule = new SchedulePhase();
                         schedule.apply(structuredGraph);
@@ -189,7 +191,7 @@ public class GraphDumper extends AbstractMethodScopeDumper {
         }
 
         ControlFlowGraph cfg = schedule.getCFG();
-        if (cfg != null && Options.PrintGraphProbabilities.getValue() && node instanceof FixedNode) {
+        if (cfg != null && PrintGraphProbabilities.getValue() && node instanceof FixedNode) {
             try {
                 nodeDict.put("probability", cfg.blockFor(node).probability());
             } catch (Throwable t) {
@@ -218,8 +220,8 @@ public class GraphDumper extends AbstractMethodScopeDumper {
                     nodeList.add(getNodeId(node));
                 }
 
-                Block[] successors = block.getSuccessors();
-                if (successors != null && successors.length > 0) {
+                List<Block> successors = block.getSuccessors();
+                if (successors != null && !successors.isEmpty()) {
                     DataList successorList = new DataList();
                     blockDict.put("successors", successorList);
                     for (Block successor : successors) {

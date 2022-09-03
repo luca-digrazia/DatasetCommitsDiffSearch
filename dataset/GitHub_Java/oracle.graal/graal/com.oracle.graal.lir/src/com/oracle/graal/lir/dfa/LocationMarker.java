@@ -27,7 +27,11 @@ import static jdk.vm.ci.code.ValueUtil.isIllegal;
 import java.util.EnumSet;
 import java.util.List;
 
-import com.oracle.graal.compiler.common.LIRKind;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.cfg.BlockMap;
 import com.oracle.graal.debug.Debug;
@@ -42,11 +46,7 @@ import com.oracle.graal.lir.ValueConsumer;
 import com.oracle.graal.lir.framemap.FrameMap;
 import com.oracle.graal.lir.util.ValueSet;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
-
-public abstract class LocationMarker<S extends ValueSet<S>> {
+public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends ValueSet<S>> {
 
     private final LIR lir;
     private final BlockMap<S> liveInMap;
@@ -67,17 +67,18 @@ public abstract class LocationMarker<S extends ValueSet<S>> {
 
     protected abstract void processState(LIRInstruction op, LIRFrameState info, S values);
 
+    @SuppressWarnings("unchecked")
     void build() {
         AbstractBlockBase<?>[] blocks = lir.getControlFlowGraph().getBlocks();
-        UniqueWorkList worklist = new UniqueWorkList(blocks.length);
+        UniqueWorkList<T> worklist = new UniqueWorkList<>(blocks.length);
         for (int i = blocks.length - 1; i >= 0; i--) {
-            worklist.add(blocks[i]);
+            worklist.add((T) blocks[i]);
         }
         for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
             liveInMap.put(block, newLiveValueSet());
         }
         while (!worklist.isEmpty()) {
-            AbstractBlockBase<?> block = worklist.poll();
+            AbstractBlockBase<T> block = worklist.poll();
             processBlock(block, worklist);
         }
     }
@@ -85,9 +86,9 @@ public abstract class LocationMarker<S extends ValueSet<S>> {
     /**
      * Merge outSet with in-set of successors.
      */
-    private boolean updateOutBlock(AbstractBlockBase<?> block) {
+    private boolean updateOutBlock(AbstractBlockBase<T> block) {
         S union = newLiveValueSet();
-        for (AbstractBlockBase<?> succ : block.getSuccessors()) {
+        for (T succ : block.getSuccessors()) {
             union.putAll(liveInMap.get(succ));
         }
         S outSet = liveOutMap.get(block);
@@ -100,7 +101,7 @@ public abstract class LocationMarker<S extends ValueSet<S>> {
     }
 
     @SuppressWarnings("try")
-    private void processBlock(AbstractBlockBase<?> block, UniqueWorkList worklist) {
+    private void processBlock(AbstractBlockBase<T> block, UniqueWorkList<T> worklist) {
         if (updateOutBlock(block)) {
             try (Indent indent = Debug.logAndIndent("handle block %s", block)) {
                 currentSet = liveOutMap.get(block).copy();
@@ -111,9 +112,7 @@ public abstract class LocationMarker<S extends ValueSet<S>> {
                 }
                 liveInMap.put(block, currentSet);
                 currentSet = null;
-                for (AbstractBlockBase<?> b : block.getPredecessors()) {
-                    worklist.add(b);
-                }
+                worklist.addAll(block.getPredecessors());
             }
         }
     }
@@ -151,14 +150,12 @@ public abstract class LocationMarker<S extends ValueSet<S>> {
     }
 
     InstructionStateProcedure stateConsumer = new InstructionStateProcedure() {
-        @Override
         public void doState(LIRInstruction inst, LIRFrameState info) {
             processState(inst, info, currentSet);
         }
     };
 
     ValueConsumer useConsumer = new ValueConsumer() {
-        @Override
         public void visitValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
             if (shouldProcessValue(operand)) {
                 // no need to insert values and derived reference
@@ -171,7 +168,6 @@ public abstract class LocationMarker<S extends ValueSet<S>> {
     };
 
     ValueConsumer defConsumer = new ValueConsumer() {
-        @Override
         public void visitValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
             if (shouldProcessValue(operand)) {
                 if (Debug.isLogEnabled()) {
@@ -179,7 +175,7 @@ public abstract class LocationMarker<S extends ValueSet<S>> {
                 }
                 currentSet.remove(operand);
             } else {
-                assert isIllegal(operand) || !operand.getValueKind().equals(LIRKind.Illegal) || mode == OperandMode.TEMP : String.format("Illegal PlatformKind is only allowed for TEMP mode: %s, %s",
+                assert isIllegal(operand) || !operand.getLIRKind().equals(LIRKind.Illegal) || mode == OperandMode.TEMP : String.format("Illegal PlatformKind is only allowed for TEMP mode: %s, %s",
                                 operand, mode);
             }
         }

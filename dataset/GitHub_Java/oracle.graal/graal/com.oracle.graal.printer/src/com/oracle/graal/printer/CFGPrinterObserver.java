@@ -44,6 +44,7 @@ import jdk.vm.ci.services.Services;
 
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.code.DisassemblerProvider;
+import com.oracle.graal.compiler.common.GraalOptions;
 import com.oracle.graal.compiler.common.alloc.Trace;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
@@ -51,7 +52,6 @@ import com.oracle.graal.compiler.gen.NodeLIRBuilder;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugDumpHandler;
 import com.oracle.graal.debug.DebugDumpScope;
-import com.oracle.graal.debug.GraalDebugConfig.Options;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.java.BciBlockMapping;
@@ -247,7 +247,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         if (timestamp == 0) {
             timestamp = System.currentTimeMillis();
         }
-        return Paths.get(Options.DumpPath.getValue(), "compilations-" + timestamp + "_" + uniqueId.incrementAndGet() + ".cfg");
+        return Paths.get(GraalOptions.DumpPath.getValue(), "compilations-" + timestamp + "_" + uniqueId.incrementAndGet() + ".cfg");
     }
 
     /** Lazy initialization to delay service lookup until disassembler is actually needed. */
@@ -265,7 +265,6 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             }
             if (selected == null) {
                 selected = new DisassemblerProvider() {
-                    @Override
                     public String getName() {
                         return "nop";
                     }
