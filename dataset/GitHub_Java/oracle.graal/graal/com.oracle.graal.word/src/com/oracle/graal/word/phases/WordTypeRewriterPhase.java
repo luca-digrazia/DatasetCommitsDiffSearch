@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,210 +22,347 @@
  */
 package com.oracle.graal.word.phases;
 
+import static com.oracle.graal.api.meta.LocationIdentity.*;
+
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.util.*;
+import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.word.*;
+import com.oracle.graal.word.Word.Opcode;
 import com.oracle.graal.word.Word.Operation;
+import com.oracle.graal.word.nodes.*;
 
 /**
- * Transforms all uses of the {@link Word} class into unsigned operations on {@code int} or {@code long} values,
- * depending on the word kind of the underlying platform.
+ * Transforms all uses of the {@link Word} class into unsigned operations on {@code int} or
+ * {@code long} values, depending on the word kind of the underlying platform.
  */
 public class WordTypeRewriterPhase extends Phase {
 
-    private final ResolvedJavaType wordBaseType;
-    private final ResolvedJavaType wordImplType;
-    private final Kind wordKind;
+    protected final MetaAccessProvider metaAccess;
+    protected final SnippetReflectionProvider snippetReflection;
+    protected final ConstantReflectionProvider constantReflection;
+    protected final ResolvedJavaType wordBaseType;
+    protected final ResolvedJavaType wordImplType;
+    protected final ResolvedJavaType objectAccessType;
+    protected final ResolvedJavaType barrieredAccessType;
+    protected final Kind wordKind;
 
-    public WordTypeRewriterPhase(MetaAccessProvider metaAccess, Kind wordKind) {
+    public WordTypeRewriterPhase(MetaAccessProvider metaAccess, SnippetReflectionProvider snippetReflection, ConstantReflectionProvider constantReflection, Kind wordKind) {
+        this.metaAccess = metaAccess;
+        this.snippetReflection = snippetReflection;
+        this.constantReflection = constantReflection;
         this.wordKind = wordKind;
         this.wordBaseType = metaAccess.lookupJavaType(WordBase.class);
         this.wordImplType = metaAccess.lookupJavaType(Word.class);
-    }
-
-    public ResolvedJavaType getWordBaseType() {
-        return wordBaseType;
-    }
-
-    public ResolvedJavaType getWordImplType() {
-        return wordImplType;
+        this.objectAccessType = metaAccess.lookupJavaType(ObjectAccess.class);
+        this.barrieredAccessType = metaAccess.lookupJavaType(BarrieredAccess.class);
     }
 
     @Override
     protected void run(StructuredGraph graph) {
-        for (Node n : GraphOrder.forwardGraph(graph)) {
+        InferStamps.inferStamps(graph);
+
+        for (Node n : graph.getNodes()) {
             if (n instanceof ValueNode) {
-                ValueNode valueNode = (ValueNode) n;
-                if (isWord(valueNode)) {
-                    changeToWord(valueNode);
-                }
+                changeToWord(graph, (ValueNode) n);
             }
         }
 
-        // Remove casts between different word types (which are by now no longer have kind Object)
-        for (CheckCastNode checkCastNode : graph.getNodes().filter(CheckCastNode.class).snapshot()) {
-            if (!checkCastNode.isDeleted() && checkCastNode.kind() == wordKind) {
-                checkCastNode.replaceAtUsages(checkCastNode.object());
-                graph.removeFixed(checkCastNode);
-            }
+        for (Node node : graph.getNodes()) {
+            rewriteNode(graph, node);
         }
+    }
 
-        // Remove unnecessary/redundant unsafe casts
-        for (UnsafeCastNode unsafeCastNode : graph.getNodes().filter(UnsafeCastNode.class).snapshot()) {
-            if (!unsafeCastNode.isDeleted() && unsafeCastNode.object().stamp() == unsafeCastNode.stamp()) {
-                graph.replaceFloating(unsafeCastNode, unsafeCastNode.object());
-            }
-        }
+    /**
+     * Change the stamp for word nodes from the object stamp ({@link WordBase} or anything extending
+     * or implementing that interface) to the primitive word stamp.
+     */
+    protected void changeToWord(StructuredGraph graph, ValueNode node) {
+        if (isWord(node)) {
+            if (node.isConstant()) {
+                ConstantNode oldConstant = (ConstantNode) node;
+                assert oldConstant.asJavaConstant().getKind() == Kind.Object;
+                WordBase value = snippetReflection.asObject(WordBase.class, oldConstant.asJavaConstant());
+                ConstantNode newConstant = ConstantNode.forIntegerKind(wordKind, value.rawValue(), node.graph());
+                graph.replaceFloating(oldConstant, newConstant);
 
-        // Replace ObjectEqualsNodes with IntegerEqualsNodes where the values being compared are words
-        for (ObjectEqualsNode objectEqualsNode : graph.getNodes().filter(ObjectEqualsNode.class).snapshot()) {
-            ValueNode x = objectEqualsNode.x();
-            ValueNode y = objectEqualsNode.y();
-            if (x.kind() == wordKind || y.kind() == wordKind) {
-                assert x.kind() == wordKind;
-                assert y.kind() == wordKind;
-                graph.replaceFloating(objectEqualsNode, graph.unique(new IntegerEqualsNode(x, y)));
-            }
-        }
-
-        // Replace ObjectEqualsNodes with IntegerEqualsNodes where the values being compared are words
-        for (LoadIndexedNode load : graph.getNodes().filter(LoadIndexedNode.class).snapshot()) {
-            if (isWord(load)) {
-                load.setStamp(StampFactory.forKind(wordKind));
-            }
-        }
-
-        for (MethodCallTargetNode callTargetNode : graph.getNodes(MethodCallTargetNode.class).snapshot()) {
-            ResolvedJavaMethod targetMethod = callTargetNode.targetMethod();
-            if (!callTargetNode.isStatic() && (callTargetNode.receiver().kind() == wordKind || isWord(callTargetNode.receiver()))) {
-                targetMethod = getWordImplType().resolveMethod(targetMethod);
-            }
-            Operation operation = targetMethod.getAnnotation(Word.Operation.class);
-            if (operation != null) {
-                NodeInputList<ValueNode> arguments = callTargetNode.arguments();
-                Invoke invoke = (Invoke) callTargetNode.usages().first();
-                assert invoke != null : callTargetNode.targetMethod();
-
-                switch (operation.opcode()) {
-                    case NODE_CLASS:
-                        assert arguments.size() == 2;
-                        ValueNode left = arguments.get(0);
-                        ValueNode right = operation.rightOperandIsInt() ? toUnsigned(graph, arguments.get(1), Kind.Int) : fromSigned(graph, arguments.get(1));
-                        replace(invoke, nodeClassOp(graph, operation.node(), left, right));
-                        break;
-
-                    case COMPARISON:
-                        assert arguments.size() == 2;
-                        replace(invoke, comparisonOp(graph, operation.condition(), arguments.get(0), fromSigned(graph, arguments.get(1))));
-                        break;
-
-                    case NOT:
-                        assert arguments.size() == 1;
-                        replace(invoke, graph.unique(new XorNode(wordKind, arguments.get(0), ConstantNode.forIntegerKind(wordKind, -1, graph))));
-                        break;
-
-                    case READ:
-                        assert arguments.size() == 2;
-                        replace(invoke, readOp(graph, arguments.get(0), arguments.get(1), invoke, LocationNode.ANY_LOCATION));
-                        break;
-
-                    case READ_FINAL:
-                        assert arguments.size() == 2;
-                        replace(invoke, readOp(graph, arguments.get(0), arguments.get(1), invoke, LocationNode.FINAL_LOCATION));
-                        break;
-
-                    case WRITE:
-                        assert arguments.size() == 3;
-                        replace(invoke, writeOp(graph, arguments.get(0), arguments.get(1), arguments.get(2), invoke, LocationNode.ANY_LOCATION));
-                        break;
-
-                    case ZERO:
-                        assert arguments.size() == 0;
-                        replace(invoke, ConstantNode.forIntegerKind(wordKind, 0L, graph));
-                        break;
-
-                    case FROM_UNSIGNED:
-                        assert arguments.size() == 1;
-                        replace(invoke, fromUnsigned(graph, arguments.get(0)));
-                        break;
-
-                    case FROM_SIGNED:
-                        assert arguments.size() == 1;
-                        replace(invoke, fromSigned(graph, arguments.get(0)));
-                        break;
-
-                    case TO_RAW_VALUE:
-                        assert arguments.size() == 1;
-                        replace(invoke, toUnsigned(graph, arguments.get(0), Kind.Long));
-                        break;
-
-                    case FROM_OBJECT:
-                        assert arguments.size() == 1;
-                        replace(invoke, graph.unique(new UnsafeCastNode(arguments.get(0), StampFactory.forKind(wordKind))));
-                        break;
-
-                    case TO_OBJECT:
-                        assert arguments.size() == 1;
-                        replace(invoke, graph.unique(new UnsafeCastNode(arguments.get(0), invoke.node().stamp())));
-                        break;
-
-                    default:
-                        throw new GraalInternalError("Unknown opcode: %s", operation.opcode());
-                }
+            } else {
+                node.setStamp(StampFactory.forKind(wordKind));
             }
         }
     }
 
-    private ValueNode fromUnsigned(StructuredGraph graph, ValueNode value) {
-        return convert(graph, value, wordKind, ConvertNode.Op.L2I, ConvertNode.Op.UNSIGNED_I2L);
+    /**
+     * Clean up nodes that are no longer necessary or valid after the stamp change, and perform
+     * intrinsification of all methods called on word types.
+     */
+    protected void rewriteNode(StructuredGraph graph, Node node) {
+        if (node instanceof CheckCastNode) {
+            rewriteCheckCast(graph, (CheckCastNode) node);
+        } else if (node instanceof PiNode) {
+            rewritePi(graph, (PiNode) node);
+        } else if (node instanceof LoadFieldNode) {
+            rewriteLoadField(graph, (LoadFieldNode) node);
+        } else if (node instanceof AccessIndexedNode) {
+            rewriteAccessIndexed(graph, (AccessIndexedNode) node);
+        } else if (node instanceof MethodCallTargetNode) {
+            rewriteInvoke(graph, (MethodCallTargetNode) node);
+        }
+    }
+
+    /**
+     * Remove casts between word types (which by now no longer have kind Object).
+     */
+    protected void rewriteCheckCast(StructuredGraph graph, CheckCastNode node) {
+        if (node.getKind() == wordKind) {
+            node.replaceAtUsages(node.object());
+            graph.removeFixed(node);
+        }
+    }
+
+    /**
+     * Remove casts between word types (which by now no longer have kind Object).
+     */
+    protected void rewritePi(StructuredGraph graph, PiNode node) {
+        if (node.getKind() == wordKind) {
+            node.replaceAtUsages(node.object());
+            graph.removeFloating(node);
+        }
+    }
+
+    /**
+     * Fold constant field reads, e.g. enum constants.
+     */
+    protected void rewriteLoadField(StructuredGraph graph, LoadFieldNode node) {
+        ConstantNode constant = node.asConstant(metaAccess, constantReflection, node.object());
+        if (constant != null) {
+            node.replaceAtUsages(graph.unique(constant));
+            graph.removeFixed(node);
+        }
+    }
+
+    /**
+     * Change loads and stores of word-arrays. Since the element kind is managed by the node on its
+     * own and not in the stamp, {@link #changeToWord} does not perform all necessary changes.
+     */
+    protected void rewriteAccessIndexed(StructuredGraph graph, AccessIndexedNode node) {
+        ResolvedJavaType arrayType = StampTool.typeOrNull(node.array());
+        /*
+         * There are cases where the array does not have a known type yet, i.e., the type is null.
+         * In that case we assume it is not a word type.
+         */
+        if (arrayType != null && isWord(arrayType.getComponentType()) && node.elementKind() != wordKind) {
+            /*
+             * The elementKind of the node is a final field, and other information such as the stamp
+             * depends on elementKind. Therefore, just create a new node and replace the old one.
+             */
+            if (node instanceof LoadIndexedNode) {
+                graph.replaceFixedWithFixed(node, graph.add(new LoadIndexedNode(node.array(), node.index(), wordKind)));
+            } else if (node instanceof StoreIndexedNode) {
+                graph.replaceFixedWithFixed(node, graph.add(new StoreIndexedNode(node.array(), node.index(), wordKind, ((StoreIndexedNode) node).value())));
+            } else {
+                throw GraalInternalError.shouldNotReachHere();
+            }
+        }
+    }
+
+    /**
+     * Intrinsification of methods defined on the {@link Word} class that are annotated with
+     * {@link Operation}.
+     */
+    protected void rewriteInvoke(StructuredGraph graph, MethodCallTargetNode callTargetNode) {
+        ResolvedJavaMethod targetMethod = callTargetNode.targetMethod();
+        final boolean isWordBase = wordBaseType.isAssignableFrom(targetMethod.getDeclaringClass());
+        final boolean isObjectAccess = objectAccessType.equals(targetMethod.getDeclaringClass());
+        final boolean isBarrieredAccess = barrieredAccessType.equals(targetMethod.getDeclaringClass());
+        if (!isWordBase && !isObjectAccess && !isBarrieredAccess) {
+            /*
+             * Not a method defined on WordBase or a subclass / subinterface, and not on
+             * ObjectAccess and not on BarrieredAccess, so nothing to rewrite.
+             */
+            return;
+        }
+
+        if (!callTargetNode.isStatic()) {
+            assert callTargetNode.receiver().getKind() == wordKind : "changeToWord() missed the receiver " + callTargetNode.receiver();
+            assert wordImplType.isLinked();
+            targetMethod = wordImplType.resolveConcreteMethod(targetMethod, callTargetNode.invoke().getContextType());
+        }
+        rewriteWordOperation(graph, callTargetNode, targetMethod);
+    }
+
+    protected void rewriteWordOperation(StructuredGraph graph, MethodCallTargetNode callTargetNode, ResolvedJavaMethod targetMethod) throws GraalInternalError {
+        Invoke invoke = callTargetNode.invoke();
+        Operation operation = targetMethod.getAnnotation(Word.Operation.class);
+        assert operation != null : targetMethod;
+
+        NodeInputList<ValueNode> arguments = callTargetNode.arguments();
+
+        switch (operation.opcode()) {
+            case NODE_CLASS:
+                assert arguments.size() == 2;
+                ValueNode left = arguments.get(0);
+                ValueNode right = operation.rightOperandIsInt() ? toUnsigned(graph, arguments.get(1), Kind.Int) : fromSigned(graph, arguments.get(1));
+
+                ValueNode replacement = graph.addOrUnique(createBinaryNodeInstance(operation.node(), left, right));
+                if (replacement instanceof FixedWithNextNode) {
+                    graph.addBeforeFixed(invoke.asNode(), (FixedWithNextNode) replacement);
+                }
+                replace(invoke, replacement);
+                break;
+
+            case COMPARISON:
+                assert arguments.size() == 2;
+                replace(invoke, comparisonOp(graph, operation.condition(), arguments.get(0), fromSigned(graph, arguments.get(1))));
+                break;
+
+            case NOT:
+                assert arguments.size() == 1;
+                replace(invoke, graph.unique(new XorNode(arguments.get(0), ConstantNode.forIntegerKind(wordKind, -1, graph))));
+                break;
+
+            case READ_POINTER:
+            case READ_OBJECT:
+            case READ_BARRIERED: {
+                assert arguments.size() == 2 || arguments.size() == 3;
+                Kind readKind = asKind(callTargetNode.returnType());
+                LocationNode location;
+                if (arguments.size() == 2) {
+                    location = makeLocation(graph, arguments.get(1), ANY_LOCATION);
+                } else {
+                    location = makeLocation(graph, arguments.get(1), arguments.get(2));
+                }
+                replace(invoke, readOp(graph, readKind, arguments.get(0), invoke, location, operation.opcode()));
+                break;
+            }
+            case READ_HEAP: {
+                assert arguments.size() == 3;
+                Kind readKind = asKind(callTargetNode.returnType());
+                LocationNode location = makeLocation(graph, arguments.get(1), ANY_LOCATION);
+                BarrierType barrierType = snippetReflection.asObject(BarrierType.class, arguments.get(2).asJavaConstant());
+                replace(invoke, readOp(graph, readKind, arguments.get(0), invoke, location, barrierType, true));
+                break;
+            }
+            case WRITE_POINTER:
+            case WRITE_OBJECT:
+            case WRITE_BARRIERED:
+            case INITIALIZE: {
+                assert arguments.size() == 3 || arguments.size() == 4;
+                Kind writeKind = asKind(targetMethod.getSignature().getParameterType(targetMethod.isStatic() ? 2 : 1, targetMethod.getDeclaringClass()));
+                LocationNode location;
+                if (arguments.size() == 3) {
+                    location = makeLocation(graph, arguments.get(1), LocationIdentity.ANY_LOCATION);
+                } else {
+                    location = makeLocation(graph, arguments.get(1), arguments.get(3));
+                }
+                replace(invoke, writeOp(graph, writeKind, arguments.get(0), arguments.get(2), invoke, location, operation.opcode()));
+                break;
+            }
+            case ZERO:
+                assert arguments.size() == 0;
+                replace(invoke, ConstantNode.forIntegerKind(wordKind, 0L, graph));
+                break;
+
+            case FROM_UNSIGNED:
+                assert arguments.size() == 1;
+                replace(invoke, fromUnsigned(graph, arguments.get(0)));
+                break;
+
+            case FROM_SIGNED:
+                assert arguments.size() == 1;
+                replace(invoke, fromSigned(graph, arguments.get(0)));
+                break;
+
+            case TO_RAW_VALUE:
+                assert arguments.size() == 1;
+                replace(invoke, toUnsigned(graph, arguments.get(0), Kind.Long));
+                break;
+
+            case FROM_OBJECT:
+                assert arguments.size() == 1;
+                WordCastNode objectToWord = graph.add(WordCastNode.objectToWord(arguments.get(0), wordKind));
+                graph.addBeforeFixed(invoke.asNode(), objectToWord);
+                replace(invoke, objectToWord);
+                break;
+
+            case FROM_ARRAY:
+                assert arguments.size() == 2;
+                replace(invoke, graph.unique(new ComputeAddressNode(arguments.get(0), arguments.get(1), StampFactory.forKind(wordKind))));
+                break;
+
+            case TO_OBJECT:
+                assert arguments.size() == 1;
+                WordCastNode wordToObject = graph.add(WordCastNode.wordToObject(arguments.get(0), wordKind));
+                graph.addBeforeFixed(invoke.asNode(), wordToObject);
+                replace(invoke, wordToObject);
+                break;
+
+            default:
+                throw new GraalInternalError("Unknown opcode: %s", operation.opcode());
+        }
+    }
+
+    protected ValueNode fromUnsigned(StructuredGraph graph, ValueNode value) {
+        return convert(graph, value, wordKind, true);
     }
 
     private ValueNode fromSigned(StructuredGraph graph, ValueNode value) {
-        return convert(graph, value, wordKind, ConvertNode.Op.L2I, ConvertNode.Op.I2L);
+        return convert(graph, value, wordKind, false);
     }
 
-    private static ValueNode toUnsigned(StructuredGraph graph, ValueNode value, Kind toKind) {
-        return convert(graph, value, toKind, ConvertNode.Op.L2I, ConvertNode.Op.UNSIGNED_I2L);
+    protected ValueNode toUnsigned(StructuredGraph graph, ValueNode value, Kind toKind) {
+        return convert(graph, value, toKind, true);
     }
 
-    private static ValueNode convert(StructuredGraph graph, ValueNode value, Kind toKind, ConvertNode.Op longToIntOp, ConvertNode.Op intToLongOp) {
-        assert longToIntOp.from == Kind.Long && longToIntOp.to == Kind.Int;
-        assert intToLongOp.from == Kind.Int && intToLongOp.to == Kind.Long;
-        if (value.kind() == toKind) {
+    private static ValueNode convert(StructuredGraph graph, ValueNode value, Kind toKind, boolean unsigned) {
+        if (value.getKind() == toKind) {
             return value;
         }
 
         if (toKind == Kind.Int) {
-            assert value.kind() == Kind.Long;
-            return graph.unique(new ConvertNode(longToIntOp, value));
+            assert value.getKind() == Kind.Long;
+            return graph.unique(new NarrowNode(value, 32));
         } else {
             assert toKind == Kind.Long;
-            assert value.kind().getStackKind() == Kind.Int;
-            return graph.unique(new ConvertNode(intToLongOp, value));
+            assert value.getKind().getStackKind() == Kind.Int;
+            if (unsigned) {
+                return graph.unique(new ZeroExtendNode(value, 64));
+            } else {
+                return graph.unique(new SignExtendNode(value, 64));
+            }
         }
     }
 
-    private ValueNode nodeClassOp(StructuredGraph graph, Class<? extends ValueNode> nodeClass, ValueNode left, ValueNode right) {
+    /**
+     * Create an instance of a binary node which is used to lower Word operations. This method is
+     * called for all Word operations which are annotated with @Operation(node = ...) and
+     * encapsulates the reflective allocation of the node.
+     */
+    private static ValueNode createBinaryNodeInstance(Class<? extends ValueNode> nodeClass, ValueNode left, ValueNode right) {
         try {
-            Constructor< ? extends ValueNode> constructor = nodeClass.getConstructor(Kind.class, ValueNode.class, ValueNode.class);
-            return graph.add(constructor.newInstance(wordKind, left, right));
+            Constructor<?> cons = nodeClass.getDeclaredConstructor(ValueNode.class, ValueNode.class);
+            return (ValueNode) cons.newInstance(left, right);
         } catch (Throwable ex) {
             throw new GraalInternalError(ex).addContext(nodeClass.getName());
         }
     }
 
     private ValueNode comparisonOp(StructuredGraph graph, Condition condition, ValueNode left, ValueNode right) {
-        assert left.kind() == wordKind && right.kind() == wordKind;
+        assert left.getKind() == wordKind && right.getKind() == wordKind;
 
         // mirroring gets the condition into canonical form
         boolean mirror = condition.canonicalMirror();
@@ -233,79 +370,89 @@ public class WordTypeRewriterPhase extends Phase {
         ValueNode a = mirror ? right : left;
         ValueNode b = mirror ? left : right;
 
-
         CompareNode comparison;
         if (condition == Condition.EQ || condition == Condition.NE) {
             comparison = new IntegerEqualsNode(a, b);
         } else if (condition.isUnsigned()) {
-            comparison = new IntegerBelowThanNode(a, b);
+            comparison = new IntegerBelowNode(a, b);
         } else {
             comparison = new IntegerLessThanNode(a, b);
         }
-        MaterializeNode materialize = MaterializeNode.create(graph.unique(comparison));
 
-        ValueNode op;
+        ConstantNode trueValue = ConstantNode.forInt(1, graph);
+        ConstantNode falseValue = ConstantNode.forInt(0, graph);
+
         if (condition.canonicalNegate()) {
-            op = (ValueNode) materialize.negate();
-        } else {
-            op = materialize;
+            ConstantNode temp = trueValue;
+            trueValue = falseValue;
+            falseValue = temp;
         }
-        return op;
+        ConditionalNode materialize = graph.unique(new ConditionalNode(graph.unique(comparison), trueValue, falseValue));
+        return materialize;
     }
 
-    private static ValueNode readOp(StructuredGraph graph, ValueNode base, ValueNode offset, Invoke invoke, Object locationIdentity) {
-        IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, invoke.node().kind(), 0, offset, graph, false);
-        ReadNode read = graph.add(new ReadNode(base, location, invoke.node().stamp()));
-        graph.addBeforeFixed(invoke.node(), read);
-        // The read must not float outside its block otherwise it may float above an explicit zero check on its base address
-        read.dependencies().add(BeginNode.prevBegin(invoke.node()));
+    protected LocationNode makeLocation(StructuredGraph graph, ValueNode offset, ValueNode locationIdentity) {
+        if (locationIdentity.isConstant()) {
+            return makeLocation(graph, offset, snippetReflection.asObject(LocationIdentity.class, locationIdentity.asJavaConstant()));
+        }
+        return graph.unique(new SnippetLocationNode(snippetReflection, locationIdentity, ConstantNode.forLong(0, graph), fromSigned(graph, offset), ConstantNode.forInt(1, graph)));
+    }
+
+    protected LocationNode makeLocation(StructuredGraph graph, ValueNode offset, LocationIdentity locationIdentity) {
+        return graph.unique(new IndexedLocationNode(locationIdentity, 0, fromSigned(graph, offset), 1));
+    }
+
+    protected ValueNode readOp(StructuredGraph graph, Kind readKind, ValueNode base, Invoke invoke, LocationNode location, Opcode op) {
+        assert op == Opcode.READ_POINTER || op == Opcode.READ_OBJECT || op == Opcode.READ_BARRIERED;
+        final BarrierType barrier = (op == Opcode.READ_BARRIERED ? BarrierType.PRECISE : BarrierType.NONE);
+        final boolean compressible = (op == Opcode.READ_OBJECT || op == Opcode.READ_BARRIERED);
+
+        return readOp(graph, readKind, base, invoke, location, barrier, compressible);
+    }
+
+    protected ValueNode readOp(StructuredGraph graph, Kind readKind, ValueNode base, Invoke invoke, LocationNode location, BarrierType barrierType, boolean compressible) {
+        JavaReadNode read = graph.add(new JavaReadNode(readKind, base, location, barrierType, compressible));
+        graph.addBeforeFixed(invoke.asNode(), read);
+        /*
+         * The read must not float outside its block otherwise it may float above an explicit zero
+         * check on its base address.
+         */
+        read.setGuard(AbstractBeginNode.prevBegin(invoke.asNode()));
         return read;
     }
 
-    private static ValueNode writeOp(StructuredGraph graph, ValueNode base, ValueNode offset, ValueNode value, Invoke invoke, Object locationIdentity) {
-        IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, value.kind(), 0, offset, graph, false);
-        WriteNode write = graph.add(new WriteNode(base, value, location));
-        graph.addBeforeFixed(invoke.node(), write);
+    protected ValueNode writeOp(StructuredGraph graph, Kind writeKind, ValueNode base, ValueNode value, Invoke invoke, LocationNode location, Opcode op) {
+        assert op == Opcode.WRITE_POINTER || op == Opcode.WRITE_OBJECT || op == Opcode.WRITE_BARRIERED || op == Opcode.INITIALIZE;
+        final BarrierType barrier = (op == Opcode.WRITE_BARRIERED ? BarrierType.PRECISE : BarrierType.NONE);
+        final boolean compressible = (op == Opcode.WRITE_OBJECT || op == Opcode.WRITE_BARRIERED);
+        final boolean initialize = (op == Opcode.INITIALIZE);
+        JavaWriteNode write = graph.add(new JavaWriteNode(writeKind, base, value, location, barrier, compressible, initialize));
+        write.setStateAfter(invoke.stateAfter());
+        graph.addBeforeFixed(invoke.asNode(), write);
         return write;
     }
 
-    private static void replace(Invoke invoke, ValueNode value) {
+    protected void replace(Invoke invoke, ValueNode value) {
         FixedNode next = invoke.next();
         invoke.setNext(null);
-        invoke.node().replaceAtPredecessor(next);
-        invoke.node().replaceAtUsages(value);
-        GraphUtil.killCFG(invoke.node());
+        invoke.asNode().replaceAtPredecessor(next);
+        invoke.asNode().replaceAtUsages(value);
+        GraphUtil.killCFG(invoke.asNode());
     }
 
-    public boolean isWord(ValueNode node) {
-        node.inferStamp();
-        if (node.stamp() == StampFactory.forWord()) {
-            return true;
-        }
-        if (node instanceof LoadIndexedNode) {
-            return isWord(((LoadIndexedNode) node).array().objectStamp().type().getComponentType());
-        }
-        if (node.kind() == Kind.Object) {
-            return isWord(node.objectStamp().type());
-        }
-        return false;
+    protected boolean isWord(ValueNode node) {
+        return isWord(StampTool.typeOrNull(node));
     }
 
-    public boolean isWord(ResolvedJavaType type) {
-        if (type != null && wordBaseType.isAssignableFrom(type)) {
-            return true;
-        }
-        return false;
+    protected boolean isWord(ResolvedJavaType type) {
+        return type != null && wordBaseType.isAssignableFrom(type);
     }
 
-    private void changeToWord(ValueNode valueNode) {
-        if (valueNode.isConstant() && valueNode.asConstant().getKind() == Kind.Object) {
-            WordBase value = (WordBase) valueNode.asConstant().asObject();
-            ConstantNode newConstant = ConstantNode.forIntegerKind(wordKind, value.rawValue(), valueNode.graph());
-            ((StructuredGraph) valueNode.graph()).replaceFloating((ConstantNode) valueNode, newConstant);
+    protected Kind asKind(JavaType type) {
+        if (type instanceof ResolvedJavaType && isWord((ResolvedJavaType) type)) {
+            return wordKind;
         } else {
-            assert !(valueNode instanceof ConstantNode) : "boxed Word constants should not appear in a snippet graph: " + valueNode + ", stamp: " + valueNode.stamp();
-            valueNode.setStamp(StampFactory.forKind(wordKind));
+            return type.getKind();
         }
     }
 }
