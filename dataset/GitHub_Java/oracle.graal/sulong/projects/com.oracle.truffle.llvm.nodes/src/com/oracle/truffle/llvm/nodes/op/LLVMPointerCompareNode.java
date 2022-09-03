@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMManagedCompareNodeGen;
@@ -46,8 +47,7 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
-@NodeChild(type = LLVMExpressionNode.class)
-@NodeChild(type = LLVMExpressionNode.class)
+@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
 public abstract class LLVMPointerCompareNode extends LLVMAbstractCompareNode {
     private final NativePointerCompare op;
 
@@ -257,8 +257,7 @@ public abstract class LLVMPointerCompareNode extends LLVMAbstractCompareNode {
         }
     }
 
-    @NodeChild(type = LLVMExpressionNode.class)
-    @NodeChild(type = LLVMExpressionNode.class)
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
     public abstract static class LLVMNegateNode extends LLVMAbstractCompareNode {
         @Child private LLVMAbstractCompareNode booleanExpression;
 
