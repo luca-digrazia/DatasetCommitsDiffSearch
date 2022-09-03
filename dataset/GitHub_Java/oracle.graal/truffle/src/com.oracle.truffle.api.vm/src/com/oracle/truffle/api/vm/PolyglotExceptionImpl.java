@@ -33,7 +33,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
-import java.util.Objects;
 
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.PolyglotException;
@@ -41,7 +40,6 @@ import org.graalvm.polyglot.PolyglotException.StackFrame;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
 import org.graalvm.polyglot.Value;
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractExceptionImpl;
 
@@ -58,7 +56,6 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
     PolyglotException api;
 
     final PolyglotContextImpl context;
-    final PolyglotEngineImpl engine;
     final Throwable exception;
     final List<TruffleStackTraceElement> guestFrames;
 
@@ -75,21 +72,9 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
     private final Value guestObject;
     private final String message;
 
-    // Exception coming from a language
     PolyglotExceptionImpl(PolyglotLanguageContext languageContext, Throwable original) {
-        this(languageContext.getImpl(), languageContext.getEngine(), languageContext, original);
-    }
-
-    // Exception coming from an instrument
-    PolyglotExceptionImpl(PolyglotEngineImpl engine, Throwable original) {
-        this(engine.impl, engine, null, original);
-    }
-
-    private PolyglotExceptionImpl(AbstractPolyglotImpl impl, PolyglotEngineImpl engine, PolyglotLanguageContext languageContext, Throwable original) {
-        super(impl);
-        Objects.requireNonNull(engine);
-        this.engine = engine;
-        this.context = (languageContext != null) ? languageContext.context : null;
+        super(languageContext.getImpl());
+        this.context = languageContext.context;
         this.exception = original;
         this.guestFrames = TruffleStackTraceElement.getStackTrace(original);
 
@@ -104,7 +89,6 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
 
             com.oracle.truffle.api.source.SourceSection section = truffleException.getSourceLocation();
             if (section != null) {
-                Objects.requireNonNull(languageContext, "Source location can not be accepted without language context.");
                 com.oracle.truffle.api.source.Source truffleSource = section.getSource();
                 String language = truffleSource.getLanguage();
                 PolyglotLanguageContext sourceContext = languageContext.context.findLanguageContext(language, truffleSource.getMimeType(), false);
@@ -118,14 +102,9 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
             }
             Object exceptionObject = ((TruffleException) exception).getExceptionObject();
             if (exceptionObject != null) {
-                Objects.requireNonNull(languageContext, "Exception object can not be accepted without language context.");
                 this.guestObject = languageContext.toHostValue(exceptionObject);
             } else {
-                if (languageContext != null) {
-                    this.guestObject = languageContext.context.getHostContext().nullValue;
-                } else {
-                    this.guestObject = null;
-                }
+                this.guestObject = languageContext.context.getHostContext().nullValue;
             }
         } else {
             this.cancelled = false;
@@ -135,11 +114,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
             this.exit = false;
             this.exitStatus = 0;
             this.sourceLocation = null;
-            if (languageContext != null) {
-                this.guestObject = languageContext.context.getHostContext().nullValue;
-            } else {
-                this.guestObject = null;
-            }
+            this.guestObject = languageContext.context.getHostContext().nullValue;
         }
         if (isHostException()) {
             this.message = asHostException().getMessage();
@@ -255,7 +230,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
 
     @Override
     public PolyglotEngineImpl getEngine() {
-        return engine;
+        return context.getEngine();
     }
 
     @Override
