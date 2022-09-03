@@ -22,10 +22,10 @@
  */
 package org.graalvm.compiler.serviceprovider;
 
-import java.io.InputStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.util.Set;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 
 /**
  * Reflection based access to API introduced by JDK 9. This allows the API to be used in code that
@@ -47,9 +47,11 @@ public final class JDK9Method {
      */
     public static final int JAVA_SPECIFICATION_VERSION = getJavaSpecificationVersion();
 
-    public static MethodHandle lookupMethodHandle(Class<?> declaringClass, String name, Class<?>... parameterTypes) {
+    public JDK9Method(Class<?> declaringClass, String name, Class<?>... parameterTypes) {
         try {
-            return MethodHandles.lookup().unreflect(declaringClass.getMethod(name, parameterTypes));
+            Method method = declaringClass.getMethod(name, parameterTypes);
+            this.methodHandle = MethodHandles.lookup().unreflect(method);
+            this.isStatic = Modifier.isStatic(method.getModifiers());
         } catch (Exception e) {
             throw new InternalError(e);
         }
@@ -60,61 +62,64 @@ public final class JDK9Method {
      */
     public static final boolean Java8OrEarlier = JAVA_SPECIFICATION_VERSION <= 8;
 
+    public final MethodHandle methodHandle;
+
+    private final boolean isStatic;
+
     /**
      * {@code Class.getModule()}.
      */
-    private static final MethodHandle getModuleHandle;
-
-    public static Object getModule(Class<?> clazz) {
-        try {
-            return getModuleHandle.invoke(clazz);
-        } catch (Throwable throwable) {
-            throw new InternalError(throwable);
-        }
-    }
+    public static final JDK9Method getModule;
 
     /**
      * {@code java.lang.Module.getPackages()}.
      */
-    private static final MethodHandle getPackages;
-
-    @SuppressWarnings("unchecked")
-    public static Set<String> getPackages(Object module) {
-        try {
-            return (Set<String>) getPackages.invoke(module);
-        } catch (Throwable throwable) {
-            throw new InternalError(throwable);
-        }
-    }
+    public static final JDK9Method getPackages;
 
     /**
      * {@code java.lang.Module.getResourceAsStream(String)}.
      */
-    private static final MethodHandle getResourceAsStream;
-
-    public static InputStream getResourceAsStream(Object module, String resource) {
-        try {
-            return (InputStream) getResourceAsStream.invoke(module, resource);
-        } catch (Throwable throwable) {
-            throw new InternalError(throwable);
-        }
-    }
+    public static final JDK9Method getResourceAsStream;
 
     /**
      * {@code java.lang.Module.addOpens(String, Module)}.
      */
-    public static final MethodHandle addOpens;
+    public static final JDK9Method addOpens;
 
     /**
      * {@code java.lang.Module.isOpen(String, Module)}.
      */
-    private static final MethodHandle isOpenTo;
+    public static final JDK9Method isOpenTo;
 
-    public static boolean isOpenTo(Object module1, String pkg, Object module2) {
+    /**
+     * Invokes the static Module API method represented by this object.
+     */
+    public <T> T invokeStatic(Object... args) {
+        checkAvailability();
+        assert isStatic;
         try {
-            return (boolean) isOpenTo.invoke(module1, pkg, module2);
-        } catch (Throwable throwable) {
-            throw new InternalError(throwable);
+            return (T) methodHandle.invoke(args);
+        } catch (Throwable e) {
+            throw new InternalError(e);
+        }
+    }
+
+    /**
+     * Invokes the non-static Module API method represented by this object.
+     */
+    public <T> T invoke(Object receiver, Object... args) {
+        checkAvailability();
+        assert !isStatic;
+        try {
+            return (T) methodHandle.invoke(receiver, args);
+        } catch (Throwable e) {
+            throw new InternalError(e);
+        }
+    }
+
+    private void checkAvailability() throws InternalError {
+        if (methodHandle == null) {
+            throw new InternalError("Cannot use Module API on JDK " + JAVA_SPECIFICATION_VERSION);
         }
     }
 
@@ -124,21 +129,28 @@ public final class JDK9Method {
         if (JAVA_SPECIFICATION_VERSION >= 9) {
             try {
                 MODULE_CLASS = Class.class.getMethod("getModule").getReturnType();
-                getModuleHandle = lookupMethodHandle(Class.class, "getModule");
-                getPackages = lookupMethodHandle(MODULE_CLASS, "getPackages");
-                addOpens = lookupMethodHandle(MODULE_CLASS, "addOpens", String.class, MODULE_CLASS);
-                getResourceAsStream = lookupMethodHandle(MODULE_CLASS, "getResourceAsStream", String.class);
-                isOpenTo = lookupMethodHandle(MODULE_CLASS, "isOpen", String.class, MODULE_CLASS);
+
+                getModule = new JDK9Method(Class.class, "getModule");
+                getPackages = new JDK9Method(MODULE_CLASS, "getPackages");
+                addOpens = new JDK9Method(MODULE_CLASS, "addOpens", String.class, MODULE_CLASS);
+                getResourceAsStream = new JDK9Method(MODULE_CLASS, "getResourceAsStream", String.class);
+                isOpenTo = new JDK9Method(MODULE_CLASS, "isOpen", String.class, MODULE_CLASS);
             } catch (NoSuchMethodException e) {
                 throw new InternalError(e);
             }
         } else {
             MODULE_CLASS = null;
-            getModuleHandle = null;
-            getPackages = null;
-            addOpens = null;
-            getResourceAsStream = null;
-            isOpenTo = null;
+            JDK9Method unavailable = new JDK9Method();
+            getModule = unavailable;
+            getPackages = unavailable;
+            addOpens = unavailable;
+            getResourceAsStream = unavailable;
+            isOpenTo = unavailable;
         }
+    }
+
+    private JDK9Method() {
+        methodHandle = null;
+        isStatic = false;
     }
 }

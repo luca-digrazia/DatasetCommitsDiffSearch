@@ -52,18 +52,18 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
     /**
      * Module containing {@link HotSpotJVMCICompilerFactory}.
      */
-    private Object jvmciModule;
+    private static Object jvmciModule;
 
     /**
      * Module containing {@link HotSpotGraalCompilerFactory}.
      */
-    private Object graalModule;
+    private static Object graalModule;
 
     /**
      * Module containing the {@linkplain CompilerConfigurationFactory#selectFactory selected}
      * configuration.
      */
-    private Object compilerConfigurationModule;
+    private static Object compilerConfigurationModule;
 
     private final HotSpotGraalJVMCIServiceLocator locator;
 
@@ -88,8 +88,8 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
         options = HotSpotGraalOptionValues.HOTSPOT_OPTIONS;
         initializeGraalCompilePolicyFields(options);
         if (!JDK9Method.Java8OrEarlier) {
-            jvmciModule = JDK9Method.getModule(HotSpotJVMCICompilerFactory.class);
-            graalModule = JDK9Method.getModule(HotSpotGraalCompilerFactory.class);
+            jvmciModule = JDK9Method.getModule.invoke(HotSpotJVMCICompilerFactory.class);
+            graalModule = JDK9Method.getModule.invoke(HotSpotGraalCompilerFactory.class);
         }
         /*
          * Exercise this code path early to encourage loading now. This doesn't solve problem of
@@ -135,7 +135,7 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
     public HotSpotGraalCompiler createCompiler(JVMCIRuntime runtime) {
         CompilerConfigurationFactory factory = CompilerConfigurationFactory.selectFactory(null, options);
         if (!JDK9Method.Java8OrEarlier) {
-            compilerConfigurationModule = JDK9Method.getModule(factory.getClass());
+            compilerConfigurationModule = JDK9Method.getModule.invoke(factory.getClass());
         }
         HotSpotGraalCompiler compiler = createCompiler(runtime, options, factory);
         // Only the HotSpotGraalRuntime associated with the compiler created via
@@ -187,19 +187,19 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
         assert HotSpotGraalCompilerFactory.class.getName().equals("org.graalvm.compiler.hotspot.HotSpotGraalCompilerFactory");
     }
 
-    static final ClassLoader JVMCI_LOADER = HotSpotGraalCompilerFactory.class.getClassLoader();
+    static final ClassLoader GRAAL_LOADER = HotSpotGraalCompilerFactory.class.getClassLoader();
 
     /*
      * This method is static so it can be exercised during initialization.
      */
-    private CompilationLevel adjustCompilationLevelInternal(Class<?> declaringClass, String name, String signature, CompilationLevel level) {
+    private static CompilationLevel adjustCompilationLevelInternal(Class<?> declaringClass, String name, String signature, CompilationLevel level) {
         if (compileGraalWithC1Only) {
             if (level.ordinal() > CompilationLevel.Simple.ordinal()) {
                 if (JDK9Method.Java8OrEarlier) {
-                    if (JVMCI_LOADER != null) {
+                    if (GRAAL_LOADER != null) {
                         // When running with +UseJVMCIClassLoader all classes in
                         // the JVMCI loader should be compiled with C1.
-                        if (declaringClass.getClassLoader() == JVMCI_LOADER) {
+                        if (declaringClass.getClassLoader() == GRAAL_LOADER) {
                             return CompilationLevel.Simple;
                         }
                     } else {
@@ -223,13 +223,9 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
                         }
                     }
                 } else {
-                    try {
-                        Object module = JDK9Method.getModule(declaringClass);
-                        if (jvmciModule == module || graalModule == module || compilerConfigurationModule == module) {
-                            return CompilationLevel.Simple;
-                        }
-                    } catch (Throwable e) {
-                        throw new InternalError(e);
+                    Object module = JDK9Method.getModule.invoke(declaringClass);
+                    if (jvmciModule == module || graalModule == module || compilerConfigurationModule == module) {
+                        return CompilationLevel.Simple;
                     }
                 }
             }
