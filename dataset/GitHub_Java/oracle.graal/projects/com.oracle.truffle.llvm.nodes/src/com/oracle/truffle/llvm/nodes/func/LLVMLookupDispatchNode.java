@@ -40,9 +40,9 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMGetStackNode;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode;
@@ -79,24 +79,23 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
         return dispatchNode.executeDispatch(frame, descriptor, arguments);
     }
 
-    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"cachedFunction != null", "handle.getVal() == cachedHandle.getVal()"})
-    protected static Object doCached(VirtualFrame frame, LLVMAddress handle, Object[] arguments,
-                    @Cached("handle") LLVMAddress cachedHandle,
+    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"cachedFunction != null", "handle.getFunctionPointer() == cachedFunction.getFunctionPointer()"})
+    protected static Object doCached(VirtualFrame frame, LLVMFunctionHandle handle, Object[] arguments,
                     @Cached("lookupFunction(handle)") LLVMFunctionDescriptor cachedFunction,
                     @Cached("createCachedDispatch()") LLVMDispatchNode dispatchNode) {
         return dispatchNode.executeDispatch(frame, cachedFunction, arguments);
     }
 
-    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"cachedFunction == null", "handle.getVal() == cachedHandle.getVal()"})
-    protected static Object doCachedNative(VirtualFrame frame, LLVMAddress handle, Object[] arguments,
-                    @Cached("handle") LLVMAddress cachedHandle,
+    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"cachedFunction == null", "handle.getFunctionPointer() == cachedHandle.getFunctionPointer()"})
+    protected static Object doCachedNative(VirtualFrame frame, LLVMFunctionHandle handle, Object[] arguments,
+                    @Cached("handle") LLVMFunctionHandle cachedHandle,
                     @Cached("lookupFunction(cachedHandle)") LLVMFunctionDescriptor cachedFunction,
                     @Cached("createCachedNativeDispatch()") LLVMNativeDispatchNode dispatchNode) {
-        return dispatchNode.executeDispatch(frame, handle, arguments);
+        return dispatchNode.executeDispatch(frame, cachedHandle, arguments);
     }
 
     @Specialization(replaces = {"doCached", "doCachedNative"})
-    protected Object doLookup(VirtualFrame frame, LLVMAddress function, Object[] arguments,
+    protected Object doLookup(VirtualFrame frame, LLVMFunctionHandle function, Object[] arguments,
                     @Cached("createCachedDispatch()") LLVMDispatchNode dispatchNode,
                     @Cached("createCachedNativeDispatch()") LLVMNativeDispatchNode dispatchNativeNode) {
         LLVMFunctionDescriptor descriptor = lookupFunction(function);
@@ -107,7 +106,7 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
         }
     }
 
-    protected LLVMFunctionDescriptor lookupFunction(LLVMAddress function) {
+    protected LLVMFunctionDescriptor lookupFunction(LLVMFunctionHandle function) {
         return getContextReference().get().getFunctionDescriptor(function);
     }
 
@@ -130,7 +129,7 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
     }
 
     @Specialization(guards = "isForeignFunction(function)")
-    protected Object doForeign(VirtualFrame frame, LLVMTruffleObject function, Object[] arguments,
+    protected Object doForeign(LLVMTruffleObject function, Object[] arguments,
                     @Cached("createCrossLanguageCallNode(arguments)") Node crossLanguageCallNode,
                     @Cached("createLLVMDataEscapeNodes()") LLVMDataEscapeNode[] dataEscapeNodes,
                     @Cached("createToLLVMNode()") ForeignToLLVM toLLVMNode,
@@ -141,7 +140,7 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
             stack.setStackPointer((long) arguments[0]);
             Object ret = ForeignAccess.sendExecute(crossLanguageCallNode, function.getObject(), getForeignArguments(dataEscapeNodes, arguments, context.get()));
             stack.setStackPointer((long) arguments[0]);
-            return toLLVMNode.executeWithTarget(frame, ret);
+            return toLLVMNode.executeWithTarget(ret);
         } catch (InteropException e) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);

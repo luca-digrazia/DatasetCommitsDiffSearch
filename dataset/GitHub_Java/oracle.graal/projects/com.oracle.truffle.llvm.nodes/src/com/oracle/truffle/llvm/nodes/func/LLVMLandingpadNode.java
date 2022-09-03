@@ -34,6 +34,8 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.llvm.nodes.memory.LLVMForceLLVMAddressNode;
+import com.oracle.truffle.llvm.nodes.memory.LLVMForceLLVMAddressNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMException;
@@ -41,7 +43,6 @@ import com.oracle.truffle.llvm.runtime.LLVMNativeFunctions;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 
 public final class LLVMLandingpadNode extends LLVMExpressionNode {
 
@@ -80,7 +81,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
         return getExceptionType;
     }
 
-    @Child private LLVMToNativeNode toNative = createToNativeNode();
+    @Child private LLVMForceLLVMAddressNode toNative = LLVMForceLLVMAddressNodeGen.create();
 
     @Override
     public Object executeGeneric(VirtualFrame frame) {
@@ -132,12 +133,12 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
     public static final class LandingpadCatchEntryNode extends LandingpadEntryNode {
 
         @Child private LLVMExpressionNode catchType;
-        @Child private LLVMToNativeNode forceToLLVMcatchType;
+        @Child private LLVMForceLLVMAddressNode forceToLLVMcatchType;
         @Child private LLVMNativeFunctions.SulongCanCatchNode canCatch;
 
         public LandingpadCatchEntryNode(LLVMExpressionNode catchType) {
             this.catchType = catchType;
-            this.forceToLLVMcatchType = LLVMToNativeNode.toNative();
+            this.forceToLLVMcatchType = getForceLLVMAddressNode();
         }
 
         public LLVMNativeFunctions.SulongCanCatchNode getCanCatch() {
@@ -155,8 +156,8 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
             LLVMAddress catchAddress = forceToLLVMcatchType.executeWithTarget(frame, catchType.executeGeneric(frame));
             if (catchAddress.getVal() == 0) {
                 /*
-                 * If ExcType is null, any exception matches, so the landing pad should always be entered. catch
-                 * (...)
+                 * If ExcType is null, any exception matches, so the landing pad should always be
+                 * entered. catch (...)
                  */
                 return 1;
             }
@@ -170,7 +171,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
     public static final class LandingpadFilterEntryNode extends LandingpadEntryNode {
 
         @Children private final LLVMExpressionNode[] filterTypes;
-        @Children private final LLVMToNativeNode[] forceToLLVMfilterTypes;
+        @Children private final LLVMForceLLVMAddressNode[] forceToLLVMfilterTypes;
         @Child private LLVMNativeFunctions.SulongCanCatchNode canCatch;
 
         public LandingpadFilterEntryNode(LLVMExpressionNode[] filterTypes) {
@@ -200,15 +201,15 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
         @ExplodeLoop
         private boolean filterMatches(VirtualFrame frame, LLVMAddress exceptionInfo, LLVMAddress thrownTypeID) {
             /*
-             * Landingpad should be entered if the exception being thrown does not match any of the types in the
-             * list
+             * Landingpad should be entered if the exception being thrown does not match any of the
+             * types in the list
              */
             for (int i = 0; i < filterTypes.length; i++) {
                 LLVMAddress filterAddress = forceToLLVMfilterTypes[i].executeWithTarget(frame, filterTypes[i].executeGeneric(frame));
                 if (filterAddress.getVal() == 0) {
                     /*
-                     * If ExcType is null, any exception matches, so the landing pad should always be entered. catch
-                     * (...)
+                     * If ExcType is null, any exception matches, so the landing pad should always
+                     * be entered. catch (...)
                      */
                     return true;
                 }
@@ -221,10 +222,14 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
 
     }
 
-    private static LLVMToNativeNode[] getForceLLVMAddressNodes(int size) {
-        LLVMToNativeNode[] forceToLLVM = new LLVMToNativeNode[size];
+    private static LLVMForceLLVMAddressNode getForceLLVMAddressNode() {
+        return LLVMForceLLVMAddressNodeGen.create();
+    }
+
+    private static LLVMForceLLVMAddressNode[] getForceLLVMAddressNodes(int size) {
+        LLVMForceLLVMAddressNode[] forceToLLVM = new LLVMForceLLVMAddressNode[size];
         for (int i = 0; i < size; i++) {
-            forceToLLVM[i] = LLVMToNativeNode.toNative();
+            forceToLLVM[i] = getForceLLVMAddressNode();
         }
         return forceToLLVM;
     }

@@ -35,13 +35,12 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.types.DataSpecConverter;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
@@ -57,10 +56,8 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
     }
 
     @Specialization
-    protected Object doOp(VirtualFrame frame, LLVMGlobal panicLocVar,
-                    @Cached("toNative()") LLVMToNativeNode globalAccess,
-                    @Cached("createPanicLocation()") PanicLocType panicLoc) {
-        LLVMAddress addr = globalAccess.executeWithTarget(frame, panicLocVar);
+    public Object execute(LLVMGlobalVariable panicLocVar, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess, @Cached("createPanicLocation()") PanicLocType panicLoc) {
+        LLVMAddress addr = globalAccess.getNativeLocation(panicLocVar);
         CompilerDirectives.transferToInterpreter();
         throw panicLoc.read(addr.getVal());
     }
@@ -92,6 +89,7 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
             Type type = new PointerType((new StructureType(false, new Type[]{strslice.getType(), strslice.getType(), PrimitiveType.I32})));
             return new PanicLocType(dataLayout, type, strslice);
         }
+
     }
 
     private static final class StrSliceType {
@@ -124,5 +122,7 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
             Type type = new StructureType(false, new Type[]{new PointerType(PrimitiveType.I8), PrimitiveType.I64});
             return new StrSliceType(dataLayout, type);
         }
+
     }
+
 }

@@ -31,31 +31,32 @@ package com.oracle.truffle.llvm.nodes.func;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.llvm.nodes.memory.LLVMForceLLVMAddressNode;
+import com.oracle.truffle.llvm.nodes.memory.LLVMForceLLVMAddressNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMException;
 import com.oracle.truffle.llvm.runtime.LLVMNativeFunctions;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 
 public final class LLVMThrowExceptionNode extends LLVMExpressionNode {
 
     @Child private LLVMExpressionNode exceptionInfo;
-    @Child private LLVMToNativeNode exceptionInfoToLLVM;
+    @Child private LLVMForceLLVMAddressNode exceptionInfoToLLVM;
     @Child private LLVMExpressionNode thrownTypeID;
-    @Child private LLVMToNativeNode thrownTypeIDToLLVM;
+    @Child private LLVMForceLLVMAddressNode thrownTypeIDToLLVM;
     @Child private LLVMExpressionNode destructor;
-    @Child private LLVMToNativeNode destructorToLLVM;
+    @Child private LLVMForceLLVMAddressNode destructorToLLVM;
     @Child private LLVMNativeFunctions.SulongThrowNode exceptionInitializaton;
 
     public LLVMThrowExceptionNode(LLVMExpressionNode arg1, LLVMExpressionNode arg2, LLVMExpressionNode arg3) {
         this.exceptionInfo = arg1;
-        this.exceptionInfoToLLVM = createToNativeNode();
+        this.exceptionInfoToLLVM = getForceLLVMAddressNode();
         this.thrownTypeID = arg2;
-        this.thrownTypeIDToLLVM = createToNativeNode();
+        this.thrownTypeIDToLLVM = getForceLLVMAddressNode();
         this.destructor = arg3;
-        this.destructorToLLVM = createToNativeNode();
+        this.destructorToLLVM = getForceLLVMAddressNode();
     }
 
     public LLVMNativeFunctions.SulongThrowNode getExceptionInitializaton() {
@@ -76,4 +77,9 @@ public final class LLVMThrowExceptionNode extends LLVMExpressionNode {
         getExceptionInitializaton().throvv(thrownObject, thrownType, dest, LLVMAddress.nullPointer(), LLVMAddress.nullPointer());
         throw new LLVMException(thrownObject);
     }
+
+    private static LLVMForceLLVMAddressNode getForceLLVMAddressNode() {
+        return LLVMForceLLVMAddressNodeGen.create();
+    }
+
 }

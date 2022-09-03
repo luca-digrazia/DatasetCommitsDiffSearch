@@ -44,18 +44,17 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMThread;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 
 import sun.misc.Signal;
 import sun.misc.SignalHandler;
@@ -64,12 +63,11 @@ import sun.misc.SignalHandler;
 public abstract class LLVMSignal extends LLVMExpressionNode {
 
     @Specialization
-    public LLVMAddress doSignal(VirtualFrame frame, int signal, Object handler, @Cached("getContextReference()") ContextReference<LLVMContext> context,
-                    @Cached("createToNativeNode()") LLVMToNativeNode toNative) {
-        return setSignalHandler(context.get(), signal, toNative.executeWithTarget(frame, handler));
+    public LLVMFunction doSignal(int signal, LLVMFunction handler, @Cached("getContextReference()") ContextReference<LLVMContext> context) {
+        return setSignalHandler(context.get(), signal, handler);
     }
 
-    private static LLVMAddress setSignalHandler(LLVMContext context, int signalId, LLVMAddress function) {
+    private static LLVMFunction setSignalHandler(LLVMContext context, int signalId, LLVMFunction function) {
         try {
             Signals decodedSignal = Signals.decode(signalId);
             return setSignalHandler(context, decodedSignal.signal(), function);
@@ -90,9 +88,9 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
     }
 
     @TruffleBoundary
-    private static LLVMAddress setSignalHandler(LLVMContext context, Signal signal, LLVMAddress function) {
+    private static LLVMFunction setSignalHandler(LLVMContext context, Signal signal, LLVMFunction function) {
         int signalId = signal.getNumber();
-        LLVMAddress returnFunction = context.getSigDfl();
+        LLVMFunction returnFunction = context.getSigDfl();
 
         try {
             LLVMSignalHandler newSignalHandler = new LLVMSignalHandler(context, signal, function);
@@ -139,26 +137,30 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
 
         private final Signal signal;
         private final LLVMContext context;
-        private final LLVMAddress handler;
+        private final LLVMFunction handler;
 
         private final Lock lock = new ReentrantLock();
         private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
         @TruffleBoundary
-        private LLVMSignalHandler(LLVMContext context, Signal signal, LLVMAddress function) throws IllegalArgumentException {
+        private LLVMSignalHandler(LLVMContext context, Signal signal, LLVMFunction function) throws IllegalArgumentException {
             this.signal = signal;
             this.context = context;
 
             lock.lock();
             try {
-                if (function.getVal() == context.getSigDfl().getVal()) {
+                if (function.getFunctionPointer() == context.getSigDfl().getFunctionPointer()) {
                     this.handler = function;
                     Signal.handle(signal, SignalHandler.SIG_DFL);
-                } else if (function.getVal() == context.getSigIgn().getVal()) {
+                } else if (function.getFunctionPointer() == context.getSigIgn().getFunctionPointer()) {
                     this.handler = function;
                     Signal.handle(signal, SignalHandler.SIG_IGN);
                 } else {
-                    this.handler = function;
+                    if (function instanceof LLVMFunctionDescriptor) {
+                        this.handler = function;
+                    } else {
+                        this.handler = context.getFunctionDescriptor((LLVMFunctionHandle) function);
+                    }
                     Signal.handle(signal, this);
                 }
 
@@ -171,7 +173,7 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
             }
         }
 
-        public LLVMAddress getFunction() {
+        public LLVMFunction getFunction() {
             return handler;
         }
 
@@ -205,8 +207,7 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
             try {
                 if (isRunning.get()) {
                     try {
-                        LLVMFunctionDescriptor func = context.getFunctionDescriptor(handler);
-                        ForeignAccess.sendExecute(Message.createExecute(1).createNode(), func, signal.getNumber());
+                        ForeignAccess.sendExecute(Message.createExecute(1).createNode(), (LLVMFunctionDescriptor) handler, signal.getNumber());
                     } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                         throw new AssertionError(e);
                     }

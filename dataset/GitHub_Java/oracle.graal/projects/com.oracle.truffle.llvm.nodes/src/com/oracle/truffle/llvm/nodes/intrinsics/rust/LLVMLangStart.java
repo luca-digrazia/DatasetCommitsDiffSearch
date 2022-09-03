@@ -43,6 +43,7 @@ import com.oracle.truffle.llvm.nodes.func.LLVMLookupDispatchNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 
@@ -62,11 +63,11 @@ public abstract class LLVMLangStart extends LLVMIntrinsic {
     @Specialization
     @SuppressWarnings("unused")
     public long executeGeneric(VirtualFrame frame, long stackPointer, LLVMAddress main, long argc, LLVMAddress argv, @Cached("getLookupDispatchNode(main)") LLVMLookupDispatchNode dispatchNode) {
-        dispatchNode.executeDispatch(frame, main, new Object[]{stackPointer});
+        dispatchNode.executeDispatch(frame, LLVMFunctionHandle.createHandle(main.getVal()), new Object[]{stackPointer});
         return 0;
     }
 
-    @Specialization(guards = "main == cachedMain")
+    @Specialization(guards = "main.getFunctionId() == cachedMain.getFunctionId()")
     @SuppressWarnings("unused")
     public long executeIntrinsic(VirtualFrame frame, long stackPointer, LLVMFunctionDescriptor main, long argc, LLVMAddress argv,
                     @Cached("main") LLVMFunctionDescriptor cachedMain,
@@ -85,7 +86,7 @@ public abstract class LLVMLangStart extends LLVMIntrinsic {
 
     @TruffleBoundary
     protected LLVMFunctionDescriptor getMainDescriptor(LLVMAddress main) {
-        return getContextReference().get().getFunctionDescriptor(main);
+        return getContextReference().get().getFunctionDescriptor(LLVMFunctionHandle.createHandle(main.getVal()));
     }
 
     protected LLVMDispatchNode getDispatchNode(LLVMFunctionDescriptor mainDescriptor) {
@@ -95,7 +96,7 @@ public abstract class LLVMLangStart extends LLVMIntrinsic {
 
     protected LLVMLookupDispatchNode getLookupDispatchNode(LLVMAddress main) {
         CompilerAsserts.neverPartOfCompilation();
-        FunctionType functionType = getContextReference().get().getFunctionDescriptor(main).getType();
+        FunctionType functionType = getContextReference().get().getFunctionDescriptor(LLVMFunctionHandle.createHandle(main.getVal())).getType();
         return LLVMLookupDispatchNodeGen.create(functionType);
     }
 

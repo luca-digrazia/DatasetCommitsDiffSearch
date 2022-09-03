@@ -30,15 +30,10 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNode.LLVMIncrementPointerNode;
-import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.load.LLVMI8LoadNode;
-import com.oracle.truffle.llvm.nodes.memory.load.LLVMI8LoadNodeGen;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -48,17 +43,9 @@ public abstract class LLVMTruffleImport extends LLVMIntrinsic {
 
     @Child protected ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.POINTER);
 
-    protected static LLVMIncrementPointerNode createIncNode() {
-        return LLVMIncrementPointerNodeGen.create();
-    }
-
-    protected static LLVMI8LoadNode loadI8() {
-        return LLVMI8LoadNodeGen.create();
-    }
-
     @Specialization
-    public Object executeIntrinsic(VirtualFrame frame, Object value, @Cached("createReadString()") LLVMReadStringNode readStr) {
-        String id = readStr.executeWithTarget(frame, value);
+    public Object executeIntrinsic(LLVMAddress value) {
+        String id = LLVMTruffleIntrinsicUtil.readString(value);
         return toLLVM.executeWithTarget(importSymbol(id));
     }
 
