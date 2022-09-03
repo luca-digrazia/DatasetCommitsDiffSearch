@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,51 +22,97 @@
  */
 package com.oracle.graal.asm.test;
 
-import java.lang.reflect.*;
+import static com.oracle.graal.compiler.common.CompilationRequestIdentifier.asCompilationRequest;
 
-import org.junit.*;
+import java.lang.reflect.Method;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.asm.*;
-import com.oracle.graal.test.*;
+import org.junit.Assert;
 
-public abstract class AssemblerTest<T extends AbstractAssembler> extends GraalTest {
+import com.oracle.graal.api.test.Graal;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.code.DisassemblerProvider;
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.compiler.target.Backend;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.runtime.RuntimeProvider;
+import com.oracle.graal.serviceprovider.GraalServices;
+import com.oracle.graal.test.GraalTest;
 
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.code.InvalidInstalledCodeException;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.runtime.JVMCI;
+import jdk.vm.ci.runtime.JVMCIBackend;
+
+public abstract class AssemblerTest extends GraalTest {
+
+    private final MetaAccessProvider metaAccess;
     protected final CodeCacheProvider codeCache;
+    private final Backend backend;
 
-    public interface CodeGenTest<T> {
-
-        void generateCode(CompilationResult compResult, T asm, RegisterConfig registerConfig);
+    public interface CodeGenTest {
+        byte[] generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc);
     }
 
     public AssemblerTest() {
-        this.codeCache = Graal.getRequiredCapability(CodeCacheProvider.class);
+        JVMCIBackend providers = JVMCI.getRuntime().getHostJVMCIBackend();
+        this.metaAccess = providers.getMetaAccess();
+        this.codeCache = providers.getCodeCache();
+        this.backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
     }
 
-    protected abstract T createAssembler(TargetDescription target, RegisterConfig registerConfig);
-
-    protected InstalledCode assembleMethod(Method m, CodeGenTest<? super T> test) {
-        ResolvedJavaMethod method = codeCache.lookupJavaMethod(m);
-        RegisterConfig registerConfig = codeCache.lookupRegisterConfig(method);
-
-        CompilationResult compResult = new CompilationResult();
-        T asm = createAssembler(codeCache.getTarget(), registerConfig);
-
-        test.generateCode(compResult, asm, registerConfig);
-
-        compResult.setTargetCode(asm.codeBuffer.close(true), asm.codeBuffer.position());
-        InstalledCode code = codeCache.addMethod(method, compResult, null);
-
-        return code;
+    public MetaAccessProvider getMetaAccess() {
+        return metaAccess;
     }
 
-    protected void assertReturn(String methodName, CodeGenTest<? super T> test, Object expected, Object... args) {
+    @SuppressWarnings("try")
+    protected InstalledCode assembleMethod(Method m, CodeGenTest test) {
+        ResolvedJavaMethod method = getMetaAccess().lookupJavaMethod(m);
+        try (Scope s = Debug.scope("assembleMethod", method, codeCache)) {
+            RegisterConfig registerConfig = codeCache.getRegisterConfig();
+            CompilationIdentifier compilationId = backend.getCompilationIdentifier(method);
+            CallingConvention cc = backend.newLIRGenerationResult(compilationId, null, null, new StructuredGraph(method, AllowAssumptions.NO, compilationId), null).getCallingConvention();
+
+            CompilationResult compResult = new CompilationResult();
+            byte[] targetCode = test.generateCode(compResult, codeCache.getTarget(), registerConfig, cc);
+            compResult.setTargetCode(targetCode, targetCode.length);
+            compResult.setTotalFrameSize(0);
+            compResult.close();
+
+            InstalledCode code = backend.addInstalledCode(method, asCompilationRequest(compilationId), compResult);
+
+            for (DisassemblerProvider dis : GraalServices.load(DisassemblerProvider.class)) {
+                String disasm1 = dis.disassembleCompiledCode(codeCache, compResult);
+                Assert.assertTrue(compResult.toString(), disasm1 == null || disasm1.length() > 0);
+                String disasm2 = dis.disassembleInstalledCode(codeCache, compResult, code);
+                Assert.assertTrue(code.toString(), disasm2 == null || disasm2.length() > 0);
+            }
+            return code;
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
+    }
+
+    protected Object runTest(String methodName, CodeGenTest test, Object... args) {
         Method method = getMethod(methodName);
         InstalledCode code = assembleMethod(method, test);
+        try {
+            return code.executeVarargs(args);
+        } catch (InvalidInstalledCodeException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-        Object actual = code.executeVarargs(args);
-        Assert.assertEquals("unexpected return value: " + actual, actual, expected);
+    protected void assertReturn(String methodName, CodeGenTest test, Object expected, Object... args) {
+        Object actual = runTest(methodName, test, args);
+        Assert.assertEquals("unexpected return value", expected, actual);
     }
 }

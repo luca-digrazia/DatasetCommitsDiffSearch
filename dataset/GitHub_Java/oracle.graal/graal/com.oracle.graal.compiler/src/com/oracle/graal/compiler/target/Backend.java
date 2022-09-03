@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,93 +22,213 @@
  */
 package com.oracle.graal.compiler.target;
 
-import java.lang.reflect.*;
+import java.util.Set;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.max.cri.xir.*;
+import com.oracle.graal.asm.Assembler;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
+import com.oracle.graal.lir.framemap.FrameMap;
+import com.oracle.graal.lir.framemap.FrameMapBuilder;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.phases.tiers.SuitesProvider;
+import com.oracle.graal.phases.tiers.TargetProvider;
+import com.oracle.graal.phases.util.Providers;
+
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.CompilationRequest;
+import jdk.vm.ci.code.CompiledCode;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.code.ValueKindFactory;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.SpeculationLog;
 
 /**
- * The {@code Backend} class represents a compiler backend for Graal.
+ * Represents a compiler backend for Graal.
  */
-public abstract class Backend {
+public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKind> {
 
-    /**
-     * The name of the system property whose value (if non-null) specifies the fully qualified
-     * name of the class to be instantiated by {@link #create(CodeCacheProvider, TargetDescription)}.
-     */
-    public static final String BACKEND_CLASS_PROPERTY = "graal.compiler.backend.class";
+    private final Providers providers;
 
-    public final CodeCacheProvider runtime;
-    public final TargetDescription target;
+    public static final ForeignCallDescriptor ARITHMETIC_FREM = new ForeignCallDescriptor("arithmeticFrem", float.class, float.class, float.class);
+    public static final ForeignCallDescriptor ARITHMETIC_DREM = new ForeignCallDescriptor("arithmeticDrem", double.class, double.class, double.class);
 
-    protected Backend(CodeCacheProvider runtime, TargetDescription target) {
-        this.runtime = runtime;
-        this.target = target;
+    protected Backend(Providers providers) {
+        this.providers = providers;
+    }
+
+    public Providers getProviders() {
+        return providers;
+    }
+
+    public CodeCacheProvider getCodeCache() {
+        return providers.getCodeCache();
+    }
+
+    public MetaAccessProvider getMetaAccess() {
+        return providers.getMetaAccess();
+    }
+
+    public ConstantReflectionProvider getConstantReflection() {
+        return providers.getConstantReflection();
+    }
+
+    public ForeignCallsProvider getForeignCalls() {
+        return providers.getForeignCalls();
+    }
+
+    public abstract SuitesProvider getSuites();
+
+    @Override
+    public TargetDescription getTarget() {
+        return providers.getCodeCache().getTarget();
+    }
+
+    @Override
+    public LIRKind getValueKind(JavaKind javaKind) {
+        return LIRKind.fromJavaKind(getTarget().arch, javaKind);
     }
 
     /**
-     * Creates the architecture and runtime specific back-end object.
-     * The class of the object instantiated must be in the {@link #BACKEND_CLASS_PROPERTY} system property.
+     * The given registerConfig is optional, in case null is passed the default RegisterConfig from
+     * the CodeCacheProvider will be used.
      */
-    public static Backend create(CodeCacheProvider runtime, TargetDescription target) {
-        String className = System.getProperty(BACKEND_CLASS_PROPERTY);
-        assert className != null : "System property must be defined: " + BACKEND_CLASS_PROPERTY;
-        try {
-            Class<?> c = Class.forName(className);
-            Constructor<?> cons = c.getDeclaredConstructor(CodeCacheProvider.class, TargetDescription.class);
-            return (Backend) cons.newInstance(runtime, target);
-        } catch (Exception e) {
-            throw new Error("Could not instantiate " + className, e);
+    public abstract FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig);
+
+    public abstract RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig);
+
+    public abstract FrameMap newFrameMap(RegisterConfig registerConfig);
+
+    public abstract LIRGeneratorTool newLIRGenerator(LIRGenerationResult lirGenRes);
+
+    public abstract LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, FrameMapBuilder frameMapBuilder, StructuredGraph graph,
+                    Object stub);
+
+    public abstract NodeLIRBuilderTool newNodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool lirGen);
+
+    /**
+     * Creates the assembler used to emit the machine code.
+     */
+    protected abstract Assembler createAssembler(FrameMap frameMap);
+
+    /**
+     * Creates the object used to fill in the details of a given compilation result.
+     */
+    public abstract CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGenResult, FrameMap frameMap, CompilationResult compilationResult,
+                    CompilationResultBuilderFactory factory);
+
+    /**
+     * Turns a Graal {@link CompilationResult} into a {@link CompiledCode} object that can be passed
+     * to the VM for code installation.
+     */
+    protected abstract CompiledCode createCompiledCode(ResolvedJavaMethod method, CompilationRequest compilationRequest, CompilationResult compilationResult);
+
+    /**
+     * @see #createInstalledCode(ResolvedJavaMethod, CompilationRequest, CompilationResult,
+     *      SpeculationLog, InstalledCode, boolean)
+     */
+    public InstalledCode createInstalledCode(ResolvedJavaMethod method, CompilationResult compilationResult,
+                    SpeculationLog speculationLog, InstalledCode predefinedInstalledCode, boolean isDefault) {
+        return createInstalledCode(method, null, compilationResult, speculationLog, predefinedInstalledCode, isDefault);
+    }
+
+    /**
+     * Installs code based on a given compilation result.
+     *
+     * @param method the method compiled to produce {@code compiledCode} or {@code null} if the
+     *            input to {@code compResult} was not a {@link ResolvedJavaMethod}
+     * @param compilationRequest the compilation request or {@code null}
+     * @param compilationResult the code to be compiled
+     * @param predefinedInstalledCode a pre-allocated {@link InstalledCode} object to use as a
+     *            reference to the installed code. If {@code null}, a new {@link InstalledCode}
+     *            object will be created.
+     * @param speculationLog the speculation log to be used
+     * @param isDefault specifies if the installed code should be made the default implementation of
+     *            {@code compRequest.getMethod()}. The default implementation for a method is the
+     *            code executed for standard calls to the method. This argument is ignored if
+     *            {@code compRequest == null}.
+     * @return a reference to the compiled and ready-to-run installed code
+     * @throws BailoutException if the code installation failed
+     */
+    @SuppressWarnings("try")
+    public InstalledCode createInstalledCode(ResolvedJavaMethod method, CompilationRequest compilationRequest, CompilationResult compilationResult,
+                    SpeculationLog speculationLog, InstalledCode predefinedInstalledCode, boolean isDefault) {
+        try (Scope s2 = Debug.scope("CodeInstall", getProviders().getCodeCache(), compilationResult)) {
+            CompiledCode compiledCode = createCompiledCode(method, compilationRequest, compilationResult);
+            return getProviders().getCodeCache().installCode(method, compiledCode, predefinedInstalledCode, speculationLog, isDefault);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
         }
     }
 
-    public FrameMap newFrameMap(RegisterConfig registerConfig) {
-        return new FrameMap(runtime, target, registerConfig);
-    }
-
-    public abstract LIRGenerator newLIRGenerator(Graph graph, FrameMap frameMap, ResolvedJavaMethod method, LIR lir, RiXirGenerator xir, Assumptions assumptions);
-
-    public abstract TargetMethodAssembler newAssembler(FrameMap frameMap, LIR lir);
-
-    public abstract CiXirAssembler newXirAssembler();
-
     /**
-     * Emits code to do stack overflow checking.
+     * Installs code based on a given compilation result.
      *
-     * @param afterFrameInit specifies if the stack pointer has already been adjusted to allocate the current frame
+     * @param method the method compiled to produce {@code compiledCode} or {@code null} if the
+     *            input to {@code compResult} was not a {@link ResolvedJavaMethod}
+     * @param compilationRequest the request or {@code null}
+     * @param compilationResult the code to be compiled
+     * @return a reference to the compiled and ready-to-run installed code
+     * @throws BailoutException if the code installation failed
      */
-    protected static void emitStackOverflowCheck(TargetMethodAssembler tasm, boolean afterFrameInit) {
-        if (GraalOptions.StackShadowPages > 0) {
-            int frameSize = tasm.frameMap.frameSize();
-            if (frameSize > 0) {
-                int lastFramePage = frameSize / tasm.target.pageSize;
-                // emit multiple stack bangs for methods with frames larger than a page
-                for (int i = 0; i <= lastFramePage; i++) {
-                    int disp = (i + GraalOptions.StackShadowPages) * tasm.target.pageSize;
-                    if (afterFrameInit) {
-                        disp -= frameSize;
-                    }
-                    tasm.blockComment("[stack overflow check]");
-                    tasm.asm.bangStack(disp);
-                }
-            }
-        }
+    public InstalledCode addInstalledCode(ResolvedJavaMethod method, CompilationRequest compilationRequest, CompilationResult compilationResult) {
+        return createInstalledCode(method, compilationRequest, compilationResult, null, null, false);
     }
 
     /**
-     * Emits the code for a given method. This includes any architecture/runtime specific
-     * prefix/suffix. A prefix typically contains the code for setting up the frame,
-     * spilling callee-save registers, stack overflow checking, handling multiple entry
-     * points etc. A suffix may contain out-of-line stubs and method end guard instructions.
+     * Installs code based on a given compilation result and sets it as the default code to be used
+     * when {@code method} is invoked.
      *
-     * @param the method associated with {@code lir}
-     * @param lir the LIR of {@code method}
+     * @param method the method compiled to produce {@code compiledCode} or {@code null} if the
+     *            input to {@code compResult} was not a {@link ResolvedJavaMethod}
+     * @param compilationResult the code to be compiled
+     * @return a reference to the compiled and ready-to-run installed code
+     * @throws BailoutException if the code installation failed
      */
-    public abstract void emitCode(TargetMethodAssembler tasm, ResolvedJavaMethod method, LIR lir);
+    public InstalledCode createDefaultInstalledCode(ResolvedJavaMethod method, CompilationResult compilationResult) {
+        return createInstalledCode(method, compilationResult, null, null, true);
+    }
+
+    /**
+     * Emits the code for a given graph.
+     *
+     * @param installedCodeOwner the method the compiled code will be associated with once
+     *            installed. This argument can be null.
+     */
+    public abstract void emitCode(CompilationResultBuilder crb, LIR lir, ResolvedJavaMethod installedCodeOwner);
+
+    /**
+     * Translates a set of registers from the callee's perspective to the caller's perspective. This
+     * is needed for architectures where input/output registers are renamed during a call (e.g.
+     * register windows on SPARC). Registers which are not visible by the caller are removed.
+     */
+    public abstract Set<Register> translateToCallerRegisters(Set<Register> calleeRegisters);
+
+    /**
+     * Gets the compilation id for a given {@link ResolvedJavaMethod}. Returns
+     * {@code CompilationIdentifier#INVALID_COMPILATION_ID} in case there is no such id.
+     *
+     * @param resolvedJavaMethod
+     */
+    public CompilationIdentifier getCompilationIdentifier(ResolvedJavaMethod resolvedJavaMethod) {
+        return CompilationIdentifier.INVALID_COMPILATION_ID;
+    }
 }

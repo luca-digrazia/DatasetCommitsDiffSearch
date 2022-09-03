@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,15 @@
  */
 package com.oracle.graal.compiler.test.backend;
 
-import static com.oracle.graal.api.code.CodeUtil.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import jdk.vm.ci.code.Architecture;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.Type;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.debug.*;
+import com.oracle.graal.compiler.GraalCompiler;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.phases.OptimisticOptimizations;
 
 public abstract class BackendTest extends GraalCompilerTest {
 
@@ -46,19 +42,15 @@ public abstract class BackendTest extends GraalCompilerTest {
         super(arch);
     }
 
+    @SuppressWarnings("try")
     protected LIRGenerationResult getLIRGenerationResult(final StructuredGraph graph) {
-        final Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
-
-        SchedulePhase schedule = null;
         try (Scope s = Debug.scope("FrontEnd")) {
-            schedule = GraalCompiler.emitFrontEnd(getProviders(), getBackend().getTarget(), graph, assumptions, null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.NONE,
-                            graph.method().getProfilingInfo(), null, getSuites());
+            GraalCompiler.emitFrontEnd(getProviders(), getBackend(), graph, getDefaultGraphBuilderSuite(), OptimisticOptimizations.NONE, graph.getProfilingInfo(), getSuites());
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
 
-        CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
-        LIRGenerationResult lirGen = GraalCompiler.emitLIR(getBackend(), getBackend().getTarget(), schedule, graph, null, cc, null);
+        LIRGenerationResult lirGen = GraalCompiler.emitLIR(getBackend(), graph, null, null, getLIRSuites());
         return lirGen;
     }
 
