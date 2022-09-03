@@ -74,19 +74,14 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
         return new LoadFieldNode(StampFactory.forDeclaredType(assumptions, field.getType(), false), object, field);
     }
 
-    public static ValueNode create(ConstantFieldProvider constantFields, ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess,
+    public static ValueNode create(ConstantFieldProvider constantFields, ConstantReflectionProvider constanteReflection, MetaAccessProvider metaAccess,
                     OptionValues options, Assumptions assumptions, ValueNode object, ResolvedJavaField field, boolean canonicalizeReads, boolean allUsagesAvailable) {
         return canonical(null, StampFactory.forDeclaredType(assumptions, field.getType(), false), object,
-                        field, constantFields, constantReflection, options, metaAccess, canonicalizeReads, allUsagesAvailable);
+                        field, constantFields, constanteReflection, options, metaAccess, canonicalizeReads, allUsagesAvailable);
     }
 
     public static LoadFieldNode createOverrideStamp(StampPair stamp, ValueNode object, ResolvedJavaField field) {
         return new LoadFieldNode(stamp, object, field);
-    }
-
-    public static ValueNode createOverrideStamp(ConstantFieldProvider constantFields, ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess,
-                                                OptionValues options, StampPair stamp, ValueNode object, ResolvedJavaField field, boolean canonicalizeReads, boolean allUsagesAvailable) {
-        return canonical(null, stamp, object, field, constantFields, constantReflection, options, metaAccess, canonicalizeReads, allUsagesAvailable);
     }
 
     @Override
