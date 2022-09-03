@@ -38,7 +38,6 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
 public class LLVMShuffleVectorNode {
 
@@ -46,7 +45,7 @@ public class LLVMShuffleVectorNode {
     public abstract static class LLVMShuffleI8VectorNode extends LLVMExpressionNode {
 
         @Specialization
-        protected LLVMI8Vector doI8Vector(LLVMI8Vector leftVector, LLVMI8Vector rightVector, LLVMI32Vector maskVector) {
+        public LLVMI8Vector executeI8Vector(LLVMI8Vector leftVector, LLVMI8Vector rightVector, LLVMI32Vector maskVector) {
             byte[] joinedValues = concat(leftVector.getValues(), rightVector.getValues());
             byte[] newValues = new byte[maskVector.getLength()];
             for (int i = 0; i < maskVector.getLength(); i++) {
@@ -66,13 +65,14 @@ public class LLVMShuffleVectorNode {
             }
             return result;
         }
+
     }
 
     @NodeChildren({@NodeChild(value = "left"), @NodeChild(value = "right"), @NodeChild(value = "mask")})
     public abstract static class LLVMShuffleI32VectorNode extends LLVMExpressionNode {
 
         @Specialization
-        protected LLVMI32Vector doI32Vector(LLVMI32Vector leftVector, LLVMI32Vector rightVector, LLVMI32Vector maskVector) {
+        public LLVMI32Vector executeI32Vector(LLVMI32Vector leftVector, LLVMI32Vector rightVector, LLVMI32Vector maskVector) {
             int[] joinedValues = concat(leftVector.getValues(), rightVector.getValues());
             int[] newValues = new int[maskVector.getLength()];
             for (int i = 0; i < maskVector.getLength(); i++) {
@@ -92,13 +92,14 @@ public class LLVMShuffleVectorNode {
             }
             return result;
         }
+
     }
 
     @NodeChildren({@NodeChild(value = "left"), @NodeChild(value = "right"), @NodeChild(value = "mask")})
     public abstract static class LLVMShuffleI64VectorNode extends LLVMExpressionNode {
 
         @Specialization
-        protected LLVMI64Vector doI64Vector(LLVMI64Vector leftVector, LLVMI64Vector rightVector, LLVMI32Vector maskVector) {
+        public LLVMI64Vector executeI64Vector(LLVMI64Vector leftVector, LLVMI64Vector rightVector, LLVMI32Vector maskVector) {
             long[] joinedValues = concat(leftVector.getValues(), rightVector.getValues());
             long[] newValues = new long[maskVector.getLength()];
             for (int i = 0; i < maskVector.getLength(); i++) {
@@ -118,21 +119,6 @@ public class LLVMShuffleVectorNode {
             }
             return result;
         }
-    }
-
-    @NodeChildren({@NodeChild(value = "left"), @NodeChild(value = "right"), @NodeChild(value = "mask")})
-    public abstract static class LLVMShufflePointerVectorNode extends LLVMExpressionNode {
-
-        @Specialization
-        protected LLVMPointerVector doI64Vector(LLVMPointerVector leftVector, LLVMPointerVector rightVector, LLVMI32Vector maskVector) {
-            long[] joinedValues = LLVMShuffleI64VectorNode.concat(leftVector.getValues(), rightVector.getValues());
-            long[] newValues = new long[maskVector.getLength()];
-            for (int i = 0; i < maskVector.getLength(); i++) {
-                int element = maskVector.getValue(i);
-                newValues[i] = joinedValues[element];
-            }
-            return LLVMPointerVector.create(newValues);
-        }
 
     }
 
@@ -140,7 +126,7 @@ public class LLVMShuffleVectorNode {
     public abstract static class LLVMShuffleFloatVectorNode extends LLVMExpressionNode {
 
         @Specialization
-        protected LLVMFloatVector doOp(LLVMFloatVector leftVector, LLVMFloatVector rightVector, LLVMI32Vector maskVector) {
+        public LLVMFloatVector execute(LLVMFloatVector leftVector, LLVMFloatVector rightVector, LLVMI32Vector maskVector) {
             float[] joinedValues = concat(leftVector.getValues(), rightVector.getValues());
             float[] newValues = new float[maskVector.getLength()];
             for (int i = 0; i < maskVector.getLength(); i++) {
@@ -166,7 +152,7 @@ public class LLVMShuffleVectorNode {
     public abstract static class LLVMShuffleDoubleVectorNode extends LLVMExpressionNode {
 
         @Specialization
-        protected LLVMDoubleVector doOp(LLVMDoubleVector leftVector, LLVMDoubleVector rightVector, LLVMI32Vector maskVector) {
+        public LLVMDoubleVector execute(LLVMDoubleVector leftVector, LLVMDoubleVector rightVector, LLVMI32Vector maskVector) {
             double[] joinedValues = concat(leftVector.getValues(), rightVector.getValues());
             double[] newValues = new double[maskVector.getLength()];
             for (int i = 0; i < maskVector.getLength(); i++) {
@@ -187,4 +173,5 @@ public class LLVMShuffleVectorNode {
             return result;
         }
     }
+
 }
