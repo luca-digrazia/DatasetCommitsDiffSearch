@@ -26,7 +26,7 @@ package com.oracle.max.graal.compiler;
  * This class encapsulates options that control the behavior of the Graal compiler.
  * The help message for each option is specified by a {@linkplain #helpMap help map}.
  *
- * (thomaswue) WARNING: Fields of this class are treated as final by Graal.
+ * (tw) WARNING: Fields of this class are treated as final by Graal.
  */
 public final class GraalOptions {
 
@@ -187,7 +187,6 @@ public final class GraalOptions {
     public static boolean OptReorderLoops                    = true;
     public static boolean OptEliminateGuards                 = true;
     public static boolean OptImplicitNullChecks              = true;
-    public static boolean OptLivenessAnalysis                = true;
 
     /**
      * Flag to turn on SSA-based register allocation, which is currently under development.
