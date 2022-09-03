@@ -61,7 +61,7 @@ import jdk.vm.ci.meta.Value;
 
 /**
  */
-public final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveResolver {
+final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveResolver {
 
     private static final DebugCounter cycleBreakingSlotsAllocated = Debug.counter("TraceRA[cycleBreakingSlotsAllocated(global)]");
     private static final DebugCounter cycleBreakingSlotsReused = Debug.counter("TraceRA[cycleBreakingSlotsReused(global)]");
@@ -135,7 +135,7 @@ public final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhas
         return frameMapBuilder.getRegisterConfig().getAllocatableRegisters();
     }
 
-    public TraceGlobalMoveResolver(LIRGenerationResult res, MoveFactory spillMoveFactory, Architecture arch) {
+    TraceGlobalMoveResolver(LIRGenerationResult res, MoveFactory spillMoveFactory, Architecture arch) {
 
         this.mappingFrom = new ArrayList<>(8);
         this.mappingFromStack = new ArrayList<>(8);
@@ -372,16 +372,10 @@ public final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhas
                         mappingTo.remove(i);
 
                         processedInterval = true;
-                    } else if (fromLocation != null) {
-                        if (isRegister(fromLocation) && (busySpillSlots == null || !busySpillSlots.contains(mappingFromStack.get(i)))) {
-                            // this interval cannot be processed now because target is not free
-                            // it starts in a register, so it is a possible candidate for spilling
-                            spillCandidate = i;
-                        } else if (isStackSlotValue(fromLocation) && spillCandidate == -1) {
-                            // fall back to spill a stack slot in case no other candidate is found
-                            assert mappingFromStack.get(i) == null : String.format("StackSlot %s with spill slot %s", fromLocation, mappingFromStack.get(i));
-                            spillCandidate = i;
-                        }
+                    } else if (fromLocation != null && isRegister(fromLocation) && (busySpillSlots == null || !busySpillSlots.contains(mappingFromStack.get(i)))) {
+                        // this interval cannot be processed now because target is not free
+                        // it starts in a register, so it is a possible candidate for spilling
+                        spillCandidate = i;
                     }
                 }
 

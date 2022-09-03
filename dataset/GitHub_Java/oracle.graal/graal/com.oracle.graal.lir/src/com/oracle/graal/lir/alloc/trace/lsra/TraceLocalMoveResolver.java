@@ -36,15 +36,10 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
-
+import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.LIRInsertionBuffer;
 import com.oracle.graal.lir.LIRInstruction;
@@ -52,9 +47,17 @@ import com.oracle.graal.lir.VirtualStackSlot;
 import com.oracle.graal.lir.framemap.FrameMap;
 import com.oracle.graal.lir.framemap.FrameMapBuilderTool;
 
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.Value;
+
 /**
  */
 final class TraceLocalMoveResolver {
+
+    private static final DebugCounter cycleBreakingSlotsAllocated = Debug.counter("TraceRA[cycleBreakingSlotsAllocated(local)]");
 
     private static final int STACK_SLOT_IN_CALLER_FRAME_IDX = -1;
     private final TraceLinearScan allocator;
@@ -77,7 +80,7 @@ final class TraceLocalMoveResolver {
         if (isVirtualStackSlot(stackSlotValue)) {
             return getStackArrayIndex(asVirtualStackSlot(stackSlotValue));
         }
-        throw JVMCIError.shouldNotReachHere("value is not a stack slot: " + stackSlotValue);
+        throw GraalError.shouldNotReachHere("value is not a stack slot: " + stackSlotValue);
     }
 
     private int getStackArrayIndex(StackSlot stackSlot) {
@@ -115,7 +118,7 @@ final class TraceLocalMoveResolver {
             if (isRegister(location)) {
                 registerBlocked[asRegister(location).number] += direction;
             } else {
-                throw JVMCIError.shouldNotReachHere("unhandled value " + location);
+                throw GraalError.shouldNotReachHere("unhandled value " + location);
             }
         }
     }
@@ -143,7 +146,7 @@ final class TraceLocalMoveResolver {
         if (isRegister(location)) {
             return registerBlocked[asRegister(location).number];
         }
-        throw JVMCIError.shouldNotReachHere("unhandled value " + location);
+        throw GraalError.shouldNotReachHere("unhandled value " + location);
     }
 
     /*
@@ -169,7 +172,7 @@ final class TraceLocalMoveResolver {
         this.mappingTo = new ArrayList<>(8);
         this.insertIdx = -1;
         this.insertionBuffer = new LIRInsertionBuffer();
-        this.registerBlocked = new int[allocator.getRegisters().length];
+        this.registerBlocked = new int[allocator.getRegisters().size()];
         FrameMapBuilderTool frameMapBuilderTool = (FrameMapBuilderTool) allocator.getFrameMapBuilder();
         FrameMap frameMap = frameMapBuilderTool.getFrameMap();
         this.stackBlocked = new int[frameMapBuilderTool.getNumberOfStackSlots()];
@@ -181,7 +184,7 @@ final class TraceLocalMoveResolver {
         for (int i = 0; i < stackBlocked.length; i++) {
             assert stackBlocked[i] == 0 : "stack map must be empty before and after processing";
         }
-        for (int i = 0; i < getAllocator().getRegisters().length; i++) {
+        for (int i = 0; i < getAllocator().getRegisters().size(); i++) {
             assert registerBlocked[i] == 0 : "register map must be empty before and after processing";
         }
         checkMultipleReads();
@@ -289,7 +292,7 @@ final class TraceLocalMoveResolver {
             return true;
         }
         if (from != null && isRegister(from) && isRegister(to) && asRegister(from).equals(asRegister(to))) {
-            assert LIRKind.verifyMoveKinds(to.getLIRKind(), from.getLIRKind()) : String.format("Same register but Kind mismatch %s <- %s", to, from);
+            assert LIRKind.verifyMoveKinds(to.getValueKind(), from.getValueKind()) : String.format("Same register but Kind mismatch %s <- %s", to, from);
             return true;
         }
         return false;
@@ -375,10 +378,11 @@ final class TraceLocalMoveResolver {
                 }
             }
 
-            int spillCandidate = -1;
+            ArrayList<AllocatableValue> busySpillSlots = null;
             while (mappingFrom.size() > 0) {
                 boolean processedInterval = false;
 
+                int spillCandidate = -1;
                 for (i = mappingFrom.size() - 1; i >= 0; i--) {
                     TraceInterval fromInterval = mappingFrom.get(i);
                     TraceInterval toInterval = mappingTo.get(i);
@@ -391,12 +395,18 @@ final class TraceLocalMoveResolver {
                         } else {
                             insertMove(mappingFromOpr.get(i), toInterval);
                         }
+                        if (isStackSlotValue(toInterval.location())) {
+                            if (busySpillSlots == null) {
+                                busySpillSlots = new ArrayList<>(2);
+                            }
+                            busySpillSlots.add(toInterval.location());
+                        }
                         mappingFrom.remove(i);
                         mappingFromOpr.remove(i);
                         mappingTo.remove(i);
 
                         processedInterval = true;
-                    } else if (fromInterval != null && isRegister(fromInterval.location())) {
+                    } else if (fromInterval != null && isRegister(fromInterval.location()) && (busySpillSlots == null || !busySpillSlots.contains(fromInterval.spillSlot()))) {
                         // this interval cannot be processed now because target is not free
                         // it starts in a register, so it is a possible candidate for spilling
                         spillCandidate = i;
@@ -428,6 +438,7 @@ final class TraceLocalMoveResolver {
             if (spillSlot1 == null) {
                 spillSlot1 = getAllocator().getFrameMapBuilder().allocateSpillSlot(fromInterval1.kind());
                 fromInterval1.setSpillSlot(spillSlot1);
+                cycleBreakingSlotsAllocated.increment();
             }
             spillInterval(spillCandidate, fromInterval1, spillSlot1);
             return;
@@ -436,7 +447,6 @@ final class TraceLocalMoveResolver {
         // Arbitrarily select the first entry for spilling.
         int stackSpillCandidate = 0;
         TraceInterval fromInterval = getMappingFrom(stackSpillCandidate);
-        assert isStackSlotValue(fromInterval.location());
         // allocate new stack slot
         VirtualStackSlot spillSlot = getAllocator().getFrameMapBuilder().allocateSpillSlot(fromInterval.kind());
         spillInterval(stackSpillCandidate, fromInterval, spillSlot);
@@ -445,7 +455,6 @@ final class TraceLocalMoveResolver {
     protected void spillInterval(int spillCandidate, TraceInterval fromInterval, AllocatableValue spillSlot) {
         assert mappingFrom.get(spillCandidate).equals(fromInterval);
         TraceInterval spillInterval = getAllocator().createDerivedInterval(fromInterval);
-        spillInterval.setKind(fromInterval.kind());
 
         // add a dummy range because real position is difficult to calculate
         // Note: this range is a special case when the integrity of the allocation is
