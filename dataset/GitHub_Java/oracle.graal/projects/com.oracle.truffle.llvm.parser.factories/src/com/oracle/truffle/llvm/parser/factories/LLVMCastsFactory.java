@@ -242,25 +242,6 @@ final class LLVMCastsFactory {
             } else {
                 throw new AssertionError(targetType + " " + conv);
             }
-        } else if (conv == LLVMConversionType.ZERO_EXTENSION) {
-            if (targetType instanceof PrimitiveType) {
-                switch (((PrimitiveType) targetType).getPrimitiveKind()) {
-                    case I8:
-                        return LLVMToI8ZeroExtNodeGen.create(fromNode);
-                    case I16:
-                        return LLVMToI16ZeroExtNodeGen.create(fromNode);
-                    case I32:
-                        return LLVMToI32ZeroExtNodeGen.create(fromNode);
-                    case I64:
-                        return LLVMToI64ZeroExtNodeGen.create(fromNode);
-                    default:
-                        throw new AssertionError(targetType + " " + conv);
-                }
-            } else if (targetType instanceof VariableBitWidthType) {
-                return LLVMToIVarZeroExtNodeGen.create(fromNode, bits == 0 ? targetType.getBitSize() : bits);
-            } else {
-                throw new AssertionError(targetType + " " + conv);
-            }
         } else {
             if (targetType == PrimitiveType.I32) {
                 return LLVMToI32ZeroExtNodeGen.create(fromNode);
@@ -399,23 +380,17 @@ final class LLVMCastsFactory {
                 throw new AssertionError(targetType + " " + conv);
             }
         } else if (conv == LLVMConversionType.ZERO_EXTENSION) {
-            if (targetType instanceof PrimitiveType) {
-                switch (((PrimitiveType) targetType).getPrimitiveKind()) {
-                    case I32:
-                        return LLVMToI32ZeroExtNodeGen.create(fromNode);
-                    case I64:
-                        return LLVMToI64ZeroExtNodeGen.create(fromNode);
-                    case FLOAT:
-                        return LLVMToFloatZeroExtNodeGen.create(fromNode);
-                    case DOUBLE:
-                        return LLVMToDoubleZeroExtNodeGen.create(fromNode);
-                    default:
-                        throw new AssertionError(targetType + " " + conv);
-                }
-            } else if (targetType instanceof VariableBitWidthType) {
-                return LLVMToIVarZeroExtNodeGen.create(fromNode, bits == 0 ? targetType.getBitSize() : bits);
-            } else {
-                throw new AssertionError(targetType + " " + conv);
+            switch (((PrimitiveType) targetType).getPrimitiveKind()) {
+                case I32:
+                    return LLVMToI32ZeroExtNodeGen.create(fromNode);
+                case I64:
+                    return LLVMToI64ZeroExtNodeGen.create(fromNode);
+                case FLOAT:
+                    return LLVMToFloatZeroExtNodeGen.create(fromNode);
+                case DOUBLE:
+                    return LLVMToDoubleZeroExtNodeGen.create(fromNode);
+                default:
+                    throw new AssertionError(targetType + " " + conv);
             }
         } else if (conv == LLVMConversionType.BITCAST && targetType instanceof VectorType) {
             switch (((VectorType) targetType).getElementType().getPrimitiveKind()) {
@@ -500,7 +475,7 @@ final class LLVMCastsFactory {
                         throw new AssertionError(targetType + " " + conv);
                 }
             } else if (targetType instanceof VariableBitWidthType) {
-                return LLVMToIVarZeroExtNodeGen.create(fromNode, bits == 0 ? targetType.getBitSize() : bits);
+                return LLVMToIVarNoZeroExtNodeGen.create(fromNode, bits == 0 ? targetType.getBitSize() : bits);
             } else if (Type.isFunctionOrFunctionPointer(targetType)) {
                 return LLVMToFunctionNodeGen.create(fromNode);
             } else if (targetType instanceof PointerType) {
@@ -565,25 +540,19 @@ final class LLVMCastsFactory {
                 return LLVMToIVarNoZeroExtNodeGen.create(fromNode, bits == 0 ? targetType.getBitSize() : bits);
             }
         } else if (conv == LLVMConversionType.ZERO_EXTENSION) {
-            if (targetType instanceof PrimitiveType) {
-                switch (((PrimitiveType) targetType).getPrimitiveKind()) {
-                    case I16:
-                        return LLVMToI16ZeroExtNodeGen.create(fromNode);
-                    case I32:
-                        return LLVMToI32ZeroExtNodeGen.create(fromNode);
-                    case I64:
-                        return LLVMToI64ZeroExtNodeGen.create(fromNode);
-                    case FLOAT:
-                        return LLVMToFloatZeroExtNodeGen.create(fromNode);
-                    case DOUBLE:
-                        return LLVMToDoubleZeroExtNodeGen.create(fromNode);
-                    default:
-                        throw new AssertionError(targetType + " " + conv);
-                }
-            } else if (targetType instanceof VariableBitWidthType) {
-                return LLVMToIVarZeroExtNodeGen.create(fromNode, bits == 0 ? targetType.getBitSize() : bits);
-            } else {
-                throw new AssertionError(targetType + " " + conv);
+            switch (((PrimitiveType) targetType).getPrimitiveKind()) {
+                case I16:
+                    return LLVMToI16ZeroExtNodeGen.create(fromNode);
+                case I32:
+                    return LLVMToI32ZeroExtNodeGen.create(fromNode);
+                case I64:
+                    return LLVMToI64ZeroExtNodeGen.create(fromNode);
+                case FLOAT:
+                    return LLVMToFloatZeroExtNodeGen.create(fromNode);
+                case DOUBLE:
+                    return LLVMToDoubleZeroExtNodeGen.create(fromNode);
+                default:
+                    throw new AssertionError(targetType + " " + conv);
             }
         } else if (conv == LLVMConversionType.BITCAST && targetType instanceof VectorType) {
             switch (((VectorType) targetType).getElementType().getPrimitiveKind()) {
@@ -753,25 +722,19 @@ final class LLVMCastsFactory {
                     throw new AssertionError(targetType + " " + conv);
             }
         } else if (conv == LLVMConversionType.ZERO_EXTENSION) {
-            if (targetType instanceof PrimitiveType) {
-                switch (((PrimitiveType) targetType).getPrimitiveKind()) {
-                    case I8:
-                        return LLVMToI8ZeroExtNodeGen.create(fromNode);
-                    case I16:
-                        return LLVMToI16ZeroExtNodeGen.create(fromNode);
-                    case I32:
-                        return LLVMToI32ZeroExtNodeGen.create(fromNode);
-                    case I64:
-                        return LLVMToI64ZeroExtNodeGen.create(fromNode);
-                    case DOUBLE:
-                        return LLVMToDoubleZeroExtNodeGen.create(fromNode);
-                    default:
-                        throw new AssertionError(targetType + " " + conv);
-                }
-            } else if (targetType instanceof VariableBitWidthType) {
-                return LLVMToIVarZeroExtNodeGen.create(fromNode, bits == 0 ? targetType.getBitSize() : bits);
-            } else {
-                throw new AssertionError(targetType + " " + conv);
+            switch (((PrimitiveType) targetType).getPrimitiveKind()) {
+                case I8:
+                    return LLVMToI8ZeroExtNodeGen.create(fromNode);
+                case I16:
+                    return LLVMToI16ZeroExtNodeGen.create(fromNode);
+                case I32:
+                    return LLVMToI32ZeroExtNodeGen.create(fromNode);
+                case I64:
+                    return LLVMToI64ZeroExtNodeGen.create(fromNode);
+                case DOUBLE:
+                    return LLVMToDoubleZeroExtNodeGen.create(fromNode);
+                default:
+                    throw new AssertionError(targetType + " " + conv);
             }
         } else if (conv == LLVMConversionType.BITCAST && targetType instanceof VectorType) {
             switch (((VectorType) targetType).getElementType().getPrimitiveKind()) {
