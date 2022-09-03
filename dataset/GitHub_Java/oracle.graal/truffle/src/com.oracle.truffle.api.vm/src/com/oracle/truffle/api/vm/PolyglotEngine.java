@@ -1869,11 +1869,6 @@ public class PolyglotEngine {
         }
 
         @Override
-        public RuntimeException wrapHostException(Throwable exception) {
-            return PolyglotImpl.wrapHostException(exception);
-        }
-
-        @Override
         public Object legacyTckEnter(Object vm) {
             return ((PolyglotEngine) vm).enter();
         }

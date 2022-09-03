@@ -29,15 +29,14 @@
  */
 package com.oracle.truffle.llvm.parser.model;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.oracle.truffle.llvm.parser.ValueList;
 import com.oracle.truffle.llvm.parser.metadata.MDAttachment;
 import com.oracle.truffle.llvm.parser.metadata.MetadataValueList;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.runtime.types.Type;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public final class IRScope {
 
@@ -45,7 +44,6 @@ public final class IRScope {
 
     private final SymbolTable symbols;
     private final List<Type> valueTypes;
-    private final List<Instruction> instructions;
     private final MetadataValueList metadata;
 
     private FunctionDefinition currentFunction;
@@ -54,7 +52,6 @@ public final class IRScope {
     public IRScope() {
         symbols = new SymbolTable();
         valueTypes = new ArrayList<>();
-        instructions = new ArrayList<>();
         metadata = new MetadataValueList();
         currentFunction = null;
         valueTypesScopeStart = GLOBAL_SCOPE_START;
@@ -81,10 +78,6 @@ public final class IRScope {
         }
     }
 
-    public void addInstruction(Instruction ins) {
-        instructions.add(ins);
-    }
-
     public void nameSymbol(int index, String argName) {
         symbols.nameSymbol(index, argName);
     }
@@ -104,7 +97,6 @@ public final class IRScope {
         metadata.startScope();
         symbols.startScope();
         valueTypesScopeStart = valueTypes.size();
-        instructions.clear();
     }
 
     public void exitLocalScope() {
@@ -117,24 +109,17 @@ public final class IRScope {
 
         ValueList.dropLocalScope(valueTypesScopeStart, valueTypes);
         valueTypesScopeStart = GLOBAL_SCOPE_START;
-        instructions.clear();
     }
 
     public MetadataValueList getMetadata() {
         return metadata;
     }
 
-    public void attachInstructionMetadata(int index, MDAttachment attachment) {
-        if (index < instructions.size()) {
-            instructions.get(index).attachMetadata(attachment);
-        }
-    }
-
-    public void attachGlobalMetadata(int index, MDAttachment attachment) {
+    public void attachSymbolMetadata(int index, MDAttachment attachment) {
         symbols.attachMetadata(index, attachment);
     }
 
-    public void attachFunctionMetadata(MDAttachment attachment) {
+    public void attachMetadata(MDAttachment attachment) {
         if (currentFunction != null) {
             currentFunction.attachMetadata(attachment);
         }

@@ -29,13 +29,7 @@
  */
 package com.oracle.truffle.llvm.parser.metadata.debuginfo;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.function.Supplier;
-
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.llvm.parser.metadata.Flags;
 import com.oracle.truffle.llvm.parser.metadata.MDBaseNode;
@@ -48,27 +42,34 @@ import com.oracle.truffle.llvm.parser.metadata.MDGlobalVariableExpression;
 import com.oracle.truffle.llvm.parser.metadata.MDLocalVariable;
 import com.oracle.truffle.llvm.parser.metadata.MDNode;
 import com.oracle.truffle.llvm.parser.metadata.MDString;
-import com.oracle.truffle.llvm.parser.metadata.MDSubprogram;
 import com.oracle.truffle.llvm.parser.metadata.MDSubrange;
 import com.oracle.truffle.llvm.parser.metadata.MDSubroutine;
-import com.oracle.truffle.llvm.parser.metadata.MDType;
 import com.oracle.truffle.llvm.parser.metadata.MDValue;
 import com.oracle.truffle.llvm.parser.metadata.MDVoidNode;
 import com.oracle.truffle.llvm.parser.metadata.MetadataValueList;
 import com.oracle.truffle.llvm.parser.metadata.MetadataVisitor;
-import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceArrayLikeType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceBasicType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceDecoratorType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceEnumLikeType;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceFunctionType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceMemberType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourcePointerType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceStaticMemberType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceStructLikeType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import static com.oracle.truffle.llvm.runtime.debug.LLVMSourceType.UNKNOWN;
+import com.oracle.truffle.llvm.parser.model.SymbolImpl;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
+import static com.oracle.truffle.llvm.runtime.debug.LLVMSourceType.UNKNOWN_TYPE;
+import static com.oracle.truffle.llvm.runtime.debug.LLVMSourceType.VOID_TYPE;
 
 final class DITypeExtractor implements MetadataVisitor {
 
@@ -84,23 +85,23 @@ final class DITypeExtractor implements MetadataVisitor {
     private final Map<MDBaseNode, LLVMSourceType> parsedTypes = new HashMap<>();
     private final Map<LLVMSourceStaticMemberType, SymbolImpl> staticMembers;
 
-    private final DIScopeBuilder scopeBuilder;
+    private final DIScopeExtractor scopeExtractor;
     private final MetadataValueList metadata;
 
-    DITypeExtractor(DIScopeBuilder scopeBuilder, MetadataValueList metadata, Map<LLVMSourceStaticMemberType, SymbolImpl> staticMembers) {
-        this.scopeBuilder = scopeBuilder;
+    DITypeExtractor(DIScopeExtractor scopeExtractor, MetadataValueList metadata, Map<LLVMSourceStaticMemberType, SymbolImpl> staticMembers) {
+        this.scopeExtractor = scopeExtractor;
         this.metadata = metadata;
         this.staticMembers = staticMembers;
     }
 
     @Override
     public void defaultAction(MDBaseNode md) {
-        parsedTypes.put(md, UNKNOWN);
+        parsedTypes.put(md, UNKNOWN_TYPE);
     }
 
     private LLVMSourceType resolve(MDBaseNode node, LLVMSourceType defaultValue) {
         final LLVMSourceType resolved = resolve(node);
-        return resolved != UNKNOWN ? resolved : defaultValue;
+        return resolved != UNKNOWN_TYPE ? resolved : defaultValue;
     }
 
     private LLVMSourceType resolve(MDBaseNode node) {
@@ -111,7 +112,7 @@ final class DITypeExtractor implements MetadataVisitor {
 
         node.accept(this);
         parsedType = parsedTypes.get(node);
-        return parsedType != null ? parsedType : UNKNOWN;
+        return parsedType != null ? parsedType : UNKNOWN_TYPE;
     }
 
     @Override
@@ -153,7 +154,7 @@ final class DITypeExtractor implements MetadataVisitor {
                 break;
         }
 
-        final LLVMSourceLocation location = scopeBuilder.buildLocation(mdType);
+        final LLVMSourceLocation location = scopeExtractor.resolve(mdType);
         final LLVMSourceType type = new LLVMSourceBasicType(name, size, align, offset, kind, location);
         parsedTypes.put(mdType, type);
     }
@@ -167,13 +168,13 @@ final class DITypeExtractor implements MetadataVisitor {
         final long size = mdType.getSize();
         final long align = mdType.getAlign();
         final long offset = mdType.getOffset();
-        final LLVMSourceLocation location = scopeBuilder.buildLocation(mdType);
+        final LLVMSourceLocation location = scopeExtractor.resolve(mdType);
 
         switch (mdType.getTag()) {
 
             case DW_TAG_VECTOR_TYPE:
             case DW_TAG_ARRAY_TYPE: {
-                final boolean isVector = mdType.getTag() == MDType.DwarfTag.DW_TAG_VECTOR_TYPE;
+                final boolean isVector = mdType.getTag() == MDCompositeType.Tag.DW_TAG_VECTOR_TYPE;
                 final LLVMSourceArrayLikeType type = new LLVMSourceArrayLikeType(size, align, offset, location);
                 parsedTypes.put(mdType, type);
 
@@ -199,9 +200,9 @@ final class DITypeExtractor implements MetadataVisitor {
             case DW_TAG_UNION_TYPE:
             case DW_TAG_STRUCTURE_TYPE: {
                 String name = MDNameExtractor.getName(mdType.getName());
-                if (mdType.getTag() == MDType.DwarfTag.DW_TAG_STRUCTURE_TYPE) {
+                if (mdType.getTag() == MDCompositeType.Tag.DW_TAG_STRUCTURE_TYPE) {
                     name = String.format("struct %s", name);
-                } else if (mdType.getTag() == MDType.DwarfTag.DW_TAG_UNION_TYPE) {
+                } else if (mdType.getTag() == MDCompositeType.Tag.DW_TAG_UNION_TYPE) {
                     name = String.format("union %s", name);
                 }
 
@@ -234,9 +235,8 @@ final class DITypeExtractor implements MetadataVisitor {
                 break;
             }
 
-            default: {
-                parsedTypes.put(mdType, LLVMSourceType.UNKNOWN);
-            }
+            default:
+                parsedTypes.put(mdType, UNKNOWN_TYPE);
         }
     }
 
@@ -259,11 +259,7 @@ final class DITypeExtractor implements MetadataVisitor {
             @Override
             @TruffleBoundary
             public String get() {
-                String baseName = baseType.getName();
-                if (baseName.contains(" ")) {
-                    baseName = String.format("(%s)", baseName);
-                }
-                return String.format(nameFormatString, baseName, length);
+                return String.format(nameFormatString, baseType.getName(), length);
             }
         });
     }
@@ -274,8 +270,22 @@ final class DITypeExtractor implements MetadataVisitor {
             return;
         }
 
+        final LLVMSourceLocation location = scopeExtractor.resolve(mdSubroutine);
         final List<LLVMSourceType> members = new ArrayList<>();
-        final LLVMSourceFunctionType type = new LLVMSourceFunctionType(members);
+        final LLVMSourceDecoratorType type = new LLVMSourceDecoratorType(0L, 0L, 0L, new Function<String, String>() {
+            @Override
+            @TruffleBoundary
+            public String apply(String ignored) {
+                if (members.isEmpty()) {
+                    return "(void())";
+                } else {
+                    CompilerDirectives.transferToInterpreter();
+                    final LLVMSourceType returnType = members.get(0);
+                    final String returnTypeName = returnType != UNKNOWN_TYPE ? returnType.getName() : VOID_TYPE.getName();
+                    return returnTypeName + members.subList(1, members.size()).stream().map(LLVMSourceType::getName).collect(Collectors.joining(", ", "(", ")"));
+                }
+            }
+        }, location);
         parsedTypes.put(mdSubroutine, type);
         getElements(mdSubroutine.getTypes(), members, true);
     }
@@ -289,16 +299,11 @@ final class DITypeExtractor implements MetadataVisitor {
         final long size = mdType.getSize();
         final long align = mdType.getAlign();
         final long offset = mdType.getOffset();
-        final LLVMSourceLocation location = scopeBuilder.buildLocation(mdType);
+        final LLVMSourceLocation location = scopeExtractor.resolve(mdType);
 
         switch (mdType.getTag()) {
 
             case DW_TAG_MEMBER: {
-                if (Flags.ARTIFICIAL.isAllFlags(mdType.getFlags())) {
-                    parsedTypes.put(mdType, LLVMSourceType.VOID);
-                    break;
-                }
-
                 final String name = MDNameExtractor.getName(mdType.getName());
 
                 if (Flags.STATIC_MEMBER.isSetIn(mdType.getFlags())) {
@@ -318,7 +323,7 @@ final class DITypeExtractor implements MetadataVisitor {
                 parsedTypes.put(mdType, type);
 
                 LLVMSourceType baseType = resolve(mdType.getBaseType());
-                if (Flags.BITFIELD.isSetIn(mdType.getFlags()) || (baseType != UNKNOWN && baseType.getSize() != size)) {
+                if (Flags.BITFIELD.isSetIn(mdType.getFlags()) || (baseType != UNKNOWN_TYPE && baseType.getSize() != size)) {
                     final LLVMSourceDecoratorType decorator = new LLVMSourceDecoratorType(size, align, offset, Function.identity(), location);
                     decorator.setBaseType(baseType);
                     baseType = decorator;
@@ -327,24 +332,19 @@ final class DITypeExtractor implements MetadataVisitor {
                 break;
             }
 
-            case DW_TAG_REFERENCE_TYPE:
             case DW_TAG_POINTER_TYPE: {
                 final boolean isSafeToDereference = Flags.OBJECT_POINTER.isSetIn(mdType.getFlags());
-                final boolean isReference = mdType.getTag() == MDType.DwarfTag.DW_TAG_REFERENCE_TYPE;
-                final LLVMSourcePointerType type = new LLVMSourcePointerType(size, align, offset, isSafeToDereference, isReference, location);
+                final LLVMSourcePointerType type = new LLVMSourcePointerType(size, align, offset, isSafeToDereference, location);
                 parsedTypes.put(mdType, type);
 
-                // LLVM does not specify a void type, if this is indicated, the reference is simply
-                // null
-                final LLVMSourceType baseType = resolve(mdType.getBaseType(), LLVMSourceType.VOID);
+                final LLVMSourceType baseType = resolve(mdType.getBaseType(), LLVMSourceType.VOID_TYPE);
                 type.setBaseType(baseType);
                 type.setName(() -> {
                     final String baseName = baseType.getName();
-                    final String sym = isReference ? " &" : "*";
                     if (!baseType.isPointer() && baseName.contains(" ")) {
-                        return String.format("(%s)%s", baseName, sym);
+                        return String.format("(%s)*", baseName);
                     } else {
-                        return String.format("%s%s", baseName, sym);
+                        return String.format("%s*", baseName);
                     }
                 });
                 break;
@@ -386,10 +386,6 @@ final class DITypeExtractor implements MetadataVisitor {
                 type.setName(() -> String.format("super (%s)", baseType.getName()));
 
                 break;
-            }
-
-            default: {
-                parsedTypes.put(mdType, LLVMSourceType.UNKNOWN);
             }
         }
     }
@@ -455,12 +451,14 @@ final class DITypeExtractor implements MetadataVisitor {
     public void visit(MDLocalVariable mdLocal) {
         if (!parsedTypes.containsKey(mdLocal)) {
             LLVMSourceType type = resolve(mdLocal.getType());
-            if (Flags.OBJECT_POINTER.isSetIn(mdLocal.getFlags()) && type instanceof LLVMSourcePointerType) {
+            if (type == UNKNOWN_TYPE) {
+                return;
+
+            } else if (Flags.OBJECT_POINTER.isSetIn(mdLocal.getFlags()) && type instanceof LLVMSourcePointerType) {
                 // llvm does not set the objectpointer flag on this pointer type even though it sets
                 // it on the pointer type that is used in the function type descriptor
                 final LLVMSourcePointerType oldPointer = (LLVMSourcePointerType) type;
-                final LLVMSourcePointerType newPointer = new LLVMSourcePointerType(oldPointer.getSize(), oldPointer.getAlign(), oldPointer.getOffset(), true, oldPointer.isReference(),
-                                type.getLocation());
+                final LLVMSourcePointerType newPointer = new LLVMSourcePointerType(oldPointer.getSize(), oldPointer.getAlign(), oldPointer.getOffset(), true, type.getLocation());
                 newPointer.setBaseType(oldPointer.getBaseType());
                 newPointer.setName(oldPointer::getName);
                 type = newPointer;
@@ -469,31 +467,12 @@ final class DITypeExtractor implements MetadataVisitor {
         }
     }
 
-    @Override
-    public void visit(MDSubprogram mdSubprogram) {
-        if (!parsedTypes.containsKey(mdSubprogram)) {
-            parsedTypes.put(mdSubprogram, resolve(mdSubprogram.getType()));
-        }
-    }
-
-    @Override
-    public void visit(MDVoidNode md) {
-        if (!parsedTypes.containsKey(md)) {
-            parsedTypes.put(md, new LLVMSourceType(() -> "void", 0, 0, 0, null) {
-                @Override
-                public LLVMSourceType getOffset(long newOffset) {
-                    return this;
-                }
-            });
-        }
-    }
-
     private void getElements(MDBaseNode elemList, List<LLVMSourceType> elemTypes, boolean includeUnknowns) {
         if (elemList instanceof MDNode) {
             final MDNode elemListNode = (MDNode) elemList;
             for (MDBaseNode elemNode : elemListNode) {
                 final LLVMSourceType elemType = resolve(elemNode);
-                if (elemType != UNKNOWN || includeUnknowns) {
+                if (elemType != UNKNOWN_TYPE || includeUnknowns) {
                     elemTypes.add(elemType);
                 }
             }
