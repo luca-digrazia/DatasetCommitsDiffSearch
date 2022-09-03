@@ -26,7 +26,6 @@ import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.graph.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.value.*;
@@ -80,7 +79,7 @@ public class InliningPhase extends Phase {
                         if (trace) {
                             String targetName = CiUtil.format("%H.%n(%p):%r", invoke.target, false);
                             String concreteName = CiUtil.format("%H.%n(%p):%r", concrete, false);
-                            TTY.println("recording concrete method assumption: %s -> %s", targetName, concreteName);
+                            System.out.printf("recording concrete method assumption: %s -> %s\n", targetName, concreteName);
                         }
                         compilation.assumptions.recordConcreteMethod(invoke.target, concrete);
                         addToQueue(invoke, concrete);
@@ -99,7 +98,7 @@ public class InliningPhase extends Phase {
                             guard.setNext(invoke);
 
                             if (trace) {
-                                TTY.println("inlining with type check, type probability: %5.3f", profile.probabilities[0]);
+                                System.out.println("inlining with type check, type probability: " + profile.probabilities[0]);
                             }
                             addToQueue(invoke, concrete);
 //                            System.out.println("inlining with type check " + profile.probabilities[0] + " " + profile.morphism + " " + profile.count);
@@ -133,7 +132,7 @@ public class InliningPhase extends Phase {
 
             if (inliningSize > GraalOptions.MaximumInstructionCount) {
                 if (trace) {
-                    TTY.println("inlining stopped: MaximumInstructionCount reached");
+                    System.out.println("inlining stopped: MaximumInstructionCount reached");
                 }
                 break;
             }
@@ -148,7 +147,7 @@ public class InliningPhase extends Phase {
                 duplicate += entry.getValue() - 1;
             }
             if (inlined > 0) {
-                TTY.println("overhead: %d (%5.3f %%)", duplicate, duplicate * 100.0 / inlined);
+                System.out.printf("overhead_: %d (%5.3f %%)\n", duplicate, duplicate * 100.0 / inlined);
             }
         }
     }
@@ -158,81 +157,73 @@ public class InliningPhase extends Phase {
 
         if (invoke.stateAfter() == null) {
             if (trace) {
-                TTY.println("not inlining %s because the invoke has no after state", name);
+                System.out.println("not inlining " + name + " because the invoke has no after state");
             }
             return false;
         }
         if (invoke.stateAfter().locksSize() > 0) {
             if (trace) {
-                TTY.println("not inlining %s because of locks", name);
+                System.out.println("not inlining " + name + " because of locks");
             }
             return false;
         }
         if (!invoke.target.isResolved()) {
             if (trace) {
-                TTY.println("not inlining %s because the invoke target is unresolved", name);
+                System.out.println("not inlining " + name + " because the invoke target is unresolved");
             }
             return false;
         }
         if (invoke.predecessors().size() == 0) {
             if (trace) {
-                TTY.println("not inlining %s because the invoke is dead code", name);
+                System.out.println("not inlining " + name + " because the invoke is dead code");
             }
             return false;
         }
         if (invoke.stateAfter() == null) {
             if (trace) {
-                TTY.println("not inlining %s because of missing frame state", name);
+                System.out.println("not inlining " + name + " because of missing frame state");
             }
         }
         return true;
     }
 
-    private boolean checkInliningConditions(RiMethod method, int iterations, Invoke invoke, RiTypeProfile profile, float adjustedRatio) {
+    private boolean checkInliningConditions(RiMethod method, int iterations, Invoke invoke, RiTypeProfile profile, float ratio) {
         String name = !trace ? null : CiUtil.format("%H.%n(%p):%r", method, false) + " (" + method.codeSize() + " bytes)";
         if (Modifier.isNative(method.accessFlags())) {
             if (trace) {
-                TTY.println("not inlining %s because it is a native method", name);
+                System.out.println("not inlining " + name + " because it is a native method");
             }
             return false;
         }
-        if (Modifier.isAbstract(method.accessFlags())) {
+        if (method.code().length > GraalOptions.MaximumInlineSize) {
             if (trace) {
-                TTY.println("not inlining %s because it is an abstract method", name);
+                System.out.println("not inlining " + name + " because of code size");
             }
             return false;
         }
         if (!method.holder().isInitialized()) {
             if (trace) {
-                TTY.println("not inlining %s because of non-initialized class", name);
+                System.out.println("not inlining " + name + " because of non-initialized class");
             }
             return false;
         }
         if (method == compilation.method && iterations > GraalOptions.MaximumRecursiveInlineLevel) {
             if (trace) {
-                TTY.println("not inlining %s because of recursive inlining limit", name);
+                System.out.println("not inlining " + name + " because of recursive inlining limit");
             }
             return false;
         }
-        int maximumSize = GraalOptions.MaximumTrivialSize;
-        float ratio = 0;
-        if (profile != null && profile.count > 0) {
+        if (method.code().length > GraalOptions.MaximumTrivialSize) {
             RiMethod parent = parentMethod.get(invoke);
             if (parent == null) {
                 parent = compilation.method;
             }
-            ratio = profile.count / (float) parent.invocationCount();
-            if (ratio >= GraalOptions.FreqInlineRatio) {
-                maximumSize = GraalOptions.MaximumFreqInlineSize;
-            } else if (ratio >= (1 - adjustedRatio)) {
-                maximumSize = GraalOptions.MaximumInlineSize;
+            if (profile == null || profile.count < parent.invocationCount() * (1 - ratio)) {
+                if (trace) {
+                    System.out.println("not inlining " + name + " because the invocation counter is too low");
+                }
+                return false;
             }
-        }
-        if (method.codeSize() > maximumSize) {
-            if (trace) {
-                TTY.println("not inlining %s because of code size (size: %d, max size: %d, ratio %5.3f)", name, method.codeSize(), maximumSize, ratio);
-            }
-            return false;
         }
         return true;
     }
@@ -243,15 +234,15 @@ public class InliningPhase extends Phase {
         Instruction exceptionEdge = invoke.exceptionEdge();
 
         CompilerGraph graph;
-        Object stored = GraphBuilderPhase.cachedGraphs.get(method);
+        Object stored = method.compilerStorage().get(CompilerGraph.class);
         if (stored != null) {
             if (trace) {
-                TTY.println("Reusing graph for %s, locals: %d, stack: %d", name, method.maxLocals(), method.maxStackSize());
+                System.out.printf("Reusing graph for %s, locals: %d, stack: %d\n", name, method.maxLocals(), method.maxStackSize());
             }
             graph = (CompilerGraph) stored;
         } else {
             if (trace) {
-                TTY.println("Building graph for %s, locals: %d, stack: %d", name, method.maxLocals(), method.maxStackSize());
+                System.out.printf("Building graph for %s, locals: %d, stack: %d\n", name, method.maxLocals(), method.maxStackSize());
             }
             graph = new CompilerGraph(null);
             new GraphBuilderPhase(compilation, method, true, true).apply(graph);
@@ -299,7 +290,7 @@ public class InliningPhase extends Phase {
         }
 
         if (trace) {
-            TTY.println("inlining %s: %d frame states, %d nodes", name, frameStates.size(), nodes.size());
+            System.out.println("inlining " + name + ": " + frameStates.size() + " frame states, " + nodes.size() + " nodes");
         }
 
         assert invoke.successors().get(0) != null : invoke;
@@ -310,7 +301,7 @@ public class InliningPhase extends Phase {
             clipNode.setNode(new IsNonNull(parameters[0], compilation.graph));
             pred = clipNode;
         } else {
-            pred = new Placeholder(compilation.graph);
+            pred = new Placeholder(compilation.graph); // (Instruction) invoke.predecessors().get(0);//new Merge(compilation.graph);
         }
         invoke.predecessors().get(0).successors().replace(invoke, pred);
         replacements.put(startNode, pred);
@@ -327,6 +318,7 @@ public class InliningPhase extends Phase {
         if (monitorIndexDelta > 0) {
             for (Map.Entry<Node, Node> entry : duplicates.entrySet()) {
                 if (entry.getValue() instanceof MonitorAddress) {
+                    System.out.println("Adjusting monitor index");
                     MonitorAddress address = (MonitorAddress) entry.getValue();
                     address.setMonitorIndex(address.monitorIndex() + monitorIndexDelta);
                 }
@@ -348,9 +340,8 @@ public class InliningPhase extends Phase {
             }
             Node returnDuplicate = duplicates.get(returnNode);
             returnDuplicate.inputs().clearAll();
-            Node n = invoke.next();
+            returnDuplicate.replace(invoke.next());
             invoke.setNext(null);
-            returnDuplicate.replace(n);
         }
 
         if (exceptionEdge != null) {
@@ -365,9 +356,7 @@ public class InliningPhase extends Phase {
                     usage.inputs().replace(obj, unwindDuplicate.exception());
                 }
                 unwindDuplicate.inputs().clearAll();
-                Node n = obj.next();
-                obj.setNext(null);
-                unwindDuplicate.replace(n);
+                unwindDuplicate.replace(obj.next());
             }
         }
 

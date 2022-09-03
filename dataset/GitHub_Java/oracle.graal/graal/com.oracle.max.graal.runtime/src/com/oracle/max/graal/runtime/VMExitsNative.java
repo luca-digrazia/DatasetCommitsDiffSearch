@@ -29,7 +29,6 @@ import java.util.*;
 
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.graph.*;
 import com.oracle.max.graal.runtime.logging.*;
 import com.oracle.max.graal.runtime.server.*;
 import com.sun.cri.ci.*;
@@ -153,7 +152,7 @@ public class VMExitsNative implements VMExits, Remote {
 
                     if (result.bailout() != null) {
                         Throwable cause = result.bailout().getCause();
-                        if (!GraalOptions.QuietBailout && !(result.bailout() instanceof JSRNotSupportedBailout)) {
+                        if (!GraalOptions.QuietBailout) {
                             StringWriter out = new StringWriter();
                             result.bailout().printStackTrace(new PrintWriter(out));
                             TTY.println("Bailout:\n" + out.toString());
@@ -180,7 +179,7 @@ public class VMExitsNative implements VMExits, Remote {
                 } catch (Throwable t) {
                     StringWriter out = new StringWriter();
                     t.printStackTrace(new PrintWriter(out));
-                    TTY.println("Compilation interrupted: (" + method + ")\n" + out.toString());
+                    TTY.println("Compilation interrupted: (" + method.name() + ")\n" + out.toString());
                     throw t;
                 }
             }

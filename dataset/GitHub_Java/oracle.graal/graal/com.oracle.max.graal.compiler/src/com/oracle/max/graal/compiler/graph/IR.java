@@ -69,7 +69,7 @@ public class IR {
      */
     public void build() {
 
-//        Object stored = GraphBuilderPhase.cachedGraphs.get(compilation.method);
+//        Object stored = compilation.method.compilerStorage().get(CompilerGraph.class);
 //        if (stored != null) {
 //            Map<Node, Node> replacements = new HashMap<Node, Node>();
 //            CompilerGraph duplicate = (CompilerGraph) stored;

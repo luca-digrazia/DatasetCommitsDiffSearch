@@ -28,5 +28,4 @@ import com.sun.cri.ri.*;
 public interface HotSpotMethodResolved extends RiMethod, Remote {
 
     RiMethod uniqueConcreteMethod();
-    void dumpProfile();
 }
