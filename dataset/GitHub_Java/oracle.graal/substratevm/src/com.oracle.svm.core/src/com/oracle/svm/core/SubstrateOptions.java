@@ -74,11 +74,11 @@ public class SubstrateOptions {
     public static final HostedOptionKey<Boolean> IncludeNodeSourcePositions = new HostedOptionKey<>(false);
 
     @Option(help = "Search path for C libraries passed to the linker (list of comma-separated directories)")//
-    public static final HostedOptionKey<String[]> CLibraryPath = new HostedOptionKey<>(new String[]{
-                    Paths.get("clibraries/" + OS.getCurrent().asPackageName() + "-" + SubstrateUtil.getArchitectureName()).toAbsolutePath().toString()});
+    public static final HostedOptionKey<String> CLibraryPath = new HostedOptionKey<>(
+                    Paths.get("clibraries/" + OS.getCurrent().asPackageName() + "-" + SubstrateUtil.getArchitectureName()).toAbsolutePath().toString());
 
     @Option(help = "Path passed to the linker as the -rpath (list of comma-separated directories)")//
-    public static final HostedOptionKey<String[]> LinkerRPath = new HostedOptionKey<>(new String[0]);
+    public static final HostedOptionKey<String> LinkerRPath = new HostedOptionKey<>("");
 
     @APIOption(name = "-ea", customHelp = "enable assertions in the generated image")//
     @APIOption(name = "-da", kind = APIOption.APIOptionKind.Negated, customHelp = "disable assertions in the generated image")//
@@ -115,7 +115,7 @@ public class SubstrateOptions {
     public static final HostedOptionKey<Boolean> UseOnlyWritableBootImageHeap = new HostedOptionKey<>(false);
 
     @Option(help = "Support multiple isolates. ")//
-    public static final HostedOptionKey<Boolean> SpawnIsolates = new HostedOptionKey<>(false);
+    public static final HostedOptionKey<Boolean> SpawnIsolates = new HostedOptionKey<>(true);
 
     @Option(help = "Trace VMOperation execution.")//
     public static final RuntimeOptionKey<Boolean> TraceVMOperations = new RuntimeOptionKey<>(false);
@@ -130,10 +130,11 @@ public class SubstrateOptions {
     @APIOption(name = "enable-https", fixedValue = "https", customHelp = "enable https support in the generated image")//
     @APIOption(name = "enable-url-protocols")//
     @Option(help = "List of comma separated URL protocols to enable.")//
-    public static final HostedOptionKey<String[]> EnableURLProtocols = new HostedOptionKey<String[]>(new String[0]) {
+    public static final HostedOptionKey<String> EnableURLProtocols = new HostedOptionKey<String>("") {
         @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String[] oldValue, String[] newValue) {
-            for (String protocol : newValue) {
+        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
+            String[] protocols = newValue.split(",");
+            for (String protocol : protocols) {
                 if (protocol.equals(JavaNetSubstitutions.HTTPS_PROTOCOL)) {
                     EnableAllSecurityServices.update(values, true);
                 }
@@ -161,10 +162,10 @@ public class SubstrateOptions {
     public static final HostedOptionKey<Boolean> JNI = new HostedOptionKey<>(true);
 
     @Option(help = "Files describing program elements to be made accessible via JNI (for syntax, see ReflectionConfigurationFiles)", type = OptionType.User)//
-    public static final HostedOptionKey<String[]> JNIConfigurationFiles = new HostedOptionKey<>(new String[0]);
+    public static final HostedOptionKey<String> JNIConfigurationFiles = new HostedOptionKey<>("");
 
     @Option(help = "Resources describing program elements to be made accessible via JNI (see JNIConfigurationFiles).", type = OptionType.User)//
-    public static final HostedOptionKey<String[]> JNIConfigurationResources = new HostedOptionKey<>(new String[0]);
+    public static final HostedOptionKey<String> JNIConfigurationResources = new HostedOptionKey<>("");
 
     /*
      * Object and array allocation options.
