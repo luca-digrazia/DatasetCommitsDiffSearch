@@ -644,9 +644,13 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     @Override
     public RootCallTarget createCallTarget(RootNode rootNode) {
         CompilerAsserts.neverPartOfCompilation();
-        final RootCallTarget newCallTarget = createClonedCallTarget(null, rootNode);
-        TruffleSplittingStrategy.newTargetCreated(tvmci, newCallTarget);
-        return newCallTarget;
+        final OptimizedCallTarget callTarget = (OptimizedCallTarget) createClonedCallTarget(null, rootNode);
+        if (TruffleCompilerOptions.getValue(TruffleSplitting)) {
+            final GraalTVMCI.EngineData engineData = tvmci.getEngineData(rootNode);
+            final int newLimit = (int) (engineData.splitLimit + TruffleCompilerOptions.getValue(TruffleSplittingGrowthLimit) * callTarget.getUninitializedNodeCount());
+            engineData.splitLimit = Math.min(newLimit, TruffleCompilerOptions.getValue(TruffleSplittingMaxNumberOfSplitNodes));
+        }
+        return callTarget;
     }
 
     @SuppressWarnings("deprecation")

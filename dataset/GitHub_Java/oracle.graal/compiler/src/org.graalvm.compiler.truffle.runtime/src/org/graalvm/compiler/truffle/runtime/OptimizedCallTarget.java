@@ -68,7 +68,6 @@ import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.Truffle
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompilationExceptionsArePrinted;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompilationExceptionsAreThrown;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TrufflePerformanceWarningsAreFatal;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleUsePollutionBasedSplittingStrategy;
 
 /**
  * Call target that is optimized by Graal upon surpassing a specific invocation threshold. That is,
@@ -677,9 +676,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     void pollutionEvent() {
-        if (TruffleCompilerOptions.getValue(TruffleUsePollutionBasedSplittingStrategy)) {
-            this.polluteProfile(0, new ArrayList<>());
-        }
+        this.polluteProfile(0, new ArrayList<>());
     }
 
     private void polluteProfile(int depth, List<RootCallTarget> toPollute) {
