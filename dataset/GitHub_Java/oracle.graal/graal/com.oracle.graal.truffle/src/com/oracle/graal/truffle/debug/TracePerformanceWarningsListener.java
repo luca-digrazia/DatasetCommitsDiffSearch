@@ -26,10 +26,9 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
 import java.util.*;
 
-import com.oracle.graal.nodes.*;
 import com.oracle.graal.truffle.*;
 
-public class TracePerformanceWarningsListener extends AbstractDebugCompilationListener {
+public final class TracePerformanceWarningsListener extends AbstractDebugCompilationListener {
 
     private TracePerformanceWarningsListener() {
     }
@@ -40,16 +39,12 @@ public class TracePerformanceWarningsListener extends AbstractDebugCompilationLi
         }
     }
 
-    @Override
-    public void notifyCompilationTruffleTierFinished(OptimizedCallTarget target, StructuredGraph graph) {
-    }
-
     public static boolean isEnabled() {
         return TraceTrufflePerformanceWarnings.getValue();
     }
 
-    public static void logPerformanceWarning(String details, Map<String, Object> properties) {
-        log(0, "perf warn", details, properties);
+    public static void logPerformanceWarning(OptimizedCallTarget target, String details, Map<String, Object> properties) {
+        log(target, 0, "perf warn", String.format("%-60s|%s", target, details), properties);
     }
 
 }
