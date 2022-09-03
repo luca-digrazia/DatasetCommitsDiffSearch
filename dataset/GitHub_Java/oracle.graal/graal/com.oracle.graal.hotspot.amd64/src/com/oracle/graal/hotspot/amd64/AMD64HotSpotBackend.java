@@ -50,7 +50,6 @@ import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.phases.*;
 
 /**
@@ -155,15 +154,7 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
 
         @Override
         protected void emitDirectCall(DirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-            InvokeKind invokeKind = ((HotSpotDirectCallTargetNode) callTarget).invokeKind();
-            if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual) {
-                append(new AMD64HotspotDirectVirtualCallOp(callTarget.target(), result, parameters, temps, callState, invokeKind));
-            } else {
-                assert invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special;
-                HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.target();
-                Constant metaspaceMethod = resolvedMethod.getMetaspaceMethodConstant();
-                append(new AMD64HotspotDirectStaticCallOp(callTarget.target(), result, parameters, temps, callState, invokeKind, metaspaceMethod));
-            }
+            append(new AMD64DirectCallOp(callTarget.target(), result, parameters, temps, callState, ((HotSpotDirectCallTargetNode) callTarget).invokeKind()));
         }
 
         @Override
