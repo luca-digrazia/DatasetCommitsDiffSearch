@@ -34,6 +34,7 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.test.examples.FunctionCallFactory.FunctionCallNodeGen;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 
@@ -97,11 +98,11 @@ public class FunctionCall {
         private int indirectCall;
 
         @Specialization(limit = "CACHE_SIZE", guards = {"function == cachedFunction", "cacheFunctionTarget(cachedFunction)"})
-        public Object directCallFunctionGuard(Function function, Object argument,  //
+        public Object directCallFunctionGuard(VirtualFrame frame, Function function, Object argument,  //
                         @Cached("function") Function cachedFunction, //
                         @Cached("create(cachedFunction.getTarget())") DirectCallNode callNode) {
             directCallFunctionGuard++;
-            return callNode.call(new Object[]{argument});
+            return callNode.call(frame, new Object[]{argument});
         }
 
         protected final boolean cacheFunctionTarget(Function function) {
@@ -123,19 +124,19 @@ public class FunctionCall {
             return false;
         }
 
-        @Specialization(limit = "CACHE_SIZE", replaces = "directCallFunctionGuard", guards = {"function.getTarget() == cachedTarget"})
-        protected Object directCall(Function function, Object argument,  //
+        @Specialization(limit = "CACHE_SIZE", contains = "directCallFunctionGuard", guards = {"function.getTarget() == cachedTarget"})
+        protected Object directCall(VirtualFrame frame, Function function, Object argument,  //
                         @Cached("function.getTarget()") CallTarget cachedTarget, //
                         @Cached("create(cachedTarget)") DirectCallNode callNode) {
             directCall++;
-            return callNode.call(new Object[]{argument});
+            return callNode.call(frame, new Object[]{argument});
         }
 
-        @Specialization(replaces = "directCall")
-        protected Object indirectCall(Function function, Object argument, //
+        @Specialization(contains = "directCall")
+        protected Object indirectCall(VirtualFrame frame, Function function, Object argument, //
                         @Cached("create()") IndirectCallNode callNode) {
             indirectCall++;
-            return callNode.call(function.getTarget(), new Object[]{argument});
+            return callNode.call(frame, function.getTarget(), new Object[]{argument});
         }
     }
 

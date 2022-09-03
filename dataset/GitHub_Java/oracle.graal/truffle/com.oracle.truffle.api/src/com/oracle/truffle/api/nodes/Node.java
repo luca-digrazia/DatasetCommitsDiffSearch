@@ -46,8 +46,6 @@ import com.oracle.truffle.api.utilities.JSONHelper;
 
 /**
  * Abstract base class for all Truffle nodes.
- * 
- * @since 0.8 or earlier
  */
 public abstract class Node implements NodeInterface, Cloneable {
     private final NodeClass nodeClass;
@@ -56,8 +54,6 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     /**
      * Marks array fields that are children of this node.
-     * 
-     * @since 0.8 or earlier
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.FIELD})
@@ -66,15 +62,12 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     /**
      * Marks fields that represent child nodes of this node.
-     * 
-     * @since 0.8 or earlier
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.FIELD})
     public @interface Child {
     }
 
-    /** @since 0.8 or earlier */
     protected Node() {
         CompilerAsserts.neverPartOfCompilation("do not create a Node from compiled code");
         this.nodeClass = NodeClass.get(getClass());
@@ -87,7 +80,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * @deprecated if your node provides source section, override {@link #getSourceSection()} to
      *             return it - this constructor will be removed
      * @param sourceSection
-     * @since 0.8 or earlier
      */
     @Deprecated
     protected Node(SourceSection sourceSection) {
@@ -100,7 +92,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      *             return it - this method will be removed
      *
      * @param section the object representing a section in guest language source code
-     * @since 0.8 or earlier
      */
     @Deprecated
     public void assignSourceSection(SourceSection section) {
@@ -126,8 +117,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * {@link NodeInfo#cost()} of the {@link NodeInfo} annotation declared at the subclass. If no
      * {@link NodeInfo} annotation is declared the method returns {@link NodeCost#MONOMORPHIC} as a
      * default value.
-     * 
-     * @since 0.8 or earlier
      */
     public NodeCost getCost() {
         NodeInfo info = getClass().getAnnotation(NodeInfo.class);
@@ -142,7 +131,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      *             return it - this method will be removed
      *
      *             Clears any previously assigned guest language source code from this node.
-     * @since 0.8 or earlier
      */
     @Deprecated
     public void clearSourceSection() {
@@ -166,7 +154,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * {@codesnippet MutableSourceSectionNode}
      *
      * @return the source code represented by this Node
-     * @since 0.8 or earlier
      */
     public SourceSection getSourceSection() {
         return sourceSection;
@@ -178,7 +165,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * this information.
      *
      * @return an approximation of the source code represented by this Node
-     * @since 0.8 or earlier
      */
     @ExplodeLoop
     public SourceSection getEncapsulatingSourceSection() {
@@ -199,7 +185,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      *
      * @param newChildren the array of new children whose parent should be updated
      * @return the array of new children
-     * @since 0.8 or earlier
      */
     protected final <T extends Node> T[] insert(final T[] newChildren) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -215,7 +200,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      *
      * @param newChild the new child whose parent should be updated
      * @return the new child
-     * @since 0.8 or earlier
      */
     protected final <T extends Node> T insert(final T newChild) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -224,7 +208,6 @@ public abstract class Node implements NodeInterface, Cloneable {
         return newChild;
     }
 
-    /** @since 0.8 or earlier */
     public final void adoptChildren() {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         adoptHelper();
@@ -278,7 +261,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * subclasses to add their own custom properties.
      *
      * @return the properties as a key/value hash map
-     * @since 0.8 or earlier
      */
     public Map<String, Object> getDebugProperties() {
         Map<String, Object> properties = new HashMap<>();
@@ -289,7 +271,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * The current parent node of this node.
      *
      * @return the parent node
-     * @since 0.8 or earlier
      */
     public final Node getParent() {
         return parent;
@@ -302,7 +283,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * @param newNode the new node that is the replacement
      * @param reason a description of the reason for the replacement
      * @return the new node
-     * @since 0.8 or earlier
      */
     public final <T extends Node> T replace(final T newNode, final CharSequence reason) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -320,7 +300,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      *
      * @param newNode the new node that is the replacement
      * @return the new node
-     * @since 0.8 or earlier
      */
     public final <T extends Node> T replace(T newNode) {
         return replace(newNode, "");
@@ -348,8 +327,6 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     /**
      * Checks if this node can be replaced by another node: tree structure & type.
-     * 
-     * @since 0.8 or earlier
      */
     public final boolean isSafelyReplaceableBy(Node newNode) {
         return NodeUtil.isReplacementSafe(getParent(), this, newNode);
@@ -386,7 +363,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      *
      * @param newNode the replacement node
      * @param reason the reason the replace supplied
-     * @since 0.8 or earlier
      */
     protected void onReplace(Node newNode, CharSequence reason) {
         // empty default
@@ -397,7 +373,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * child nodes.
      *
      * @param nodeVisitor the visitor
-     * @since 0.8 or earlier
      */
     public final void accept(NodeVisitor nodeVisitor) {
         if (nodeVisitor.visit(this)) {
@@ -409,7 +384,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * Iterator over the children of this node.
      *
      * @return the iterator
-     * @since 0.8 or earlier
      */
     public final Iterable<Node> getChildren() {
         return new Iterable<Node>() {
@@ -423,7 +397,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * Creates a shallow copy of this node.
      *
      * @return the new copy
-     * @since 0.8 or earlier
      */
     public Node copy() {
         CompilerAsserts.neverPartOfCompilation("do not call Node.copy from compiled code");
@@ -439,7 +412,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * Creates a deep copy of this node.
      *
      * @return the new deep copy
-     * @since 0.8 or earlier
      */
     public Node deepCopy() {
         return NodeUtil.deepCopyImpl(this);
@@ -449,7 +421,6 @@ public abstract class Node implements NodeInterface, Cloneable {
      * Get the root node of the tree a node belongs to.
      *
      * @return the {@link RootNode} or {@code null} if there is none.
-     * @since 0.8 or earlier
      */
     public final RootNode getRootNode() {
         Node rootNode = this;
@@ -465,8 +436,6 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     /**
      * Converts this node to a textual representation useful for debugging.
-     * 
-     * @since 0.8 or earlier
      */
     @Override
     public String toString() {
@@ -485,7 +454,6 @@ public abstract class Node implements NodeInterface, Cloneable {
         return sb.toString();
     }
 
-    /** @since 0.8 or earlier */
     public final void atomic(Runnable closure) {
         RootNode rootNode = getRootNode();
         // Major Assumption: parent is never null after a node got adopted
@@ -501,7 +469,6 @@ public abstract class Node implements NodeInterface, Cloneable {
         }
     }
 
-    /** @since 0.8 or earlier */
     public final <T> T atomic(Callable<T> closure) {
         try {
             RootNode rootNode = getRootNode();
@@ -526,8 +493,6 @@ public abstract class Node implements NodeInterface, Cloneable {
     /**
      * Returns a user-readable description of the purpose of the Node, or "" if no description is
      * available.
-     * 
-     * @since 0.8 or earlier
      */
     public String getDescription() {
         NodeInfo info = getClass().getAnnotation(NodeInfo.class);
@@ -540,8 +505,6 @@ public abstract class Node implements NodeInterface, Cloneable {
     /**
      * Returns a string representing the language this node has been implemented for. If the
      * language is unknown, returns "".
-     * 
-     * @since 0.8 or earlier
      */
     public String getLanguage() {
         NodeInfo info = getClass().getAnnotation(NodeInfo.class);
@@ -578,34 +541,16 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     static final class AccessorNodes extends Accessor {
-
         @SuppressWarnings("rawtypes")
         @Override
         protected Class<? extends TruffleLanguage> findLanguage(RootNode n) {
             return n.language;
         }
 
-        @SuppressWarnings("rawtypes")
-        @Override
-        protected Class<? extends TruffleLanguage> findLanguage(Node n) {
-            return n.getRootNode().language;
-        }
-
-        @Override
-        protected boolean isInstrumentable(RootNode rootNode) {
-            return rootNode.isInstrumentable();
-        }
-
         @Override
         protected void probeAST(RootNode rootNode) {
             super.probeAST(rootNode);
         }
-
-        @Override
-        protected void onLoopCount(Node source, int iterations) {
-            super.onLoopCount(source, iterations);
-        }
-
     }
 
     // registers into Accessor.NODES

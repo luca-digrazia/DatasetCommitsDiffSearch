@@ -30,8 +30,6 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
 /**
  * A slot in a {@link Frame} and {@link FrameDescriptor} that can store a value of a given type.
- * 
- * @since 0.8 or earlier
  */
 public final class FrameSlot implements Cloneable {
 
@@ -46,7 +44,6 @@ public final class FrameSlot implements Cloneable {
      *             {@link FrameDescriptor#addFrameSlot(java.lang.Object, java.lang.Object, com.oracle.truffle.api.frame.FrameSlotKind)}
      *             to create new instance of the slot. This method will be made package private in
      *             the future.
-     * @since 0.8 or earlier
      */
     @Deprecated
     public FrameSlot(FrameDescriptor descriptor, Object identifier, Object info, int index, FrameSlotKind kind) {
@@ -66,7 +63,6 @@ public final class FrameSlot implements Cloneable {
      *
      * @return value as specified in {@link FrameDescriptor#addFrameSlot(java.lang.Object)}
      *         parameter
-     * @since 0.8 or earlier
      */
     public Object getIdentifier() {
         return identifier;
@@ -77,7 +73,6 @@ public final class FrameSlot implements Cloneable {
      *
      * @return value as specified as second parameter of
      *         {@link FrameDescriptor#addFrameSlot(java.lang.Object, java.lang.Object, com.oracle.truffle.api.frame.FrameSlotKind)}
-     * @since 0.8 or earlier
      */
     public Object getInfo() {
         return info;
@@ -89,7 +84,6 @@ public final class FrameSlot implements Cloneable {
      * @return position of the slot computed after
      *         {@link FrameDescriptor#addFrameSlot(java.lang.Object, java.lang.Object, com.oracle.truffle.api.frame.FrameSlotKind)
      *         adding} it.
-     * @since 0.8 or earlier
      */
     public int getIndex() {
         return index;
@@ -102,7 +96,6 @@ public final class FrameSlot implements Cloneable {
      * method.
      *
      * @return current kind of this slot
-     * @since 0.8 or earlier
      */
     public FrameSlotKind getKind() {
         return kind;
@@ -114,17 +107,15 @@ public final class FrameSlot implements Cloneable {
      * {@link #getFrameDescriptor() associated descriptor}.
      *
      * @param kind new kind of the slot
-     * @since 0.8 or earlier
      */
     public void setKind(final FrameSlotKind kind) {
         if (this.kind != kind) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CompilerDirectives.transferToInterpreter();
             this.kind = kind;
             this.descriptor.updateVersion();
         }
     }
 
-    /** @since 0.8 or earlier */
     @Override
     public String toString() {
         CompilerAsserts.neverPartOfCompilation("do not call FrameSlot.toString from compiled code");
@@ -136,7 +127,6 @@ public final class FrameSlot implements Cloneable {
      *
      * @return instance of descriptor that {@link FrameDescriptor#addFrameSlot(java.lang.Object)
      *         created} the slot
-     * @since 0.8 or earlier
      */
     public FrameDescriptor getFrameDescriptor() {
         return this.descriptor;

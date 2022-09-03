@@ -24,15 +24,18 @@
  */
 package com.oracle.truffle.api.dsl.internal;
 
-import java.util.*;
-import java.util.concurrent.*;
-
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeCost;
+import java.util.Arrays;
+import java.util.concurrent.Callable;
 
 /** Contains utility classes shared across generated DSLNode implementations. */
 public class DSLShare {
 
     public static boolean isExcluded(Node currentNode, DSLMetadata otherMetadata) {
+        CompilerAsserts.neverPartOfCompilation("do not call DSLShare.isExcluded from compiled code");
+
         assert otherMetadata.getExcludedBy().length > 0 : "At least one exclude must be defined for isIncluded.";
         Node cur = findRoot(currentNode);
         while (cur != null) {
@@ -52,6 +55,8 @@ public class DSLShare {
     }
 
     public static <T extends Node & DSLNode> T rewrite(final Node thisNode, final T newNode, final String message) {
+        CompilerAsserts.neverPartOfCompilation("do not call DSLShare.rewrite from compiled code");
+
         return thisNode.atomic(new Callable<T>() {
             public T call() {
                 assert newNode != null;
@@ -72,6 +77,8 @@ public class DSLShare {
 
     @SuppressWarnings("unchecked")
     public static <T extends Node> T findRoot(T node) {
+        CompilerAsserts.neverPartOfCompilation("do not call DSLShare.findRoot from compiled code");
+
         Node prev = node;
         Node cur;
         do {
@@ -92,6 +99,8 @@ public class DSLShare {
     }
 
     public static <T extends Node & DSLNode> T rewriteUninitialized(final Node uninitialized, final T newNode) {
+        CompilerAsserts.neverPartOfCompilation("do not call DSLShare.rewriteUninitialized from compiled code");
+
         return uninitialized.atomic(new Callable<T>() {
             public T call() {
                 Node prev = getPrevious(uninitialized);
@@ -108,6 +117,8 @@ public class DSLShare {
 
     public static <T extends Node & DSLNode> T rewriteToPolymorphic(final Node oldNode, final DSLNode uninitializedDSL, final T polymorphic, final DSLNode currentCopy, final DSLNode newNodeDSL,
                     final String message) {
+        CompilerAsserts.neverPartOfCompilation("do not call DSLShare.rewriteToPolymorphic from compiled code");
+
         return oldNode.atomic(new Callable<T>() {
             public T call() {
                 assert getNext(oldNode) == null;
@@ -135,7 +146,8 @@ public class DSLShare {
 
     private static void updateSourceSection(Node oldNode, Node newNode) {
         if (newNode.getSourceSection() == null) {
-            newNode.assignSourceSection(oldNode.getSourceSection());
+            throw new IllegalArgumentException("Can't update source: " + oldNode);
+            // newNode.assignSourceSection(oldNode.getSourceSection());
         }
     }
 
