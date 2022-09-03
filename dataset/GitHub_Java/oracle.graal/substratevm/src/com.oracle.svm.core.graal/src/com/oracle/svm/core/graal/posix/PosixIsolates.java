@@ -39,7 +39,6 @@ import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.c.CGlobalData;
 import com.oracle.svm.core.c.CGlobalDataFactory;
 import com.oracle.svm.core.c.function.CEntryPointCreateIsolateParameters;
-import com.oracle.svm.core.c.function.CEntryPointSetup;
 import com.oracle.svm.core.graal.posix.PosixCEntryPointSnippets.Errors;
 import com.oracle.svm.core.posix.headers.LibC;
 import com.oracle.svm.core.posix.headers.Mman;
@@ -54,17 +53,16 @@ public class PosixIsolates {
 
     @Uninterruptible(reason = "Thread state not yet set up.")
     public static int checkSanity(Isolate isolate) {
-        if (SubstrateOptions.SpawnIsolates.getValue()) {
-            return isolate.isNull() ? Errors.NULL_ARGUMENT : Errors.NO_ERROR;
-        } else {
-            return isolate.equal(CEntryPointSetup.SINGLE_ISOLATE_SENTINEL) ? Errors.NO_ERROR : Errors.UNINITIALIZED_ISOLATE;
+        if (!SubstrateOptions.SpawnIsolates.getValue()) {
+            return isolate.isNull() ? Errors.NO_ERROR : Errors.UNINITIALIZED_ISOLATE;
         }
+        return isolate.isNull() ? Errors.NULL_ARGUMENT : Errors.NO_ERROR;
     }
 
     @Uninterruptible(reason = "Thread state not yet set up.")
     public static int create(WordPointer isolatePointer, @SuppressWarnings("unused") CEntryPointCreateIsolateParameters parameters) {
         if (!SubstrateOptions.SpawnIsolates.getValue()) {
-            isolatePointer.write(CEntryPointSetup.SINGLE_ISOLATE_SENTINEL);
+            isolatePointer.write(Word.nullPointer());
             return Errors.NO_ERROR;
         }
 
@@ -114,7 +112,7 @@ public class PosixIsolates {
 
     @Uninterruptible(reason = "Thread state not yet set up.")
     public static PointerBase getHeapBase(Isolate isolate) {
-        if (!SubstrateOptions.SpawnIsolates.getValue()) {
+        if (!SubstrateOptions.SpawnIsolates.getValue() || isolate.isNull()) {
             return IMAGE_HEAP_BEGIN.get();
         }
         return isolate;
