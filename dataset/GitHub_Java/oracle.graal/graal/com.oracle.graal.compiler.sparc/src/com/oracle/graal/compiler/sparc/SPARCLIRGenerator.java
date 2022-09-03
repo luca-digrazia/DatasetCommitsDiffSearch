@@ -37,7 +37,7 @@ import com.oracle.graal.api.code.ForeignCallLinkage;
 import com.oracle.graal.api.code.StackSlot;
 import com.oracle.graal.api.code.TargetDescription;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.compiler.gen.LIRGenerator;
 import com.oracle.graal.compiler.target.LIRGenLowerable;
 import com.oracle.graal.graph.GraalInternalError;
@@ -151,38 +151,26 @@ public class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label) {
-        Variable x;
-        Value y;
-        Condition condition;
-        if (LIRValueUtil.isVariable(right)) {
-            x = load(right);
-            y = loadNonConst(left);
-            condition = cond.mirror();
-        } else {
-            x = load(left);
-            y = loadNonConst(right);
-            condition = cond;
-        }
         switch (left.getKind().getStackKind()) {
             case Int:
-                append(new CompareOp(ICMP, x, y));
-                append(new BranchOp(condition, label));
+                append(new CompareOp(ICMP, left, right));
+                append(new BranchOp(cond, label));
                 break;
             case Long:
-                append(new CompareOp(LCMP, x, y));
-                append(new BranchOp(condition, label));
+                append(new CompareOp(LCMP, left, right));
+                append(new BranchOp(cond, label));
                 break;
             case Float:
-                append(new CompareOp(FCMP, x, y));
-                append(new BranchOp(condition, label));
+                append(new CompareOp(FCMP, left, right));
+                append(new BranchOp(cond, label));
                 break;
             case Double:
-                append(new CompareOp(DCMP, x, y));
-                append(new BranchOp(condition, label));
+                append(new CompareOp(DCMP, left, right));
+                append(new BranchOp(cond, label));
                 break;
             case Object:
-                append(new CompareOp(ACMP, x, y));
-                append(new BranchOp(condition, label));
+                append(new CompareOp(ACMP, left, right));
+                append(new BranchOp(cond, label));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere("" + left.getKind());
@@ -400,11 +388,8 @@ public class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public boolean canInlineConstant(Constant c) {
         switch (c.getKind()) {
-            case Int:
-                return SPARCAssembler.isSimm13(c.asInt()) && !runtime.needsDataPatch(c);
             case Long:
-                // return NumUtil.isInt(c.asLong()) && !runtime.needsDataPatch(c);
-                throw new InternalError("NYI");
+                return NumUtil.isInt(c.asLong()) && !runtime.needsDataPatch(c);
             case Object:
                 return c.isNull();
             default:
@@ -434,7 +419,7 @@ public class SPARCLIRGenerator extends LIRGenerator {
             baseRegister = asAllocatable(base);
         }
 
-        if (!Value.ILLEGAL.equals(index) && scale != 0) {
+        if (index != Value.ILLEGAL && scale != 0) {
             if (isConstant(index)) {
                 finalDisp += asConstant(index).asLong() * scale;
             } else {
@@ -445,7 +430,7 @@ public class SPARCLIRGenerator extends LIRGenerator {
                     indexRegister = index;
                 }
 
-                if (Value.ILLEGAL.equals(baseRegister)) {
+                if (baseRegister == Value.ILLEGAL) {
                     baseRegister = asAllocatable(indexRegister);
                 } else {
                     Variable newBase = newVariable(Kind.Int);
