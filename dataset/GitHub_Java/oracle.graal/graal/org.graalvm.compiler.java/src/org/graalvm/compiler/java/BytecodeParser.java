@@ -739,8 +739,6 @@ public class BytecodeParser implements GraphBuilderContext {
             }
 
             if (method.isSynchronized()) {
-                finishPrepare(lastInstr, BytecodeFrame.BEFORE_BCI);
-
                 // add a monitor enter to the start block
                 methodSynchronizedObject = synchronizedObject(frameState, method);
                 frameState.clearNonLiveLocals(startBlock, liveness, true);
@@ -754,7 +752,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 profilingPlugin.profileInvoke(this, method, stateBefore);
             }
 
-            finishPrepare(lastInstr, 0);
+            finishPrepare(lastInstr);
 
             genInfoPointNode(InfopointReason.METHOD_START, null);
 
@@ -800,12 +798,11 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     /**
-     * Hook for subclasses to modify synthetic code (start nodes and unwind nodes).
+     * Hook for subclasses to modify the graph start instruction or append new instructions to it.
      *
-     * @param instruction the current last instruction
-     * @param bci the current bci
+     * @param startInstr the start instruction of the graph
      */
-    protected void finishPrepare(FixedWithNextNode instruction, int bci) {
+    protected void finishPrepare(FixedWithNextNode startInstr) {
     }
 
     protected void cleanupFinalGraph() {
@@ -1469,7 +1466,7 @@ public class BytecodeParser implements GraphBuilderContext {
             return createInvoke(callTarget, resultType);
         } else {
             Invoke invoke = createInvokeWithException(callTarget, resultType);
-            AbstractBeginNode beginNode = graph.add(KillingBeginNode.create(LocationIdentity.any()));
+            AbstractBeginNode beginNode = graph.add(new KillingBeginNode(LocationIdentity.any()));
             invoke.setNext(beginNode);
             lastInstr = beginNode;
             return invoke;
@@ -2435,7 +2432,7 @@ public class BytecodeParser implements GraphBuilderContext {
             if (block == blockMap.getReturnBlock()) {
                 handleReturnBlock();
             } else if (block == blockMap.getUnwindBlock()) {
-                handleUnwindBlock((ExceptionDispatchBlock) block);
+                handleUnwindBlock();
             } else if (block instanceof ExceptionDispatchBlock) {
                 createExceptionDispatch((ExceptionDispatchBlock) block);
             } else {
@@ -2445,9 +2442,8 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    private void handleUnwindBlock(ExceptionDispatchBlock block) {
+    private void handleUnwindBlock() {
         if (parent == null) {
-            finishPrepare(lastInstr, block.deoptBci);
             frameState.setRethrowException(false);
             createUnwind();
         } else {
@@ -2479,8 +2475,8 @@ public class BytecodeParser implements GraphBuilderContext {
 
     private void createUnwind() {
         assert frameState.stackSize() == 1 : frameState;
-        synchronizedEpilogue(BytecodeFrame.AFTER_EXCEPTION_BCI, null, null);
         ValueNode exception = frameState.pop(JavaKind.Object);
+        synchronizedEpilogue(BytecodeFrame.AFTER_EXCEPTION_BCI, null, null);
         append(new UnwindNode(exception));
     }
 
@@ -2491,7 +2487,6 @@ public class BytecodeParser implements GraphBuilderContext {
             }
             genMonitorExit(methodSynchronizedObject, currentReturnValue, bci);
             assert !frameState.rethrowException();
-            finishPrepare(lastInstr, bci);
         }
         if (frameState.lockDepth(false) != 0) {
             throw bailout("unbalanced monitors: too few exits exiting frame");
