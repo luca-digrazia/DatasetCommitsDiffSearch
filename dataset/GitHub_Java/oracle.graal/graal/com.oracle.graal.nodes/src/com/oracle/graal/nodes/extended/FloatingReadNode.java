@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,53 +22,70 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import java.util.*;
-
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 
+/**
+ * A floating read of a value from memory specified in terms of an object base and an object
+ * relative location. This node does not null check the object.
+ */
+@NodeInfo
+public final class FloatingReadNode extends FloatingAccessNode implements LIRLowerable, Canonicalizable {
+    public static final NodeClass<FloatingReadNode> TYPE = NodeClass.create(FloatingReadNode.class);
 
-public final class FloatingReadNode extends FloatingAccessNode implements Node.IterableNodeType, LIRLowerable, Canonicalizable {
+    @OptionalInput(InputType.Memory) MemoryNode lastLocationAccess;
 
-    @Input private Node lastLocationAccess;
+    public FloatingReadNode(ValueNode object, LocationNode location, MemoryNode lastLocationAccess, Stamp stamp) {
+        this(object, location, lastLocationAccess, stamp, null, BarrierType.NONE);
+    }
 
-    public FloatingReadNode(ValueNode object, LocationNode location, Node lastLocationAccess, Stamp stamp, Node... dependencies) {
-        super(object, location, stamp, dependencies);
+    public FloatingReadNode(ValueNode object, LocationNode location, MemoryNode lastLocationAccess, Stamp stamp, GuardingNode guard) {
+        this(object, location, lastLocationAccess, stamp, guard, BarrierType.NONE);
+    }
+
+    public FloatingReadNode(ValueNode object, LocationNode location, MemoryNode lastLocationAccess, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
+        super(TYPE, object, location, stamp, guard, barrierType);
         this.lastLocationAccess = lastLocationAccess;
     }
 
-    public FloatingReadNode(ValueNode object, LocationNode location, Node lastLocationAccess, Stamp stamp, List<Node> dependencies) {
-        super(object, location, stamp, dependencies);
-        this.lastLocationAccess = lastLocationAccess;
-    }
-
-    public Node lastLocationAccess() {
+    public MemoryNode getLastLocationAccess() {
         return lastLocationAccess;
     }
 
-    @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.setResult(this, gen.emitLoad(gen.makeAddress(location(), object()), getNullCheck()));
+    public void setLastLocationAccess(MemoryNode newlla) {
+        updateUsages(ValueNodeUtil.asNode(lastLocationAccess), ValueNodeUtil.asNode(newlla));
+        lastLocationAccess = newlla;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (object() != null && object().isConstant() && object().kind() == CiKind.Object) {
-            if (this.location() == LocationNode.FINAL_LOCATION && location().getClass() == LocationNode.class) {
-                Object value = object().asConstant().asObject();
-                long displacement = location().displacement();
-                CiKind kind = location().kind();
-                RiRuntime runtime = tool.runtime();
-                CiConstant constant = kind.readUnsafeConstant(value, displacement);
-                if (constant != null) {
-                    return ConstantNode.forCiConstant(constant, runtime, graph());
-                }
-            }
+    public void generate(NodeLIRBuilderTool gen) {
+        Value address = location().generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
+        LIRKind readKind = gen.getLIRGeneratorTool().getLIRKind(stamp());
+        gen.setResult(this, gen.getLIRGeneratorTool().emitLoad(readKind, address, null));
+    }
+
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (object() instanceof PiNode && ((PiNode) object()).getGuard() == getGuard()) {
+            return new FloatingReadNode(((PiNode) object()).getOriginalNode(), location(), getLastLocationAccess(), stamp(), getGuard(), getBarrierType());
         }
-        return this;
+        return ReadNode.canonicalizeRead(this, location(), object(), tool);
+    }
+
+    @Override
+    public FixedAccessNode asFixedNode() {
+        return graph().add(new ReadNode(object(), accessLocation(), stamp(), getGuard(), getBarrierType()));
+    }
+
+    @Override
+    public boolean verify() {
+        MemoryNode lla = getLastLocationAccess();
+        assert lla != null || getLocationIdentity().isImmutable() : "lastLocationAccess of " + this + " shouldn't be null for mutable location identity " + getLocationIdentity();
+        return super.verify();
     }
 }
