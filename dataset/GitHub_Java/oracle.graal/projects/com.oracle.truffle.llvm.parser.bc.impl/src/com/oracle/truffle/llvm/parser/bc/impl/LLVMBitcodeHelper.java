@@ -114,7 +114,7 @@ import uk.ac.man.cs.llvm.ir.model.constants.BinaryOperationConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.CastConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.CompareConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.Constant;
-import uk.ac.man.cs.llvm.ir.model.constants.BlockAddressConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.DeferredBlockAddressConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.FloatingPointConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.GetElementPointerConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
@@ -423,10 +423,10 @@ public final class LLVMBitcodeHelper {
                     break;
             }
         }
-        if (value instanceof BlockAddressConstant) {
-            BlockAddressConstant blockAddressConstant = (BlockAddressConstant) value;
+        if (value instanceof DeferredBlockAddressConstant) {
+            DeferredBlockAddressConstant blockAddressConstant = (DeferredBlockAddressConstant) value;
 
-            FunctionDefinition function = blockAddressConstant.getFunction();
+            FunctionDefinition function = (FunctionDefinition) blockAddressConstant.getFunction();
             Map<String, Integer> innerLabels = labels.labels(function.getName());
             InstructionBlock b = null;
             int label = -1;
@@ -637,7 +637,7 @@ public final class LLVMBitcodeHelper {
         }
         if (value instanceof CastConstant) {
             CastConstant cast = (CastConstant) value;
-            LLVMConversionType type = LLVMBitcodeHelper.toConversionType(cast.getOperator());
+            LLVMConversionType type = toConversionType(cast.getOperator());
             LLVMExpressionNode fromNode = toConstantNode(cast.getValue(), align, variables, context, stack, labels);
             LLVMBaseType from = toBaseType(cast.getValue().getType()).getType();
             LLVMBaseType to = toBaseType(cast.getType()).getType();

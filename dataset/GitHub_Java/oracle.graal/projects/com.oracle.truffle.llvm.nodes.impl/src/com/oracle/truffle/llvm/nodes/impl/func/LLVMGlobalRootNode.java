@@ -93,7 +93,6 @@ public class LLVMGlobalRootNode extends RootNode {
         } catch (LLVMExitException e) {
             return e.getReturnCode();
         } finally {
-            context.awaitThreadTermination();
             if (printNativeStats) {
                 printNativeCallStats(context);
             }

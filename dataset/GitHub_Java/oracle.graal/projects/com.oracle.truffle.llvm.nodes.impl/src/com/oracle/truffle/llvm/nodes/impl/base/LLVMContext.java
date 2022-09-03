@@ -80,7 +80,7 @@ public class LLVMContext extends ExecutionContext {
 
     public NativeFunctionHandle getNativeHandle(LLVMFunctionDescriptor function, LLVMExpressionNode[] args) {
         LLVMFunctionDescriptor sameFunction = getFunctionDescriptor(function);
-        return getNativeLookup().getNativeHandle(sameFunction, args);
+        return nativeLookup.getNativeHandle(sameFunction, args);
     }
 
     /**
@@ -99,15 +99,15 @@ public class LLVMContext extends ExecutionContext {
     }
 
     public void addLibraryToNativeLookup(String library) {
-        getNativeLookup().addLibraryToNativeLookup(library);
+        nativeLookup.addLibraryToNativeLookup(library);
     }
 
     public long getNativeHandle(String functionName) {
-        return getNativeLookup().getNativeHandle(functionName);
+        return nativeLookup.getNativeHandle(functionName);
     }
 
     public Map<LLVMFunctionDescriptor, Integer> getNativeFunctionLookupStats() {
-        return getNativeLookup().getNativeFunctionLookupStats();
+        return nativeLookup.getNativeFunctionLookupStats();
     }
 
     public LLVMStack getStack() {
@@ -168,10 +168,6 @@ public class LLVMContext extends ExecutionContext {
 
     public boolean isParseOnly() {
         return parseOnly;
-    }
-
-    public NativeLookup getNativeLookup() {
-        return nativeLookup;
     }
 
 }

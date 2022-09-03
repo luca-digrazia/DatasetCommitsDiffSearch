@@ -30,44 +30,22 @@
 package com.oracle.truffle.llvm.parser;
 
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
-public final class LLVMParserResult {
+import java.util.List;
+import java.util.Map;
 
-    private final RootCallTarget mainCallTarget;
-    private final RootCallTarget globalVarInits;
-    private final RootCallTarget globalVarDeallocs;
-    private final RootCallTarget constructorFunctions;
-    private final RootCallTarget destructorFunctions;
+public interface LLVMParserResult {
 
-    LLVMParserResult(RootCallTarget mainCallTarget,
-                    RootCallTarget globalVarInits,
-                    RootCallTarget globalVarDeallocs,
-                    RootCallTarget constructorFunctions,
-                    RootCallTarget destructorFunctions) {
-        this.mainCallTarget = mainCallTarget;
-        this.globalVarInits = globalVarInits;
-        this.globalVarDeallocs = globalVarDeallocs;
-        this.constructorFunctions = constructorFunctions;
-        this.destructorFunctions = destructorFunctions;
-    }
+    RootCallTarget getMainFunction();
 
-    public RootCallTarget getMainCallTarget() {
-        return mainCallTarget;
-    }
+    Map<LLVMFunctionDescriptor, RootCallTarget> getParsedFunctions();
 
-    public RootCallTarget getGlobalVarInit() {
-        return globalVarInits;
-    }
+    RootCallTarget getGlobalVarInits();
 
-    public RootCallTarget getGlobalVarDealloc() {
-        return globalVarDeallocs;
-    }
+    RootCallTarget getGlobalVarDeallocs();
 
-    public RootCallTarget getConstructorFunction() {
-        return constructorFunctions;
-    }
+    List<RootCallTarget> getConstructorFunctions();
 
-    public RootCallTarget getDestructorFunction() {
-        return destructorFunctions;
-    }
+    List<RootCallTarget> getDestructorFunctions();
 }

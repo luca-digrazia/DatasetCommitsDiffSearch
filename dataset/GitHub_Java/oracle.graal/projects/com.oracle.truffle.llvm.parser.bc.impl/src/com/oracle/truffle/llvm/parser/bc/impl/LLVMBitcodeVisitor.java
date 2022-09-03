@@ -216,8 +216,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
                         store = LLVMMemI32CopyFactory.create(globalVarAddress, (LLVMAddressNode) constant, new LLVMI32LiteralNode(size), new LLVMI32LiteralNode(0), new LLVMI1LiteralNode(false));
                     } else {
                         Type t = global.getValue().getType();
-                        store = LLVMMemoryReadWriteFactory.createStore(globalVarAddress, constant, LLVMBitcodeHelper.toBaseType(t).getType(),
-                                        LLVMBitcodeHelper.getSize(t, 0));
+                        store = LLVMMemoryReadWriteFactory.createStore(globalVarAddress, constant, LLVMBitcodeHelper.toBaseType(t).getType(), LLVMBitcodeHelper.getSize(t, 0));
                     }
                     return store;
                 }
@@ -354,5 +353,4 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
     @Override
     public void visit(Type type) {
     }
-
 }
