@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.graph.util.CollectionsAccess.*;
-
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
@@ -35,6 +33,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
 import com.oracle.graal.nodes.virtual.*;
@@ -56,6 +55,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     private final NodeBitMap usages;
     private final VirtualizerToolImpl tool;
+    private final Map<Invoke, Double> hints = new IdentityHashMap<>();
 
     /**
      * Final subclass of PartialEscapeClosure, for performance and to make everything behave nicely
@@ -79,9 +79,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
     }
 
     public PartialEscapeClosure(SchedulePhase schedule, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, Assumptions assumptions) {
-        super(schedule, schedule.getCFG());
+        super(schedule);
         this.usages = schedule.getCFG().graph.createNodeBitMap();
         this.tool = new VirtualizerToolImpl(metaAccess, constantReflection, assumptions, this);
+    }
+
+    public Map<Invoke, Double> getHints() {
+        return hints;
     }
 
     /**
@@ -112,6 +116,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             for (ValueNode input : node.inputs().filter(ValueNode.class)) {
                 ObjectState obj = getObjectState(state, input);
                 if (obj != null) {
+                    if (obj.isVirtual() && node instanceof MethodCallTargetNode) {
+                        Invoke invoke = ((MethodCallTargetNode) node).invoke();
+                        hints.put(invoke, 5d);
+                    }
                     VirtualUtil.trace("replacing input %s at %s: %s", input, node, obj);
                     replaceWithMaterialized(input, node, insertBefore, state, obj, effects, METRIC_MATERIALIZATIONS_UNHANDLED);
                 }
@@ -270,8 +278,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
     protected class MergeProcessor extends EffectsClosure<BlockT>.MergeProcessor {
 
         private final HashMap<Object, ValuePhiNode> materializedPhis = new HashMap<>();
-        private final Map<ValueNode, ValuePhiNode[]> valuePhis = newIdentityMap();
-        private final Map<ValuePhiNode, VirtualObjectNode> valueObjectVirtuals = newNodeIdentityMap();
+        private final IdentityHashMap<ValueNode, ValuePhiNode[]> valuePhis = new IdentityHashMap<>();
+        private final IdentityHashMap<ValuePhiNode, VirtualObjectNode> valueObjectVirtuals = new IdentityHashMap<>();
 
         public MergeProcessor(Block mergeBlock) {
             super(mergeBlock);
