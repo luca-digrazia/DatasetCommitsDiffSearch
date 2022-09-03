@@ -254,8 +254,7 @@ public abstract class SPARCAssembler extends Assembler {
 
         @Override
         protected int getInstructionBits() {
-            int inst = super.getInstructionBits() | a << A_SHIFT | cond << COND_SHIFT | (disp22 & DISP22_MASK) << DISP22_SHIFT;
-            return inst;
+            return super.getInstructionBits() | a << A_SHIFT | cond << COND_SHIFT | (disp22 & DISP22_MASK) << DISP22_SHIFT;
         }
 
         protected static Fmt00b read(SPARCAssembler masm, Op2s op2, int pos) {

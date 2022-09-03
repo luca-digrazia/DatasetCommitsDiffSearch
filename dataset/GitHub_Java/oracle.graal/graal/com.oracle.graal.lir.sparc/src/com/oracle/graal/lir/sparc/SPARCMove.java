@@ -36,6 +36,7 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.sparc.*;
 
 public class SPARCMove {
 
@@ -387,19 +388,15 @@ public class SPARCMove {
         } else if (isConstant(input)) {
             if (isRegister(result)) {
                 const2reg(crb, masm, result, (Constant) input);
-            } else if (isStackSlot(result)) {
-                // Move a Constant to a stack slot (Probably a 7th output parameter)
-                Value scratch = input.getKind() == Kind.Float || input.getKind() == Kind.Double ? f30.asValue() : g5.asValue();
-                const2reg(crb, masm, scratch, (Constant) input);
-                reg2stack(crb, masm, result, scratch);
             } else {
-                throw GraalInternalError.shouldNotReachHere("Result is a : " + result);
+                throw GraalInternalError.shouldNotReachHere();
             }
         } else {
             throw GraalInternalError.shouldNotReachHere();
         }
     }
 
+    @SuppressWarnings("unused")
     private static void reg2reg(SPARCAssembler masm, Value result, Value input) {
         final Register src = asRegister(input);
         final Register dst = asRegister(result);
@@ -427,7 +424,7 @@ public class SPARCMove {
                         new Fmovs(src, dst).emit(masm);
                         break;
                     case Double:
-                        new Fstod(src, dst).emit(masm);
+                        new Fstod(masm, src, dst);
                         break;
                     default:
                         throw GraalInternalError.shouldNotReachHere();
@@ -515,7 +512,6 @@ public class SPARCMove {
                 }
                 break;
             case Float:
-                // TODO: Handle it the same way, as in the double case with Movwtos
                 crb.asFloatConstRef(input);
                 // First load the address into the scratch register
                 new Setx(0, scratch, true).emit(masm);
@@ -523,8 +519,9 @@ public class SPARCMove {
                 new Ldf(scratch, asFloatReg(result)).emit(masm);
                 break;
             case Double:
-                // instead loading this from memory and do the complicated lookup,
+                // before we load this from memory and do the complicated lookup,
                 // just load it directly into a scratch register
+                scratch = g5;
                 // First load the address into the scratch register
                 new Setx(Double.doubleToLongBits(input.asDouble()), scratch, true).emit(masm);
                 // Now load the float value
