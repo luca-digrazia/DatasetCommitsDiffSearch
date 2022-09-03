@@ -29,61 +29,71 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.utilities.CyclicAssumption;
-import com.oracle.truffle.llvm.runtime.types.FunctionType;
 
 public final class LLVMFunctionDescriptor extends LLVMFunction implements Comparable<LLVMFunctionDescriptor> {
 
+    public enum LLVMRuntimeType {
+        I1,
+        I8,
+        I16,
+        I32,
+        I64,
+        I_VAR_BITWIDTH,
+        HALF,
+        FLOAT,
+        DOUBLE,
+        X86_FP80,
+        ADDRESS,
+        STRUCT,
+        ARRAY,
+        FUNCTION_ADDRESS,
+        I1_VECTOR,
+        I8_VECTOR,
+        I16_VECTOR,
+        I32_VECTOR,
+        I64_VECTOR,
+        FLOAT_VECTOR,
+        DOUBLE_VECTOR,
+        VOID,
+        ILLEGAL,
+        I1_POINTER,
+        I8_POINTER,
+        I16_POINTER,
+        I32_POINTER,
+        I64_POINTER,
+        HALF_POINTER,
+        FLOAT_POINTER,
+        DOUBLE_POINTER;
+    }
+
     private final String functionName;
-    private final FunctionType type;
+    private final LLVMRuntimeType returnType;
+    private final LLVMRuntimeType[] parameterTypes;
+    private final boolean hasVarArgs;
     private final int functionId;
 
-    @CompilationFinal private RootCallTarget callTarget;
-    @CompilationFinal private TruffleObject nativeSymbol;
-    @CompilationFinal private RootCallTarget intrinsic;
-    @CompilationFinal private LazyToTruffleConverter lazyConverter;
-    @CompilationFinal private CyclicAssumption functionDescriptorState;
+    private RootCallTarget callTarget;
+    private TruffleObject nativeSymbol;
+    private RootCallTarget intrinsic;
 
-    private LLVMFunctionDescriptor(LLVMContext context, String name, FunctionType type, int functionId) {
-        super(context);
+    private LLVMFunctionDescriptor(String name, LLVMRuntimeType llvmReturnType, LLVMRuntimeType[] llvmParamTypes, boolean varArgs, int functionId) {
         this.functionName = name;
-        this.type = type;
+        this.returnType = llvmReturnType;
+        this.parameterTypes = llvmParamTypes;
+        this.hasVarArgs = varArgs;
         this.functionId = functionId;
         this.callTarget = null;
         this.nativeSymbol = null;
-        this.functionDescriptorState = new CyclicAssumption(name);
     }
 
-    public static LLVMFunctionDescriptor create(LLVMContext context, String name, FunctionType type, int functionId) {
-        LLVMFunctionDescriptor func = new LLVMFunctionDescriptor(context, name, type, functionId);
+    public static LLVMFunctionDescriptor create(String name, LLVMRuntimeType llvmReturnType, LLVMRuntimeType[] llvmParamTypes, boolean varArgs, int functionId) {
+        LLVMFunctionDescriptor func = new LLVMFunctionDescriptor(name, llvmReturnType, llvmParamTypes, varArgs, functionId);
         return func;
     }
 
-    public interface LazyToTruffleConverter {
-        void convert();
-    }
-
-    public void setLazyToTruffleConverter(LazyToTruffleConverter lazyToTruffleConverterImpl) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        this.lazyConverter = lazyToTruffleConverterImpl;
-        functionDescriptorState.invalidate();
-    }
-
     public RootCallTarget getCallTarget() {
-        if (lazyConverter != null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            // lazy conversion
-            lazyConverter.convert();
-            lazyConverter = null;
-            functionDescriptorState.invalidate();
-        }
-        if (!functionDescriptorState.getAssumption().isValid()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-        }
         if (callTarget == null && intrinsic != null) {
             return intrinsic;
         }
@@ -91,38 +101,37 @@ public final class LLVMFunctionDescriptor extends LLVMFunction implements Compar
     }
 
     public void setCallTarget(RootCallTarget callTarget) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         assert this.nativeSymbol == null;
         this.callTarget = callTarget;
-        functionDescriptorState.invalidate();
     }
 
     public void setIntrinsicCallTarget(RootCallTarget callTarget) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         this.intrinsic = callTarget;
-        functionDescriptorState.invalidate();
     }
 
     public TruffleObject getNativeSymbol() {
-        if (!functionDescriptorState.getAssumption().isValid()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-        }
         return nativeSymbol;
     }
 
     public void setNativeSymbol(TruffleObject nativeSymbol) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        assert this.callTarget == null && this.nativeSymbol == null && this.lazyConverter == null;
+        assert this.callTarget == null && this.nativeSymbol == null;
         this.nativeSymbol = nativeSymbol;
-        functionDescriptorState.invalidate();
     }
 
     public String getName() {
         return functionName;
     }
 
-    public FunctionType getType() {
-        return type;
+    public LLVMRuntimeType getReturnType() {
+        return returnType;
+    }
+
+    public LLVMRuntimeType[] getParameterTypes() {
+        return parameterTypes;
+    }
+
+    public boolean isVarArgs() {
+        return hasVarArgs;
     }
 
     /**
@@ -167,5 +176,4 @@ public final class LLVMFunctionDescriptor extends LLVMFunction implements Compar
             return getFunctionIndex() == other.getFunctionIndex();
         }
     }
-
 }
