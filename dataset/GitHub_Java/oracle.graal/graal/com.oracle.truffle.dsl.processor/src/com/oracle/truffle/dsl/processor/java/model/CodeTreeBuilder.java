@@ -77,11 +77,11 @@ public class CodeTreeBuilder {
     }
 
     public static CodeTree singleString(String s) {
-        return createBuilder().string(s).build();
+        return new CodeTreeBuilder(null).string(s).getTree();
     }
 
     public static CodeTree singleType(TypeMirror s) {
-        return createBuilder().type(s).build();
+        return new CodeTreeBuilder(null).type(s).getTree();
     }
 
     private CodeTreeBuilder push(CodeTreeKind kind) {
@@ -316,19 +316,16 @@ public class CodeTreeBuilder {
         }
     }
 
-    public CodeTreeBuilder trees(CodeTree... trees) {
-        for (CodeTree tree : trees) {
-            tree(tree);
-        }
-        return this;
-    }
-
     public CodeTreeBuilder string(String chunk1, String chunk2, String chunk3, String chunk4, String... chunks) {
         push(GROUP).string(chunk1).string(chunk2).string(chunk3).string(chunk4);
         for (int i = 0; i < chunks.length; i++) {
             string(chunks[i]);
         }
         return end();
+    }
+
+    public CodeTreeBuilder dot() {
+        return string(".");
     }
 
     public CodeTreeBuilder newLine() {
@@ -579,6 +576,17 @@ public class CodeTreeBuilder {
         return declaration(type, name, init.getTree());
     }
 
+    public CodeTreeBuilder declaration(String type, String name, CodeTreeBuilder init) {
+        if (init == this) {
+            throw new IllegalArgumentException("Recursive builder usage.");
+        }
+        return declaration(type, name, init.getTree());
+    }
+
+    public CodeTreeBuilder declaration(TypeMirror type, String name) {
+        return declaration(type, name, (CodeTree) null);
+    }
+
     public CodeTreeBuilder create() {
         return new CodeTreeBuilder(this);
     }
@@ -612,6 +620,11 @@ public class CodeTreeBuilder {
 
     public CodeTree build() {
         return root;
+    }
+
+    public CodeTreeBuilder cast(String baseClassName) {
+        string("(").string(baseClassName).string(") ");
+        return this;
     }
 
     public CodeTreeBuilder cast(TypeMirror type) {
@@ -658,8 +671,20 @@ public class CodeTreeBuilder {
         return startReturn().string("true").end();
     }
 
+    public CodeTreeBuilder instanceOf(CodeTree var, CodeTree type) {
+        return tree(var).string(" instanceof ").tree(type);
+    }
+
     public CodeTreeBuilder instanceOf(CodeTree var, TypeMirror type) {
         return tree(var).string(" instanceof ").type(type);
+    }
+
+    public CodeTreeBuilder instanceOf(String var, String type) {
+        return instanceOf(singleString(var), singleString(type));
+    }
+
+    public CodeTreeBuilder instanceOf(String var, TypeMirror type) {
+        return instanceOf(singleString(var), singleType(type));
     }
 
     public CodeTreeBuilder defaultValue(TypeMirror mirror) {
@@ -690,6 +715,26 @@ public class CodeTreeBuilder {
             default:
                 throw new AssertionError();
         }
+    }
+
+    public CodeTreeBuilder assertFalse() {
+        return startAssert().string("false").end();
+    }
+
+    public CodeTreeBuilder breakStatement() {
+        return statement("break");
+    }
+
+    public CodeTreeBuilder isNull() {
+        return string(" == null");
+    }
+
+    public CodeTreeBuilder isNotNull() {
+        return string(" != null");
+    }
+
+    public CodeTreeBuilder is(CodeTree tree) {
+        return string(" == ").tree(tree);
     }
 
     public CodeTreeBuilder startTryBlock() {
@@ -866,17 +911,6 @@ public class CodeTreeBuilder {
                 b.append("    ");
             }
         }
-    }
-
-    public CodeTreeBuilder returnDefault() {
-        ExecutableElement method = findMethod();
-        if (ElementUtils.isVoid(method.getReturnType())) {
-            returnStatement();
-        } else {
-            startReturn().defaultValue(method.getReturnType()).end();
-        }
-        return this;
-
     }
 
 }

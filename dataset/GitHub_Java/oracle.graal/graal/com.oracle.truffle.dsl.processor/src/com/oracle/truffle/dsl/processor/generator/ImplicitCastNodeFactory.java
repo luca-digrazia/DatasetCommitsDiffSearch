@@ -44,30 +44,31 @@ import static com.oracle.truffle.dsl.processor.generator.GeneratorUtils.*;
 public class ImplicitCastNodeFactory {
 
     private final ProcessorContext context;
-    private final TypeMirror forType;
+    private final TypeData forType;
     private final TypeSystemData typeSystem;
     private final DSLOptions options;
-    private final List<TypeMirror> sourceTypes;
+    private final List<TypeData> sourceTypes;
 
-    public ImplicitCastNodeFactory(ProcessorContext context, TypeSystemData typeSystem, TypeMirror forType) {
+    public ImplicitCastNodeFactory(ProcessorContext context, TypeData forType) {
         this.context = context;
         this.forType = forType;
-        this.typeSystem = typeSystem;
+        this.typeSystem = forType.getTypeSystem();
         this.options = typeSystem.getOptions();
         this.sourceTypes = typeSystem.lookupSourceTypes(forType);
     }
 
-    public static String typeName(TypeMirror type) {
-        return "Implicit" + getTypeId(type) + "Cast";
+    public static String typeName(TypeData type) {
+        return "Implicit" + getTypeId(type.getBoxedType()) + "Cast";
     }
 
-    public static TypeMirror type(TypeSystemData typeSystem, TypeMirror type) {
+    public static TypeMirror type(TypeData type) {
+        TypeSystemData typeSystem = type.getTypeSystem();
         String typeSystemName = TypeSystemCodeGenerator.typeName(typeSystem);
         return new GeneratedTypeMirror(ElementUtils.getPackageName(typeSystem.getTemplateType()) + "." + typeSystemName, typeName(type));
     }
 
-    public static CodeTree create(TypeSystemData typeSystem, TypeMirror type, CodeTree value) {
-        return CodeTreeBuilder.createBuilder().startStaticCall(type(typeSystem, type), "create").tree(value).end().build();
+    public static CodeTree create(TypeData type, CodeTree value) {
+        return CodeTreeBuilder.createBuilder().startStaticCall(type(type), "create").tree(value).end().build();
     }
 
     public static CodeTree cast(String nodeName, CodeTree value) {
@@ -78,8 +79,8 @@ public class ImplicitCastNodeFactory {
         return CodeTreeBuilder.createBuilder().startCall(nodeName, "check").tree(value).end().build();
     }
 
-    private static String seenFieldName(TypeMirror type) {
-        return "seen" + getTypeId(type);
+    private static String seenFieldName(TypeData type) {
+        return "seen" + getTypeId(type.getBoxedType());
     }
 
     public CodeTypeElement create() {
@@ -87,7 +88,7 @@ public class ImplicitCastNodeFactory {
         TypeMirror baseType = context.getType(Object.class);
         CodeTypeElement clazz = GeneratorUtils.createClass(typeSystem, null, modifiers(PUBLIC, FINAL, STATIC), typeName, baseType);
 
-        for (TypeMirror sourceType : sourceTypes) {
+        for (TypeData sourceType : sourceTypes) {
             CodeVariableElement hasSeen = new CodeVariableElement(modifiers(PUBLIC), context.getType(boolean.class), seenFieldName(sourceType));
             hasSeen.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(CompilationFinal.class)));
             clazz.add(hasSeen);
@@ -112,7 +113,7 @@ public class ImplicitCastNodeFactory {
         CodeTreeBuilder builder = method.createBuilder();
         builder.startReturn();
         String operator = "";
-        for (TypeMirror sourceType : sourceTypes) {
+        for (TypeData sourceType : sourceTypes) {
             builder.string(operator);
             builder.string(seenFieldName(sourceType));
             operator = " ^ ";
@@ -128,15 +129,15 @@ public class ImplicitCastNodeFactory {
     private Element createCreate(CodeTypeElement clazz) {
         String methodName = "create";
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC, STATIC), clazz.asType(), methodName);
-        method.addParameter(new CodeVariableElement(context.getType(Object.class), "value"));
+        method.addParameter(new CodeVariableElement(typeSystem.getGenericType(), "value"));
         CodeTreeBuilder builder = method.createBuilder();
 
         builder.declaration(clazz.asType(), "newCast", builder.create().startNew(clazz.asType()).end());
 
-        for (TypeMirror sourceType : sourceTypes) {
+        for (TypeData sourceType : sourceTypes) {
             String seenField = seenFieldName(sourceType);
             builder.startStatement();
-            builder.string("newCast.").string(seenField).string(" = ").tree(TypeSystemCodeGenerator.check(typeSystem, sourceType, "value"));
+            builder.string("newCast.").string(seenField).string(" = ").tree(TypeSystemCodeGenerator.check(sourceType, "value"));
             builder.end();
         }
         builder.startReturn().string("newCast").end();
@@ -149,7 +150,7 @@ public class ImplicitCastNodeFactory {
         method.addParameter(new CodeVariableElement(clazz.asType(), "otherCast"));
         CodeTreeBuilder builder = method.createBuilder();
 
-        for (TypeMirror sourceType : sourceTypes) {
+        for (TypeData sourceType : sourceTypes) {
             String seenField = seenFieldName(sourceType);
             builder.startStatement();
             builder.string("this.").string(seenField).string(" |= ").string("otherCast.").string(seenField);
@@ -161,13 +162,13 @@ public class ImplicitCastNodeFactory {
     private Element createCheck() {
         String methodName = "check";
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), context.getType(boolean.class), methodName);
-        method.addParameter(new CodeVariableElement(context.getType(Object.class), "value"));
+        method.addParameter(new CodeVariableElement(typeSystem.getGenericType(), "value"));
         CodeTreeBuilder builder = method.createBuilder();
 
         boolean elseIf = false;
-        for (TypeMirror sourceType : sourceTypes) {
+        for (TypeData sourceType : sourceTypes) {
             elseIf = builder.startIf(elseIf);
-            builder.string(seenFieldName(sourceType)).string(" && ").tree(TypeSystemCodeGenerator.check(typeSystem, sourceType, "value"));
+            builder.string(seenFieldName(sourceType)).string(" && ").tree(TypeSystemCodeGenerator.check(sourceType, "value"));
             builder.end();
             builder.startBlock().returnTrue().end();
         }
@@ -177,8 +178,8 @@ public class ImplicitCastNodeFactory {
 
     private Element createCast(boolean expect) {
         String methodName = expect ? "expect" : "cast";
-        CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), forType, methodName);
-        method.addParameter(new CodeVariableElement(context.getType(Object.class), "value"));
+        CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), forType.getPrimitiveType(), methodName);
+        method.addParameter(new CodeVariableElement(typeSystem.getGenericType(), "value"));
         if (expect) {
             method.getThrownTypes().add(context.getType(UnexpectedResultException.class));
         }
@@ -186,16 +187,16 @@ public class ImplicitCastNodeFactory {
         CodeTreeBuilder builder = method.createBuilder();
 
         boolean elseIf = false;
-        for (TypeMirror sourceType : sourceTypes) {
+        for (TypeData sourceType : sourceTypes) {
             elseIf = builder.startIf(elseIf);
-            builder.string(seenFieldName(sourceType)).string(" && ").tree(TypeSystemCodeGenerator.check(typeSystem, sourceType, "value"));
+            builder.string(seenFieldName(sourceType)).string(" && ").tree(TypeSystemCodeGenerator.check(sourceType, "value"));
             builder.end();
             builder.startBlock();
             builder.startReturn();
-            CodeTree castTree = TypeSystemCodeGenerator.cast(typeSystem, sourceType, "value");
+            CodeTree castTree = TypeSystemCodeGenerator.cast(sourceType, "value");
             ImplicitCastData cast = typeSystem.lookupCast(sourceType, forType);
             if (cast != null) {
-                builder.tree(TypeSystemCodeGenerator.invokeImplicitCast(typeSystem, cast, castTree));
+                builder.tree(TypeSystemCodeGenerator.invokeImplicitCast(cast, castTree));
             } else {
                 builder.tree(castTree);
             }

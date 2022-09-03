@@ -48,6 +48,18 @@ public class TypeData extends MessageContainer implements Comparable<TypeData> {
         this.boxedType = boxedType;
     }
 
+    public int getIndex() {
+        return index;
+    }
+
+    public boolean isDefaultCast() {
+        return getTypeCasts().isEmpty();
+    }
+
+    public boolean isDefaultCheck() {
+        return getTypeChecks().isEmpty();
+    }
+
     @Override
     public Element getMessageElement() {
         return typeSystem.getMessageElement();
@@ -142,6 +154,14 @@ public class TypeData extends MessageContainer implements Comparable<TypeData> {
 
     public boolean isPrimitive() {
         return ElementUtils.isPrimitive(getPrimitiveType());
+    }
+
+    public List<TypeData> getImplicitSourceTypes() {
+        return getTypeSystem().lookupSourceTypes(this);
+    }
+
+    public boolean hasImplicitSourceTypes() {
+        return getTypeSystem().hasImplicitSourceTypes(this);
     }
 
     public boolean isImplicitSubtypeOf(TypeData other) {

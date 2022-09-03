@@ -133,11 +133,7 @@ public final class SpecializationData extends TemplateMethod {
             return true;
         }
         for (Parameter parameter : getSignatureParameters()) {
-            NodeChildData child = parameter.getSpecification().getExecution().getChild();
-            ExecutableTypeData type = child.findExecutableType(parameter.getTypeSystemType());
-            if (type == null) {
-                type = child.findAnyGenericExecutableType(context);
-            }
+            ExecutableTypeData type = parameter.getSpecification().getExecution().getChild().findExecutableType(context, parameter.getTypeSystemType());
             if (type.hasUnexpectedValue(context)) {
                 return true;
             }

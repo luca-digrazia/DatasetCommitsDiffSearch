@@ -51,6 +51,7 @@ public class NodeCodeGenerator extends CodeTypeElementFactory<NodeData> {
         List<CodeTypeElement> generatedNodes = generateNodes(context, node);
 
         if (!generatedNodes.isEmpty() || !enclosedTypes.isEmpty()) {
+
             CodeTypeElement type;
             if (generatedNodes.isEmpty()) {
                 type = createContainer(node);
@@ -77,7 +78,9 @@ public class NodeCodeGenerator extends CodeTypeElementFactory<NodeData> {
 
     private static CodeTypeElement makeInnerClass(CodeTypeElement type) {
         Set<Modifier> modifiers = type.getModifiers();
-        modifiers.add(Modifier.STATIC);
+        if (!modifiers.contains(Modifier.STATIC)) {
+            modifiers.add(Modifier.STATIC);
+        }
         return type;
     }
 
@@ -101,9 +104,8 @@ public class NodeCodeGenerator extends CodeTypeElementFactory<NodeData> {
                     }
                 }
             }
-            Modifier templateVisibility = ElementUtils.getVisibility(node.getTemplateType().getModifiers());
-            new NodeFactoryFactory(context, node, second).createFactoryMethods(first, templateVisibility);
-            ElementUtils.setVisibility(first.getModifiers(), templateVisibility);
+            new NodeFactoryFactory(context, node, second).createFactoryMethods(first, ElementUtils.getVisibility(node.getTemplateType().getModifiers()));
+            ElementUtils.setVisibility(first.getModifiers(), ElementUtils.getVisibility(node.getTemplateType().getModifiers()));
             for (ExecutableElement constructor : ElementFilter.constructorsIn(first.getEnclosedElements())) {
                 ElementUtils.setVisibility(((CodeExecutableElement) constructor).getModifiers(), Modifier.PRIVATE);
             }

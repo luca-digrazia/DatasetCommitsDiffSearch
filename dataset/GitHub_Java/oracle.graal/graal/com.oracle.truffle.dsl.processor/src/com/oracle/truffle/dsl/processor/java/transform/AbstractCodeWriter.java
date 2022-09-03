@@ -131,7 +131,7 @@ public abstract class AbstractCodeWriter extends CodeElementScanner<Void, Void> 
             writeLn();
         }
 
-        writeModifiers(e.getModifiers(), true);
+        writeModifiers(e.getModifiers());
         if (e.getKind() == ElementKind.ENUM) {
             write("enum ");
         } else {
@@ -267,7 +267,7 @@ public abstract class AbstractCodeWriter extends CodeElementScanner<Void, Void> 
             }
         } else {
             Element enclosing = f.getEnclosingElement();
-            writeModifiers(f.getModifiers(), true);
+            writeModifiers(f.getModifiers());
 
             boolean varArgs = false;
             if (enclosing.getKind() == ElementKind.METHOD) {
@@ -476,7 +476,7 @@ public abstract class AbstractCodeWriter extends CodeElementScanner<Void, Void> 
             writeLn();
         }
 
-        writeModifiers(e.getModifiers(), !e.getEnclosingClass().getModifiers().contains(Modifier.FINAL));
+        writeModifiers(e.getModifiers());
 
         if (e.getReturnType() != null) {
             write(useImport(e, e.getReturnType()));
@@ -586,15 +586,10 @@ public abstract class AbstractCodeWriter extends CodeElementScanner<Void, Void> 
         // default implementation does nothing
     }
 
-    private void writeModifiers(Set<Modifier> modifiers, boolean includeFinal) {
-        if (modifiers != null && !modifiers.isEmpty()) {
-            Modifier[] modArray = modifiers.toArray(new Modifier[modifiers.size()]);
-            Arrays.sort(modArray);
-            for (Modifier mod : modArray) {
-                if (mod == Modifier.FINAL && !includeFinal) {
-                    continue;
-                }
-                write(mod.toString());
+    private void writeModifiers(Set<Modifier> modifiers) {
+        if (modifiers != null) {
+            for (Modifier modifier : modifiers) {
+                write(modifier.toString());
                 write(" ");
             }
         }

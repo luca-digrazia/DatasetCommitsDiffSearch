@@ -24,7 +24,6 @@ package com.oracle.truffle.dsl.processor.model;
 
 import javax.lang.model.element.*;
 
-import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.dsl.processor.*;
 import com.oracle.truffle.dsl.processor.java.*;
 
@@ -51,7 +50,7 @@ public class ExecutableTypeData extends TemplateMethod {
     }
 
     public boolean hasUnexpectedValue(ProcessorContext context) {
-        return ElementUtils.canThrowType(getMethod().getThrownTypes(), context.getType(UnexpectedResultException.class));
+        return ElementUtils.canThrowType(getMethod().getThrownTypes(), context.getTruffleTypes().getUnexpectedValueException());
     }
 
     public boolean isFinal() {

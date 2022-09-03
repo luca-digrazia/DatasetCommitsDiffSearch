@@ -147,11 +147,6 @@ public class ExecuteEvaluatedTest {
 
     abstract static class TestEvaluatedVarArgs0 extends ChildrenNode {
 
-        @Override
-        public final Object execute(VirtualFrame frame) {
-            return execute1(frame);
-        }
-
         public abstract Object execute1(VirtualFrame frame, Object... value);
 
         @Specialization
@@ -251,11 +246,6 @@ public class ExecuteEvaluatedTest {
     }
 
     abstract static class TestEvaluatedVarArgs5 extends ValueNode {
-
-        @Override
-        public final Object execute(VirtualFrame frame) {
-            return execute1(frame);
-        }
 
         public abstract Object execute1(VirtualFrame frame, Object... value);
 

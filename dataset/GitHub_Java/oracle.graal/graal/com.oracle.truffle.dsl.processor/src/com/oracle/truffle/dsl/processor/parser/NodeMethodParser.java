@@ -100,9 +100,9 @@ public abstract class NodeMethodParser<E extends TemplateMethod> extends Templat
         }
     }
 
-    protected void addDefaultFrame(MethodSpec methodSpec) {
+    private void addDefaultFrame(MethodSpec methodSpec) {
         if (getNode().supportsFrame()) {
-            methodSpec.addOptional(new ParameterSpec("frame", getNode().getFrameType()));
+            methodSpec.addOptional(new ParameterSpec("frame", getContext().getTruffleTypes().getFrame()));
         }
     }
 

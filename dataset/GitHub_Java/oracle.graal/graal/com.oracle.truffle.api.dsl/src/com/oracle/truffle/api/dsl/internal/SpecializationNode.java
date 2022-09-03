@@ -129,7 +129,7 @@ public abstract class SpecializationNode extends Node {
         return getClass() == other.getClass();
     }
 
-    private int count() {
+    private final int count() {
         return next != null ? next.count() + 1 : 1;
     }
 
@@ -142,7 +142,7 @@ public abstract class SpecializationNode extends Node {
     }
 
     /** Find the topmost of the specialization chain. */
-    private SpecializationNode findStart() {
+    private final SpecializationNode findStart() {
         SpecializationNode node = this;
         Node parent = this.getParent();
         while (parent instanceof SpecializationNode) {
@@ -156,7 +156,7 @@ public abstract class SpecializationNode extends Node {
         return node;
     }
 
-    private Node findParentNode() {
+    private final Node findParentNode() {
         return findStart().getParent();
     }
 
@@ -363,7 +363,7 @@ public abstract class SpecializationNode extends Node {
         });
     }
 
-    private SpecializationNode insert(final SpecializationNode generated, CharSequence message) {
+    private final SpecializationNode insert(final SpecializationNode generated, CharSequence message) {
         SpecializationNode start = findStart();
         if (start == this) {
             // fast path for first insert

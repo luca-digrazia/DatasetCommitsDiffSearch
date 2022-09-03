@@ -1216,11 +1216,11 @@ public class NodeGenFactory {
         } else if (specialization.isUninitialized()) {
             builder.startReturn().tree(createCallDelegate("uninitialized", null, type, currentLocals)).end();
         } else {
-            final TypeData finalType = type;
+            final TypeData type_ = type;
             SpecializationGroup group = SpecializationGroup.create(specialization);
             SpecializationExecution executionFactory = new SpecializationExecution() {
                 public CodeTree createExecute(SpecializationData s, LocalContext values) {
-                    return createFastPathExecute(finalType, s, values);
+                    return createFastPathExecute(type_, s, values);
                 }
 
                 public boolean isFastPath() {
@@ -2132,7 +2132,7 @@ public class NodeGenFactory {
 
     }
 
-    public static final class LocalVariable {
+    public final static class LocalVariable {
 
         private final TypeData type;
         private final TypeMirror typeMirror;
@@ -2205,15 +2205,15 @@ public class NodeGenFactory {
             return new LocalVariable(newType, newType.getPrimitiveType(), name, accessorTree);
         }
 
-        public LocalVariable accessWith(CodeTree tree) {
+        public final LocalVariable accessWith(CodeTree tree) {
             return new LocalVariable(type, typeMirror, name, tree);
         }
 
-        public LocalVariable nextName() {
+        public final LocalVariable nextName() {
             return new LocalVariable(type, typeMirror, createNextName(name), accessorTree);
         }
 
-        public LocalVariable makeGeneric() {
+        public final LocalVariable makeGeneric() {
             return newType(type.getTypeSystem().getGenericTypeData());
         }
 

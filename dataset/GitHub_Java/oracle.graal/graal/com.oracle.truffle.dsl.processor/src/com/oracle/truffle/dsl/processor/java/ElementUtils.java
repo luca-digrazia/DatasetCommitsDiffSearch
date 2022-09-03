@@ -988,7 +988,9 @@ public class ElementUtils {
         }
 
         // search for any super types
-        for (TypeElement typeElement : getSuperTypes(fromTypeMirror(exceptionType))) {
+        TypeElement exceptionTypeElement = fromTypeMirror(exceptionType);
+        List<TypeElement> superTypes = getSuperTypes(exceptionTypeElement);
+        for (TypeElement typeElement : superTypes) {
             if (ElementUtils.containsType(thrownTypes, typeElement.asType())) {
                 return true;
             }
@@ -1020,7 +1022,11 @@ public class ElementUtils {
 
     private static boolean isRuntimeException(TypeMirror type) {
         Set<String> typeSuperSet = new HashSet<>(getQualifiedSuperTypeNames(fromTypeMirror(type)));
-        return typeSuperSet.contains(RuntimeException.class.getCanonicalName()) || getQualifiedName(type).equals(RuntimeException.class.getCanonicalName());
+        String typeName = getQualifiedName(type);
+        if (!typeSuperSet.contains(Throwable.class.getCanonicalName()) && !typeName.equals(Throwable.class.getCanonicalName())) {
+            throw new IllegalArgumentException("Given type does not extend Throwable.");
+        }
+        return typeSuperSet.contains(RuntimeException.class.getCanonicalName()) || typeName.equals(RuntimeException.class.getCanonicalName());
     }
 
     private static boolean containsType(Collection<? extends TypeMirror> collection, TypeMirror type) {

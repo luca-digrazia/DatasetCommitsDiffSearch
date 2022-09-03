@@ -24,6 +24,10 @@ package com.oracle.truffle.dsl.processor.parser;
 
 import java.util.*;
 
+import javax.lang.model.type.*;
+
+import com.oracle.truffle.dsl.processor.*;
+import com.oracle.truffle.dsl.processor.java.*;
 import com.oracle.truffle.dsl.processor.model.*;
 import com.oracle.truffle.dsl.processor.model.TemplateMethod.TypeSignature;
 
@@ -33,6 +37,7 @@ import com.oracle.truffle.dsl.processor.model.TemplateMethod.TypeSignature;
  */
 public final class SpecializationGroup {
 
+    private final List<String> assumptions;
     private final List<TypeGuard> typeGuards;
     private final List<GuardExpression> guards;
 
@@ -44,10 +49,12 @@ public final class SpecializationGroup {
 
     private SpecializationGroup(SpecializationData data) {
         this.node = data.getNode();
+        this.assumptions = new ArrayList<>();
         this.typeGuards = new ArrayList<>();
         this.guards = new ArrayList<>();
         this.specialization = data;
 
+        this.assumptions.addAll(data.getAssumptions());
         TypeSignature sig = data.getTypeSignature();
         for (int i = 1; i < sig.size(); i++) {
             typeGuards.add(new TypeGuard(sig.get(i), i - 1));
@@ -55,8 +62,9 @@ public final class SpecializationGroup {
         this.guards.addAll(data.getGuards());
     }
 
-    public SpecializationGroup(List<SpecializationGroup> children, List<TypeGuard> typeGuardsMatches, List<GuardExpression> guardMatches) {
+    public SpecializationGroup(List<SpecializationGroup> children, List<String> assumptionMatches, List<TypeGuard> typeGuardsMatches, List<GuardExpression> guardMatches) {
         assert !children.isEmpty() : "children must not be empty";
+        this.assumptions = assumptionMatches;
         this.typeGuards = typeGuardsMatches;
         this.guards = guardMatches;
         this.node = children.get(0).node;
@@ -73,8 +81,17 @@ public final class SpecializationGroup {
         return collectedGuards;
     }
 
+    public TypeGuard findTypeGuard(int signatureIndex) {
+        for (TypeGuard guard : typeGuards) {
+            if (guard.getSignatureIndex() == signatureIndex) {
+                return guard;
+            }
+        }
+        return null;
+    }
+
     public List<GuardExpression> findElseConnectableGuards() {
-        if (!getTypeGuards().isEmpty()) {
+        if (!getTypeGuards().isEmpty() || !getAssumptions().isEmpty()) {
             return Collections.emptyList();
         }
 
@@ -109,7 +126,7 @@ public final class SpecializationGroup {
         }
 
         GuardExpression previousGuard = previous.getGuards().get(elseConnectedGuards.size());
-        if (guard.equalsNegated(previousGuard)) {
+        if (guard.getResolvedGuard().getMethod().equals(previousGuard.getResolvedGuard().getMethod()) && guard.isNegated() != previousGuard.isNegated()) {
             return guard;
         }
         return null;
@@ -127,6 +144,10 @@ public final class SpecializationGroup {
 
     public SpecializationGroup getParent() {
         return parent;
+    }
+
+    public List<String> getAssumptions() {
+        return assumptions;
     }
 
     public List<TypeGuard> getTypeGuards() {
@@ -153,11 +174,22 @@ public final class SpecializationGroup {
             return null;
         }
 
+        List<String> assumptionMatches = new ArrayList<>();
         List<TypeGuard> typeGuardsMatches = new ArrayList<>();
         List<GuardExpression> guardMatches = new ArrayList<>();
 
         SpecializationGroup first = groups.get(0);
         List<SpecializationGroup> others = groups.subList(1, groups.size());
+
+        outer: for (String assumption : first.assumptions) {
+            for (SpecializationGroup other : others) {
+                if (!other.assumptions.contains(assumption)) {
+                    // assumptions can be combined unordered
+                    continue outer;
+                }
+            }
+            assumptionMatches.add(assumption);
+        }
 
         outer: for (TypeGuard typeGuard : first.typeGuards) {
             for (SpecializationGroup other : others) {
@@ -182,23 +214,71 @@ public final class SpecializationGroup {
         // check for guards for required type casts
         for (Iterator<GuardExpression> iterator = guardMatches.iterator(); iterator.hasNext();) {
             GuardExpression guardMatch = iterator.next();
-            if (!guardMatch.getExpression().findBoundVariables().isEmpty()) {
+
+            int signatureIndex = 0;
+            for (Parameter parameter : guardMatch.getResolvedGuard().getParameters()) {
+                signatureIndex++;
+                if (!parameter.getSpecification().isSignature()) {
+                    continue;
+                }
+
+                TypeMirror guardType = parameter.getType();
+
+                // object guards can be safely moved up
+                if (ElementUtils.isObject(guardType)) {
+                    continue;
+                }
+
+                // generic guards can be safely moved up
+                SpecializationData generic = first.node.getGenericSpecialization();
+                if (generic != null) {
+                    Parameter genericParameter = generic.findParameter(parameter.getLocalName());
+                    if (genericParameter != null && ElementUtils.typeEquals(genericParameter.getType(), guardType)) {
+                        continue;
+                    }
+                }
+
+                // signature index required for moving up guards
+                if (containsIndex(typeGuardsMatches, signatureIndex) || (first.getParent() != null && first.getParent().containsTypeGuardIndex(signatureIndex))) {
+                    continue;
+                }
+
                 iterator.remove();
+                break;
             }
-            // TODO we need to be smarter here with bound parameters.
         }
 
-        if (typeGuardsMatches.isEmpty() && guardMatches.isEmpty()) {
+        if (assumptionMatches.isEmpty() && typeGuardsMatches.isEmpty() && guardMatches.isEmpty()) {
             return null;
         }
 
         for (SpecializationGroup group : groups) {
+            group.assumptions.removeAll(assumptionMatches);
             group.typeGuards.removeAll(typeGuardsMatches);
             group.guards.removeAll(guardMatches);
         }
 
         List<SpecializationGroup> newChildren = new ArrayList<>(groups);
-        return new SpecializationGroup(newChildren, typeGuardsMatches, guardMatches);
+        return new SpecializationGroup(newChildren, assumptionMatches, typeGuardsMatches, guardMatches);
+    }
+
+    private boolean containsTypeGuardIndex(int index) {
+        if (containsIndex(typeGuards, index)) {
+            return true;
+        }
+        if (parent != null) {
+            return parent.containsTypeGuardIndex(index);
+        }
+        return false;
+    }
+
+    private static boolean containsIndex(List<TypeGuard> typeGuards, int signatureIndex) {
+        for (TypeGuard guard : typeGuards) {
+            if (guard.signatureIndex == signatureIndex) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static SpecializationGroup create(SpecializationData specialization) {
@@ -210,12 +290,12 @@ public final class SpecializationGroup {
         for (SpecializationData specialization : specializations) {
             groups.add(new SpecializationGroup(specialization));
         }
-        return new SpecializationGroup(createCombinationalGroups(groups), Collections.<TypeGuard> emptyList(), Collections.<GuardExpression> emptyList());
+        return new SpecializationGroup(createCombinationalGroups(groups), Collections.<String> emptyList(), Collections.<TypeGuard> emptyList(), Collections.<GuardExpression> emptyList());
     }
 
     @Override
     public String toString() {
-        return "SpecializationGroup [typeGuards=" + typeGuards + ", guards=" + guards + "]";
+        return "SpecializationGroup [assumptions=" + assumptions + ", typeGuards=" + typeGuards + ", guards=" + guards + "]";
     }
 
     private static List<SpecializationGroup> createCombinationalGroups(List<SpecializationGroup> groups) {
@@ -343,16 +423,26 @@ public final class SpecializationGroup {
         }
     }
 
-    public SpecializationGroup getPrevious() {
-        if (getParent() == null) {
-            return null;
+    public boolean isTypeGuardUsedInAnyGuardBelow(ProcessorContext context, SpecializationData source, TypeGuard typeGuard) {
+        NodeExecutionData execution = source.getNode().getChildExecutions().get(typeGuard.getSignatureIndex());
+
+        for (GuardExpression guard : guards) {
+            List<Parameter> guardParameters = guard.getResolvedGuard().findByExecutionData(execution);
+            Parameter sourceParameter = source.getSignatureParameter(typeGuard.getSignatureIndex());
+            for (Parameter guardParameter : guardParameters) {
+                if (sourceParameter.getTypeSystemType().needsCastTo(guardParameter.getType())) {
+                    return true;
+                }
+            }
         }
 
-        List<SpecializationGroup> parentChildren = getParent().getChildren();
-        int index = parentChildren.indexOf(this);
-        if (index <= 0) {
-            return null;
+        for (SpecializationGroup group : getChildren()) {
+            if (group.isTypeGuardUsedInAnyGuardBelow(context, source, typeGuard)) {
+                return true;
+            }
         }
-        return parentChildren.get(index - 1);
+
+        return false;
     }
+
 }

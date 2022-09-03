@@ -41,10 +41,6 @@ public abstract class CodeElement<E extends Element> implements Element, Generat
     private Element generatorElement;
     private AnnotationMirror generatorAnnotationMirror;
 
-    public CodeElement() {
-        this.modifiers = new LinkedHashSet<>();
-    }
-
     public CodeElement(Set<Modifier> modifiers) {
         this.modifiers = new LinkedHashSet<>(modifiers);
     }
@@ -69,7 +65,7 @@ public abstract class CodeElement<E extends Element> implements Element, Generat
         return generatorElement;
     }
 
-    public E add(E element) {
+    public <T extends E> T add(T element) {
         if (element == null) {
             throw new NullPointerException();
         }
@@ -77,7 +73,7 @@ public abstract class CodeElement<E extends Element> implements Element, Generat
         return element;
     }
 
-    public E addOptional(E element) {
+    public <T extends E> T addOptional(T element) {
         if (element != null) {
             add(element);
         }
@@ -140,7 +136,7 @@ public abstract class CodeElement<E extends Element> implements Element, Generat
         getAnnotationMirrors().add(annotationMirror);
     }
 
-    protected void setEnclosingElement(Element parent) {
+    public void setEnclosingElement(Element parent) {
         this.enclosingElement = parent;
     }
 
