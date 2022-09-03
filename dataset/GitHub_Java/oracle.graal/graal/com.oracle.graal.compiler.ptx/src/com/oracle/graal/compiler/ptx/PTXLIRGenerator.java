@@ -133,8 +133,7 @@ public class PTXLIRGenerator extends LIRGenerator {
         }
     }
 
-    @Override
-    public PTXAddressValue emitAddress(Value base, long displacement, Value index, int scale) {
+    private PTXAddressValue prepareAddress(Value base, long displacement, Value index, int scale) {
         AllocatableValue baseRegister;
         long finalDisp = displacement;
         if (isConstant(base)) {
@@ -175,31 +174,28 @@ public class PTXLIRGenerator extends LIRGenerator {
         return new PTXAddressValue(target().wordKind, baseRegister, finalDisp);
     }
 
-    private PTXAddressValue asAddress(Value address) {
-        if (address instanceof PTXAddressValue) {
-            return (PTXAddressValue) address;
-        } else {
-            return emitAddress(address, 0, Value.ILLEGAL, 0);
-        }
-    }
-
     @Override
-    public Variable emitLoad(Kind kind, Value address, DeoptimizingNode deopting) {
-        PTXAddressValue loadAddress = asAddress(address);
+    public Variable emitLoad(Kind kind, Value base, long displacement, Value index, int scale, DeoptimizingNode deopting) {
+        PTXAddressValue loadAddress = prepareAddress(base, displacement, index, scale);
         Variable result = newVariable(kind);
         append(new LoadOp(kind, result, loadAddress, deopting != null ? state(deopting) : null));
         return result;
     }
 
     @Override
-    public void emitStore(Kind kind, Value address, Value inputVal, DeoptimizingNode deopting) {
-        PTXAddressValue storeAddress = asAddress(address);
+    public void emitStore(Kind kind, Value base, long displacement, Value index, int scale, Value inputVal, DeoptimizingNode deopting) {
+        PTXAddressValue storeAddress = prepareAddress(base, displacement, index, scale);
         Variable input = load(inputVal);
         append(new StoreOp(kind, storeAddress, input, deopting != null ? state(deopting) : null));
     }
 
     @Override
-    public Variable emitAddress(StackSlot address) {
+    public Variable emitLea(Value base, long displacement, Value index, int scale) {
+        throw new InternalError("NYI");
+    }
+
+    @Override
+    public Variable emitLea(StackSlot address) {
         throw new InternalError("NYI");
     }
 

@@ -24,6 +24,7 @@ package com.oracle.graal.lir;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -55,8 +56,6 @@ public class LIR {
      */
     private final List<Block> codeEmittingOrder;
 
-    private int firstVariableNumber;
-
     private int numVariables;
 
     public SpillMoveFactory spillMoveFactory;
@@ -70,15 +69,22 @@ public class LIR {
 
     private boolean hasArgInCallerFrame;
 
+    private final SpeculationLog speculationLog;
+
     /**
      * Creates a new LIR instance for the specified compilation.
      */
-    public LIR(ControlFlowGraph cfg, BlockMap<List<ScheduledNode>> blockToNodesMap, List<Block> linearScanOrder, List<Block> codeEmittingOrder) {
+    public LIR(ControlFlowGraph cfg, BlockMap<List<ScheduledNode>> blockToNodesMap, List<Block> linearScanOrder, List<Block> codeEmittingOrder, SpeculationLog speculationLog) {
         this.cfg = cfg;
         this.blockToNodesMap = blockToNodesMap;
         this.codeEmittingOrder = codeEmittingOrder;
         this.linearScanOrder = linearScanOrder;
         this.lirInstructions = new BlockMap<>(cfg);
+        this.speculationLog = speculationLog;
+    }
+
+    public SpeculationLog getDeoptimizationReasons() {
+        return speculationLog;
     }
 
     /**
@@ -129,11 +135,7 @@ public class LIR {
     }
 
     public int nextVariable() {
-        return firstVariableNumber + numVariables++;
-    }
-
-    public void setFirstVariableNumber(int num) {
-        firstVariableNumber = num;
+        return numVariables++;
     }
 
     public void emitCode(TargetMethodAssembler tasm) {
