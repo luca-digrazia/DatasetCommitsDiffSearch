@@ -171,7 +171,8 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
         if (receiver != null) {
             receiver.get();
         }
-        return b.intrinsify(targetMethod, subst, argsIncludingReceiver);
+        b.intrinsify(targetMethod, subst, argsIncludingReceiver);
+        return true;
     }
 
     public StackTraceElement getApplySourceLocation(MetaAccessProvider metaAccess) {
