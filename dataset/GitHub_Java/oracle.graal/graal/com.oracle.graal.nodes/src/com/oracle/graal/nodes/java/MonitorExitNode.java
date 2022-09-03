@@ -24,26 +24,27 @@ package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
- * The {@code MonitorExitNode} represents a monitor release. If it is the release of the monitor of
- * a synchronized method, then the return value of the method will be referenced, so that it will be
- * materialized before releasing the monitor.
+ * The {@code MonitorEnterNode} represents a monitor release.
  */
-public final class MonitorExitNode extends AccessMonitorNode implements Virtualizable, Simplifiable, Lowerable, IterableNodeType, MonitorExit, MemoryCheckpoint.Single {
+public final class MonitorExitNode extends AccessMonitorNode implements Virtualizable, Lowerable, IterableNodeType, MonitorExit, MemoryCheckpoint.Single, MonitorReference {
 
+    private int lockDepth;
     @Input private ValueNode escapedReturnValue;
 
     /**
      * Creates a new MonitorExitNode.
+     * 
+     * @param object the instruction produces the object value
      */
-    public MonitorExitNode(ValueNode object, MonitorIdNode monitorId, ValueNode escapedReturnValue) {
-        super(object, monitorId);
+    public MonitorExitNode(ValueNode object, ValueNode escapedReturnValue, int lockDepth) {
+        super(object);
         this.escapedReturnValue = escapedReturnValue;
+        this.lockDepth = lockDepth;
     }
 
     public void setEscapedReturnValue(ValueNode x) {
@@ -57,31 +58,34 @@ public final class MonitorExitNode extends AccessMonitorNode implements Virtuali
     }
 
     @Override
-    public void simplify(SimplifierTool tool) {
-        if (escapedReturnValue != null && stateAfter().bci != FrameState.AFTER_BCI) {
-            ValueNode returnValue = escapedReturnValue;
-            setEscapedReturnValue(null);
-            tool.removeIfUnused(returnValue);
-        }
-    }
-
-    @Override
     public void lower(LoweringTool tool) {
         tool.getLowerer().lower(this, tool);
     }
 
+    public int getLockDepth() {
+        return lockDepth;
+    }
+
+    public void setLockDepth(int lockDepth) {
+        this.lockDepth = lockDepth;
+    }
+
     @Override
     public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object());
-        // the monitor exit for a synchronized method should never be virtualized
-        assert stateAfter().bci != FrameState.AFTER_BCI || state == null;
-        if (state != null && state.getState() == EscapeState.Virtual && state.getVirtualObject().hasIdentity()) {
-            MonitorIdNode removedLock = state.removeLock();
-            if (removedLock != getMonitorId()) {
-                throw new GraalInternalError("mismatch at %s: %s vs. %s", this, removedLock, getMonitorId());
+        /*
+         * The last MonitorExitNode of a synchronized method cannot be removed anyway, and we need
+         * it to materialize the return value.
+         * 
+         * TODO: replace this with correct handling of AFTER_BCI frame states in the runtime.
+         */
+        if (stateAfter().bci != FrameState.AFTER_BCI) {
+            setEscapedReturnValue(null);
+            State state = tool.getObjectState(object());
+            if (state != null && state.getState() == EscapeState.Virtual && state.getVirtualObject().hasIdentity()) {
+                int removedLock = state.removeLock();
+                assert removedLock == getLockDepth();
+                tool.delete();
             }
-            assert removedLock == getMonitorId() : "mismatch at " + this + ": " + removedLock + " vs. " + getMonitorId();
-            tool.delete();
         }
     }
 }
