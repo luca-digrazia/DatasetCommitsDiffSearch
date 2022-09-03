@@ -221,9 +221,9 @@ public final class GraphBuilder {
             if (n instanceof Placeholder) {
                 Placeholder p = (Placeholder) n;
 
-                /*if (p == graph.start().successors().get(0)) {
+                if (p == graph.start().successors().get(0)) {
                     // nothing to do...
-                } else*/ if (p.blockPredecessors().size() == 0) {
+                } else if (p.blockPredecessors().size() == 0) {
                     assert p.next() == null;
                     p.delete();
                 } else {
@@ -236,12 +236,6 @@ public final class GraphBuilder {
                 }
             }
         }
-
-        for (Node n : graph.getNodes()) {
-            assert !(n instanceof Placeholder);
-        }
-
-
         for (Node n : graph.getNodes()) {
             if (n instanceof FrameState) {
                 boolean delete = false;
@@ -1095,9 +1089,7 @@ public final class GraphBuilder {
             // go forward to the end of the block
             lastInstr = lastInstr.next();
         }
-
-//        TTY.println("first instruction: " + syncHandler.firstInstruction);
-        frameState.initializeFrom(((StateSplit) syncHandler.firstInstruction).stateBefore());
+        frameState.initializeFrom(((BlockBegin) syncHandler.firstInstruction).stateBefore());
 
         int bci = Instruction.SYNCHRONIZATION_ENTRY_BCI;
 

@@ -37,8 +37,7 @@ import com.sun.cri.ci.*;
  */
 public final class BlockBegin extends StateSplit {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_STATE_BEFORE = 0;
+    private static final int INPUT_COUNT = 0;
 
     private static final int SUCCESSOR_COUNT = 0;
 
@@ -135,7 +134,7 @@ public final class BlockBegin extends StateSplit {
             ArrayList<BlockBegin> excBlocks = new ArrayList<BlockBegin>();
             while (inst != null) {
                 if (inst instanceof ExceptionEdgeInstruction) {
-                    excBlocks.add(((ExceptionEdgeInstruction) inst).exceptionEdge());
+                    excBlocks.add((BlockBegin) ((ExceptionEdgeInstruction) inst).exceptionEdge());
                 }
                 inst = inst.next();
             }
@@ -342,5 +341,26 @@ public final class BlockBegin extends StateSplit {
     @Override
     public String shortName() {
         return "BlockBegin #" + blockID;
+    }
+
+    /**
+     * Iterates over all successors of this block: successors of the end node and exception handler.
+     */
+    public void allSuccessorsDo(boolean backwards, BlockClosure closure) {
+        BlockEnd end = end();
+        if (backwards) {
+            for (int i = end.blockSuccessorCount() - 1; i >= 0; i--) {
+                closure.apply(end.blockSuccessor(i));
+            }
+        } else {
+            for (int i = 0; i < end.blockSuccessorCount(); i++) {
+                closure.apply(end.blockSuccessor(i));
+            }
+        }
+        for (Instruction x = next(); x != null; x = x.next()) {
+            if (x instanceof ExceptionEdgeInstruction && ((ExceptionEdgeInstruction) x).exceptionEdge() != null) {
+                closure.apply((BlockBegin) ((ExceptionEdgeInstruction) x).exceptionEdge());
+            }
+        }
     }
 }

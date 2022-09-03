@@ -61,11 +61,4 @@ public class Placeholder extends StateSplit {
     public String shortName() {
         return "Placeholder" + id();
     }
-
-    @Override
-    public Node copy(Graph into) {
-        Placeholder x = new Placeholder(into);
-        x.setNonNull(isNonNull());
-        return x;
-    }
 }

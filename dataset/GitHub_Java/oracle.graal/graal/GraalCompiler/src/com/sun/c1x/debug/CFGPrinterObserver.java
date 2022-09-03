@@ -25,6 +25,7 @@ package com.sun.c1x.debug;
 import java.io.*;
 
 import com.sun.c1x.*;
+import com.sun.c1x.ir.*;
 import com.sun.c1x.observer.*;
 import com.sun.cri.ri.*;
 
@@ -39,14 +40,8 @@ public class CFGPrinterObserver implements CompilationObserver {
     private C1XCompilation currentCompilation;
     private CFGPrinter cfgPrinter;
     private ByteArrayOutputStream buffer = null;
-    private final OutputStream stream;
 
     public CFGPrinterObserver() {
-        this(CFGPrinter.cfgFileStream());
-    }
-
-    public CFGPrinterObserver(OutputStream stream) {
-        this.stream = stream;
     }
 
     @Override
@@ -79,11 +74,10 @@ public class CFGPrinterObserver implements CompilationObserver {
             cfgprinted = true;
         }
 
-        // TODO fix that when schedule is here (startBlock : Instruction->Block)
-        /*if (event.getStartBlock() != null) {
+        if (event.getStartBlock() != null) {
             cfgPrinter.printCFG((BlockBegin) event.getStartBlock(), label, event.isHIRValid(), event.isLIRValid());
             cfgprinted = true;
-        }*/
+        }
 
         if (event.getTargetMethod() != null) {
             if (cfgprinted) {
@@ -102,13 +96,13 @@ public class CFGPrinterObserver implements CompilationObserver {
 
         cfgPrinter.flush();
 
-        if (stream != null) {
-            synchronized (stream) {
+        OutputStream cfgFileStream = CFGPrinter.cfgFileStream();
+        if (cfgFileStream != null) {
+            synchronized (cfgFileStream) {
                 try {
-                    stream.write(buffer.toByteArray());
-                    stream.flush();
+                    cfgFileStream.write(buffer.toByteArray());
                 } catch (IOException e) {
-                    TTY.println("WARNING: Error writing CFGPrinter output for %s: %s", event.getMethod(), e);
+                    TTY.println("WARNING: Error writing CFGPrinter output for %s to disk: %s", event.getMethod(), e);
                 }
             }
         }

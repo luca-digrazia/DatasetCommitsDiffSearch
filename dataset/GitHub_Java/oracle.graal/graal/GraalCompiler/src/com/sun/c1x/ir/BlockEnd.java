@@ -52,14 +52,14 @@ public abstract class BlockEnd extends Instruction {
     /**
      * The list of instructions that produce input for this instruction.
      */
-    public Instruction blockSuccessor(int index) {
+    public BlockBegin blockSuccessor(int index) {
         assert index >= 0 && index < blockSuccessorCount;
-        return (Instruction) successors().get(super.successorCount() + SUCCESSOR_COUNT + index);
+        return (BlockBegin) successors().get(super.successorCount() + SUCCESSOR_COUNT + index);
     }
 
     public Instruction setBlockSuccessor(int index, Instruction n) {
         assert index >= 0 && index < blockSuccessorCount;
-        assert n == null || n instanceof BlockBegin : "only BlockBegins, for now... " + n.getClass();
+//        assert n == null || n instanceof BlockBegin : "only BlockBegins, for now... " + n.getClass();
         return (BlockBegin) successors().set(super.successorCount() + SUCCESSOR_COUNT + index, n);
     }
 
@@ -123,7 +123,7 @@ public abstract class BlockEnd extends Instruction {
      * Gets the successor corresponding to the default (fall through) case.
      * @return the default successor
      */
-    public Instruction defaultSuccessor() {
+    public BlockBegin defaultSuccessor() {
         return blockSuccessor(blockSuccessorCount - 1);
     }
 
