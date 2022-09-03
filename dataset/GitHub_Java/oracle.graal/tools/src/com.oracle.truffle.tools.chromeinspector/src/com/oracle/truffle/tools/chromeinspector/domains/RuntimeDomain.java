@@ -52,8 +52,6 @@ public abstract class RuntimeDomain extends Domain {
 
     public abstract void runIfWaitingForDebugger(CommandPostProcessor postProcessor);
 
-    public abstract void notifyConsoleAPICalled(String type, Object text);
-
     protected void executionContextCreated(long id, String name) {
         eventHandler.event(new Event("Runtime.executionContextCreated", Params.createContext(id, name)));
     }
