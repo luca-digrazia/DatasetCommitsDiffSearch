@@ -202,16 +202,12 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
     // Connect blocks (including loop backward edges), but ignoring dead code (blocks with id < 0).
     private void connectBlocks() {
         for (Block block : reversePostOrder) {
-            List<Block> predecessors = new ArrayList<>(1);
+            List<Block> predecessors = new ArrayList<>(4);
             double probability = block.getBeginNode() instanceof StartNode ? 1D : 0D;
             for (Node predNode : block.getBeginNode().cfgPredecessors()) {
                 Block predBlock = nodeToBlock.get(predNode);
                 if (predBlock.getId() >= 0) {
                     predecessors.add(predBlock);
-                    if (predBlock.getSuccessors() == null) {
-                        predBlock.setSuccessors(new ArrayList<>(1));
-                    }
-                    predBlock.getSuccessors().add(block);
                     probability += predBlock.probability;
                 }
             }
@@ -221,15 +217,11 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
             if (block.getBeginNode() instanceof LoopBeginNode) {
                 LoopBeginNode loopBegin = (LoopBeginNode) block.getBeginNode();
                 probability *= loopBegin.loopFrequency();
-                for (LoopEndNode predNode : loopBegin.loopEnds()) {
+                for (LoopEndNode predNode : loopBegin.orderedLoopEnds()) {
                     Block predBlock = nodeToBlock.get(predNode);
                     assert predBlock != null : predNode;
                     if (predBlock.getId() >= 0) {
                         predecessors.add(predBlock);
-                        if (predBlock.getSuccessors() == null) {
-                            predBlock.setSuccessors(new ArrayList<>(1));
-                        }
-                        predBlock.getSuccessors().add(block);
                     }
                 }
             }
@@ -238,9 +230,19 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
             }
             block.setPredecessors(predecessors);
             block.setProbability(probability);
-            if (block.getSuccessors() == null) {
-                block.setSuccessors(new ArrayList<>(1));
+
+            List<Block> successors = new ArrayList<>(4);
+            for (Node suxNode : block.getEndNode().cfgSuccessors()) {
+                Block suxBlock = nodeToBlock.get(suxNode);
+                assert suxBlock.getId() >= 0;
+                successors.add(suxBlock);
             }
+            if (block.getEndNode() instanceof LoopEndNode) {
+                Block suxBlock = nodeToBlock.get(((LoopEndNode) block.getEndNode()).loopBegin());
+                assert suxBlock.getId() >= 0;
+                successors.add(suxBlock);
+            }
+            block.setSuccessors(successors);
         }
     }
 
