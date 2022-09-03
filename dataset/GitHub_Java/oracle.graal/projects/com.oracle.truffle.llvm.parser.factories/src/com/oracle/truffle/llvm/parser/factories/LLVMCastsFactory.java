@@ -445,6 +445,7 @@ final class LLVMCastsFactory {
                     case I16:
                         return LLVMToI16VectorBitNodeGen.create(fromNode);
                     default:
+                        System.err.println("targetType: " + ((PrimitiveType) elemType).getPrimitiveKind());
                         throw new AssertionError(targetType);
                 }
             } else {
@@ -554,6 +555,7 @@ final class LLVMCastsFactory {
                         case I64:
                             return LLVMToI64VectorBitNodeGen.create(fromNode);
                         default:
+                            System.err.println("targetType: " + ((PrimitiveType) elemType).getPrimitiveKind());
                             throw new AssertionError(targetType);
                     }
                 } else {
@@ -621,6 +623,7 @@ final class LLVMCastsFactory {
                     case I8:
                         return LLVMToI8VectorBitNodeGen.create(fromNode);
                     default:
+                        System.err.println("targetType: " + ((PrimitiveType) elemType).getPrimitiveKind());
                         throw new AssertionError(targetType);
                 }
             } else {
@@ -765,6 +768,7 @@ final class LLVMCastsFactory {
                         case I32:
                             return LLVMToI32VectorBitNodeGen.create(fromNode);
                         default:
+                            System.err.println("targetType: " + ((PrimitiveType) elemType).getPrimitiveKind());
                             throw new AssertionError(targetType);
                     }
                 } else {
@@ -824,6 +828,7 @@ final class LLVMCastsFactory {
                     case I1:
                         return LLVMToI1VectorBitNodeGen.create(fromNode);
                     default:
+                        System.err.println("targetType: " + ((PrimitiveType) elemType).getPrimitiveKind());
                         throw new AssertionError(targetType);
                 }
             } else {
