@@ -189,7 +189,7 @@ public abstract class Accessor {
 
         public abstract Object getCurrentVM();
 
-        public abstract CallTarget parseForLanguage(Object vmObject, Source source, String[] argumentNames);
+        public abstract Env getEnvForLanguage(Object languageShared, String languageId, String mimeType);
 
         public abstract Env getEnvForInstrument(Object vm, String languageId, String mimeType);
 
@@ -304,7 +304,6 @@ public abstract class Accessor {
         public abstract void addToHostClassPath(Object vmObject, TruffleFile entries);
 
         public abstract boolean isInstrumentExceptionsAreThrown(Object vmObject);
-
     }
 
     public abstract static class LanguageSupport {
@@ -378,8 +377,6 @@ public abstract class Accessor {
 
         public abstract Env patchEnvContext(Env env, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options, String[] applicationArguments,
                         FileSystem fileSystem);
-
-        public abstract boolean initializeMultiContext(LanguageInfo info);
 
     }
 
