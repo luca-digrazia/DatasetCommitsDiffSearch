@@ -36,8 +36,6 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo(nameTemplate = "Invoke!#{p#targetMethod/s}")
 public class InvokeWithExceptionNode extends ControlSplitNode implements Node.IterableNodeType, Invoke, MemoryCheckpoint, LIRLowerable {
 
-    private static final double EXCEPTION_PROBA = 1e-5;
-
     @Successor private AbstractBeginNode next;
     @Successor private DispatchBeginNode exceptionEdge;
     @Input private CallTargetNode callTarget;
@@ -47,7 +45,6 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     private final int bci;
     private boolean polymorphic;
     private boolean useForInlining;
-    private double exceptionProbability;
 
     public InvokeWithExceptionNode(CallTargetNode callTarget, DispatchBeginNode exceptionEdge, int bci) {
         super(callTarget.returnStamp());
@@ -56,7 +53,6 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         this.callTarget = callTarget;
         this.polymorphic = false;
         this.useForInlining = true;
-        this.exceptionProbability = EXCEPTION_PROBA;
     }
 
     public DispatchBeginNode exceptionEdge() {
@@ -209,15 +205,11 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         }
     }
 
-    @Override
-    public double probability(AbstractBeginNode successor) {
-        return successor == next ? 1 - exceptionProbability : exceptionProbability;
-    }
+    private static final double EXCEPTION_PROBA = 1e-5;
 
     @Override
-    public void setProbability(AbstractBeginNode successor, double value) {
-        assert successor == next || successor == exceptionEdge;
-        this.exceptionProbability = successor == next ? 1 - value : value;
+    public double probability(AbstractBeginNode successor) {
+        return successor == next ? 1 - EXCEPTION_PROBA : EXCEPTION_PROBA;
     }
 
     @Override

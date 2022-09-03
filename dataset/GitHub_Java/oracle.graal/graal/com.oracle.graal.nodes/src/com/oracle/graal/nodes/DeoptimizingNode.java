@@ -23,12 +23,11 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.spi.*;
 
 /**
  * Interface implemented by nodes which need deoptimization information.
  */
-public interface DeoptimizingNode extends NodeWithState {
+public interface DeoptimizingNode {
 
     /**
      * Determines if this node needs deoptimization information.

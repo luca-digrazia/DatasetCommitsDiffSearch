@@ -22,20 +22,21 @@
  */
 package com.oracle.graal.nodes;
 
+import static com.oracle.graal.api.meta.LocationIdentity.*;
+
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 /**
  * The {@code InvokeNode} represents all kinds of method calls.
  */
 @NodeInfo(nameTemplate = "Invoke#{p#targetMethod/s}")
-public final class InvokeNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, Invoke, LIRLowerable, MemoryCheckpoint.Single {
+public final class InvokeNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, Invoke, LIRLowerable, MemoryCheckpoint {
 
     @Input private CallTargetNode callTarget;
     @Input private FrameState deoptState;
@@ -47,22 +48,11 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     /**
      * Constructs a new Invoke instruction.
      * 
-     * @param callTarget the target method being called
      * @param bci the bytecode index of the original invoke (used for debug infos)
+     * @param callTarget the target method being called
      */
     public InvokeNode(CallTargetNode callTarget, int bci) {
-        this(callTarget, bci, callTarget.returnStamp());
-    }
-
-    /**
-     * Constructs a new Invoke instruction.
-     * 
-     * @param callTarget the target method being called
-     * @param bci the bytecode index of the original invoke (used for debug infos)
-     * @param stamp the stamp to be used for this value
-     */
-    public InvokeNode(CallTargetNode callTarget, int bci, Stamp stamp) {
-        super(stamp);
+        super(callTarget.returnStamp());
         this.callTarget = callTarget;
         this.bci = bci;
         this.polymorphic = false;
@@ -103,8 +93,8 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     }
 
     @Override
-    public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.ANY_LOCATION;
+    public LocationIdentity[] getLocationIdentities() {
+        return new LocationIdentity[]{ANY_LOCATION};
     }
 
     @Override
