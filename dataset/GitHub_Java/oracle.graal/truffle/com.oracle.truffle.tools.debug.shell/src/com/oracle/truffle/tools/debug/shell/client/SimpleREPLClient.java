@@ -82,8 +82,6 @@ import jline.console.ConsoleReader;
  */
 public class SimpleREPLClient implements REPLClient {
 
-    // TODO (mlvdv) Temporarily in hybrid mode; will work either single language or multi (sort of)
-
     private static final String REPLY_PREFIX = "==> ";
     private static final String FAIL_PREFIX = "**> ";
     private static final String WARNING_PREFIX = "!!> ";
@@ -96,6 +94,8 @@ public class SimpleREPLClient implements REPLClient {
 
     private static final String STACK_FRAME_FORMAT = "    %3d: at %s in %s    line =\"%s\"\n";
     private static final String STACK_FRAME_SELECTED_FORMAT = "==> %3d: at %s in %s    line =\"%s\"\n";
+
+    private final String languageName;
 
     // Top level commands
     private final Map<String, REPLCommand> commandMap = new HashMap<>();
@@ -145,6 +145,8 @@ public class SimpleREPLClient implements REPLClient {
 
     public SimpleREPLClient(REPLServer replServer) {
         this.replServer = replServer;
+        // TODO (mlvdv) language-dependent
+        this.languageName = replServer.getLanguageName();
         this.writer = System.out;
         try {
             this.reader = new ConsoleReader();
@@ -175,7 +177,6 @@ public class SimpleREPLClient implements REPLClient {
         addCommand(REPLRemoteCommand.LOAD_CMD);
         addCommand(quitCommand);
         addCommand(setCommand);
-        addCommand(REPLRemoteCommand.SET_LANG_CMD);
         addCommand(REPLRemoteCommand.STEP_INTO_CMD);
         addCommand(REPLRemoteCommand.STEP_OUT_CMD);
         addCommand(REPLRemoteCommand.STEP_OVER_CMD);
@@ -205,22 +206,11 @@ public class SimpleREPLClient implements REPLClient {
 
         this.clientContext = new ClientContextImpl(null, null);
         try {
-            showWelcome();
             clientContext.startContextSession();
         } catch (QuitException ex) {
-            clientContext.displayReply("Goodbye");
+            clientContext.displayReply("Goodbye from " + languageName + "/REPL");
         }
-    }
 
-    private void showWelcome() {
-        final REPLMessage request = new REPLMessage(REPLMessage.OP, REPLMessage.INFO);
-        request.put(REPLMessage.TOPIC, REPLMessage.WELCOME_MESSAGE);
-        final REPLMessage[] replies = clientContext.sendToServer(request);
-        if (replies[0].get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
-            clientContext.displayReply("Welcome");
-        } else {
-            clientContext.displayReply(replies[0].get(REPLMessage.INFO_VALUE));
-        }
     }
 
     public void addCommand(REPLCommand replCommand) {
@@ -296,17 +286,7 @@ public class SimpleREPLClient implements REPLClient {
             updatePrompt();
         }
 
-        @Override
-        public void updatePrompt() {
-
-            String languageName = "???";
-            final REPLMessage request = new REPLMessage();
-            request.put(REPLMessage.OP, REPLMessage.INFO);
-            request.put(REPLMessage.TOPIC, REPLMessage.INFO_CURRENT_LANGUAGE);
-            final REPLMessage[] replies = replServer.receive(request);
-            if (replies[0].get(REPLMessage.STATUS).equals(REPLMessage.SUCCEEDED)) {
-                languageName = replies[0].get(REPLMessage.LANG_NAME);
-            }
+        private void updatePrompt() {
             if (level == 0) {
                 // 0-level context; no executions halted.
                 if (selectedSource == null) {
@@ -319,9 +299,7 @@ public class SimpleREPLClient implements REPLClient {
                 final StringBuilder sb = new StringBuilder();
                 sb.append("(<" + Integer.toString(level) + "> ");
                 sb.append(selectedSource.getShortName());
-                sb.append(")");
-                sb.append("(" + languageName + ")");
-                sb.append(" ");
+                sb.append(") ");
                 currentPrompt = sb.toString();
             } else {
                 // Prompt reveals where currently halted.
@@ -331,9 +309,7 @@ public class SimpleREPLClient implements REPLClient {
                 if (haltedLineNumber > 0) {
                     sb.append(":" + Integer.toString(haltedLineNumber));
                 }
-                sb.append(")");
-                sb.append("(" + languageName + ")");
-                sb.append(" ");
+                sb.append(") ");
                 currentPrompt = sb.toString();
             }
 
@@ -947,9 +923,9 @@ public class SimpleREPLClient implements REPLClient {
         }
     };
 
-    private final REPLCommand infoLanguageCommand = new REPLRemoteCommand("languages", "lang", "languages supported") {
+    private final REPLCommand infoLanguageCommand = new REPLRemoteCommand("language", "lang", "language and implementation details") {
 
-        final String[] help = {"info language:  list details about supported languages"};
+        final String[] help = {"info language:  list details about the language implementation"};
 
         @Override
         public String[] getHelp() {
@@ -960,7 +936,7 @@ public class SimpleREPLClient implements REPLClient {
         public REPLMessage createRequest(REPLClientContext context, String[] args) {
             final REPLMessage request = new REPLMessage();
             request.put(REPLMessage.OP, REPLMessage.INFO);
-            request.put(REPLMessage.TOPIC, REPLMessage.INFO_SUPPORTED_LANGUAGES);
+            request.put(REPLMessage.TOPIC, REPLMessage.LANGUAGE);
             return request;
         }
 
@@ -969,12 +945,12 @@ public class SimpleREPLClient implements REPLClient {
             if (replies[0].get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
                 clientContext.displayFailReply(replies[0].get(REPLMessage.DISPLAY_MSG));
             } else {
-                clientContext.displayReply("Languages supported:");
+                clientContext.displayReply("Language info:");
                 for (REPLMessage message : replies) {
                     final StringBuilder sb = new StringBuilder();
-                    sb.append(message.get(REPLMessage.LANG_NAME));
-                    sb.append(" ver. ");
-                    sb.append(message.get(REPLMessage.LANG_VER));
+                    sb.append(message.get(REPLMessage.INFO_KEY));
+                    sb.append(": ");
+                    sb.append(message.get(REPLMessage.INFO_VALUE));
                     clientContext.displayInfo(sb.toString());
                 }
             }
