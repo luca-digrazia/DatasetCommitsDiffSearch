@@ -24,12 +24,13 @@ package com.oracle.truffle.dsl.processor;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -40,9 +41,11 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
@@ -50,14 +53,19 @@ import javax.tools.Diagnostic.Kind;
 import javax.tools.JavaFileObject;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.AcceptMessage;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 
 /**
  * THIS IS NOT PUBLIC API.
  */
+@SuppressWarnings("deprecation")
 public final class InteropProcessor extends AbstractProcessor {
+
+    private static final List<Message> KNOWN_MESSAGES = Arrays.asList(new Message[]{
+                    Message.READ, Message.WRITE, Message.IS_NULL, Message.IS_EXECUTABLE, Message.IS_BOXED, Message.HAS_SIZE,
+                    Message.GET_SIZE, Message.UNBOX, Message.KEYS, Message.createExecute(0), Message.createInvoke(0), Message.createNew(0)});
+    private final Map<String, FactoryGenerator> factoryGenerators = new HashMap<>();
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
@@ -74,17 +82,19 @@ public final class InteropProcessor extends AbstractProcessor {
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         if (roundEnv.processingOver()) {
+            for (FactoryGenerator fg : factoryGenerators.values()) {
+                fg.generate();
+            }
             return false;
         }
 
-        Map<String, FactoryGenerator> factoryGenerators = new HashMap<>();
         List<String> generatedClasses = new LinkedList<>();
 
-        top: for (Element e : roundEnv.getElementsAnnotatedWith(AcceptMessage.class)) {
+        top: for (Element e : roundEnv.getElementsAnnotatedWith(com.oracle.truffle.api.interop.AcceptMessage.class)) {
             if (e.getKind() != ElementKind.CLASS) {
                 continue;
             }
-            AcceptMessage message = e.getAnnotation(AcceptMessage.class);
+            com.oracle.truffle.api.interop.AcceptMessage message = e.getAnnotation(com.oracle.truffle.api.interop.AcceptMessage.class);
             if (message == null) {
                 continue;
             }
@@ -95,66 +105,96 @@ public final class InteropProcessor extends AbstractProcessor {
 
             final String pkg = findPkg(e);
             String receiverTypeFullClassName = getReceiverTypeFullClassName(message);
-            final String receiverTypeSimpleClass = receiverTypeFullClassName.substring(receiverTypeFullClassName.lastIndexOf(".") + 1);
-            final String receiverTypePackage = receiverTypeFullClassName.substring(0, receiverTypeFullClassName.lastIndexOf("."));
+            String receiverTypePreparedClassName = getPreparedReceiverTypeClassName(message);
+            final String receiverTypeSimpleClass = receiverTypePreparedClassName.substring(receiverTypePreparedClassName.lastIndexOf(".") + 1);
+            final String receiverTypePackage = receiverTypePreparedClassName.substring(0, receiverTypePreparedClassName.lastIndexOf("."));
             final String factoryShortClassName = receiverTypeSimpleClass + "Foreign";
-            final String factoryFullClassName = receiverTypeFullClassName + "Foreign";
+            final String factoryFullClassName = receiverTypePreparedClassName + "Foreign";
 
             String truffleLanguageFullClazzName = getTruffleLanguageFullClassName(message);
 
             final String clazzName = extending.toString();
             String fqn = pkg + "." + clazzName;
-            String messageName = message.value().toLowerCase(Locale.ENGLISH);
+            String messageName = message.value();
+
+            if (isNonStaticInner(message)) {
+                generateErrorClass(e, pkg, fqn, clazzName, null);
+                emitError(receiverTypeFullClassName + " cannot be used as receiverType as it is not a static inner class.", e);
+                continue;
+            }
 
             MessageGenerator currentGenerator = null;
-            Message currentMessage = null;
+            Object currentMessage = null;
             try {
                 currentMessage = Message.valueOf(messageName);
+            } catch (IllegalArgumentException ex) {
+                TypeElement typeElement = processingEnv.getElementUtils().getTypeElement(message.value());
+                TypeElement messageElement = processingEnv.getElementUtils().getTypeElement(Message.class.getName());
+                if (typeElement != null && processingEnv.getTypeUtils().isAssignable(typeElement.asType(), messageElement.asType())) {
+                    currentMessage = messageName;
+                }
+            }
+            if (currentMessage != null) {
                 if (Message.READ.toString().equalsIgnoreCase(messageName)) {
                     currentGenerator = new ReadGenerator(processingEnv, e, pkg, clazzName, fqn, messageName, ((TypeElement) e).getSimpleName().toString(), truffleLanguageFullClazzName);
                 } else if (Message.WRITE.toString().equalsIgnoreCase(messageName)) {
                     currentGenerator = new WriteGenerator(processingEnv, e, pkg, clazzName, fqn, messageName, ((TypeElement) e).getSimpleName().toString(), truffleLanguageFullClazzName);
                 } else if (Message.IS_NULL.toString().equalsIgnoreCase(messageName) || Message.IS_EXECUTABLE.toString().equalsIgnoreCase(messageName) ||
                                 Message.IS_BOXED.toString().equalsIgnoreCase(messageName) || Message.HAS_SIZE.toString().equalsIgnoreCase(messageName) ||
-                                Message.GET_SIZE.toString().equalsIgnoreCase(messageName) || Message.UNBOX.toString().equalsIgnoreCase(messageName)) {
+                                Message.GET_SIZE.toString().equalsIgnoreCase(messageName) || Message.UNBOX.toString().equalsIgnoreCase(messageName) ||
+                                Message.KEYS.toString().equalsIgnoreCase(messageName)) {
                     currentGenerator = new UnaryGenerator(processingEnv, e, pkg, clazzName, fqn, messageName, ((TypeElement) e).getSimpleName().toString(), truffleLanguageFullClazzName);
                 } else if (Message.createExecute(0).toString().equalsIgnoreCase(messageName) || Message.createInvoke(0).toString().equalsIgnoreCase(messageName) ||
                                 Message.createNew(0).toString().equalsIgnoreCase(messageName)) {
                     currentGenerator = new ExecuteGenerator(processingEnv, e, pkg, clazzName, fqn, messageName, ((TypeElement) e).getSimpleName().toString(), truffleLanguageFullClazzName);
+                } else {
+                    assert !KNOWN_MESSAGES.contains(currentMessage);
+                    currentGenerator = new GenericGenerator(processingEnv, e, pkg, clazzName, fqn, messageName.substring(messageName.lastIndexOf('.') + 1),
+                                    ((TypeElement) e).getSimpleName().toString(),
+                                    truffleLanguageFullClazzName);
                 }
-            } catch (IllegalArgumentException ex) {
-                // fall through
             }
 
             if (currentGenerator == null) {
-                generateErrorClass(e, pkg, fqn, clazzName);
+                generateErrorClass(e, pkg, fqn, clazzName, null);
                 emitError("Unknown message type: " + message.value(), e);
                 continue;
             }
 
             if (isInstanceMissing(receiverTypeFullClassName)) {
-                generateErrorClass(e, pkg, fqn, clazzName);
+                generateErrorClass(e, pkg, fqn, clazzName, null);
                 emitError("Missing isInstance method in class " + receiverTypeFullClassName, e);
                 continue;
             }
 
             if (!e.getModifiers().contains(javax.lang.model.element.Modifier.FINAL)) {
-                generateErrorClass(e, pkg, fqn, clazzName);
+                generateErrorClass(e, pkg, fqn, clazzName, null);
                 emitError("Class must be final", e);
                 continue;
             }
 
             List<ExecutableElement> methods = currentGenerator.getAccessMethods();
-            if (methods.size() == 0) {
-                generateErrorClass(e, pkg, fqn, clazzName);
+            if (methods.isEmpty()) {
+                generateErrorClass(e, pkg, fqn, clazzName, null);
                 emitError("There needs to be at least one access method.", e);
                 continue;
+            }
+
+            List<? extends VariableElement> params = methods.get(0).getParameters();
+            int argumentSize = params.size();
+            for (ExecutableElement m : methods) {
+                params = m.getParameters();
+                if (argumentSize != params.size()) {
+                    generateErrorClass(e, pkg, fqn, clazzName, methods);
+                    emitError("Inconsistent argument length.", e);
+                    continue top;
+                }
             }
 
             for (ExecutableElement m : methods) {
                 String errorMessage = currentGenerator.checkSignature(m);
                 if (errorMessage != null) {
-                    generateErrorClass(e, pkg, fqn, clazzName);
+                    generateErrorClass(e, pkg, fqn, clazzName, methods);
                     emitError(errorMessage, m);
                     continue top;
                 }
@@ -169,8 +209,8 @@ public final class InteropProcessor extends AbstractProcessor {
 
             if (!factoryGenerators.containsKey(receiverTypeFullClassName)) {
                 try {
-                    factoryGenerators.put(receiverTypeFullClassName,
-                                    new FactoryGenerator(receiverTypePackage, factoryShortClassName, receiverTypeFullClassName, processingEnv.getFiler().createSourceFile(factoryFullClassName, e)));
+                    factoryGenerators.put(receiverTypeFullClassName, new FactoryGenerator(receiverTypePackage, factoryShortClassName, receiverTypeFullClassName,
+                                    processingEnv.getFiler().createSourceFile(factoryFullClassName, e)));
                 } catch (IOException e1) {
                     throw new IllegalStateException(e1);
                 }
@@ -179,14 +219,10 @@ public final class InteropProcessor extends AbstractProcessor {
             factoryGenerator.addMessageHandler(currentMessage, currentGenerator.getRootNodeFactoryInvokation());
         }
 
-        for (FactoryGenerator fg : factoryGenerators.values()) {
-            fg.generate();
-        }
-
         return true;
     }
 
-    private void generateErrorClass(Element e, final String pkg, final String fqn, final String clazzName) {
+    private void generateErrorClass(Element e, final String pkg, final String fqn, final String clazzName, List<ExecutableElement> methods) {
         try {
             JavaFileObject file = processingEnv.getFiler().createSourceFile(fqn, e);
             Writer w = file.openWriter();
@@ -194,10 +230,40 @@ public final class InteropProcessor extends AbstractProcessor {
 
             w.append("abstract class ").append(clazzName).append(" {\n");
             w.append("  // An error occured, fix ").append(e.getSimpleName()).append(" first.\n");
+            if (methods != null) {
+                for (ExecutableElement m : methods) {
+                    generateAbstractMethod(w, m, null);
+                }
+            }
             w.append("}\n");
             w.close();
         } catch (IOException ex1) {
             emitError(ex1.getMessage(), e);
+        }
+    }
+
+    private static boolean isNonStaticInner(com.oracle.truffle.api.interop.AcceptMessage message) {
+        try {
+            Class<?> receiverType = message.receiverType();
+            if (receiverType.isMemberClass() || receiverType.isLocalClass()) {
+                return !Modifier.isStatic(receiverType.getModifiers());
+            } else {
+                return false;
+            }
+        } catch (MirroredTypeException mte) {
+            // This exception is thrown most of the time: use the mirrors to inspect the class
+            DeclaredType type = (DeclaredType) mte.getTypeMirror();
+            TypeElement element = (TypeElement) type.asElement();
+            if (element.getNestingKind() == NestingKind.MEMBER || element.getNestingKind() == NestingKind.LOCAL) {
+                for (javax.lang.model.element.Modifier modifier : element.getModifiers()) {
+                    if (modifier.compareTo(javax.lang.model.element.Modifier.STATIC) == 0) {
+                        return false;
+                    }
+                }
+                return true;
+            } else {
+                return false;
+            }
         }
     }
 
@@ -214,23 +280,48 @@ public final class InteropProcessor extends AbstractProcessor {
         return true;
     }
 
-    private static String getReceiverTypeFullClassName(AcceptMessage message) {
+    private static String getReceiverTypeFullClassName(com.oracle.truffle.api.interop.AcceptMessage message) {
         String receiverTypeFullClassName;
         try {
             receiverTypeFullClassName = message.receiverType().getName();
         } catch (MirroredTypeException mte) {
-            // wow, annotations processors are strange
+            // This exception is thrown most of the time: use the mirrors to inspect the class
             receiverTypeFullClassName = mte.getTypeMirror().toString();
         }
         return receiverTypeFullClassName;
     }
 
-    private static String getTruffleLanguageFullClassName(AcceptMessage message) {
+    private static String getPreparedReceiverTypeClassName(com.oracle.truffle.api.interop.AcceptMessage message) {
+        StringBuilder receiverTypeFullClassName = new StringBuilder();
+        try {
+            Class<?> receiverType = message.receiverType();
+            while (receiverType.isMemberClass() || receiverType.isLocalClass()) {
+                receiverTypeFullClassName.append(receiverType.getSimpleName());
+                receiverTypeFullClassName.insert(0, "_");
+                receiverType = receiverType.getDeclaringClass();
+            }
+            receiverTypeFullClassName.insert(0, receiverType.getName());
+        } catch (MirroredTypeException mte) {
+            // This exception is thrown most of the time: use the mirrors to inspect the class
+
+            DeclaredType type = (DeclaredType) mte.getTypeMirror();
+            TypeElement element = (TypeElement) type.asElement();
+            while (element.getNestingKind() == NestingKind.MEMBER || element.getNestingKind() == NestingKind.LOCAL) {
+                receiverTypeFullClassName.append(element.getSimpleName());
+                receiverTypeFullClassName.insert(0, "_");
+                element = (TypeElement) element.getEnclosingElement();
+            }
+            receiverTypeFullClassName.insert(0, element.getQualifiedName());
+        }
+        return receiverTypeFullClassName.toString();
+    }
+
+    private static String getTruffleLanguageFullClassName(com.oracle.truffle.api.interop.AcceptMessage message) {
         String truffleLanguageFullClazzName;
         try {
             truffleLanguageFullClazzName = message.language().getName();
         } catch (MirroredTypeException mte) {
-            // wow, annotations processors are strange
+            // This exception is thrown most of the time: use the mirrors to inspect the class
             truffleLanguageFullClazzName = mte.getTypeMirror().toString();
         }
         return truffleLanguageFullClazzName;
@@ -253,7 +344,20 @@ public final class InteropProcessor extends AbstractProcessor {
         processingEnv.getMessager().printMessage(Kind.ERROR, msg, e);
     }
 
-    private static abstract class MessageGenerator {
+    static void generateAbstractMethod(Writer w, ExecutableElement method, String extraName) throws IOException {
+        String methodName = extraName == null ? method.getSimpleName().toString() : extraName;
+        w.append("  protected abstract ").append(method.getReturnType().toString()).append(" ").append(methodName);
+        w.append("(");
+        final List<? extends VariableElement> params = method.getParameters();
+        String sep = "";
+        for (VariableElement p : params) {
+            w.append(sep).append(p.asType().toString()).append(" ").append(p.getSimpleName());
+            sep = ", ";
+        }
+        w.append(");\n");
+    }
+
+    private abstract static class MessageGenerator {
         protected static final String ACCESS_METHOD_NAME = "access";
 
         protected final Element e;
@@ -328,15 +432,7 @@ public final class InteropProcessor extends AbstractProcessor {
 
         void appendAbstractMethods(Writer w) throws IOException {
             for (ExecutableElement method : getAccessMethods()) {
-                w.append("  protected abstract ").append(method.getReturnType().toString()).append(" ").append(ACCESS_METHOD_NAME);
-                w.append("(");
-                final List<? extends VariableElement> params = method.getParameters();
-                String sep = "";
-                for (VariableElement p : params) {
-                    w.append(sep).append(p.asType().toString()).append(" ").append(p.getSimpleName());
-                    sep = ", ";
-                }
-                w.append(");\n");
+                generateAbstractMethod(w, method, ACCESS_METHOD_NAME);
             }
         }
 
@@ -398,10 +494,15 @@ public final class InteropProcessor extends AbstractProcessor {
             return ((TypeElement) e).asType().toString() + ".createRoot(" + truffleLanguageFullClazzName + ".class)";
         }
 
+        @Override
+        public String toString() {
+            return clazzName;
+        }
+
     }
 
     // IsNull IsExecutable IsBoxed HasSize
-    // GetSize Unbox
+    // GetSize Unbox Properties
     private static class UnaryGenerator extends MessageGenerator {
 
         private static final int NUMBER_OF_UNARY = 2; // VirtualFrame frame, TruffleObject receiver
@@ -427,7 +528,7 @@ public final class InteropProcessor extends AbstractProcessor {
 
         @Override
         void appendRootNode(Writer w) throws IOException {
-            w.append("    private final static class ").append(unaryRootNode).append(" extends RootNode {\n");
+            w.append("    private static final class ").append(unaryRootNode).append(" extends RootNode {\n");
             w.append("        protected ").append(unaryRootNode).append("(Class<? extends TruffleLanguage<?>> language) {\n");
             w.append("            super(language, null, null);\n");
             w.append("        }\n");
@@ -495,7 +596,6 @@ public final class InteropProcessor extends AbstractProcessor {
         void appendImports(Writer w) throws IOException {
             super.appendImports(w);
             w.append("import java.util.List;").append("\n");
-            w.append("import com.oracle.truffle.api.nodes.ExplodeLoop;").append("\n");
         }
 
         @Override
@@ -510,7 +610,7 @@ public final class InteropProcessor extends AbstractProcessor {
 
         @Override
         void appendRootNode(Writer w) throws IOException {
-            w.append("    private final static class ").append(executeRootNode).append(" extends RootNode {\n");
+            w.append("    private static final class ").append(executeRootNode).append(" extends RootNode {\n");
             w.append("        protected ").append(executeRootNode).append("(Class<? extends TruffleLanguage<?>> language) {\n");
             w.append("            super(language, null, null);\n");
             w.append("        }\n");
@@ -519,7 +619,6 @@ public final class InteropProcessor extends AbstractProcessor {
                             "Gen.create();\n");
             w.append("\n");
             w.append("        @Override\n");
-            w.append("        @ExplodeLoop\n");
             w.append("        public Object execute(VirtualFrame frame) {\n");
             w.append("            try {\n");
             w.append("              Object receiver = ForeignAccess.getReceiver(frame);\n");
@@ -590,7 +689,7 @@ public final class InteropProcessor extends AbstractProcessor {
 
         @Override
         void appendRootNode(Writer w) throws IOException {
-            w.append("    private final static class ").append(READ_ROOT_NODE).append(" extends RootNode {\n");
+            w.append("    private static final class ").append(READ_ROOT_NODE).append(" extends RootNode {\n");
             w.append("        protected ").append(READ_ROOT_NODE).append("(Class<? extends TruffleLanguage<?>> language) {\n");
             w.append("            super(language, null, null);\n");
             w.append("        }\n");
@@ -655,7 +754,7 @@ public final class InteropProcessor extends AbstractProcessor {
 
         @Override
         void appendRootNode(Writer w) throws IOException {
-            w.append("    private final static class ").append(WRITE_ROOT_NODE).append(" extends RootNode {\n");
+            w.append("    private static final class ").append(WRITE_ROOT_NODE).append(" extends RootNode {\n");
             w.append("        protected ").append(WRITE_ROOT_NODE).append("(Class<? extends TruffleLanguage<?>> language) {\n");
             w.append("            super(language, null, null);\n");
             w.append("        }\n");
@@ -707,6 +806,86 @@ public final class InteropProcessor extends AbstractProcessor {
 
     }
 
+    private static class GenericGenerator extends MessageGenerator {
+
+        private final String targetableExecuteNode;
+        private final String executeRootNode;
+
+        GenericGenerator(ProcessingEnvironment processingEnv, Element e, String pkg, String clazzName, String fullClazzName, String methodName, String userClassName,
+                        String truffleLanguageFullClazzName) {
+            super(processingEnv, e, pkg, clazzName, fullClazzName, methodName, userClassName, truffleLanguageFullClazzName);
+            this.targetableExecuteNode = (new StringBuilder(methodName)).replace(0, 1, methodName.substring(0, 1).toUpperCase()).append("Node").insert(0, "Targetable").toString();
+            this.executeRootNode = (new StringBuilder(methodName)).replace(0, 1, methodName.substring(0, 1).toUpperCase()).append("RootNode").toString();
+        }
+
+        @Override
+        int getParameterCount() {
+            return getAccessMethods().get(0).getParameters().size();
+        }
+
+        @Override
+        String getTargetableNodeName() {
+            return targetableExecuteNode;
+        }
+
+        @Override
+        void appendImports(Writer w) throws IOException {
+            super.appendImports(w);
+            w.append("import java.util.List;").append("\n");
+        }
+
+        @Override
+        void appendRootNode(Writer w) throws IOException {
+            w.append("    private static final class ").append(executeRootNode).append(" extends RootNode {\n");
+            w.append("        protected ").append(executeRootNode).append("(Class<? extends TruffleLanguage<?>> language) {\n");
+            w.append("            super(language, null, null);\n");
+            w.append("        }\n");
+            w.append("\n");
+            w.append("        @Child private ").append(targetableExecuteNode).append(" node = ").append(pkg).append(".").append(clazzName).append("Factory.").append(targetableExecuteNode).append(
+                            "Gen.create();\n");
+            w.append("\n");
+            w.append("        @Override\n");
+            w.append("        public Object execute(VirtualFrame frame) {\n");
+            w.append("            try {\n");
+            w.append("              Object receiver = ForeignAccess.getReceiver(frame);\n");
+            w.append("              List<Object> arguments = ForeignAccess.getArguments(frame);\n");
+            for (int i = 0; i < getParameterCount() - 2; i++) {
+                String index = String.valueOf(i);
+                w.append("              Object arg").append(index).append(" = arguments.get(").append(index).append(");\n");
+            }
+            w.append("              return node.executeWithTarget(frame, receiver, ");
+            String sep = "";
+            for (int i = 0; i < getParameterCount() - 2; i++) {
+                String index = String.valueOf(i);
+                w.append(sep).append("arg").append(index);
+                sep = ", ";
+            }
+            w.append(");\n");
+
+            w.append("            } catch (UnsupportedSpecializationException e) {\n");
+            w.append("                throw UnsupportedTypeException.raise(e.getSuppliedValues());\n");
+            w.append("            }\n");
+            w.append("        }\n");
+            w.append("\n");
+            w.append("    }\n");
+        }
+
+        @Override
+        String getRootNodeName() {
+            return executeRootNode;
+        }
+
+        @Override
+        String checkSignature(ExecutableElement method) {
+            final List<? extends VariableElement> params = method.getParameters();
+            if (!params.get(0).asType().toString().equals(VirtualFrame.class.getName())) {
+                return "The first argument must be a " + VirtualFrame.class.getName() + "- but is " + params.get(0).asType().toString();
+            }
+            return null;
+        }
+
+    }
+
     private static class FactoryGenerator {
 
         private final String receiverTypeClass;
@@ -714,9 +893,9 @@ public final class InteropProcessor extends AbstractProcessor {
         private final String className;
         private final JavaFileObject factoryFile;
 
-        private final Map<Message, String> messageHandlers;
+        private final Map<Object, String> messageHandlers;
 
-        public FactoryGenerator(String packageName, String className, String receiverTypeClass, JavaFileObject factoryFile) {
+        FactoryGenerator(String packageName, String className, String receiverTypeClass, JavaFileObject factoryFile) {
             this.receiverTypeClass = receiverTypeClass;
             this.className = className;
             this.packageName = packageName;
@@ -724,7 +903,7 @@ public final class InteropProcessor extends AbstractProcessor {
             this.messageHandlers = new HashMap<>();
         }
 
-        public void addMessageHandler(Message message, String factoryMethodInvocation) {
+        public void addMessageHandler(Object message, String factoryMethodInvocation) {
             messageHandlers.put(message, factoryMethodInvocation);
         }
 
@@ -733,23 +912,24 @@ public final class InteropProcessor extends AbstractProcessor {
                 Writer w = factoryFile.openWriter();
                 w.append("package ").append(packageName).append(";\n");
                 appendImports(w);
-                w.append("public final class ").append(className).append(" implements Factory10, Factory {\n");
+                w.append("final class ").append(className).append(" implements Factory18, Factory {\n");
 
-                appendSingelton(w);
+                appendSingletonAndGetter(w);
                 appendPrivateConstructor(w);
                 appendFactoryCanHandle(w);
 
-                appendFactory10accessIsNull(w);
-                appendFactory10accessIsExecutable(w);
-                appendFactory10accessIsBoxed(w);
-                appendFactory10accessHasSize(w);
-                appendFactory10accessGetSize(w);
-                appendFactory10accessUnbox(w);
-                appendFactory10accessRead(w);
-                appendFactory10accessWrite(w);
-                appendFactory10accessExecute(w);
-                appendFactory10accessInvoke(w);
-                appendFactory10accessNew(w);
+                appendFactory18accessIsNull(w);
+                appendFactory18accessIsExecutable(w);
+                appendFactory18accessIsBoxed(w);
+                appendFactory18accessHasSize(w);
+                appendFactory18accessGetSize(w);
+                appendFactory18accessUnbox(w);
+                appendFactory18accessRead(w);
+                appendFactory18accessWrite(w);
+                appendFactory18accessExecute(w);
+                appendFactory18accessInvoke(w);
+                appendFactory18accessNew(w);
+                appendFactory18accessKeys(w);
                 appendFactoryAccessMessage(w);
 
                 w.append("}\n");
@@ -760,8 +940,7 @@ public final class InteropProcessor extends AbstractProcessor {
         }
 
         private static void appendImports(Writer w) throws IOException {
-            w.append("import com.oracle.truffle.api.interop.UnsupportedMessageException;").append("\n");
-            w.append("import com.oracle.truffle.api.interop.ForeignAccess.Factory10;").append("\n");
+            w.append("import com.oracle.truffle.api.interop.ForeignAccess.Factory18;").append("\n");
             w.append("import com.oracle.truffle.api.interop.ForeignAccess.Factory;").append("\n");
             w.append("import com.oracle.truffle.api.interop.Message;").append("\n");
             w.append("import com.oracle.truffle.api.interop.ForeignAccess;").append("\n");
@@ -771,8 +950,9 @@ public final class InteropProcessor extends AbstractProcessor {
             w.append("import com.oracle.truffle.api.nodes.RootNode;").append("\n");
         }
 
-        private void appendSingelton(Writer w) throws IOException {
-            w.append("  public static final ForeignAccess ACCESS = ForeignAccess.create(null, new ").append(className).append("());").append("\n");
+        private void appendSingletonAndGetter(Writer w) throws IOException {
+            w.append("  public static final ForeignAccess ACCESS = ForeignAccess.create(new ").append(className).append("(), null);").append("\n");
+            w.append("  public static ForeignAccess createAccess() { return ForeignAccess.create(new ").append(className).append("(), null);}").append("\n");
             w.append("\n");
         }
 
@@ -788,25 +968,25 @@ public final class InteropProcessor extends AbstractProcessor {
             w.append("\n");
         }
 
-        private void appendFactory10accessIsNull(Writer w) throws IOException {
+        private void appendFactory18accessIsNull(Writer w) throws IOException {
             w.append("    public CallTarget accessIsNull() {").append("\n");
             appendOptionalDefaultHandlerBody(w, Message.IS_NULL);
             w.append("    }").append("\n");
         }
 
-        private void appendFactory10accessIsExecutable(Writer w) throws IOException {
+        private void appendFactory18accessIsExecutable(Writer w) throws IOException {
             w.append("    public CallTarget accessIsExecutable() {").append("\n");
             appendOptionalDefaultHandlerBody(w, Message.IS_EXECUTABLE);
             w.append("    }").append("\n");
         }
 
-        private void appendFactory10accessIsBoxed(Writer w) throws IOException {
+        private void appendFactory18accessIsBoxed(Writer w) throws IOException {
             w.append("    public CallTarget accessIsBoxed() {").append("\n");
             appendOptionalDefaultHandlerBody(w, Message.IS_BOXED);
             w.append("    }").append("\n");
         }
 
-        private void appendFactory10accessHasSize(Writer w) throws IOException {
+        private void appendFactory18accessHasSize(Writer w) throws IOException {
             w.append("    public CallTarget accessHasSize() {").append("\n");
             appendOptionalDefaultHandlerBody(w, Message.HAS_SIZE);
             w.append("    }").append("\n");
@@ -820,51 +1000,57 @@ public final class InteropProcessor extends AbstractProcessor {
             }
         }
 
-        private void appendFactory10accessGetSize(Writer w) throws IOException {
+        private void appendFactory18accessGetSize(Writer w) throws IOException {
             w.append("    public CallTarget accessGetSize() {").append("\n");
-            appendOptionalHandlerBody(w, Message.GET_SIZE, "Message.GET_SIZE");
+            appendOptionalHandlerBody(w, Message.GET_SIZE);
             w.append("    }").append("\n");
         }
 
-        private void appendFactory10accessUnbox(Writer w) throws IOException {
+        private void appendFactory18accessUnbox(Writer w) throws IOException {
             w.append("    public CallTarget accessUnbox() {").append("\n");
-            appendOptionalHandlerBody(w, Message.UNBOX, "Message.UNBOX");
+            appendOptionalHandlerBody(w, Message.UNBOX);
             w.append("    }").append("\n");
         }
 
-        private void appendFactory10accessRead(Writer w) throws IOException {
+        private void appendFactory18accessRead(Writer w) throws IOException {
             w.append("    public CallTarget accessRead() {").append("\n");
-            appendOptionalHandlerBody(w, Message.READ, "Message.READ");
+            appendOptionalHandlerBody(w, Message.READ);
             w.append("    }").append("\n");
         }
 
-        private void appendFactory10accessWrite(Writer w) throws IOException {
+        private void appendFactory18accessWrite(Writer w) throws IOException {
             w.append("    public CallTarget accessWrite() {").append("\n");
-            appendOptionalHandlerBody(w, Message.WRITE, "Message.WRITE");
+            appendOptionalHandlerBody(w, Message.WRITE);
             w.append("    }").append("\n");
         }
 
-        private void appendFactory10accessExecute(Writer w) throws IOException {
+        private void appendFactory18accessExecute(Writer w) throws IOException {
             w.append("    public CallTarget accessExecute(int argumentsLength) {").append("\n");
-            appendOptionalHandlerBody(w, Message.createExecute(0), "Message.createExecute(argumentsLength)");
+            appendOptionalHandlerBody(w, Message.createExecute(0));
             w.append("    }").append("\n");
         }
 
-        private void appendFactory10accessInvoke(Writer w) throws IOException {
+        private void appendFactory18accessInvoke(Writer w) throws IOException {
             w.append("    public CallTarget accessInvoke(int argumentsLength) {").append("\n");
-            appendOptionalHandlerBody(w, Message.createInvoke(0), "Message.createInvoke(argumentsLength)");
+            appendOptionalHandlerBody(w, Message.createInvoke(0));
             w.append("    }").append("\n");
         }
 
-        private void appendFactory10accessNew(Writer w) throws IOException {
+        private void appendFactory18accessNew(Writer w) throws IOException {
             w.append("    public CallTarget accessNew(int argumentsLength) {").append("\n");
-            appendOptionalHandlerBody(w, Message.createNew(0), "Message.createNew(argumentsLength)");
+            appendOptionalHandlerBody(w, Message.createNew(0));
             w.append("    }").append("\n");
         }
 
-        private void appendOptionalHandlerBody(Writer w, Message message, String messageObjectAsString) throws IOException {
+        private void appendFactory18accessKeys(Writer w) throws IOException {
+            w.append("    public CallTarget accessKeys() {").append("\n");
+            appendOptionalHandlerBody(w, Message.KEYS);
+            w.append("    }").append("\n");
+        }
+
+        private void appendOptionalHandlerBody(Writer w, Message message) throws IOException {
             if (!messageHandlers.containsKey(message)) {
-                w.append("      throw UnsupportedMessageException.raise(").append(messageObjectAsString).append(");").append("\n");
+                w.append("      return null;\n");
             } else {
                 w.append("      return com.oracle.truffle.api.Truffle.getRuntime().createCallTarget(").append(messageHandlers.get(message)).append(");").append("\n");
             }
@@ -872,13 +1058,21 @@ public final class InteropProcessor extends AbstractProcessor {
 
         private void appendFactoryAccessMessage(Writer w) throws IOException {
             w.append("    public CallTarget accessMessage(Message unknown) {").append("\n");
-            for (Message m : messageHandlers.keySet()) {
-                w.append("      if (Message.valueOf(\"").append(m.toString()).append("\").getClass().isInstance(unknown)) {").append("\n");
-                w.append("        return Truffle.getRuntime().createCallTarget(").append(messageHandlers.get(m)).append(");").append("\n");
-                w.append("      }").append("\n");
+            for (Object m : messageHandlers.keySet()) {
+                if (!KNOWN_MESSAGES.contains(m)) {
+                    String msg = m instanceof Message ? Message.toString((Message) m) : (String) m;
+                    w.append("      if (unknown instanceof ").append(msg).append(") {").append("\n");
+                    w.append("        return Truffle.getRuntime().createCallTarget(").append(messageHandlers.get(m)).append(");").append("\n");
+                    w.append("      }").append("\n");
+                }
             }
-            w.append("      throw UnsupportedMessageException.raise(unknown);").append("\n");
+            w.append("      return null;\n");
             w.append("    }").append("\n");
+        }
+
+        @Override
+        public String toString() {
+            return "FactoryGenerator: " + className;
         }
     }
 }
