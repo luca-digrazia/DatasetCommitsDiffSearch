@@ -48,4 +48,11 @@ public interface HotSpotGraalRuntimeProvider extends GraalRuntime, RuntimeProvid
 
     @Override
     HotSpotBackend getHostBackend();
+
+    GraalHotSpotVMConfig getVMConfig();
+
+    /**
+     * Determines if the VM is currently bootstrapping the JVMCI compiler.
+     */
+    boolean isBootstrapping();
 }
