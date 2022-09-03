@@ -22,67 +22,38 @@
  */
 package com.oracle.graal.graph.iterators;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
-import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.*;
 
 public interface NodeIterable<T extends Node> extends Iterable<T> {
 
-    @SuppressWarnings("unchecked")
-    default <F extends T> NodeIterable<F> filter(Class<F> clazz) {
-        return (NodeIterable<F>) new FilteredNodeIterable<>(this).and(NodePredicates.isA(clazz));
-    }
+    NodeIterable<T> until(T u);
 
-    default FilteredNodeIterable<T> filter(NodePredicate predicate) {
-        return new FilteredNodeIterable<>(this).and(predicate);
-    }
+    NodeIterable<T> until(Class<? extends T> clazz);
 
-    default NodeIterable<T> distinct() {
-        return new FilteredNodeIterable<>(this).distinct();
-    }
+    <F extends T> NodeIterable<F> filter(Class<F> clazz);
 
-    default List<T> snapshot() {
-        ArrayList<T> list = new ArrayList<>();
-        snapshotTo(list);
-        return list;
-    }
+    NodeIterable<T> filterInterface(Class<?> iface);
 
-    default void snapshotTo(Collection<? super T> to) {
-        for (T n : this) {
-            to.add(n);
-        }
-    }
+    FilteredNodeIterable<T> filter(NodePredicate predicate);
 
-    default T first() {
-        Iterator<T> iterator = iterator();
-        if (iterator.hasNext()) {
-            return iterator.next();
-        }
-        return null;
-    }
+    FilteredNodeIterable<T> nonNull();
 
-    default int count() {
-        int count = 0;
-        Iterator<T> iterator = iterator();
-        while (iterator.hasNext()) {
-            iterator.next();
-            count++;
-        }
-        return count;
-    }
+    NodeIterable<T> distinct();
 
-    default boolean isEmpty() {
-        return !iterator().hasNext();
-    }
+    List<T> snapshot();
 
-    default boolean isNotEmpty() {
-        return iterator().hasNext();
-    }
+    void snapshotTo(Collection<T> to);
 
-    default boolean contains(T node) {
-        return this.filter(NodePredicates.equals(node)).isNotEmpty();
-    }
+    T first();
+
+    int count();
+
+    boolean isEmpty();
+
+    boolean isNotEmpty();
+
+    boolean contains(T node);
+
 }
