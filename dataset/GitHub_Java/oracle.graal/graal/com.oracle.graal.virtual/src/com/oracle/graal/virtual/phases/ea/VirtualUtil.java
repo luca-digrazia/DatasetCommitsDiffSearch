@@ -26,20 +26,16 @@ import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.debug.*;
-
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
-
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 public final class VirtualUtil {
 
     private VirtualUtil() {
-        JVMCIError.shouldNotReachHere();
+        GraalInternalError.shouldNotReachHere();
     }
 
     public static boolean assertNonReachable(StructuredGraph graph, List<Node> obsoleteNodes) {
@@ -109,15 +105,8 @@ public final class VirtualUtil {
         }
         if (!success) {
             TTY.println();
-            Debug.dump(graph, "assertNonReachable");
         }
         return success;
-    }
-
-    public static void trace(String format) {
-        if (Debug.isEnabled() && TraceEscapeAnalysis.getValue() && Debug.isLogEnabled()) {
-            Debug.logv(format);
-        }
     }
 
     public static void trace(String format, Object obj) {
@@ -135,12 +124,6 @@ public final class VirtualUtil {
     public static void trace(String format, Object obj, Object obj2, Object obj3) {
         if (Debug.isEnabled() && TraceEscapeAnalysis.getValue() && Debug.isLogEnabled()) {
             Debug.logv(format, obj, obj2, obj3);
-        }
-    }
-
-    public static void trace(String format, Object obj, Object obj2, Object obj3, Object obj4) {
-        if (Debug.isEnabled() && TraceEscapeAnalysis.getValue() && Debug.isLogEnabled()) {
-            Debug.logv(format, obj, obj2, obj3, obj4);
         }
     }
 
