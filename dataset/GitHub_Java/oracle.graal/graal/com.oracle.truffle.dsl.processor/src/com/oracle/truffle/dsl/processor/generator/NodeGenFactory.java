@@ -420,17 +420,6 @@ public class NodeGenFactory {
     }
 
     private boolean needsPolymorphic() {
-        int signatureSize = node.getSignatureSize();
-        boolean allEvaluated = true;
-        for (ExecutableTypeData type : usedTypes) {
-            if (type.getEvaluatedCount() != signatureSize) {
-                allEvaluated = false;
-            }
-        }
-        if (allEvaluated) {
-            return false;
-        }
-
         if (reachableSpecializations.size() != 1) {
             return true;
         }
@@ -1981,7 +1970,7 @@ public class NodeGenFactory {
         } else {
             castGuards = new HashSet<>();
             for (TypeGuard castGuard : group.getTypeGuards()) {
-                if (isTypeGuardUsedInAnyGuardOrCacheBelow(group, currentValues, castGuard, execution.isFastPath())) {
+                if (isTypeGuardUsedInAnyGuardOrCacheBelow(group, currentValues, castGuard)) {
                     castGuards.add(castGuard);
                 }
             }
@@ -2059,7 +2048,7 @@ public class NodeGenFactory {
         return true;
     }
 
-    private boolean isTypeGuardUsedInAnyGuardOrCacheBelow(SpecializationGroup group, LocalContext currentValues, TypeGuard typeGuard, boolean fastPath) {
+    private boolean isTypeGuardUsedInAnyGuardOrCacheBelow(SpecializationGroup group, LocalContext currentValues, TypeGuard typeGuard) {
         String localName = currentValues.getValue(typeGuard.getSignatureIndex()).getName();
 
         SpecializationData specialization = group.getSpecialization();
@@ -2068,7 +2057,7 @@ public class NodeGenFactory {
                 return true;
             }
         }
-        if (!fastPath && specialization != null) {
+        if (specialization != null) {
             for (CacheExpression cache : specialization.getCaches()) {
                 if (isVariableBoundIn(specialization, cache.getExpression(), localName, currentValues)) {
                     return true;
@@ -2077,7 +2066,7 @@ public class NodeGenFactory {
         }
 
         for (SpecializationGroup child : group.getChildren()) {
-            if (isTypeGuardUsedInAnyGuardOrCacheBelow(child, currentValues, typeGuard, fastPath)) {
+            if (isTypeGuardUsedInAnyGuardOrCacheBelow(child, currentValues, typeGuard)) {
                 return true;
             }
         }
@@ -2356,7 +2345,6 @@ public class NodeGenFactory {
             final CodeTreeBuilder polyChainBuilder = builder.create();
             final String profileField = polymorphicTypeProfileFieldName(execution);
             final String valueFieldName = "_value";
-            final String typeFieldName = "_type";
 
             builder.declaration(getType(Class.class), profileField, accessParent(profileField));
 
@@ -2379,8 +2367,6 @@ public class NodeGenFactory {
             polyChainBuilder.startElseIf().string(profileField).string(" == null").end();
             polyChainBuilder.startBlock();
             polyChainBuilder.tree(createTransferToInterpreterAndInvalidate());
-            polyChainBuilder.declaration(context.getType(Class.class), typeFieldName, polyChainBuilder.create().typeLiteral(genericType).build());
-            polyChainBuilder.startTryBlock();
             polyChainBuilder.declaration(genericExecutableType.getReturnType(), valueFieldName, executeGeneric);
 
             hasSpecializedTypes = false;
@@ -2389,17 +2375,14 @@ public class NodeGenFactory {
                 polyChainBuilder.tree(TypeSystemCodeGenerator.check(typeSystem, executableType.getReturnType(), CodeTreeBuilder.singleString(valueFieldName)));
                 polyChainBuilder.end();
                 polyChainBuilder.startBlock();
-                polyChainBuilder.startStatement().string(typeFieldName).string(" = ").typeLiteral(executableType.getReturnType()).end();
+                polyChainBuilder.startStatement().tree(accessParent(profileField)).string(" = ").typeLiteral(executableType.getReturnType()).end();
                 polyChainBuilder.end();
             }
+
             polyChainBuilder.startElseBlock();
-            polyChainBuilder.startStatement().string(typeFieldName).string(" = ").typeLiteral(genericType).end();
+            polyChainBuilder.startStatement().tree(accessParent(profileField)).string(" = ").typeLiteral(genericType).end();
             polyChainBuilder.end();
             polyChainBuilder.startReturn().string(valueFieldName).end();
-
-            polyChainBuilder.end().startFinallyBlock();
-            polyChainBuilder.startStatement().tree(accessParent(profileField)).string(" = ").string(typeFieldName).end();
-            polyChainBuilder.end();
             polyChainBuilder.end();
 
             // else -> execute generic
