@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -571,23 +569,6 @@ public class LanguageSPIHostInteropTest extends AbstractPolyglotTest {
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
             throw new AssertionError(e);
         }
-    }
-
-    @Test
-    public void testIsHostFunction() {
-        TruffleObject system = (TruffleObject) languageEnv.lookupHostSymbol(System.class.getName());
-        Object exit = read(system, "exit");
-        assertTrue(exit instanceof TruffleObject);
-        assertFalse(languageEnv.isHostObject(exit));
-        assertTrue(languageEnv.isHostFunction(exit));
-
-        Object out = read(system, "out");
-        assertTrue(exit instanceof TruffleObject);
-        assertTrue(languageEnv.isHostObject(out));
-        assertFalse(languageEnv.isHostFunction(out));
-
-        assertFalse(languageEnv.isHostFunction(system));
-        assertFalse(languageEnv.isHostFunction(false));
     }
 
     static final class NoKeysObject implements TruffleObject {

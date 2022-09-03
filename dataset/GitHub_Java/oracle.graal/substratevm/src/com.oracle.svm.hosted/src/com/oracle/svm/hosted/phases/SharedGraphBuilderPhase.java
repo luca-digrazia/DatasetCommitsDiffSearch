@@ -38,6 +38,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.InvocationPluginReceiver;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.spi.StampProvider;
+import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.word.WordTypes;
 
@@ -50,6 +51,7 @@ import com.oracle.svm.hosted.HostedConfiguration;
 import com.oracle.svm.hosted.NativeImageOptions;
 
 import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.ExceptionHandler;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaField;
 import jdk.vm.ci.meta.JavaKind;
@@ -58,6 +60,7 @@ import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.JavaTypeProfile;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance {
     final WordTypes wordTypes;
@@ -69,13 +72,16 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
     }
 
     public abstract static class SharedBytecodeParser extends BytecodeParser {
-
-        private final boolean explicitExceptionEdges;
+        private final ResolvedJavaType explicitNullCheck;
+        private final ResolvedJavaType[] explicitExceptionTypes;
 
         protected SharedBytecodeParser(GraphBuilderPhase.Instance graphBuilderInstance, StructuredGraph graph, BytecodeParser parent, ResolvedJavaMethod method, int entryBCI,
-                        IntrinsicContext intrinsicContext, boolean explicitExceptionEdges) {
+                        IntrinsicContext intrinsicContext) {
             super(graphBuilderInstance, graph, parent, method, entryBCI, intrinsicContext);
-            this.explicitExceptionEdges = explicitExceptionEdges;
+            explicitNullCheck = metaAccess.lookupJavaType(NullPointerException.class);
+            explicitExceptionTypes = new ResolvedJavaType[]{explicitNullCheck, metaAccess.lookupJavaType(ArrayIndexOutOfBoundsException.class),
+                            metaAccess.lookupJavaType(IndexOutOfBoundsException.class)};
+
         }
 
         @Override
@@ -361,18 +367,53 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
         }
 
         @Override
-        protected boolean needsExplicitNullCheckException(ValueNode object) {
-            return needsExplicitException() && object.getStackKind() == JavaKind.Object;
+        protected ValueNode emitExplicitExceptions(ValueNode receiver, ValueNode outOfBoundsIndex) {
+            /*
+             * Normally, Substrate VM does not allow to catch implicit exceptions (exception thrown
+             * by bytecodes other than "throw") from within the same method. However, some JDK code
+             * relies on that behavior for field and array accesses. If there is an exception
+             * handler explicitly for such an exception type, we generate explicit checks that allow
+             * a catch from within the same method. If the catch is for a base class such as
+             * Throwable, we still do not catch it.
+             */
+            for (ExceptionHandler handler : method.getExceptionHandlers()) {
+                if (handler.getStartBCI() <= bci() && bci() < handler.getEndBCI()) {
+                    for (ResolvedJavaType explicitExceptionType : explicitExceptionTypes) {
+                        if (explicitExceptionType.equals(handler.getCatchType())) {
+                            return super.emitExplicitExceptions(receiver, outOfBoundsIndex);
+                        }
+                    }
+                }
+            }
+
+            // Nothing to do, we do not want explicit exception checks during graph building.
+            return receiver;
         }
 
         @Override
-        protected boolean needsExplicitStoreCheckException(ValueNode array, ValueNode value) {
-            return needsExplicitException() && value.getStackKind() == JavaKind.Object;
-        }
+        protected ValueNode emitExplicitExceptions(ValueNode receiver) {
+            if (StampTool.isPointerNonNull(receiver) || !needsExplicitException()) {
+                return receiver;
+            } else {
+                /*
+                 * Normally, Substrate VM does not allow to catch implicit exceptions (exception
+                 * thrown by bytecodes other than "throw") from within the same method. However,
+                 * some JDK code relies on that behavior for null checks. If there is an exception
+                 * handler explicitly for a NullPointerException, we generate explicit checks that
+                 * allow a catch from within the same method. If the catch is for a base class such
+                 * as Throwable, we still do not catch it.
+                 */
+                for (ExceptionHandler handler : method.getExceptionHandlers()) {
+                    if (handler.getStartBCI() <= bci() && bci() < handler.getEndBCI()) {
+                        if (explicitNullCheck.equals(handler.getCatchType())) {
+                            return super.emitExplicitNullCheck(receiver);
+                        }
+                    }
+                }
 
-        @Override
-        protected boolean needsExplicitException() {
-            return explicitExceptionEdges && !parsingIntrinsic();
+                // Nothing to do, we do not want explicit exception checks during graph building.
+                return receiver;
+            }
         }
 
         @Override
