@@ -30,11 +30,11 @@ import com.oracle.graal.nodes.cfg.*;
 
 public interface LoweringTool {
 
+    TargetDescription getTarget();
+
     GraalCodeCacheProvider getRuntime();
 
-    Replacements getReplacements();
-
-    ValueNode createNullCheckGuard(NodeInputList<ValueNode> dependencies, ValueNode object);
+    ValueNode createNullCheckGuard(ValueNode object);
 
     ValueNode createGuard(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action);
 
