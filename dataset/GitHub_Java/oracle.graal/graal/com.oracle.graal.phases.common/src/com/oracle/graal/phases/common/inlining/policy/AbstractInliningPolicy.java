@@ -22,19 +22,18 @@
  */
 package com.oracle.graal.phases.common.inlining.policy;
 
-import static com.oracle.graal.phases.common.inlining.InliningPhase.Options.AlwaysInlineIntrinsics;
-
-import java.util.Map;
-
-import jdk.vm.ci.meta.ProfilingInfo;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
+import com.oracle.graal.api.meta.ProfilingInfo;
+import com.oracle.graal.api.meta.ResolvedJavaMethod;
 import com.oracle.graal.nodes.Invoke;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.spi.Replacements;
 import com.oracle.graal.phases.common.inlining.InliningUtil;
 import com.oracle.graal.phases.common.inlining.info.InlineInfo;
 import com.oracle.graal.phases.common.inlining.info.elem.Inlineable;
+
+import java.util.Map;
+
+import static com.oracle.graal.phases.common.inlining.InliningPhase.Options.AlwaysInlineIntrinsics;
 
 public abstract class AbstractInliningPolicy implements InliningPolicy {
     public static final float RelevanceCapForInlining = 1.0f;
@@ -87,7 +86,7 @@ public abstract class AbstractInliningPolicy implements InliningPolicy {
         int size = 0;
         for (int i = 0; i < info.numberOfMethods(); i++) {
             ResolvedJavaMethod m = info.methodAt(i);
-            ProfilingInfo profile = info.graph().getProfilingInfo(m);
+            ProfilingInfo profile = m.getProfilingInfo();
             int compiledGraphSize = profile.getCompilerIRSize(StructuredGraph.class);
             if (compiledGraphSize > 0) {
                 size += compiledGraphSize;

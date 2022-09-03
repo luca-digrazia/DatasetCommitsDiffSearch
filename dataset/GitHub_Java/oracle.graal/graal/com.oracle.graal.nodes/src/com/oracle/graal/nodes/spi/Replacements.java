@@ -22,11 +22,12 @@
  */
 package com.oracle.graal.nodes.spi;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import java.lang.reflect.*;
+import java.util.*;
 
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.api.replacements.SnippetTemplateCache;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * Interface for managing replacements.
@@ -64,14 +65,19 @@ public interface Replacements {
      *            otherwise {@code -1}
      * @return the graph, if any, that is a substitution for {@code method}
      */
-    StructuredGraph getSubstitution(ResolvedJavaMethod method, int invokeBci);
+    default StructuredGraph getSubstitution(ResolvedJavaMethod method, int invokeBci) {
+        return getSubstitution(method, false, invokeBci);
+    }
 
     /**
-     * Gets a method that is a substitution for a given method.
+     * Gets a graph that is a substitution for a given method.
      *
-     * @return the method, if any, whose bytecode are a substitution for {@code method}
+     * @param fromBytecodeOnly only return a graph created by parsing the bytecode of another method
+     * @param invokeBci the call site BCI if this request is made for inlining a substitute
+     *            otherwise {@code -1}
+     * @return the graph, if any, that is a substitution for {@code method}
      */
-    ResolvedJavaMethod getSubstitutionMethod(ResolvedJavaMethod method);
+    StructuredGraph getSubstitution(ResolvedJavaMethod method, boolean fromBytecodeOnly, int invokeBci);
 
     /**
      * Determines if there is a {@linkplain #getSubstitution(ResolvedJavaMethod, int) substitution
@@ -96,6 +102,25 @@ public interface Replacements {
      * @return true iff there is a substitution graph available for {@code method}
      */
     boolean hasSubstitution(ResolvedJavaMethod method, boolean fromBytecodeOnly, int invokeBci);
+
+    /**
+     * Registers all the {@linkplain MethodSubstitution method} substitutions defined by a given
+     * class.
+     *
+     * @param original the original class for which substitutions are being registered. This must be
+     *            the same type denoted by the {@link ClassSubstitution} annotation on
+     *            {@code substitutions}. It is required here so that an implementation is not forced
+     *            to read annotations during registration.
+     * @param substitutions the class defining substitutions for {@code original}. This class must
+     *            be annotated with {@link ClassSubstitution}.
+     */
+    void registerSubstitutions(Type original, Class<?> substitutions);
+
+    /**
+     * Returns all methods that are currently registered as method/macro substitution or as a
+     * snippet.
+     */
+    Collection<ResolvedJavaMethod> getAllReplacements();
 
     /**
      * Register snippet templates.
