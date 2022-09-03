@@ -90,13 +90,4 @@ public final class Local extends Value {
     protected int successorCount() {
         return super.successorCount() + SUCCESSOR_COUNT;
     }
-
-    @Override
-    public Node copy(Graph into) {
-        Local x = new Local(kind, index, into);
-        x.setDeclaredType(declaredType());
-        return x;
-    }
-
-
 }

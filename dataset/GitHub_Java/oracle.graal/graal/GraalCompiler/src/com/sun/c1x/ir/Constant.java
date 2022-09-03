@@ -48,7 +48,7 @@ public final class Constant extends Value {
     public Constant(CiConstant value, Graph graph) {
         super(value.kind.stackKind(), INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.value = value;
-        setNonNull(true);
+        initFlag(Value.Flag.NonNull, value.isNonNull());
     }
 
     @Override

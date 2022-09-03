@@ -31,7 +31,7 @@ import com.sun.cri.ci.*;
 /**
  * The {@code Convert} class represents a conversion between primitive types.
  */
-public final class Convert extends Value {
+public final class Convert extends Instruction {
 
     private static final int INPUT_COUNT = 1;
     private static final int INPUT_VALUE = 0;

@@ -40,7 +40,6 @@ public final class Phi extends Value {
     private static final int SUCCESSOR_COUNT = 0;
 
     private int usedInputCount;
-    private boolean isDead;
 
     @Override
     protected int successorCount() {
@@ -102,11 +101,8 @@ public final class Phi extends Value {
      * Make this phi illegal if types were not merged correctly.
      */
     public void makeDead() {
-        isDead = true;
-    }
-
-    public boolean isDead() {
-        return isDead;
+        setFlag(Flag.PhiCannotSimplify);
+        setFlag(Flag.PhiDead);
     }
 
     @Override
