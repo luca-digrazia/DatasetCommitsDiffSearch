@@ -306,12 +306,6 @@ public final class DebugContext implements AutoCloseable {
             this.compilable = compilable;
             this.identifier = identifier;
         }
-
-        @Override
-        public String toString() {
-            String compilableName = compilable instanceof JavaMethod ? ((JavaMethod) compilable).format("%H.%n(%p)%R") : String.valueOf(compilable);
-            return identifier + ":" + compilableName;
-        }
     }
 
     private final Description description;
@@ -1876,7 +1870,6 @@ public final class DebugContext implements AutoCloseable {
         if (metricsEnabled && globalMetrics != null && metricValues != null) {
             globalMetrics.add(this);
         }
-        metricValues = null;
     }
 
     public void closeDumpHandlers(boolean ignoreErrors) {
