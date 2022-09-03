@@ -27,11 +27,11 @@ import com.oracle.graal.nodes.*;
 /**
  * This interface marks nodes whose result is the same as one of their inputs. Such nodes are used
  * to add type information, to introduce scheduling restrictions, etc.
- *
+ * 
  * For some algorithms it is necessary or advantageous to see through these proxies.
  */
-public interface ValueProxy extends Proxy {
+public interface ValueProxy {
 
-    ValueNode getOriginalNode();
+    ValueNode getOriginalValue();
 
 }
