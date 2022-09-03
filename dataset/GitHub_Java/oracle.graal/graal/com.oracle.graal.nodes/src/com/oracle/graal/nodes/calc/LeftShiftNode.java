@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,77 +22,70 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.ShiftOp.Shl;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "<<")
-public final class LeftShiftNode extends ShiftNode implements Canonicalizable {
+public final class LeftShiftNode extends ShiftNode<Shl> {
 
-    public LeftShiftNode(Kind kind, ValueNode x, ValueNode y) {
-        super(kind, x, y);
+    public static final NodeClass<LeftShiftNode> TYPE = NodeClass.create(LeftShiftNode.class);
+
+    public LeftShiftNode(ValueNode x, ValueNode y) {
+        super(TYPE, ArithmeticOpTable::getShl, x, y);
     }
 
     @Override
-    public boolean inferStamp() {
-        return updateStamp(StampTool.leftShift(x().stamp(), y().stamp()));
-    }
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        ValueNode ret = super.canonical(tool, forX, forY);
+        if (ret != this) {
+            return ret;
+        }
 
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (y().isConstant()) {
-            int amount = y().asConstant().asInt();
+        if (forY.isConstant()) {
+            int amount = forY.asJavaConstant().asInt();
             int originalAmout = amount;
-            int mask;
-            if (kind() == Kind.Int) {
-                mask = 0x1f;
-            } else {
-                assert kind() == Kind.Long;
-                mask = 0x3f;
-            }
+            int mask = getShiftAmountMask();
             amount &= mask;
-            if (x().isConstant()) {
-                if (kind() == Kind.Int) {
-                    return ConstantNode.forInt(x().asConstant().asInt() << amount, graph());
-                } else {
-                    assert kind() == Kind.Long;
-                    return ConstantNode.forLong(x().asConstant().asLong() << amount, graph());
-                }
-            }
             if (amount == 0) {
-                return x();
+                return forX;
             }
-            if (x() instanceof ShiftNode) {
-                ShiftNode other = (ShiftNode) x();
-                if (other.y().isConstant()) {
-                    int otherAmount = other.y().asConstant().asInt() & mask;
+            if (forX instanceof ShiftNode) {
+                ShiftNode<?> other = (ShiftNode<?>) forX;
+                if (other.getY().isConstant()) {
+                    int otherAmount = other.getY().asJavaConstant().asInt() & mask;
                     if (other instanceof LeftShiftNode) {
                         int total = amount + otherAmount;
                         if (total != (total & mask)) {
-                            return ConstantNode.forIntegerKind(kind(), 0, graph());
+                            return ConstantNode.forIntegerKind(getStackKind(), 0);
                         }
-                        return graph().unique(new LeftShiftNode(kind(), other.x(), ConstantNode.forInt(total, graph())));
+                        return new LeftShiftNode(other.getX(), ConstantNode.forInt(total));
                     } else if ((other instanceof RightShiftNode || other instanceof UnsignedRightShiftNode) && otherAmount == amount) {
-                        if (kind() == Kind.Long) {
-                            return graph().unique(new AndNode(kind(), other.x(), ConstantNode.forLong(-1L << amount, graph())));
+                        if (getStackKind() == Kind.Long) {
+                            return new AndNode(other.getX(), ConstantNode.forLong(-1L << amount));
                         } else {
-                            assert kind() == Kind.Int;
-                            return graph().unique(new AndNode(kind(), other.x(), ConstantNode.forInt(-1 << amount, graph())));
+                            assert getStackKind() == Kind.Int;
+                            return new AndNode(other.getX(), ConstantNode.forInt(-1 << amount));
                         }
                     }
                 }
             }
             if (originalAmout != amount) {
-                return graph().unique(new LeftShiftNode(kind(), x(), ConstantNode.forInt(amount, graph())));
+                return new LeftShiftNode(forX, ConstantNode.forInt(amount));
             }
         }
         return this;
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
-        gen.setResult(this, gen.emitShl(gen.operand(x()), gen.operand(y())));
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
+        nodeValueMap.setResult(this, gen.emitShl(nodeValueMap.operand(getX()), nodeValueMap.operand(getY())));
     }
 }

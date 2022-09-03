@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,16 @@
  */
 package com.oracle.graal.compiler.test.deopt;
 
-import java.lang.reflect.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
 import org.junit.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.InstalledCode.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * In the following tests, the usages of local variable "a" are replaced with the integer constant
@@ -55,146 +52,48 @@ public class CompiledMethodTest extends GraalCompilerTest {
 
     @Test
     public void test1() {
-        Method method = getMethod("testMethod");
-        final StructuredGraph graph = parse(method);
-        new CanonicalizerPhase(runtime(), new Assumptions(false)).apply(graph);
+        final ResolvedJavaMethod javaMethod = getResolvedJavaMethod("testMethod");
+        final StructuredGraph graph = parseEager(javaMethod, AllowAssumptions.NO);
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
         new DeadCodeEliminationPhase().apply(graph);
 
-        for (Node node : graph.getNodes()) {
-            if (node instanceof ConstantNode) {
-                ConstantNode constant = (ConstantNode) node;
-                if (constant.kind() == Kind.Object && " ".equals(constant.value.asObject())) {
-                    graph.replaceFloating(constant, ConstantNode.forObject("-", runtime, graph));
-                }
+        for (ConstantNode node : ConstantNode.getConstantNodes(graph)) {
+            if (node.getStackKind() == Kind.Object && " ".equals(getSnippetReflection().asObject(String.class, node.asJavaConstant()))) {
+                node.replace(graph, ConstantNode.forConstant(getSnippetReflection().forObject("-"), getMetaAccess(), graph));
             }
         }
 
-        final ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
         InstalledCode compiledMethod = getCode(javaMethod, graph);
         try {
-            Object result = compiledMethod.execute("1", "2", "3");
+            Object result = compiledMethod.executeVarargs("1", "2", "3");
             Assert.assertEquals("1-2-3", result);
-        } catch (MethodInvalidatedException t) {
+        } catch (InvalidInstalledCodeException t) {
             Assert.fail("method invalidated");
         }
     }
 
     @Test
     public void test3() {
-        Method method = getMethod("testMethod");
-        final StructuredGraph graph = parse(method);
-        final ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
-        InstalledCode compiledMethod = getCode(javaMethod, graph);
+        final ResolvedJavaMethod javaMethod = getResolvedJavaMethod("testMethod");
+        InstalledCode compiledMethod = getCode(javaMethod);
         try {
             Object result = compiledMethod.executeVarargs("1", "2", "3");
             Assert.assertEquals("1 2 3", result);
-        } catch (MethodInvalidatedException t) {
+        } catch (InvalidInstalledCodeException t) {
             Assert.fail("method invalidated");
         }
     }
 
     @Test
     public void test4() {
-        Method method = getMethod("testMethodVirtual");
-        final StructuredGraph graph = parse(method);
-        final ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
-        InstalledCode compiledMethod = getCode(javaMethod, graph);
+        final ResolvedJavaMethod javaMethod = getResolvedJavaMethod("testMethodVirtual");
+        InstalledCode compiledMethod = getCode(javaMethod);
         try {
             f1 = "0";
             Object result = compiledMethod.executeVarargs(this, "1", "2", "3");
             Assert.assertEquals("0 1 2 3", result);
-        } catch (MethodInvalidatedException t) {
+        } catch (InvalidInstalledCodeException t) {
             Assert.fail("method invalidated");
-        }
-    }
-
-    @Test
-    public void test2() throws NoSuchMethodException, SecurityException {
-        Method method = CompilableObjectImpl.class.getDeclaredMethod("executeHelper", ObjectCompiler.class, String.class);
-        ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
-        StructuredGraph graph = new StructuredGraph(javaMethod);
-        new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.NONE).apply(graph);
-        new CanonicalizerPhase(runtime, new Assumptions(false)).apply(graph);
-        new DeadCodeEliminationPhase().apply(graph);
-
-        for (Node node : graph.getNodes()) {
-            if (node instanceof ConstantNode) {
-                ConstantNode constant = (ConstantNode) node;
-                if (constant.kind() == Kind.Object && "1 ".equals(constant.value.asObject())) {
-                    graph.replaceFloating(constant, ConstantNode.forObject("1-", runtime, graph));
-                }
-            }
-        }
-
-        InstalledCode compiledMethod = getCode(javaMethod, graph);
-        final CompilableObject compilableObject = new CompilableObjectImpl(0);
-
-        Object result;
-        result = compilableObject.execute(new ObjectCompilerImpl(compiledMethod), "3");
-        Assert.assertEquals("1-3", result);
-    }
-
-    public abstract class CompilableObject {
-
-        private CompiledObject compiledObject;
-        private final int compileThreshold;
-        private int counter;
-
-        public CompilableObject(int compileThreshold) {
-            this.compileThreshold = compileThreshold;
-        }
-
-        public final Object execute(ObjectCompiler compiler, String args) {
-            if (counter++ < compileThreshold || compiler == null) {
-                return executeHelper(compiler, args);
-            } else {
-                compiledObject = compiler.compile(this);
-                return compiledObject.execute(compiler, args);
-            }
-        }
-
-        protected abstract Object executeHelper(ObjectCompiler context, String args);
-    }
-
-    private final class CompilableObjectImpl extends CompilableObject {
-
-        private CompilableObjectImpl(int compileThreshold) {
-            super(compileThreshold);
-        }
-
-        @Override
-        protected Object executeHelper(ObjectCompiler compiler, String args) {
-            return "1 " + args;
-        }
-    }
-
-    public interface CompiledObject {
-
-        Object execute(ObjectCompiler context, String args);
-    }
-
-    public interface ObjectCompiler {
-
-        CompiledObject compile(CompilableObject node);
-    }
-
-    private final class ObjectCompilerImpl implements ObjectCompiler {
-
-        private final InstalledCode compiledMethod;
-
-        private ObjectCompilerImpl(InstalledCode compiledMethod) {
-            this.compiledMethod = compiledMethod;
-        }
-
-        @Override
-        public CompiledObject compile(final CompilableObject node) {
-            return new CompiledObject() {
-
-                @Override
-                public Object execute(ObjectCompiler compiler, String args) {
-                    return compiledMethod.execute(node, compiler, args);
-                }
-            };
         }
     }
 }

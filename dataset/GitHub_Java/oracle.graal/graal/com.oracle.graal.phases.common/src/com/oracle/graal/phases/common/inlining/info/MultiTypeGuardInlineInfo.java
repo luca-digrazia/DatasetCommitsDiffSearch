@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,50 +22,27 @@
  */
 package com.oracle.graal.phases.common.inlining.info;
 
-import static com.oracle.graal.compiler.common.GraalOptions.UseGraalQueries;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-import jdk.internal.jvmci.meta.DeoptimizationAction;
-import jdk.internal.jvmci.meta.DeoptimizationReason;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.JavaTypeProfile.ProfiledType;
-import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import com.oracle.graal.debug.*;
 import jdk.internal.jvmci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.Kind;
+import jdk.internal.jvmci.meta.DeoptimizationReason;
+import jdk.internal.jvmci.meta.DeoptimizationAction;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.JavaTypeProfile.ProfiledType;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.BeginNode;
+import java.util.*;
+
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.GuardedValueNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.InvokeWithExceptionNode;
-import com.oracle.graal.nodes.MergeNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.extended.LoadHubNode;
-import com.oracle.graal.nodes.java.ExceptionObjectNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.java.TypeSwitchNode;
-import com.oracle.graal.nodes.spi.StampProvider;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.common.inlining.InliningUtil;
-import com.oracle.graal.phases.common.inlining.info.elem.Inlineable;
-import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.common.inlining.info.elem.*;
+import com.oracle.graal.phases.util.*;
 
 /**
  * Polymorphic inlining of m methods with n type checks (n &ge; m) in case that the profiling
@@ -192,7 +169,7 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
         returnMerge.setStateAfter(invoke.stateAfter());
 
         PhiNode returnValuePhi = null;
-        if (invoke.asNode().getStackKind() != JavaKind.Void) {
+        if (invoke.asNode().getStackKind() != Kind.Void) {
             returnValuePhi = graph.addWithoutUnique(new ValuePhiNode(invoke.asNode().stamp().unrestricted(), returnMerge));
         }
 
@@ -206,9 +183,8 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
 
             FixedNode exceptionSux = exceptionEdge.next();
             graph.addBeforeFixed(exceptionSux, exceptionMerge);
-            exceptionObjectPhi = graph.addWithoutUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Object), exceptionMerge));
-            exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicateModified(invoke.stateAfter().bci, true, JavaKind.Object, new JavaKind[]{JavaKind.Object},
-                            new ValueNode[]{exceptionObjectPhi}));
+            exceptionObjectPhi = graph.addWithoutUnique(new ValuePhiNode(StampFactory.forKind(Kind.Object), exceptionMerge));
+            exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicateModified(invoke.stateAfter().bci, true, Kind.Object, new Kind[]{Kind.Object}, new ValueNode[]{exceptionObjectPhi}));
         }
 
         // create one separate block for each invoked method
@@ -243,9 +219,6 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
         assert invoke.next() == continuation;
         invoke.setNext(null);
         returnMerge.setNext(continuation);
-        if (UseGraalQueries.getValue()) {
-            InliningUtil.removeAttachedInstrumentation(invoke);
-        }
         if (returnValuePhi != null) {
             invoke.asNode().replaceAtUsages(returnValuePhi);
         }
@@ -390,8 +363,8 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
         result.asNode().replaceFirstInput(result.callTarget(), callTarget);
         result.setUseForInlining(useForInlining);
 
-        JavaKind kind = invoke.asNode().getStackKind();
-        if (kind != JavaKind.Void) {
+        Kind kind = invoke.asNode().getStackKind();
+        if (kind != Kind.Void) {
             FrameState stateAfter = invoke.stateAfter();
             stateAfter = stateAfter.duplicate(stateAfter.bci);
             stateAfter.replaceFirstInput(invoke.asNode(), result.asNode());
@@ -407,7 +380,7 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
 
             ExceptionObjectNode newExceptionEdge = (ExceptionObjectNode) exceptionEdge.copyWithInputs();
             // set new state (pop old exception object, push new one)
-            newExceptionEdge.setStateAfter(stateAfterException.duplicateModified(JavaKind.Object, JavaKind.Object, newExceptionEdge));
+            newExceptionEdge.setStateAfter(stateAfterException.duplicateModified(Kind.Object, Kind.Object, newExceptionEdge));
 
             EndNode endNode = graph.add(new EndNode());
             newExceptionEdge.setNext(endNode);

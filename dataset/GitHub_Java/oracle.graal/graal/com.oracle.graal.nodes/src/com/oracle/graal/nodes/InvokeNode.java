@@ -22,33 +22,24 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.extended.ForeignCallNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.nodes.spi.UncheckedInterfaceProvider;
-import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
 
 /**
  * The {@code InvokeNode} represents all kinds of method calls.
  */
 @NodeInfo(nameTemplate = "Invoke#{p#targetMethod/s}", allowedUsageTypes = {InputType.Memory})
-public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRLowerable, MemoryCheckpoint.Single, UncheckedInterfaceProvider {
+public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRLowerable, MemoryCheckpoint.Single {
     public static final NodeClass<InvokeNode> TYPE = NodeClass.create(InvokeNode.class);
 
     @Input(InputType.Extension) CallTargetNode callTarget;
@@ -59,7 +50,7 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     protected boolean useForInlining;
 
     public InvokeNode(CallTargetNode callTarget, int bci) {
-        this(callTarget, bci, callTarget.returnStamp().getTrustedStamp());
+        this(callTarget, bci, callTarget.returnStamp());
     }
 
     public InvokeNode(CallTargetNode callTarget, int bci, Stamp stamp) {
@@ -102,7 +93,7 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     @Override
     public boolean isAllowedUsageType(InputType type) {
         if (!super.isAllowedUsageType(type)) {
-            if (getStackKind() != JavaKind.Void) {
+            if (getStackKind() != Kind.Void) {
                 if (callTarget instanceof MethodCallTargetNode && ((MethodCallTargetNode) callTarget).targetMethod().getAnnotation(NodeIntrinsic.class) != null) {
                     return true;
                 }
@@ -205,9 +196,5 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     public void setGuard(GuardingNode guard) {
         updateUsagesInterface(this.guard, guard);
         this.guard = guard;
-    }
-
-    public Stamp uncheckedStamp() {
-        return this.callTarget.returnStamp().getUncheckedStamp();
     }
 }

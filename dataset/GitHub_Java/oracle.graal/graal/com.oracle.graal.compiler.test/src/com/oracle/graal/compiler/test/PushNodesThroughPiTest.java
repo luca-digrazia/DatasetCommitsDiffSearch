@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.test;
 
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.*;
-
 import jdk.internal.jvmci.meta.*;
 
 import org.junit.*;
@@ -67,7 +66,6 @@ public class PushNodesThroughPiTest extends GraalCompilerTest {
     }
 
     @Test
-    @SuppressWarnings("try")
     public void test1() {
         final String snippet = "test1Snippet";
         try (Scope s = Debug.scope("PushThroughPi", new DebugDumpScope(snippet))) {

@@ -24,47 +24,80 @@ package com.oracle.graal.phases.common;
 
 import java.util.*;
 
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
- * This phase tries to find {@link DeoptimizeNode DeoptimizeNodes} which use the same
+ * This phase tries to find {@link AbstractDeoptimizeNode DeoptimizeNodes} which use the same
  * {@link FrameState} and merges them together.
  */
-public class DeoptimizationGroupingPhase extends Phase {
+public class DeoptimizationGroupingPhase extends BasePhase<MidTierContext> {
 
     @Override
-    protected void run(StructuredGraph graph) {
-        for (FrameState fs : graph.getNodes(FrameState.class)) {
+    protected void run(StructuredGraph graph, MidTierContext context) {
+        ControlFlowGraph cfg = null;
+        for (FrameState fs : graph.getNodes(FrameState.TYPE)) {
             FixedNode target = null;
-            List<DeoptimizeNode> obsoletes = null;
-            for (DeoptimizeNode deopt : fs.usages().filter(DeoptimizeNode.class)) {
+            PhiNode reasonActionPhi = null;
+            PhiNode speculationPhi = null;
+            List<AbstractDeoptimizeNode> obsoletes = null;
+            for (AbstractDeoptimizeNode deopt : fs.usages().filter(AbstractDeoptimizeNode.class)) {
                 if (target == null) {
                     target = deopt;
                 } else {
-                    MergeNode merge;
-                    if (target instanceof DeoptimizeNode) {
+                    if (cfg == null) {
+                        cfg = ControlFlowGraph.compute(graph, true, true, false, false);
+                    }
+                    AbstractMergeNode merge;
+                    if (target instanceof AbstractDeoptimizeNode) {
                         merge = graph.add(new MergeNode());
                         EndNode firstEnd = graph.add(new EndNode());
+                        ValueNode actionAndReason = ((AbstractDeoptimizeNode) target).getActionAndReason(context.getMetaAccess());
+                        ValueNode speculation = ((AbstractDeoptimizeNode) target).getSpeculation(context.getMetaAccess());
+                        reasonActionPhi = graph.addWithoutUnique(new ValuePhiNode(StampFactory.forKind(actionAndReason.getStackKind()), merge));
+                        speculationPhi = graph.addWithoutUnique(new ValuePhiNode(StampFactory.forKind(speculation.getStackKind()), merge));
                         merge.addForwardEnd(firstEnd);
-                        target.predecessor().replaceFirstSuccessor(target, firstEnd);
-                        merge.setNext(target);
+                        reasonActionPhi.addInput(actionAndReason);
+                        speculationPhi.addInput(speculation);
+                        target.replaceAtPredecessor(firstEnd);
+
+                        exitLoops((AbstractDeoptimizeNode) target, firstEnd, cfg);
+
+                        merge.setNext(graph.add(new DynamicDeoptimizeNode(reasonActionPhi, speculationPhi)));
                         obsoletes = new LinkedList<>();
+                        obsoletes.add((AbstractDeoptimizeNode) target);
                         target = merge;
                     } else {
-                        merge = (MergeNode) target;
+                        merge = (AbstractMergeNode) target;
                     }
                     EndNode newEnd = graph.add(new EndNode());
                     merge.addForwardEnd(newEnd);
-                    deopt.predecessor().replaceFirstSuccessor(deopt, newEnd);
+                    reasonActionPhi.addInput(deopt.getActionAndReason(context.getMetaAccess()));
+                    speculationPhi.addInput(deopt.getSpeculation(context.getMetaAccess()));
+                    deopt.replaceAtPredecessor(newEnd);
+                    exitLoops(deopt, newEnd, cfg);
                     obsoletes.add(deopt);
                 }
             }
             if (obsoletes != null) {
-                for (DeoptimizeNode obsolete : obsoletes) {
+                ((DynamicDeoptimizeNode) ((AbstractMergeNode) target).next()).setStateBefore(fs);
+                for (AbstractDeoptimizeNode obsolete : obsoletes) {
                     obsolete.safeDelete();
                 }
             }
+        }
+    }
+
+    private static void exitLoops(AbstractDeoptimizeNode deopt, EndNode end, ControlFlowGraph cfg) {
+        Block block = cfg.blockFor(deopt);
+        Loop<Block> loop = block.getLoop();
+        while (loop != null) {
+            end.graph().addBeforeFixed(end, end.graph().add(new LoopExitNode((LoopBeginNode) loop.getHeader().getBeginNode())));
+            loop = loop.getParent();
         }
     }
 }

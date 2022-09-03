@@ -28,9 +28,7 @@ import static jdk.internal.jvmci.common.JVMCIError.*;
 import java.util.*;
 
 import jdk.internal.jvmci.code.*;
-
 import com.oracle.graal.debug.*;
-
 import jdk.internal.jvmci.meta.*;
 import jdk.internal.jvmci.options.*;
 
@@ -112,7 +110,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             if (bytecodePosition == null) {
                 ensureOuterStateDecoded(this);
                 ensureExceptionStateDecoded(this);
-                bytecodePosition = new BytecodePosition(FrameState.toBytecodePosition(outerState), method, invokeData.invoke.bci());
+                bytecodePosition = InliningUtil.processBytecodePosition(invokeData.invoke, null);
             }
             return bytecodePosition;
         }
@@ -584,7 +582,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     protected void handleFixedNode(MethodScope s, LoopScope loopScope, int nodeOrderId, FixedNode node) {
         PEMethodScope methodScope = (PEMethodScope) s;
         if (node instanceof SimpleInfopointNode && methodScope.isInlinedMethod()) {
-            InliningUtil.addSimpleInfopointCaller((SimpleInfopointNode) node, methodScope.getBytecodePosition());
+            InliningUtil.processSimpleInfopoint(methodScope.invokeData.invoke, (SimpleInfopointNode) node, methodScope.getBytecodePosition());
         }
         super.handleFixedNode(s, loopScope, nodeOrderId, node);
     }

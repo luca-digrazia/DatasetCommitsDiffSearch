@@ -22,24 +22,15 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
-import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.BinaryOpLogicNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.LogicConstantNode;
-import com.oracle.graal.nodes.LogicNegationNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 
 /* TODO (thomaswue/gdub) For high-level optimization purpose the compare node should be a boolean *value* (it is currently only a helper node)
  * But in the back-end the comparison should not always be materialized (for example in x86 the comparison result will not be in a register but in a flag)
@@ -132,12 +123,6 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             ConvertNode convertX = (ConvertNode) forX;
             ConvertNode convertY = (ConvertNode) forY;
             if (convertX.preservesOrder(condition()) && convertY.preservesOrder(condition()) && convertX.getValue().stamp().isCompatible(convertY.getValue().stamp())) {
-                boolean multiUsage = (convertX.asNode().getUsageCount() > 1 || convertY.asNode().getUsageCount() > 1);
-                if ((forX instanceof ZeroExtendNode || forX instanceof SignExtendNode) && multiUsage) {
-                    // Do not perform for zero or sign extend if there are multiple usages of the
-                    // value.
-                    return this;
-                }
                 return duplicateModified(convertX.getValue(), convertY.getValue());
             }
         }
@@ -160,12 +145,6 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             return optimizeNormalizeCmp(constant, (NormalizeCompareNode) nonConstant, mirrored);
         } else if (nonConstant instanceof ConvertNode) {
             ConvertNode convert = (ConvertNode) nonConstant;
-            boolean multiUsage = (convert.asNode().getUsageCount() > 1 && convert.getValue().getUsageCount() == 1);
-            if ((convert instanceof ZeroExtendNode || convert instanceof SignExtendNode) && multiUsage) {
-                // Do not perform for zero or sign extend if it could introduce
-                // new live values.
-                return this;
-            }
             ConstantNode newConstant = canonicalConvertConstant(tool, convert, constant);
             if (newConstant != null) {
                 if (mirrored) {

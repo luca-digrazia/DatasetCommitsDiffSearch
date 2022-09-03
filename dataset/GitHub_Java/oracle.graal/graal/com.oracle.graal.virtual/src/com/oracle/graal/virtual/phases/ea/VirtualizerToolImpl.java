@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -108,7 +108,7 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
     }
 
     private static boolean isObjectEntry(ValueNode value) {
-        return value.getStackKind() == JavaKind.Object || value instanceof VirtualObjectNode;
+        return value.getStackKind() == Kind.Object || value instanceof VirtualObjectNode;
     }
 
     @Override
@@ -178,11 +178,6 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
         } else {
             replaceWithValue(node);
         }
-    }
-
-    @Override
-    public boolean ensureMaterialized(VirtualObjectNode virtualObject) {
-        return closure.ensureMaterialized(state, virtualObject.getObjectId(), position, effects, PartialEscapeClosure.METRIC_MATERIALIZATIONS_UNHANDLED);
     }
 
     public void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId) {

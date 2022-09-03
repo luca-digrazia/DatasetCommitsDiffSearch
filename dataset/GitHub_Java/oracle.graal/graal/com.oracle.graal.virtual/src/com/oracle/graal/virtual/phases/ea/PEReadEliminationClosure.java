@@ -22,58 +22,36 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
+import static com.oracle.graal.nodes.NamedLocationIdentity.*;
 
-import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValueProxyNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.extended.UnboxNode;
-import com.oracle.graal.nodes.extended.UnsafeLoadNode;
-import com.oracle.graal.nodes.extended.UnsafeStoreNode;
-import com.oracle.graal.nodes.java.ArrayLengthNode;
-import com.oracle.graal.nodes.java.LoadFieldNode;
-import com.oracle.graal.nodes.java.LoadIndexedNode;
-import com.oracle.graal.nodes.java.StoreFieldNode;
-import com.oracle.graal.nodes.java.StoreIndexedNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.nodes.virtual.VirtualArrayNode;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
 
 public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadEliminationBlockState> {
 
-    private static final EnumMap<JavaKind, LocationIdentity> UNBOX_LOCATIONS;
+    private static final EnumMap<Kind, LocationIdentity> UNBOX_LOCATIONS;
     static {
-        UNBOX_LOCATIONS = new EnumMap<>(JavaKind.class);
-        for (JavaKind kind : JavaKind.values()) {
+        UNBOX_LOCATIONS = new EnumMap<>(Kind.class);
+        for (Kind kind : Kind.values()) {
             UNBOX_LOCATIONS.put(kind, NamedLocationIdentity.immutable("PEA unbox " + kind.getJavaName()));
         }
     }
 
-    public PEReadEliminationClosure(ScheduleResult schedule, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
+    public PEReadEliminationClosure(SchedulePhase schedule, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
         super(schedule, metaAccess, constantReflection);
     }
 
@@ -153,7 +131,7 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
                 long offset = load.offset().asJavaConstant().asLong();
                 int index = VirtualArrayNode.entryIndexForOffset(offset, load.accessKind(), type.getComponentType(), Integer.MAX_VALUE);
                 ValueNode object = GraphUtil.unproxify(load.object());
-                LocationIdentity location = NamedLocationIdentity.getArrayLocation(type.getComponentType().getJavaKind());
+                LocationIdentity location = NamedLocationIdentity.getArrayLocation(type.getComponentType().getKind());
                 ValueNode cachedValue = state.getReadCache(object, location, index, this);
                 if (cachedValue != null && load.stamp().isCompatible(cachedValue.stamp())) {
                     effects.replaceAtUsages(load, cachedValue);
@@ -170,7 +148,7 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
     private boolean processUnsafeStore(UnsafeStoreNode store, PEReadEliminationBlockState state, GraphEffectList effects) {
         ResolvedJavaType type = StampTool.typeOrNull(store.object());
         if (type != null && type.isArray()) {
-            LocationIdentity location = NamedLocationIdentity.getArrayLocation(type.getComponentType().getJavaKind());
+            LocationIdentity location = NamedLocationIdentity.getArrayLocation(type.getComponentType().getKind());
             if (store.offset().isConstant()) {
                 long offset = store.offset().asJavaConstant().asLong();
                 int index = VirtualArrayNode.entryIndexForOffset(offset, store.accessKind(), type.getComponentType(), Integer.MAX_VALUE);
@@ -323,7 +301,7 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
                 }
             }
             for (PhiNode phi : getPhis()) {
-                if (phi.getStackKind() == JavaKind.Object) {
+                if (phi.getStackKind() == Kind.Object) {
                     for (Map.Entry<ReadCacheEntry, ValueNode> entry : states.get(0).readCache.entrySet()) {
                         if (entry.getKey().object == getPhiValueAt(phi, 0)) {
                             mergeReadCachePhi(phi, entry.getKey().identity, entry.getKey().index, states);

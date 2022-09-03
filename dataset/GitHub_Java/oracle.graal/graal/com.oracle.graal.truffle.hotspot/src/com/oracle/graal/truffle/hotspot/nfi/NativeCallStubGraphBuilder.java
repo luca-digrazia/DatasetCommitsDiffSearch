@@ -22,36 +22,23 @@
  */
 package com.oracle.graal.truffle.hotspot.nfi;
 
-import static jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.meta.JavaConstant;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.ResolvedJavaField;
-import jdk.internal.jvmci.meta.ResolvedJavaMethod;
-import jdk.internal.jvmci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.BoxNode;
-import com.oracle.graal.nodes.java.LoadFieldNode;
-import com.oracle.graal.nodes.java.LoadIndexedNode;
-import com.oracle.graal.nodes.memory.address.AddressNode;
-import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
-import com.oracle.graal.nodes.virtual.EscapeObjectState;
-import com.oracle.graal.word.nodes.WordCastNode;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.word.nodes.*;
 
 /**
  * Utility creating a graph for a stub used to call a native function.
@@ -70,9 +57,9 @@ public class NativeCallStubGraphBuilder {
         try {
             ResolvedJavaMethod method = providers.getMetaAccess().lookupJavaMethod(NativeCallStubGraphBuilder.class.getMethod("libCall", Object.class, Object.class, Object.class));
             StructuredGraph g = new StructuredGraph(method, AllowAssumptions.NO);
-            ParameterNode arg0 = g.unique(new ParameterNode(0, StampFactory.forKind(JavaKind.Object)));
-            ParameterNode arg1 = g.unique(new ParameterNode(1, StampFactory.forKind(JavaKind.Object)));
-            ParameterNode arg2 = g.unique(new ParameterNode(2, StampFactory.forKind(JavaKind.Object)));
+            ParameterNode arg0 = g.unique(new ParameterNode(0, StampFactory.forKind(Kind.Object)));
+            ParameterNode arg1 = g.unique(new ParameterNode(1, StampFactory.forKind(Kind.Object)));
+            ParameterNode arg2 = g.unique(new ParameterNode(2, StampFactory.forKind(Kind.Object)));
             FrameState frameState = g.add(new FrameState(null, method, 0, Arrays.asList(new ValueNode[]{arg0, arg1, arg2}), 3, 0, false, false, null, new ArrayList<EscapeObjectState>()));
             g.start().setStateAfter(frameState);
             List<ValueNode> parameters = new ArrayList<>();
@@ -95,14 +82,14 @@ public class NativeCallStubGraphBuilder {
 
             // box result
             BoxNode boxedResult;
-            if (callNode.getStackKind() != JavaKind.Void) {
-                if (callNode.getStackKind() == JavaKind.Object) {
+            if (callNode.getStackKind() != Kind.Void) {
+                if (callNode.getStackKind() == Kind.Object) {
                     throw new IllegalArgumentException("Return type not supported: " + returnType.getName());
                 }
                 ResolvedJavaType type = providers.getMetaAccess().lookupJavaType(callNode.getStackKind().toBoxedJavaClass());
                 boxedResult = g.add(new BoxNode(callNode, type, callNode.getStackKind()));
             } else {
-                boxedResult = g.add(new BoxNode(ConstantNode.forLong(0, g), providers.getMetaAccess().lookupJavaType(Long.class), JavaKind.Long));
+                boxedResult = g.add(new BoxNode(ConstantNode.forLong(0, g), providers.getMetaAccess().lookupJavaType(Long.class), Kind.Long));
             }
 
             callNode.setNext(boxedResult);
@@ -119,7 +106,7 @@ public class NativeCallStubGraphBuilder {
         FixedWithNextNode last = null;
         for (int i = 0; i < numArgs; i++) {
             // load boxed array element:
-            LoadIndexedNode boxedElement = g.add(new LoadIndexedNode(argumentsArray, ConstantNode.forInt(i, g), JavaKind.Object));
+            LoadIndexedNode boxedElement = g.add(new LoadIndexedNode(argumentsArray, ConstantNode.forInt(i, g), Kind.Object));
             if (i == 0) {
                 g.start().setNext(boxedElement);
                 last = boxedElement;
@@ -128,11 +115,12 @@ public class NativeCallStubGraphBuilder {
                 last = boxedElement;
             }
             Class<?> type = argumentTypes[i];
-            JavaKind kind = getKind(type);
-            if (kind == JavaKind.Object) {
+            Kind kind = getKind(type);
+            if (kind == Kind.Object) {
                 // array value
-                JavaKind arrayElementKind = getElementKind(type);
-                int displacement = getArrayBaseOffset(arrayElementKind);
+                Kind arrayElementKind = getElementKind(type);
+                HotSpotJVMCIRuntimeProvider jvmciRuntime = runtime().getJVMCIRuntime();
+                int displacement = jvmciRuntime.getArrayBaseOffset(arrayElementKind);
                 AddressNode arrayAddress = g.unique(new OffsetAddressNode(boxedElement, ConstantNode.forLong(displacement, g)));
                 WordCastNode cast = g.add(WordCastNode.addressToWord(arrayAddress, providers.getWordTypes().getWordKind()));
                 last.setNext(cast);
@@ -154,34 +142,34 @@ public class NativeCallStubGraphBuilder {
         return last;
     }
 
-    public static JavaKind getElementKind(Class<?> clazz) {
+    public static Kind getElementKind(Class<?> clazz) {
         Class<?> componentType = clazz.getComponentType();
         if (componentType == null) {
             throw new IllegalArgumentException("Parameter type not supported: " + clazz);
         }
         if (componentType.isPrimitive()) {
-            return JavaKind.fromJavaClass(componentType);
+            return Kind.fromJavaClass(componentType);
         }
         throw new IllegalArgumentException("Parameter type not supported: " + clazz);
     }
 
-    private static JavaKind getKind(Class<?> clazz) {
+    private static Kind getKind(Class<?> clazz) {
         if (clazz == int.class || clazz == Integer.class) {
-            return JavaKind.Int;
+            return Kind.Int;
         } else if (clazz == long.class || clazz == Long.class) {
-            return JavaKind.Long;
+            return Kind.Long;
         } else if (clazz == char.class || clazz == Character.class) {
-            return JavaKind.Char;
+            return Kind.Char;
         } else if (clazz == byte.class || clazz == Byte.class) {
-            return JavaKind.Byte;
+            return Kind.Byte;
         } else if (clazz == float.class || clazz == Float.class) {
-            return JavaKind.Float;
+            return Kind.Float;
         } else if (clazz == double.class || clazz == Double.class) {
-            return JavaKind.Double;
+            return Kind.Double;
         } else if (clazz == int[].class || clazz == long[].class || clazz == char[].class || clazz == byte[].class || clazz == float[].class || clazz == double[].class) {
-            return JavaKind.Object;
+            return Kind.Object;
         } else if (clazz == void.class) {
-            return JavaKind.Void;
+            return Kind.Void;
         } else {
             throw new IllegalArgumentException("Type not supported: " + clazz);
         }

@@ -22,42 +22,34 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.PrimitiveStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.UnaryNode;
-import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Determines the index of the least significant "1" bit. Note that the result is undefined if the
  * input is zero.
  */
 @NodeInfo
-public final class BitScanForwardNode extends UnaryNode implements ArithmeticLIRLowerable {
+public final class BitScanForwardNode extends UnaryNode implements LIRLowerable {
 
     public static final NodeClass<BitScanForwardNode> TYPE = NodeClass.create(BitScanForwardNode.class);
 
     public BitScanForwardNode(ValueNode value) {
-        super(TYPE, StampFactory.forInteger(JavaKind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
-        assert value.getStackKind() == JavaKind.Int || value.getStackKind() == JavaKind.Long;
+        super(TYPE, StampFactory.forInteger(Kind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
+        assert value.getStackKind() == Kind.Int || value.getStackKind() == Kind.Long;
     }
 
     @Override
-    public Stamp foldStamp(Stamp newStamp) {
-        assert newStamp.isCompatible(getValue().stamp());
-        IntegerStamp valueStamp = (IntegerStamp) newStamp;
+    public boolean inferStamp() {
+        IntegerStamp valueStamp = (IntegerStamp) getValue().stamp();
         int min;
         int max;
         long mask = CodeUtil.mask(valueStamp.getBits());
@@ -71,7 +63,7 @@ public final class BitScanForwardNode extends UnaryNode implements ArithmeticLIR
             min = firstMaybeSetBit;
             max = firstAlwaysSetBit;
         }
-        return StampFactory.forInteger(JavaKind.Int, min, max);
+        return updateStamp(StampFactory.forInteger(Kind.Int, min, max));
     }
 
     @Override
@@ -79,7 +71,7 @@ public final class BitScanForwardNode extends UnaryNode implements ArithmeticLIR
         if (forValue.isConstant()) {
             JavaConstant c = forValue.asJavaConstant();
             if (c.asLong() != 0) {
-                return ConstantNode.forInt(forValue.getStackKind() == JavaKind.Int ? scan(c.asInt()) : scan(c.asLong()));
+                return ConstantNode.forInt(forValue.getStackKind() == Kind.Int ? scan(c.asInt()) : scan(c.asLong()));
             }
         }
         return this;
@@ -127,7 +119,8 @@ public final class BitScanForwardNode extends UnaryNode implements ArithmeticLIR
     public static native int unsafeScan(int v);
 
     @Override
-    public void generate(NodeLIRBuilderTool builder, ArithmeticLIRGeneratorTool gen) {
-        builder.setResult(this, gen.emitBitScanForward(builder.operand(getValue())));
+    public void generate(NodeLIRBuilderTool gen) {
+        Value result = gen.getLIRGeneratorTool().emitBitScanForward(gen.operand(getValue()));
+        gen.setResult(this, result);
     }
 }

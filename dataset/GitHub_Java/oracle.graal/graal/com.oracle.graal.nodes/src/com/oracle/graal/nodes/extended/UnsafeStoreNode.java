@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,16 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.java.StoreFieldNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Store of a value at a location specified as an offset relative to an object. No null check is
@@ -55,30 +44,27 @@ public final class UnsafeStoreNode extends UnsafeAccessNode implements StateSpli
     @Input ValueNode value;
     @OptionalInput(InputType.State) FrameState stateAfter;
 
-    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity) {
+    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
         this(object, offset, value, accessKind, locationIdentity, null);
     }
 
-    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
+    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
         super(TYPE, StampFactory.forVoid(), object, offset, accessKind, locationIdentity);
         this.value = value;
         this.stateAfter = stateAfter;
-        assert accessKind != JavaKind.Void && accessKind != JavaKind.Illegal;
+        assert accessKind != Kind.Void && accessKind != Kind.Illegal;
     }
 
-    @Override
     public FrameState stateAfter() {
         return stateAfter;
     }
 
-    @Override
     public void setStateAfter(FrameState x) {
         assert x == null || x.isAlive() : "frame state must be in a graph";
         updateUsages(stateAfter, x);
         stateAfter = x;
     }
 
-    @Override
     public boolean hasSideEffect() {
         return true;
     }
@@ -102,17 +88,17 @@ public final class UnsafeStoreNode extends UnsafeAccessNode implements StateSpli
                 long off = indexValue.asJavaConstant().asLong();
                 int entryIndex = virtual.entryIndexForOffset(off, accessKind());
                 if (entryIndex != -1) {
-                    JavaKind entryKind = virtual.entryKind(entryIndex);
+                    Kind entryKind = virtual.entryKind(entryIndex);
                     ValueNode entry = tool.getEntry(virtual, entryIndex);
                     if (entry.getStackKind() == value.getStackKind() || entryKind == accessKind()) {
                         tool.setVirtualEntry(virtual, entryIndex, value(), true);
                         tool.delete();
                     } else {
-                        if ((accessKind() == JavaKind.Long || accessKind() == JavaKind.Double) && entryKind == JavaKind.Int) {
+                        if ((accessKind() == Kind.Long || accessKind() == Kind.Double) && entryKind == Kind.Int) {
                             int nextIndex = virtual.entryIndexForOffset(off + 4, entryKind);
                             if (nextIndex != -1) {
-                                JavaKind nextKind = virtual.entryKind(nextIndex);
-                                if (nextKind == JavaKind.Int) {
+                                Kind nextKind = virtual.entryKind(nextIndex);
+                                if (nextKind == Kind.Int) {
                                     tool.setVirtualEntry(virtual, entryIndex, value(), true);
                                     tool.setVirtualEntry(virtual, nextIndex, ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccessProvider(), graph()), true);
                                     tool.delete();
@@ -126,7 +112,7 @@ public final class UnsafeStoreNode extends UnsafeAccessNode implements StateSpli
     }
 
     @Override
-    protected ValueNode cloneAsFieldAccess(Assumptions assumptions, ResolvedJavaField field) {
+    protected ValueNode cloneAsFieldAccess(ResolvedJavaField field) {
         return new StoreFieldNode(object(), field, value(), stateAfter());
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,51 +22,30 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
-import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
+import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.*;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.List;
+import java.lang.reflect.*;
+import java.util.*;
 
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Signature;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.graph.Graph;
-import com.oracle.graal.java.FrameStateBuilder;
-import com.oracle.graal.java.GraphBuilderPhase;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.BeginNode;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.java.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.MergeNode;
-import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality;
-import com.oracle.graal.phases.common.inlining.InliningUtil;
-import com.oracle.graal.phases.util.Providers;
-import com.oracle.graal.word.WordTypes;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.util.*;
+import com.oracle.graal.word.*;
 
 /**
  * A utility for manually creating a graph. This will be expanded as necessary to support all
@@ -165,15 +144,6 @@ public class GraphKit {
         return method;
     }
 
-    public ResolvedJavaMethod findMethod(Class<?> declaringClass, String name, Class<?>... parameterTypes) {
-        try {
-            Method m = declaringClass.getDeclaredMethod(name, parameterTypes);
-            return providers.getMetaAccess().lookupJavaMethod(m);
-        } catch (NoSuchMethodException | SecurityException e) {
-            throw new AssertionError(e);
-        }
-    }
-
     /**
      * Creates and appends an {@link InvokeNode} for a call to a given method with a given set of
      * arguments.
@@ -187,12 +157,12 @@ public class GraphKit {
         InvokeNode invoke = append(new InvokeNode(callTarget, bci));
 
         if (frameStateBuilder != null) {
-            if (invoke.getStackKind() != JavaKind.Void) {
-                frameStateBuilder.push(returnType.getJavaKind(), invoke);
+            if (invoke.getStackKind() != Kind.Void) {
+                frameStateBuilder.push(returnType.getKind(), invoke);
             }
             invoke.setStateAfter(frameStateBuilder.create(bci, invoke));
-            if (invoke.getStackKind() != JavaKind.Void) {
-                frameStateBuilder.pop(returnType.getJavaKind());
+            if (invoke.getStackKind() != Kind.Void) {
+                frameStateBuilder.pop(returnType.getKind());
             }
         }
         return invoke;
@@ -218,14 +188,14 @@ public class GraphKit {
         int argIndex = 0;
         if (!isStatic) {
             ResolvedJavaType expectedType = method.getDeclaringClass();
-            JavaKind expected = wordTypes == null ? expectedType.getJavaKind() : wordTypes.asKind(expectedType);
-            JavaKind actual = args[argIndex++].stamp().getStackKind();
+            Kind expected = wordTypes == null ? expectedType.getKind() : wordTypes.asKind(expectedType);
+            Kind actual = args[argIndex++].stamp().getStackKind();
             assert expected == actual : graph + ": wrong kind of value for receiver argument of call to " + method + " [" + actual + " != " + expected + "]";
         }
         for (int i = 0; i != signature.getParameterCount(false); i++) {
             JavaType expectedType = signature.getParameterType(i, method.getDeclaringClass());
-            JavaKind expected = wordTypes == null ? expectedType.getJavaKind().getStackKind() : wordTypes.asKind(expectedType).getStackKind();
-            JavaKind actual = args[argIndex++].stamp().getStackKind();
+            Kind expected = wordTypes == null ? expectedType.getKind().getStackKind() : wordTypes.asKind(expectedType).getStackKind();
+            Kind actual = args[argIndex++].stamp().getStackKind();
             if (expected != actual) {
                 throw new AssertionError(graph + ": wrong kind of value for argument " + i + " of call to " + method + " [" + actual + " != " + expected + "]");
             }
@@ -258,12 +228,16 @@ public class GraphKit {
         Plugins plugins = new Plugins(graphBuilderPlugins);
         GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
 
-        StructuredGraph calleeGraph = new StructuredGraph(method, AllowAssumptions.NO, NO_PROFILING_INFO);
+        StructuredGraph calleeGraph = new StructuredGraph(method, AllowAssumptions.NO);
         IntrinsicContext initialReplacementContext = new IntrinsicContext(method, method, INLINE_AFTER_PARSING);
         new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), config, OptimisticOptimizations.NONE, initialReplacementContext).apply(calleeGraph);
 
         // Remove all frame states from inlinee
-        calleeGraph.clearAllStateAfter();
+        for (Node node : calleeGraph.getNodes()) {
+            if (node instanceof StateSplit) {
+                ((StateSplit) node).setStateAfter(null);
+            }
+        }
         new DeadCodeEliminationPhase(Optionality.Required).apply(calleeGraph);
 
         InliningUtil.inline(invoke, calleeGraph, false, null);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,21 @@
  */
 package com.oracle.graal.nodes;
 
-import static jdk.vm.ci.code.BytecodeFrame.getPlaceholderBciName;
-import static jdk.vm.ci.code.BytecodeFrame.isPlaceholderBci;
+import static jdk.internal.jvmci.code.BytecodeFrame.*;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaUtil;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.bytecode.Bytecodes;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.java.MonitorIdNode;
-import com.oracle.graal.nodes.virtual.EscapeObjectState;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.bytecode.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code FrameState} class encapsulates the frame state (i.e. local variables and operand
@@ -76,7 +62,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         public static final NodeClass<TwoSlotMarker> TYPE = NodeClass.create(TwoSlotMarker.class);
 
         protected TwoSlotMarker() {
-            super(TYPE, StampFactory.forKind(JavaKind.Illegal));
+            super(TYPE, StampFactory.forKind(Kind.Illegal));
         }
     }
 
@@ -294,11 +280,11 @@ public final class FrameState extends VirtualState implements IterableNodeType {
      * Creates a copy of this frame state with one stack element of type {@code popKind} popped from
      * the stack.
      */
-    public FrameState duplicateModifiedDuringCall(int newBci, JavaKind popKind) {
+    public FrameState duplicateModifiedDuringCall(int newBci, Kind popKind) {
         return duplicateModified(graph(), newBci, rethrowException, true, popKind, null, null);
     }
 
-    public FrameState duplicateModifiedBeforeCall(int newBci, JavaKind popKind, JavaKind[] pushedSlotKinds, ValueNode[] pushedValues) {
+    public FrameState duplicateModifiedBeforeCall(int newBci, Kind popKind, Kind[] pushedSlotKinds, ValueNode[] pushedValues) {
         return duplicateModified(graph(), newBci, rethrowException, false, popKind, pushedSlotKinds, pushedValues);
     }
 
@@ -308,21 +294,17 @@ public final class FrameState extends VirtualState implements IterableNodeType {
      * {@code pushedValues} will be formatted correctly in slot encoding: a long or double will be
      * followed by a null slot.
      */
-    public FrameState duplicateModified(int newBci, boolean newRethrowException, JavaKind popKind, JavaKind[] pushedSlotKinds, ValueNode[] pushedValues) {
+    public FrameState duplicateModified(int newBci, boolean newRethrowException, Kind popKind, Kind[] pushedSlotKinds, ValueNode[] pushedValues) {
         return duplicateModified(graph(), newBci, newRethrowException, duringCall, popKind, pushedSlotKinds, pushedValues);
-    }
-
-    public FrameState duplicateModified(int newBci, boolean newRethrowException, boolean newDuringCall, JavaKind popKind, JavaKind[] pushedSlotKinds, ValueNode[] pushedValues) {
-        return duplicateModified(graph(), newBci, newRethrowException, newDuringCall, popKind, pushedSlotKinds, pushedValues);
     }
 
     /**
      * Creates a copy of this frame state with the top of stack replaced with with
      * {@code pushedValue} which must be of type {@code popKind}.
      */
-    public FrameState duplicateModified(JavaKind popKind, JavaKind pushedSlotKind, ValueNode pushedValue) {
+    public FrameState duplicateModified(Kind popKind, Kind pushedSlotKind, ValueNode pushedValue) {
         assert pushedValue != null && pushedValue.getStackKind() == popKind;
-        return duplicateModified(graph(), bci, rethrowException, duringCall, popKind, new JavaKind[]{pushedSlotKind}, new ValueNode[]{pushedValue});
+        return duplicateModified(graph(), bci, rethrowException, duringCall, popKind, new Kind[]{pushedSlotKind}, new ValueNode[]{pushedValue});
     }
 
     /**
@@ -331,14 +313,14 @@ public final class FrameState extends VirtualState implements IterableNodeType {
      * correctly in slot encoding: a long or double will be followed by a null slot. The bci will be
      * changed to newBci.
      */
-    public FrameState duplicateModified(StructuredGraph graph, int newBci, boolean newRethrowException, boolean newDuringCall, JavaKind popKind, JavaKind[] pushedSlotKinds, ValueNode[] pushedValues) {
+    public FrameState duplicateModified(StructuredGraph graph, int newBci, boolean newRethrowException, boolean newDuringCall, Kind popKind, Kind[] pushedSlotKinds, ValueNode[] pushedValues) {
         ArrayList<ValueNode> copy;
-        if (newRethrowException && !rethrowException && popKind == JavaKind.Void) {
-            assert popKind == JavaKind.Void;
+        if (newRethrowException && !rethrowException && popKind == Kind.Void) {
+            assert popKind == Kind.Void;
             copy = new ArrayList<>(values.subList(0, localsSize));
         } else {
             copy = new ArrayList<>(values.subList(0, localsSize + stackSize));
-            if (popKind != JavaKind.Void) {
+            if (popKind != Kind.Void) {
                 if (stackAt(stackSize() - 1) == null) {
                     copy.remove(copy.size() - 1);
                 }
@@ -549,7 +531,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         assertTrue(locksSize() == monitorIdCount(), "mismatch in number of locks");
         for (ValueNode value : values) {
             assertTrue(value == null || !value.isDeleted(), "frame state must not contain deleted nodes");
-            assertTrue(value == null || value instanceof VirtualObjectNode || (value.getStackKind() != JavaKind.Void), "unexpected value: %s", value);
+            assertTrue(value == null || value instanceof VirtualObjectNode || (value.getStackKind() != Kind.Void), "unexpected value: %s", value);
         }
         return super.verify();
     }

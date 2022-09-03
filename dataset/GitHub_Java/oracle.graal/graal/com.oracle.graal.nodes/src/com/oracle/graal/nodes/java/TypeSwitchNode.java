@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -71,7 +71,20 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
 
     @Override
     public boolean isSorted() {
-        return false;
+        Kind kind = value().getStackKind();
+        if (kind.isNumericInteger()) {
+            JavaConstant lastKey = null;
+            for (int i = 0; i < keyCount(); i++) {
+                JavaConstant key = keyAt(i);
+                if (lastKey != null && key.asLong() <= lastKey.asLong()) {
+                    return false;
+                }
+                lastKey = key;
+            }
+            return true;
+        } else {
+            return false;
+        }
     }
 
     @Override
@@ -80,8 +93,8 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
     }
 
     @Override
-    public Constant keyAt(int index) {
-        return keys[index].getObjectHub();
+    public JavaConstant keyAt(int index) {
+        return (JavaConstant) keys[index].getObjectHub();
     }
 
     @Override
@@ -105,11 +118,12 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
     @Override
     public void simplify(SimplifierTool tool) {
         if (value() instanceof ConstantNode) {
-            Constant constant = value().asConstant();
+            JavaConstant constant = value().asJavaConstant();
 
             int survivingEdge = keySuccessorIndex(keyCount());
             for (int i = 0; i < keyCount(); i++) {
-                Constant typeHub = keyAt(i);
+                JavaConstant typeHub = keyAt(i);
+                assert constant.getKind() == typeHub.getKind();
                 Boolean equal = tool.getConstantReflection().constantEquals(constant, typeHub);
                 if (equal == null) {
                     /* We don't know if this key is a match or not, so we cannot simplify. */

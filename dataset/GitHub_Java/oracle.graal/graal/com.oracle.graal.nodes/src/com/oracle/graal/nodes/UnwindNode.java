@@ -22,23 +22,17 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_8;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_4;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-import jdk.vm.ci.meta.JavaKind;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Unwinds the current frame to an exception handler in the caller frame.
  */
-@NodeInfo(cycles = CYCLES_8, size = SIZE_4)
+@NodeInfo
 public final class UnwindNode extends ControlSinkNode implements Lowerable, LIRLowerable {
 
     public static final NodeClass<UnwindNode> TYPE = NodeClass.create(UnwindNode.class);
@@ -50,7 +44,7 @@ public final class UnwindNode extends ControlSinkNode implements Lowerable, LIRL
 
     public UnwindNode(ValueNode exception) {
         super(TYPE, StampFactory.forVoid());
-        assert exception.getStackKind() == JavaKind.Object;
+        assert exception.getStackKind() == Kind.Object;
         this.exception = exception;
     }
 

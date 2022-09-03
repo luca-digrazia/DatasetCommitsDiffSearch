@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.*;
-
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.type.*;
@@ -59,7 +58,6 @@ public class ConditionalEliminationPhase extends Phase {
     public ConditionalEliminationPhase() {
     }
 
-    @SuppressWarnings("try")
     @Override
     protected void run(StructuredGraph inputGraph) {
         graph = inputGraph;

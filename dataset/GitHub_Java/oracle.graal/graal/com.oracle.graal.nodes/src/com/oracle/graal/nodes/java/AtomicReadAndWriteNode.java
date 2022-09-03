@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,15 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.vm.ci.meta.JavaKind;
-import sun.misc.Unsafe;
+import jdk.internal.jvmci.meta.*;
+import sun.misc.*;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Represents an atomic read-and-write operation like {@link Unsafe#getAndSetInt(Object, long, int)}
@@ -47,10 +44,10 @@ public final class AtomicReadAndWriteNode extends AbstractMemoryCheckpoint imple
     @Input ValueNode offset;
     @Input ValueNode newValue;
 
-    protected final JavaKind valueKind;
+    protected final Kind valueKind;
     protected final LocationIdentity locationIdentity;
 
-    public AtomicReadAndWriteNode(ValueNode object, ValueNode offset, ValueNode newValue, JavaKind valueKind, LocationIdentity locationIdentity) {
+    public AtomicReadAndWriteNode(ValueNode object, ValueNode offset, ValueNode newValue, Kind valueKind, LocationIdentity locationIdentity) {
         super(TYPE, StampFactory.forKind(newValue.getStackKind()));
         this.object = object;
         this.offset = offset;
@@ -71,16 +68,14 @@ public final class AtomicReadAndWriteNode extends AbstractMemoryCheckpoint imple
         return newValue;
     }
 
-    public JavaKind getValueKind() {
+    public Kind getValueKind() {
         return valueKind;
     }
 
-    @Override
     public LocationIdentity getLocationIdentity() {
         return locationIdentity;
     }
 
-    @Override
     public void lower(LoweringTool tool) {
         tool.getLowerer().lower(this, tool);
     }

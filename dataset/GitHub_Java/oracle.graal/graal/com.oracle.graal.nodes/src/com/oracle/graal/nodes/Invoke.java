@@ -22,17 +22,17 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.Node;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.extended.GuardedNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDuring, GuardedNode, FixedNodeInterface {
+public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDuring, GuardedNode, UncheckedInterfaceProvider {
 
     FixedNode next();
 
@@ -41,6 +41,8 @@ public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDur
     CallTargetNode callTarget();
 
     int bci();
+
+    FixedNode asNode();
 
     Node predecessor();
 
@@ -69,7 +71,7 @@ public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDur
         if (state == null) {
             state = stateDuring();
         }
-        return state.getMethod();
+        return state.method();
     }
 
     /**
@@ -79,11 +81,7 @@ public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDur
      * @return the type from which this invoke is executed.
      */
     default ResolvedJavaType getContextType() {
-        ResolvedJavaMethod contextMethod = getContextMethod();
-        if (contextMethod == null) {
-            return null;
-        }
-        return contextMethod.getDeclaringClass();
+        return getContextMethod().getDeclaringClass();
     }
 
     @Override
@@ -107,5 +105,13 @@ public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDur
 
     default InvokeKind getInvokeKind() {
         return callTarget().invokeKind();
+    }
+
+    default Stamp uncheckedStamp() {
+        if (callTarget() instanceof MethodCallTargetNode) {
+            MethodCallTargetNode methodCallTargetNode = (MethodCallTargetNode) callTarget();
+            return UncheckedInterfaceProvider.uncheckedOrNull(methodCallTargetNode.returnType(), asNode().stamp());
+        }
+        return null;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,47 +22,93 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.cri.*;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
- * The {@code UnsafeCastNode} produces the same value as its input, but with a different type.
+ * The {@code UnsafeCastNode} produces the same value as its input, but with a different type. It
+ * allows unsafe casts "sideways" in the type hierarchy. It does not allow to "drop" type
+ * information, i.e., an unsafe cast is removed if the input object has a more precise or equal type
+ * than the type this nodes casts to.
  */
-public final class UnsafeCastNode extends FloatingNode implements Canonicalizable, Lowerable {
+@NodeInfo
+public final class UnsafeCastNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, GuardingNode, IterableNodeType, Canonicalizable, ValueProxy {
 
-    @Input private ValueNode object;
-    @Data private RiResolvedType toType;
+    public static final NodeClass<UnsafeCastNode> TYPE = NodeClass.create(UnsafeCastNode.class);
+    @Input ValueNode object;
 
-    public ValueNode object() {
+    public UnsafeCastNode(ValueNode object, Stamp stamp) {
+        super(TYPE, stamp);
+        this.object = object;
+    }
+
+    public UnsafeCastNode(ValueNode object, Stamp stamp, ValueNode anchor) {
+        super(TYPE, stamp, (GuardingNode) anchor);
+        this.object = object;
+    }
+
+    public UnsafeCastNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
+        this(object, toType.getKind() == Kind.Object ? StampFactory.object(toType, exactType, nonNull || StampTool.isPointerNonNull(object.stamp()), true) : StampFactory.forKind(toType.getKind()));
+    }
+
+    @Override
+    public ValueNode getOriginalNode() {
         return object;
     }
 
-    public UnsafeCastNode(ValueNode object, RiResolvedType toType) {
-        super(StampFactory.declared(toType));
-        this.object = object;
-        this.toType = toType;
-    }
-
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (object != null && object.declaredType() != null && object.declaredType().isSubtypeOf(toType)) {
-            return object;
+    public Node canonical(CanonicalizerTool tool) {
+        assert getStackKind() == Kind.Object && object.getStackKind() == Kind.Object;
+
+        ObjectStamp my = (ObjectStamp) stamp();
+        ObjectStamp other = (ObjectStamp) object.stamp();
+
+        if (my.type() == null || other.type() == null) {
+            return this;
         }
-        return this;
+        if (my.isExactType() && !other.isExactType()) {
+            return this;
+        }
+        if (my.nonNull() && !other.nonNull()) {
+            return this;
+        }
+        if (!my.type().isAssignableFrom(other.type())) {
+            return this;
+        }
+        /*
+         * The unsafe cast does not add any new type information, so it can be removed. Note that
+         * this means that the unsafe cast cannot be used to "drop" type information (in which case
+         * it must not be canonicalized in any case).
+         */
+        return object;
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
-        ((StructuredGraph) graph()).replaceFloating(this, object);
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(object);
+        if (alias instanceof VirtualObjectNode) {
+            VirtualObjectNode virtual = (VirtualObjectNode) alias;
+            if (StampTool.typeOrNull(this) != null && StampTool.typeOrNull(this).isAssignableFrom(virtual.type())) {
+                tool.replaceWithVirtual(virtual);
+            }
+        }
     }
 
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static <T> T cast(Object object, @ConstantNodeParameter Class<?> toType) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    @Override
+    public void generate(NodeLIRBuilderTool generator) {
+        assert getStackKind() == Kind.Object && object.getStackKind() == Kind.Object;
+        /*
+         * The LIR only cares about the kind of an operand, not the actual type of an object. So we
+         * do not have to introduce a new operand.
+         */
+        generator.setResult(this, generator.operand(object));
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,47 +22,24 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaTypeProfile;
-import jdk.vm.ci.meta.JavaTypeProfile.ProfiledType;
-import jdk.vm.ci.meta.PrimitiveConstant;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.TriState;
+import jdk.internal.jvmci.common.*;
+import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.meta.JavaTypeProfile.*;
 
-import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.Simplifiable;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.calc.CompareNode;
-import com.oracle.graal.nodes.calc.ConditionalNode;
-import com.oracle.graal.nodes.calc.IntegerBelowNode;
-import com.oracle.graal.nodes.calc.IntegerLessThanNode;
-import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.nodes.java.InstanceOfNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
 
 /**
  * The {@code IfNode} represents a branch that can go one of two directions depending on the outcome
@@ -329,7 +306,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                          * appear to be interesting.
                          */
                         JavaConstant positive = lessThan2.getX().asJavaConstant();
-                        if (positive != null && positive.asLong() > 0 && positive.asLong() < positive.getJavaKind().getMaxValue()) {
+                        if (positive != null && positive.asLong() > 0 && positive.asLong() < positive.getKind().getMaxValue()) {
                             ConstantNode newLimit = ConstantNode.forIntegerStamp(lessThan2.getX().stamp(), positive.asLong() + 1, graph());
                             below = graph().unique(new IntegerBelowNode(lessThan.getX(), newLimit));
                         }
@@ -684,7 +661,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         if (trueValue.getStackKind() != falseValue.getStackKind()) {
             return null;
         }
-        if (trueValue.getStackKind() != JavaKind.Int && trueValue.getStackKind() != JavaKind.Long) {
+        if (trueValue.getStackKind() != Kind.Int && trueValue.getStackKind() != Kind.Long) {
             return null;
         }
         if (trueValue.isConstant() && falseValue.isConstant()) {
@@ -784,18 +761,18 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
 
         for (EndNode end : merge.forwardEnds().snapshot()) {
             Node value = phi.valueAt(end);
-            LogicNode result = null;
+            Node result = null;
             if (condition() instanceof Canonicalizable.Binary<?>) {
                 Canonicalizable.Binary<Node> compare = (Canonicalizable.Binary<Node>) condition;
                 if (compare.getX() == phi) {
-                    result = (LogicNode) compare.canonical(tool, value, compare.getY());
+                    result = compare.canonical(tool, value, compare.getY());
                 } else {
-                    result = (LogicNode) compare.canonical(tool, compare.getX(), value);
+                    result = compare.canonical(tool, compare.getX(), value);
                 }
             } else {
                 assert condition() instanceof Canonicalizable.Unary<?>;
                 Canonicalizable.Unary<Node> compare = (Canonicalizable.Unary<Node>) condition;
-                result = (LogicNode) compare.canonical(tool, value);
+                result = compare.canonical(tool, value);
             }
             if (result instanceof LogicConstantNode) {
                 merge.removeEnd(end);
@@ -810,31 +787,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                     }
                     falseMerge.addForwardEnd(end);
                 }
-            } else if (result != condition) {
-                // Build a new IfNode using the new condition
-                BeginNode trueBegin = graph().add(new BeginNode());
-                BeginNode falseBegin = graph().add(new BeginNode());
-
-                if (result.graph() == null) {
-                    result = graph().addOrUniqueWithInputs(result);
-                }
-                IfNode newIfNode = graph().add(new IfNode(result, trueBegin, falseBegin, trueSuccessorProbability));
-                merge.removeEnd(end);
-                ((FixedWithNextNode) end.predecessor()).setNext(newIfNode);
-
-                if (trueMerge == null) {
-                    trueMerge = insertMerge(trueSuccessor());
-                }
-                trueBegin.setNext(graph().add(new EndNode()));
-                trueMerge.addForwardEnd((EndNode) trueBegin.next());
-
-                if (falseMerge == null) {
-                    falseMerge = insertMerge(falseSuccessor());
-                }
-                falseBegin.setNext(graph().add(new EndNode()));
-                falseMerge.addForwardEnd((EndNode) falseBegin.next());
-
-                end.safeDelete();
             }
         }
         transferProxies(trueSuccessor(), trueMerge);
@@ -1171,7 +1123,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
      */
     public static Constant[] constantValues(ValueNode node, AbstractMergeNode merge, boolean allowNull) {
         if (node.isConstant()) {
-            Constant[] result = new Constant[merge.forwardEndCount()];
+            JavaConstant[] result = new JavaConstant[merge.forwardEndCount()];
             Arrays.fill(result, node.asConstant());
             return result;
         }

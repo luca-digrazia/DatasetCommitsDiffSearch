@@ -204,7 +204,6 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         Assert.assertTrue(c.isEqualTo(Boolean.TRUE));
     }
 
-    @SuppressWarnings("try")
     private StructuredGraph compile(String test, boolean compileAOT) {
         try (OverrideScope s = OptionValue.override(ImmutableCode, compileAOT)) {
             StructuredGraph graph = parseEager(test, AllowAssumptions.YES);
@@ -214,8 +213,8 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
             SuitesProvider suitesProvider = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getSuites();
             final Suites suitesLocal = suitesProvider.createSuites();
             final LIRSuites lirSuitesLocal = suitesProvider.createLIRSuites();
-            final CompilationResult compResult = compileGraph(graph, cc, method, getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph),
-                            suitesLocal, lirSuitesLocal, new CompilationResult(), CompilationResultBuilderFactory.Default);
+            final CompilationResult compResult = compileGraph(graph, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
+                            getProfilingInfo(graph), suitesLocal, lirSuitesLocal, new CompilationResult(), CompilationResultBuilderFactory.Default);
             addMethod(method, compResult);
             return graph;
         }

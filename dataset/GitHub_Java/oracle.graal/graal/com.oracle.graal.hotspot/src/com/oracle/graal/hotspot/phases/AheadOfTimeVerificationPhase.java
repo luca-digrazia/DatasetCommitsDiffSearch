@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,65 @@
  */
 package com.oracle.graal.hotspot.phases;
 
-import com.oracle.graal.api.meta.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.nodes.ConstantNode.*;
+
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
- * Checking for embedded oops in the graph. (Interned) Strings are an exception as they live in CDS
- * space.
- * 
+ * Checks for {@link #isIllegalObjectConstant(ConstantNode) illegal} object constants in a graph
+ * processed for AOT compilation.
+ *
  * @see LoadJavaMirrorWithKlassPhase
  */
-public class AheadOfTimeVerificationPhase extends VerifyPhase {
+public class AheadOfTimeVerificationPhase extends VerifyPhase<PhaseContext> {
 
     @Override
-    protected boolean verify(StructuredGraph graph) {
-        for (ConstantNode node : graph.getNodes().filter(ConstantNode.class)) {
-            assert !isOop(node) || isNullReference(node) || isString(node) : "embedded oop: " + node;
+    protected boolean verify(StructuredGraph graph, PhaseContext context) {
+        for (ConstantNode node : getConstantNodes(graph)) {
+            if (isIllegalObjectConstant(node)) {
+                throw new VerificationError("illegal object constant: " + node);
+            }
         }
         return true;
     }
 
-    private static boolean isOop(ConstantNode node) {
-        return node.kind() == Kind.Object;
+    public static boolean isIllegalObjectConstant(ConstantNode node) {
+        return isObject(node) && !isNullReference(node) && !isInternedString(node) && !isDirectMethodHandle(node) && !isBoundMethodHandle(node);
+    }
+
+    private static boolean isObject(ConstantNode node) {
+        return node.getStackKind() == Kind.Object;
     }
 
     private static boolean isNullReference(ConstantNode node) {
-        return isOop(node) && node.asConstant().asObject() == null;
+        return isObject(node) && node.isNullConstant();
     }
 
-    private static boolean isString(ConstantNode node) {
-        return isOop(node) && node.asConstant().asObject() instanceof String;
+    private static boolean isDirectMethodHandle(ConstantNode node) {
+        if (!isObject(node)) {
+            return false;
+        }
+        return "Ljava/lang/invoke/DirectMethodHandle;".equals(StampTool.typeOrNull(node).getName());
+    }
+
+    private static boolean isBoundMethodHandle(ConstantNode node) {
+        if (!isObject(node)) {
+            return false;
+        }
+        return StampTool.typeOrNull(node).getName().startsWith("Ljava/lang/invoke/BoundMethodHandle");
+    }
+
+    private static boolean isInternedString(ConstantNode node) {
+        if (!isObject(node)) {
+            return false;
+        }
+
+        HotSpotObjectConstant c = (HotSpotObjectConstant) node.asConstant();
+        return c.isInternedString();
     }
 }

@@ -22,16 +22,12 @@
  */
 package com.oracle.graal.nodes;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.iterators.NodePredicate;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.nodeinfo.*;
 
 /**
  * This class represents a value within the graph, including local variables, phis, and all other
@@ -42,8 +38,8 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node {
 
     public static final NodeClass<ValueNode> TYPE = NodeClass.create(ValueNode.class);
     /**
-     * The kind of this value. This is {@link JavaKind#Void} for instructions that produce no value.
-     * This kind is guaranteed to be a {@linkplain JavaKind#getStackKind() stack kind}.
+     * The kind of this value. This is {@link Kind#Void} for instructions that produce no value.
+     * This kind is guaranteed to be a {@linkplain Kind#getStackKind() stack kind}.
      */
     protected Stamp stamp;
 
@@ -93,7 +89,7 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node {
         return false;
     }
 
-    public final JavaKind getStackKind() {
+    public final Kind getStackKind() {
         return stamp().getStackKind();
     }
 
@@ -155,7 +151,7 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node {
 
     @Override
     public boolean isAllowedUsageType(InputType type) {
-        if (getStackKind() != JavaKind.Void && type == InputType.Value) {
+        if (getStackKind() != Kind.Void && type == InputType.Value) {
             return true;
         } else {
             return super.isAllowedUsageType(type);

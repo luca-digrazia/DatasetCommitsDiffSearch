@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,77 +22,84 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.ShiftOp.UShr;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = ">>>")
-public final class UnsignedRightShiftNode extends ShiftNode implements Canonicalizable {
+public final class UnsignedRightShiftNode extends ShiftNode<UShr> {
 
-    public UnsignedRightShiftNode(Kind kind, ValueNode x, ValueNode y) {
-        super(kind, x, y);
+    public static final NodeClass<UnsignedRightShiftNode> TYPE = NodeClass.create(UnsignedRightShiftNode.class);
+
+    public UnsignedRightShiftNode(ValueNode x, ValueNode y) {
+        super(TYPE, ArithmeticOpTable::getUShr, x, y);
     }
 
     @Override
-    public boolean inferStamp() {
-        return updateStamp(StampTool.unsignedRightShift(x().stamp(), y().stamp()));
-    }
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        ValueNode ret = super.canonical(tool, forX, forY);
+        if (ret != this) {
+            return ret;
+        }
 
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (y().isConstant()) {
-            int amount = y().asConstant().asInt();
+        if (forY.isConstant()) {
+            int amount = forY.asJavaConstant().asInt();
             int originalAmout = amount;
-            int mask;
-            if (kind() == Kind.Int) {
-                mask = 0x1f;
-            } else {
-                assert kind() == Kind.Long;
-                mask = 0x3f;
-            }
+            int mask = getShiftAmountMask();
             amount &= mask;
-            if (x().isConstant()) {
-                if (kind() == Kind.Int) {
-                    return ConstantNode.forInt(x().asConstant().asInt() >>> amount, graph());
-                } else {
-                    assert kind() == Kind.Long;
-                    return ConstantNode.forLong(x().asConstant().asLong() >>> amount, graph());
-                }
-            }
             if (amount == 0) {
-                return x();
+                return forX;
             }
-            if (x() instanceof ShiftNode) {
-                ShiftNode other = (ShiftNode) x();
-                if (other.y().isConstant()) {
-                    int otherAmount = other.y().asConstant().asInt() & mask;
+            if (forX instanceof ShiftNode) {
+                ShiftNode<?> other = (ShiftNode<?>) forX;
+                if (other.getY().isConstant()) {
+                    int otherAmount = other.getY().asJavaConstant().asInt() & mask;
                     if (other instanceof UnsignedRightShiftNode) {
                         int total = amount + otherAmount;
                         if (total != (total & mask)) {
-                            return ConstantNode.forIntegerKind(kind(), 0, graph());
+                            return ConstantNode.forIntegerKind(getStackKind(), 0);
                         }
-                        return graph().unique(new UnsignedRightShiftNode(kind(), other.x(), ConstantNode.forInt(total, graph())));
+                        return new UnsignedRightShiftNode(other.getX(), ConstantNode.forInt(total));
                     } else if (other instanceof LeftShiftNode && otherAmount == amount) {
-                        if (kind() == Kind.Long) {
-                            return graph().unique(new AndNode(kind(), other.x(), ConstantNode.forLong(-1L >>> amount, graph())));
+                        if (getStackKind() == Kind.Long) {
+                            return new AndNode(other.getX(), ConstantNode.forLong(-1L >>> amount));
                         } else {
-                            assert kind() == Kind.Int;
-                            return graph().unique(new AndNode(kind(), other.x(), ConstantNode.forInt(-1 >>> amount, graph())));
+                            assert getStackKind() == Kind.Int;
+                            return new AndNode(other.getX(), ConstantNode.forInt(-1 >>> amount));
                         }
                     }
                 }
             }
             if (originalAmout != amount) {
-                return graph().unique(new UnsignedRightShiftNode(kind(), x(), ConstantNode.forInt(amount, graph())));
+                return new UnsignedRightShiftNode(forX, ConstantNode.forInt(amount));
             }
         }
         return this;
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
-        gen.setResult(this, gen.emitUShr(gen.operand(x()), gen.operand(y())));
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
+        nodeValueMap.setResult(this, gen.emitUShr(nodeValueMap.operand(getX()), nodeValueMap.operand(getY())));
+    }
+
+    @Override
+    public boolean isNarrowable(int resultBits) {
+        if (super.isNarrowable(resultBits)) {
+            /*
+             * For unsigned right shifts, the narrow can be done before the shift if the cut off
+             * bits are all zero.
+             */
+            IntegerStamp inputStamp = (IntegerStamp) getX().stamp();
+            return (inputStamp.upMask() & ~(resultBits - 1)) == 0;
+        } else {
+            return false;
+        }
     }
 }

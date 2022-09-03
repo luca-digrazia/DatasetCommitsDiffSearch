@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,15 +24,16 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.Verbosity;
+import jdk.internal.jvmci.meta.*;
 
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.memory.*;
 
 public class ValueNodeUtil {
 
     public static ValueNode assertKind(Kind kind, ValueNode x) {
-        assert x != null && ((x.kind() == kind) || (x.kind() == Kind.Jsr && kind == Kind.Object)) : "kind=" + kind + ", value=" + x + ((x == null) ? "" : ", value.kind=" + x.kind());
+        assert x != null && x.getStackKind() == kind : "kind=" + kind + ", value=" + x + ((x == null) ? "" : ", value.kind=" + x.getStackKind());
         return x;
     }
 
@@ -45,43 +46,33 @@ public class ValueNodeUtil {
     }
 
     public static ValueNode assertLong(ValueNode x) {
-        assert x != null && (x.kind() == Kind.Long);
-        return x;
-    }
-
-    public static ValueNode assertJsr(ValueNode x) {
-        assert x != null && (x.kind() == Kind.Jsr);
+        assert x != null && (x.getStackKind() == Kind.Long);
         return x;
     }
 
     public static ValueNode assertInt(ValueNode x) {
-        assert x != null && (x.kind() == Kind.Int);
+        assert x != null && (x.getStackKind() == Kind.Int);
         return x;
     }
 
     public static ValueNode assertFloat(ValueNode x) {
-        assert x != null && (x.kind() == Kind.Float);
+        assert x != null && (x.getStackKind() == Kind.Float);
         return x;
     }
 
     public static ValueNode assertObject(ValueNode x) {
-        assert x != null && (x.kind() == Kind.Object);
+        assert x != null && (x.getStackKind() == Kind.Object);
         return x;
     }
 
     public static ValueNode assertDouble(ValueNode x) {
-        assert x != null && (x.kind() == Kind.Double);
+        assert x != null && (x.getStackKind() == Kind.Double);
         return x;
     }
 
     public static void assertHigh(ValueNode x) {
         assert x == null;
     }
-
-    public static boolean typeMismatch(ValueNode x, ValueNode y) {
-        return y == null || x == null || x.kind() != y.kind();
-    }
-
 
     @SuppressWarnings("unchecked")
     public static <T extends Node> Collection<T> filter(Iterable<Node> nodes, Class<T> clazz) {
@@ -95,14 +86,23 @@ public class ValueNodeUtil {
     }
 
     /**
-     * Converts a given instruction to a value string. The representation of an node as
-     * a value is formed by concatenating the {@linkplain com.oracle.graal.api.meta.Kind#typeChar character} denoting its
-     * {@linkplain ValueNode#kind kind} and its {@linkplain Node#id()}. For example, {@code "i13"}.
+     * Converts a given instruction to a value string. The representation of an node as a value is
+     * formed by concatenating the {@linkplain jdk.internal.jvmci.meta.Kind#getTypeChar character}
+     * denoting its {@linkplain ValueNode#getStackKind kind} and its id. For example, {@code "i13"}.
      *
-     * @param value the instruction to convert to a value string. If {@code value == null}, then "-" is returned.
+     * @param value the instruction to convert to a value string. If {@code value == null}, then "-"
+     *            is returned.
      * @return the instruction representation as a string
      */
     public static String valueString(ValueNode value) {
-        return (value == null) ? "-" : ("" + value.kind().typeChar + value.toString(Verbosity.Id));
+        return (value == null) ? "-" : ("" + value.getStackKind().getTypeChar() + value.toString(Verbosity.Id));
+    }
+
+    public static ValueNode asNode(MemoryNode node) {
+        if (node == null) {
+            return null;
+        } else {
+            return node.asNode();
+        }
     }
 }

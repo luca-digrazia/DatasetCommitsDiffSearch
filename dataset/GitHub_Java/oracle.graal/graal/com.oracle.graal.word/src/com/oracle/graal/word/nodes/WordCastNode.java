@@ -22,31 +22,15 @@
  */
 package com.oracle.graal.word.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.LIRKind;
-import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.Word.Opcode;
-
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
 
 /**
  * Casts between Word and Object exposed by the {@link Opcode#FROM_ADDRESS},
@@ -54,7 +38,7 @@ import jdk.vm.ci.meta.ValueKind;
  * operations. It has an impact on the pointer maps for the GC, so it must not be scheduled or
  * optimized away.
  */
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+@NodeInfo
 public final class WordCastNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable {
 
     public static final NodeClass<WordCastNode> TYPE = NodeClass.create(WordCastNode.class);
@@ -62,22 +46,22 @@ public final class WordCastNode extends FixedWithNextNode implements LIRLowerabl
     @Input ValueNode input;
     public final boolean trackedPointer;
 
-    public static WordCastNode wordToObject(ValueNode input, JavaKind wordKind) {
+    public static WordCastNode wordToObject(ValueNode input, Kind wordKind) {
         assert input.getStackKind() == wordKind;
         return new WordCastNode(StampFactory.object(), input);
     }
 
-    public static WordCastNode addressToWord(ValueNode input, JavaKind wordKind) {
+    public static WordCastNode addressToWord(ValueNode input, Kind wordKind) {
         assert input.stamp() instanceof AbstractPointerStamp;
         return new WordCastNode(StampFactory.forKind(wordKind), input);
     }
 
-    public static WordCastNode objectToTrackedPointer(ValueNode input, JavaKind wordKind) {
+    public static WordCastNode objectToTrackedPointer(ValueNode input, Kind wordKind) {
         assert input.stamp() instanceof ObjectStamp;
         return new WordCastNode(StampFactory.forKind(wordKind), input, true);
     }
 
-    public static WordCastNode objectToUntrackedPointer(ValueNode input, JavaKind wordKind) {
+    public static WordCastNode objectToUntrackedPointer(ValueNode input, Kind wordKind) {
         assert input.stamp() instanceof ObjectStamp;
         return new WordCastNode(StampFactory.forKind(wordKind), input, false);
     }
@@ -108,7 +92,7 @@ public final class WordCastNode extends FixedWithNextNode implements LIRLowerabl
             /* Null pointers are uncritical for GC, so they can be constant folded. */
             if (input.asJavaConstant().isNull()) {
                 return ConstantNode.forIntegerStamp(stamp(), 0);
-            } else if (input.asJavaConstant().getJavaKind().isNumericInteger() && input.asJavaConstant().asLong() == 0) {
+            } else if (input.asJavaConstant().getKind().isNumericInteger() && input.asJavaConstant().asLong() == 0) {
                 return ConstantNode.forConstant(stamp(), JavaConstant.NULL_POINTER, tool.getMetaAccess());
             }
         }
@@ -119,15 +103,15 @@ public final class WordCastNode extends FixedWithNextNode implements LIRLowerabl
     @Override
     public void generate(NodeLIRBuilderTool generator) {
         Value value = generator.operand(input);
-        ValueKind<?> kind = generator.getLIRGeneratorTool().getLIRKind(stamp());
-        assert kind.getPlatformKind().getSizeInBytes() == value.getPlatformKind().getSizeInBytes();
+        LIRKind kind = generator.getLIRGeneratorTool().getLIRKind(stamp());
+        assert generator.getLIRGeneratorTool().target().getSizeInBytes(kind.getPlatformKind()) == generator.getLIRGeneratorTool().target().getSizeInBytes(value.getPlatformKind());
 
-        if (trackedPointer && LIRKind.isValue(kind) && !LIRKind.isValue(value)) {
+        if (trackedPointer && kind.isValue() && !value.getLIRKind().isValue()) {
             // just change the PlatformKind, but don't drop reference information
-            kind = value.getValueKind().changeType(kind.getPlatformKind());
+            kind = value.getLIRKind().changeType(kind.getPlatformKind());
         }
 
-        if (kind.equals(value.getValueKind())) {
+        if (kind.equals(value.getLIRKind())) {
             generator.setResult(this, value);
         } else {
             AllocatableValue result = generator.getLIRGeneratorTool().newVariable(kind);

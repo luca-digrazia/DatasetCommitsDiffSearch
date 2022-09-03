@@ -24,28 +24,16 @@ package com.oracle.graal.nodes;
 
 //JaCoCo Exclude
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.extended.UnsafeLoadNode;
-import com.oracle.graal.nodes.java.LoadFieldNode;
-import com.oracle.graal.nodes.java.LoadIndexedNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.nodes.spi.ValueProxy;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * A node that changes the type of its input, usually narrowing it. For example, a {@link PiNode}
@@ -88,7 +76,7 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
 
     @Override
     public void generate(NodeLIRBuilderTool generator) {
-        if (object.getStackKind() != JavaKind.Void && object.getStackKind() != JavaKind.Illegal) {
+        if (object.getStackKind() != Kind.Void && object.getStackKind() != Kind.Illegal) {
             generator.setResult(this, generator.operand(object));
         }
     }
@@ -119,42 +107,19 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
             return this;
         }
         inferStamp();
-        ValueNode o = object();
-
-        // The pi node does not give any additional information => skip it.
-        if (stamp().equals(o.stamp())) {
-            return o;
+        if (stamp().equals(object().stamp())) {
+            return object();
         }
-
-        GuardingNode g = getGuard();
-        if (g == null) {
-            // Try to merge the pi node with a load node.
-            if (o instanceof LoadFieldNode) {
-                LoadFieldNode loadFieldNode = (LoadFieldNode) o;
-                loadFieldNode.setStamp(loadFieldNode.stamp().improveWith(this.stamp()));
-                return loadFieldNode;
-            } else if (o instanceof UnsafeLoadNode) {
-                UnsafeLoadNode unsafeLoadNode = (UnsafeLoadNode) o;
-                unsafeLoadNode.setStamp(unsafeLoadNode.stamp().improveWith(this.stamp()));
-                return unsafeLoadNode;
-            } else if (o instanceof LoadIndexedNode) {
-                LoadIndexedNode loadIndexedNode = (LoadIndexedNode) o;
-                loadIndexedNode.setStamp(loadIndexedNode.stamp().improveWith(this.stamp()));
-                return loadIndexedNode;
-            }
-        } else {
-            for (Node n : g.asNode().usages()) {
-                if (n instanceof PiNode) {
-                    PiNode otherPi = (PiNode) n;
-                    if (o == otherPi.object() && stamp().equals(otherPi.stamp())) {
-                        /*
-                         * Two PiNodes with the same guard and same result, so return the one with
-                         * the more precise piStamp.
-                         */
-                        Stamp newStamp = piStamp.join(otherPi.piStamp);
-                        if (newStamp.equals(otherPi.piStamp)) {
-                            return otherPi;
-                        }
+        if (getGuard() != null) {
+            for (PiNode otherPi : getGuard().asNode().usages().filter(PiNode.class)) {
+                if (object() == otherPi.object() && stamp().equals(otherPi.stamp())) {
+                    /*
+                     * Two PiNodes with the same guard and same result, so return the one with the
+                     * more precise piStamp.
+                     */
+                    Stamp newStamp = piStamp.join(otherPi.piStamp);
+                    if (newStamp.equals(otherPi.piStamp)) {
+                        return otherPi;
                     }
                 }
             }

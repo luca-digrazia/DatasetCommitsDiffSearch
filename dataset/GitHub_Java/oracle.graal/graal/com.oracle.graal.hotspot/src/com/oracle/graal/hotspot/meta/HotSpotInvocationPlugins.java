@@ -22,24 +22,18 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import java.lang.reflect.Type;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.hotspot.phases.AheadOfTimeVerificationPhase;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.replacements.nodes.MacroNode;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.hotspot.phases.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.replacements.StandardGraphBuilderPlugins.BoxPlugin;
+import com.oracle.graal.replacements.nodes.*;
 
 /**
  * Extension of {@link InvocationPlugins} that disables plugins based on runtime configuration.
@@ -53,13 +47,20 @@ final class HotSpotInvocationPlugins extends InvocationPlugins {
     }
 
     @Override
-    public void register(InvocationPlugin plugin, Type declaringClass, String name, Type... argumentTypes) {
+    public void register(InvocationPlugin plugin, Class<?> declaringClass, String name, Class<?>... argumentTypes) {
         if (!config.usePopCountInstruction) {
             if (name.equals("bitCount")) {
                 assert declaringClass.equals(Integer.class) || declaringClass.equals(Long.class);
                 return;
             }
         }
+        if (config.useHeapProfiler) {
+            if (plugin instanceof BoxPlugin) {
+                // The heap profiler wants to see all allocations related to boxing
+                return;
+            }
+        }
+
         super.register(plugin, declaringClass, name, argumentTypes);
     }
 
@@ -77,7 +78,7 @@ final class HotSpotInvocationPlugins extends InvocationPlugins {
             for (Node node : newNodes) {
                 if (node.hasUsages() && node instanceof ConstantNode) {
                     ConstantNode c = (ConstantNode) node;
-                    if (c.getStackKind() == JavaKind.Object && AheadOfTimeVerificationPhase.isIllegalObjectConstant(c)) {
+                    if (c.getStackKind() == Kind.Object && AheadOfTimeVerificationPhase.isIllegalObjectConstant(c)) {
                         if (isClass(c)) {
                             // This will be handled later by LoadJavaMirrorWithKlassPhase
                         } else {

@@ -590,7 +590,7 @@ public class InliningUtil {
                 }
             }
         }
-        return nonReplaceableFrameState;
+        return null;
     }
 
     public static ValueNode mergeReturns(AbstractMergeNode merge, List<? extends ReturnNode> returnNodes, List<Node> canonicalizedNodes) {

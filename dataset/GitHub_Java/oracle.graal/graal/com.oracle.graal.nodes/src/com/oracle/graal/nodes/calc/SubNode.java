@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,12 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
+import jdk.internal.jvmci.meta.*;
+
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Sub;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -32,14 +36,27 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "-")
-public class SubNode extends BinaryArithmeticNode implements NarrowableArithmeticNode {
+public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArithmeticNode {
 
-    public static SubNode create(ValueNode x, ValueNode y) {
-        return USE_GENERATED_NODES ? new SubNodeGen(x, y) : new SubNode(x, y);
+    public static final NodeClass<SubNode> TYPE = NodeClass.create(SubNode.class);
+
+    public SubNode(ValueNode x, ValueNode y) {
+        this(TYPE, x, y);
     }
 
-    protected SubNode(ValueNode x, ValueNode y) {
-        super(ArithmeticOpTable.forStamp(x.stamp()).getSub(), x, y);
+    protected SubNode(NodeClass<? extends SubNode> c, ValueNode x, ValueNode y) {
+        super(c, ArithmeticOpTable::getSub, x, y);
+    }
+
+    public static ValueNode create(ValueNode x, ValueNode y) {
+        BinaryOp<Sub> op = ArithmeticOpTable.forStamp(x.stamp()).getSub();
+        Stamp stamp = op.foldStamp(x.stamp(), y.stamp());
+        ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp);
+        if (tryConstantFold != null) {
+            return tryConstantFold;
+        } else {
+            return new SubNode(x, y);
+        }
     }
 
     @SuppressWarnings("hiding")
@@ -50,13 +67,14 @@ public class SubNode extends BinaryArithmeticNode implements NarrowableArithmeti
             return ret;
         }
 
+        BinaryOp<Sub> op = getOp(forX, forY);
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
-            Constant zero = getOp().getZero(forX.stamp());
+            Constant zero = op.getZero(forX.stamp());
             if (zero != null) {
                 return ConstantNode.forPrimitive(stamp(), zero);
             }
         }
-        boolean associative = getOp().isAssociative();
+        boolean associative = op.isAssociative();
         if (associative) {
             if (forX instanceof AddNode) {
                 AddNode x = (AddNode) forX;
@@ -72,18 +90,18 @@ public class SubNode extends BinaryArithmeticNode implements NarrowableArithmeti
                 SubNode x = (SubNode) forX;
                 if (x.getX() == forY) {
                     // (a - b) - a
-                    return NegateNode.create(x.getY());
+                    return new NegateNode(x.getY());
                 }
             }
             if (forY instanceof AddNode) {
                 AddNode y = (AddNode) forY;
                 if (y.getX() == forX) {
                     // a - (a + b)
-                    return NegateNode.create(y.getY());
+                    return new NegateNode(y.getY());
                 }
                 if (y.getY() == forX) {
                     // b - (a + b)
-                    return NegateNode.create(y.getX());
+                    return new NegateNode(y.getX());
                 }
             } else if (forY instanceof SubNode) {
                 SubNode y = (SubNode) forY;
@@ -95,7 +113,7 @@ public class SubNode extends BinaryArithmeticNode implements NarrowableArithmeti
         }
         if (forY.isConstant()) {
             Constant c = forY.asConstant();
-            if (getOp().isNeutral(c)) {
+            if (op.isNeutral(c)) {
                 return forX;
             }
             if (associative) {
@@ -104,9 +122,9 @@ public class SubNode extends BinaryArithmeticNode implements NarrowableArithmeti
                     return reassociated;
                 }
             }
-            if (c.getKind().isNumericInteger()) {
-                long i = c.asLong();
-                if (i < 0 || ((IntegerStamp) StampFactory.forKind(forY.getKind())).contains(-i)) {
+            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getKind().isNumericInteger()) {
+                long i = ((PrimitiveConstant) c).asLong();
+                if (i < 0 || ((IntegerStamp) StampFactory.forKind(forY.getStackKind())).contains(-i)) {
                     // Adding a negative is more friendly to the backend since adds are
                     // commutative, so prefer add when it fits.
                     return BinaryArithmeticNode.add(forX, ConstantNode.forIntegerStamp(stamp(), -i));
@@ -120,7 +138,7 @@ public class SubNode extends BinaryArithmeticNode implements NarrowableArithmeti
                  * have to test for the neutral element of +, because we are doing this
                  * transformation: 0 - x == (-x) + 0 == -x.
                  */
-                return NegateNode.create(forY);
+                return new NegateNode(forY);
             }
             if (associative) {
                 return reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
@@ -133,7 +151,7 @@ public class SubNode extends BinaryArithmeticNode implements NarrowableArithmeti
     }
 
     @Override
-    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitSub(builder.operand(getX()), builder.operand(getY())));
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
+        nodeValueMap.setResult(this, gen.emitSub(nodeValueMap.operand(getX()), nodeValueMap.operand(getY()), false));
     }
 }
