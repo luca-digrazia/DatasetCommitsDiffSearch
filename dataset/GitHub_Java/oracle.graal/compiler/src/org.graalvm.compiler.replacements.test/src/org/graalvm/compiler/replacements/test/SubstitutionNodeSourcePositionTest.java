@@ -25,7 +25,6 @@
 package org.graalvm.compiler.replacements.test;
 
 import static org.graalvm.compiler.core.GraalCompiler.compileGraph;
-import static org.graalvm.compiler.core.common.GraalOptions.TrackNodeSourcePosition;
 
 import java.util.List;
 
@@ -40,7 +39,6 @@ import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.debug.BlackholeNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.replacements.classfile.ClassfileBytecodeProvider;
 import org.junit.Assert;
@@ -141,7 +139,6 @@ public class SubstitutionNodeSourcePositionTest extends ReplacementsTest {
         List<SourceMapping> mappings = getSourceMappings(snippetMethod);
         ResolvedJavaType resolvedJavaType = getMetaAccess().lookupJavaType(boundaryClass);
         boolean found = false;
-        Assert.assertTrue("must have mappings", !mappings.isEmpty());
         for (SourceMapping mapping : mappings) {
             NodeSourcePosition callee = null;
             for (NodeSourcePosition pos = mapping.getSourcePosition(); pos != null; pos = pos.getCaller()) {
@@ -164,8 +161,7 @@ public class SubstitutionNodeSourcePositionTest extends ReplacementsTest {
 
     private List<SourceMapping> getSourceMappings(String name) {
         final ResolvedJavaMethod method = getResolvedJavaMethod(name);
-        final OptionValues options = new OptionValues(getInitialOptions(), TrackNodeSourcePosition, true);
-        final StructuredGraph graph = parseEager(method, StructuredGraph.AllowAssumptions.YES, options);
+        final StructuredGraph graph = parseEager(method, StructuredGraph.AllowAssumptions.YES);
         final CompilationResult cr = compileGraph(graph, graph.method(), getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, graph.getProfilingInfo(),
                         createSuites(graph.getOptions()), createLIRSuites(graph.getOptions()), new CompilationResult(graph.compilationId()), CompilationResultBuilderFactory.Default, true);
         return cr.getSourceMappings();
