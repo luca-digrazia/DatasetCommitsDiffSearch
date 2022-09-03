@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -47,34 +45,30 @@ public final class DynamicPiNode extends PiNode {
     public static final NodeClass<DynamicPiNode> TYPE = NodeClass.create(DynamicPiNode.class);
     @Input ValueNode typeMirror;
     private final boolean exact;
-    private final boolean allowsNull;
 
-    protected DynamicPiNode(ValueNode object, GuardingNode guard, ValueNode typeMirror, boolean allowsNull, boolean exact) {
+    protected DynamicPiNode(ValueNode object, GuardingNode guard, ValueNode typeMirror, boolean exact) {
         super(TYPE, object, StampFactory.object(), guard);
         this.typeMirror = typeMirror;
         this.exact = exact;
-        this.allowsNull = allowsNull;
     }
 
-    public static ValueNode create(Assumptions assumptions, ConstantReflectionProvider constantReflection, ValueNode object, GuardingNode guard, ValueNode typeMirror, boolean allowsNull,
-                    boolean exact) {
-        ValueNode synonym = findSynonym(assumptions, constantReflection, object, guard, typeMirror, allowsNull, exact);
+    public static ValueNode create(Assumptions assumptions, ConstantReflectionProvider constantReflection, ValueNode object, GuardingNode guard, ValueNode typeMirror, boolean exact) {
+        ValueNode synonym = findSynonym(assumptions, constantReflection, object, guard, typeMirror, exact);
         if (synonym != null) {
             return synonym;
         }
-        return new DynamicPiNode(object, guard, typeMirror, allowsNull, exact);
+        return new DynamicPiNode(object, guard, typeMirror, exact);
     }
 
     public static ValueNode create(Assumptions assumptions, ConstantReflectionProvider constantReflection, ValueNode object, GuardingNode guard, ValueNode typeMirror) {
-        return create(assumptions, constantReflection, object, guard, typeMirror, true, false);
+        return create(assumptions, constantReflection, object, guard, typeMirror, false);
     }
 
     public boolean isExact() {
         return exact;
     }
 
-    private static ValueNode findSynonym(Assumptions assumptions, ConstantReflectionProvider constantReflection, ValueNode object, GuardingNode guard, ValueNode typeMirror, boolean allowsNull,
-                    boolean exact) {
+    private static ValueNode findSynonym(Assumptions assumptions, ConstantReflectionProvider constantReflection, ValueNode object, GuardingNode guard, ValueNode typeMirror, boolean exact) {
         if (typeMirror.isConstant()) {
             ResolvedJavaType t = constantReflection.asJavaType(typeMirror.asConstant());
             if (t != null) {
@@ -83,12 +77,9 @@ public final class DynamicPiNode extends PiNode {
                     staticPiStamp = StampFactory.alwaysNull();
                 } else {
                     TypeReference type = exact ? TypeReference.createExactTrusted(t) : TypeReference.createTrusted(assumptions, t);
-                    if (allowsNull) {
-                        staticPiStamp = StampFactory.object(type);
-                    } else {
-                        staticPiStamp = StampFactory.objectNonNull(type);
-                    }
+                    staticPiStamp = StampFactory.object(type);
                 }
+
                 return PiNode.create(object, staticPiStamp, (ValueNode) guard);
             }
         }
@@ -98,7 +89,7 @@ public final class DynamicPiNode extends PiNode {
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        ValueNode synonym = findSynonym(tool.getAssumptions(), tool.getConstantReflection(), object, guard, typeMirror, allowsNull, exact);
+        ValueNode synonym = findSynonym(tool.getAssumptions(), tool.getConstantReflection(), object, guard, typeMirror, exact);
         if (synonym != null) {
             return synonym;
         }
