@@ -68,7 +68,7 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
         }
 
         @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected LLVMI1Vector doI1VectorDerefHandle(LLVMAddress addr,
+        protected LLVMI1Vector doI32DerefHandle(LLVMAddress addr,
                         @Cached("createForeignReads()") LLVMForeignReadNode[] foreignReads) {
             return doForeign(getDerefHandleGetReceiverNode().execute(addr), foreignReads);
         }
@@ -110,15 +110,10 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
             return memory.getI8Vector(globalAccess.executeWithTarget(addr), getSize());
         }
 
-        @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMI8Vector doI8Vector(LLVMAddress addr) {
-            return getLLVMMemoryCached().getI8Vector(addr, getSize());
-        }
-
-        @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected LLVMI8Vector doI8VectorDerefHandle(LLVMAddress addr,
-                        @Cached("createForeignReads()") LLVMForeignReadNode[] foreignReads) {
-            return doForeign(getDerefHandleGetReceiverNode().execute(addr), foreignReads);
+        @Specialization
+        protected LLVMI8Vector doI8Vector(LLVMAddress addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getI8Vector(addr, getSize());
         }
 
         @Specialization(guards = "addr.isNative()")
@@ -153,15 +148,10 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
             return memory.getI16Vector(globalAccess.executeWithTarget(addr), getSize());
         }
 
-        @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMI16Vector doI16Vector(LLVMAddress addr) {
-            return getLLVMMemoryCached().getI16Vector(addr, getSize());
-        }
-
-        @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected LLVMI16Vector doI16VectorDerefHandle(LLVMAddress addr,
-                        @Cached("createForeignReads()") LLVMForeignReadNode[] foreignReads) {
-            return doForeign(getDerefHandleGetReceiverNode().execute(addr), foreignReads);
+        @Specialization
+        protected LLVMI16Vector doI16Vector(LLVMAddress addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getI16Vector(addr, getSize());
         }
 
         @Specialization(guards = "addr.isNative()")
@@ -196,15 +186,10 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
             return memory.getI32Vector(globalAccess.executeWithTarget(addr), getSize());
         }
 
-        @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMI32Vector doI32Vector(LLVMAddress addr) {
-            return getLLVMMemoryCached().getI32Vector(addr, getSize());
-        }
-
-        @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected LLVMI32Vector doI32VectorDerefHandle(LLVMAddress addr,
-                        @Cached("createForeignReads()") LLVMForeignReadNode[] foreignReads) {
-            return doForeign(getDerefHandleGetReceiverNode().execute(addr), foreignReads);
+        @Specialization
+        protected LLVMI32Vector doI32Vector(LLVMAddress addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getI32Vector(addr, getSize());
         }
 
         @Specialization(guards = "addr.isNative()")
@@ -239,15 +224,10 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
             return memory.getI64Vector(globalAccess.executeWithTarget(addr), getSize());
         }
 
-        @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMI64Vector doI64Vector(LLVMAddress addr) {
-            return getLLVMMemoryCached().getI64Vector(addr, getSize());
-        }
-
-        @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected LLVMI64Vector doI64VectorDerefHandle(LLVMAddress addr,
-                        @Cached("createForeignReads()") LLVMForeignReadNode[] foreignReads) {
-            return doForeign(getDerefHandleGetReceiverNode().execute(addr), foreignReads);
+        @Specialization
+        protected LLVMI64Vector doI64Vector(LLVMAddress addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getI64Vector(addr, getSize());
         }
 
         @Specialization(guards = "addr.isNative()")
@@ -282,15 +262,10 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
             return memory.getFloatVector(globalAccess.executeWithTarget(addr), getSize());
         }
 
-        @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMFloatVector doFloatVector(LLVMAddress addr) {
-            return getLLVMMemoryCached().getFloatVector(addr, getSize());
-        }
-
-        @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected LLVMFloatVector doFloatVectorDerefHandle(LLVMAddress addr,
-                        @Cached("createForeignReads()") LLVMForeignReadNode[] foreignReads) {
-            return doForeign(getDerefHandleGetReceiverNode().execute(addr), foreignReads);
+        @Specialization
+        protected LLVMFloatVector doFloatVector(LLVMAddress addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getFloatVector(addr, getSize());
         }
 
         @Specialization(guards = "addr.isNative()")
@@ -325,15 +300,10 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
             return memory.getDoubleVector(globalAccess.executeWithTarget(addr), getSize());
         }
 
-        @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMDoubleVector doDoubleVector(LLVMAddress addr) {
-            return getLLVMMemoryCached().getDoubleVector(addr, getSize());
-        }
-
-        @Specialization(guards = "isAutoDerefHandle(addr)")
+        @Specialization
         protected LLVMDoubleVector doDoubleVector(LLVMAddress addr,
-                        @Cached("createForeignReads()") LLVMForeignReadNode[] foreignReads) {
-            return doForeign(getDerefHandleGetReceiverNode().execute(addr), foreignReads);
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getDoubleVector(addr, getSize());
         }
 
         @Specialization(guards = "addr.isNative()")
@@ -368,15 +338,10 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
             return memory.getAddressVector(globalAccess.executeWithTarget(addr), getSize());
         }
 
-        @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMAddressVector doAddressVector(LLVMAddress addr) {
-            return getLLVMMemoryCached().getAddressVector(addr, getSize());
-        }
-
-        @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected Object doAddressVectorDerefHandle(LLVMAddress addr,
-                        @Cached("createForeignReads()") LLVMForeignReadNode[] foreignReads) {
-            return doForeign(getDerefHandleGetReceiverNode().execute(addr), foreignReads);
+        @Specialization
+        protected LLVMAddressVector doAddressVector(LLVMAddress addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getAddressVector(addr, getSize());
         }
 
         @Specialization(guards = "addr.isNative()")
