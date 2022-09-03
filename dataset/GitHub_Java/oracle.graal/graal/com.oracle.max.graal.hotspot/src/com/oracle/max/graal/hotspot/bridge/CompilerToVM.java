@@ -111,7 +111,5 @@ public interface CompilerToVM {
 
     Object executeCompiledMethod(HotSpotCompiledMethod method, Object arg1, Object arg2, Object arg3);
 
-    int RiMethod_vtableEntryOffset(HotSpotMethodResolved method);
-
     // Checkstyle: resume
 }

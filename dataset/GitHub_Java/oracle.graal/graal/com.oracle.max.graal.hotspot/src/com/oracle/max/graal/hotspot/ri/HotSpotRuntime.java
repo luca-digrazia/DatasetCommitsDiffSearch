@@ -361,7 +361,7 @@ public class HotSpotRuntime implements GraalRuntime {
                 LocalNode receiver = graph.unique(new LocalNode(CiKind.Object, 0));
                 SafeReadNode klassOop = safeRead(graph, CiKind.Object, receiver, config.klassOopOffset);
                 graph.start().setNext(klassOop);
-                // TODO (thomaswue): Care about primitive classes! Crashes for primitive classes at the moment (klassOop == null)
+                // TODO(tw): Care about primitive classes! Crashes for primitive classes at the moment (klassOop == null)
                 ReadNode result = graph.add(new ReadNode(CiKind.Int, klassOop, LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Int, config.klassModifierFlagsOffset, graph)));
                 ReturnNode ret = graph.add(new ReturnNode(result));
                 klassOop.setNext(ret);
@@ -437,7 +437,7 @@ public class HotSpotRuntime implements GraalRuntime {
 
     private CiTargetMethod createCallbackStub(RiResolvedMethod method, CiGenericCallback callback) {
         StructuredGraph graph = new StructuredGraph();
-        FrameStateBuilder frameState = new FrameStateBuilder(method, graph, false);
+        FrameStateBuilder frameState = new FrameStateBuilder(method, method.maxLocals(), method.maxStackSize(), graph, false);
         ValueNode local0 = frameState.loadLocal(0);
 
         FrameState initialFrameState = frameState.create(0);
