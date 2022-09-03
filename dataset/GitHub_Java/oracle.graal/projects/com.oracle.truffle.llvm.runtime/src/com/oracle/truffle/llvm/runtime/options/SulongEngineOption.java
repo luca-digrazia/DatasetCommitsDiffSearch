@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,36 +29,124 @@
  */
 package com.oracle.truffle.llvm.runtime.options;
 
-import com.oracle.truffle.llvm.option.Constants;
-import com.oracle.truffle.llvm.option.Option;
-import com.oracle.truffle.llvm.option.OptionCategory;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
-@OptionCategory(name = "Base Options")
-abstract class SulongEngineOption {
+import org.graalvm.options.OptionCategory;
+import org.graalvm.options.OptionDescriptor;
+import org.graalvm.options.OptionKey;
 
-    @Option(commandLineName = "LLVM", help = "Version of the used LLVM File Format 3.2/3.8.", name = "llvmVersion") //
-    protected static final String LLVM_VERSION = "3.2";
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.TruffleLanguage;
 
-    @Option(commandLineName = "NodeConfiguration", help = "The node configuration (node factory) to be used in Sulong.", name = "nodeConfiguration") //
-    protected static final String NODE_CONFIGURATION = "default";
+public final class SulongEngineOption {
 
-    @Option(commandLineName = "StackSizeKB", help = "The stack size in KB.", name = "stackSize") //
-    protected static final Integer STACK_SIZE_KB = 81920;
+    public static final String OPTION_ARRAY_SEPARATOR = ":";
 
-    @Option(commandLineName = "DynamicNativeLibraryPath", help = "The native library search paths delimited by " +
-                    Constants.OPTION_ARRAY_SEPARATOR + " .", name = "dynamicNativeLibraryPath") //
-    protected static final String[] DYN_LIBRARY_PATHS = new String[0];
+    public static final OptionKey<String> CONFIGURATION = new OptionKey<>("basic");
+    public static final String CONFIGURATION_NAME = "llvm.configuration";
+    public static final String CONFIGURATION_INFO = "Sulongs configuration (default=basic).";
 
-    @Option(commandLineName = "DynamicBitcodeLibraries", help = "The paths to shared bitcode libraries delimited by " +
-                    Constants.OPTION_ARRAY_SEPARATOR + " .", name = "dynamicBitcodeLibraries") //
-    protected static final String[] DYN_BITCODE_LIBRARIES = new String[0];
+    public static final OptionKey<Integer> STACK_SIZE_KB = new OptionKey<>(81920);
+    public static final String STACK_SIZE_KB_NAME = "llvm.stackSizeKB";
+    public static final String STACK_SIZE_KB_INFO = "The stack size in KB.";
 
-    @Option(commandLineName = "ProjectRoot", help = "Overrides the root of the project. This option exists to set the project root from mx.", name = "projectRoot") //
-    protected static final String PROJECT_ROOT = "./projects";
+    public static final OptionKey<String> LIBRARY_PATH = new OptionKey<>("");
+    public static final String LIBRARY_PATH_NAME = "llvm.libraryPath";
+    public static final String LIBRARY_PATH_INFO = "A list of paths where Sulong will search for relative libraries. Paths are delimited by " + OPTION_ARRAY_SEPARATOR + " .";
 
-    @Option(commandLineName = "ExecutionCount", help = "Execute each program for as many times as specified by this option.", name = "executionCount") //
-    protected static final Integer EXECUTION_COUNT = 1;
+    public static final OptionKey<String> LIBRARIES = new OptionKey<>("");
+    public static final String LIBRARIES_NAME = "llvm.libraries";
+    public static final String LIBRARIES_INFO = "List of libraries (precompiled libraires *.dylib/*.so as well as bitcode libraries *.bc). Files with a relative path will be looked up relative to llvm.libraryPath. Libraries are delimited by " +
+                    OPTION_ARRAY_SEPARATOR + " .";
 
-    @Option(commandLineName = "TracePerformanceWarnings", help = "Reports all LLVMPerformance.warn() invokations in compiled code.", name = "tracePerformanceWarnings") //
-    protected static final Boolean PERFORMANCE_WARNINGS = false;
+    public static final OptionKey<Boolean> ENABLE_NFI = new OptionKey<>(true);
+    public static final String ENABLE_NFI_NAME = "llvm.enableExternalNativeAccess";
+    public static final String ENABLE_NFI_INFO = "Enable Sulongs native interface.";
+
+    public static final OptionKey<String> DEBUG = new OptionKey<>(String.valueOf(false));
+    public static final String DEBUG_NAME = "llvm.debug";
+    public static final String DEBUG_INFO = "Turns debugging on/off. Can be \'true\', \'false\', \'stdout\', \'stderr\' or a filepath.";
+
+    public static final OptionKey<String> DEBUG_SYSCALLS = new OptionKey<>(String.valueOf(false));
+    public static final String DEBUG_SYSCALLS_NAME = "llvm.debugSysCalls";
+    public static final String DEBUG_SYSCALLS_INFO = "Turns syscall debugging on/off. Can be \'true\', \'false\', \'stdout\', \'stderr\' or a filepath.";
+
+    public static final OptionKey<String> NATIVE_CALL_STATS = new OptionKey<>(String.valueOf(false));
+    public static final String NATIVE_CALL_STATS_NAME = "llvm.printNativeCallStats";
+    public static final String NATIVE_CALL_STATS_INFO = "Outputs stats about native call site frequencies. Can be \'true\', \'false\', \'stdout\', \'stderr\' or a filepath.";
+
+    public static final OptionKey<String> PRINT_LIFE_TIME_ANALYSIS_STATS = new OptionKey<>(String.valueOf(false));
+    public static final String PRINT_LIFE_TIME_ANALYSIS_STATS_NAME = "llvm.printLifetimeAnalysisStats";
+    public static final String PRINT_LIFE_TIME_ANALYSIS_STATS_INFO = "Prints the results of the lifetime analysis. Can be \'true\', \'false\', \'stdout\', \'stderr\' or a filepath.";
+
+    public static final OptionKey<Boolean> PARSE_ONLY = new OptionKey<>(false);
+    public static final String PARSE_ONLY_NAME = "llvm.parseOnly";
+    public static final String PARSE_ONLY_INFO = "Only parses a bc file; execution is not possible.";
+
+    public static final OptionKey<Boolean> ENABLE_LVI = new OptionKey<>(false);
+    public static final String ENABLE_LVI_NAME = "llvm.enableLVI";
+    public static final String ENABLE_LVI_INFO = "Enable source-level inspection of local variables.";
+
+    public static final OptionKey<Boolean> LAZY_PARSING = new OptionKey<>(true);
+    public static final String LAZY_PARSING_NAME = "llvm.lazyParsing";
+    public static final String LAZY_PARSING_INFO = "Enable lazy parsing of LLVM bitcode files.";
+
+    public static final OptionKey<Boolean> LL_DEBUG = new OptionKey<>(false);
+    public static final String LL_DEBUG_NAME = "llvm.llDebug";
+    public static final String LL_DEBUG_INFO = "Enable IR-level debugging of LLVM bitcode files.";
+
+    public static final OptionKey<String> LL_DEBUG_SOURCES = new OptionKey<>("");
+    public static final String LL_DEBUG_SOURCES_NAME = "llvm.llDebug.sources";
+    public static final String LL_DEBUG_SOURCES_INFO = "Provide the locations of *.ll files for debugging. The expected format is <bc-path>=<ll-path>{:<bc-path>=<ll-path>}.";
+
+    public static final OptionKey<Boolean> STACKTRACE_ON_ABORT = new OptionKey<>(false);
+    public static final String STACKTRACE_ON_ABORT_NAME = "llvm.printStackTraceOnAbort";
+    public static final String STACKTRACE_ON_ABORT_INFO = "Prints a C stack trace when abort() is called.";
+
+    public static List<OptionDescriptor> describeOptions() {
+        ArrayList<OptionDescriptor> options = new ArrayList<>();
+        options.add(OptionDescriptor.newBuilder(CONFIGURATION, CONFIGURATION_NAME).help(CONFIGURATION_INFO).category(OptionCategory.USER).build());
+        options.add(OptionDescriptor.newBuilder(STACK_SIZE_KB, STACK_SIZE_KB_NAME).help(STACK_SIZE_KB_INFO).category(OptionCategory.USER).build());
+        options.add(OptionDescriptor.newBuilder(LIBRARIES, LIBRARIES_NAME).help(LIBRARIES_INFO).category(OptionCategory.USER).build());
+        options.add(OptionDescriptor.newBuilder(LIBRARY_PATH, LIBRARY_PATH_NAME).help(LIBRARY_PATH_INFO).category(OptionCategory.USER).build());
+        options.add(OptionDescriptor.newBuilder(ENABLE_NFI, ENABLE_NFI_NAME).help(ENABLE_NFI_INFO).category(OptionCategory.USER).build());
+        options.add(OptionDescriptor.newBuilder(DEBUG_SYSCALLS, DEBUG_SYSCALLS_NAME).help(DEBUG_SYSCALLS_INFO).category(OptionCategory.USER).build());
+        options.add(OptionDescriptor.newBuilder(NATIVE_CALL_STATS, NATIVE_CALL_STATS_NAME).help(NATIVE_CALL_STATS_INFO).category(OptionCategory.USER).build());
+        options.add(OptionDescriptor.newBuilder(PRINT_LIFE_TIME_ANALYSIS_STATS, PRINT_LIFE_TIME_ANALYSIS_STATS_NAME).help(PRINT_LIFE_TIME_ANALYSIS_STATS_INFO).category(OptionCategory.USER).build());
+        options.add(OptionDescriptor.newBuilder(PARSE_ONLY, PARSE_ONLY_NAME).help(PARSE_ONLY_INFO).category(OptionCategory.EXPERT).build());
+        options.add(OptionDescriptor.newBuilder(ENABLE_LVI, ENABLE_LVI_NAME).help(ENABLE_LVI_INFO).category(OptionCategory.DEBUG).build());
+        options.add(OptionDescriptor.newBuilder(LAZY_PARSING, LAZY_PARSING_NAME).help(LAZY_PARSING_INFO).category(OptionCategory.EXPERT).build());
+        options.add(OptionDescriptor.newBuilder(LL_DEBUG, LL_DEBUG_NAME).help(LL_DEBUG_INFO).category(OptionCategory.DEBUG).build());
+        options.add(OptionDescriptor.newBuilder(LL_DEBUG_SOURCES, LL_DEBUG_SOURCES_NAME).help(LL_DEBUG_SOURCES_INFO).category(OptionCategory.DEBUG).build());
+        options.add(OptionDescriptor.newBuilder(STACKTRACE_ON_ABORT, STACKTRACE_ON_ABORT_NAME).help(STACKTRACE_ON_ABORT_INFO).category(OptionCategory.DEBUG).build());
+        return options;
+    }
+
+    public static PrintStream getStream(String name) {
+        if ("stderr".equals(name)) {
+            return System.err;
+        } else {
+            return System.out;
+        }
+    }
+
+    public static boolean isTrue(String option) {
+        return "true".equals(option.toLowerCase()) || "stdout".equals(option.toLowerCase()) || "stderr".equals(option.toLowerCase());
+    }
+
+    public static List<String> getPolyglotOptionSearchPaths(TruffleLanguage.Env env) {
+        String libraryPathOption = env.getOptions().get(LIBRARY_PATH);
+        String[] libraryPath = libraryPathOption.equals("") ? new String[0] : libraryPathOption.split(OPTION_ARRAY_SEPARATOR);
+        return Arrays.asList(libraryPath);
+    }
+
+    public static List<String> getPolyglotOptionExternalLibraries(TruffleLanguage.Env env) {
+        CompilerAsserts.neverPartOfCompilation();
+        String librariesOption = env.getOptions().get(LIBRARIES);
+        String[] userLibraries = librariesOption.equals("") ? new String[0] : librariesOption.split(OPTION_ARRAY_SEPARATOR);
+        return Arrays.asList(userLibraries);
+    }
 }
