@@ -22,15 +22,14 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.meta.Assumptions.*;
-
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.meta.Assumptions.AssumptionResult;
 
 /**
  * The {@code TypeCheckNode} represents a test equivalent to {@code o.getClass() == type}. The node
@@ -104,7 +103,7 @@ public final class TypeCheckNode extends UnaryOpLogicNode implements Lowerable, 
                 return LogicConstantNode.tautology();
             }
         } else {
-            if (exactType || !inputType.isAssignableFrom(type)) {
+            if (exactType) {
                 // since this type check failed for an exact type we know that it can never
                 // succeed at run time. we also don't care about null values, since they will
                 // also make the check fail.
