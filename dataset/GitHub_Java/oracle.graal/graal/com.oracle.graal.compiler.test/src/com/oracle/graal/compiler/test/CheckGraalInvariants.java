@@ -40,7 +40,6 @@ import com.oracle.graal.compiler.CompilerThreadFactory.DebugConfigAccess;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.java.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.VerifyPhase.VerificationError;
@@ -115,13 +114,7 @@ public class CheckGraalInvariants extends GraalTest {
         for (String className : classNames) {
             try {
                 Class<?> c = Class.forName(className, false, CheckGraalInvariants.class.getClassLoader());
-                executor.execute(() -> {
-                    try {
-                        checkClass(c, metaAccess);
-                    } catch (Throwable e) {
-                        errors.add(String.format("Error while checking %s:%n%s", className, printStackTraceToString(e)));
-                    }
-                });
+                executor.execute(() -> checkClass(c, metaAccess));
 
                 for (Method m : c.getDeclaredMethods()) {
                     if (Modifier.isNative(m.getModifiers()) || Modifier.isAbstract(m.getModifiers())) {
@@ -145,7 +138,9 @@ public class CheckGraalInvariants extends GraalTest {
                                     // Graal bail outs on certain patterns in Java bytecode (e.g.,
                                     // unbalanced monitors introduced by jacoco).
                                 } catch (Throwable e) {
-                                    errors.add(String.format("Error while checking %s:%n%s", methodName, printStackTraceToString(e)));
+                                    StringWriter sw = new StringWriter();
+                                    e.printStackTrace(new PrintWriter(sw));
+                                    errors.add(String.format("Error while checking %s:%n%s", methodName, sw));
                                 }
                             });
                         }
@@ -222,11 +217,5 @@ public class CheckGraalInvariants extends GraalTest {
             }
         }
         return false;
-    }
-
-    private static String printStackTraceToString(Throwable t) {
-        StringWriter sw = new StringWriter();
-        t.printStackTrace(new PrintWriter(sw));
-        return sw.toString();
     }
 }
