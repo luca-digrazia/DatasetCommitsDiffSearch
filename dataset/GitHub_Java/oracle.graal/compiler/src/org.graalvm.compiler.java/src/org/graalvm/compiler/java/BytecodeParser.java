@@ -1878,9 +1878,7 @@ public class BytecodeParser implements GraphBuilderContext {
                     ValueNode receiver = invocationPluginReceiver.init(targetMethod, args).get();
                     ResolvedJavaField resolvedField = (ResolvedJavaField) field;
                     genGetField(resolvedField, receiver);
-                    notifyBeforeInline(targetMethod);
                     printInlining(targetMethod, targetMethod, true, "inline accessor method (bytecode parsing)");
-                    notifyAfterInline(targetMethod);
                     return true;
                 }
             }
@@ -1926,10 +1924,8 @@ public class BytecodeParser implements GraphBuilderContext {
                     // Otherwise inline the original method. Any frame state created
                     // during the inlining will exclude frame(s) in the
                     // intrinsic method (see HIRFrameStateBuilder.create(int bci)).
-                    notifyBeforeInline(inlinedMethod);
                     printInlining(targetMethod, inlinedMethod, true, "partial intrinsic exit (bytecode parsing)");
                     parseAndInlineCallee(intrinsic.getOriginalMethod(), args, null);
-                    notifyAfterInline(inlinedMethod);
                     return true;
                 } else {
                     printInlining(targetMethod, inlinedMethod, false, "partial intrinsic exit (bytecode parsing)");
@@ -1943,28 +1939,20 @@ public class BytecodeParser implements GraphBuilderContext {
                 intrinsic = new IntrinsicContext(targetMethod, inlinedMethod, intrinsicBytecodeProvider, INLINE_DURING_PARSING, args, bci());
             }
             if (inlinedMethod.hasBytecodes()) {
-                notifyBeforeInline(inlinedMethod);
+                for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
+                    plugin.notifyBeforeInline(inlinedMethod);
+                }
                 printInlining(targetMethod, inlinedMethod, true, "inline method (bytecode parsing)");
                 parseAndInlineCallee(inlinedMethod, args, intrinsic);
-                notifyAfterInline(inlinedMethod);
+                for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
+                    plugin.notifyAfterInline(inlinedMethod);
+                }
             } else {
                 printInlining(targetMethod, inlinedMethod, false, "no bytecodes (abstract or native) (bytecode parsing)");
                 return false;
             }
         }
         return true;
-    }
-
-    protected void notifyBeforeInline(ResolvedJavaMethod inlinedMethod) {
-        for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
-            plugin.notifyBeforeInline(inlinedMethod);
-        }
-    }
-
-    protected void notifyAfterInline(ResolvedJavaMethod inlinedMethod) {
-        for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
-            plugin.notifyAfterInline(inlinedMethod);
-        }
     }
 
     /**
