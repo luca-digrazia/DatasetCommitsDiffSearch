@@ -107,14 +107,9 @@ public class TargetMethodAssembler {
             for (int i = 0; i < dms.length; i++) {
                 dms[i] = Debug.metric("DataPatches-" + Kind.values()[i].toString());
             }
-            DebugMetric dmRaw = Debug.metric("DataPatches-raw");
 
             for (DataPatch dp : ldp) {
-                if (dp.constant != null) {
-                    dms[dp.constant.getKind().ordinal()].add(1);
-                } else {
-                    dmRaw.add(1);
-                }
+                dms[dp.constant.getKind().ordinal()].add(1);
             }
 
             Debug.metric("TargetMethods").increment();
