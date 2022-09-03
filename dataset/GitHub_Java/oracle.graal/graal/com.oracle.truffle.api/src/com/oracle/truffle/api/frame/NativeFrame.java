@@ -38,10 +38,9 @@ public class NativeFrame implements VirtualFrame, PackedFrame {
         this.arguments = arguments;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public <T extends Arguments> T getArguments(Class<T> clazz) {
-        return (T) arguments;
+    public Arguments getArguments() {
+        return arguments;
     }
 
     @Override
@@ -105,11 +104,6 @@ public class NativeFrame implements VirtualFrame, PackedFrame {
     }
 
     @Override
-    public Object getValue(FrameSlot slot) {
-        throw new UnsupportedOperationException("native frame");
-    }
-
-    @Override
     public PackedFrame pack() {
         return this;
     }
@@ -130,12 +124,11 @@ public class NativeFrame implements VirtualFrame, PackedFrame {
     }
 
     @Override
-    public FrameDescriptor getFrameDescriptor() {
-        throw new UnsupportedOperationException("native frame");
+    public void updateToLatestVersion() {
     }
 
     @Override
-    public boolean isInitialized(FrameSlot slot) {
+    public FrameDescriptor getFrameDescriptor() {
         throw new UnsupportedOperationException("native frame");
     }
 }
