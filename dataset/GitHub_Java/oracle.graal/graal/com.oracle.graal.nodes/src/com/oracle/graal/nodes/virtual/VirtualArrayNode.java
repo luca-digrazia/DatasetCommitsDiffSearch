@@ -36,7 +36,6 @@ public class VirtualArrayNode extends VirtualObjectNode {
     private final int length;
 
     public VirtualArrayNode(ResolvedJavaType componentType, int length) {
-        super(true);
         this.componentType = componentType;
         this.length = length;
     }
@@ -141,7 +140,7 @@ public class VirtualArrayNode extends VirtualObjectNode {
     }
 
     @Override
-    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, int[] locks) {
+    public AllocatedObjectNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, int[] locks) {
         return new AllocatedObjectNode(this);
     }
 }

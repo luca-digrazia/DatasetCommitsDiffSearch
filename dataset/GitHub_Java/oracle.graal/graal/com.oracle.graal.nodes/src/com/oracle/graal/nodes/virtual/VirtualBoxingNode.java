@@ -31,13 +31,18 @@ public class VirtualBoxingNode extends VirtualInstanceNode {
     private final Kind boxingKind;
 
     public VirtualBoxingNode(ResolvedJavaType type, Kind boxingKind) {
-        super(type, false);
+        super(type);
         this.boxingKind = boxingKind;
     }
 
     @Override
     public VirtualBoxingNode duplicate() {
         return new VirtualBoxingNode(type(), boxingKind);
+    }
+
+    @Override
+    public boolean hasIdentity() {
+        return false;
     }
 
     @Override
