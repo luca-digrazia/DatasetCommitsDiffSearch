@@ -195,13 +195,14 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
                     }
                 };
 
-                InstructionValueConsumer useConsumer = (instruction, value, mode, flags) -> {
+                ValuePositionProcedure useProcedure = (instruction, position) -> {
+                    Value value = position.get(instruction);
                     if (isVariable(value)) {
                         Variable var = (Variable) value;
                         if (!phiConstants.get(var.index)) {
                             DefUseTree tree = map.get(var);
                             if (tree != null) {
-                                tree.addUsage(block, instruction, value);
+                                tree.addUsage(block, instruction, position);
                                 Debug.log("usage of %s : %s", var, instruction);
                             }
                         }
@@ -213,8 +214,8 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
                     // set instruction id to the index in the lir instruction list
                     inst.setId(opId++);
                     inst.visitEachOutput(loadConsumer);
-                    inst.forEachInput(useConsumer);
-                    inst.forEachAlive(useConsumer);
+                    inst.forEachInputPos(useProcedure);
+                    inst.forEachAlivePos(useProcedure);
 
                 }
             }

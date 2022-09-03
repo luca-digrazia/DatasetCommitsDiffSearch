@@ -33,12 +33,12 @@ class UseEntry {
 
     private final AbstractBlockBase<?> block;
     private final LIRInstruction instruction;
-    private final Value value;
+    private final ValuePosition position;
 
-    public UseEntry(AbstractBlockBase<?> block, LIRInstruction instruction, Value value) {
+    public UseEntry(AbstractBlockBase<?> block, LIRInstruction instruction, ValuePosition position) {
         this.block = block;
         this.instruction = instruction;
-        this.value = value;
+        this.position = position;
     }
 
     public LIRInstruction getInstruction() {
@@ -50,20 +50,11 @@ class UseEntry {
     }
 
     public void setValue(Value newValue) {
-        replaceValue(instruction, value, newValue);
-    }
-
-    private static void replaceValue(LIRInstruction op, Value oldValue, Value newValue) {
-        ValueProcedure proc = (value, mode, flags) -> value.identityEquals(oldValue) ? newValue : value;
-        op.forEachAlive(proc);
-        op.forEachInput(proc);
-        op.forEachOutput(proc);
-        op.forEachTemp(proc);
-        op.forEachState(proc);
+        position.set(getInstruction(), newValue);
     }
 
     public Value getValue() {
-        return value;
+        return position.get(instruction);
     }
 
     @Override
