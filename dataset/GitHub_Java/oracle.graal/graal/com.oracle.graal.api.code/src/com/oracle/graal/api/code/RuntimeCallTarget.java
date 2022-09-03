@@ -115,11 +115,5 @@ public interface RuntimeCallTarget extends InvokeTarget {
 
     Descriptor getDescriptor();
 
-    /**
-     * Determines if the target routine destroys all registers.
-     * 
-     * @return {@code true} if the register allocator must save all live registers around a call to
-     *         this target
-     */
-    boolean destroysRegisters();
+    boolean preservesRegisters();
 }

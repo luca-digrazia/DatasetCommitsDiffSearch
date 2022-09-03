@@ -65,7 +65,8 @@ public class AMD64Call {
         }
     }
 
-    public abstract static class RuntimeCallOp extends AMD64LIRInstruction {
+    @Opcode("CALL_NEAR_RUNTIME")
+    public static class DirectNearRuntimeCallOp extends AMD64LIRInstruction {
 
         @Def({REG, ILLEGAL}) protected Value result;
         @Use({REG, STACK}) protected Value[] parameters;
@@ -74,7 +75,7 @@ public class AMD64Call {
 
         protected final RuntimeCallTarget callTarget;
 
-        public RuntimeCallOp(RuntimeCallTarget callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
+        public DirectNearRuntimeCallOp(RuntimeCallTarget callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
             this.callTarget = callTarget;
             this.result = result;
             this.parameters = parameters;
@@ -84,37 +85,45 @@ public class AMD64Call {
         }
 
         @Override
+        public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+            directCall(tasm, masm, callTarget, null, false, state);
+        }
+
+        @Override
         public boolean hasCall() {
             return !callTarget.preservesRegisters();
         }
     }
 
-    @Opcode("CALL_NEAR_RUNTIME")
-    public static class DirectNearRuntimeCallOp extends RuntimeCallOp {
-
-        public DirectNearRuntimeCallOp(RuntimeCallTarget callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
-            super(callTarget, result, parameters, temps, state);
-        }
-
-        @Override
-        public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            directCall(tasm, masm, callTarget, null, false, state);
-        }
-    }
-
     @Opcode("CALL_FAR_RUNTIME")
-    public static class DirectFarRuntimeCallOp extends RuntimeCallOp {
+    public static class DirectFarRuntimeCallOp extends AMD64LIRInstruction {
 
+        @Def({REG, ILLEGAL}) protected Value result;
+        @Use({REG, STACK}) protected Value[] parameters;
+        @Temp protected Value[] temps;
+        @State protected LIRFrameState state;
         @Temp({REG}) protected AllocatableValue callTemp;
 
+        protected final RuntimeCallTarget callTarget;
+
         public DirectFarRuntimeCallOp(LIRGeneratorTool gen, RuntimeCallTarget callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
-            super(callTarget, result, parameters, temps, state);
+            this.callTarget = callTarget;
+            this.result = result;
+            this.parameters = parameters;
+            this.state = state;
+            this.temps = temps;
+            assert temps != null;
             callTemp = gen.newVariable(Kind.Long);
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
             directCall(tasm, masm, callTarget, ((RegisterValue) callTemp).getRegister(), false, state);
+        }
+
+        @Override
+        public boolean hasCall() {
+            return !callTarget.preservesRegisters();
         }
     }
 

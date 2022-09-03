@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.target.*;
@@ -53,7 +51,7 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
     /**
      * Where the stub gets its arguments and where it places its result.
      */
-    private CallingConvention cc;
+    public final CallingConvention cc;
 
     private final CompilerToVM vm;
 
@@ -89,28 +87,12 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
     public void finalizeAddress(Backend backend) {
         if (address == 0) {
             assert stub != null : "linkage without an address must be a stub";
-            InstalledCode code = stub.getCode(backend);
-
-            Value[] argumentLocations = new Value[cc.getArgumentCount()];
-            for (int i = 0; i < argumentLocations.length; i++) {
-                argumentLocations[i] = cc.getArgument(i);
-            }
-
-            Set<Register> definedRegisters = stub.getDefinedRegisters();
-            Value[] temporaryLocations = new Value[definedRegisters.size()];
-            int i = 0;
-            for (Register reg : definedRegisters) {
-                temporaryLocations[i++] = reg.asValue();
-            }
-            // Update calling convention with temporaries
-            cc = new CallingConvention(temporaryLocations, cc.getStackSize(), cc.getReturn(), argumentLocations);
-            address = code.getStart();
+            address = stub.getAddress(backend);
         }
     }
 
     @Override
     public boolean preservesRegisters() {
-        assert address != 0;
-        return true;
+        return stub == null;
     }
 }
