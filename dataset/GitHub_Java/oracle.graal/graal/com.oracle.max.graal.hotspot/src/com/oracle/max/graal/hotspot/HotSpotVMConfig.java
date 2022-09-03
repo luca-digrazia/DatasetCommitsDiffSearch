@@ -22,12 +22,17 @@
  */
 package com.oracle.max.graal.hotspot;
 
-import com.sun.cri.ci.*;
+import com.oracle.max.cri.ci.*;
 
 /**
  * Used to communicate configuration details, runtime offsets, etc. to graal upon compileMethod.
  */
 public final class HotSpotVMConfig extends CompilerObject {
+
+    /**
+     *
+     */
+    private static final long serialVersionUID = -4744897993263044184L;
 
     private HotSpotVMConfig() {
         super(null);
@@ -65,7 +70,20 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int runtimeCallStackSize;
     public int klassModifierFlagsOffset;
     public int klassOopOffset;
+    public int graalMirrorKlassOffset;
     public int nmethodEntryOffset;
+    public int methodCompiledEntryOffset;
+
+    // methodData information
+    public int methodDataOopDataOffset;
+    public int dataLayoutHeaderSize;
+    public int dataLayoutTagOffset;
+    public int dataLayoutFlagsOffset;
+    public int dataLayoutBCIOffset;
+    public int dataLayoutCellsOffset;
+    public int dataLayoutCellSize;
+    public int bciProfileWidth;
+    public int typeProfileWidth;
 
     // runtime stubs
     public long debugStub;
@@ -98,7 +116,7 @@ public final class HotSpotVMConfig extends CompilerObject {
         return arrayOffsets[getKindNumber(kind)];
     }
 
-    private int getKindNumber(CiKind kind) {
+    private static int getKindNumber(CiKind kind) {
         if (kind == CiKind.Boolean) {
             return 0;
         } else if (kind == CiKind.Byte) {

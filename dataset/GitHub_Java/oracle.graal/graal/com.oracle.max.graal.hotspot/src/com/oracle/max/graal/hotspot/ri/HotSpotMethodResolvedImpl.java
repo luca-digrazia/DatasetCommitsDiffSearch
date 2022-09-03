@@ -37,6 +37,9 @@ import com.oracle.max.graal.java.*;
  */
 public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements HotSpotMethodResolved {
 
+    /**
+     *
+     */
     private static final long serialVersionUID = -5486975070147586588L;
 
     /** DO NOT USE IN JAVA CODE! */
@@ -58,6 +61,7 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     private boolean canBeInlined;
     private CiGenericCallback callback;
     private int compilationComplexity;
+    private int vtableEntryOffset;
 
     private HotSpotMethodResolvedImpl() {
         super(null);
@@ -353,6 +357,6 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
 
     @Override
     public int vtableEntryOffset() {
-        return compiler.getVMEntries().RiMethod_vtableEntryOffset(this);
+        return vtableEntryOffset;
     }
 }

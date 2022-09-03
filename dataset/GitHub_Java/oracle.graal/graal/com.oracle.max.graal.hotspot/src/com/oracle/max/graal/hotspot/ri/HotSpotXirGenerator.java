@@ -249,49 +249,45 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         }
     };
 
-    private SimpleTemplates invokeVirtualTemplates = new SimpleTemplates(NULL_CHECK) {
-
-        @Override
-        protected XirTemplate create(CiXirAssembler asm, long flags) {
-            asm.restart();
-            XirParameter receiver = asm.createInputParameter("receiver", CiKind.Object);
-            XirParameter addr = asm.createConstantInputParameter("addr", target.wordKind);
-            XirOperand temp = asm.createRegisterTemp("temp", target.wordKind, AMD64.rax);
-            XirOperand tempO = asm.createRegister("tempO", CiKind.Object, AMD64.rax);
-
-            if (is(NULL_CHECK, flags)) {
-                asm.mark(MARK_IMPLICIT_NULL);
-                asm.pload(target.wordKind, temp, receiver, true);
-            }
-            asm.mark(MARK_INVOKEVIRTUAL);
-            asm.mov(tempO, asm.createConstant(CiConstant.forObject(HotSpotProxy.DUMMY_CONSTANT_OBJ)));
-
-            return asm.finishTemplate(addr, "invokevirtual");
-        }
-    };
-
-    private IndexTemplates inlinedInvokeVirtualTemplates = new IndexTemplates(NULL_CHECK) {
+    private IndexTemplates invokeVirtualTemplates = new IndexTemplates(NULL_CHECK) {
 
         @Override
         protected XirTemplate create(CiXirAssembler asm, long flags, int vtableEntryOffset) {
-            asm.restart();
-            XirParameter receiver = asm.createInputParameter("receiver", CiKind.Object);
-            XirOperand temp = asm.createRegisterTemp("temp", target.wordKind, AMD64.rax);
-            XirOperand method = asm.createRegisterTemp("method", CiKind.Object, AMD64.rbx);
+            if (GraalOptions.InlineVTableStubs) {
+                asm.restart();
+                XirParameter receiver = asm.createInputParameter("receiver", CiKind.Object);
+                XirOperand temp = asm.createRegisterTemp("temp", target.wordKind, AMD64.rax);
+                XirOperand method = asm.createRegisterTemp("method", CiKind.Object, AMD64.rbx);
 
-            // load class from receiver
-            if (is(NULL_CHECK, flags)) {
+                // load class from receiver
+                if (is(NULL_CHECK, flags)) {
+                    asm.mark(MARK_IMPLICIT_NULL);
+                }
+                asm.pload(target.wordKind, temp, receiver, asm.i(config.hubOffset), true);
+                // load vtable entry
+                asm.pload(target.wordKind, method, temp, asm.i(vtableEntryOffset), false);
+                // load entry point from methodOop
                 asm.mark(MARK_IMPLICIT_NULL);
-            }
-            asm.pload(target.wordKind, temp, receiver, asm.i(config.hubOffset), true);
-            // load vtable entry
-            asm.pload(target.wordKind, method, temp, asm.i(vtableEntryOffset), false);
-            // load entry point from methodOop
-            asm.mark(MARK_IMPLICIT_NULL);
-            asm.pload(target.wordKind, temp, method, asm.i(config.methodCompiledEntryOffset), true);
-            asm.mark(MARK_INVOKEVIRTUAL);
+                asm.pload(target.wordKind, temp, method, asm.i(config.methodCompiledEntryOffset), true);
+                asm.mark(MARK_INVOKEVIRTUAL);
 
-            return asm.finishTemplate(temp, "invokevirtual");
+                return asm.finishTemplate(temp, "invokevirtual");
+            } else {
+                asm.restart();
+                XirParameter receiver = asm.createInputParameter("receiver", CiKind.Object);
+                XirParameter addr = asm.createConstantInputParameter("addr", target.wordKind);
+                XirOperand temp = asm.createRegisterTemp("temp", target.wordKind, AMD64.rax);
+                XirOperand tempO = asm.createRegister("tempO", CiKind.Object, AMD64.rax);
+
+                if (is(NULL_CHECK, flags)) {
+                    asm.mark(MARK_IMPLICIT_NULL);
+                    asm.pload(target.wordKind, temp, receiver, true);
+                }
+                asm.mark(MARK_INVOKEVIRTUAL);
+                asm.mov(tempO, asm.createConstant(CiConstant.forObject(HotSpotProxy.DUMMY_CONSTANT_OBJ)));
+
+                return asm.finishTemplate(addr, "invokevirtual");
+            }
         }
     };
 
@@ -1254,19 +1250,12 @@ public class HotSpotXirGenerator implements RiXirGenerator {
     }
 
     @Override
-    public XirSnippet genInvokeVirtual(XirSite site, XirArgument receiver, RiMethod method, boolean megamorph) {
-        int vtableEntryOffset = 0;
-
-        if (GraalOptions.InlineVTableStubs && (GraalOptions.AlwaysInlineVTableStubs || megamorph)) {
-            HotSpotMethodResolved hsMethod = (HotSpotMethodResolved) method;
-            if (!hsMethod.holder().isInterface()) {
-                vtableEntryOffset = hsMethod.vtableEntryOffset();
-            }
-        }
-        if (vtableEntryOffset > 0) {
-            return new XirSnippet(inlinedInvokeVirtualTemplates.get(site, vtableEntryOffset), receiver);
+    public XirSnippet genInvokeVirtual(XirSite site, XirArgument receiver, RiMethod method) {
+        HotSpotMethodResolved hsMethod = (HotSpotMethodResolved) method;
+        if (GraalOptions.InlineVTableStubs) {
+            return new XirSnippet(invokeVirtualTemplates.get(site, hsMethod.vtableEntryOffset()), receiver);
         } else {
-            return new XirSnippet(invokeVirtualTemplates.get(site), receiver, wordArg(0));
+            return new XirSnippet(invokeVirtualTemplates.get(site, hsMethod.vtableEntryOffset()), receiver, wordArg(0));
         }
     }
 

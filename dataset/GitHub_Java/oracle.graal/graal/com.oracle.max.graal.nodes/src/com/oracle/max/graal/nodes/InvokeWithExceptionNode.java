@@ -26,6 +26,7 @@ import java.util.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.graph.Node.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.java.*;
 import com.oracle.max.graal.nodes.spi.*;
@@ -38,8 +39,6 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     @Input private final MethodCallTargetNode callTarget;
     @Input private FrameState stateAfter;
     @Data private final int bci;
-    // megamorph should only be true when the compiler is sure that the call site is megamorph, and false when in doubt
-    @Data private boolean megamorph;
     private boolean useForInlining;
 
     /**
@@ -51,7 +50,6 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         super(callTarget.returnStamp(), new BeginNode[]{null, exceptionEdge}, new double[]{1.0, 0.0});
         this.bci = bci;
         this.callTarget = callTarget;
-        this.megamorph = true;
         this.useForInlining = true;
     }
 
@@ -73,16 +71,6 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
 
     public MethodCallTargetNode callTarget() {
         return callTarget;
-    }
-
-    @Override
-    public boolean megamorph() {
-        return megamorph;
-    }
-
-    @Override
-    public void setMegamorph(boolean megamorph) {
-        this.megamorph = megamorph;
     }
 
     @Override
