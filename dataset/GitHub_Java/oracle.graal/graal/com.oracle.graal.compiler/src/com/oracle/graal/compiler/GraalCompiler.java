@@ -51,10 +51,9 @@ public class GraalCompiler {
                     final StructuredGraph graph, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog) {
         assert (method.getModifiers() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
 
-        final CompilationResult compilationResult = new CompilationResult();
-        Debug.scope("GraalCompiler", new Object[]{graph, method, runtime}, new Runnable() {
+        return Debug.scope("GraalCompiler", new Object[]{graph, method, runtime}, new Callable<CompilationResult>() {
 
-            public void run() {
+            public CompilationResult call() {
                 final Assumptions assumptions = new Assumptions(GraalOptions.OptAssumptions);
                 final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
 
@@ -62,23 +61,21 @@ public class GraalCompiler {
                         return emitHIR(runtime, target, graph, assumptions, cache, plan, optimisticOpts, speculationLog);
                     }
                 });
-                final LIRGenerator lirGen = Debug.scope("BackEnd", lir, new Callable<LIRGenerator>() {
+                final FrameMap frameMap = Debug.scope("BackEnd", lir, new Callable<FrameMap>() {
 
-                    public LIRGenerator call() {
+                    public FrameMap call() {
                         return emitLIR(backend, target, lir, graph, method);
                     }
                 });
-                Debug.scope("CodeGen", lirGen, new Runnable() {
+                return Debug.scope("CodeGen", frameMap, new Callable<CompilationResult>() {
 
-                    public void run() {
-                        emitCode(backend, getLeafGraphIdArray(graph), assumptions, method, lirGen, compilationResult);
+                    public CompilationResult call() {
+                        return emitCode(backend, getLeafGraphIdArray(graph), assumptions, method, lir, frameMap);
                     }
 
                 });
             }
         });
-
-        return compilationResult;
     }
 
     private static long[] getLeafGraphIdArray(StructuredGraph graph) {
@@ -236,11 +233,11 @@ public class GraalCompiler {
 
     }
 
-    public static LIRGenerator emitLIR(Backend backend, final TargetDescription target, final LIR lir, StructuredGraph graph, final ResolvedJavaMethod method) {
+    public static FrameMap emitLIR(Backend backend, final TargetDescription target, final LIR lir, StructuredGraph graph, final ResolvedJavaMethod method) {
         final FrameMap frameMap = backend.newFrameMap();
-        final LIRGenerator lirGen = backend.newLIRGenerator(graph, frameMap, method, lir);
+        final LIRGenerator lirGenerator = backend.newLIRGenerator(graph, frameMap, method, lir);
 
-        Debug.scope("LIRGen", lirGen, new Runnable() {
+        Debug.scope("LIRGen", lirGenerator, new Runnable() {
 
             public void run() {
                 for (Block b : lir.linearScanOrder()) {
@@ -257,7 +254,7 @@ public class GraalCompiler {
                             emitBlock(pred);
                         }
                     }
-                    lirGen.doBlock(b);
+                    lirGenerator.doBlock(b);
                 }
             }
         });
@@ -265,15 +262,15 @@ public class GraalCompiler {
         Debug.scope("Allocator", new Runnable() {
 
             public void run() {
-                new LinearScan(target, method, lir, lirGen, frameMap).allocate();
+                new LinearScan(target, method, lir, lirGenerator, frameMap).allocate();
             }
         });
-        return lirGen;
+        return frameMap;
     }
 
-    public static void emitCode(Backend backend, long[] leafGraphIds, Assumptions assumptions, ResolvedJavaMethod method, LIRGenerator lirGen, CompilationResult compilationResult) {
-        TargetMethodAssembler tasm = backend.newAssembler(lirGen, compilationResult);
-        backend.emitCode(tasm, method, lirGen);
+    public static CompilationResult emitCode(Backend backend, long[] leafGraphIds, Assumptions assumptions, ResolvedJavaMethod method, LIR lir, FrameMap frameMap) {
+        TargetMethodAssembler tasm = backend.newAssembler(frameMap, lir);
+        backend.emitCode(tasm, method, lir);
         CompilationResult result = tasm.finishTargetMethod(method, false);
         if (!assumptions.isEmpty()) {
             result.setAssumptions(assumptions);
@@ -281,5 +278,6 @@ public class GraalCompiler {
         result.setLeafGraphIds(leafGraphIds);
 
         Debug.dump(result, "After code generation");
+        return result;
     }
 }
