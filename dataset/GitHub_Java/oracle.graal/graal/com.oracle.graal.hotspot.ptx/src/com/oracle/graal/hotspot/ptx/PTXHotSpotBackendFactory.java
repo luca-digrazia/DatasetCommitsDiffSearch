@@ -59,7 +59,7 @@ public class PTXHotSpotBackendFactory implements HotSpotBackendFactory {
         final int stackFrameAlignment = 1;
         final int implicitNullCheckLimit = 0;
         final boolean inlineObjects = true;
-        return new HotSpotTargetDescription(createArchitecture(), true, stackFrameAlignment, implicitNullCheckLimit, inlineObjects, Kind.Int);
+        return new TargetDescription(createArchitecture(), true, stackFrameAlignment, implicitNullCheckLimit, inlineObjects);
     }
 
     public String getArchitecture() {
