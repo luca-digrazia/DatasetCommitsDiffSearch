@@ -25,29 +25,35 @@ package com.oracle.graal.nodes.java;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
- * Implements a type check against a compile-time known type.
+ * Implements a type check that results in a {@link ClassCastException} if it fails.
  */
-public final class CheckCastNode extends FixedWithNextNode implements Canonicalizable, Lowerable, Node.IterableNodeType, Virtualizable {
+public final class CheckCastNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Lowerable, Node.IterableNodeType, TypeFeedbackProvider, TypeCanonicalizable {
 
     @Input private ValueNode object;
-    private final ResolvedJavaType type;
+    @Input private ValueNode targetClassInstruction;
+    private final ResolvedJavaType targetClass;
     private final JavaTypeProfile profile;
 
     /**
      * Creates a new CheckCast instruction.
-     *
-     * @param type the type being cast to
+     * @param targetClassInstruction the instruction which produces the class which is being cast to
+     * @param targetClass the class being cast to
      * @param object the instruction producing the object
      */
-    public CheckCastNode(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile) {
-        super(StampFactory.declared(type));
-        assert type != null;
-        this.type = type;
+    public CheckCastNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object) {
+        this(targetClassInstruction, targetClass, object, null);
+    }
+
+    public CheckCastNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object, JavaTypeProfile profile) {
+        super(targetClass == null ? StampFactory.object() : StampFactory.declared(targetClass));
+        this.targetClassInstruction = targetClassInstruction;
+        this.targetClass = targetClass;
         this.object = object;
         this.profile = profile;
     }
@@ -58,9 +64,14 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
     }
 
     @Override
+    public void generate(LIRGeneratorTool gen) {
+        gen.visitCheckCast(this);
+    }
+
+    @Override
     public boolean inferStamp() {
         if (object().stamp().nonNull() && !stamp().nonNull()) {
-            setStamp(StampFactory.declaredNonNull(type));
+            setStamp(targetClass == null ? StampFactory.objectNonNull() : StampFactory.declaredNonNull(targetClass));
             return true;
         }
         return super.inferStamp();
@@ -70,9 +81,9 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
     public ValueNode canonical(CanonicalizerTool tool) {
         assert object() != null : this;
 
-        if (type != null) {
+        if (targetClass != null) {
             ResolvedJavaType objectType = object().objectStamp().type();
-            if (objectType != null && objectType.isAssignableTo(type)) {
+            if (objectType != null && objectType.isSubtypeOf(targetClass)) {
                 // we don't have to check for null types here because they will also pass the checkcast.
                 return object();
             }
@@ -84,26 +95,46 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
         return this;
     }
 
+    @Override
+    public void typeFeedback(TypeFeedbackTool tool) {
+        if (targetClass() != null) {
+            tool.addObject(object()).declaredType(targetClass(), false);
+        }
+    }
+
+    @Override
+    public Result canonical(TypeFeedbackTool tool) {
+        ObjectTypeQuery query = tool.queryObject(object());
+        if (query.constantBound(Condition.EQ, Constant.NULL_OBJECT)) {
+            return new Result(object(), query);
+        } else if (targetClass() != null) {
+            if (query.declaredType(targetClass())) {
+                return new Result(object(), query);
+            }
+        }
+        return null;
+    }
+
     public ValueNode object() {
         return object;
     }
 
+    public ValueNode targetClassInstruction() {
+        return targetClassInstruction;
+    }
+
     /**
-     * Gets the type being cast to.
+     * Gets the target class, i.e. the class being cast to, or the class being tested against.
+     * This may be null in the case where the type being tested is dynamically loaded such as
+     * when checking an object array store.
+     *
+     * @return the target class or null if not known
      */
-    public ResolvedJavaType type() {
-        return type;
+    public ResolvedJavaType targetClass() {
+        return targetClass;
     }
 
     public JavaTypeProfile profile() {
         return profile;
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        VirtualObjectNode virtual = tool.getVirtualState(object());
-        if (virtual != null && virtual.type().isAssignableTo(type())) {
-            tool.replaceWithVirtual(virtual);
-        }
     }
 }

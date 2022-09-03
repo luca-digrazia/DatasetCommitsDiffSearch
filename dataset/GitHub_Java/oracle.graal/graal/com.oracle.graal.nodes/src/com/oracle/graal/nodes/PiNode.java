@@ -53,11 +53,14 @@ public class PiNode extends FloatingNode implements LIRLowerable {
 
     @Override
     public boolean inferStamp() {
-        if (object().objectStamp().alwaysNull() && objectStamp().nonNull()) {
-            // a null value flowing into a nonNull PiNode can happen should be guarded by a type/isNull guard, but the
-            // compiler might see this situation before the branch is deleted
-            return false;
+        if (object().stamp().nonNull() && !stamp().nonNull()) {
+            setStamp(StampFactory.declaredNonNull(objectStamp().type()));
+            return true;
         }
-        return updateStamp(stamp().join(object().stamp()));
+        if (object().objectStamp().alwaysNull() && !objectStamp().alwaysNull()) {
+            setStamp(StampFactory.alwaysNull());
+            return true;
+        }
+        return super.inferStamp();
     }
 }

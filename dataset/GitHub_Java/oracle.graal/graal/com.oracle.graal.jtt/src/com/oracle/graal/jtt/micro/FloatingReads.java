@@ -26,7 +26,7 @@ import org.junit.*;
 
 
 public class FloatingReads {
-    public static long init = Runtime.getRuntime().totalMemory();
+    private static long init = Runtime.getRuntime().totalMemory();
     private final int f = 10;
     private int a;
     private int b;

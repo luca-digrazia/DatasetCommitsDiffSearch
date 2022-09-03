@@ -28,7 +28,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "==")
-public final class ObjectEqualsNode extends CompareNode implements Virtualizable {
+public final class ObjectEqualsNode extends CompareNode {
 
     /**
      * Constructs a new object equality comparison node.
@@ -68,21 +68,5 @@ public final class ObjectEqualsNode extends CompareNode implements Virtualizable
         }
 
         return super.canonical(tool);
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        State stateX = tool.getObjectState(x());
-        State stateY = tool.getObjectState(y());
-        boolean xVirtual = stateX != null && stateX.getState() == EscapeState.Virtual;
-        boolean yVirtual = stateY != null && stateY.getState() == EscapeState.Virtual;
-
-        if (xVirtual ^ yVirtual) {
-            // one of them is virtual: they can never be the same objects
-            tool.replaceWithValue(ConstantNode.forBoolean(false, graph()));
-        } else if (xVirtual && yVirtual) {
-            // both are virtual: check if they refer to the same object
-            tool.replaceWithValue(ConstantNode.forBoolean(stateX == stateY, graph()));
-        }
     }
 }

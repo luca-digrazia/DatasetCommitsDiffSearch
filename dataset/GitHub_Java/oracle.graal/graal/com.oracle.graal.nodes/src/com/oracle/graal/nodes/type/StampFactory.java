@@ -37,7 +37,7 @@ public class StampFactory {
     private static final Stamp virtualStamp = new GenericStamp(GenericStampType.Virtual);
     private static final Stamp conditionStamp = new GenericStamp(GenericStampType.Condition);
     private static final Stamp voidStamp = new GenericStamp(GenericStampType.Void);
-    private static final Stamp nodeIntrinsicStamp = new ObjectStamp(null, false, false, false);
+
     private static final Stamp positiveInt = forInteger(Kind.Int, 0, Integer.MAX_VALUE, Integer.MAX_VALUE);
 
     private static void setCache(Kind kind, Stamp stamp) {
@@ -61,21 +61,17 @@ public class StampFactory {
         setCache(Kind.Void, voidStamp);
     }
 
+    public static Stamp forWord(Kind wordKind, boolean nonNull) {
+        return new WordStamp(wordKind, nonNull);
+    }
+
     public static Stamp forKind(Kind kind) {
-        assert stampCache[kind.getStackKind().ordinal()] != null : "unexpected forKind(" + kind + ")";
-        return stampCache[kind.getStackKind().ordinal()];
+        assert stampCache[kind.stackKind().ordinal()] != null : "unexpected forKind(" + kind + ")";
+        return stampCache[kind.stackKind().ordinal()];
     }
 
     public static Stamp forVoid() {
         return voidStamp;
-    }
-
-    /**
-     * A stamp used only in the graph of intrinsics, e.g., snippets. It is then replaced by an actual stamp when the
-     * intrinsic is used, i.e., when the snippet template is instantiated.
-     */
-    public static Stamp forNodeIntrinsic() {
-        return nodeIntrinsicStamp;
     }
 
     public static Stamp intValue() {
@@ -106,41 +102,31 @@ public class StampFactory {
         return new IntegerStamp(kind, lowerBound, upperBound, mask);
     }
 
-    public static Stamp forInteger(Kind kind, long lowerBound, long upperBound) {
-        long mask;
-        if (lowerBound < 0) {
-            mask = IntegerStamp.defaultMask(kind);
-        } else {
-            mask = -1 >>> Long.numberOfLeadingZeros(upperBound);
-        }
-        return forInteger(kind, lowerBound, upperBound, mask);
-    }
-
     public static Stamp forFloat(Kind kind, double lowerBound, double upperBound, boolean nonNaN) {
         return new FloatStamp(kind, lowerBound, upperBound, nonNaN);
     }
 
     public static Stamp forConstant(Constant value) {
-        assert value.getKind() != Kind.Object;
-        if (value.getKind() == Kind.Object) {
-            throw new GraalInternalError("unexpected kind: %s", value.getKind());
+        assert value.kind != Kind.Object;
+        if (value.kind == Kind.Object) {
+            throw new GraalInternalError("unexpected kind: %s", value.kind);
         } else {
-            if (value.getKind() == Kind.Int || value.getKind() == Kind.Long) {
-                return forInteger(value.getKind(), value.asLong(), value.asLong(), value.asLong() & IntegerStamp.defaultMask(value.getKind()));
-            } else if (value.getKind() == Kind.Float || value.getKind() == Kind.Double) {
-                return forFloat(value.getKind(), value.asDouble(), value.asDouble(), !Double.isNaN(value.asDouble()));
+            if (value.kind == Kind.Int || value.kind == Kind.Long) {
+                return forInteger(value.kind, value.asLong(), value.asLong(), value.asLong() & IntegerStamp.defaultMask(value.kind));
+            } else if (value.kind == Kind.Float || value.kind == Kind.Double) {
+                return forFloat(value.kind, value.asDouble(), value.asDouble(), !Double.isNaN(value.asDouble()));
             }
-            return forKind(value.getKind().getStackKind());
+            return forKind(value.kind.stackKind());
         }
     }
 
     public static Stamp forConstant(Constant value, MetaAccessProvider runtime) {
-        assert value.getKind() == Kind.Object;
-        if (value.getKind() == Kind.Object) {
-            ResolvedJavaType type = value.isNull() ? null : runtime.lookupJavaType(value);
+        assert value.kind == Kind.Object;
+        if (value.kind == Kind.Object) {
+            ResolvedJavaType type = value.isNull() ? null : runtime.getTypeOf(value);
             return new ObjectStamp(type, value.isNonNull(), value.isNonNull(), value.isNull());
         } else {
-            throw new GraalInternalError(Kind.Object + " expected, actual kind: %s", value.getKind());
+            throw new GraalInternalError(Kind.Object + " expected, actual kind: %s", value.kind);
         }
     }
 
@@ -166,8 +152,8 @@ public class StampFactory {
 
     public static Stamp declared(ResolvedJavaType type, boolean nonNull) {
         assert type != null;
-        assert type.getKind() == Kind.Object;
-        ResolvedJavaType exact = type.asExactType();
+        assert type.kind() == Kind.Object;
+        ResolvedJavaType exact = type.exactType();
         if (exact != null) {
             return new ObjectStamp(exact, true, nonNull, false);
         } else {

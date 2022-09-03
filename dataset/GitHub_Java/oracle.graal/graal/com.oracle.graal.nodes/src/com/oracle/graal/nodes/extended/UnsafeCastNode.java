@@ -31,67 +31,76 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code UnsafeCastNode} produces the same value as its input, but with a different type.
  */
-public class UnsafeCastNode extends FloatingNode implements Canonicalizable, LIRLowerable {
+public final class UnsafeCastNode extends FloatingNode implements Canonicalizable, LIRLowerable {
 
-    @Input
-    private ValueNode object;
+    @Input private ValueNode object;
+    private ResolvedJavaType toType;
 
     public ValueNode object() {
         return object;
     }
 
-    public UnsafeCastNode(ValueNode object, Stamp stamp) {
-        super(stamp);
+    public UnsafeCastNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
+        super(toType.kind().isObject() ? new ObjectStamp(toType, exactType, nonNull, false) : StampFactory.forKind(toType.kind()));
         this.object = object;
+        this.toType = toType;
     }
 
-    public UnsafeCastNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
-        this(object, toType.getKind().isObject() ? StampFactory.object(toType, exactType, nonNull || object.stamp().nonNull()) : StampFactory.forKind(toType.getKind()));
+    public UnsafeCastNode(ValueNode object, ResolvedJavaType toType) {
+        super(toType.kind().isObject() ? StampFactory.declared(toType, object.stamp().nonNull()) : StampFactory.forKind(toType.kind()));
+        this.object = object;
+        this.toType = toType;
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        if (kind() != object.kind()) {
-            return this;
-        }
-
-        if (kind() == Kind.Object) {
-            ObjectStamp my = objectStamp();
-            ObjectStamp other = object.objectStamp();
-
-            if (my.type() == null || other.type() == null) {
-                return this;
-            }
-            if (my.isExactType() && !other.isExactType()) {
-                return this;
-            }
-            if (my.nonNull() && !other.nonNull()) {
-                return this;
-            }
-            if (my.type() != other.type() && my.type().isAssignableTo(other.type())) {
-                return this;
+        if (object != null) {
+            if (object.kind().isObject()) {
+                if (object.objectStamp().type() != null && object.objectStamp().type().isSubtypeOf(toType)) {
+                    if (!isNarrower(objectStamp(), object.objectStamp())) {
+                        return object;
+                    }
+                }
+            } else if (object.kind() == kind()) {
+                // Removes redundant casts introduced by WordTypeRewriterPhase
+                return object;
             }
         }
-        return object;
+        return this;
+    }
+
+    /**
+     * Determines if one object stamp is narrower than another in terms of nullness and exactness.
+     *
+     * @return true if x is definitely non-null and y's nullness is unknown OR
+     *                  x's type is exact and the exactness of y's type is unknown
+     */
+    private static boolean isNarrower(ObjectStamp x, ObjectStamp y) {
+        if (x.nonNull() && !y.nonNull()) {
+            return true;
+        }
+        if (x.isExactType() && !y.isExactType()) {
+            return true;
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static <T> T cast(Object object, @ConstantNodeParameter Class<?> toType) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static <T> T cast(Object object, @ConstantNodeParameter Class<?> toType, @ConstantNodeParameter boolean exactType, @ConstantNodeParameter boolean nonNull) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
     }
 
     @Override
     public void generate(LIRGeneratorTool generator) {
-        if (kind() != object.kind()) {
-            assert generator.target().sizeInBytes(kind()) == generator.target().sizeInBytes(object.kind()) : "unsafe cast cannot be used to change the size of a value";
-            Value result = generator.newVariable(kind());
-            generator.emitMove(generator.operand(object), result);
-            generator.setResult(this, result);
-        } else {
-            // The LIR only cares about the kind of an operand, not the actual type of an object. So we do not have to
-            // introduce a new operand when the kind is the same.
-            generator.setResult(this, generator.operand(object));
-        }
+        Value result = generator.newVariable(kind());
+        generator.emitMove(generator.operand(object), result);
+        generator.setResult(this, result);
     }
-
-    @NodeIntrinsic
-    public static native <T> T unsafeCast(Object object, @ConstantNodeParameter Stamp stamp);
-
-    @NodeIntrinsic
-    public static native <T> T unsafeCast(Object object, @ConstantNodeParameter Class<T> toType, @ConstantNodeParameter boolean exactType, @ConstantNodeParameter boolean nonNull);
 }
