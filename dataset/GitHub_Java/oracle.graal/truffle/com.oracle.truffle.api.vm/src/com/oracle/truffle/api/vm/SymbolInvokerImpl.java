@@ -28,10 +28,10 @@ import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.impl.ContextStore;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
@@ -114,14 +114,14 @@ final class SymbolInvokerImpl {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            ContextStore prev = ExecutionImpl.executionStarted(store);
+            ContextStore prev = PolyglotEngine.Access.EXEC.executionStarted(store);
             try {
                 if (!debuggingDisabled.isValid()) {
                     debugExecutionStarted();
                 }
                 return executeImpl(frame);
             } finally {
-                ExecutionImpl.executionEnded(prev);
+                PolyglotEngine.Access.EXEC.executionEnded(prev);
                 if (!debuggingDisabled.isValid()) {
                     debugExecutionEnded();
                 }
@@ -153,11 +153,7 @@ final class SymbolInvokerImpl {
                 return execute(frame);
             } catch (InteropException e) {
                 CompilerDirectives.transferToInterpreter();
-                if (e.getCause() instanceof UnsupportedSpecializationException) {
-                    throw (UnsupportedSpecializationException) e.getCause();
-                } else {
-                    throw new AssertionError(e);
-                }
+                throw new AssertionError(e);
             }
         }
     }
