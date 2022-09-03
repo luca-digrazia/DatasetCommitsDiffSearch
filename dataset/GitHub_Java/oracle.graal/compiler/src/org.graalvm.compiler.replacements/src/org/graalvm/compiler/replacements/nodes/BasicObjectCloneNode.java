@@ -139,7 +139,7 @@ public abstract class BasicObjectCloneNode extends MacroStateSplitNode implement
     }
 
     @Override
-    public ValueNode findLength(ArrayLengthProvider.FindLengthMode mode) {
-        return GraphUtil.arrayLength(getObject(), mode);
+    public ValueNode length() {
+        return GraphUtil.arrayLength(getObject());
     }
 }
