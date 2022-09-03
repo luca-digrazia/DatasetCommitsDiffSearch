@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -52,12 +52,12 @@ public final class ValueUtil {
 
     public static boolean isConstant(Value value) {
         assert value != null;
-        return value instanceof JavaConstant;
+        return value instanceof Constant;
     }
 
-    public static JavaConstant asConstant(Value value) {
+    public static Constant asConstant(Value value) {
         assert value != null;
-        return (JavaConstant) value;
+        return (Constant) value;
     }
 
     public static boolean isAllocatableValue(Value value) {
@@ -78,26 +78,6 @@ public final class ValueUtil {
     public static StackSlot asStackSlot(Value value) {
         assert value != null;
         return (StackSlot) value;
-    }
-
-    public static boolean isStackSlotValue(Value value) {
-        assert value != null;
-        return value instanceof StackSlotValue;
-    }
-
-    public static StackSlotValue asStackSlotValue(Value value) {
-        assert value != null;
-        return (StackSlotValue) value;
-    }
-
-    public static boolean isVirtualStackSlot(Value value) {
-        assert value != null;
-        return value instanceof VirtualStackSlot;
-    }
-
-    public static VirtualStackSlot asVirtualStackSlot(Value value) {
-        assert value != null;
-        return (VirtualStackSlot) value;
     }
 
     public static boolean isRegister(Value value) {
