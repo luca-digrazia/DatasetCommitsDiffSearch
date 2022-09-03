@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -228,10 +226,10 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     @TruffleCallBoundary
     protected final Object callBoundary(Object[] args) {
-        if (CompilerDirectives.inInterpreterOrLowTier()) {
+        if (CompilerDirectives.inInterpreter()) {
             // We are called and we are still in Truffle interpreter mode.
             getCompilationProfile().interpreterCall(this);
-            if (CompilerDirectives.inInterpreter() && isValid()) {
+            if (isValid()) {
                 // Stubs were deoptimized => reinstall.
                 runtime().bypassedInstalledCode();
             }

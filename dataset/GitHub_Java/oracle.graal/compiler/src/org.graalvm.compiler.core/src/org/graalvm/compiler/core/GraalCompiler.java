@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,9 +22,10 @@
  */
 package org.graalvm.compiler.core;
 
+import java.util.Collection;
 import java.util.List;
 
-import org.graalvm.collections.UnmodifiableEconomicSet;
+import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.LIRGenerationPhase.LIRGenerationContext;
 import org.graalvm.compiler.core.common.GraalOptions;
@@ -107,7 +106,6 @@ public class GraalCompiler {
         public final LIRSuites lirSuites;
         public final T compilationResult;
         public final CompilationResultBuilderFactory factory;
-        public final boolean verifySourcePositions;
 
         /**
          * @param graph the graph to be compiled
@@ -124,8 +122,7 @@ public class GraalCompiler {
          * @param factory
          */
         public Request(StructuredGraph graph, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend, PhaseSuite<HighTierContext> graphBuilderSuite,
-                        OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, Suites suites, LIRSuites lirSuites, T compilationResult, CompilationResultBuilderFactory factory,
-                        boolean verifySourcePositions) {
+                        OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, Suites suites, LIRSuites lirSuites, T compilationResult, CompilationResultBuilderFactory factory) {
             this.graph = graph;
             this.installedCodeOwner = installedCodeOwner;
             this.providers = providers;
@@ -137,7 +134,6 @@ public class GraalCompiler {
             this.lirSuites = lirSuites;
             this.compilationResult = compilationResult;
             this.factory = factory;
-            this.verifySourcePositions = verifySourcePositions;
         }
 
         /**
@@ -160,9 +156,8 @@ public class GraalCompiler {
      */
     public static <T extends CompilationResult> T compileGraph(StructuredGraph graph, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend,
                     PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, Suites suites, LIRSuites lirSuites, T compilationResult,
-                    CompilationResultBuilderFactory factory, boolean verifySourcePositions) {
-        return compile(new Request<>(graph, installedCodeOwner, providers, backend, graphBuilderSuite, optimisticOpts, profilingInfo, suites, lirSuites, compilationResult, factory,
-                        verifySourcePositions));
+                    CompilationResultBuilderFactory factory) {
+        return compile(new Request<>(graph, installedCodeOwner, providers, backend, graphBuilderSuite, optimisticOpts, profilingInfo, suites, lirSuites, compilationResult, factory));
     }
 
     /**
@@ -178,9 +173,6 @@ public class GraalCompiler {
             try (DebugContext.Scope s0 = debug.scope("GraalCompiler", r.graph, r.providers.getCodeCache()); DebugCloseable a = CompilerTimer.start(debug)) {
                 emitFrontEnd(r.providers, r.backend, r.graph, r.graphBuilderSuite, r.optimisticOpts, r.profilingInfo, r.suites);
                 emitBackEnd(r.graph, null, r.installedCodeOwner, r.backend, r.compilationResult, r.factory, null, r.lirSuites);
-                if (r.verifySourcePositions) {
-                    assert r.graph.verifySourcePositions(true);
-                }
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
@@ -383,8 +375,7 @@ public class GraalCompiler {
     }
 
     @SuppressWarnings("try")
-    public static void emitCode(Backend backend, Assumptions assumptions, ResolvedJavaMethod rootMethod, UnmodifiableEconomicSet<ResolvedJavaMethod> inlinedMethods,
-                    UnmodifiableEconomicSet<ResolvedJavaField> accessedFields,
+    public static void emitCode(Backend backend, Assumptions assumptions, ResolvedJavaMethod rootMethod, Collection<ResolvedJavaMethod> inlinedMethods, EconomicSet<ResolvedJavaField> accessedFields,
                     int bytecodeSize, LIRGenerationResult lirGenRes,
                     CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner, CompilationResultBuilderFactory factory) {
         DebugContext debug = lirGenRes.getLIR().getDebug();

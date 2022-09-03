@@ -241,7 +241,7 @@ public class CompilationWrapperTest extends GraalCompilerTest {
                     Assert.fail(String.format("Expected at least one .bgv file in %s: %s%n%s", diagnosticOutputZip, entries, proc));
                 }
                 if (cfg == 0) {
-                    Assert.fail(String.format("Expected at least one .cfg file in %s: %s%n%s", diagnosticOutputZip, entries, proc));
+                    Assert.fail(String.format("Expected at least one .cfg file in %s: %s", diagnosticOutputZip, entries));
                 }
             } finally {
                 zip.delete();
