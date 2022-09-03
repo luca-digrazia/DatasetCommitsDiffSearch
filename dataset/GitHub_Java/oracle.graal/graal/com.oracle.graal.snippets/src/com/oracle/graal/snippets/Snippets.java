@@ -25,8 +25,6 @@ package com.oracle.graal.snippets;
 import java.lang.reflect.*;
 import java.util.concurrent.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.util.*;
@@ -37,13 +35,15 @@ import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * Utilities for snippet installation and management.
  */
 public class Snippets {
 
-    public static void install(ExtendedRiRuntime runtime, TargetDescription target, SnippetsInterface obj) {
+    public static void install(GraalRuntime runtime, CiTarget target, SnippetsInterface obj) {
         Class<? extends SnippetsInterface> clazz = obj.getClass();
         BoxingMethodPool pool = new BoxingMethodPool(runtime);
         if (clazz.isAnnotationPresent(ClassSubstitution.class)) {
@@ -53,7 +53,7 @@ public class Snippets {
         }
     }
 
-    private static void installSnippets(ExtendedRiRuntime runtime, TargetDescription target, Class< ? extends SnippetsInterface> clazz, BoxingMethodPool pool) {
+    private static void installSnippets(GraalRuntime runtime, CiTarget target, Class< ? extends SnippetsInterface> clazz, BoxingMethodPool pool) {
         for (Method method : clazz.getDeclaredMethods()) {
             if (method.getAnnotation(Snippet.class) != null) {
                 Method snippet = method;
@@ -61,7 +61,7 @@ public class Snippets {
                 if (Modifier.isAbstract(modifiers) || Modifier.isNative(modifiers)) {
                     throw new RuntimeException("Snippet must not be abstract or native");
                 }
-                ResolvedJavaMethod snippetRiMethod = runtime.getResolvedJavaMethod(snippet);
+                RiResolvedMethod snippetRiMethod = runtime.getRiMethod(snippet);
                 if (snippetRiMethod.compilerStorage().get(Graph.class) == null) {
                     buildSnippetGraph(snippetRiMethod, runtime, target, pool);
                 }
@@ -69,7 +69,7 @@ public class Snippets {
         }
     }
 
-    private static void installSubstitution(ExtendedRiRuntime runtime, TargetDescription target, Class< ? extends SnippetsInterface> clazz,
+    private static void installSubstitution(GraalRuntime runtime, CiTarget target, Class< ? extends SnippetsInterface> clazz,
                     BoxingMethodPool pool, Class<?> original) throws GraalInternalError {
         for (Method snippet : clazz.getDeclaredMethods()) {
             try {
@@ -81,16 +81,16 @@ public class Snippets {
                 if (Modifier.isAbstract(modifiers) || Modifier.isNative(modifiers)) {
                     throw new RuntimeException("Snippet must not be abstract or native");
                 }
-                ResolvedJavaMethod snippetRiMethod = runtime.getResolvedJavaMethod(snippet);
+                RiResolvedMethod snippetRiMethod = runtime.getRiMethod(snippet);
                 StructuredGraph graph = buildSnippetGraph(snippetRiMethod, runtime, target, pool);
-                runtime.getResolvedJavaMethod(method).compilerStorage().put(Graph.class, graph);
+                runtime.getRiMethod(method).compilerStorage().put(Graph.class, graph);
             } catch (NoSuchMethodException e) {
                 throw new RuntimeException("Could not resolve method to substitute with: " + snippet.getName(), e);
             }
         }
     }
 
-    private static StructuredGraph buildSnippetGraph(final ResolvedJavaMethod snippetRiMethod, final ExtendedRiRuntime runtime, final TargetDescription target, final BoxingMethodPool pool) {
+    private static StructuredGraph buildSnippetGraph(final RiResolvedMethod snippetRiMethod, final GraalRuntime runtime, final CiTarget target, final BoxingMethodPool pool) {
         final StructuredGraph graph = new StructuredGraph(snippetRiMethod);
         return Debug.scope("BuildSnippetGraph", new Object[] {snippetRiMethod, graph}, new Callable<StructuredGraph>() {
             @Override
@@ -105,17 +105,15 @@ public class Snippets {
 
                 for (Invoke invoke : graph.getInvokes()) {
                     MethodCallTargetNode callTarget = invoke.callTarget();
-                    ResolvedJavaMethod targetMethod = callTarget.targetMethod();
-                    ResolvedJavaType holder = targetMethod.holder();
+                    RiResolvedMethod targetMethod = callTarget.targetMethod();
+                    RiResolvedType holder = targetMethod.holder();
                     if (enclosedInSnippetsClass(holder)) {
                         StructuredGraph targetGraph = (StructuredGraph) targetMethod.compilerStorage().get(Graph.class);
                         if (targetGraph == null) {
                             targetGraph = buildSnippetGraph(targetMethod, runtime, target, pool);
                         }
                         InliningUtil.inline(invoke, targetGraph, true);
-                        Debug.dump(graph, "after inlining %s", targetMethod);
                         if (GraalOptions.OptCanonicalizer) {
-                            new WordTypeRewriterPhase(target).apply(graph);
                             new CanonicalizerPhase(target, runtime, null).apply(graph);
                         }
                     }
@@ -123,8 +121,7 @@ public class Snippets {
 
                 new SnippetIntrinsificationPhase(runtime, pool).apply(graph);
 
-                new WordTypeRewriterPhase(target).apply(graph);
-
+                Debug.dump(graph, "%s: %s", snippetRiMethod.name(), GraphBuilderPhase.class.getSimpleName());
                 new DeadCodeEliminationPhase().apply(graph);
                 if (GraalOptions.OptCanonicalizer) {
                     new CanonicalizerPhase(target, runtime, null).apply(graph);
@@ -143,7 +140,7 @@ public class Snippets {
                 return graph;
             }
 
-            private boolean enclosedInSnippetsClass(ResolvedJavaType holder) {
+            private boolean enclosedInSnippetsClass(RiResolvedType holder) {
                 Class enclosingClass = holder.toJava();
                 while (enclosingClass != null) {
                     if (SnippetsInterface.class.isAssignableFrom(enclosingClass)) {
