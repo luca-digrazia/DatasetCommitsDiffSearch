@@ -28,7 +28,6 @@ import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import java.util.*;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
@@ -71,7 +70,7 @@ public class WriteBarrierVerificationPhase extends Phase {
         Iterator<Node> iterator = frontier.iterator();
         while (iterator.hasNext()) {
             Node currentNode = iterator.next();
-            assert !isSafepoint(currentNode) : "Write barrier must be present " + write;
+            assert !isSafepoint(currentNode) : "Write barrier must be present";
             if (useG1GC()) {
                 if (!(currentNode instanceof G1PostWriteBarrier) || ((currentNode instanceof G1PostWriteBarrier) && !validateBarrier((AccessNode) write, (WriteBarrier) currentNode))) {
                     expandFrontier(frontier, currentNode);
