@@ -60,18 +60,6 @@ public class RegexEngine implements RegexLanguageObject {
         this.eagerCompilation = eagerCompilation;
     }
 
-    public RegexObject compile(RegexSource regexSource) throws RegexSyntaxException, UnsupportedRegexException {
-        // Detect SyntaxErrors in regular expressions early.
-        RegexParser regexParser = new RegexParser(regexSource, RegexOptions.DEFAULT);
-        regexParser.validate();
-        RegexObject regexObject = new RegexObject(compiler, regexSource, regexParser.getNamedCaptureGroups());
-        if (eagerCompilation) {
-            // Force the compilation of the RegExp.
-            regexObject.getCompiledRegexObject();
-        }
-        return regexObject;
-    }
-
     public static boolean isInstance(TruffleObject object) {
         return object instanceof RegexEngine;
     }
@@ -103,7 +91,15 @@ public class RegexEngine implements RegexLanguageObject {
                     flags = (String) args[1];
                 }
                 RegexSource regexSource = new RegexSource(pattern, RegexFlags.parseFlags(flags));
-                return receiver.compile(regexSource);
+                // Detect SyntaxErrors in regular expressions early.
+                RegexParser regexParser = new RegexParser(regexSource, RegexOptions.DEFAULT);
+                regexParser.validate();
+                RegexObject regexObject = new RegexObject(receiver.compiler, regexSource, regexParser.getNamedCaptureGroups());
+                if (receiver.eagerCompilation) {
+                    // Force the compilation of the RegExp.
+                    regexObject.getCompiledRegexObject();
+                }
+                return regexObject;
             }
         }
 
