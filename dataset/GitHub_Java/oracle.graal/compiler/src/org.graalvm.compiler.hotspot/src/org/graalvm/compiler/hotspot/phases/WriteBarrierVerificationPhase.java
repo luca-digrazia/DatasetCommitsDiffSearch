@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,10 +29,10 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeFlood;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
-import org.graalvm.compiler.hotspot.gc.g1.G1PostWriteBarrier;
-import org.graalvm.compiler.hotspot.gc.shared.ArrayRangeWriteBarrier;
-import org.graalvm.compiler.hotspot.gc.shared.ObjectWriteBarrier;
-import org.graalvm.compiler.hotspot.gc.shared.SerialWriteBarrier;
+import org.graalvm.compiler.hotspot.nodes.ArrayRangeWriteBarrier;
+import org.graalvm.compiler.hotspot.nodes.G1PostWriteBarrier;
+import org.graalvm.compiler.hotspot.nodes.ObjectWriteBarrier;
+import org.graalvm.compiler.hotspot.nodes.SerialWriteBarrier;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.nodes.DeoptimizingNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
@@ -44,7 +42,6 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.extended.ArrayRangeWrite;
 import org.graalvm.compiler.nodes.java.LoweredAtomicReadAndWriteNode;
 import org.graalvm.compiler.nodes.java.LogicCompareAndSwapNode;
-import org.graalvm.compiler.nodes.java.ValueCompareAndSwapNode;
 import org.graalvm.compiler.nodes.memory.FixedAccessNode;
 import org.graalvm.compiler.nodes.memory.HeapAccess;
 import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
@@ -128,9 +125,6 @@ public class WriteBarrierVerificationPhase extends Phase {
         boolean validatePreBarrier = useG1GC() && (isObjectWrite(node) || !((ArrayRangeWrite) node).isInitialization());
         if (node instanceof WriteNode) {
             WriteNode writeNode = (WriteNode) node;
-            if (config.useDeferredInitBarriers && writeNode.getLocationIdentity().isInit()) {
-                return true;
-            }
             if (writeNode.getLocationIdentity().isInit()) {
                 validatePreBarrier = false;
             }
@@ -195,8 +189,7 @@ public class WriteBarrierVerificationPhase extends Phase {
     }
 
     private static boolean validateBarrier(FixedAccessNode write, ObjectWriteBarrier barrier) {
-        assert write instanceof WriteNode || write instanceof LogicCompareAndSwapNode || write instanceof ValueCompareAndSwapNode ||
-                        write instanceof LoweredAtomicReadAndWriteNode : "Node must be of type requiring a write barrier " + write;
+        assert write instanceof WriteNode || write instanceof LogicCompareAndSwapNode || write instanceof LoweredAtomicReadAndWriteNode : "Node must be of type requiring a write barrier " + write;
         if (!barrier.usePrecise()) {
             if (barrier.getAddress() instanceof OffsetAddressNode && write.getAddress() instanceof OffsetAddressNode) {
                 return GraphUtil.unproxify(((OffsetAddressNode) barrier.getAddress()).getBase()) == GraphUtil.unproxify(((OffsetAddressNode) write.getAddress()).getBase());

@@ -51,7 +51,6 @@ import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node.ConstantNodeParameter;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
-import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.hotspot.meta.HotSpotRegistersProvider;
 import org.graalvm.compiler.hotspot.nodes.G1ArrayRangePostWriteBarrier;
@@ -66,7 +65,6 @@ import org.graalvm.compiler.hotspot.nodes.SerialWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.VMErrorNode;
 import org.graalvm.compiler.nodes.NamedLocationIdentity;
 import org.graalvm.compiler.nodes.NodeView;
-import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.extended.FixedValueAnchorNode;
@@ -81,14 +79,12 @@ import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.type.NarrowOopStamp;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.Log;
-import org.graalvm.compiler.replacements.ReplacementsUtil;
 import org.graalvm.compiler.replacements.SnippetCounter;
 import org.graalvm.compiler.replacements.SnippetCounter.Group;
 import org.graalvm.compiler.replacements.SnippetTemplate.AbstractTemplates;
 import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
 import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
 import org.graalvm.compiler.replacements.Snippets;
-import org.graalvm.compiler.replacements.nodes.AssertionNode;
 import org.graalvm.compiler.replacements.nodes.DirectStoreNode;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.word.LocationIdentity;
@@ -144,10 +140,7 @@ public class WriteBarrierSnippets implements Snippets {
     }
 
     @Snippet
-    public static void serialImpreciseWriteBarrier(Object object, @ConstantParameter boolean verifyBarrier, @ConstantParameter Counters counters) {
-        if (verifyBarrier) {
-            verifyNotArray(object);
-        }
+    public static void serialImpreciseWriteBarrier(Object object, @ConstantParameter Counters counters) {
         serialWriteBarrier(Word.objectToTrackedPointer(object), counters);
     }
 
@@ -228,8 +221,8 @@ public class WriteBarrierSnippets implements Snippets {
     }
 
     @Snippet
-    public static void g1PostWriteBarrier(Address address, Object object, Object value, @ConstantParameter boolean usePrecise, @ConstantParameter boolean verifyBarrier,
-                    @ConstantParameter Register threadRegister, @ConstantParameter boolean trace, @ConstantParameter Counters counters) {
+    public static void g1PostWriteBarrier(Address address, Object object, Object value, @ConstantParameter boolean usePrecise, @ConstantParameter Register threadRegister,
+                    @ConstantParameter boolean trace, @ConstantParameter Counters counters) {
         Word thread = registerAsWord(threadRegister);
         Object fixedValue = FixedValueAnchorNode.getObject(value);
         verifyOop(object);
@@ -239,9 +232,6 @@ public class WriteBarrierSnippets implements Snippets {
         if (usePrecise) {
             oop = Word.fromAddress(address);
         } else {
-            if (verifyBarrier) {
-                verifyNotArray(object);
-            }
             oop = Word.objectToTrackedPointer(object);
         }
         int gcCycle = 0;
@@ -305,13 +295,6 @@ public class WriteBarrierSnippets implements Snippets {
                     }
                 }
             }
-        }
-    }
-
-    private static void verifyNotArray(Object object) {
-        if (object != null) {
-            // Manually build the null check and cast because we're in snippet that's lowered late.
-            AssertionNode.assertion(false, !PiNode.piCastNonNull(object, Object.class).getClass().isArray(), "imprecise card mark used with array");
         }
     }
 
@@ -432,13 +415,11 @@ public class WriteBarrierSnippets implements Snippets {
 
         private final CompressEncoding oopEncoding;
         private final Counters counters;
-        private final boolean verifyBarrier;
 
-        public Templates(OptionValues options, Iterable<DebugHandlersFactory> factories, Group.Factory factory, HotSpotProviders providers, TargetDescription target,
-                        GraalHotSpotVMConfig config) {
+        public Templates(OptionValues options, Iterable<DebugHandlersFactory> factories, SnippetCounter.Group.Factory factory, HotSpotProviders providers, TargetDescription target,
+                        CompressEncoding oopEncoding) {
             super(options, factories, providers, providers.getSnippetReflection(), target);
-            this.oopEncoding = config.useCompressedOops ? config.getOopEncoding() : null;
-            this.verifyBarrier = ReplacementsUtil.REPLACEMENTS_ASSERTIONS_ENABLED || config.verifyBeforeGC || config.verifyAfterGC;
+            this.oopEncoding = oopEncoding;
             this.counters = new Counters(factory);
         }
 
@@ -451,10 +432,9 @@ public class WriteBarrierSnippets implements Snippets {
                 args = new Arguments(serialImpreciseWriteBarrier, writeBarrier.graph().getGuardsStage(), tool.getLoweringStage());
                 OffsetAddressNode address = (OffsetAddressNode) writeBarrier.getAddress();
                 args.add("object", address.getBase());
-                args.addConst("verifyBarrier", verifyBarrier);
             }
             args.addConst("counters", counters);
-            template(writeBarrier, args).instantiate(providers.getMetaAccess(), writeBarrier, DEFAULT_REPLACER, args);
+            template(writeBarrier.getDebug(), args).instantiate(providers.getMetaAccess(), writeBarrier, DEFAULT_REPLACER, args);
         }
 
         public void lower(SerialArrayRangeWriteBarrier arrayRangeWriteBarrier, LoweringTool tool) {
@@ -462,7 +442,7 @@ public class WriteBarrierSnippets implements Snippets {
             args.add("address", arrayRangeWriteBarrier.getAddress());
             args.add("length", arrayRangeWriteBarrier.getLength());
             args.addConst("elementStride", arrayRangeWriteBarrier.getElementStride());
-            template(arrayRangeWriteBarrier, args).instantiate(providers.getMetaAccess(), arrayRangeWriteBarrier, DEFAULT_REPLACER, args);
+            template(arrayRangeWriteBarrier.getDebug(), args).instantiate(providers.getMetaAccess(), arrayRangeWriteBarrier, DEFAULT_REPLACER, args);
         }
 
         public void lower(G1PreWriteBarrier writeBarrierPre, HotSpotRegistersProvider registers, LoweringTool tool) {
@@ -487,7 +467,7 @@ public class WriteBarrierSnippets implements Snippets {
             args.addConst("threadRegister", registers.getThreadRegister());
             args.addConst("trace", traceBarrier(writeBarrierPre.graph()));
             args.addConst("counters", counters);
-            template(writeBarrierPre, args).instantiate(providers.getMetaAccess(), writeBarrierPre, DEFAULT_REPLACER, args);
+            template(writeBarrierPre.getDebug(), args).instantiate(providers.getMetaAccess(), writeBarrierPre, DEFAULT_REPLACER, args);
         }
 
         public void lower(G1ReferentFieldReadBarrier readBarrier, HotSpotRegistersProvider registers, LoweringTool tool) {
@@ -512,7 +492,7 @@ public class WriteBarrierSnippets implements Snippets {
             args.addConst("threadRegister", registers.getThreadRegister());
             args.addConst("trace", traceBarrier(readBarrier.graph()));
             args.addConst("counters", counters);
-            template(readBarrier, args).instantiate(providers.getMetaAccess(), readBarrier, DEFAULT_REPLACER, args);
+            template(readBarrier.getDebug(), args).instantiate(providers.getMetaAccess(), readBarrier, DEFAULT_REPLACER, args);
         }
 
         public void lower(G1PostWriteBarrier writeBarrierPost, HotSpotRegistersProvider registers, LoweringTool tool) {
@@ -539,11 +519,10 @@ public class WriteBarrierSnippets implements Snippets {
             args.add("value", value);
 
             args.addConst("usePrecise", writeBarrierPost.usePrecise());
-            args.addConst("verifyBarrier", verifyBarrier);
             args.addConst("threadRegister", registers.getThreadRegister());
             args.addConst("trace", traceBarrier(writeBarrierPost.graph()));
             args.addConst("counters", counters);
-            template(writeBarrierPost, args).instantiate(providers.getMetaAccess(), writeBarrierPost, DEFAULT_REPLACER, args);
+            template(graph.getDebug(), args).instantiate(providers.getMetaAccess(), writeBarrierPost, DEFAULT_REPLACER, args);
         }
 
         public void lower(G1ArrayRangePreWriteBarrier arrayRangeWriteBarrier, HotSpotRegistersProvider registers, LoweringTool tool) {
@@ -552,7 +531,7 @@ public class WriteBarrierSnippets implements Snippets {
             args.add("length", arrayRangeWriteBarrier.getLength());
             args.addConst("elementStride", arrayRangeWriteBarrier.getElementStride());
             args.addConst("threadRegister", registers.getThreadRegister());
-            template(arrayRangeWriteBarrier, args).instantiate(providers.getMetaAccess(), arrayRangeWriteBarrier, DEFAULT_REPLACER, args);
+            template(arrayRangeWriteBarrier.getDebug(), args).instantiate(providers.getMetaAccess(), arrayRangeWriteBarrier, DEFAULT_REPLACER, args);
         }
 
         public void lower(G1ArrayRangePostWriteBarrier arrayRangeWriteBarrier, HotSpotRegistersProvider registers, LoweringTool tool) {
@@ -561,7 +540,7 @@ public class WriteBarrierSnippets implements Snippets {
             args.add("length", arrayRangeWriteBarrier.getLength());
             args.addConst("elementStride", arrayRangeWriteBarrier.getElementStride());
             args.addConst("threadRegister", registers.getThreadRegister());
-            template(arrayRangeWriteBarrier, args).instantiate(providers.getMetaAccess(), arrayRangeWriteBarrier, DEFAULT_REPLACER, args);
+            template(arrayRangeWriteBarrier.getDebug(), args).instantiate(providers.getMetaAccess(), arrayRangeWriteBarrier, DEFAULT_REPLACER, args);
         }
     }
 
