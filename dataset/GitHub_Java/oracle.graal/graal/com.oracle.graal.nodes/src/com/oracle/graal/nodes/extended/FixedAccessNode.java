@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Accesses a value at an memory address specified by an {@linkplain #object object} and a
@@ -32,11 +32,12 @@ import com.oracle.graal.nodes.*;
  */
 public abstract class FixedAccessNode extends DeoptimizingFixedWithNextNode implements Access {
 
-    @OptionalInput(InputType.Guard) private GuardingNode guard;
+    @Input(InputType.Guard) private GuardingNode guard;
     @Input private ValueNode object;
     @Input(InputType.Association) private ValueNode location;
     private boolean nullCheck;
     private BarrierType barrierType;
+    private boolean compressible;
 
     public ValueNode object() {
         return object;
@@ -64,20 +65,20 @@ public abstract class FixedAccessNode extends DeoptimizingFixedWithNextNode impl
     }
 
     public FixedAccessNode(ValueNode object, ValueNode location, Stamp stamp) {
-        this(object, location, stamp, BarrierType.NONE);
+        this(object, location, stamp, null, BarrierType.NONE, false);
     }
 
-    public FixedAccessNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType) {
-        this(object, location, stamp, null, barrierType, false, null);
+    public FixedAccessNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType, boolean compressible) {
+        this(object, location, stamp, null, barrierType, compressible);
     }
 
-    public FixedAccessNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck, FrameState stateBefore) {
-        super(stamp, stateBefore);
+    public FixedAccessNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean compressible) {
+        super(stamp);
         this.object = object;
         this.location = location;
         this.guard = guard;
         this.barrierType = barrierType;
-        this.nullCheck = nullCheck;
+        this.compressible = compressible;
     }
 
     @Override
@@ -99,5 +100,10 @@ public abstract class FixedAccessNode extends DeoptimizingFixedWithNextNode impl
     @Override
     public BarrierType getBarrierType() {
         return barrierType;
+    }
+
+    @Override
+    public boolean isCompressible() {
+        return compressible;
     }
 }

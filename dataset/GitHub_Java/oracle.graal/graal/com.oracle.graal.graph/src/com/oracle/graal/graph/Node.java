@@ -111,7 +111,7 @@ public abstract class Node implements Cloneable, Formattable {
          * method. If not specified, then the class in which the annotated method is declared is
          * used (and is assumed to be a {@link Node} subclass).
          */
-        Class<?> value() default NodeIntrinsic.class;
+        Class value() default NodeIntrinsic.class;
 
         /**
          * Determines if the stamp of the instantiated intrinsic node has its stamp set from the
@@ -135,6 +135,8 @@ public abstract class Node implements Cloneable, Formattable {
 
     private static final int INLINE_USAGE_COUNT = 2;
     private static final Node[] NO_NODES = {};
+
+    private static final boolean VERIFY_TYPES = true;
 
     /**
      * Head of usage list. The elements of the usage list in order are {@link #usage0},
@@ -228,7 +230,7 @@ public abstract class Node implements Cloneable, Formattable {
         }
     }
 
-    class NodeUsageIterable implements NodeIterable<Node> {
+    class NodeUsageIterable extends AbstractNodeIterable<Node> {
 
         public NodeUsageIterator iterator() {
             return new NodeUsageIterator();
@@ -746,12 +748,14 @@ public abstract class Node implements Cloneable, Formattable {
             for (Node usage : usages()) {
                 assertFalse(usage.isDeleted(), "usage %s must never be deleted", usage);
                 assertTrue(usage.inputs().contains(this), "missing input in usage %s", usage);
-                NodeClassIterator iterator = usage.inputs().iterator();
-                while (iterator.hasNext()) {
-                    Position pos = iterator.nextPosition();
-                    if (pos.get(usage) == this && pos.getInputType(usage) != InputType.Unchecked) {
-                        assert isAllowedUsageType(pos.getInputType(usage)) : "invalid input of type " + pos.getInputType(usage) + " from " + usage + " to " + this + " (" + pos.getInputName(usage) +
-                                        ")";
+                if (VERIFY_TYPES) {
+                    NodeClassIterator iterator = usage.inputs().iterator();
+                    while (iterator.hasNext()) {
+                        Position pos = iterator.nextPosition();
+                        if (pos.get(usage) == this && pos.getInputType(usage) != InputType.Unchecked) {
+                            assert isAllowedUsageType(pos.getInputType(usage)) : "invalid input of type " + pos.getInputType(usage) + " from " + usage + " to " + this + " (" +
+                                            pos.getInputName(usage) + ")";
+                        }
                     }
                 }
             }
@@ -907,8 +911,7 @@ public abstract class Node implements Cloneable, Formattable {
         if ((flags & FormattableFlags.ALTERNATE) == FormattableFlags.ALTERNATE) {
             formatter.format("%s", toString(Verbosity.Id));
         } else if ((flags & FormattableFlags.UPPERCASE) == FormattableFlags.UPPERCASE) {
-            // Use All here since Long is only slightly longer than Short.
-            formatter.format("%s", toString(Verbosity.All));
+            formatter.format("%s", toString(Verbosity.Long));
         } else {
             formatter.format("%s", toString(Verbosity.Short));
         }
