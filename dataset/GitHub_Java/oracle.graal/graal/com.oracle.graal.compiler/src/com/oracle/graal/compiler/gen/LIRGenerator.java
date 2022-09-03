@@ -486,17 +486,9 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
                 }
             }
         }
-
-        if (!hasBlockEnd(block)) {
+        if (block.getSuccessorCount() >= 1 && !hasBlockEnd(block)) {
             NodeClassIterable successors = block.getEndNode().successors();
-            assert successors.count() == block.getSuccessorCount();
-            if (block.getSuccessorCount() != 1) {
-                /*
-                 * If we have more than one successor, we cannot just use the first one. Since
-                 * successors are unordered, this would be a random choice.
-                 */
-                throw new GraalInternalError("Block without BlockEndOp: " + block.getEndNode());
-            }
+            assert successors.isNotEmpty() : "should have at least one successor : " + block.getEndNode();
             emitJump(getLIRBlock((FixedNode) successors.first()));
         }
 
@@ -738,10 +730,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
         if (isLegal(result)) {
             setResult(x.asNode(), emitMove(result));
-        }
-
-        if (x instanceof InvokeWithExceptionNode) {
-            emitJump(getLIRBlock(((InvokeWithExceptionNode) x).next()));
         }
     }
 
