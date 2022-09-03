@@ -143,7 +143,7 @@ public final class Source {
      * @since 1.0
      */
     public String getName() {
-        return getImpl().getName(impl);
+        return IMPL.getName(impl);
     }
 
     /**
@@ -153,7 +153,7 @@ public final class Source {
      * @since 1.0
      */
     public String getPath() {
-        return getImpl().getPath(impl);
+        return IMPL.getPath(impl);
     }
 
     /**
@@ -168,7 +168,7 @@ public final class Source {
      * @since 1.0
      */
     public boolean isInteractive() {
-        return getImpl().isInteractive(impl);
+        return IMPL.isInteractive(impl);
     }
 
     /**
@@ -178,7 +178,7 @@ public final class Source {
      * @since 1.0
      */
     public URL getURL() {
-        return getImpl().getURL(impl);
+        return IMPL.getURL(impl);
     }
 
     /**
@@ -192,7 +192,7 @@ public final class Source {
      * @since 1.0
      */
     public URI getURI() {
-        return getImpl().getURI(impl);
+        return IMPL.getURI(impl);
     }
 
     /**
@@ -201,7 +201,7 @@ public final class Source {
      * @since 1.0
      */
     public Reader getReader() {
-        return getImpl().getReader(impl);
+        return IMPL.getReader(impl);
     }
 
     /**
@@ -211,7 +211,7 @@ public final class Source {
      * @since 1.0
      */
     public InputStream getInputStream() {
-        return getImpl().getInputStream(impl);
+        return IMPL.getInputStream(impl);
     }
 
     /**
@@ -221,7 +221,7 @@ public final class Source {
      * @since 1.0
      */
     public int getLength() {
-        return getImpl().getLength(impl);
+        return IMPL.getLength(impl);
     }
 
     /**
@@ -231,7 +231,7 @@ public final class Source {
      * @since 1.0
      */
     public CharSequence getCode() {
-        return getImpl().getCode(impl);
+        return IMPL.getCode(impl);
     }
 
     /**
@@ -241,7 +241,7 @@ public final class Source {
      * @since 1.0
      */
     public CharSequence getCode(int lineNumber) {
-        return getImpl().getCode(impl, lineNumber);
+        return IMPL.getCode(impl, lineNumber);
     }
 
     /**
@@ -252,7 +252,7 @@ public final class Source {
      * @since 1.0
      */
     public int getLineCount() {
-        return getImpl().getLineCount(impl);
+        return IMPL.getLineCount(impl);
     }
 
     /**
@@ -263,7 +263,7 @@ public final class Source {
      * @since 1.0
      */
     public int getLineNumber(int offset) throws IllegalArgumentException {
-        return getImpl().getLineNumber(impl, offset);
+        return IMPL.getLineNumber(impl, offset);
     }
 
     /**
@@ -274,7 +274,7 @@ public final class Source {
      * @since 1.0
      */
     public int getColumnNumber(int offset) throws IllegalArgumentException {
-        return getImpl().getColumnNumber(impl, offset);
+        return IMPL.getColumnNumber(impl, offset);
     }
 
     /**
@@ -284,7 +284,7 @@ public final class Source {
      * @since 1.0
      */
     public int getLineStartOffset(int lineNumber) throws IllegalArgumentException {
-        return getImpl().getLineStartOffset(impl, lineNumber);
+        return IMPL.getLineStartOffset(impl, lineNumber);
     }
 
     /**
@@ -295,7 +295,7 @@ public final class Source {
      * @since 1.0
      */
     public int getLineLength(int lineNumber) throws IllegalArgumentException {
-        return getImpl().getLineLength(impl, lineNumber);
+        return IMPL.getLineLength(impl, lineNumber);
     }
 
     /**
@@ -314,7 +314,7 @@ public final class Source {
      * @since 1.0
      */
     public boolean isInternal() {
-        return getImpl().isInternal(impl);
+        return IMPL.isInternal(impl);
     }
 
     /**
@@ -324,7 +324,7 @@ public final class Source {
      */
     @Override
     public String toString() {
-        return getImpl().toString(impl);
+        return IMPL.toString(impl);
     }
 
     /**
@@ -334,7 +334,7 @@ public final class Source {
      */
     @Override
     public int hashCode() {
-        return getImpl().hashCode(impl);
+        return IMPL.hashCode(impl);
     }
 
     /**
@@ -350,7 +350,7 @@ public final class Source {
         } else {
             return false;
         }
-        return getImpl().equals(impl, otherImpl);
+        return IMPL.equals(impl, otherImpl);
     }
 
     public static Builder newBuilder(String language, CharSequence source, String name) {
