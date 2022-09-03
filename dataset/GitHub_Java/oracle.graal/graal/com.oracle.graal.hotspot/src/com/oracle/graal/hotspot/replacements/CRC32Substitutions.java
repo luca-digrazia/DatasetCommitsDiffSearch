@@ -46,7 +46,7 @@ public class CRC32Substitutions {
      */
     @Fold
     private static long crcTableAddress() {
-        return runtime().getConfig().crcTableAddress;
+        return graalRuntime().getConfig().crcTableAddress;
     }
 
     @MethodSubstitution(isStatic = true)
