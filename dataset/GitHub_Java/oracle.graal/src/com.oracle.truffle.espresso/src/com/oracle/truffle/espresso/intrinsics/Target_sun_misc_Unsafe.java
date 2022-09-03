@@ -315,7 +315,7 @@ public class Target_sun_misc_Unsafe {
 
     @Intrinsic(hasReceiver = true)
     public static void setMemory(Object self, Object o, long offset, long bytes, byte value) {
-        if (StaticObject.isNull(o)) {
+        if (o == StaticObject.NULL) {
             o = null;
         }
         U.setMemory(o, offset, bytes, value);
