@@ -23,24 +23,24 @@
 package com.oracle.graal.lir.sparc;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.isSimm13;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Cmp;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
+//@formatter:off
 public enum SPARCCompare {
     ICMP, LCMP, ACMP, FCMP, DCMP;
 
     public static class CompareOp extends SPARCLIRInstruction {
 
         @Opcode private final SPARCCompare opcode;
-        @Use({REG}) protected Value x;
-        @Use({REG, CONST}) protected Value y;
+        @Use({REG, STACK, CONST}) protected Value x;
+        @Use({REG, STACK, CONST}) protected Value y;
 
         public CompareOp(SPARCCompare opcode, Value x, Value y) {
             this.opcode = opcode;
@@ -56,58 +56,79 @@ public enum SPARCCompare {
         @Override
         protected void verify() {
             super.verify();
-            assert (name().startsWith("I") && x.getKind() == Kind.Int && y.getKind().getStackKind() == Kind.Int) || (name().startsWith("L") && x.getKind() == Kind.Long && y.getKind() == Kind.Long) ||
-                            (name().startsWith("A") && x.getKind() == Kind.Object && y.getKind() == Kind.Object) ||
-                            (name().startsWith("F") && x.getKind() == Kind.Float && y.getKind() == Kind.Float) || (name().startsWith("D") && x.getKind() == Kind.Double && y.getKind() == Kind.Double);
+            assert (name().startsWith("I") && x.getKind() == Kind.Int && y.getKind().getStackKind() == Kind.Int)
+                || (name().startsWith("L") && x.getKind() == Kind.Long && y.getKind() == Kind.Long)
+                || (name().startsWith("A") && x.getKind() == Kind.Object && y.getKind() == Kind.Object)
+                || (name().startsWith("F") && x.getKind() == Kind.Float && y.getKind() == Kind.Float)
+                || (name().startsWith("D") && x.getKind() == Kind.Double && y.getKind() == Kind.Double);
         }
     }
 
+    @SuppressWarnings("unused")
     public static void emit(TargetMethodAssembler tasm, SPARCAssembler masm, SPARCCompare opcode, Value x, Value y) {
         if (isRegister(y)) {
             switch (opcode) {
                 case ICMP:
-                    new Cmp(asIntReg(x), asIntReg(y)).emit(masm);
+                    new Cmp(masm, asIntReg(x), asIntReg(y));
                     break;
                 case LCMP:
-                    new Cmp(asLongReg(x), asLongReg(y)).emit(masm);
+                    new Cmp(masm, asLongReg(x), asLongReg(y));
                     break;
                 case ACMP:
                     // masm.cmpptr(asObjectReg(x), asObjectReg(y));
-                    // break;
+                    break;
                 case FCMP:
                     // masm.ucomiss(asFloatReg(x), asFloatReg(y));
-                    // break;
+                    break;
                 case DCMP:
                     // masm.ucomisd(asDoubleReg(x), asDoubleReg(y));
-                    // break;
+                    break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }
-        } else {
-            assert isConstant(y);
+        } else if (isConstant(y)) {
             switch (opcode) {
                 case ICMP:
                     assert isSimm13(tasm.asIntConst(y));
-                    new Cmp(asIntReg(x), tasm.asIntConst(y)).emit(masm);
+                    new Cmp(masm, asIntReg(x), tasm.asIntConst(y));
                     break;
                 case LCMP:
                     assert isSimm13(tasm.asIntConst(y));
-                    new Cmp(asLongReg(x), tasm.asIntConst(y)).emit(masm);
+                    new Cmp(masm, asLongReg(x), tasm.asIntConst(y));
                     break;
                 case ACMP:
                     if (((Constant) y).isNull()) {
                         // masm.cmpq(asObjectReg(x), 0);
-                        // break;
-                        throw GraalInternalError.shouldNotReachHere();
+                        break;
                     } else {
                         throw GraalInternalError.shouldNotReachHere("Only null object constants are allowed in comparisons");
                     }
                 case FCMP:
                     // masm.ucomiss(asFloatReg(x), (AMD64Address) tasm.asFloatConstRef(y));
-                    // break;
+                    break;
                 case DCMP:
                     // masm.ucomisd(asDoubleReg(x), (AMD64Address) tasm.asDoubleConstRef(y));
-                    // break;
+                    break;
+                default:
+                    throw GraalInternalError.shouldNotReachHere();
+            }
+        } else {
+            switch (opcode) {
+                case ICMP:
+                    // masm.cmpl(asIntReg(x), (AMD64Address) tasm.asIntAddr(y)); 
+                    break;
+                case LCMP:
+                    // masm.cmpq(asLongReg(x), (AMD64Address) tasm.asLongAddr(y));
+                    break;
+                case ACMP:
+                    // masm.cmpptr(asObjectReg(x), (AMD64Address) tasm.asObjectAddr(y));
+                    break;
+                case FCMP:
+                    // masm.ucomiss(asFloatReg(x), (AMD64Address) tasm.asFloatAddr(y));
+                    break;
+                case DCMP:
+                    // masm.ucomisd(asDoubleReg(x), (AMD64Address) tasm.asDoubleAddr(y)); 
+                    break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }

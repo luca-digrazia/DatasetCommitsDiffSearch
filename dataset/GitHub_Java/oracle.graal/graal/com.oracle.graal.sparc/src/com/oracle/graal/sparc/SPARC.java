@@ -83,24 +83,6 @@ public class SPARC extends Architecture {
     public static final Register g6 = r6;
     public static final Register g7 = r7;
 
-    public static final Register o0 = r8;
-    public static final Register o1 = r9;
-    public static final Register o2 = r10;
-    public static final Register o3 = r11;
-    public static final Register o4 = r12;
-    public static final Register o5 = r13;
-    public static final Register o6 = r14;
-    public static final Register o7 = r15;
-
-    public static final Register l0 = r16;
-    public static final Register l1 = r17;
-    public static final Register l2 = r18;
-    public static final Register l3 = r19;
-    public static final Register l4 = r20;
-    public static final Register l5 = r21;
-    public static final Register l6 = r22;
-    public static final Register l7 = r23;
-
     public static final Register i0 = r24;
     public static final Register i1 = r25;
     public static final Register i2 = r26;
@@ -110,12 +92,18 @@ public class SPARC extends Architecture {
     public static final Register i6 = r30;
     public static final Register i7 = r31;
 
-    public static final Register fp = i6;
-    public static final Register sp = o6;
+    public static final Register o0 = r8;
+    public static final Register o1 = r9;
+    public static final Register o2 = r10;
+    public static final Register o3 = r11;
+    public static final Register o4 = r12;
+    public static final Register o5 = r13;
+    public static final Register o6 = r14;
+    public static final Register o7 = r15;
 
-    public static final Register[] cpuRegisters = {
+    public static final Register[] gprRegisters = {
         r0,  r1,  r2,  r3,  r4,  r5,  r6,  r7,
-        r8,  r9,  r10, r11, r12, r13, r14, r15,
+         r8,  r9, r10, r11, r12, r13, r14, r15,
         r16, r17, r18, r19, r20, r21, r22, r23,
         r24, r25, r26, r27, r28, r29, r30, r31
     };
@@ -131,7 +119,7 @@ public class SPARC extends Architecture {
     public static final Register f7 = new Register(39, 7, "f7", FPU);
 
     public static final Register[] allRegisters = {
-        // CPU
+        // GPR
         r0,  r1,  r2,  r3,  r4,  r5,  r6,  r7,
         r8,  r9, r10, r11, r12, r13, r14, r15,
        r16, r17, r18, r19, r20, r21, r22, r23,
@@ -140,50 +128,20 @@ public class SPARC extends Architecture {
         f0,  f1,  f2,  f3,  f4,  f5,  f6,  f7,
     };
 
-    // @formatter:on
-
     public SPARC() {
-        // The return address doesn't have an extra slot in the frame so we pass 0 for the return
-        // address size.
-        super("SPARC", 8, ByteOrder.BIG_ENDIAN, allRegisters, LOAD_STORE | STORE_STORE, 1, r31.encoding + 1, 0);
+        super("SPARC", 8, ByteOrder.LITTLE_ENDIAN, allRegisters, LOAD_STORE | STORE_STORE, 1, 0, 8);
+        // SPARC: Fix architecture parameters.
     }
 
     @Override
-    public boolean canStoreValue(RegisterCategory category, PlatformKind platformKind) {
-        if (!(platformKind instanceof Kind)) {
-            return false;
-        }
-
-        Kind kind = (Kind) platformKind;
-        if (category == CPU) {
-            switch (kind) {
-                case Boolean:
-                case Byte:
-                case Char:
-                case Short:
-                case Int:
-                case Long:
-                case Object:
-                    return true;
-            }
-        } else if (category == FPU) {
-            switch (kind) {
-                case Float:
-                case Double:
-                    return true;
-            }
-        }
+    public boolean canStoreValue(RegisterCategory category, PlatformKind kind) {
+        // TODO Auto-generated method stub
         return false;
     }
 
     @Override
     public PlatformKind getLargestStorableKind(RegisterCategory category) {
-        if (category == CPU) {
-            return Kind.Long;
-        } else if (category == FPU) {
-            return Kind.Double;
-        } else {
-            return Kind.Illegal;
-        }
+        // TODO Auto-generated method stub
+        return null;
     }
 }
