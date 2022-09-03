@@ -43,12 +43,12 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.interop.java.MethodMessage;
 import com.oracle.truffle.api.nodes.Node;
@@ -141,22 +141,12 @@ public class JavaInteropTest {
 
     }
 
-    @Test
-    public void readUnknownField() throws Exception {
-        try {
-            ForeignAccess.sendRead(Message.READ.createNode(), obj, "unknown");
-            fail("Exception thrown when reading unknown field");
-        } catch (UnknownIdentifierException ex) {
-            assertEquals("unknown", ex.getUnknownIdentifier());
-        }
-    }
-
     static CallTarget sendKeys() {
         final Node keysNode = Message.KEYS.createNode();
 
         class SendKeys extends RootNode {
             SendKeys() {
-                super(null);
+                super(TruffleLanguage.class, null, null);
             }
 
             @Override
@@ -548,7 +538,7 @@ public class JavaInteropTest {
 
     static Object message(final Message m, TruffleObject receiver, Object... arr) {
         Node n = m.createNode();
-        CallTarget callTarget = Truffle.getRuntime().createCallTarget(new TemporaryRoot(n, receiver, arr));
+        CallTarget callTarget = Truffle.getRuntime().createCallTarget(new TemporaryRoot(TruffleLanguage.class, n, receiver, arr));
         return callTarget.call();
     }
 
@@ -557,8 +547,9 @@ public class JavaInteropTest {
         private final TruffleObject function;
         private final Object[] args;
 
-        TemporaryRoot(Node foreignAccess, TruffleObject function, Object... args) {
-            super(null);
+        @SuppressWarnings("rawtypes")
+        TemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function, Object... args) {
+            super(lang, null, null);
             this.foreignAccess = foreignAccess;
             this.function = function;
             this.args = args;
