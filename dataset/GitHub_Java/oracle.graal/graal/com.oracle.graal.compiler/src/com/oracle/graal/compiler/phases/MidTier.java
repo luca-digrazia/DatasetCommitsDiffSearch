@@ -29,7 +29,6 @@ import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.virtual.phases.ea.*;
 
 public class MidTier extends PhaseSuite<MidTierContext> {
 
@@ -45,10 +44,6 @@ public class MidTier extends PhaseSuite<MidTierContext> {
 
         appendPhase(new ValueAnchorCleanupPhase());
         appendPhase(new LockEliminationPhase());
-
-        if (OptReadElimination.getValue()) {
-            appendPhase(new EarlyReadEliminationPhase(canonicalizer));
-        }
 
         if (OptFloatingReads.getValue()) {
             IncrementalCanonicalizerPhase<MidTierContext> incCanonicalizer = new IncrementalCanonicalizerPhase<>();

@@ -37,7 +37,7 @@ import com.oracle.graal.phases.graph.*;
  */
 public class ValueAnchorCleanupPhase extends Phase {
 
-    private static class State extends MergeableState<State> implements Cloneable {
+    private static class State extends MergeableState<State> {
 
         private final HashSet<Node> anchoredValues;
 
@@ -73,15 +73,14 @@ public class ValueAnchorCleanupPhase extends Phase {
         protected void node(FixedNode node) {
             if (node instanceof ValueAnchorNode) {
                 ValueAnchorNode anchor = (ValueAnchorNode) node;
-                ValueNode anchored = anchor.getAnchoredNode();
-                if (anchored != null) {
+                for (ValueNode anchored : anchor.getAnchoredNodes().snapshot()) {
                     if (state.anchoredValues.contains(anchored)) {
-                        anchor.removeAnchoredNode();
+                        anchor.removeAnchoredNode(anchored);
                     } else {
                         state.anchoredValues.add(anchored);
                     }
                 }
-                if (anchor.getAnchoredNode() == null && anchor.usages().isEmpty()) {
+                if (!anchor.isPermanent() && anchor.getAnchoredNodes().isEmpty() && anchor.usages().isEmpty()) {
                     node.graph().removeFixed(anchor);
                 }
             }

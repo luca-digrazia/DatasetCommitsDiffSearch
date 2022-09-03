@@ -46,7 +46,7 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
         this.anchored = new NodeInputList<>(this, values);
     }
 
-    private boolean permanent;
+    private final boolean permanent;
 
     @Override
     public void generate(LIRGeneratorTool gen) {
@@ -65,10 +65,6 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
 
     public NodeInputList<ValueNode> getAnchoredNodes() {
         return anchored;
-    }
-
-    public void setPermanent(boolean permanent) {
-        this.permanent = permanent;
     }
 
     public boolean isPermanent() {
