@@ -39,7 +39,6 @@ import com.oracle.truffle.api.*;
  *
  * Substitution for method {@link CompilerDirectives#unsafeGetFinalObject} and friends.
  */
-@NodeInfo
 public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements Canonicalizable, Virtualizable, Lowerable {
     @Input private ValueNode object;
     @Input private ValueNode offset;
@@ -60,7 +59,7 @@ public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements 
     public Node canonical(CanonicalizerTool tool) {
         if (object.isConstant() && !object.isNullConstant() && offset.isConstant() && condition.isConstant() && condition.asConstant().asInt() == 1) {
             Constant constant = tool.getConstantReflection().readUnsafeConstant(accessKind, object.asConstant(), offset.asConstant().asLong());
-            return ConstantNode.forConstant(constant, tool.getMetaAccess());
+            return ConstantNode.forConstant(constant, tool.getMetaAccess(), graph());
         }
         return this;
     }
