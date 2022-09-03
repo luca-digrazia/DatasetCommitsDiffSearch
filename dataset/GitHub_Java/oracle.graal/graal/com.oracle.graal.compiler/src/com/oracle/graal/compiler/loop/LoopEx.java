@@ -30,7 +30,7 @@ public class LoopEx {
     private final Loop lirLoop;
     private LoopFragmentInside inside;
     private LoopFragmentWhole whole;
-    private CountedLoopInfo counted; //TODO (gd) detect
+    private boolean isCounted; //TODO (gd) detect
     private LoopsData data;
 
     LoopEx(Loop lirLoop, LoopsData data) {
@@ -56,19 +56,17 @@ public class LoopEx {
         return whole;
     }
 
-    @SuppressWarnings("unused")
     public LoopFragmentInsideFrom insideFrom(FixedNode point) {
         // TODO (gd)
         return null;
     }
 
-    @SuppressWarnings("unused")
     public LoopFragmentInsideBefore insideBefore(FixedNode point) {
         // TODO (gd)
         return null;
     }
 
-    public boolean isOutsideLoop(Node n) {
+    public boolean isInvariant(Node n) {
         return !whole().contains(n);
     }
 
@@ -85,11 +83,7 @@ public class LoopEx {
     }
 
     public boolean isCounted() {
-        return counted != null;
-    }
-
-    public CountedLoopInfo counted() {
-        return counted;
+        return isCounted;
     }
 
     public LoopEx parent() {

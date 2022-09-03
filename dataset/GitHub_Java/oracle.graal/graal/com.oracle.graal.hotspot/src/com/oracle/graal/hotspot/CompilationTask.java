@@ -29,7 +29,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.ri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.max.criutils.*;
 
@@ -47,18 +47,18 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
 
     private volatile boolean cancelled;
 
-    private final HotSpotGraalRuntime compiler;
+    private final HotSpotCompilerImpl compiler;
     private final PhasePlan plan;
-    private final HotSpotResolvedJavaMethod method;
+    private final HotSpotMethodResolved method;
     private final OptimisticOptimizations optimisticOpts;
     private final int id;
     private final int priority;
 
-    public static CompilationTask create(HotSpotGraalRuntime compiler, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int id, int priority) {
+    public static CompilationTask create(HotSpotCompilerImpl compiler, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotMethodResolved method, int id, int priority) {
         return new CompilationTask(compiler, plan, optimisticOpts, method, id, priority);
     }
 
-    private CompilationTask(HotSpotGraalRuntime compiler, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int id, int priority) {
+    private CompilationTask(HotSpotCompilerImpl compiler, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotMethodResolved method, int id, int priority) {
         this.compiler = compiler;
         this.plan = plan;
         this.method = method;
@@ -67,7 +67,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         this.priority = priority;
     }
 
-    public ResolvedJavaMethod method() {
+    public RiResolvedMethod method() {
         return method;
     }
 
@@ -101,20 +101,20 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
     }
 
     public void runCompilation() {
-        CompilationStatistics stats = CompilationStatistics.create(method);
+        CiCompilationStatistics stats = CiCompilationStatistics.create(method);
         try {
             final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
             if (printCompilation) {
                 TTY.println(String.format("%-6d Graal %-70s %-45s %-50s ...", id, method.holder().name(), method.name(), method.signature().asString()));
             }
 
-            CompilationResult result = null;
+            CiTargetMethod result = null;
             TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
             try {
-                result = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true), new Callable<CompilationResult>() {
+                result = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true), new Callable<CiTargetMethod>() {
 
                     @Override
-                    public CompilationResult call() throws Exception {
+                    public CiTargetMethod call() throws Exception {
                         compiler.evictDeoptedGraphs();
                         StructuredGraph graph = new StructuredGraph(method);
                         return compiler.getCompiler().compileMethod(method, graph, -1, compiler.getCache(), plan, optimisticOpts);
@@ -128,14 +128,14 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
             }
 
             installMethod(result);
-        } catch (BailoutException bailout) {
+        } catch (CiBailout bailout) {
             Debug.metric("Bailouts").increment();
             if (GraalOptions.ExitVMOnBailout) {
-                TTY.cachedOut.println(CodeUtil.format("Bailout in %H.%n(%p)", method));
+                TTY.cachedOut.println(CiUtil.format("Bailout in %H.%n(%p)", method));
                 bailout.printStackTrace(TTY.cachedOut);
                 System.exit(-1);
             } else if (GraalOptions.PrintBailout) {
-                TTY.cachedOut.println(CodeUtil.format("Bailout in %H.%n(%p)", method));
+                TTY.cachedOut.println(CiUtil.format("Bailout in %H.%n(%p)", method));
                 bailout.printStackTrace(TTY.cachedOut);
             }
         } catch (Throwable t) {
@@ -147,14 +147,14 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         stats.finish(method);
     }
 
-    private void installMethod(final CompilationResult tm) {
+    private void installMethod(final CiTargetMethod tm) {
         Debug.scope("CodeInstall", new Object[] {new DebugDumpScope(String.valueOf(id), true), compiler.getCompiler(), method}, new Runnable() {
             @Override
             public void run() {
-                final CodeInfo[] info = Debug.isDumpEnabled() ? new CodeInfo[1] : null;
+                final RiCodeInfo[] info = Debug.isDumpEnabled() ? new RiCodeInfo[1] : null;
                 compiler.getRuntime().installMethod(method, tm, info);
                 if (info != null) {
-                    Debug.dump(new Object[] {tm, info[0]}, "After code installation");
+                    Debug.dump(info[0], "After code installation");
                 }
             }
 

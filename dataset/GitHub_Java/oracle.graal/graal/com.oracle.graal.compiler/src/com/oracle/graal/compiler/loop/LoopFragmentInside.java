@@ -69,7 +69,6 @@ public class LoopFragmentInside extends LoopFragment {
         return (LoopFragmentInside) super.original();
     }
 
-    @SuppressWarnings("unused")
     public void appendInside(LoopEx loop) {
         // TODO (gd)
     }
@@ -245,6 +244,9 @@ public class LoopFragmentInside extends LoopFragment {
                 ValueNode initializer = firstPhi;
                 if (duplicateState != null) {
                     duplicateState.replaceFirstInput(phi, firstPhi); // fix the merge's state after
+                }
+                if (phi.type() == PhiType.Virtual) {
+                    initializer = GraphUtil.mergeVirtualChain(graph, firstPhi, newExitMerge);
                 }
                 mergedInitializers.put(phi, initializer);
             }

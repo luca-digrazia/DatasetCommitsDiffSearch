@@ -24,12 +24,18 @@ package com.oracle.graal.hotspot;
 
 import java.io.*;
 
-import com.oracle.graal.api.meta.Kind.*;
+import com.oracle.graal.api.meta.RiKind.*;
 
 
 /**
- * Parent class for all HotSpot types that need to be serialized.
+ * Parent class for all HotSpot Ri... types.
  */
 public abstract class CompilerObject implements Serializable, FormatWithToString {
     private static final long serialVersionUID = -4551670987101214877L;
+    protected final HotSpotCompilerImpl compiler;
+
+    protected CompilerObject(HotSpotCompilerImpl compiler) {
+        this.compiler = compiler;
+    }
+
 }
