@@ -93,13 +93,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
                 section = location.getEncapsulatingSourceSection();
             }
             if (section != null) {
-                com.oracle.truffle.api.source.Source truffleSource = section.getSource();
-                PolyglotLanguageContextImpl sourceContext = languageContext.context.findLanguageContext(truffleSource.getMimeType(), false);
-                String language = null;
-                if (sourceContext != null) {
-                    language = sourceContext.language.getId();
-                }
-                Source source = getAPIAccess().newSource(language, truffleSource);
+                Source source = getAPIAccess().newSource(section.getSource());
                 this.sourceLocation = getAPIAccess().newSourceSection(source, section);
             } else {
                 this.sourceLocation = null;
