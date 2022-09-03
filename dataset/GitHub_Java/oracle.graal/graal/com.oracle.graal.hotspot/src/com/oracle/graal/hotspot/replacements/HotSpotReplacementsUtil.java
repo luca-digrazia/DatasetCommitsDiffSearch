@@ -490,13 +490,16 @@ public class HotSpotReplacementsUtil {
     @SuppressWarnings("unused")
     @NodeIntrinsic(value = UnsafeLoadNode.class, setStampFromReturnType = true)
     private static Word loadWordFromObjectIntrinsic(Object object, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter Kind wordKind) {
-        return Word.unsigned(unsafeReadWord(object, offset + displacement));
+        return Word.box(unsafeReadWord(object, offset + displacement));
     }
 
     @SuppressWarnings("unused")
     @NodeIntrinsic(value = LoadHubNode.class, setStampFromReturnType = true)
-    public static Word loadHubIntrinsic(Object object, @ConstantNodeParameter Kind word, GuardingNode anchor) {
-        return Word.unsigned(unsafeReadKlassPointer(object));
+    static Word loadHubIntrinsic(Object object, @ConstantNodeParameter Kind word, GuardingNode anchor) {
+        if (wordKind() == Kind.Int) {
+            return Word.box((int) unsafeReadKlassPointer(object));
+        }
+        return Word.box(unsafeReadKlassPointer(object));
     }
 
     @Fold

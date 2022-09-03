@@ -513,7 +513,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                 NodeInputList<ValueNode> parameters = callTarget.arguments();
                 ValueNode receiver = parameters.size() <= 0 ? null : parameters.get(0);
                 GuardingNode receiverNullCheck = null;
-                if (!callTarget.isStatic() && receiver.stamp() instanceof ObjectStamp && !ObjectStamp.isObjectNonNull(receiver)) {
+                if (!callTarget.isStatic() && receiver.kind() == Kind.Object && !receiver.objectStamp().nonNull()) {
                     receiverNullCheck = tool.createNullCheckGuard(invoke, receiver);
                 }
                 JavaType[] signature = MetaUtil.signatureToTypes(callTarget.targetMethod().getSignature(), callTarget.isStatic() ? null : callTarget.targetMethod().getDeclaringClass());
@@ -608,10 +608,10 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             LocationNode arrayLocation = createArrayLocation(graph, elementKind, storeIndexed.index());
             ValueNode value = storeIndexed.value();
             ValueNode array = storeIndexed.array();
-            if (elementKind == Kind.Object && !ObjectStamp.isObjectAlwaysNull(value)) {
+            if (elementKind == Kind.Object && !value.objectStamp().alwaysNull()) {
                 // Store check!
-                ResolvedJavaType arrayType = ObjectStamp.typeOrNull(array);
-                if (arrayType != null && ObjectStamp.isExactType(array)) {
+                ResolvedJavaType arrayType = array.objectStamp().type();
+                if (arrayType != null && array.objectStamp().isExactType()) {
                     ResolvedJavaType elementType = arrayType.getComponentType();
                     if (!MetaUtil.isJavaLangObject(elementType)) {
                         CheckCastNode checkcast = graph.add(new CheckCastNode(elementType, value, null, true));
@@ -722,8 +722,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                                 value = allocations[commit.getVirtualObjects().indexOf(value)];
                             }
                             if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
-                                WriteNode write = new WriteNode(newObject, value, createFieldLocation(graph, (HotSpotResolvedJavaField) virtualInstance.field(i)),
-                                                virtualInstance.field(i).getKind() == Kind.Object ? BarrierType.IMPRECISE : BarrierType.NONE, virtualInstance.field(i).getKind() == Kind.Object);
+                                WriteNode write = new WriteNode(newObject, value, createFieldLocation(graph, (HotSpotResolvedJavaField) virtualInstance.field(i)), BarrierType.NONE,
+                                                virtualInstance.field(i).getKind() == Kind.Object);
 
                                 graph.addBeforeFixed(commit, graph.add(write));
                             }
@@ -740,8 +740,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                                 value = allocations[indexOf];
                             }
                             if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
-                                WriteNode write = new WriteNode(newObject, value, createArrayLocation(graph, element.getKind(), ConstantNode.forInt(i, graph)),
-                                                value.kind() == Kind.Object ? BarrierType.PRECISE : BarrierType.NONE, value.kind() == Kind.Object);
+                                WriteNode write = new WriteNode(newObject, value, createArrayLocation(graph, element.getKind(), ConstantNode.forInt(i, graph)), BarrierType.NONE,
+                                                value.kind() == Kind.Object);
                                 graph.addBeforeFixed(commit, graph.add(write));
                             }
                         }
@@ -795,13 +795,9 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         } else if (n instanceof CheckCastDynamicNode) {
             checkcastDynamicSnippets.lower((CheckCastDynamicNode) n);
         } else if (n instanceof InstanceOfNode) {
-            if (tool.getLoweringType() == LoweringType.AFTER_GUARDS) {
-                instanceofSnippets.lower((InstanceOfNode) n, tool);
-            }
+            instanceofSnippets.lower((InstanceOfNode) n, tool);
         } else if (n instanceof InstanceOfDynamicNode) {
-            if (tool.getLoweringType() == LoweringType.AFTER_GUARDS) {
-                instanceofSnippets.lower((InstanceOfDynamicNode) n, tool);
-            }
+            instanceofSnippets.lower((InstanceOfDynamicNode) n, tool);
         } else if (n instanceof NewInstanceNode) {
             if (tool.getLoweringType() == LoweringType.AFTER_FSA) {
                 newObjectSnippets.lower((NewInstanceNode) n);
@@ -858,15 +854,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     }
 
     private static boolean addReadBarrier(UnsafeLoadNode load) {
-        if (useG1GC()) {
-            if (load.object().kind() == Kind.Object && load.accessKind() == Kind.Object && !ObjectStamp.isObjectAlwaysNull(load.object())) {
-                ResolvedJavaType type = ObjectStamp.typeOrNull(load.object());
-                if (type != null && !type.isArray()) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return useG1GC() && load.object().kind() == Kind.Object && load.accessKind() == Kind.Object && !load.object().objectStamp().alwaysNull() && load.object().objectStamp().type() != null &&
+                        !(load.object().objectStamp().type().isArray());
     }
 
     private static ReadNode createReadVirtualMethod(StructuredGraph graph, Kind wordKind, ValueNode hub, ResolvedJavaMethod method) {
@@ -921,7 +910,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     private static BarrierType getUnsafeStoreBarrierType(UnsafeStoreNode store) {
         BarrierType barrierType = BarrierType.NONE;
         if (store.value().kind() == Kind.Object) {
-            ResolvedJavaType type = ObjectStamp.typeOrNull(store.object());
+            ResolvedJavaType type = store.object().objectStamp().type();
             if (type != null && !type.isArray()) {
                 barrierType = BarrierType.IMPRECISE;
             } else {
@@ -934,7 +923,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     private static BarrierType getCompareAndSwapBarrier(CompareAndSwapNode cas) {
         BarrierType barrierType = BarrierType.NONE;
         if (cas.expected().kind() == Kind.Object) {
-            ResolvedJavaType type = ObjectStamp.typeOrNull(cas.object());
+            ResolvedJavaType type = cas.object().objectStamp().type();
             if (type != null && !type.isArray()) {
                 barrierType = BarrierType.IMPRECISE;
             } else {

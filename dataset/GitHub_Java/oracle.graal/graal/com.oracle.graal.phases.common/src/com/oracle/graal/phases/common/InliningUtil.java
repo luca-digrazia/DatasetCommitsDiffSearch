@@ -38,7 +38,7 @@ import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.Verbosity;
+import com.oracle.graal.graph.Node.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -478,7 +478,7 @@ public class InliningUtil {
         private void createGuard(StructuredGraph graph, MetaAccessProvider runtime) {
             ValueNode nonNullReceiver = InliningUtil.nonNullReceiver(invoke);
             ConstantNode typeHub = ConstantNode.forConstant(type.getEncoding(Representation.ObjectHub), runtime, graph);
-            LoadHubNode receiverHub = graph.unique(new LoadHubNode(nonNullReceiver, typeHub.kind(), null));
+            LoadHubNode receiverHub = graph.add(new LoadHubNode(nonNullReceiver, typeHub.kind(), null));
 
             CompareNode typeCheck = CompareNode.createCompareNode(Condition.EQ, receiverHub, typeHub);
             FixedGuardNode guard = graph.add(new FixedGuardNode(typeCheck, DeoptimizationReason.TypeCheckedInliningViolated, DeoptimizationAction.InvalidateReprofile));
@@ -608,7 +608,7 @@ public class InliningUtil {
 
             PhiNode returnValuePhi = null;
             if (invoke.asNode().kind() != Kind.Void) {
-                returnValuePhi = graph.addWithoutUnique(new PhiNode(invoke.asNode().kind(), returnMerge));
+                returnValuePhi = graph.add(new PhiNode(invoke.asNode().kind(), returnMerge));
             }
 
             MergeNode exceptionMerge = null;
@@ -707,8 +707,7 @@ public class InliningUtil {
                 if (opportunities > 0) {
                     metricInliningTailDuplication.increment();
                     Debug.log("MultiTypeGuardInlineInfo starting tail duplication (%d opportunities)", opportunities);
-                    TailDuplicationPhase.tailDuplicate(returnMerge, TailDuplicationPhase.TRUE_DECISION, replacementNodes, new PhaseContext(runtime, assumptions, replacements), new CanonicalizerPhase(
-                                    !AOTCompilation.getValue()));
+                    TailDuplicationPhase.tailDuplicate(returnMerge, TailDuplicationPhase.TRUE_DECISION, replacementNodes, new PhaseContext(runtime, assumptions, replacements));
                 }
             }
         }
@@ -764,7 +763,7 @@ public class InliningUtil {
             assert ptypes.size() >= 1;
             ValueNode nonNullReceiver = nonNullReceiver(invoke);
             Kind hubKind = ((MethodCallTargetNode) invoke.callTarget()).targetMethod().getDeclaringClass().getEncoding(Representation.ObjectHub).getKind();
-            LoadHubNode hub = graph.unique(new LoadHubNode(nonNullReceiver, hubKind, null));
+            LoadHubNode hub = graph.add(new LoadHubNode(nonNullReceiver, hubKind, null));
 
             if (!invokeIsOnlySuccessor && chooseMethodDispatch()) {
                 assert successors.length == concretes.size() + 1;
@@ -1037,10 +1036,7 @@ public class InliningUtil {
         assert callTarget.invokeKind() == InvokeKind.Virtual || callTarget.invokeKind() == InvokeKind.Interface;
 
         ResolvedJavaType holder = targetMethod.getDeclaringClass();
-        if (!(callTarget.receiver().stamp() instanceof ObjectStamp)) {
-            return null;
-        }
-        ObjectStamp receiverStamp = (ObjectStamp) callTarget.receiver().stamp();
+        ObjectStamp receiverStamp = callTarget.receiver().objectStamp();
         if (receiverStamp.alwaysNull()) {
             // Don't inline if receiver is known to be null
             return null;
@@ -1446,7 +1442,8 @@ public class InliningUtil {
         assert !callTarget.isStatic() : callTarget.targetMethod();
         StructuredGraph graph = callTarget.graph();
         ValueNode firstParam = callTarget.arguments().get(0);
-        if (firstParam.kind() == Kind.Object && !ObjectStamp.isObjectNonNull(firstParam)) {
+        if (firstParam.kind() == Kind.Object && !firstParam.objectStamp().nonNull()) {
+            assert !firstParam.objectStamp().alwaysNull();
             IsNullNode condition = graph.unique(new IsNullNode(firstParam));
             Stamp stamp = firstParam.stamp().join(objectNonNull());
             GuardingPiNode nonNullReceiver = graph.add(new GuardingPiNode(firstParam, condition, true, NullCheckException, InvalidateReprofile, stamp));

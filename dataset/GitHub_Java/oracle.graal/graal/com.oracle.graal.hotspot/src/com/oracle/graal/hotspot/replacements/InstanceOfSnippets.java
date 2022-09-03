@@ -79,8 +79,8 @@ public class InstanceOfSnippets implements Snippets {
      */
     @Snippet
     public static Object instanceofWithProfile(Object object, @VarargsParameter Word[] hints, @VarargsParameter boolean[] hintIsPositive, Object trueValue, Object falseValue,
-                    @ConstantParameter boolean nullSeen) {
-        if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
+                    @ConstantParameter boolean checkNull, @ConstantParameter boolean nullSeen) {
+        if (probability(NOT_FREQUENT_PROBABILITY, checkNull && object == null)) {
             isNull.inc();
             if (!nullSeen) {
                 // See comment below for other deoptimization path; the
@@ -113,8 +113,8 @@ public class InstanceOfSnippets implements Snippets {
      * A test against a final type.
      */
     @Snippet
-    public static Object instanceofExact(Object object, Word exactHub, Object trueValue, Object falseValue) {
-        if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
+    public static Object instanceofExact(Object object, Word exactHub, Object trueValue, Object falseValue, @ConstantParameter boolean checkNull) {
+        if (checkNull && probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
             return falseValue;
         }
@@ -132,8 +132,8 @@ public class InstanceOfSnippets implements Snippets {
      * A test against a primary type.
      */
     @Snippet
-    public static Object instanceofPrimary(Word hub, Object object, @ConstantParameter int superCheckOffset, Object trueValue, Object falseValue) {
-        if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
+    public static Object instanceofPrimary(Word hub, Object object, @ConstantParameter int superCheckOffset, Object trueValue, Object falseValue, @ConstantParameter boolean checkNull) {
+        if (checkNull && probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
             return falseValue;
         }
@@ -151,8 +151,9 @@ public class InstanceOfSnippets implements Snippets {
      * A test against a restricted secondary type type.
      */
     @Snippet
-    public static Object instanceofSecondary(Word hub, Object object, @VarargsParameter Word[] hints, @VarargsParameter boolean[] hintIsPositive, Object trueValue, Object falseValue) {
-        if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
+    public static Object instanceofSecondary(Word hub, Object object, @VarargsParameter Word[] hints, @VarargsParameter boolean[] hintIsPositive, Object trueValue, Object falseValue,
+                    @ConstantParameter boolean checkNull) {
+        if (checkNull && probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
             return falseValue;
         }
@@ -178,13 +179,14 @@ public class InstanceOfSnippets implements Snippets {
      * Type test used when the type being tested against is not known at compile time.
      */
     @Snippet
-    public static Object instanceofDynamic(Class mirror, Object object, Object trueValue, Object falseValue) {
-        if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
+    public static Object instanceofDynamic(Class mirror, Object object, Object trueValue, Object falseValue, @ConstantParameter boolean checkNull) {
+        if (checkNull && probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
             return falseValue;
         }
-        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
+
         Word hub = loadWordFromObject(mirror, klassOffset());
+        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
         Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
         if (!checkUnknownSubType(hub, objectHub)) {
             return falseValue;
@@ -240,6 +242,7 @@ public class InstanceOfSnippets implements Snippets {
                 }
                 args.add("trueValue", replacer.trueValue);
                 args.add("falseValue", replacer.falseValue);
+                args.addConst("checkNull", !object.stamp().nonNull());
                 if (hintInfo.hintHitProbability >= hintHitProbabilityThresholdForDeoptimizingSnippet()) {
                     args.addConst("nullSeen", hintInfo.profile.getNullSeen() != TriState.FALSE);
                 }
@@ -255,6 +258,7 @@ public class InstanceOfSnippets implements Snippets {
                 args.add("object", object);
                 args.add("trueValue", replacer.trueValue);
                 args.add("falseValue", replacer.falseValue);
+                args.addConst("checkNull", !object.stamp().nonNull());
                 return args;
             }
         }

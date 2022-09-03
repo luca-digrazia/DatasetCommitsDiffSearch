@@ -59,16 +59,14 @@ public final class LoadHubNode extends FloatingGuardedNode implements Lowerable,
 
     @Override
     public void lower(LoweringTool tool, LoweringType loweringType) {
-        if (loweringType == LoweringType.AFTER_GUARDS) {
-            tool.getRuntime().lower(this, tool);
-        }
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         MetaAccessProvider runtime = tool.runtime();
-        if (runtime != null && object.stamp() instanceof ObjectStamp) {
-            ObjectStamp stamp = (ObjectStamp) object.stamp();
+        if (runtime != null) {
+            ObjectStamp stamp = object.objectStamp();
 
             ResolvedJavaType exactType;
             if (stamp.isExactType()) {
