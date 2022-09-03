@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -347,6 +347,18 @@ public final class LLVM80BitFloat implements LLVMArithmetic {
         int newExponent = leftExponent + overFlow;
         long newFraction = resultLo + resultHi << Integer.SIZE;
         return LLVM80BitFloat.fromRawValues(newSign, newExponent, newFraction);
+    }
+
+    public LLVM80BitFloat rem(LLVM80BitFloat right) {
+        return fromDouble(getDoubleValue() % right.getDoubleValue());
+    }
+
+    public LLVM80BitFloat pow(int right) {
+        return fromDouble(Math.pow(getDoubleValue(), right));
+    }
+
+    public LLVM80BitFloat pow(LLVM80BitFloat right) {
+        return fromDouble(Math.pow(getDoubleValue(), right.getDoubleValue()));
     }
 
     public LLVM80BitFloat abs() {

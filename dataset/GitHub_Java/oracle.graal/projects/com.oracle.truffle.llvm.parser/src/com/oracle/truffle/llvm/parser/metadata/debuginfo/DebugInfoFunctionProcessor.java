@@ -90,9 +90,6 @@ public final class DebugInfoFunctionProcessor {
         initSourceFunction(function, bitcodeSource);
         function.accept((FunctionVisitor) new SymbolProcessor(function.getSourceFunction()));
         scope.getMetadata().consumeLocals(new MetadataProcessor());
-        for (SourceVariable local : function.getSourceFunction().getVariables()) {
-            local.processFragments();
-        }
         cache.endLocalScope();
     }
 
@@ -117,6 +114,9 @@ public final class DebugInfoFunctionProcessor {
 
         final SourceFunction sourceFunction = new SourceFunction(scope, type);
         function.setSourceFunction(sourceFunction);
+        for (SourceVariable local : sourceFunction.getVariables()) {
+            local.processFragments();
+        }
     }
 
     private static SymbolImpl getArg(VoidCallInstruction call, int index) {
@@ -168,7 +168,7 @@ public final class DebugInfoFunctionProcessor {
             if (loc != null) {
                 final LLVMSourceLocation scope = cache.buildLocation(loc);
                 if (scope != null) {
-                    instruction.setSourceLocation(scope);
+                    function.addInstruction(instruction, scope);
                 }
             }
         }

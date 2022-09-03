@@ -30,80 +30,89 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueProvider;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-public abstract class LLVMToDebugDeclarationNode extends LLVMNode implements LLVMDebugValueProvider.Builder {
+public abstract class LLVMToDebugDeclarationNode extends LLVMNode implements LLVMDebugValue.Builder {
+
+    private final ContextReference<LLVMContext> contextRef;
 
     @Child protected Node isPointer = Message.IS_POINTER.createNode();
     @Child protected Node asPointer = Message.AS_POINTER.createNode();
+
+    protected LLVMToDebugDeclarationNode(ContextReference<LLVMContext> contextRef) {
+        this.contextRef = contextRef;
+    }
 
     protected static boolean notLLVM(TruffleObject object) {
         return LLVMExpressionNode.notLLVM(object);
     }
 
-    private static LLVMDebugValueProvider unavailable() {
+    private static LLVMDebugValue unavailable() {
         // @llvm.dbg.declare is supposed to tell us the location of the variable in memory, there
         // should never be a case where this cannot be resolved to a pointer. If it happens anyhow
         // this is a safe default.
-        return LLVMUnavailableDebugValueProvider.INSTANCE;
+        return LLVMDebugValue.UNAVAILABLE;
     }
 
-    public abstract LLVMDebugValueProvider executeWithTarget(Object value);
+    public abstract LLVMDebugValue executeWithTarget(Object value);
 
     @Override
-    public LLVMDebugValueProvider build(Object irValue) {
+    public LLVMDebugValue build(Object irValue) {
         return executeWithTarget(irValue);
     }
 
     @Specialization
-    protected LLVMDebugValueProvider fromAddress(LLVMAddress address) {
-        return new LLVMAllocationValueProvider(address);
+    protected LLVMDebugValue fromNativePointer(LLVMNativePointer address,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return new LLVMAllocationValueProvider(memory, address);
     }
 
     @Specialization
-    protected LLVMDebugValueProvider fromTruffleAddress(LLVMTruffleAddress truffleAddress) {
-        return new LLVMAllocationValueProvider(truffleAddress.getAddress());
-    }
-
-    @Specialization
-    protected LLVMDebugValueProvider fromBoxedPrimitive(LLVMBoxedPrimitive boxedPrimitive) {
+    protected LLVMDebugValue fromBoxedPrimitive(LLVMBoxedPrimitive boxedPrimitive,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         if (boxedPrimitive.getValue() instanceof Long) {
-            return fromAddress(LLVMAddress.fromLong((long) boxedPrimitive.getValue()));
+            return fromNativePointer(LLVMNativePointer.create((long) boxedPrimitive.getValue()), memory);
         } else {
             return unavailable();
         }
     }
 
     @Specialization
-    protected LLVMDebugValueProvider fromGlobal(LLVMGlobalVariable value) {
-        return new LLVMConstantGlobalValueProvider(value, LLVMToDebugValueNodeGen.create());
+    protected LLVMDebugValue fromGlobal(LLVMGlobal value,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return new LLVMConstantGlobalValueProvider(memory, value, contextRef.get(), LLVMToDebugValueNodeGen.create(contextRef));
     }
 
     @Specialization
-    protected LLVMDebugValueProvider fromSharedGlobal(LLVMSharedGlobalVariable value) {
-        return fromGlobal(value.getDescriptor());
+    protected LLVMDebugValue fromSharedGlobal(LLVMSharedGlobalVariable value,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return fromGlobal(value.getDescriptor(), memory);
     }
 
     @Specialization(guards = "notLLVM(obj)")
-    protected LLVMDebugValueProvider fromTruffleObject(TruffleObject obj) {
+    protected LLVMDebugValue fromTruffleObject(TruffleObject obj,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         try {
             if (ForeignAccess.sendIsPointer(isPointer, obj)) {
                 final long rawAddress = ForeignAccess.sendAsPointer(asPointer, obj);
-                return fromAddress(LLVMAddress.fromLong(rawAddress));
+                return fromNativePointer(LLVMNativePointer.create(rawAddress), memory);
             }
         } catch (UnsupportedMessageException ignored) {
             CompilerDirectives.transferToInterpreter();
@@ -112,12 +121,13 @@ public abstract class LLVMToDebugDeclarationNode extends LLVMNode implements LLV
     }
 
     @Specialization(guards = {"obj.getOffset() == 0", "notLLVM(obj.getObject())"})
-    protected LLVMDebugValueProvider fromLLVMTruffleObject(LLVMTruffleObject obj) {
-        return fromTruffleObject(obj.getObject());
+    protected LLVMDebugValue fromManagedPointer(LLVMManagedPointer obj,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return fromTruffleObject(obj.getObject(), memory);
     }
 
     @Specialization
-    protected LLVMDebugValueProvider fromGenericObject(@SuppressWarnings("unused") Object object) {
+    protected LLVMDebugValue fromGenericObject(@SuppressWarnings("unused") Object object) {
         return unavailable();
     }
 }

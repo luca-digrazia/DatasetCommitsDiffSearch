@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.runtime.debug;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMFrameValueAccess;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObjectBuilder;
@@ -41,13 +40,11 @@ public final class LLVMSourceContext {
 
     private final HashMap<LLVMSourceSymbol, LLVMDebugObjectBuilder> staticValues;
     private final HashMap<LLVMSourceSymbol, LLVMFrameValueAccess> frameValues;
-    private final HashMap<String, LLVMSourceLocation> exportedScopes;
 
     @TruffleBoundary
     public LLVMSourceContext() {
         staticValues = new HashMap<>();
         frameValues = new HashMap<>();
-        exportedScopes = new HashMap<>();
     }
 
     @TruffleBoundary
@@ -68,15 +65,5 @@ public final class LLVMSourceContext {
     @TruffleBoundary
     public LLVMFrameValueAccess getFrameValue(LLVMSourceSymbol symbol) {
         return frameValues.get(symbol);
-    }
-
-    @TruffleBoundary
-    public LLVMSourceLocation getExportedScope(String name) {
-        return exportedScopes.get(name);
-    }
-
-    @TruffleBoundary
-    public void exportScope(String name, LLVMSourceLocation scope) {
-        exportedScopes.put(name, scope);
     }
 }

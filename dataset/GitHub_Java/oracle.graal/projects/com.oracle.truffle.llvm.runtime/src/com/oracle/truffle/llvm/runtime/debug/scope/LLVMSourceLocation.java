@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -213,11 +213,6 @@ public abstract class LLVMSourceLocation {
         return result;
     }
 
-    @Override
-    public String toString() {
-        return describeLocation();
-    }
-
     private static class LineScope extends LLVMSourceLocation {
 
         private final SourceSection sourceSection;
@@ -369,51 +364,6 @@ public abstract class LLVMSourceLocation {
 
     }
 
-    private static final class GlobalScope extends LLVMSourceLocation {
-
-        @CompilationFinal private List<LLVMSourceSymbol> symbols;
-
-        private GlobalScope(LLVMSourceLocation parent, Kind kind, String name) {
-            super(parent, kind, name);
-        }
-
-        @TruffleBoundary
-        @Override
-        public void addSymbol(LLVMSourceSymbol symbol) {
-            CompilerAsserts.neverPartOfCompilation("Source-Scope may only grow when parsing!");
-            if (symbols == null) {
-                symbols = new ArrayList<>();
-            }
-            symbols.add(symbol);
-        }
-
-        @TruffleBoundary
-        @Override
-        public boolean hasSymbols() {
-            return symbols != null && !symbols.isEmpty();
-        }
-
-        @Override
-        public List<LLVMSourceSymbol> getSymbols() {
-            return symbols != null ? symbols : NO_SYMBOLS;
-        }
-
-        @Override
-        public SourceSection getSourceSection() {
-            return UNAVAILABLE_SECTION;
-        }
-
-        @Override
-        public String describeFile() {
-            return getName();
-        }
-
-        @Override
-        public String describeLocation() {
-            return getName();
-        }
-    }
-
     public static LLVMSourceLocation create(LLVMSourceLocation parent, LLVMSourceLocation.Kind kind, String name, SourceSection sourceSection, LLVMSourceLocation compileUnit) {
         assert sourceSection != null;
 
@@ -435,12 +385,8 @@ public abstract class LLVMSourceLocation {
         }
     }
 
-    public static LLVMSourceLocation createGlobalScope(LLVMSourceLocation parent, LLVMSourceLocation.Kind kind, String name) {
-        return new GlobalScope(parent, kind, name);
-    }
-
-    public static LLVMSourceLocation createUnavailable(LLVMSourceLocation parent, LLVMSourceLocation.Kind kind, String name, String file, int line, int col) {
-        return new UnavailableScope(parent, kind, name, file, line, col);
+    public static LLVMSourceLocation createUnavailable(LLVMSourceLocation.Kind kind, String name, String file, int line, int col) {
+        return new UnavailableScope(null, kind, name, file, line, col);
     }
 
     public static LLVMSourceLocation createBitcodeFunction(String name, SourceSection simpleSection) {

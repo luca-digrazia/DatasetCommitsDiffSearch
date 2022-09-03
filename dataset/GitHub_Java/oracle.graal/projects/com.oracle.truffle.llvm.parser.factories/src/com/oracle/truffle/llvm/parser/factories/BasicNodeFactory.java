@@ -326,7 +326,6 @@ import com.oracle.truffle.llvm.nodes.vector.LLVMInsertElementNodeFactory.LLVMI8I
 import com.oracle.truffle.llvm.nodes.vector.LLVMInsertElementNodeFactory.LLVMPointerInsertElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMShuffleVectorNodeFactory.LLVMShuffleDoubleVectorNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMShuffleVectorNodeFactory.LLVMShuffleFloatVectorNodeGen;
-import com.oracle.truffle.llvm.nodes.vector.LLVMShuffleVectorNodeFactory.LLVMShuffleI16VectorNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMShuffleVectorNodeFactory.LLVMShuffleI32VectorNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMShuffleVectorNodeFactory.LLVMShuffleI64VectorNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMShuffleVectorNodeFactory.LLVMShuffleI8VectorNodeGen;
@@ -352,11 +351,11 @@ import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
-import com.oracle.truffle.llvm.runtime.debug.LLVMDebugObjectBuilder;
-import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourcePointerType;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMFrameValueAccess;
+import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObjectBuilder;
+import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
+import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourcePointerType;
+import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.debug.value.LLVMFrameValueAccess;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
@@ -449,8 +448,6 @@ public class BasicNodeFactory implements NodeFactory {
             switch (((PrimitiveType) resultType.getElementType()).getPrimitiveKind()) {
                 case I8:
                     return LLVMShuffleI8VectorNodeGen.create(vector1, vector2, mask);
-                case I16:
-                    return LLVMShuffleI16VectorNodeGen.create(vector1, vector2, mask);
                 case I32:
                     return LLVMShuffleI32VectorNodeGen.create(vector1, vector2, mask);
                 case I64:
@@ -1349,9 +1346,6 @@ public class BasicNodeFactory implements NodeFactory {
         LLVMStoreNode store;
         if (llvmType instanceof PrimitiveType) {
             switch (((PrimitiveType) llvmType).getPrimitiveKind()) {
-                case I1:
-                    store = LLVMI1StoreNodeGen.create(null, null);
-                    break;
                 case I8:
                     store = LLVMI8StoreNodeGen.create(null, null);
                     break;

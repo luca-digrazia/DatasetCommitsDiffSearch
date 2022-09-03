@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -148,10 +148,6 @@ public abstract class GlobalValueSymbol implements ValueSymbol, MetadataAttachme
 
     public boolean isExported() {
         return Linkage.isExported(linkage, visibility);
-    }
-
-    public boolean isOverridable() {
-        return Linkage.isOverridable(linkage, visibility);
     }
 
     public boolean isExternal() {
