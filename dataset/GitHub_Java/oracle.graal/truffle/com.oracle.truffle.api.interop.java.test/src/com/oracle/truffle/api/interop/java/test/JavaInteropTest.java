@@ -48,8 +48,6 @@ import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.interop.java.MethodMessage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.test.ReflectionUtils;
-
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -165,13 +163,13 @@ public class JavaInteropTest {
         return callTarget;
     }
 
-    class PrivatePOJO {
+    class POJO {
         public int x;
     }
 
     @Test
     public void accessAllProperties() {
-        TruffleObject pojo = JavaInterop.asTruffleObject(new PrivatePOJO());
+        TruffleObject pojo = JavaInterop.asTruffleObject(new POJO());
         Map<?, ?> map = JavaInterop.asJavaObject(Map.class, pojo);
         int cnt = 0;
         for (Map.Entry<?, ?> entry : map.entrySet()) {
@@ -184,32 +182,6 @@ public class JavaInteropTest {
         }
         assertEquals("No properties", 0, cnt);
         assertEquals("Empty: " + map, 0, map.size());
-    }
-
-    @Test
-    public void accessAllPropertiesDirectly() {
-        TruffleObject pojo = JavaInterop.asTruffleObject(new PrivatePOJO());
-        CallTarget callKeys = sendKeys();
-        TruffleObject result = (TruffleObject) callKeys.call(pojo);
-        List<?> propertyNames = JavaInterop.asJavaObject(List.class, result);
-        assertEquals("No props, class isn't public", 0, propertyNames.size());
-    }
-
-    public class PublicPOJO {
-        PublicPOJO() {
-        }
-
-        public int x;
-    }
-
-    @Test
-    public void accessAllPublicPropertiesDirectly() {
-        TruffleObject pojo = JavaInterop.asTruffleObject(new PublicPOJO());
-        CallTarget callKeys = sendKeys();
-        TruffleObject result = (TruffleObject) callKeys.call(pojo);
-        List<?> propertyNames = JavaInterop.asJavaObject(List.class, result);
-        assertEquals("One field", 1, propertyNames.size());
-        assertEquals("One field x", "x", propertyNames.get(0));
     }
 
     @Test
@@ -375,7 +347,7 @@ public class JavaInteropTest {
 
     private static boolean isJavaFunctionalInterface(final Class<?> clazz) throws Exception {
         Method isFunctionaInterface = JavaInterop.class.getDeclaredMethod("isJavaFunctionInterface", Class.class);
-        ReflectionUtils.setAccessible(isFunctionaInterface, true);
+        isFunctionaInterface.setAccessible(true);
         return (boolean) isFunctionaInterface.invoke(null, clazz);
     }
 
