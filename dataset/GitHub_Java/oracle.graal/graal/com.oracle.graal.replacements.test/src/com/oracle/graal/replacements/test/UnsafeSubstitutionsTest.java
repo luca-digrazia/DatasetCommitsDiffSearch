@@ -22,14 +22,13 @@
  */
 package com.oracle.graal.replacements.test;
 
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import static jdk.internal.jvmci.common.UnsafeAccess.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
-import sun.misc.Unsafe;
+import sun.misc.*;
 
 /**
  * Tests the VM independent intrinsification of {@link Unsafe} methods.
@@ -58,7 +57,7 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
 
     static long off(Object o, String name) {
         try {
-            return UNSAFE.objectFieldOffset(o.getClass().getDeclaredField(name));
+            return unsafe.objectFieldOffset(o.getClass().getDeclaredField(name));
         } catch (Exception e) {
             Assert.fail(e.toString());
             return 0L;
@@ -79,7 +78,7 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
 
     @Test
     public void testUnsafeSubstitutions() throws Exception {
-        test("unsafeCompareAndSwapInt", UNSAFE, supply(() -> new Foo()), fooOffset("i"));
+        test("unsafeCompareAndSwapInt", unsafe, supply(() -> new Foo()), fooOffset("i"));
 
         testGraph("unsafeCompareAndSwapInt");
         testGraph("unsafeCompareAndSwapLong");
@@ -111,8 +110,8 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
         testGraph("unsafeDirectMemoryRead");
         testGraph("unsafeDirectMemoryWrite");
 
-        long address = UNSAFE.allocateMemory(8 * JavaKind.values().length);
-        for (Unsafe unsafeArg : new Unsafe[]{UNSAFE, null}) {
+        long address = unsafe.allocateMemory(8 * Kind.values().length);
+        for (Unsafe unsafeArg : new Unsafe[]{unsafe, null}) {
             test("unsafeCompareAndSwapInt", unsafeArg, supply(() -> new Foo()), fooOffset("i"));
             test("unsafeCompareAndSwapLong", unsafeArg, supply(() -> new Foo()), fooOffset("l"));
             test("unsafeCompareAndSwapObject", unsafeArg, supply(() -> new Foo()), fooOffset("o"));
@@ -143,12 +142,12 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
             test("unsafeDirectMemoryRead", unsafeArg, address);
             test("unsafeDirectMemoryWrite", unsafeArg, address, 0xCAFE_BABE_DEAD_BABEL);
         }
-        UNSAFE.freeMemory(address);
+        unsafe.freeMemory(address);
     }
 
     private static long fooOffset(String name) {
         try {
-            return UNSAFE.objectFieldOffset(Foo.class.getDeclaredField(name));
+            return unsafe.objectFieldOffset(Foo.class.getDeclaredField(name));
         } catch (NoSuchFieldException | SecurityException e) {
             throw new AssertionError(e);
         }
@@ -356,7 +355,7 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
         final String a = "a";
         final String b;
 
-        MyObject(String b) {
+        public MyObject(String b) {
             this.b = b;
             Thread.dumpStack();
         }
@@ -374,8 +373,8 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
 
     @Test
     public void testAllocateInstance() throws Exception {
-        System.out.println("result: " + unsafeAllocateInstance(UNSAFE));
-        test("unsafeAllocateInstance", UNSAFE);
+        System.out.println("result: " + unsafeAllocateInstance(unsafe));
+        test("unsafeAllocateInstance", unsafe);
         test("unsafeAllocateInstance", (Object) null);
     }
 
@@ -388,12 +387,12 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
         for (int delta = Integer.MAX_VALUE - 10; delta < Integer.MAX_VALUE; delta++) {
             Object[] args1 = new Object[]{f1, offset, delta};
             Object[] args2 = new Object[]{f2, offset, delta};
-            testSubstitution("getAndAddInt", Unsafe.class, "getAndAddInt", parameterTypes, UNSAFE, args1, args2);
+            testSubstitution("getAndAddInt", Unsafe.class, "getAndAddInt", parameterTypes, unsafe, args1, args2);
         }
     }
 
     public static int getAndAddInt(Object obj, long offset, int delta) {
-        return UNSAFE.getAndAddInt(obj, offset, delta);
+        return unsafe.getAndAddInt(obj, offset, delta);
     }
 
     @Test
@@ -405,12 +404,12 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
         for (long delta = Long.MAX_VALUE - 10; delta < Long.MAX_VALUE; delta++) {
             Object[] args1 = new Object[]{f1, offset, delta};
             Object[] args2 = new Object[]{f2, offset, delta};
-            testSubstitution("getAndAddLong", Unsafe.class, "getAndAddLong", parameterTypes, UNSAFE, args1, args2);
+            testSubstitution("getAndAddLong", Unsafe.class, "getAndAddLong", parameterTypes, unsafe, args1, args2);
         }
     }
 
     public static long getAndAddLong(Object obj, long offset, long delta) {
-        return UNSAFE.getAndAddLong(obj, offset, delta);
+        return unsafe.getAndAddLong(obj, offset, delta);
     }
 
     @Test
@@ -422,12 +421,12 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
         for (int delta = Integer.MAX_VALUE - 10; delta < Integer.MAX_VALUE; delta++) {
             Object[] args1 = new Object[]{f1, offset, delta};
             Object[] args2 = new Object[]{f2, offset, delta};
-            testSubstitution("getAndSetInt", Unsafe.class, "getAndSetInt", parameterTypes, UNSAFE, args1, args2);
+            testSubstitution("getAndSetInt", Unsafe.class, "getAndSetInt", parameterTypes, unsafe, args1, args2);
         }
     }
 
     public static int getAndSetInt(Object obj, long offset, int newValue) {
-        return UNSAFE.getAndSetInt(obj, offset, newValue);
+        return unsafe.getAndSetInt(obj, offset, newValue);
     }
 
     @Test
@@ -439,12 +438,12 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
         for (long newValue = Long.MAX_VALUE - 10; newValue < Long.MAX_VALUE; newValue++) {
             Object[] args1 = new Object[]{f1, offset, newValue};
             Object[] args2 = new Object[]{f2, offset, newValue};
-            testSubstitution("getAndSetLong", Unsafe.class, "getAndSetLong", parameterTypes, UNSAFE, args1, args2);
+            testSubstitution("getAndSetLong", Unsafe.class, "getAndSetLong", parameterTypes, unsafe, args1, args2);
         }
     }
 
     public static long getAndSetLong(Object obj, long offset, long newValue) {
-        return UNSAFE.getAndSetLong(obj, offset, newValue);
+        return unsafe.getAndSetLong(obj, offset, newValue);
     }
 
     @Test
@@ -457,13 +456,13 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
             Object o = new Object();
             Object[] args1 = new Object[]{f1, offset, o};
             Object[] args2 = new Object[]{f2, offset, o};
-            testSubstitution("getAndSetObject", Unsafe.class, "getAndSetObject", parameterTypes, UNSAFE, args1, args2);
+            testSubstitution("getAndSetObject", Unsafe.class, "getAndSetObject", parameterTypes, unsafe, args1, args2);
             System.gc();
         }
     }
 
     public static Object getAndSetObject(Object obj, long offset, Object newValue) {
-        return UNSAFE.getAndSetObject(obj, offset, newValue);
+        return unsafe.getAndSetObject(obj, offset, newValue);
     }
 
 }
