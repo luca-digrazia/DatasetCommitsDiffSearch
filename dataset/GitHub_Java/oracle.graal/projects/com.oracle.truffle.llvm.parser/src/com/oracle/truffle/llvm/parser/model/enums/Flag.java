@@ -46,8 +46,6 @@ public enum Flag {
 
     private final int mask;
 
-    public static final Flag[] EMPTY_ARRAY = {};
-
     Flag(String irString, int mask) {
         this.irString = irString;
         this.mask = mask;
@@ -97,7 +95,7 @@ public enum Flag {
     private static Flag[] create(long flagbits, Flag... options) {
         int i = 0;
         int count = Long.bitCount(flagbits);
-        Flag[] flags = count == 0 ? EMPTY_ARRAY : new Flag[count];
+        Flag[] flags = new Flag[count];
         for (Flag option : options) {
             if (option.test(flagbits)) {
                 flags[i++] = option;
