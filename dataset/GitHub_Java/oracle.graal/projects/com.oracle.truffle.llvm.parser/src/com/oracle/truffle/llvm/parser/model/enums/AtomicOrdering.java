@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,30 +30,61 @@
 package com.oracle.truffle.llvm.parser.model.enums;
 
 public enum AtomicOrdering {
-    NOT_ATOMIC(0L),
-    UNORDERED(1L),
-    MONOTONIC(2L),
-    ACQUIRE(3L),
-    RELEASE(4L),
-    ACQUIRE_RELEASE(5L),
-    SEQUENTIALLY_CONSISTENT(6L);
+    NOT_ATOMIC(0L, ""),
+    UNORDERED(1L, "unordered"),
+    MONOTONIC(2L, "monotonic"),
+    ACQUIRE(3L, "acquire"),
+    RELEASE(4L, "release"),
+    ACQUIRE_RELEASE(5L, "acq_rel"),
+    SEQUENTIALLY_CONSISTENT(6L, "seq_cst");
+
+    private static final AtomicOrdering[] VALUES = values();
 
     private final long encodedValue;
+    private final String irString;
 
-    AtomicOrdering(long encodeValue) {
+    AtomicOrdering(long encodeValue, String irString) {
         this.encodedValue = encodeValue;
+        this.irString = irString;
     }
 
     public long getEncodedValue() {
         return encodedValue;
     }
 
+    /**
+     * Useful to get the llvm ir equivalent string of the enum.
+     */
+    public String getIrString() {
+        return irString;
+    }
+
     public static AtomicOrdering decode(long id) {
-        for (AtomicOrdering atomicOrdering : values()) {
+        for (AtomicOrdering atomicOrdering : VALUES) {
             if (atomicOrdering.getEncodedValue() == id) {
                 return atomicOrdering;
             }
         }
         return SEQUENTIALLY_CONSISTENT;
+    }
+
+    public static AtomicOrdering getOrStrongestFailureOrdering(long id, AtomicOrdering successOrdering) {
+        for (AtomicOrdering atomicOrdering : VALUES) {
+            if (atomicOrdering.getEncodedValue() == id) {
+                return atomicOrdering;
+            }
+        }
+        switch (successOrdering) {
+            case RELEASE:
+            case MONOTONIC:
+                return MONOTONIC;
+            case ACQUIRE_RELEASE:
+            case ACQUIRE:
+                return ACQUIRE;
+            case SEQUENTIALLY_CONSISTENT:
+                return SEQUENTIALLY_CONSISTENT;
+            default:
+                throw new AssertionError("Invalid SuccessOrdering: " + successOrdering);
+        }
     }
 }

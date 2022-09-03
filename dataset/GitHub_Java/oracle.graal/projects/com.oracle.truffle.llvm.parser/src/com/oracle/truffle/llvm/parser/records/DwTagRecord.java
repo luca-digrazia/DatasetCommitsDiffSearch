@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -111,6 +111,8 @@ public enum DwTagRecord {
     DW_TAG_RETURN_VARIABLE(0x102),
     DW_TAG_VECTOR_TYPE(0x103);
 
+    private static final DwTagRecord[] VALUES = values();
+
     private static final long DWARF_CONSTANT_VALUE_MASK = 0x0000FFFF;
     private static final long DWARF_CONSTANT_VERSION_MASK = 0xFFFF0000;
 
@@ -120,7 +122,7 @@ public enum DwTagRecord {
 
     public static DwTagRecord decode(long code) {
         long codePart = getDwarfConstant(code);
-        for (DwTagRecord cc : values()) {
+        for (DwTagRecord cc : VALUES) {
             if (cc.code() == codePart) {
                 return cc;
             }
@@ -129,7 +131,18 @@ public enum DwTagRecord {
     }
 
     public static boolean isDwarfDescriptor(long val) {
-        return (val & DWARF_CONSTANT_VERSION_MASK) != 0 && decode(val) != DW_TAG_UNKNOWN;
+        if (val <= 0 || (val & DWARF_CONSTANT_VERSION_MASK) == 0) {
+            return false;
+        }
+        final DwTagRecord decoded = decode(val);
+        switch (decoded) {
+            case DW_TAG_UNKNOWN:
+            case DW_TAG_HI_USER:
+            case DW_TAG_LO_USER:
+                return false;
+            default:
+                return true;
+        }
     }
 
     private final int code;

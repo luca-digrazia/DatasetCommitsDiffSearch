@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,6 +29,10 @@
  */
 package com.oracle.truffle.llvm.parser.scanner;
 
+import static com.oracle.truffle.llvm.parser.scanner.Block.ParsingStrategy.EAGER;
+import static com.oracle.truffle.llvm.parser.scanner.Block.ParsingStrategy.LAZY;
+import static com.oracle.truffle.llvm.parser.scanner.Block.ParsingStrategy.SKIP;
+
 public enum Block {
 
     ROOT(-1),
@@ -39,27 +43,52 @@ public enum Block {
     PARAMATTR(9),
     PARAMATTR_GROUP(10),
     CONSTANTS(11),
-    FUNCTION(12),
+    FUNCTION(12, LAZY),
     IDENTIFICATION(13),
     VALUE_SYMTAB(14),
     METADATA(15),
     METADATA_ATTACHMENT(16),
     TYPE(17),
-    USELIST(18),
-    MODULE_STRTAB(19),
-    FUNCTION_SUMMARY(20),
-    OPERAND_BUNDLE_TAGS(21),
-    METADATA_KIND(22);
+    USELIST(18, SKIP),
+    MODULE_STRTAB(19, SKIP),
+    FUNCTION_SUMMARY(20, SKIP),
+    OPERAND_BUNDLE_TAGS(21, SKIP),
+    METADATA_KIND(22),
+    STRTAB(23),
+    FULL_LTO_GLOBALVAR_SUMMARY(24, SKIP),
+    SYMTAB(25),
+    SYNC_SCOPE_NAMES(26, SKIP);
 
-    private final int id;
+    private static final Block[] VALUES = values();
 
-    Block(int id) {
-        this.id = id;
+    enum ParsingStrategy {
+        EAGER,
+        LAZY,
+        SKIP
     }
 
-    public static Block lookup(long id) {
-        // TODO set private when removing the old scanner
-        for (Block block : values()) {
+    private final int id;
+    private final ParsingStrategy strategy;
+
+    Block(int id) {
+        this(id, EAGER);
+    }
+
+    Block(int id, ParsingStrategy strategy) {
+        this.id = id;
+        this.strategy = strategy;
+    }
+
+    boolean parseLazily() {
+        return strategy == LAZY;
+    }
+
+    boolean skip() {
+        return strategy == SKIP;
+    }
+
+    static Block lookup(long id) {
+        for (Block block : VALUES) {
             if (block.id == id) {
                 return block;
             }

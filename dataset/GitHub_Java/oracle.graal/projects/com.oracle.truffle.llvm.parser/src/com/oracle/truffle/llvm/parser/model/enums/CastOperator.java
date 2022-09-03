@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,25 +31,39 @@ package com.oracle.truffle.llvm.parser.model.enums;
 
 public enum CastOperator {
 
-    TRUNCATE,
-    ZERO_EXTEND,
-    SIGN_EXTEND,
-    FP_TO_UNSIGNED_INT,
-    FP_TO_SIGNED_INT,
-    UNSIGNED_INT_TO_FP,
-    SIGNED_INT_TO_FP,
-    FP_TRUNCATE,
-    FP_EXTEND,
-    PTR_TO_INT,
-    INT_TO_PTR,
-    BITCAST,
-    ADDRESS_SPACE_CAST;
+    TRUNCATE("trunc"),
+    ZERO_EXTEND("zext"),
+    SIGN_EXTEND("sext"),
+    FP_TO_UNSIGNED_INT("fptoui"),
+    FP_TO_SIGNED_INT("fptosi"),
+    UNSIGNED_INT_TO_FP("uitofp"),
+    SIGNED_INT_TO_FP("sitofp"),
+    FP_TRUNCATE("fptrunc"),
+    FP_EXTEND("fpext"),
+    PTR_TO_INT("ptrtoint"),
+    INT_TO_PTR("inttoptr"),
+    BITCAST("bitcast"),
+    ADDRESS_SPACE_CAST("addrspacecast");
+
+    private static final CastOperator[] VALUES = values();
 
     public static CastOperator decode(int code) {
-        CastOperator[] ops = values();
-        if (code >= 0 && code < ops.length) {
-            return ops[code];
+        if (code >= 0 && code < VALUES.length) {
+            return VALUES[code];
         }
         return null;
+    }
+
+    private final String irString;
+
+    CastOperator(String irString) {
+        this.irString = irString;
+    }
+
+    /**
+     * Useful to get the llvm ir equivalent string of the enum.
+     */
+    public String getIrString() {
+        return irString;
     }
 }

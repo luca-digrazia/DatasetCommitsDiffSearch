@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,18 +32,13 @@ package com.oracle.truffle.llvm.parser.metadata;
 import com.oracle.truffle.llvm.parser.listeners.Metadata;
 import com.oracle.truffle.llvm.parser.records.DwTagRecord;
 
-import java.util.Arrays;
-
 public final class MDBasicType extends MDType implements MDBaseNode {
     // http://llvm.org/releases/3.2/docs/SourceLevelDebugging.html#format_basic_type
 
     private final DwarfEncoding encoding;
 
-    private final long tag;
-
     private MDBasicType(long tag, long line, long size, long align, long offset, long flags, long encoding) {
-        super(size, align, offset, line, flags);
-        this.tag = tag;
+        super(tag, size, align, offset, line, flags);
         this.encoding = DwarfEncoding.decode(encoding);
     }
 
@@ -54,10 +49,6 @@ public final class MDBasicType extends MDType implements MDBaseNode {
 
     public DwarfEncoding getEncoding() {
         return encoding;
-    }
-
-    public long getTag() {
-        return tag;
     }
 
     public enum DwarfEncoding {
@@ -71,6 +62,8 @@ public final class MDBasicType extends MDType implements MDBaseNode {
         DW_ATE_UNSIGNED(7),
         DW_ATE_UNSIGNED_CHAR(8);
 
+        private static final DwarfEncoding[] VALUES = values();
+
         private final int id;
 
         DwarfEncoding(int id) {
@@ -78,7 +71,12 @@ public final class MDBasicType extends MDType implements MDBaseNode {
         }
 
         private static DwarfEncoding decode(long val) {
-            return Arrays.stream(values()).filter(e -> e.id == val).findAny().orElse(UNKNOWN);
+            for (DwarfEncoding encoding : VALUES) {
+                if (encoding.id == val) {
+                    return encoding;
+                }
+            }
+            return UNKNOWN;
         }
     }
 
@@ -123,5 +121,4 @@ public final class MDBasicType extends MDType implements MDBaseNode {
         basicType.setFile(ParseUtil.resolveReference(args, ARGINDEX_32_FILE, basicType, md));
         return basicType;
     }
-
 }

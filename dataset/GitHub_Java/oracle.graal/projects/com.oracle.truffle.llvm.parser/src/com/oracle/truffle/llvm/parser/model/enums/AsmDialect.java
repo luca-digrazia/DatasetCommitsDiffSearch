@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,10 +31,25 @@ package com.oracle.truffle.llvm.parser.model.enums;
 
 public enum AsmDialect {
 
-    AT_T,
-    INTEL;
+    AT_T(""),
+    INTEL("inteldialect");
+
+    private static final AsmDialect[] VALUES = values();
 
     public static AsmDialect decode(long id) {
-        return values()[(int) id];
+        return VALUES[(int) id];
+    }
+
+    private final String irString;
+
+    AsmDialect(String irString) {
+        this.irString = irString;
+    }
+
+    /**
+     * Useful to get the llvm ir equivalent string of the enum.
+     */
+    public String getIrString() {
+        return irString;
     }
 }

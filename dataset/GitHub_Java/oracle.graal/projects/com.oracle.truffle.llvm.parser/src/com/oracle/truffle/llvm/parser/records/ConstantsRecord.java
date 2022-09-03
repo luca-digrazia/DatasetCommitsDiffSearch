@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -53,9 +53,12 @@ public enum ConstantsRecord {
     CE_INBOUNDS_GEP,
     BLOCKADDRESS,
     DATA,
-    INLINEASM;
+    INLINEASM,
+    CE_GEP_WITH_INRANGE_INDEX;
+
+    private static final ConstantsRecord[] VALUES = values();
 
     public static ConstantsRecord decode(long id) {
-        return values()[(int) id];
+        return VALUES[(int) id];
     }
 }
