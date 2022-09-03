@@ -120,20 +120,18 @@ public class GraalCompiler {
         }
 
         if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
+            new CanonicalizerPhase(runtime, assumptions).apply(graph);
         }
-
-        HighTierContext highTierContext = new HighTierContext(runtime, assumptions);
 
         if (GraalOptions.Inline && !plan.isPhaseDisabled(InliningPhase.class)) {
             if (GraalOptions.IterativeInlining) {
-                new IterativeInliningPhase(replacements, cache, plan, optimisticOpts, GraalOptions.OptEarlyReadElimination).apply(graph, highTierContext);
+                new IterativeInliningPhase(runtime, replacements, assumptions, cache, plan, optimisticOpts, GraalOptions.OptEarlyReadElimination).apply(graph);
             } else {
                 new InliningPhase(runtime, null, replacements, assumptions, cache, plan, optimisticOpts).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
 
                 if (GraalOptions.ConditionalElimination && GraalOptions.OptCanonicalizer) {
-                    new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
+                    new CanonicalizerPhase(runtime, assumptions).apply(graph);
                     new IterativeConditionalEliminationPhase(runtime, assumptions).apply(graph);
                 }
             }
@@ -144,25 +142,26 @@ public class GraalCompiler {
         if (GraalOptions.FullUnroll) {
             new LoopFullUnrollPhase(runtime, assumptions).apply(graph);
             if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
+                new CanonicalizerPhase(runtime, assumptions).apply(graph);
             }
         }
 
         if (GraalOptions.OptTailDuplication) {
             new TailDuplicationPhase().apply(graph);
             if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
+                new CanonicalizerPhase(runtime, assumptions).apply(graph);
             }
         }
 
-        if (GraalOptions.PartialEscapeAnalysis) {
-            new PartialEscapeAnalysisPhase(true, GraalOptions.OptEarlyReadElimination).apply(graph, highTierContext);
+        if (GraalOptions.PartialEscapeAnalysis && !plan.isPhaseDisabled(PartialEscapeAnalysisPhase.class)) {
+            new PartialEscapeAnalysisPhase(runtime, assumptions, true, GraalOptions.OptEarlyReadElimination).apply(graph);
         }
 
+        HighTierContext highTierContext = new HighTierContext(runtime, assumptions);
         Suites.HIGH_TIER.apply(graph, highTierContext);
 
         if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
+            new CanonicalizerPhase(runtime, assumptions).apply(graph);
         }
 
         new LoweringPhase(target, runtime, replacements, assumptions).apply(graph);
@@ -170,14 +169,14 @@ public class GraalCompiler {
         if (GraalOptions.OptPushThroughPi) {
             new PushThroughPiPhase().apply(graph);
             if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
+                new CanonicalizerPhase(runtime, assumptions).apply(graph);
             }
         }
 
         if (GraalOptions.OptFloatingReads) {
             int mark = graph.getMark();
             new FloatingReadPhase().apply(graph);
-            new CanonicalizerPhase.Instance(runtime, assumptions, mark, null).apply(graph);
+            new CanonicalizerPhase(runtime, assumptions, mark, null).apply(graph);
             if (GraalOptions.OptReadElimination) {
                 new ReadEliminationPhase().apply(graph);
             }
@@ -185,7 +184,7 @@ public class GraalCompiler {
         new RemoveValueProxyPhase().apply(graph);
 
         if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
+            new CanonicalizerPhase(runtime, assumptions).apply(graph);
         }
 
         if (GraalOptions.OptEliminatePartiallyRedundantGuards) {
@@ -201,7 +200,7 @@ public class GraalCompiler {
         }
 
         if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
+            new CanonicalizerPhase(runtime, assumptions).apply(graph);
         }
 
         plan.runPhases(PhasePosition.MID_LEVEL, graph);
