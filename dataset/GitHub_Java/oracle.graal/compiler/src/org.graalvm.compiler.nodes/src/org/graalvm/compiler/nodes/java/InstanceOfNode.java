@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -61,7 +59,7 @@ import jdk.vm.ci.meta.TriState;
 public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtualizable {
     public static final NodeClass<InstanceOfNode> TYPE = NodeClass.create(InstanceOfNode.class);
 
-    private final ObjectStamp checkedStamp;
+    private ObjectStamp checkedStamp;
 
     private JavaTypeProfile profile;
     @OptionalInput(Anchor) protected AnchoringNode anchor;
@@ -77,7 +75,6 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
         this.anchor = anchor;
         assert (profile == null) || (anchor != null) : "profiles must be anchored";
         assert checkedStamp != null;
-        assert type() != null;
     }
 
     public static LogicNode createAllowNull(TypeReference type, ValueNode object, JavaTypeProfile profile, AnchoringNode anchor) {
@@ -216,6 +213,11 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
 
     public ObjectStamp getCheckedStamp() {
         return checkedStamp;
+    }
+
+    public void strengthenCheckedStamp(ObjectStamp newCheckedStamp) {
+        assert this.checkedStamp.join(newCheckedStamp).equals(newCheckedStamp) : "stamp can only improve";
+        this.checkedStamp = newCheckedStamp;
     }
 
     @Override
