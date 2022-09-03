@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,50 +22,29 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.amd64.AMD64.*;
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.amd64.AMD64DeoptimizeOp.*;
+import static com.oracle.graal.hotspot.HotSpotHostBackend.UNCOMMON_TRAP_HANDLER;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.lir.LIRInstruction.Opcode;
-import com.oracle.graal.lir.amd64.*;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.amd64.AMD64Call;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 /**
  * Removes the current frame and tail calls the uncommon trap routine.
  */
 @Opcode("DEOPT_CALLER")
-final class AMD64HotSpotDeoptimizeCallerOp extends AMD64HotSpotEpilogueOp {
+final class AMD64HotSpotDeoptimizeCallerOp extends AMD64HotSpotEpilogueBlockEndOp {
 
-    private final DeoptimizationAction action;
-    private final DeoptimizationReason reason;
+    public static final LIRInstructionClass<AMD64HotSpotDeoptimizeCallerOp> TYPE = LIRInstructionClass.create(AMD64HotSpotDeoptimizeCallerOp.class);
 
-    AMD64HotSpotDeoptimizeCallerOp(DeoptimizationAction action, DeoptimizationReason reason) {
-        this.action = action;
-        this.reason = reason;
+    protected AMD64HotSpotDeoptimizeCallerOp() {
+        super(TYPE);
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        if (isStackSlot(savedRbp)) {
-            // Restoring RBP from the stack must be done before the frame is removed
-            masm.movq(rbp, (AMD64Address) tasm.asAddress(savedRbp));
-        } else {
-            Register framePointer = asRegister(savedRbp);
-            if (framePointer != rbp) {
-                masm.movq(rbp, framePointer);
-            }
-        }
-        if (tasm.frameContext != null) {
-            tasm.frameContext.leave(tasm);
-        }
-        HotSpotGraalRuntime runtime = graalRuntime();
-        Register thread = runtime.getRuntime().threadRegister();
-        masm.movl(new AMD64Address(thread, runtime.getConfig().pendingDeoptimizationOffset), tasm.runtime.encodeDeoptActionAndReason(action, reason));
-        AMD64Call.directJmp(tasm, masm, tasm.runtime.lookupRuntimeCall(DEOPTIMIZE));
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        leaveFrameAndRestoreRbp(crb, masm);
+        AMD64Call.directJmp(crb, masm, crb.foreignCalls.lookupForeignCall(UNCOMMON_TRAP_HANDLER));
     }
 }

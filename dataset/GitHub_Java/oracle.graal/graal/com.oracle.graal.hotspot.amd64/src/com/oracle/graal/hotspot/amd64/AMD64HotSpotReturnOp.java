@@ -24,15 +24,14 @@ package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
+import jdk.internal.jvmci.meta.Value;
 
 import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.Value;
 
 /**
  * Returns from a function.
@@ -44,9 +43,9 @@ final class AMD64HotSpotReturnOp extends AMD64HotSpotEpilogueBlockEndOp {
     @Use({REG, ILLEGAL}) protected Value value;
     private final boolean isStub;
     private final Register scratchForSafepointOnReturn;
-    private final GraalHotSpotVMConfig config;
+    private final HotSpotVMConfig config;
 
-    AMD64HotSpotReturnOp(Value value, boolean isStub, Register scratchForSafepointOnReturn, GraalHotSpotVMConfig config) {
+    AMD64HotSpotReturnOp(Value value, boolean isStub, Register scratchForSafepointOnReturn, HotSpotVMConfig config) {
         super(TYPE);
         this.value = value;
         this.isStub = isStub;

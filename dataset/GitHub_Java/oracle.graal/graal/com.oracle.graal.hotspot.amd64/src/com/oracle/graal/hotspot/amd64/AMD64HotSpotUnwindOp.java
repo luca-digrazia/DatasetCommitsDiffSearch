@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,43 +22,50 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.amd64.AMD64.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.UNWIND_EXCEPTION_TO_CALLER;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static jdk.internal.jvmci.amd64.AMD64.rsp;
+import static jdk.internal.jvmci.code.ValueUtil.asRegister;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.RegisterValue;
 
-import com.oracle.graal.amd64.*;
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.*;
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.lir.LIRInstruction.Opcode;
-import com.oracle.graal.lir.amd64.*;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.asm.amd64.AMD64Address;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.amd64.AMD64Call;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 /**
- * Performs an unwind to throw an exception.
+ * Removes the current frame and jumps to the {@link UnwindExceptionToCallerStub}.
  */
-@Opcode("CALL_INDIRECT")
-final class AMD64HotSpotUnwindOp extends AMD64LIRInstruction {
+@Opcode("UNWIND")
+final class AMD64HotSpotUnwindOp extends AMD64HotSpotEpilogueBlockEndOp {
+    public static final LIRInstructionClass<AMD64HotSpotUnwindOp> TYPE = LIRInstructionClass.create(AMD64HotSpotUnwindOp.class);
 
-    public static final Descriptor UNWIND_EXCEPTION = new Descriptor("unwindException", true, void.class, Object.class);
+    @Use({REG}) protected RegisterValue exception;
 
-    /**
-     * Vtable stubs expect the metaspace Method in RBX.
-     */
-    public static final Register METHOD = AMD64.rbx;
-
-    @Use({REG}) protected AllocatableValue exception;
-    @Temp private RegisterValue framePointer;
-
-    AMD64HotSpotUnwindOp(AllocatableValue exception) {
+    AMD64HotSpotUnwindOp(RegisterValue exception) {
+        super(TYPE);
         this.exception = exception;
-        assert exception == AMD64.rax.asValue();
-        framePointer = AMD64.rbp.asValue();
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        masm.movq(framePointer.getRegister(), rsp);
-        masm.incrementq(framePointer.getRegister(), tasm.frameMap.frameSize() - 8);
-        AMD64Call.directCall(tasm, masm, tasm.runtime.lookupRuntimeCall(UNWIND_EXCEPTION), null);
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        leaveFrameAndRestoreRbp(crb, masm);
+
+        ForeignCallLinkage linkage = crb.foreignCalls.lookupForeignCall(UNWIND_EXCEPTION_TO_CALLER);
+        CallingConvention cc = linkage.getOutgoingCallingConvention();
+        assert cc.getArgumentCount() == 2;
+        assert exception.equals(cc.getArgument(0));
+
+        // Get return address (is on top of stack after leave).
+        Register returnAddress = asRegister(cc.getArgument(1));
+        masm.movq(returnAddress, new AMD64Address(rsp, 0));
+
+        AMD64Call.directJmp(crb, masm, linkage);
     }
 }

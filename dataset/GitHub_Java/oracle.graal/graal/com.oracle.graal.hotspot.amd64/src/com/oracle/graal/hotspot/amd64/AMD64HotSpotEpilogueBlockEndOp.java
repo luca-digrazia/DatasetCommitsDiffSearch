@@ -25,20 +25,30 @@ package com.oracle.graal.hotspot.amd64;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
 import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.LIRKind;
 
 import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
 import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.amd64.AMD64BlockEndOp;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 /**
  * @see AMD64HotSpotEpilogueOp
  */
-abstract class AMD64HotSpotEpilogueBlockEndOp extends AMD64BlockEndOp implements AMD64HotSpotRestoreRbpOp {
+abstract class AMD64HotSpotEpilogueBlockEndOp extends AMD64BlockEndOp {
 
     protected AMD64HotSpotEpilogueBlockEndOp(LIRInstructionClass<? extends AMD64HotSpotEpilogueBlockEndOp> c) {
         super(c);
     }
+
+    /**
+     * The type of location (i.e., stack or register) in which RBP is saved is not known until
+     * initial LIR generation is finished. Until then, we use a placeholder variable so that LIR
+     * verification is successful.
+     */
+    private static final Variable PLACEHOLDER = new Variable(LIRKind.value(JavaKind.Long), Integer.MAX_VALUE);
 
     @Use({REG, STACK}) protected AllocatableValue savedRbp = PLACEHOLDER;
 
@@ -46,7 +56,4 @@ abstract class AMD64HotSpotEpilogueBlockEndOp extends AMD64BlockEndOp implements
         AMD64HotSpotEpilogueOp.leaveFrameAndRestoreRbp(savedRbp, crb, masm);
     }
 
-    public void setSavedRbp(AllocatableValue value) {
-        savedRbp = value;
-    }
 }

@@ -23,11 +23,11 @@
 package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static jdk.vm.ci.amd64.AMD64.rbp;
-import static jdk.vm.ci.amd64.AMD64.rsp;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.AllocatableValue;
+import static jdk.internal.jvmci.amd64.AMD64.rbp;
+import static jdk.internal.jvmci.amd64.AMD64.rsp;
+import static jdk.internal.jvmci.code.ValueUtil.asRegister;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.meta.AllocatableValue;
 
 import com.oracle.graal.asm.amd64.AMD64Address;
 import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
@@ -67,12 +67,10 @@ final class AMD64HotSpotJumpToExceptionHandlerInCallerOp extends AMD64HotSpotEpi
         // Discard the return address, thus completing restoration of caller frame
         masm.incrementq(rsp, 8);
 
-        if (System.getProperty("java.specification.version").compareTo("1.9") < 0) {
-            // Restore rsp from rbp if the exception PC is a method handle call site.
-            AMD64Address dst = new AMD64Address(thread, isMethodHandleReturnOffset);
-            masm.cmpl(dst, 0);
-            masm.cmovq(ConditionFlag.NotEqual, rsp, rbp);
-        }
+        // Restore rsp from rbp if the exception PC is a method handle call site.
+        AMD64Address dst = new AMD64Address(thread, isMethodHandleReturnOffset);
+        masm.cmpl(dst, 0);
+        masm.cmovq(ConditionFlag.NotEqual, rsp, rbp);
 
         masm.jmp(asRegister(handlerInCallerPc));
     }
