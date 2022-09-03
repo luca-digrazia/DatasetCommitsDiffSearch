@@ -1623,6 +1623,9 @@ public class NodeGenFactory {
         if (!cast.isEmpty()) {
             builder.tree(cast);
         }
+        if (!guardAssertions.isEmpty()) {
+            builder.tree(guardAssertions);
+        }
         boolean elseIf = !elseGuardExpressions.isEmpty();
         if (!methodGuards.isEmpty()) {
             builder.startIf(elseIf);
@@ -1632,9 +1635,6 @@ public class NodeGenFactory {
         } else if (elseIf) {
             builder.startElseBlock();
             ifCount++;
-        }
-        if (!guardAssertions.isEmpty()) {
-            builder.tree(guardAssertions);
         }
 
         boolean reachable = isReachableGroup(group, ifCount);
@@ -2125,7 +2125,8 @@ public class NodeGenFactory {
         return new CodeTree[]{expressionBuilder.build(), assertionBuilder.build()};
     }
 
-    private static Map<Variable, CodeTree> castBoundTypes(Map<Variable, LocalVariable> bindings) {
+    private Map<Variable, CodeTree> castBoundTypes(Map<Variable, LocalVariable> bindings) {
+
         Map<Variable, CodeTree> resolvedBindings = new HashMap<>();
         for (Variable variable : bindings.keySet()) {
             LocalVariable localVariable = bindings.get(variable);

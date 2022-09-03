@@ -29,22 +29,23 @@ import javax.lang.model.type.*;
 import javax.tools.Diagnostic.Kind;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.CompilerDirectives.*;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.dsl.internal.*;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.nodes.Node.Children;
+import com.oracle.truffle.api.source.*;
 
 /**
  * THIS IS NOT PUBLIC API.
  */
 public final class TruffleTypes {
 
-    public static final String OPTION_DETAILED_REWRITE_REASONS = "DetailedRewriteReasons";
-
-    private final TypeMirror node;
-    private final TypeMirror nodeArray;
+    private final DeclaredType node;
+    private final ArrayType nodeArray;
     private final TypeMirror unexpectedValueException;
     private final TypeMirror frame;
     private final TypeMirror assumption;
@@ -52,17 +53,25 @@ public final class TruffleTypes {
     private final DeclaredType childAnnotation;
     private final DeclaredType childrenAnnotation;
     private final DeclaredType nodeInfoAnnotation;
-    private final DeclaredType nodeInfoKind;
+    private final DeclaredType nodeCost;
     private final TypeMirror compilerDirectives;
     private final TypeMirror compilerAsserts;
-    private final DeclaredType slowPath;
+    private final DeclaredType truffleBoundary;
     private final DeclaredType sourceSection;
     private final DeclaredType truffleOptions;
+    private final DeclaredType compilationFinal;
+    private final DeclaredType nodeUtil;
+    private final DeclaredType dslNode;
+    private final DeclaredType dslShare;
+    private final DeclaredType nodeFactory;
+    private final DeclaredType nodeFactoryBase;
+    private final DeclaredType dslMetadata;
+    private final DeclaredType generateNodeFactory;
     private final TypeElement expectError;
 
     private final List<String> errors = new ArrayList<>();
 
-    public TruffleTypes(ProcessorContext context) {
+    TruffleTypes(ProcessorContext context) {
         node = getRequired(context, Node.class);
         nodeArray = context.getEnvironment().getTypeUtils().getArrayType(node);
         unexpectedValueException = getRequired(context, UnexpectedResultException.class);
@@ -74,11 +83,47 @@ public final class TruffleTypes {
         assumption = getRequired(context, Assumption.class);
         invalidAssumption = getRequired(context, InvalidAssumptionException.class);
         nodeInfoAnnotation = getRequired(context, NodeInfo.class);
-        nodeInfoKind = getRequired(context, NodeInfo.Kind.class);
-        slowPath = getRequired(context, SlowPath.class);
+        nodeCost = getRequired(context, NodeCost.class);
+        truffleBoundary = getRequired(context, TruffleBoundary.class);
         sourceSection = getRequired(context, SourceSection.class);
         truffleOptions = getRequired(context, TruffleOptions.class);
+        compilationFinal = getRequired(context, CompilationFinal.class);
+        nodeUtil = getRequired(context, NodeUtil.class);
+        dslNode = getRequired(context, DSLNode.class);
+        dslShare = getRequired(context, DSLShare.class);
+        nodeFactory = getRequired(context, NodeFactory.class);
+        nodeFactoryBase = getRequired(context, NodeFactoryBase.class);
+        dslMetadata = getRequired(context, DSLMetadata.class);
         expectError = (TypeElement) getRequired(context, ExpectError.class).asElement();
+        generateNodeFactory = getRequired(context, GenerateNodeFactory.class);
+    }
+
+    public DeclaredType getGenerateNodeFactory() {
+        return generateNodeFactory;
+    }
+
+    public DeclaredType getDslMetadata() {
+        return dslMetadata;
+    }
+
+    public DeclaredType getNodeFactory() {
+        return nodeFactory;
+    }
+
+    public DeclaredType getNodeFactoryBase() {
+        return nodeFactoryBase;
+    }
+
+    public DeclaredType getDslNode() {
+        return dslNode;
+    }
+
+    public DeclaredType getDslShare() {
+        return dslShare;
+    }
+
+    public DeclaredType getCompilationFinal() {
+        return compilationFinal;
     }
 
     public TypeElement getExpectError() {
@@ -101,11 +146,11 @@ public final class TruffleTypes {
         return false;
     }
 
-    public DeclaredType getNodeInfoKind() {
-        return nodeInfoKind;
+    public DeclaredType getNodeCost() {
+        return nodeCost;
     }
 
-    private DeclaredType getRequired(ProcessorContext context, Class clazz) {
+    private DeclaredType getRequired(ProcessorContext context, Class<?> clazz) {
         TypeMirror type = context.getType(clazz);
         if (type == null) {
             errors.add(String.format("Could not find required type: %s", clazz.getSimpleName()));
@@ -125,11 +170,11 @@ public final class TruffleTypes {
         return compilerDirectives;
     }
 
-    public TypeMirror getNode() {
+    public DeclaredType getNode() {
         return node;
     }
 
-    public TypeMirror getNodeArray() {
+    public ArrayType getNodeArray() {
         return nodeArray;
     }
 
@@ -157,11 +202,15 @@ public final class TruffleTypes {
         return truffleOptions;
     }
 
-    public DeclaredType getSlowPath() {
-        return slowPath;
+    public DeclaredType getTruffleBoundary() {
+        return truffleBoundary;
     }
 
     public DeclaredType getSourceSection() {
         return sourceSection;
+    }
+
+    public DeclaredType getNodeUtil() {
+        return nodeUtil;
     }
 }

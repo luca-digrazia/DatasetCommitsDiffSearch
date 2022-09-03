@@ -76,6 +76,10 @@ public abstract class DSLExpression {
         return resolvedTargetType;
     }
 
+    public final boolean isVariableBound(VariableElement variableElement) {
+        return findBoundVariableElements().contains(variableElement);
+    }
+
     public abstract TypeMirror getResolvedType();
 
     public abstract void accept(DSLExpressionVisitor visitor);
