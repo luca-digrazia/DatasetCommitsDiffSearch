@@ -79,8 +79,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
     @CompilationFinal private volatile PolyglotThreadInfo constantCurrentThreadInfo = PolyglotThreadInfo.NULL;
 
     /*
-     * While canceling the context can no longer be entered. The context goes from canceling into closed
-     * state.
+     * While canceling the context can no longer be entered. The context goes from canceling into
+     * closed state.
      */
     volatile boolean cancelling;
     private volatile Thread closingThread;
@@ -353,9 +353,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
                 checkAllThreadAccesses();
             }
 
-            Thread closing = this.closingThread;
             if (needsInitialization) {
-                if (closing != null && closing != current) {
+                if (closingThread != null && closingThread != current) {
                     throw new PolyglotIllegalStateException("Can not create new threads in closing context.");
                 }
                 threads.put(current, threadInfo);
@@ -376,7 +375,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
             }
 
             // never cache last thread on close or when closingThread
-            if (!closed && closing == null) {
+            if (!closed && closingThread == null) {
                 setCachedThreadInfo(threadInfo);
             }
         }
@@ -864,21 +863,16 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         try {
             synchronized (this) {
                 if (!closed) {
+                    closingThread = Thread.currentThread();
+
                     // triggers a thread changed event which requires synchronization on the next
-                    PolyglotThreadInfo threadInfo = getCurrentThreadInfo();
-
                     setCachedThreadInfo(PolyglotThreadInfo.NULL);
-
-                    if (!threadInfo.explicitContextStack.isEmpty()) {
-                        throw new IllegalStateException("The context is explicitely entered on the current thread. Call leave() before closing the context to resolve this.");
-                    }
-
-                    childrenToClose = childContexts.toArray(new PolyglotContextImpl[childContexts.size()]);
 
                     if (cancelIfExecuting) {
                         cancelling = true;
-                        if (threadInfo != PolyglotThreadInfo.NULL) {
-                            threadInfo.cancelled = true;
+                        PolyglotThreadInfo currentTInfo = getCurrentThreadInfo();
+                        if (currentTInfo != PolyglotThreadInfo.NULL) {
+                            currentTInfo.cancelled = true;
                             // clear interrupted status after closingThread
                             // needed because we interrupt when closingThread from another thread.
                             Thread.interrupted();
@@ -891,7 +885,10 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
                          */
                         return false;
                     }
-                    closingThread = Thread.currentThread();
+                    if (!getCurrentThreadInfo().explicitContextStack.isEmpty()) {
+                        throw new IllegalStateException("The context is explicitely entered on the current thread. Call leave() before closing the context to resolve this.");
+                    }
+                    childrenToClose = childContexts.toArray(new PolyglotContextImpl[childContexts.size()]);
                 }
             }
             if (childrenToClose != null) {
@@ -981,8 +978,9 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         for (PolyglotThreadInfo threadInfo : threads.values()) {
             if (!threadInfo.isCurrent() && threadInfo.isActive()) {
                 /*
-                 * We send an interrupt to the thread to wake up and to run some guest language code in case they
-                 * are waiting in some async primitive. The interrupt is then cleared when the closed is performed.
+                 * We send an interrupt to the thread to wake up and to run some guest language code
+                 * in case they are waiting in some async primitive. The interrupt is then cleared
+                 * when the closed is performed.
                  */
                 threadInfo.thread.interrupt();
             }
@@ -999,8 +997,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
                 currentTInfo = PolyglotThreadInfo.NULL;
             }
         }
-        assert currentTInfo.thread == null || currentTInfo.thread == Thread.currentThread();
-
         return currentTInfo;
     }
 
