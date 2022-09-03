@@ -89,6 +89,11 @@ public final class DefaultDirectCallNode extends DirectCallNode {
     }
 
     @Override
+    public boolean isInlined() {
+        return false;
+    }
+
+    @Override
     public boolean isSplittable() {
         return false;
     }

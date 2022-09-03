@@ -85,11 +85,6 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
     }
 
     @Override
-    public CompilerOptions createCompilerOptions() {
-        return new DefaultCompilerOptions();
-    }
-
-    @Override
     public Assumption createAssumption() {
         return createAssumption(null);
     }
@@ -147,10 +142,6 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
     @Override
     public FrameInstance getCurrentFrame() {
         return currentFrames.get();
-    }
-
-    public <T> T getCapability(Class<T> capability) {
-        return null;
     }
 
     public void notifyTransferToInterpreter() {
