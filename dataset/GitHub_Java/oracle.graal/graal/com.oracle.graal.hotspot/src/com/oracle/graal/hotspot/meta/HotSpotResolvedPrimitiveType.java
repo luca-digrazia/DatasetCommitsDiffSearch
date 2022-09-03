@@ -112,10 +112,6 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
         return true;
     }
 
-    public boolean isLinked() {
-        return true;
-    }
-
     @Override
     public boolean isInstance(Constant obj) {
         return false;
@@ -133,7 +129,6 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
 
     @Override
     public boolean isAssignableFrom(ResolvedJavaType other) {
-        assert other != null;
         return other == this;
     }
 
