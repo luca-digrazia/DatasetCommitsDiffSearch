@@ -22,15 +22,10 @@
  */
 package com.oracle.graal.jtt.except;
 
-import jdk.internal.org.objectweb.asm.ClassWriter;
-import jdk.internal.org.objectweb.asm.MethodVisitor;
-import jdk.internal.org.objectweb.asm.Opcodes;
-import jdk.internal.org.objectweb.asm.Type;
+import org.junit.*;
+import jdk.internal.org.objectweb.asm.*;
 
-import org.junit.BeforeClass;
-import org.junit.Test;
-
-import com.oracle.graal.jtt.JTTTest;
+import com.oracle.graal.jtt.*;
 
 public class UntrustedInterfaces extends JTTTest {
 
@@ -50,20 +45,20 @@ public class UntrustedInterfaces extends JTTTest {
      *     public void setField() {
      *         field = new TestConstant();
      *     }
-     * 
+     *
      *     public void setStaticField() {
      *         staticField = new TestConstant();
      *     }
-     * 
+     *
      *     public int callMe(CallBack callback) {
      *         return callback.callBack(new TestConstant());
      *     }
-     * 
+     *
      *     public TestInterface get() {
      *         return new TestConstant();
      *     }
      * }
-     * 
+     *
      * private static final class TestConstant implements TestInterface {
      *     public int method() {
      *         return 42;
