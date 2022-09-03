@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,52 +22,79 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import static com.oracle.graal.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
+
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.debug.DebugCloseable;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.CanonicalizableLocation;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.PiNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.extended.ValueAnchorNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.util.GraphUtil;
+
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.MetaAccessProvider;
 
 /**
  * Reads an {@linkplain FixedAccessNode accessed} value.
  */
-@NodeInfo
-public final class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, PiPushable, Virtualizable, GuardingNode {
+@NodeInfo(nameTemplate = "Read#{p#location/s}", cycles = CYCLES_2, size = SIZE_1)
+public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, Virtualizable, GuardingNode {
 
     public static final NodeClass<ReadNode> TYPE = NodeClass.create(ReadNode.class);
 
-    public ReadNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType) {
-        super(TYPE, object, location, stamp, null, barrierType);
+    public ReadNode(AddressNode address, LocationIdentity location, Stamp stamp, BarrierType barrierType) {
+        super(TYPE, address, location, stamp, null, barrierType);
     }
 
-    public ReadNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
-        super(TYPE, object, location, stamp, guard, barrierType);
+    public ReadNode(AddressNode address, LocationIdentity location, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
+        super(TYPE, address, location, stamp, guard, barrierType);
     }
 
-    public ReadNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck, FrameState stateBefore) {
-        super(TYPE, object, location, stamp, guard, barrierType, nullCheck, stateBefore);
+    public ReadNode(AddressNode address, LocationIdentity location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck, FrameState stateBefore) {
+        this(TYPE, address, location, stamp, guard, barrierType, nullCheck, stateBefore);
     }
 
-    public ReadNode(ValueNode object, ValueNode location, ValueNode guard, BarrierType barrierType) {
+    protected ReadNode(NodeClass<? extends ReadNode> c, AddressNode address, LocationIdentity location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck,
+                    FrameState stateBefore) {
+        super(c, address, location, stamp, guard, barrierType, nullCheck, stateBefore);
+    }
+
+    public ReadNode(AddressNode address, LocationIdentity location, ValueNode guard, BarrierType barrierType) {
         /*
          * Used by node intrinsics. Really, you can trust me on that! Since the initial value for
          * location is a parameter, i.e., a ParameterNode, the constructor cannot use the declared
          * type LocationNode.
          */
-        super(TYPE, object, location, StampFactory.forNodeIntrinsic(), (GuardingNode) guard, barrierType);
+        super(TYPE, address, location, StampFactory.forNodeIntrinsic(), (GuardingNode) guard, barrierType);
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        Value address = location().generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
         LIRKind readKind = gen.getLIRGeneratorTool().getLIRKind(stamp());
-        gen.setResult(this, gen.getLIRGeneratorTool().emitLoad(readKind, address, gen.state(this)));
+        gen.setResult(this, gen.getLIRGeneratorTool().getArithmetic().emitLoad(readKind, gen.operand(address), gen.state(this)));
     }
 
     @Override
@@ -81,11 +108,15 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
                 return null;
             }
         }
-        if (object() instanceof PiNode && ((PiNode) object()).getGuard() == getGuard()) {
-            return new ReadNode(((PiNode) object()).getOriginalNode(), location(), stamp(), getGuard(), getBarrierType(), getNullCheck(), stateBefore());
+        if (getAddress() instanceof OffsetAddressNode) {
+            OffsetAddressNode objAddress = (OffsetAddressNode) getAddress();
+            if (objAddress.getBase() instanceof PiNode && ((PiNode) objAddress.getBase()).getGuard() == getGuard()) {
+                OffsetAddressNode newAddress = new OffsetAddressNode(((PiNode) objAddress.getBase()).getOriginalNode(), objAddress.getOffset());
+                return new ReadNode(newAddress, getLocationIdentity(), stamp(), getGuard(), getBarrierType(), getNullCheck(), stateBefore());
+            }
         }
         if (!getNullCheck()) {
-            return canonicalizeRead(this, location(), object(), tool);
+            return canonicalizeRead(this, getAddress(), getLocationIdentity(), tool);
         } else {
             // if this read is a null check, then replacing it with the value is incorrect for
             // guard-type usages
@@ -93,9 +124,12 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
         }
     }
 
+    @SuppressWarnings("try")
     @Override
     public FloatingAccessNode asFloatingNode(MemoryNode lastLocationAccess) {
-        return graph().unique(new FloatingReadNode(object(), location(), lastLocationAccess, stamp(), getGuard(), getBarrierType()));
+        try (DebugCloseable position = withNodeSourcePosition()) {
+            return graph().unique(new FloatingReadNode(getAddress(), getLocationIdentity(), lastLocationAccess, stamp(), getGuard(), getBarrierType()));
+        }
     }
 
     @Override
@@ -103,69 +137,46 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
         return (getNullCheck() && type == InputType.Guard) ? true : super.isAllowedUsageType(type);
     }
 
-    public static ValueNode canonicalizeRead(ValueNode read, LocationNode location, ValueNode object, CanonicalizerTool tool) {
+    public static ValueNode canonicalizeRead(ValueNode read, AddressNode address, LocationIdentity locationIdentity, CanonicalizerTool tool) {
         MetaAccessProvider metaAccess = tool.getMetaAccess();
-        if (tool.canonicalizeReads()) {
-            if (metaAccess != null && object != null && object.isConstant() && !object.isNullConstant() && location instanceof ConstantLocationNode) {
-                long displacement = ((ConstantLocationNode) location).getDisplacement();
-                if ((location.getLocationIdentity().isImmutable())) {
+        if (tool.canonicalizeReads() && address instanceof OffsetAddressNode) {
+            OffsetAddressNode objAddress = (OffsetAddressNode) address;
+            ValueNode object = objAddress.getBase();
+            if (metaAccess != null && object.isConstant() && !object.isNullConstant() && objAddress.getOffset().isConstant()) {
+                long displacement = objAddress.getOffset().asJavaConstant().asLong();
+                int stableDimension = ((ConstantNode) object).getStableDimension();
+                if (locationIdentity.isImmutable() || stableDimension > 0) {
                     Constant constant = read.stamp().readConstant(tool.getConstantReflection().getMemoryAccessProvider(), object.asConstant(), displacement);
-                    if (constant != null) {
-                        return ConstantNode.forConstant(read.stamp(), constant, metaAccess);
+                    boolean isDefaultStable = locationIdentity.isImmutable() || ((ConstantNode) object).isDefaultStable();
+                    if (constant != null && (isDefaultStable || !constant.isDefaultForKind())) {
+                        return ConstantNode.forConstant(read.stamp(), constant, Math.max(stableDimension - 1, 0), isDefaultStable, metaAccess);
                     }
                 }
-
-                Constant constant = tool.getConstantReflection().readConstantArrayElementForOffset(object.asJavaConstant(), displacement);
-                if (constant != null) {
-                    return ConstantNode.forConstant(read.stamp(), constant, metaAccess);
-                }
             }
-            if (location.getLocationIdentity().equals(LocationIdentity.ARRAY_LENGTH_LOCATION)) {
+            if (locationIdentity.equals(ARRAY_LENGTH_LOCATION)) {
                 ValueNode length = GraphUtil.arrayLength(object);
                 if (length != null) {
                     // TODO Does this need a PiCastNode to the positive range?
                     return length;
                 }
             }
+            if (locationIdentity instanceof CanonicalizableLocation) {
+                CanonicalizableLocation canonicalize = (CanonicalizableLocation) locationIdentity;
+                ValueNode result = canonicalize.canonicalizeRead(read, address, object, tool);
+                assert result != null && result.stamp().isCompatible(read.stamp());
+                return result;
+            }
+
         }
         return read;
     }
 
     @Override
-    public boolean push(PiNode parent) {
-        if (!(location() instanceof ConstantLocationNode && parent.stamp() instanceof ObjectStamp && parent.object().stamp() instanceof ObjectStamp)) {
-            return false;
-        }
-
-        ObjectStamp piStamp = (ObjectStamp) parent.stamp();
-        ResolvedJavaType receiverType = piStamp.type();
-        if (receiverType == null) {
-            return false;
-        }
-        ConstantLocationNode constantLocationNode = (ConstantLocationNode) location();
-        ResolvedJavaField field = receiverType.findInstanceFieldWithOffset(constantLocationNode.getDisplacement(), constantLocationNode.getKind());
-        if (field == null) {
-            // field was not declared by receiverType
-            return false;
-        }
-
-        ObjectStamp valueStamp = (ObjectStamp) parent.object().stamp();
-        ResolvedJavaType valueType = StampTool.typeOrNull(valueStamp);
-        if (valueType != null && field.getDeclaringClass().isAssignableFrom(valueType)) {
-            if (piStamp.nonNull() == valueStamp.nonNull() && piStamp.alwaysNull() == valueStamp.alwaysNull()) {
-                replaceFirstInput(parent, parent.object());
-                return true;
-            }
-        }
-
-        return false;
+    public void virtualize(VirtualizerTool tool) {
+        throw GraalError.shouldNotReachHere("unexpected ReadNode before PEA");
     }
 
     @Override
-    public void virtualize(VirtualizerTool tool) {
-        throw GraalInternalError.shouldNotReachHere("unexpected ReadNode before PEA");
-    }
-
     public boolean canNullCheck() {
         return true;
     }

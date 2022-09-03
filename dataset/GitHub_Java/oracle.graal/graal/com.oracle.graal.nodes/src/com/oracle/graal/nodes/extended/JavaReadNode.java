@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,61 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.memory.FixedAccessNode;
+import com.oracle.graal.nodes.memory.ReadNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * Read a raw memory location according to Java field or array read semantics. It will perform read
  * barriers, implicit conversions and optionally oop uncompression.
  */
-public final class JavaReadNode extends FixedAccessNode implements Lowerable, GuardingNode {
+@NodeInfo(nameTemplate = "JavaRead#{p#location/s}", cycles = CYCLES_2, size = SIZE_1)
+public final class JavaReadNode extends FixedAccessNode implements Lowerable, GuardingNode, Canonicalizable {
 
-    public JavaReadNode(ValueNode object, LocationNode location, BarrierType barrierType, boolean compressible) {
-        super(object, location, StampFactory.forKind(location.getValueKind()), barrierType, compressible);
+    public static final NodeClass<JavaReadNode> TYPE = NodeClass.create(JavaReadNode.class);
+    protected final JavaKind readKind;
+    protected final boolean compressible;
+
+    public JavaReadNode(JavaKind readKind, AddressNode address, LocationIdentity location, BarrierType barrierType, boolean compressible) {
+        super(TYPE, address, location, StampFactory.forKind(readKind), barrierType);
+        this.readKind = readKind;
+        this.compressible = compressible;
     }
 
+    @Override
     public void lower(LoweringTool tool) {
         tool.getLowerer().lower(this, tool);
     }
 
+    @Override
     public boolean canNullCheck() {
         return true;
+    }
+
+    public JavaKind getReadKind() {
+        return readKind;
+    }
+
+    public boolean isCompressible() {
+        return compressible;
+    }
+
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        return ReadNode.canonicalizeRead(this, getAddress(), getLocationIdentity(), tool);
     }
 }

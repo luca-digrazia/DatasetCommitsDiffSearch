@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,59 +22,90 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.extended.LocationNode.Location;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.InputType.Guard;
+
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Simplifiable;
+import com.oracle.graal.graph.spi.SimplifierTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.PiNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.nodes.memory.address.AddressNode.Address;
+import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
 
 /**
  * Writes a given {@linkplain #value() value} a {@linkplain FixedAccessNode memory location}.
  */
-@NodeInfo
-public final class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
+@NodeInfo(nameTemplate = "Write#{p#location/s}")
+public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
 
     public static final NodeClass<WriteNode> TYPE = NodeClass.create(WriteNode.class);
 
-    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType) {
-        super(TYPE, object, value, location, barrierType);
+    @OptionalInput(Guard) protected GuardingNode storeCheckGuard;
+
+    protected WriteNode(ValueNode address, LocationIdentity location, ValueNode value, BarrierType barrierType) {
+        this((AddressNode) address, location, value, barrierType);
     }
 
-    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean initialization) {
-        super(TYPE, object, value, location, barrierType, initialization);
+    public WriteNode(AddressNode address, LocationIdentity location, ValueNode value, BarrierType barrierType) {
+        super(TYPE, address, location, value, barrierType);
     }
 
-    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
-        super(TYPE, object, value, location, barrierType, guard, initialization);
+    public WriteNode(AddressNode address, LocationIdentity location, ValueNode value, BarrierType barrierType, boolean initialization) {
+        super(TYPE, address, location, value, barrierType, initialization);
+    }
+
+    public WriteNode(AddressNode address, LocationIdentity location, ValueNode value, BarrierType barrierType, GuardingNode guard, boolean initialization) {
+        this(TYPE, address, location, value, barrierType, guard, initialization);
+    }
+
+    protected WriteNode(NodeClass<? extends WriteNode> c, AddressNode address, LocationIdentity location, ValueNode value, BarrierType barrierType, GuardingNode guard, boolean initialization) {
+        super(c, address, location, value, barrierType, guard, initialization);
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        Value address = location().generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
         LIRKind writeKind = gen.getLIRGeneratorTool().getLIRKind(value().stamp());
-        gen.getLIRGeneratorTool().emitStore(writeKind, address, gen.operand(value()), gen.state(this));
+        gen.getLIRGeneratorTool().getArithmetic().emitStore(writeKind, gen.operand(address), gen.operand(value()), gen.state(this));
     }
 
     @Override
     public void simplify(SimplifierTool tool) {
-        if (object() instanceof PiNode && ((PiNode) object()).getGuard() == getGuard()) {
-            setObject(((PiNode) object()).getOriginalNode());
+        if (getAddress() instanceof OffsetAddressNode) {
+            OffsetAddressNode objAddress = (OffsetAddressNode) getAddress();
+            if (objAddress.getBase() instanceof PiNode && ((PiNode) objAddress.getBase()).getGuard() == getGuard()) {
+                OffsetAddressNode newAddress = graph().unique(new OffsetAddressNode(((PiNode) objAddress.getBase()).getOriginalNode(), objAddress.getOffset()));
+                setAddress(newAddress);
+                tool.addToWorkList(newAddress);
+            }
         }
     }
 
     @NodeIntrinsic
-    public static native void writeMemory(Object object, Object value, Location location, @ConstantNodeParameter BarrierType barrierType);
+    public static native void writeMemory(Address address, @ConstantNodeParameter LocationIdentity location, Object value, @ConstantNodeParameter BarrierType barrierType);
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        throw GraalInternalError.shouldNotReachHere("unexpected WriteNode before PEA");
+        throw GraalError.shouldNotReachHere("unexpected WriteNode before PEA");
     }
 
+    @Override
     public boolean canNullCheck() {
         return true;
+    }
+
+    public void setStoreCheckGuard(GuardingNode newStoreCheckGuard) {
+        updateUsages((Node) this.storeCheckGuard, (Node) newStoreCheckGuard);
+        this.storeCheckGuard = newStoreCheckGuard;
     }
 }

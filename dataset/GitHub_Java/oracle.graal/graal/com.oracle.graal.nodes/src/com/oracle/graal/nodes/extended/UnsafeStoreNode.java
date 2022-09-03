@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,114 +22,123 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.cri.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.State;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.java.StoreFieldNode;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
- * Store of a value at a location specified as an offset relative to an object.
+ * Store of a value at a location specified as an offset relative to an object. No null check is
+ * performed before the store.
  */
-public class UnsafeStoreNode extends AbstractStateSplit implements Lowerable {
+@NodeInfo(cycles = CYCLES_3, size = SIZE_1)
+public final class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, MemoryCheckpoint.Single {
 
-    @Input private ValueNode object;
-    @Input private ValueNode offset;
-    @Input private ValueNode value;
-    @Data private final int displacement;
-    @Data private final CiKind storeKind;
+    public static final NodeClass<UnsafeStoreNode> TYPE = NodeClass.create(UnsafeStoreNode.class);
+    @Input ValueNode value;
+    @OptionalInput(State) FrameState stateAfter;
 
-    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, CiKind kind) {
-        this(object, 0, offset, value, kind);
+    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity) {
+        this(object, offset, value, accessKind, locationIdentity, null);
     }
 
-    public UnsafeStoreNode(ValueNode object, int displacement, ValueNode offset, ValueNode value, CiKind kind) {
-        super(StampFactory.illegal());
-        assert kind != CiKind.Void && kind != CiKind.Illegal;
-        this.object = object;
-        this.displacement = displacement;
-        this.offset = offset;
+    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
+        super(TYPE, StampFactory.forVoid(), object, offset, accessKind, locationIdentity);
         this.value = value;
-        this.storeKind = kind;
+        this.stateAfter = stateAfter;
+        assert accessKind != JavaKind.Void && accessKind != JavaKind.Illegal;
     }
 
-    public ValueNode object() {
-        return object;
+    @Override
+    public FrameState stateAfter() {
+        return stateAfter;
     }
 
-    public int displacement() {
-        return displacement;
+    @Override
+    public void setStateAfter(FrameState x) {
+        assert x == null || x.isAlive() : "frame state must be in a graph";
+        updateUsages(stateAfter, x);
+        stateAfter = x;
     }
 
-    public ValueNode offset() {
-        return offset;
+    @Override
+    public boolean hasSideEffect() {
+        return true;
     }
 
     public ValueNode value() {
         return value;
     }
 
-    public CiKind storeKind() {
-        return storeKind;
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(object());
+        if (alias instanceof VirtualObjectNode) {
+            VirtualObjectNode virtual = (VirtualObjectNode) alias;
+            ValueNode indexValue = tool.getAlias(offset());
+            if (indexValue.isConstant()) {
+                long off = indexValue.asJavaConstant().asLong();
+                int entryIndex = virtual.entryIndexForOffset(off, accessKind());
+                if (entryIndex != -1) {
+                    JavaKind entryKind = virtual.entryKind(entryIndex);
+                    ValueNode entry = tool.getEntry(virtual, entryIndex);
+                    if (entry.getStackKind() == value.getStackKind() || entryKind == accessKind()) {
+                        tool.setVirtualEntry(virtual, entryIndex, value(), true);
+                        tool.delete();
+                    } else {
+                        if ((accessKind() == JavaKind.Long || accessKind() == JavaKind.Double) && entryKind == JavaKind.Int) {
+                            int nextIndex = virtual.entryIndexForOffset(off + 4, entryKind);
+                            if (nextIndex != -1) {
+                                JavaKind nextKind = virtual.entryKind(nextIndex);
+                                if (nextKind == JavaKind.Int) {
+                                    tool.setVirtualEntry(virtual, entryIndex, value(), true);
+                                    tool.setVirtualEntry(virtual, nextIndex, ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccessProvider(), graph()), true);
+                                    tool.delete();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    // specialized on value type until boxing/unboxing is sorted out in intrinsification
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(Object object, long offset, Object value, @ConstantNodeParameter CiKind kind) {
-        throw new UnsupportedOperationException();
+    @Override
+    protected ValueNode cloneAsFieldAccess(Assumptions assumptions, ResolvedJavaField field) {
+        return new StoreFieldNode(object(), field, value(), stateAfter());
     }
 
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(Object object, long offset, boolean value, @ConstantNodeParameter CiKind kind) {
-        throw new UnsupportedOperationException();
+    @Override
+    protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity) {
+        return new UnsafeStoreNode(object(), location, value, accessKind(), identity, stateAfter());
     }
 
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(Object object, long offset, byte value, @ConstantNodeParameter CiKind kind) {
-        throw new UnsupportedOperationException();
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(Object object, long offset, char value, @ConstantNodeParameter CiKind kind) {
-        throw new UnsupportedOperationException();
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(Object object, long offset, double value, @ConstantNodeParameter CiKind kind) {
-        throw new UnsupportedOperationException();
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(Object object, long offset, float value, @ConstantNodeParameter CiKind kind) {
-        throw new UnsupportedOperationException();
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(Object object, long offset, int value, @ConstantNodeParameter CiKind kind) {
-        throw new UnsupportedOperationException();
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(Object object, long offset, long value, @ConstantNodeParameter CiKind kind) {
-        throw new UnsupportedOperationException();
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(Object object, long offset, short value, @ConstantNodeParameter CiKind kind) {
-        throw new UnsupportedOperationException();
+    public FrameState getState() {
+        return stateAfter;
     }
 }
