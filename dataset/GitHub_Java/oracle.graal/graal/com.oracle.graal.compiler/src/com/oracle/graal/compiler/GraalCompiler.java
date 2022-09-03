@@ -367,17 +367,17 @@ public class GraalCompiler {
             try (Scope s1 = Debug.scope("MarkLocations")) {
                 if (backend.shouldAllocateRegisters()) {
                     // currently we mark locations only if we do register allocation
-                    LocationMarker.markLocations(lirGenRes);
+                    LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
                 }
             }
 
             try (Scope s = Debug.scope("ControlFlowOptimizations")) {
-                EdgeMoveOptimizer.optimize(lirGenRes);
+                EdgeMoveOptimizer.optimize(lir);
                 ControlFlowOptimizer.optimize(lir, codeEmittingOrder);
                 if (lirGen.canEliminateRedundantMoves()) {
-                    RedundantMoveElimination.optimize(lirGenRes);
+                    RedundantMoveElimination.optimize(lir, frameMapBuilder);
                 }
-                NullCheckOptimizer.optimize(target, lirGenRes);
+                NullCheckOptimizer.optimize(lir, target.implicitNullCheckLimit);
 
                 Debug.dump(lir, "After control flow optimization");
             } catch (Throwable e) {
