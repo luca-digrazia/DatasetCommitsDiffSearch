@@ -77,10 +77,22 @@ public class NativeImageBuildClient {
         Consumer<String> outln = s -> out.accept(s + "\n");
         Consumer<String> errln = s -> out.accept(s + "\n");
 
-        try (
-                        Socket svmClient = new Socket((String) null, port);
-                        OutputStreamWriter os = new OutputStreamWriter(svmClient.getOutputStream());
-                        BufferedReader is = new BufferedReader(new InputStreamReader(svmClient.getInputStream()))) {
+        Socket svmClient;
+        OutputStreamWriter os;
+        BufferedReader is;
+        try {
+            svmClient = new Socket((String) null, port);
+            os = new OutputStreamWriter(svmClient.getOutputStream());
+            is = new BufferedReader(new InputStreamReader(svmClient.getInputStream()));
+        } catch (IOException e) {
+            if (!ServerCommand.version.toString().equals(command)) {
+                errln.accept("The image build server is not running on port " + port);
+                errln.accept("Underlying exception: " + e);
+            }
+            return EXIT_FAIL;
+        }
+
+        try {
             SubstrateServerMessage.send(new SubstrateServerMessage(command, payload), os);
             String line;
             switch (command) {
@@ -113,11 +125,11 @@ public class NativeImageBuildClient {
                     }
                 }
             }
+            os.close();
+            is.close();
+            svmClient.close();
         } catch (IOException e) {
-            if (!ServerCommand.version.toString().equals(command)) {
-                errln.accept("Could not connect to image build server running on port " + port);
-                errln.accept("Underlying exception: " + e);
-            }
+            errln.accept("Could not stream data from the image build server. Underlying exception: " + e);
             return EXIT_FAIL;
         }
         return EXIT_SUCCESS;
