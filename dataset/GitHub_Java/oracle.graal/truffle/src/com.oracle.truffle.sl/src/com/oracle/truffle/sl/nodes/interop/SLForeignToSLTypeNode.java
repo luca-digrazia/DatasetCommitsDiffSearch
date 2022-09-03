@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -38,79 +38,87 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.sl.nodes.expression;
+package com.oracle.truffle.sl.nodes.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.sl.nodes.SLExpressionNode;
-import com.oracle.truffle.sl.nodes.interop.SLForeignToSLTypeNode;
-import com.oracle.truffle.sl.runtime.SLFunction;
+import com.oracle.truffle.sl.nodes.SLTypes;
+import com.oracle.truffle.sl.runtime.SLContext;
 import com.oracle.truffle.sl.runtime.SLNull;
-import java.math.BigInteger;
 
-@NodeChild("child")
-public abstract class SLUnboxNode extends SLExpressionNode {
+/**
+ * The node for converting a foreign primitive or boxed primitive value to an SL value.
+ */
+@TypeSystemReference(SLTypes.class)
+public abstract class SLForeignToSLTypeNode extends Node {
+
+    public abstract Object executeConvert(Object value);
 
     @Specialization
-    protected long unboxLong(long value) {
+    protected static Object fromObject(Number value) {
+        return SLContext.fromForeignValue(value);
+    }
+
+    @Specialization
+    protected static Object fromString(String value) {
         return value;
     }
 
     @Specialization
-    protected BigInteger unboxBigInteger(BigInteger value) {
+    protected static Object fromBoolean(boolean value) {
         return value;
     }
 
     @Specialization
-    protected boolean unboxBoolean(boolean value) {
-        return value;
+    protected static Object fromChar(char value) {
+        return String.valueOf(value);
     }
 
-    @Specialization
-    protected String unboxString(String value) {
-        return value;
-    }
-
-    @Specialization
-    protected SLFunction unboxFunction(SLFunction value) {
-        return value;
-    }
-
-    @Specialization
-    protected SLNull unboxNull(SLNull value) {
-        return value;
-    }
-
+    /*
+     * In case the foreign object is a boxed primitive we unbox it using the UNBOX message.
+     */
     @Specialization(guards = "isBoxedPrimitive(value)")
-    protected Object unboxBoxed(
-                    Object value,
-                    @Cached("create()") SLForeignToSLTypeNode foreignToSL) {
-        return foreignToSL.unbox((TruffleObject) value);
+    public Object unbox(TruffleObject value) {
+        Object unboxed = doUnbox(value);
+        return SLContext.fromForeignValue(unboxed);
     }
 
     @Specialization(guards = "!isBoxedPrimitive(value)")
-    protected Object unboxGeneric(Object value) {
+    public Object fromTruffleObject(TruffleObject value) {
         return value;
     }
 
     @Child private Node isBoxed;
 
-    protected boolean isBoxedPrimitive(Object value) {
-        if (value instanceof TruffleObject) {
-            if (isBoxed == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                isBoxed = insert(Message.IS_BOXED.createNode());
-            }
-            if (ForeignAccess.sendIsBoxed(isBoxed, (TruffleObject) value)) {
-                return true;
-            }
+    protected final boolean isBoxedPrimitive(TruffleObject object) {
+        if (isBoxed == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            isBoxed = insert(Message.IS_BOXED.createNode());
         }
-        return false;
+        return ForeignAccess.sendIsBoxed(isBoxed, object);
+    }
+
+    @Child private Node unbox;
+
+    protected final Object doUnbox(TruffleObject value) {
+        if (unbox == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            unbox = insert(Message.UNBOX.createNode());
+        }
+        try {
+            return ForeignAccess.sendUnbox(unbox, value);
+        } catch (UnsupportedMessageException e) {
+            return SLNull.SINGLETON;
+        }
+    }
+
+    public static SLForeignToSLTypeNode create() {
+        return SLForeignToSLTypeNodeGen.create();
     }
 }
