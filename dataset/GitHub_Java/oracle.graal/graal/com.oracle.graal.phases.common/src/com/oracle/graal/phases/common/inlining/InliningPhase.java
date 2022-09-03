@@ -277,11 +277,11 @@ public class InliningPhase extends AbstractInliningPhase {
         if (macroNodeClass != null) {
             return new InlineableMacroNode(macroNodeClass);
         } else {
-            return new InlineableGraph(buildGraph(method, invoke, context, canonicalizer));
+            return new InlineableGraph(buildGraph(method, invoke, context));
         }
     }
 
-    private static StructuredGraph buildGraph(final ResolvedJavaMethod method, final Invoke invoke, final HighTierContext context, CanonicalizerPhase canonicalizer) {
+    private StructuredGraph buildGraph(final ResolvedJavaMethod method, final Invoke invoke, final HighTierContext context) {
         final StructuredGraph newGraph;
         final boolean parseBytecodes;
 
@@ -304,7 +304,7 @@ public class InliningPhase extends AbstractInliningPhase {
 
         try (Scope s = Debug.scope("InlineGraph", newGraph)) {
             if (parseBytecodes) {
-                parseBytecodes(newGraph, context, canonicalizer);
+                parseBytecodes(newGraph, context);
             }
 
             boolean callerHasMoreInformationAboutArguments = false;
@@ -350,12 +350,8 @@ public class InliningPhase extends AbstractInliningPhase {
         return null;
     }
 
-    /**
-     * This method builds the IR nodes for <code>newGraph</code> and canonicalizes them. Provided
-     * profiling info is mature, the resulting graph is cached.
-     */
-    private static StructuredGraph parseBytecodes(StructuredGraph newGraph, HighTierContext context, CanonicalizerPhase canonicalizer) {
-        final boolean hasMatureProfilingInfo = newGraph.method().getProfilingInfo().isMature();
+    private StructuredGraph parseBytecodes(StructuredGraph newGraph, HighTierContext context) {
+        boolean hasMatureProfilingInfo = newGraph.method().getProfilingInfo().isMature();
 
         if (context.getGraphBuilderSuite() != null) {
             context.getGraphBuilderSuite().apply(newGraph, context);
