@@ -46,12 +46,8 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.frame.Frame;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.InstrumentationHandler.AccessorInstrumentHandler;
 import com.oracle.truffle.api.instrumentation.InstrumentationHandler.InstrumentClientInstrumenter;
-import com.oracle.truffle.api.nodes.ExecutableNode;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -199,10 +195,6 @@ public abstract class TruffleInstrument {
             this.in = in;
             this.err = err;
             this.out = out;
-        }
-
-        Object getVMObject() {
-            return vmObject;
         }
 
         /**
@@ -366,53 +358,6 @@ public abstract class TruffleInstrument {
         public CallTarget parse(Source source, String... argumentNames) throws IOException {
             TruffleLanguage.Env env = AccessorInstrumentHandler.engineAccess().getEnvForInstrument(vmObject, source.getLanguage(), source.getMimeType());
             return AccessorInstrumentHandler.langAccess().parse(env, source, null, argumentNames);
-        }
-
-        /**
-         * Parses source snippet of the node's language at the provided node location. The result is
-         * an AST fragment represented by {@link ExecutableNode} that accepts frames valid at the
-         * provided node location, or <code>null</code> when inline parsing is not supported by the
-         * language.
-         *
-         * @param source a source snippet to parse at the provided node location
-         * @param node a context location where the source is parsed at, must not be
-         *            <code>null</code>
-         * @param frame a frame location where the source is parsed at, can be <code>null</code>
-         * @return the executable fragment representing the parsed result, or <code>null</code>
-         * @since 0.31
-         */
-        public ExecutableNode parseInline(Source source, Node node, MaterializedFrame frame) {
-            if (node == null) {
-                throw new IllegalArgumentException("Node must not be null.");
-            }
-            TruffleLanguage.Env env = AccessorInstrumentHandler.engineAccess().getEnvForInstrument(vmObject, source.getLanguage(), source.getMimeType());
-            // Assert that the languages match:
-            assert AccessorInstrumentHandler.langAccess().getLanguageInfo(env) == node.getRootNode().getLanguageInfo();
-            ExecutableNode fragment = AccessorInstrumentHandler.langAccess().parseInline(env, source, node, frame);
-            if (fragment != null) {
-                TruffleLanguage<?> languageSPI = AccessorInstrumentHandler.langAccess().getSPI(env);
-                fragment = new GuardedExecutableNode(languageSPI, fragment, frame);
-            }
-            return fragment;
-        }
-
-        private static class GuardedExecutableNode extends ExecutableNode {
-
-            private final FrameDescriptor frameDescriptor;
-            @Child private ExecutableNode fragment;
-
-            GuardedExecutableNode(TruffleLanguage<?> languageSPI, ExecutableNode fragment, MaterializedFrame frameLocation) {
-                super(languageSPI);
-                this.frameDescriptor = (frameLocation != null) ? frameLocation.getFrameDescriptor() : null;
-                this.fragment = fragment;
-            }
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                assert frameDescriptor == null || frameDescriptor == frame.getFrameDescriptor();
-                return fragment.execute(frame);
-            }
-
         }
 
         /**

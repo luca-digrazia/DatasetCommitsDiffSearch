@@ -134,11 +134,17 @@ public class TruffleCompilerOptions {
     @Option(help = "Exclude assertion code from Truffle compilations", type = OptionType.Debug)
     public static final OptionKey<Boolean> TruffleExcludeAssertions = new OptionKey<>(true);
 
+    /**
+     * deprecated use {@link PolyglotCompilerOptions#CompilationThreshold} instead.
+     */
     @Option(help = "Compile call target when call count exceeds this threshold", type = OptionType.User)
     public static final OptionKey<Integer> TruffleCompilationThreshold = new OptionKey<>(1000);
 
+    /**
+     * deprecated use {@link PolyglotCompilerOptions#QueueTimeThreshold} instead.
+     */
     @Option(help = "Defines the maximum timespan in milliseconds that is required for a call target to be queued for compilation.", type = OptionType.User)
-    public static final OptionKey<Integer> TruffleTimeThreshold = new OptionKey<>(25000);
+    public static final OptionKey<Integer> TruffleTimeThreshold = new OptionKey<>(50000);
 
     @Option(help = "Minimum number of calls before a call target is compiled", type = OptionType.Expert)
     public static final OptionKey<Integer> TruffleMinInvokeThreshold = new OptionKey<>(3);
@@ -147,7 +153,7 @@ public class TruffleCompilerOptions {
     public static final OptionKey<Integer> TruffleInvalidationReprofileCount = new OptionKey<>(3);
 
     @Option(help = "Delay compilation after a node replacement", type = OptionType.Expert)
-    public static final OptionKey<Integer> TruffleReplaceReprofileCount = new OptionKey<>(10);
+    public static final OptionKey<Integer> TruffleReplaceReprofileCount = new OptionKey<>(3);
 
     @Option(help = "Enable automatic inlining of call targets", type = OptionType.Debug)
     public static final OptionKey<Boolean> TruffleFunctionInlining = new OptionKey<>(true);
@@ -195,9 +201,6 @@ public class TruffleCompilerOptions {
     @Option(help = "Print information for compilation results", type = OptionType.Debug)
     public static final OptionKey<Boolean> TraceTruffleCompilation = new OptionKey<>(false);
 
-    @Option(help = "Compile time benchmarking: repeat Truffle compilation n times and then exit the VM", type = OptionType.Debug)
-    public static final OptionKey<Integer> TruffleCompilationRepeats = new OptionKey<>(0);
-
     @Option(help = "Print information for compilation queuing", type = OptionType.Debug)
     public static final OptionKey<Boolean> TraceTruffleCompilationDetails = new OptionKey<>(false);
 
@@ -219,6 +222,9 @@ public class TruffleCompilerOptions {
     @Option(help = "Treat compilation exceptions as fatal exceptions that will exit the application", type = OptionType.Debug)
     public static final OptionKey<Boolean> TruffleCompilationExceptionsAreFatal = new OptionKey<>(false);
 
+    @Option(help = "Treat performance warnings as fatal occurrences that will exit the applications", type = OptionType.Debug)
+    public static final OptionKey<Boolean> TrufflePerformanceWarningsAreFatal = new OptionKey<>(false);
+
     @Option(help = "Prints the exception stack trace for compilation exceptions", type = OptionType.Debug)
     public static final OptionKey<Boolean> TruffleCompilationExceptionsArePrinted = new OptionKey<>(true);
 
@@ -239,9 +245,6 @@ public class TruffleCompilerOptions {
 
     @Option(help = "Number of stack trace elements printed by TraceTruffleTransferToInterpreter and TraceTruffleAssumptions", type = OptionType.Debug)
     public static final OptionKey<Integer> TraceTruffleStackTraceLimit = new OptionKey<>(20);
-
-    @Option(help = "Print a summary of execution counts for all executed CallTargets. Introduces counter overhead for each call.", type = OptionType.Debug)
-    public static final OptionKey<Boolean> TruffleCallTargetProfiling = new OptionKey<>(false);
 
     @Option(help = "Print Truffle compilation statistics at the end of a run.", type = OptionType.Debug)
     public static final OptionKey<Boolean> TruffleCompilationStatistics = new OptionKey<>(false);

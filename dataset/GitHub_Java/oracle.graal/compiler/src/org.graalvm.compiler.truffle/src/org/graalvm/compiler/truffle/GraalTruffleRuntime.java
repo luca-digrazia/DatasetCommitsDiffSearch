@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
+import java.util.WeakHashMap;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -51,6 +52,14 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.stack.InspectedFrame;
+import jdk.vm.ci.code.stack.InspectedFrameVisitor;
+import jdk.vm.ci.code.stack.StackIntrospection;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.SpeculationLog;
 
 import org.graalvm.compiler.api.runtime.GraalRuntime;
 import org.graalvm.compiler.code.CompilationResult;
@@ -102,23 +111,16 @@ import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.object.LayoutFactory;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.stack.InspectedFrame;
-import jdk.vm.ci.code.stack.InspectedFrameVisitor;
-import jdk.vm.ci.code.stack.StackIntrospection;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.SpeculationLog;
-
 public abstract class GraalTruffleRuntime implements TruffleRuntime {
+
+    private final Map<RootCallTarget, Void> callTargets = Collections.synchronizedMap(new WeakHashMap<RootCallTarget, Void>());
 
     /**
      * Used only to reset state for native image compilation.
      */
-    protected void clearState() {
+    protected void clearCallTargets() {
         assert TruffleOptions.AOT : "Must be called only in AOT mode.";
-        callMethods = null;
-        truffleCompiler = null;
+        callTargets.clear();
     }
 
     protected static class BackgroundCompileQueue {
@@ -492,10 +494,17 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         OptimizedCallTarget target = createOptimizedCallTarget(source, rootNode);
         rootNode.setCallTarget(target);
         tvmci.onLoad(target.getRootNode());
+        callTargets.put(target, null);
         return target;
     }
 
     protected abstract OptimizedCallTarget createOptimizedCallTarget(OptimizedCallTarget source, RootNode rootNode);
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public Collection<RootCallTarget> getCallTargets() {
+        return Collections.unmodifiableSet(callTargets.keySet());
+    }
 
     public void addCompilationListener(GraalTruffleCompilationListener listener) {
         compilationListeners.add(listener);
