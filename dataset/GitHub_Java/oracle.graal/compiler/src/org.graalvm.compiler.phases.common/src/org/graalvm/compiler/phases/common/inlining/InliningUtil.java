@@ -69,7 +69,6 @@ import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
 import org.graalvm.compiler.nodes.KillingBeginNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.MergeNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.PiNode;
@@ -828,7 +827,7 @@ public class InliningUtil extends ValueMergeUtil {
         if (newReceiver.getStackKind() == JavaKind.Object) {
 
             if (invoke.getInvokeKind() == InvokeKind.Special) {
-                Stamp paramStamp = newReceiver.stamp(NodeView.DEFAULT);
+                Stamp paramStamp = newReceiver.stamp();
                 Stamp stamp = paramStamp.join(StampFactory.object(TypeReference.create(graph.getAssumptions(), callTarget.targetMethod().getDeclaringClass())));
                 if (!stamp.equals(paramStamp)) {
                     // The verifier and previous optimizations guarantee unconditionally that the
