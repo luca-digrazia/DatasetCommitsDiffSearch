@@ -24,7 +24,6 @@ package com.oracle.graal.lir.sparc;
 
 import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.MemoryBarriers.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
 import static jdk.internal.jvmci.meta.Kind.*;
 import static jdk.internal.jvmci.sparc.SPARC.*;
@@ -43,14 +42,13 @@ import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Sethix;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.ImplicitNullCheck;
-import com.oracle.graal.lir.StandardOp.LoadConstantOp;
+import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.NullCheck;
-import com.oracle.graal.lir.StandardOp.ValueMoveOp;
 import com.oracle.graal.lir.asm.*;
 
 public class SPARCMove {
 
-    public static class LoadInlineConstant extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction, LoadConstantOp {
+    public static class LoadInlineConstant extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction, MoveOp {
         public static final LIRInstructionClass<LoadInlineConstant> TYPE = LIRInstructionClass.create(LoadInlineConstant.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(1);
         private JavaConstant constant;
@@ -72,7 +70,7 @@ public class SPARCMove {
             }
         }
 
-        public Constant getConstant() {
+        public Value getInput() {
             return constant;
         }
 
@@ -118,14 +116,14 @@ public class SPARCMove {
     }
 
     @Opcode("MOVE")
-    public static class Move extends SPARCLIRInstruction implements ValueMoveOp, SPARCTailDelayedLIRInstruction {
+    public static class Move extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
         public static final LIRInstructionClass<Move> TYPE = LIRInstructionClass.create(Move.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(8);
 
         @Def({REG, STACK, HINT}) protected AllocatableValue result;
-        @Use({REG, STACK}) protected AllocatableValue input;
+        @Use({REG, STACK}) protected Value input;
 
-        public Move(AllocatableValue result, AllocatableValue input) {
+        public Move(AllocatableValue result, Value input) {
             super(TYPE, SIZE);
             this.result = result;
             this.input = input;
@@ -137,7 +135,7 @@ public class SPARCMove {
         }
 
         @Override
-        public AllocatableValue getInput() {
+        public Value getInput() {
             return input;
         }
 
@@ -151,7 +149,7 @@ public class SPARCMove {
      * Move between floating-point and general purpose register domain.
      */
     @Opcode("MOVE_FPGP")
-    public static final class MoveFpGp extends SPARCLIRInstruction implements ValueMoveOp, SPARCTailDelayedLIRInstruction {
+    public static final class MoveFpGp extends SPARCLIRInstruction implements MoveOp, SPARCTailDelayedLIRInstruction {
         public static final LIRInstructionClass<MoveFpGp> TYPE = LIRInstructionClass.create(MoveFpGp.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(2);
 
@@ -166,7 +164,7 @@ public class SPARCMove {
             this.temp = temp;
         }
 
-        public AllocatableValue getInput() {
+        public Value getInput() {
             return input;
         }
 
@@ -342,12 +340,7 @@ public class SPARCMove {
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             getDelayedControlTransfer().emitControlTransfer(crb, masm);
-            masm.membar(MEMBAR_STORE_LOAD);
-        }
-
-        @Override
-        public void verify() {
-            assert barriers == STORE_LOAD : String.format("Got barriers 0x%x; On SPARC only STORE_LOAD barriers are accepted; all other barriers are not neccessary due to TSO", barriers);
+            masm.membar(barriers);
         }
     }
 
