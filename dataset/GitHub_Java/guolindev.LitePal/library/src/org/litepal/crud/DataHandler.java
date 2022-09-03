@@ -912,11 +912,7 @@ abstract class DataHandler extends LitePalBase {
 		} else {
 			getterMethodPrefix = "get";
 		}
-		if (fieldName.matches("^[a-z]{1}[A-Z]{1}.*")) {
-			return getterMethodPrefix + fieldName;
-		} else {
-			return getterMethodPrefix + BaseUtility.capitalize(fieldName);
-		}
+		return getterMethodPrefix + BaseUtility.capitalize(fieldName);
 	}
 
 	/**
