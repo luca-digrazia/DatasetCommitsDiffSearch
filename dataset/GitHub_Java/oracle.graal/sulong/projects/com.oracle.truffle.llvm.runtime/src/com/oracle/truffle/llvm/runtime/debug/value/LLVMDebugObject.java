@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,7 +34,6 @@ import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebuggerValue;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
@@ -45,6 +44,7 @@ import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourcePointerType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceStaticMemberType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
@@ -128,7 +128,7 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
      *
      * @return the value of the referenced variable
      */
-    public Object getValue() {
+    protected Object getValue() {
         if (value == null) {
             return "";
 
@@ -147,30 +147,34 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
     @Override
     @TruffleBoundary
     public String toString() {
-        Object currentValue = getValue();
+        Object value = getValue();
 
-        if (LLVMManagedPointer.isInstance(currentValue)) {
-            final LLVMManagedPointer managedPointer = LLVMManagedPointer.cast(currentValue);
-            final TruffleObject target = managedPointer.getObject();
+        if (LLVMManagedPointer.isInstance(value)) {
+            final LLVMManagedPointer managedPointer = LLVMManagedPointer.cast(value);
+            final Object target = managedPointer.getObject();
 
             String targetString;
-            if (target instanceof LLVMFunctionDescriptor) {
+            if (target instanceof LLVMGlobal) {
+                final LLVMGlobal global = (LLVMGlobal) target;
+                targetString = "LLVM global " + global.getName();
+
+            } else if (target instanceof LLVMFunctionDescriptor) {
                 final LLVMFunctionDescriptor function = (LLVMFunctionDescriptor) target;
                 targetString = "LLVM function " + function.getName();
 
-            } else {
+            }  else {
                 targetString = "<managed pointer>";
             }
 
-            final long targetOffset = managedPointer.getOffset();
-            if (targetOffset != 0L) {
-                targetString = String.format("%s + %d byte%s", targetString, targetOffset, targetOffset == 1L ? "" : "s");
+            final long offset = managedPointer.getOffset();
+            if (offset != 0L) {
+                targetString = String.format("%s + %d byte%s", targetString, offset, offset == 1L ? "" : "s");
             }
 
-            currentValue = targetString;
+            value = targetString;
         }
 
-        return Objects.toString(currentValue);
+        return Objects.toString(value);
     }
 
     @Override
@@ -411,8 +415,6 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
 
     private static final class Pointer extends LLVMDebugObject {
 
-        private static final String[] SAFE_DEREFERENCE_KEYS = new String[]{"<target>"};
-
         private final LLVMSourcePointerType pointerType;
 
         Pointer(LLVMDebugValue value, long offset, LLVMSourceType type, LLVMSourceLocation declaration) {
@@ -428,9 +430,6 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
 
         @Override
         public String[] getKeysSafe() {
-            if (pointerType != null && !pointerType.isReference() && (value.isAlwaysSafeToDereference(offset) || pointerType.isSafeToDereference())) {
-                return SAFE_DEREFERENCE_KEYS;
-            }
             final LLVMDebugObject target = dereference();
             return target == null ? NO_KEYS : target.getKeys();
         }
@@ -438,18 +437,7 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
         @Override
         public Object getMemberSafe(String identifier) {
             final LLVMDebugObject target = dereference();
-            if (target == null) {
-                return "Cannot dereference pointer!";
-
-            } else if (SAFE_DEREFERENCE_KEYS[0].equals(identifier)) {
-                assert pointerType != null;
-                assert !pointerType.isReference();
-                assert value.isAlwaysSafeToDereference(offset) || pointerType.isSafeToDereference();
-                return target;
-
-            } else {
-                return target.getMember(identifier);
-            }
+            return target == null ? "Cannot dereference pointer!" : target.getMember(identifier);
         }
 
         @Override
