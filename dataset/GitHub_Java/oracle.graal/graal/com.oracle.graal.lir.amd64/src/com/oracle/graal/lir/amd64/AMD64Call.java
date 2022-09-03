@@ -56,22 +56,14 @@ public class AMD64Call {
         }
     }
 
-    public abstract static class MethodCallOp extends CallOp {
+    @Opcode("CALL_DIRECT")
+    public static class DirectCallOp extends CallOp {
 
         protected final ResolvedJavaMethod callTarget;
 
-        public MethodCallOp(ResolvedJavaMethod callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
+        public DirectCallOp(ResolvedJavaMethod callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
             super(result, parameters, temps, state);
             this.callTarget = callTarget;
-        }
-
-    }
-
-    @Opcode("CALL_DIRECT")
-    public static class DirectCallOp extends MethodCallOp {
-
-        public DirectCallOp(ResolvedJavaMethod callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
-            super(callTarget, result, parameters, temps, state);
         }
 
         @Override
@@ -81,12 +73,15 @@ public class AMD64Call {
     }
 
     @Opcode("CALL_INDIRECT")
-    public static class IndirectCallOp extends MethodCallOp {
+    public static class IndirectCallOp extends CallOp {
 
         @Use({REG}) protected Value targetAddress;
 
-        public IndirectCallOp(ResolvedJavaMethod callTarget, Value result, Value[] parameters, Value[] temps, Value targetAddress, LIRFrameState state) {
-            super(callTarget, result, parameters, temps, state);
+        protected final InvokeTarget callTarget;
+
+        public IndirectCallOp(InvokeTarget callTarget, Value result, Value[] parameters, Value[] temps, Value targetAddress, LIRFrameState state) {
+            super(result, parameters, temps, state);
+            this.callTarget = callTarget;
             this.targetAddress = targetAddress;
         }
 
