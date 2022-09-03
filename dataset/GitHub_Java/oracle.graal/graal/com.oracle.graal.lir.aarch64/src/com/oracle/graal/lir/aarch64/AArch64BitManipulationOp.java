@@ -24,15 +24,14 @@ package com.oracle.graal.lir.aarch64;
 
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
 
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.AllocatableValue;
 
 /**
  * Bit manipulation ops for ARMv8 ISA.
@@ -62,7 +61,7 @@ public class AArch64BitManipulationOp extends AArch64LIRInstruction {
     public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
         Register dst = asRegister(result);
         Register src = asRegister(input);
-        final int size = input.getPlatformKind().getSizeInBytes() * Byte.SIZE;
+        final int size = result.getPlatformKind().getSizeInBytes() * Byte.SIZE;
         switch (opcode) {
             case CLZ:
                 masm.clz(size, dst, src);
@@ -74,15 +73,15 @@ public class AArch64BitManipulationOp extends AArch64LIRInstruction {
                 masm.add(size, dst, dst, size - 1);
                 break;
             case BSF:
-                // BSF == CLZ(rbit(input))
-                masm.rbit(size, dst, src);
+                // BSF == CLZ(rev(input))
+                masm.rev(size, dst, src);
                 masm.clz(size, dst, dst);
                 break;
             case BSWP:
                 masm.rev(size, dst, src);
                 break;
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 
