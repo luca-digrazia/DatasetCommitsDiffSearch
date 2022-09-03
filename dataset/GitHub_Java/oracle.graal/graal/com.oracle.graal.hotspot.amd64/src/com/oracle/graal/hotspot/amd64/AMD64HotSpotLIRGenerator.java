@@ -186,16 +186,6 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         super.emitCall(callTarget, result, arguments, temps, info);
     }
 
-    protected AMD64SaveRegistersOp emitSaveRegisters(Register[] savedRegisters, StackSlot[] savedRegisterLocations) {
-        AMD64SaveRegistersOp save = new AMD64SaveRegistersOp(savedRegisters, savedRegisterLocations);
-        append(save);
-        return save;
-    }
-
-    protected void emitRestoreRegisters(AMD64SaveRegistersOp save) {
-        append(new AMD64RestoreRegistersOp(save.getSlots().clone(), save));
-    }
-
     @Override
     public Variable emitCall(RuntimeCallTarget callTarget, CallingConvention cc, DeoptimizingNode info, Value... args) {
         Stub stub = runtime().asStub(method);
@@ -214,7 +204,8 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
                     StackSlot spillSlot = frameMap.allocateSpillSlot(kind);
                     savedRegisterLocations[i] = spillSlot;
                 }
-                save = emitSaveRegisters(savedRegisters, savedRegisterLocations);
+                save = new AMD64SaveRegistersOp(savedRegisters, savedRegisterLocations);
+                append(save);
             }
             append(new AMD64HotSpotCRuntimeCallPrologueOp());
         }
@@ -227,7 +218,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
                 assert !calleeSaveInfo.containsKey(currentRuntimeCallInfo);
                 calleeSaveInfo.put(currentRuntimeCallInfo, save);
 
-                emitRestoreRegisters(save);
+                append(new AMD64RestoreRegistersOp(savedRegisterLocations.clone(), save));
             } else {
                 assert zapRegisters();
             }
