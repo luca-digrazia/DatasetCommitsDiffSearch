@@ -39,13 +39,13 @@ import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.inittimer.SuppressFBWarnings;
+import jdk.vm.ci.options.Option;
+import jdk.vm.ci.options.OptionType;
+import jdk.vm.ci.options.OptionValue;
 
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.hotspot.replacements.NewObjectSnippets;
 import com.oracle.graal.nodes.debug.DynamicCounterNode;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
 
 //JaCoCo Exclude
 
@@ -113,7 +113,7 @@ public class BenchmarkCounters {
         public final String group;
         public final AtomicLong staticCounters;
 
-        Counter(int index, String group, AtomicLong staticCounters) {
+        public Counter(int index, String group, AtomicLong staticCounters) {
             this.index = index;
             this.group = group;
             this.staticCounters = staticCounters;
@@ -288,7 +288,7 @@ public class BenchmarkCounters {
         private final byte[][] patterns;
         private final int[] positions;
 
-        CallbackOutputStream(PrintStream delegate, String... patterns) {
+        public CallbackOutputStream(PrintStream delegate, String... patterns) {
             this.delegate = delegate;
             this.positions = new int[patterns.length];
             this.patterns = new byte[patterns.length][];
