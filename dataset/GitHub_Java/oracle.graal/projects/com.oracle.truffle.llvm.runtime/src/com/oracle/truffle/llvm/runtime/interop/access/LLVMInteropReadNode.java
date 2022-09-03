@@ -38,26 +38,22 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropAccessNode.AccessLocation;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
 public abstract class LLVMInteropReadNode extends LLVMNode {
 
-    public static LLVMInteropReadNode create(ForeignToLLVMType type) {
-        return LLVMInteropReadNodeGen.create(type);
+    public static LLVMInteropReadNode create(int elementAccessSize) {
+        return LLVMInteropReadNodeGen.create(elementAccessSize);
     }
 
-    @Child Node read;
-    @Child ForeignToLLVM foreignToLLVM;
+    @Child Node read = Message.READ.createNode();
 
     private final int elementAccessSize;
 
-    protected LLVMInteropReadNode(ForeignToLLVMType type) {
-        this.read = Message.READ.createNode();
-        this.foreignToLLVM = ForeignToLLVM.create(type);
-        this.elementAccessSize = type.getSizeInBytes();
+    protected LLVMInteropReadNode(int elementAccessSize) {
+        this.elementAccessSize = elementAccessSize;
     }
 
     public abstract Object execute(LLVMInteropType.Structured type, TruffleObject foreign, long offset);
@@ -84,6 +80,10 @@ public abstract class LLVMInteropReadNode extends LLVMNode {
             CompilerDirectives.transferToInterpreter();
             throw ex.raise();
         }
-        return foreignToLLVM.executeWithType(ret, location.type);
+
+        if (location.type != null) {
+            ret = LLVMTypedForeignObject.create((TruffleObject) ret, location.type);
+        }
+        return ret;
     }
 }
