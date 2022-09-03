@@ -24,33 +24,23 @@ package com.oracle.graal.truffle;
 
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-import com.oracle.truffle.api.*;
-
 public class DefaultInliningPolicy implements TruffleInliningPolicy {
 
     private static final String REASON_RECURSION = "recursion";
     private static final String REASON_MAXIMUM_NODE_COUNT = "deepNodeCount * callSites  > " + TruffleInliningMaxCallerSize.getValue();
     private static final String REASON_MAXIMUM_TOTAL_NODE_COUNT = "totalNodeCount > " + TruffleInliningMaxCallerSize.getValue();
 
-    @Override
     public double calculateScore(TruffleInliningProfile profile) {
         return profile.getFrequency() / profile.getDeepNodeCount();
     }
 
-    @Override
-    public boolean isAllowed(TruffleInliningProfile profile, int currentNodeCount, CompilerOptions options) {
+    public boolean isAllowed(TruffleInliningProfile profile, int currentNodeCount) {
         if (profile.isRecursiveCall()) {
             profile.setFailedReason(REASON_RECURSION);
             return false;
         }
 
-        int inliningMaxCallerSize = TruffleInliningMaxCallerSize.getValue();
-
-        if (options instanceof GraalCompilerOptions) {
-            inliningMaxCallerSize = Math.max(inliningMaxCallerSize, ((GraalCompilerOptions) options).getMinInliningMaxCallerSize());
-        }
-
-        if (currentNodeCount + profile.getDeepNodeCount() > inliningMaxCallerSize) {
+        if (currentNodeCount + profile.getDeepNodeCount() > TruffleInliningMaxCallerSize.getValue()) {
             profile.setFailedReason(REASON_MAXIMUM_TOTAL_NODE_COUNT);
             return false;
         }
@@ -60,7 +50,7 @@ public class DefaultInliningPolicy implements TruffleInliningPolicy {
         }
 
         int cappedCallSites = Math.min(Math.max(profile.getCallSites(), 1), 10);
-        if (profile.getDeepNodeCount() * cappedCallSites > inliningMaxCallerSize) {
+        if (profile.getDeepNodeCount() * cappedCallSites > TruffleInliningMaxCallerSize.getValue()) {
             profile.setFailedReason(REASON_MAXIMUM_NODE_COUNT);
             return false;
         }
