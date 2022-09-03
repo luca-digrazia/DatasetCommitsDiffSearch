@@ -29,7 +29,6 @@ import org.graalvm.compiler.loop.DefaultLoopPolicies;
 import org.graalvm.compiler.loop.phases.LoopFullUnrollPhase;
 import org.graalvm.compiler.loop.phases.LoopPeelingPhase;
 import org.graalvm.compiler.nodes.ConstantNode;
-import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.extended.BoxNode;
 import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
@@ -205,30 +204,6 @@ public class EscapeAnalysisTest extends EATestBase {
     }
 
     @Test
-    public void testMergeAllocationsInt3() {
-        // ensure that the result is not constant:
-        assertTrue(testMergeAllocationsInt3Snippet(true));
-        assertFalse(testMergeAllocationsInt3Snippet(false));
-
-        prepareGraph("testMergeAllocationsInt3Snippet", true);
-        assertFalse(graph.getNodes().filter(ReturnNode.class).first().result().isConstant());
-    }
-
-    public boolean testMergeAllocationsInt3Snippet(boolean a) {
-        TestClassInt phi1;
-        TestClassInt phi2;
-        if (a) {
-            field = new TestClassObject();
-            field = new TestClassObject();
-            phi1 = phi2 = new TestClassInt(1, 2);
-        } else {
-            phi1 = new TestClassInt(2, 3);
-            phi2 = new TestClassInt(3, 4);
-        }
-        return phi1 == phi2;
-    }
-
-    @Test
     public void testMergeAllocationsObj() {
         testEscapeAnalysis("testMergeAllocationsObjSnippet", JavaConstant.forInt(1), false);
     }
@@ -319,7 +294,7 @@ public class EscapeAnalysisTest extends EATestBase {
         Assert.assertEquals(1, graph.getNodes().filter(BoxNode.class).count());
         List<Node> nodes = graph.getNodes().snapshot();
         // verify that an additional run doesn't add or remove nodes
-        new PartialEscapePhase(false, false, new CanonicalizerPhase(), null, graph.getOptions()).apply(graph, context);
+        new PartialEscapePhase(false, false, new CanonicalizerPhase(), null).apply(graph, context);
         Assert.assertEquals(nodes.size(), graph.getNodeCount());
         for (Node node : nodes) {
             Assert.assertTrue(node.isAlive());
@@ -355,7 +330,7 @@ public class EscapeAnalysisTest extends EATestBase {
         graph.replaceFixedWithFloating(graph.getNodes().filter(LoadFieldNode.class).first(), graph.unique(ConstantNode.forInt(0)));
         new CanonicalizerPhase().apply(graph, context);
         // verify that an additional run removes all allocations
-        new PartialEscapePhase(false, false, new CanonicalizerPhase(), null, graph.getOptions()).apply(graph, context);
+        new PartialEscapePhase(false, false, new CanonicalizerPhase(), null).apply(graph, context);
         Assert.assertEquals(0, graph.getNodes().filter(CommitAllocationNode.class).count());
     }
 
@@ -427,7 +402,7 @@ public class EscapeAnalysisTest extends EATestBase {
     public void testFullyUnrolledLoop() {
         prepareGraph("testFullyUnrolledLoopSnippet", false);
         new LoopFullUnrollPhase(new CanonicalizerPhase(), new DefaultLoopPolicies()).apply(graph, context);
-        new PartialEscapePhase(false, new CanonicalizerPhase(), graph.getOptions()).apply(graph, context);
+        new PartialEscapePhase(false, new CanonicalizerPhase()).apply(graph, context);
         Assert.assertEquals(1, returnNodes.size());
         Assert.assertTrue(returnNodes.get(0).result() instanceof AllocatedObjectNode);
         CommitAllocationNode commit = ((AllocatedObjectNode) returnNodes.get(0).result()).getCommit();
@@ -458,7 +433,7 @@ public class EscapeAnalysisTest extends EATestBase {
     public void testPeeledLoop() {
         prepareGraph("testPeeledLoopSnippet", false);
         new LoopPeelingPhase(new DefaultLoopPolicies()).apply(graph, getDefaultHighTierContext());
-        new SchedulePhase(graph.getOptions()).apply(graph);
+        new SchedulePhase().apply(graph);
     }
 
     public static void testDeoptMonitorSnippetInner(Object o2, Object t, int i) {
