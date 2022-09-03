@@ -24,7 +24,6 @@ package org.graalvm.compiler.truffle;
 
 import static org.graalvm.compiler.core.GraalCompiler.compileGraph;
 import static org.graalvm.compiler.core.common.CompilationRequestIdentifier.asCompilationRequest;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleEnableInfopoints;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleExcludeAssertions;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrumentBoundaries;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrumentBranches;
@@ -66,7 +65,6 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import jdk.vm.ci.code.CompilationRequest;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
 
@@ -112,8 +110,8 @@ public abstract class TruffleCompiler {
 
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
 
-        boolean needSourcePositions = graalTruffleRuntime.enableInfopoints() || TruffleCompilerOptions.getValue(TruffleEnableInfopoints) ||
-                        TruffleCompilerOptions.getValue(TruffleInstrumentBranches) || TruffleCompilerOptions.getValue(TruffleInstrumentBoundaries);
+        boolean needSourcePositions = graalTruffleRuntime.enableInfopoints() || TruffleCompilerOptions.getValue(TruffleInstrumentBranches) ||
+                        TruffleCompilerOptions.getValue(TruffleInstrumentBoundaries);
         GraphBuilderConfiguration baseConfig = GraphBuilderConfiguration.getDefault(new Plugins(plugins)).withNodeSourcePosition(needSourcePositions);
         this.config = baseConfig.withSkippedExceptionTypes(skippedExceptionTypes).withOmitAssertions(TruffleCompilerOptions.getValue(TruffleExcludeAssertions)).withBytecodeExceptionMode(
                         BytecodeExceptionMode.ExplicitOnly);
@@ -160,12 +158,11 @@ public abstract class TruffleCompiler {
         compilationNotify.notifyCompilationStarted(compilable, compilationMap);
 
         try (CompilationAlarm alarm = CompilationAlarm.trackCompilationPeriod(TruffleCompilerOptions.getOptions())) {
-            ResolvedJavaMethod rootMethod = partialEvaluator.rootForCallTarget(compilable);
             TruffleInlining inliningDecision = new TruffleInlining(compilable, new DefaultInliningPolicy());
-            CompilationIdentifier compilationId = runtime.getCompilationIdentifier(compilable, rootMethod, backend);
+            CompilationIdentifier compilationId = runtime.getCompilationIdentifier(compilable, partialEvaluator.getCompilationRootMethods()[0], backend);
             PhaseSuite<HighTierContext> graphBuilderSuite = createGraphBuilderSuite();
             try (DebugCloseable a = PartialEvaluationTime.start(); DebugCloseable c = PartialEvaluationMemUse.start()) {
-                graph = partialEvaluator.createGraph(compilable, inliningDecision, rootMethod, AllowAssumptions.YES, compilationId, task);
+                graph = partialEvaluator.createGraph(compilable, inliningDecision, AllowAssumptions.YES, compilationId, task);
             }
 
             // check if the task was cancelled in the time frame between [after PE: before
