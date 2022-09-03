@@ -44,7 +44,7 @@ import com.oracle.graal.phases.schedule.*;
  */
 public class GraphPrinterDumpHandler implements DebugDumpHandler {
 
-    protected GraphPrinter printer;
+    private GraphPrinter printer;
     private List<String> previousInlineContext;
     private int[] dumpIds = {};
     private int failuresCount;
@@ -62,15 +62,11 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 return;
             }
             previousInlineContext.clear();
-            createPrinter();
-        }
-    }
-
-    protected void createPrinter() {
-        if (PrintIdealGraphFile.getValue()) {
-            initializeFilePrinter();
-        } else {
-            initializeNetworkPrinter();
+            if (PrintIdealGraphFile.getValue()) {
+                initializeFilePrinter();
+            } else {
+                initializeNetworkPrinter();
+            }
         }
     }
 
