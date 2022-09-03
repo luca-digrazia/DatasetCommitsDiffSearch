@@ -108,16 +108,6 @@ public class SubstrateOptions {
     @Option(help = "Use heap base register. ")//
     public static final HostedOptionKey<Boolean> UseHeapBaseRegister = new HostedOptionKey<>(false);
 
-    @Option(help = "Support multiple isolates (disable for legacy mode with a single isolate). ")//
-    public static final HostedOptionKey<Boolean> SpawnIsolates = new HostedOptionKey<Boolean>(false) {
-        @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Boolean oldValue, Boolean newValue) {
-            if (newValue) {
-                UseHeapBaseRegister.update(values, true);
-            }
-        }
-    };
-
     @Option(help = "Trace VMOperation execution.")//
     public static final RuntimeOptionKey<Boolean> TraceVMOperations = new RuntimeOptionKey<>(false);
 
@@ -126,9 +116,6 @@ public class SubstrateOptions {
 
     @Option(help = "Prefix that is added to the names of API functions.")//
     public static final HostedOptionKey<String> APIFunctionPrefix = new HostedOptionKey<>("graal_");
-
-    @Option(help = "List of comma separated protocols to enable.")//
-    public static final HostedOptionKey<String> EnableURLProtocols = new HostedOptionKey<>("");
 
     /*
      * Object and array allocation options.

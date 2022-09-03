@@ -89,15 +89,11 @@ public class SubstrateOptionsParser {
         String valueString = null;
 
         char first = option.charAt(0);
-        int index = option.indexOf('=');
         if (first == '+' || first == '-') {
             optionName = option.substring(1);
             value = (first == '+');
-            if (index != -1) {
-                optionName = option.substring(1, index);
-                return OptionParseResult.error("Cannot mix +/- with <name>=<value> format: '" + option + "'");
-            }
         } else {
+            int index = option.indexOf('=');
             if (index == -1) {
                 optionName = option;
                 valueString = null;
@@ -109,6 +105,7 @@ public class SubstrateOptionsParser {
 
         OptionDescriptor desc = options.get(optionName);
         if (desc == null && value != null) {
+            int index = option.indexOf('=');
             if (index != -1) {
                 optionName = option.substring(1, index);
                 desc = options.get(optionName);
@@ -134,7 +131,7 @@ public class SubstrateOptionsParser {
         if (value == null) {
             if (valueString == null) {
                 if (optionType == Boolean.class) {
-                    return OptionParseResult.error("Boolean option '" + optionName + "' must have +/- prefix");
+                    return OptionParseResult.error("Boolean option '" + optionName + "' must have +/- prefix or be specified with the value 'true' or 'false'");
                 }
                 return OptionParseResult.error("Missing value for option '" + optionName + "'");
             }
@@ -158,13 +155,13 @@ public class SubstrateOptionsParser {
                     } else if (valueString.equals("false")) {
                         value = false;
                     } else {
-                        return OptionParseResult.error("Boolean option '" + optionName + "' must have +/- prefix");
+                        return OptionParseResult.error("Invalid value for boolean option '" + optionName + "': '" + valueString + "' (must be 'true' or 'false')");
                     }
                 } else {
                     throw VMError.shouldNotReachHere("Unsupported option value class: " + optionType.getSimpleName());
                 }
             } catch (NumberFormatException ex) {
-                return OptionParseResult.error("Invalid value for option '" + optionName + "': '" + valueString + "' is not a valid number");
+                return OptionParseResult.error("Wrong value for option '" + optionName + "': '" + valueString + "' is not a valid number");
             }
         } else {
             if (optionType != Boolean.class) {
