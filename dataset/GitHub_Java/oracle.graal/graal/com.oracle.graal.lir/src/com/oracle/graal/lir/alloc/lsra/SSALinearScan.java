@@ -22,22 +22,19 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import java.util.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.*;
-
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.ssa.*;
 
 final class SSALinearScan extends LinearScan {
 
-    SSALinearScan(TargetDescription target, LIRGenerationResult res, SpillMoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig, List<? extends AbstractBlockBase<?>> sortedBlocks) {
-        super(target, res, spillMoveFactory, regAllocConfig, sortedBlocks);
+    SSALinearScan(TargetDescription target, LIRGenerationResult res, SpillMoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig) {
+        super(target, res, spillMoveFactory, regAllocConfig);
     }
 
     @Override

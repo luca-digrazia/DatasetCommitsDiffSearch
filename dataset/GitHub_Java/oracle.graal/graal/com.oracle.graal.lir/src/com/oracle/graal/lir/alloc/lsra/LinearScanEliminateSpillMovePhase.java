@@ -22,29 +22,25 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.LoadConstantOp;
-import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.StandardOp.ValueMoveOp;
-import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
-import com.oracle.graal.lir.alloc.lsra.LinearScan.IntervalPredicate;
+import com.oracle.graal.lir.StandardOp.*;
+import com.oracle.graal.lir.alloc.lsra.Interval.*;
+import com.oracle.graal.lir.alloc.lsra.LinearScan.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.*;
 import com.oracle.graal.lir.phases.*;
 
-public class LinearScanEliminateSpillMovePhase extends AllocationPhase {
+class LinearScanEliminateSpillMovePhase extends AllocationPhase {
 
     private static final IntervalPredicate mustStoreAtDefinition = new LinearScan.IntervalPredicate() {
 
@@ -56,13 +52,12 @@ public class LinearScanEliminateSpillMovePhase extends AllocationPhase {
 
     protected final LinearScan allocator;
 
-    protected LinearScanEliminateSpillMovePhase(LinearScan allocator) {
+    LinearScanEliminateSpillMovePhase(LinearScan allocator) {
         this.allocator = allocator;
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory) {
         eliminateSpillMoves();
     }
 
@@ -90,9 +85,9 @@ public class LinearScanEliminateSpillMovePhase extends AllocationPhase {
             }
 
             LIRInsertionBuffer insertionBuffer = new LIRInsertionBuffer();
-            for (AbstractBlockBase<?> block : allocator.sortedBlocks()) {
+            for (AbstractBlockBase<?> block : allocator.sortedBlocks) {
                 try (Indent indent1 = Debug.logAndIndent("Handle %s", block)) {
-                    List<LIRInstruction> instructions = allocator.getLIR().getLIRforBlock(block);
+                    List<LIRInstruction> instructions = allocator.ir.getLIRforBlock(block);
                     int numInst = instructions.size();
 
                     // iterate all instructions of the block.
@@ -113,14 +108,8 @@ public class LinearScanEliminateSpillMovePhase extends AllocationPhase {
                                  * instruction.
                                  */
                                 if (Debug.isLogEnabled()) {
-                                    if (move instanceof ValueMoveOp) {
-                                        ValueMoveOp vmove = (ValueMoveOp) move;
-                                        Debug.log("eliminating move from interval %d (%s) to %d (%s) in block %s", allocator.operandNumber(vmove.getInput()), vmove.getInput(),
-                                                        allocator.operandNumber(vmove.getResult()), vmove.getResult(), block);
-                                    } else {
-                                        LoadConstantOp load = (LoadConstantOp) move;
-                                        Debug.log("eliminating constant load from %s to %d (%s) in block %s", load.getConstant(), allocator.operandNumber(load.getResult()), load.getResult(), block);
-                                    }
+                                    Debug.log("eliminating move from interval %d (%s) to %d (%s) in block %s", allocator.operandNumber(move.getInput()), move.getInput(),
+                                                    allocator.operandNumber(move.getResult()), move.getResult(), block);
                                 }
 
                                 // null-instructions are deleted by assignRegNum

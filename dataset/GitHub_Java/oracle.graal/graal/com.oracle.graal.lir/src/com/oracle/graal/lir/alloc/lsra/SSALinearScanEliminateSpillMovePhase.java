@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import jdk.internal.jvmci.debug.*;
 
 import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.MoveOp;
@@ -45,16 +45,14 @@ public class SSALinearScanEliminateSpillMovePhase extends LinearScanEliminateSpi
 
     @Override
     protected boolean canEliminateSpillMove(AbstractBlockBase<?> block, MoveOp move) {
+        // SSA Linear Scan might introduce moves to stack slots
         assert isVariable(move.getResult()) || LinearScanPhase.SSA_LSRA.getValue() : "Move should not be produced in a non-SSA compilation: " + move;
 
-        if (super.canEliminateSpillMove(block, move)) {
-            // SSA Linear Scan might introduce moves to stack slots
-            Interval curInterval = allocator.intervalFor(move.getResult());
-            assert !isRegister(curInterval.location()) && curInterval.alwaysInMemory();
-            if (!isPhiResolutionMove(block, move, curInterval)) {
-                assert isStackSlotValue(curInterval.location()) : "Not a stack slot: " + curInterval.location();
-                return true;
-            }
+        Interval curInterval = allocator.intervalFor(move.getResult());
+
+        if (!isRegister(curInterval.location()) && curInterval.alwaysInMemory() && !isPhiResolutionMove(block, move, curInterval)) {
+            assert isStackSlotValue(curInterval.location()) : "Not a stack slot: " + curInterval.location();
+            return true;
         }
         return false;
     }
