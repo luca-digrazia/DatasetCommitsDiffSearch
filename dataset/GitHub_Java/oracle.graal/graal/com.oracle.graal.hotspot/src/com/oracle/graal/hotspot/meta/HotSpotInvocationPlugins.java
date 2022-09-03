@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
@@ -78,7 +77,7 @@ final class HotSpotInvocationPlugins extends InvocationPlugins {
             for (Node node : newNodes) {
                 if (node.hasUsages() && node instanceof ConstantNode) {
                     ConstantNode c = (ConstantNode) node;
-                    if (c.getStackKind() == Kind.Object && AheadOfTimeVerificationPhase.isIllegalObjectConstant(c)) {
+                    if (c.getKind() == Kind.Object && AheadOfTimeVerificationPhase.isIllegalObjectConstant(c)) {
                         if (isClass(c)) {
                             // This will be handled later by LoadJavaMirrorWithKlassPhase
                         } else {
