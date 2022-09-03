@@ -85,7 +85,7 @@ public abstract class AssociationUpdater extends Creator {
 	 * @return All the foreign key columns in a list.
 	 */
 	protected List<String> getForeignKeyColumns(TableModel tableModel) {
-		List<String> foreignKeyColumns = new ArrayList<>();
+		List<String> foreignKeyColumns = new ArrayList<String>();
         Collection<ColumnModel> columnModels = getTableModelFromDB(tableModel.getTableName()).getColumnModels();
 		for (ColumnModel columnModel : columnModels) {
             String columnName = columnModel.getColumnName();
@@ -124,6 +124,7 @@ public abstract class AssociationUpdater extends Creator {
 	 * @param tableName
 	 *            The table name use to get table model from database.
 	 * @return A table model object with values from database table.
+	 * @throws org.litepal.exceptions.DatabaseGenerateException
 	 */
 	protected TableModel getTableModelFromDB(String tableName) {
 		return DBUtility.findPragmaTableInfo(tableName, mDb);
