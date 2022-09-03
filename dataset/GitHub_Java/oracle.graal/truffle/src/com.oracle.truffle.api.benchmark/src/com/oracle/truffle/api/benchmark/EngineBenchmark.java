@@ -22,32 +22,26 @@
  */
 package com.oracle.truffle.api.benchmark;
 
-import java.util.Collections;
-import java.util.function.Function;
-
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
@@ -67,7 +61,7 @@ public class EngineBenchmark extends TruffleBenchmark {
         return Context.create();
     }
 
-    @State(org.openjdk.jmh.annotations.Scope.Thread)
+    @State(Scope.Thread)
     public static class ContextState {
         final Source source = Source.create(TEST_LANGUAGE, "");
         final Context context = Context.create(TEST_LANGUAGE);
@@ -97,7 +91,7 @@ public class EngineBenchmark extends TruffleBenchmark {
         return result;
     }
 
-    @State(org.openjdk.jmh.annotations.Scope.Thread)
+    @State(Scope.Thread)
     public static class CallTargetCallState {
         final Source source = Source.create(TEST_LANGUAGE, "");
         final Context context = Context.create(TEST_LANGUAGE);
@@ -195,12 +189,7 @@ public class EngineBenchmark extends TruffleBenchmark {
 
         @Override
         protected BenchmarkContext createContext(Env env) {
-            return new BenchmarkContext(env, new Function<TruffleObject, Scope>() {
-                @Override
-                public Scope apply(TruffleObject obj) {
-                    return Scope.newBuilder("Benchmark top scope", obj).build();
-                }
-            });
+            return new BenchmarkContext(env);
         }
 
         @Override
@@ -209,12 +198,12 @@ public class EngineBenchmark extends TruffleBenchmark {
         }
 
         @Override
-        protected Iterable<Scope> findLocalScopes(BenchmarkContext context, Node node, Frame frame) {
-            if (node != null) {
-                return super.findLocalScopes(context, node, frame);
-            } else {
-                return context.topScopes;
+        protected Object lookupSymbol(BenchmarkContext context, String symbolName) {
+            switch (symbolName) {
+                case "context":
+                    return context;
             }
+            return context.object;
         }
 
         @Override
@@ -233,11 +222,9 @@ public class EngineBenchmark extends TruffleBenchmark {
 
         final Env env;
         final BenchmarkObject object = new BenchmarkObject();
-        final Iterable<Scope> topScopes;
 
-        BenchmarkContext(Env env, Function<TruffleObject, Scope> scopeProvider) {
+        BenchmarkContext(Env env) {
             this.env = env;
-            topScopes = Collections.singleton(scopeProvider.apply(new TopScopeObject(this)));
         }
 
     }
@@ -255,41 +242,6 @@ public class EngineBenchmark extends TruffleBenchmark {
             return obj instanceof BenchmarkObject;
         }
 
-    }
-
-    static final class TopScopeObject implements TruffleObject {
-
-        private final BenchmarkContext context;
-
-        private TopScopeObject(BenchmarkContext context) {
-            this.context = context;
-        }
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return TopScopeObjectMessageResolutionForeign.ACCESS;
-        }
-
-        public static boolean isInstance(TruffleObject obj) {
-            return obj instanceof TopScopeObject;
-        }
-
-        @MessageResolution(receiverType = TopScopeObject.class)
-        static class TopScopeObjectMessageResolution {
-
-            @Resolve(message = "READ")
-            abstract static class VarsMapReadNode extends Node {
-
-                @TruffleBoundary
-                public Object access(TopScopeObject ts, String name) {
-                    if ("context".equals(name)) {
-                        return JavaInterop.asTruffleObject(ts.context);
-                    } else {
-                        return JavaInterop.asTruffleObject(ts.context.object);
-                    }
-                }
-            }
-        }
     }
 
     @MessageResolution(receiverType = BenchmarkObject.class)
