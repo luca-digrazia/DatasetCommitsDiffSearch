@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -35,7 +34,6 @@ import com.oracle.graal.nodes.spi.*;
  * A special purpose store node that differs from {@link UnsafeStoreNode} in that it is not a
  * {@link StateSplit} and takes a computed address instead of an object.
  */
-@NodeInfo
 public class DirectStoreNode extends FixedWithNextNode implements LIRLowerable {
 
     @Input private ValueNode address;
@@ -52,8 +50,7 @@ public class DirectStoreNode extends FixedWithNextNode implements LIRLowerable {
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         Value v = gen.operand(value);
-        LIRKind lirKind = gen.getLIRGeneratorTool().target().getLIRKind(kind);
-        gen.getLIRGeneratorTool().emitStore(lirKind, gen.operand(address), v, null);
+        gen.getLIRGeneratorTool().emitStore(kind, gen.operand(address), v, null);
     }
 
     protected ValueNode getAddress() {

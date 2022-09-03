@@ -24,11 +24,11 @@ package com.oracle.graal.hotspot.hsail.replacements;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.word.*;
+import com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil;
+import com.oracle.graal.hotspot.meta.*;
 
 //JaCoCo Exclude
 
@@ -43,18 +43,18 @@ public class HSAILHotSpotReplacementsUtil extends HotSpotReplacementsUtil {
         hsailRegisters = registers;
     }
 
-    public static final LocationIdentity TLAB_INFO_LOCATION = NamedLocationIdentity.create("TlabInfo");
-    public static final LocationIdentity TLABINFO_LASTGOODTOP_LOCATION = NamedLocationIdentity.create("TlabInfoLastGoodTop");
-    public static final LocationIdentity TLABINFO_END_LOCATION = NamedLocationIdentity.create("TlabInfoEnd");
-    public static final LocationIdentity TLABINFO_TOP_LOCATION = NamedLocationIdentity.create("TlabInfoTop");
-    public static final LocationIdentity TLABINFO_START_LOCATION = NamedLocationIdentity.create("TlabInfoStart");
-    public static final LocationIdentity TLABINFO_ALLOCINFO_LOCATION = NamedLocationIdentity.create("TlabInfoAllocInfo");
-    public static final LocationIdentity TLABINFO_ORIGINALTOP_LOCATION = NamedLocationIdentity.create("TlabInfoOriginalTop");
-    public static final LocationIdentity TLABINFO_TLAB_LOCATION = NamedLocationIdentity.create("TlabInfoTlab");
+    public static final LocationIdentity TLAB_INFO_LOCATION = new NamedLocationIdentity("TlabInfo");
+    public static final LocationIdentity TLABINFO_LASTGOODTOP_LOCATION = new NamedLocationIdentity("TlabInfoLastGoodTop");
+    public static final LocationIdentity TLABINFO_END_LOCATION = new NamedLocationIdentity("TlabInfoEnd");
+    public static final LocationIdentity TLABINFO_TOP_LOCATION = new NamedLocationIdentity("TlabInfoTop");
+    public static final LocationIdentity TLABINFO_START_LOCATION = new NamedLocationIdentity("TlabInfoStart");
+    public static final LocationIdentity TLABINFO_ALLOCINFO_LOCATION = new NamedLocationIdentity("TlabInfoAllocInfo");
+    public static final LocationIdentity TLABINFO_ORIGINALTOP_LOCATION = new NamedLocationIdentity("TlabInfoOriginalTop");
+    public static final LocationIdentity TLABINFO_DONORTHREAD_LOCATION = new NamedLocationIdentity("TlabInfoDonorThread");
 
-    public static final LocationIdentity ALLOCINFO_TLABINFOSPOOLNEXT_LOCATION = NamedLocationIdentity.create("AllocInfoTlabInfosPoolNext");
-    public static final LocationIdentity ALLOCINFO_TLABINFOSPOOLEND_LOCATION = NamedLocationIdentity.create("AllocInfoTlabInfosPoolEnd");
-    public static final LocationIdentity ALLOCINFO_TLABALIGNRESERVEBYTES_LOCATION = NamedLocationIdentity.create("AllocInfoTlabAlignreservebytes");
+    public static final LocationIdentity ALLOCINFO_TLABINFOSPOOLNEXT_LOCATION = new NamedLocationIdentity("AllocInfoTlabInfosPoolNext");
+    public static final LocationIdentity ALLOCINFO_TLABINFOSPOOLEND_LOCATION = new NamedLocationIdentity("AllocInfoTlabInfosPoolEnd");
+    public static final LocationIdentity ALLOCINFO_TLABALIGNRESERVEBYTES_LOCATION = new NamedLocationIdentity("AllocInfoTlabAlignreservebytes");
 
     /**
      * Gets the value of the thread register as a Word. There is a level of indirection here. Thread
@@ -121,12 +121,12 @@ public class HSAILHotSpotReplacementsUtil extends HotSpotReplacementsUtil {
         tlabInfo.writeWord(config().hsailTlabInfoOriginalTopOffset, val, TLABINFO_ORIGINALTOP_LOCATION);
     }
 
-    public static void writeTlabInfoTlab(Word tlabInfo, Word val) {
-        tlabInfo.writeWord(config().hsailTlabInfoTlabOffset, val, TLABINFO_TLAB_LOCATION);
+    public static void writeTlabInfoDonorThread(Word tlabInfo, Word val) {
+        tlabInfo.writeWord(config().hsailTlabInfoDonorThreadOffset, val, TLABINFO_DONORTHREAD_LOCATION);
     }
 
-    public static Word readTlabInfoTlab(Word tlabInfo) {
-        return tlabInfo.readWord(config().hsailTlabInfoTlabOffset, TLABINFO_TLAB_LOCATION);
+    public static Word readTlabInfoDonorThread(Word tlabInfo) {
+        return tlabInfo.readWord(config().hsailTlabInfoDonorThreadOffset, TLABINFO_DONORTHREAD_LOCATION);
     }
 
     public static Word readAllocInfoTlabInfosPoolEnd(Word allocInfo) {

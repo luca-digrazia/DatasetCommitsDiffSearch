@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,14 +23,12 @@
 package com.oracle.graal.hotspot.hsail.replacements;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.hsail.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.nodes.*;
+import com.oracle.graal.hotspot.hsail.*;
 import com.oracle.graal.word.*;
 
-@NodeInfo
 public class HSAILDirectStoreReleaseNode extends DirectStoreNode {
 
     public HSAILDirectStoreReleaseNode(ValueNode address, ValueNode value, Kind kind) {
@@ -41,8 +39,7 @@ public class HSAILDirectStoreReleaseNode extends DirectStoreNode {
     public void generate(NodeLIRBuilderTool gen) {
         HSAILHotSpotLIRGenerator hsailgen = (HSAILHotSpotLIRGenerator) (gen.getLIRGeneratorTool());
         Value v = gen.operand(getValue());
-        LIRKind kind = hsailgen.getLIRKind(getValue().stamp());
-        hsailgen.emitStoreRelease(kind, gen.operand(getAddress()), v, null);
+        hsailgen.emitStoreRelease(getKind(), gen.operand(getAddress()), v, null);
     }
 
     @NodeIntrinsic

@@ -27,22 +27,61 @@ package com.oracle.graal.compiler.hsail.test.infra;
  * This class extends KernelTester and provides a base class
  * for which the HSAIL code comes from the Graal compiler.
  */
-import com.oracle.graal.compiler.hsail.HSAILCompilationResult;
-import java.lang.reflect.Method;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static org.junit.Assume.*;
+
 import java.io.*;
+import java.lang.reflect.*;
+
+import org.junit.*;
+
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.gpu.*;
+import com.oracle.graal.hotspot.hsail.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hsail.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.options.OptionValue.OverrideScope;
 
 public abstract class GraalKernelTester extends KernelTester {
 
-    HSAILCompilationResult hsailCompResult;
+    private static boolean substitutionsInstalled;
+
+    private static synchronized void installSubstitutions() {
+        if (!substitutionsInstalled) {
+            getHSAILBackend().getProviders().getReplacements().registerSubstitutions(GraalKernelTester.class, ForceDeoptSubstitutions.class);
+            substitutionsInstalled = true;
+        }
+    }
+
+    public GraalKernelTester() {
+        super(getHSAILBackend().isDeviceInitialized());
+        installSubstitutions();
+    }
+
+    protected static HSAILHotSpotBackend getHSAILBackend() {
+        Backend backend = runtime().getBackend(HSAIL.class);
+        Assume.assumeTrue(backend instanceof HSAILHotSpotBackend);
+        return (HSAILHotSpotBackend) backend;
+    }
+
+    ExternalCompilationResult hsailCode;
     private boolean showHsailSource = false;
     private boolean saveInFile = false;
 
     @Override
-    public String getCompiledHSAILSource(Method testMethod) {
-        if (hsailCompResult == null) {
-            hsailCompResult = HSAILCompilationResult.getHSAILCompilationResult(testMethod);
+    public String getCompiledHSAILSource(Method method) {
+        if (hsailCode == null) {
+            HSAILHotSpotBackend backend = getHSAILBackend();
+            ResolvedJavaMethod javaMethod = backend.getProviders().getMetaAccess().lookupJavaMethod(method);
+            hsailCode = backend.compileKernel(javaMethod, false);
         }
-        String hsailSource = hsailCompResult.getHSAILCode();
+        String hsailSource = hsailCode.getCodeString();
         if (showHsailSource) {
             logger.severe(hsailSource);
         }
@@ -59,6 +98,122 @@ public abstract class GraalKernelTester extends KernelTester {
             }
         }
         return hsailSource;
+    }
+
+    public boolean aggressiveInliningEnabled() {
+        return (InlineEverything.getValue());
+    }
+
+    public boolean canHandleHSAILMethodCalls() {
+        // needs 2 things, backend needs to be able to generate such calls, and target needs to be
+        // able to run them
+        boolean canGenerateCalls = false;   // not implemented yet
+        boolean canExecuteCalls = runningOnSimulator();
+        return (canGenerateCalls && canExecuteCalls);
+    }
+
+    private static boolean supportsObjectAllocation() {
+        return true;
+    }
+
+    /**
+     * Determines if the runtime supports object allocation in HSAIL code.
+     */
+    public boolean canHandleObjectAllocation() {
+        return supportsObjectAllocation() && canDeoptimize();
+    }
+
+    /**
+     * Determines if the runtime supports deoptimization in HSAIL code.
+     */
+    public boolean canDeoptimize() {
+        return getHSAILBackend().getRuntime().getConfig().useHSAILDeoptimization;
+    }
+
+    /**
+     * Determines if the JVM supports the required typeProfileWidth.
+     */
+    public boolean typeProfileWidthAtLeast(int val) {
+        return (getHSAILBackend().getRuntime().getConfig().typeProfileWidth >= val);
+    }
+
+    /**
+     * Determines if the runtime supports {@link VirtualObject}s in {@link DebugInfo} associated
+     * with HSAIL code.
+     */
+    public boolean canHandleDeoptVirtualObjects() {
+        return true;
+    }
+
+    /**
+     * Determines if the runtime has the capabilities required by this test.
+     */
+    protected boolean supportsRequiredCapabilities() {
+        return true;
+    }
+
+    HotSpotNmethod installedCode;
+
+    @Override
+    protected void dispatchKernelOkra(int range, Object... args) {
+        HSAILHotSpotBackend backend = getHSAILBackend();
+        if (backend.isDeviceInitialized()) {
+            try {
+                if (installedCode == null) {
+                    installedCode = backend.compileAndInstallKernel(testMethod);
+                }
+                backend.executeKernel(installedCode, range, args);
+            } catch (InvalidInstalledCodeException e) {
+                Debug.log("WARNING:Invalid installed code: " + e);
+                e.printStackTrace();
+            }
+        } else {
+            super.dispatchKernelOkra(range, args);
+        }
+    }
+
+    public static OptionValue<?> getOptionFromField(Class<?> declaringClass, String fieldName) {
+        try {
+            Field f = declaringClass.getDeclaredField(fieldName);
+            f.setAccessible(true);
+            return (OptionValue<?>) f.get(null);
+        } catch (Exception e) {
+            throw new GraalInternalError(e);
+        }
+    }
+
+    private OptionValue<?> accessibleRemoveNeverExecutedCode = getOptionFromField(GraalOptions.class, "RemoveNeverExecutedCode");
+
+    // Special overrides for the testGeneratedxxx routines which set
+    // required graal options that we need to run any junit test
+
+    private OverrideScope getOverrideScope() {
+        return OptionValue.override(GraalOptions.InlineEverything, true, accessibleRemoveNeverExecutedCode, false);
+    }
+
+    @Override
+    public void testGeneratedHsail() {
+        try (OverrideScope s = getOverrideScope()) {
+            assumeTrue(supportsRequiredCapabilities() && okraEnvIsInitialized());
+            super.testGeneratedHsail();
+        }
+    }
+
+    @Override
+    public void testGeneratedHsailUsingLambdaMethod() {
+        try (OverrideScope s = getOverrideScope()) {
+            assumeTrue(supportsRequiredCapabilities() && okraEnvIsInitialized());
+            super.testGeneratedHsailUsingLambdaMethod();
+        }
+    }
+
+    // used for forcing a deoptimization
+    public static int forceDeopt(int x) {
+        return x * x;
+    }
+
+    public static double forceDeopt(double x) {
+        return x * x;
     }
 
 }
