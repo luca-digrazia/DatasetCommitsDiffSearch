@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,11 +22,11 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompilationThreshold;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleInvalidationReprofileCount;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleMinInvokeThreshold;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleOSRCompilationThreshold;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleReplaceReprofileCount;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationThreshold;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInvalidationReprofileCount;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleMinInvokeThreshold;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleOSRCompilationThreshold;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleReplaceReprofileCount;
 import static org.junit.Assert.assertSame;
 
 import java.util.concurrent.ExecutionException;
@@ -36,10 +34,10 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
-import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
-import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
-import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.OptimizedOSRLoopNode;
+import org.graalvm.compiler.truffle.GraalTruffleRuntime;
+import org.graalvm.compiler.truffle.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.OptimizedOSRLoopNode;
+import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
@@ -112,7 +110,7 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
     public void testOSRAndRewriteDoesNotSuppressTargetCompilation(OSRLoopFactory factory) {
         try (TruffleCompilerOptions.TruffleOptionsOverrideScope s = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleCompilationThreshold, 3)) {
             TestRootNodeWithReplacement rootNode = new TestRootNodeWithReplacement(factory, new TestRepeatingNode());
-            OptimizedCallTarget target = runtime.createOptimizedCallTarget(null, rootNode);
+            OptimizedCallTarget target = new OptimizedCallTarget(null, rootNode);
             target.call(OSR_THRESHOLD + 1);
             assertCompiled(rootNode.getOSRTarget());
             assertNotCompiled(target);
@@ -254,7 +252,7 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
         assertCompiled(rootNode.getOSRTarget());
 
         for (int i = 0; i < 10; i++) {
-            rootNode.getOSRTarget().invalidate(this, "test");
+            rootNode.getOSRTarget().invalidate();
             Assert.assertNotNull(rootNode.getOSRTarget());
             assertNotCompiled(rootNode.getOSRTarget());
             Assert.assertNotNull(rootNode.getOSRTarget()); // no eager cleanup for thread safety
@@ -313,23 +311,24 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
         assertCompiled(rootNode.getOSRTarget());
         assertSame(rootNode.getOSRTarget(), osrTarget);
 
-        target.invalidate(this, "test");
+        target.invalidate();
         assertNotCompiled(target);
         assertCompiled(rootNode.getOSRTarget());
         assertSame(rootNode.getOSRTarget(), osrTarget);
 
         // after invalidating the outer method the osr target should still be valid and used
-        target.resetCompilationProfile();
         target.call(15);
-
+        // even though target is compiled it is invoked in interpreter
+        target.invalidate();
         assertCompiled(rootNode.getOSRTarget());
         assertSame(rootNode.getOSRTarget(), osrTarget);
-        assertNotCompiled(target);
+        // assertNotCompiled(target);
 
-        // now externally invalidate the osr target and see if we compile the osr target again
-        rootNode.getOSRTarget().invalidate(this, "test");
+        // now externally invalidate the osr target and see if we compile again
+        rootNode.getOSRTarget().invalidate();
         target.call(OSR_THRESHOLD + 1);
         assertCompiled(rootNode.getOSRTarget());
+
     }
 
     /*

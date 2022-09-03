@@ -56,9 +56,8 @@ import java.util.function.Supplier;
 
 import org.graalvm.compiler.api.runtime.GraalRuntime;
 import org.graalvm.compiler.code.CompilationResult;
-import org.graalvm.compiler.core.CompilationWrapper;
-import org.graalvm.compiler.core.CompilationWrapper.ExceptionAction;
 import org.graalvm.compiler.core.CompilerThreadFactory;
+import org.graalvm.compiler.core.CompilationWrapper;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.DebugContext;
@@ -557,14 +556,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     protected abstract DiagnosticsOutputDirectory getDebugOutputDirectory();
 
-    /**
-     * Gets the map used to count the number of compilation failures or bailouts handled by each
-     * action.
-     * 
-     * @see CompilationWrapper#CompilationWrapper(DiagnosticsOutputDirectory, Map)
-     */
-    protected abstract Map<ExceptionAction, Integer> getCompilationProblemsPerAction();
-
     protected final void compileMethod(DebugContext initialDebug,
                     TruffleCompiler compiler,
                     OptimizedCallTarget optimizedCallTarget,
@@ -572,7 +563,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
                     CompilationIdentifier compilationId,
                     CancellableCompileTask task) {
 
-        CompilationWrapper<Void> compilation = new CompilationWrapper<Void>(getDebugOutputDirectory(), getCompilationProblemsPerAction()) {
+        CompilationWrapper<Void> compilation = new CompilationWrapper<Void>(getDebugOutputDirectory()) {
 
             @Override
             public String toString() {
