@@ -22,49 +22,58 @@
  */
 package com.oracle.truffle.object;
 
-import java.util.*;
-
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.*;
-import com.oracle.truffle.api.object.*;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.api.object.LocationFactory;
+import com.oracle.truffle.api.object.Property;
+import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.object.Locations.ValueLocation;
-import com.oracle.truffle.object.debug.*;
 
+/** @since 0.17 or earlier */
 public abstract class DynamicObjectImpl extends DynamicObject implements Cloneable {
     private ShapeImpl shape;
 
+    /** @since 0.17 or earlier */
     public static final DebugCounter reshapeCount = DebugCounter.create("Reshape count");
 
-    public DynamicObjectImpl(Shape shape) {
+    /** @since 0.17 or earlier */
+    protected DynamicObjectImpl(Shape shape) {
         assert shape instanceof ShapeImpl;
         initialize(shape);
         setShape(shape);
 
         if (ObjectStorageOptions.Profile) {
-            trackObject(this);
+            Debug.trackObject(this);
         }
     }
 
+    /** @since 0.17 or earlier */
     public Object getTypeIdentifier() {
         return getShape();
     }
 
+    /** @since 0.17 or earlier */
     @Override
     public ShapeImpl getShape() {
         return shape;
     }
 
+    /** @since 0.17 or earlier */
     protected void setShape(Shape shape) {
         assert shape.getLayout().getType().isInstance(this);
         this.shape = (ShapeImpl) shape;
     }
 
+    /** @since 0.17 or earlier */
     protected abstract void initialize(Shape initialShape);
 
+    /** @since 0.17 or earlier */
     public final void setShapeAndResize(Shape newShape) {
         setShapeAndResize(getShape(), newShape);
     }
 
+    /** @since 0.17 or earlier */
     @Override
     public final void setShapeAndResize(Shape oldShape, Shape newShape) {
         assert getShape() == oldShape : "wrong old shape";
@@ -82,6 +91,7 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
      * time.
      *
      * @see #setShapeAndResize(Shape, Shape)
+     * @since 0.17 or earlier
      */
     @Override
     public final void setShapeAndGrow(Shape oldShape, Shape newShape) {
@@ -106,8 +116,10 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         }
     }
 
+    /** @since 0.17 or earlier */
     protected abstract void growObjectStore(Shape oldShape, Shape newShape);
 
+    /** @since 0.17 or earlier */
     protected abstract void growPrimitiveStore(Shape oldShape, Shape newShape);
 
     private void resizeStore(Shape oldShape, Shape newShape) {
@@ -117,8 +129,10 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         }
     }
 
+    /** @since 0.17 or earlier */
     protected abstract void resizePrimitiveStore(Shape oldShape, Shape newShape);
 
+    /** @since 0.17 or earlier */
     protected abstract void resizeObjectStore(Shape oldShape, Shape newShape);
 
     /**
@@ -130,18 +144,17 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         Shape currentShape = getShape();
         assert oldShape != newShape : "Wrong old shape assumption?";
         assert newShape != currentShape : "Redundant shape change? shape=" + currentShape;
-        // assert oldShape == currentShape || (oldShape.getLastProperty() == ((EnterpriseLayout)
-        // oldShape.getLayout()).getPrimitiveArrayProperty() && oldShape.getParent() ==
-        // currentShape) : "Out-of-order shape change?" + "\nparentShape=" + currentShape +
-        // "\noldShape=" + oldShape + "\nnewShape=" + newShape;
         return true;
     }
 
     /**
      * Check whether the extension arrays are in accordance with the description in the shape.
+     *
+     * @since 0.17 or earlier
      */
     protected abstract boolean checkExtensionArrayInvariants(Shape newShape);
 
+    /** @since 0.17 or earlier */
     @Override
     protected final DynamicObject clone() {
         try {
@@ -151,14 +164,13 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         }
     }
 
+    /** @since 0.17 or earlier */
     protected abstract DynamicObject cloneWithShape(Shape currentShape);
 
-    void reshapeAfterDelete(final Shape newShape, final Shape deletedParentShape) {
-        DynamicObject original = this.cloneWithShape(getShape());
-        setShapeAndResize(newShape);
-        copyProperties(original, deletedParentShape);
-    }
+    /** @since 0.17 or earlier */
+    protected abstract void reshape(ShapeImpl newShape);
 
+    /** @since 0.17 or earlier */
     public final void copyProperties(DynamicObject fromObject, Shape ancestor) {
         ShapeImpl fromShape = (ShapeImpl) fromObject.getShape();
         ShapeImpl toShape = getShape();
@@ -184,11 +196,11 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         }
     }
 
-    @Override
+    /** @since 0.17 or earlier */
     @TruffleBoundary
-    public boolean changeFlags(Object id, int newFlags) {
+    public boolean changeFlags(Object key, int newFlags) {
         Shape oldShape = getShape();
-        Property existing = oldShape.getProperty(id);
+        Property existing = oldShape.getProperty(key);
         if (existing != null) {
             if (existing.getFlags() != newFlags) {
                 Property newProperty = existing.copyWithFlags(newFlags);
@@ -201,83 +213,39 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         }
     }
 
-    @Override
-    @TruffleBoundary
-    public boolean changeFlags(Object id, FlagsFunction updateFunction) {
-        Shape oldShape = getShape();
-        Property existing = oldShape.getProperty(id);
-        if (existing != null) {
-            int newFlags = updateFunction.apply(existing.getFlags());
-            if (existing.getFlags() != newFlags) {
-                Property newProperty = existing.copyWithFlags(newFlags);
-                Shape newShape = oldShape.replaceProperty(existing, newProperty);
-                this.setShape(newShape);
-            }
-            return true;
-        } else {
-            return false;
-        }
-    }
-
+    /** @since 0.17 or earlier */
     public String debugDump(int level) {
         return debugDump(0, level);
     }
 
+    /** @since 0.17 or earlier */
     public String debugDump(int level, int levelStop) {
-        List<Property> properties = this.getShape().getPropertyListInternal(true);
-        StringBuilder sb = new StringBuilder(properties.size() * 10);
-        sb.append("{\n");
-        for (Property property : properties) {
-            indent(sb, level + 1);
-
-            sb.append(property.getKey());
-            sb.append('[').append(property.getLocation()).append(']');
-            Object value = property.get(this, false);
-            if (value instanceof DynamicObjectImpl) {
-                if (level < levelStop) {
-                    value = ((DynamicObjectImpl) value).debugDump(level + 1, levelStop);
-                } else {
-                    value = value.toString();
-                }
-            }
-            sb.append(": ");
-            sb.append(value);
-            if (property != properties.get(properties.size() - 1)) {
-                sb.append(",");
-            }
-            sb.append("\n");
-        }
-        indent(sb, level);
-        sb.append("}");
-        return sb.toString();
+        return Debug.dumpObject(this, level, levelStop);
     }
 
-    private static StringBuilder indent(StringBuilder sb, int level) {
-        for (int i = 0; i < level; i++) {
-            sb.append(' ');
-        }
-        return sb;
-    }
-
+    /** @since 0.17 or earlier */
     @Override
     public String toString() {
         return getShape().getObjectType().toString(this);
     }
 
+    /** @since 0.17 or earlier */
     @Override
     public boolean equals(Object obj) {
         return getShape().getObjectType().equals(this, obj);
     }
 
+    /** @since 0.17 or earlier */
     @Override
     public int hashCode() {
         return getShape().getObjectType().hashCode(this);
     }
 
+    /** @since 0.17 or earlier */
     @Override
     @TruffleBoundary
-    public Object get(Object id, Object defaultValue) {
-        Property existing = getShape().getProperty(id);
+    public Object get(Object key, Object defaultValue) {
+        Property existing = getShape().getProperty(key);
         if (existing != null) {
             return existing.get(this, false);
         } else {
@@ -285,10 +253,11 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         }
     }
 
+    /** @since 0.17 or earlier */
     @Override
     @TruffleBoundary
-    public boolean set(Object id, Object value) {
-        Property existing = getShape().getProperty(id);
+    public boolean set(Object key, Object value) {
+        Property existing = getShape().getProperty(key);
         if (existing != null) {
             existing.setGeneric(this, value, null);
             return true;
@@ -297,85 +266,62 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         }
     }
 
+    /** @since 0.17 or earlier */
     @Override
     @TruffleBoundary
-    public void define(Object id, Object value, int flags) {
-        ShapeImpl oldShape = getShape();
-        Property existing = oldShape.getProperty(id);
-        if (existing == null) {
-            updateShape();
-            oldShape = getShape();
-            Shape newShape = oldShape.addProperty(Property.create(id, oldShape.allocator().locationForValue(value, true, true), flags));
-            updateShape();
-            newShape.getLastProperty().setGeneric(this, value, oldShape, newShape);
-        } else {
-            defineExisting(id, value, flags, existing, oldShape);
-        }
+    public void define(Object key, Object value, int flags) {
+        define(key, value, flags, getShape().getLayout().getStrategy().getDefaultLocationFactory());
     }
 
-    private void defineExisting(Object id, Object value, int flags, Property existing, ShapeImpl oldShape) {
-        if (existing.getFlags() == flags) {
-            existing.setGeneric(this, value, null);
-        } else {
-            Property newProperty = Property.create(id, oldShape.getLayout().existingLocationForValue(value, existing.getLocation(), oldShape), flags);
-            Shape newShape = oldShape.replaceProperty(existing, newProperty);
-            this.setShapeAndResize(newShape);
-            newProperty.setInternal(this, value);
-        }
-    }
-
+    /** @since 0.17 or earlier */
     @Override
     @TruffleBoundary
-    public void define(Object id, Object value, int flags, LocationFactory locationFactory) {
+    public void define(Object key, Object value, int flags, LocationFactory locationFactory) {
         ShapeImpl oldShape = getShape();
-        Property existing = oldShape.getProperty(id);
-        if (existing == null) {
-            updateShape();
-            oldShape = getShape();
-            Shape newShape = oldShape.addProperty(Property.create(id, locationFactory.createLocation(oldShape, value), flags));
-            updateShape();
-            newShape.getLastProperty().setGeneric(this, value, oldShape, newShape);
-        } else {
-            defineExisting(id, value, flags, existing, oldShape);
-        }
+        oldShape.getLayout().getStrategy().objectDefineProperty(this, key, value, flags, locationFactory, oldShape);
     }
 
+    /** @since 0.17 or earlier */
     @Override
     @TruffleBoundary
-    public boolean delete(Object id) {
+    public boolean delete(Object key) {
         ShapeImpl oldShape = getShape();
-        Property existing = oldShape.getProperty(id);
+        Property existing = oldShape.getProperty(key);
         if (existing != null) {
-            ShapeImpl newShape = oldShape.removeProperty(existing);
-            this.reshapeAfterDelete(newShape, ShapeImpl.findCommonAncestor(oldShape, newShape));
-            // TODO ancestor should be the parent of found property's shape
+            oldShape.getLayout().getStrategy().objectRemoveProperty(this, existing, oldShape);
             return true;
         } else {
             return false;
         }
     }
 
+    /** @since 0.17 or earlier */
     @Override
     public int size() {
         return getShape().getPropertyCount();
     }
 
+    /** @since 0.17 or earlier */
     @Override
     public boolean isEmpty() {
         return size() == 0;
     }
 
+    /** @since 0.17 or earlier */
     @Override
     public final boolean updateShape() {
         return getShape().getLayout().getStrategy().updateShape(this);
     }
 
-    private static void trackObject(DynamicObject obj) {
-        ShapeProfiler.getInstance().track(obj);
+    /** @since 0.17 or earlier */
+    @Override
+    public final DynamicObject copy(Shape currentShape) {
+        return cloneWithShape(currentShape);
     }
 
+    /** @since 0.17 or earlier */
     @Override
     public ForeignAccess getForeignAccess() {
-        return getShape().getForeignAccessFactory();
+        return getShape().getForeignAccessFactory(this);
     }
 }
