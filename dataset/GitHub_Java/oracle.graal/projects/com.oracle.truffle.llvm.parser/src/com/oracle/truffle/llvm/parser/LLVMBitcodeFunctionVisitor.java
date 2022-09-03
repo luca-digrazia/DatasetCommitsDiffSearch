@@ -29,6 +29,11 @@
  */
 package com.oracle.truffle.llvm.parser;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.llvm.parser.LLVMLivenessAnalysis.LLVMLivenessAnalysisResult;
@@ -39,21 +44,14 @@ import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 
 final class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
 
-    private final LLVMContext context;
-    private final ExternalLibrary library;
+    private final LLVMParserRuntime runtime;
     private final FrameDescriptor frame;
     private final List<LLVMExpressionNode> blocks;
+    private final Map<String, Integer> labels;
     private final Map<InstructionBlock, List<Phi>> phis;
     private final LLVMSymbolReadResolver symbols;
     private final NodeFactory nodeFactory;
@@ -64,12 +62,12 @@ final class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
     private final LLVMRuntimeDebugInformation dbgInfoHandler;
     private boolean initDebugValues;
 
-    LLVMBitcodeFunctionVisitor(LLVMContext context, ExternalLibrary library, FrameDescriptor frame, Map<InstructionBlock, List<Phi>> phis, NodeFactory nodeFactory, int argCount,
-                    LLVMSymbolReadResolver symbols,
-                    FunctionDefinition functionDefinition, LLVMLivenessAnalysisResult liveness, List<FrameSlot> notNullable, LLVMRuntimeDebugInformation dbgInfoHandler) {
-        this.context = context;
-        this.library = library;
+    LLVMBitcodeFunctionVisitor(LLVMParserRuntime runtime, FrameDescriptor frame, Map<String, Integer> labels,
+                    Map<InstructionBlock, List<Phi>> phis, NodeFactory nodeFactory, int argCount, LLVMSymbolReadResolver symbols, FunctionDefinition functionDefinition,
+                    LLVMLivenessAnalysisResult liveness, List<FrameSlot> notNullable, LLVMRuntimeDebugInformation dbgInfoHandler) {
+        this.runtime = runtime;
         this.frame = frame;
+        this.labels = labels;
         this.phis = phis;
         this.symbols = symbols;
         this.nodeFactory = nodeFactory;
@@ -94,7 +92,7 @@ final class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
     public void visit(InstructionBlock block) {
         List<Phi> blockPhis = phis.get(block);
         ArrayList<LLVMLivenessAnalysis.NullerInformation> blockNullerInfos = liveness.getNullableWithinBlock()[block.getBlockIndex()];
-        LLVMBitcodeInstructionVisitor visitor = new LLVMBitcodeInstructionVisitor(frame, blockPhis, nodeFactory, argCount, symbols, context, library, blockNullerInfos, function.getSourceFunction(),
+        LLVMBitcodeInstructionVisitor visitor = new LLVMBitcodeInstructionVisitor(frame, labels, blockPhis, nodeFactory, argCount, symbols, runtime, blockNullerInfos, function.getSourceFunction(),
                         notNullable, dbgInfoHandler);
 
         if (initDebugValues) {
@@ -112,6 +110,6 @@ final class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
             visitor.setInstructionIndex(i);
             instruction.accept(visitor);
         }
-        blocks.add(nodeFactory.createBasicBlockNode(visitor.getInstructions(), visitor.getControlFlowNode(), block.getBlockIndex(), block.getName()));
+        blocks.add(nodeFactory.createBasicBlockNode(runtime, visitor.getInstructions(), visitor.getControlFlowNode(), block.getBlockIndex(), block.getName()));
     }
 }

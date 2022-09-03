@@ -29,10 +29,16 @@
  */
 package com.oracle.truffle.llvm.parser;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.llvm.parser.model.SymbolImpl;
-import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
@@ -75,14 +81,8 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstr
 import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
-
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import com.oracle.truffle.llvm.parser.model.SymbolImpl;
+import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 
 public final class LLVMLivenessAnalysis {
 
@@ -541,16 +541,16 @@ public final class LLVMLivenessAnalysis {
 
         @Override
         public void visit(InvokeInstruction call) {
-            for (SymbolImpl arg : call.getArguments()) {
-                visitLocalRead(arg);
+            for (int i = 0; i < call.getArgumentCount(); i++) {
+                visitLocalRead(call.getArgument(i));
             }
             visitLocalRead(call.getCallTarget());
         }
 
         @Override
         public void visit(CallInstruction call) {
-            for (SymbolImpl arg : call.getArguments()) {
-                visitLocalRead(arg);
+            for (int i = 0; i < call.getArgumentCount(); i++) {
+                visitLocalRead(call.getArgument(i));
             }
             visitLocalRead(call.getCallTarget());
         }
@@ -684,16 +684,16 @@ public final class LLVMLivenessAnalysis {
 
         @Override
         public void visit(VoidCallInstruction call) {
-            for (SymbolImpl arg : call.getArguments()) {
-                visitLocalRead(arg);
+            for (int i = 0; i < call.getArgumentCount(); i++) {
+                visitLocalRead(call.getArgument(i));
             }
             visitLocalRead(call.getCallTarget());
         }
 
         @Override
         public void visit(VoidInvokeInstruction call) {
-            for (SymbolImpl arg : call.getArguments()) {
-                visitLocalRead(arg);
+            for (int i = 0; i < call.getArgumentCount(); i++) {
+                visitLocalRead(call.getArgument(i));
             }
             visitLocalRead(call.getCallTarget());
         }

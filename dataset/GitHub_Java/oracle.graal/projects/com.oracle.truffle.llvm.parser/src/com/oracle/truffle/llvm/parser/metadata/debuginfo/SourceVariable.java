@@ -29,11 +29,6 @@
  */
 package com.oracle.truffle.llvm.parser.metadata.debuginfo;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.DbgDeclareInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.DbgValueInstruction;
@@ -43,12 +38,17 @@ import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+
 public final class SourceVariable implements SymbolImpl {
 
     private final LLVMSourceSymbol symbol;
 
-    private HashSet<DbgDeclareInstruction> declarations;
-    private HashSet<DbgValueInstruction> values;
+    private final HashSet<DbgDeclareInstruction> declarations;
+    private final HashSet<DbgValueInstruction> values;
 
     private List<ValueFragment> fragments;
 
@@ -57,6 +57,8 @@ public final class SourceVariable implements SymbolImpl {
 
     SourceVariable(LLVMSourceSymbol symbol) {
         this.symbol = symbol;
+        this.declarations = new HashSet<>();
+        this.values = new HashSet<>();
         this.fragments = null;
         this.hasFullDefinition = false;
         this.hasStaticValue = false;
@@ -91,11 +93,11 @@ public final class SourceVariable implements SymbolImpl {
     }
 
     public boolean hasDeclaration() {
-        return declarations != null && !declarations.isEmpty();
+        return !declarations.isEmpty();
     }
 
     public boolean hasValue() {
-        return values != null && !values.isEmpty();
+        return !values.isEmpty();
     }
 
     public List<ValueFragment> getFragments() {
@@ -103,7 +105,7 @@ public final class SourceVariable implements SymbolImpl {
     }
 
     public boolean isSingleDeclaration() {
-        return declarations != null && declarations.size() == 1 && !hasValue();
+        return declarations.size() == 1 && values.isEmpty();
     }
 
     public DbgDeclareInstruction getSingleDeclaration() {
@@ -111,7 +113,7 @@ public final class SourceVariable implements SymbolImpl {
     }
 
     public boolean isSingleValue() {
-        return !hasDeclaration() && values != null && values.size() == 1 && fragments == null;
+        return declarations.isEmpty() && values.size() == 1 && fragments == null;
     }
 
     public DbgValueInstruction getSingleValue() {
@@ -127,16 +129,10 @@ public final class SourceVariable implements SymbolImpl {
     }
 
     void addDeclaration(DbgDeclareInstruction dbg) {
-        if (declarations == null) {
-            declarations = new HashSet<>();
-        }
         declarations.add(dbg);
     }
 
     void addValue(DbgValueInstruction dbg) {
-        if (values == null) {
-            values = new HashSet<>();
-        }
         values.add(dbg);
     }
 

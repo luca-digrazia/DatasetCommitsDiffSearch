@@ -29,14 +29,19 @@
  */
 package com.oracle.truffle.llvm.parser.model.functions;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.parser.metadata.MDAttachment;
 import com.oracle.truffle.llvm.parser.metadata.MetadataAttachmentHolder;
 import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceFunction;
-import com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInfoModuleProcessor;
+import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceModel;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
-import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
@@ -50,16 +55,9 @@ import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
+import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 
 public final class FunctionDefinition implements Constant, ValueSymbol, MetadataAttachmentHolder {
-
-    private static final InstructionBlock[] EMPTY = new InstructionBlock[0];
 
     private final List<FunctionParameter> parameters = new ArrayList<>();
     private final FunctionType type;
@@ -67,9 +65,9 @@ public final class FunctionDefinition implements Constant, ValueSymbol, Metadata
     private final Linkage linkage;
 
     private List<MDAttachment> mdAttachments = null;
-    private SourceFunction sourceFunction = DebugInfoModuleProcessor.DEFAULT_FUNCTION;
+    private SourceFunction sourceFunction = SourceModel.DEFAULT_FUNCTION;
 
-    private InstructionBlock[] blocks = EMPTY;
+    private InstructionBlock[] blocks = new InstructionBlock[0];
     private int currentBlock = 0;
     private String name;
 
@@ -109,7 +107,7 @@ public final class FunctionDefinition implements Constant, ValueSymbol, Metadata
 
     @Override
     public void setName(String name) {
-        this.name = name;
+        this.name = LLVMIdentifier.toGlobalIdentifier(name);
     }
 
     @Override
@@ -175,7 +173,7 @@ public final class FunctionDefinition implements Constant, ValueSymbol, Metadata
         for (final InstructionBlock block : blocks) {
             if (block.getName().equals(LLVMIdentifier.UNKNOWN)) {
                 do {
-                    block.setName(LLVMIdentifier.toImplicitBlockName(symbolIndex++));
+                    block.setImplicitName(symbolIndex++);
                     // avoid name clashes
                 } while (explicitBlockNames.contains(block.getName()));
             }
@@ -211,7 +209,7 @@ public final class FunctionDefinition implements Constant, ValueSymbol, Metadata
     }
 
     public void nameBlock(int index, String argName) {
-        blocks[index].setName(LLVMIdentifier.toExplicitBlockName(argName));
+        blocks[index].setName(argName);
     }
 
     @Override

@@ -78,7 +78,6 @@ import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
 import java.math.BigInteger;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.Map;
 
 public final class SourceModel {
@@ -189,9 +188,6 @@ public final class SourceModel {
         private final Cache cache;
         private final Source bitcodeSource;
 
-        private final LinkedList<Integer> removeFromBlock = new LinkedList<>();
-        private int blockInstIndex = 0;
-
         private SourceFunction currentFunction = null;
         private InstructionBlock currentBlock = null;
 
@@ -272,15 +268,7 @@ public final class SourceModel {
         @Override
         public void visit(InstructionBlock block) {
             currentBlock = block;
-            for (blockInstIndex = 0; blockInstIndex < block.getInstructionCount(); blockInstIndex++) {
-                block.getInstruction(blockInstIndex).accept(this);
-            }
-            if (!removeFromBlock.isEmpty()) {
-                for (int i : removeFromBlock) {
-                    currentBlock.remove(i);
-                }
-                removeFromBlock.clear();
-            }
+            block.accept(this);
             currentBlock = null;
         }
 
@@ -371,8 +359,7 @@ public final class SourceModel {
             final SourceVariable variable = getVariable(call, mdlocalArgIndex);
             if (variable == null) {
                 // invalid or unsupported debug information
-                // remove upper indices so we do not need to update the later ones
-                removeFromBlock.addFirst(blockInstIndex);
+                currentBlock.remove(call);
                 return;
             }
 
@@ -386,7 +373,7 @@ public final class SourceModel {
             if (isDeclaration) {
                 final DbgDeclareInstruction dbgDeclare = new DbgDeclareInstruction(value, variable, expression);
                 variable.addDeclaration(dbgDeclare);
-                currentBlock.set(blockInstIndex, dbgDeclare);
+                currentBlock.replace(call, dbgDeclare);
 
             } else {
                 long index = 0;
@@ -397,7 +384,7 @@ public final class SourceModel {
                 }
                 final DbgValueInstruction dbgValue = new DbgValueInstruction(value, variable, index, expression);
                 variable.addValue(dbgValue);
-                currentBlock.set(blockInstIndex, dbgValue);
+                currentBlock.replace(call, dbgValue);
             }
         }
     }

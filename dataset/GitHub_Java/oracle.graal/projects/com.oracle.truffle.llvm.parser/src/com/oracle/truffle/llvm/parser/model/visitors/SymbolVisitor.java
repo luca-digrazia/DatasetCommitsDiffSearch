@@ -31,8 +31,8 @@ package com.oracle.truffle.llvm.parser.model.visitors;
 
 import com.oracle.truffle.llvm.parser.ValueList;
 import com.oracle.truffle.llvm.parser.metadata.MetadataSymbol;
-import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceModel;
-import com.oracle.truffle.llvm.parser.model.Symbol;
+import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceVariable;
+import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionParameter;
@@ -64,6 +64,8 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.CastInstruction
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareExchangeInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ConditionalBranchInstruction;
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.DbgDeclareInstruction;
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.DbgValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractElementInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.FenceInstruction;
@@ -87,7 +89,7 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnreachableInst
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstruction;
 
-public interface SymbolVisitor extends ValueList.ValueVisitor<Symbol> {
+public interface SymbolVisitor extends ValueList.ValueVisitor<SymbolImpl> {
 
     default void visit(ArrayConstant constant) {
         defaultAction(constant);
@@ -289,6 +291,14 @@ public interface SymbolVisitor extends ValueList.ValueVisitor<Symbol> {
         defaultAction(inst);
     }
 
+    default void visit(DbgDeclareInstruction inst) {
+        defaultAction(inst);
+    }
+
+    default void visit(DbgValueInstruction inst) {
+        defaultAction(inst);
+    }
+
     default void visit(FunctionParameter param) {
         defaultAction(param);
     }
@@ -305,7 +315,7 @@ public interface SymbolVisitor extends ValueList.ValueVisitor<Symbol> {
         defaultAction(global);
     }
 
-    default void visit(SourceModel.Variable variable) {
+    default void visit(SourceVariable variable) {
         defaultAction(variable);
     }
 }

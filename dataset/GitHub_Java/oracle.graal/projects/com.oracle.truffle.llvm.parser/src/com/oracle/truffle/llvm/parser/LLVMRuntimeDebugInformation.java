@@ -46,8 +46,8 @@ import com.oracle.truffle.llvm.parser.model.symbols.constants.floatingpoint.Floa
 import com.oracle.truffle.llvm.parser.model.symbols.constants.floatingpoint.X86FP80Constant;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.integer.BigIntegerConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.integer.IntegerConstant;
+import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
-import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.AllocateInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.DbgDeclareInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.DbgValueInstruction;
@@ -57,7 +57,6 @@ import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMFrameValueAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
@@ -76,15 +75,17 @@ final class LLVMRuntimeDebugInformation {
     private final LLVMContext context;
     private final List<FrameSlot> notNullableSlots;
     private final LLVMSymbolReadResolver symbols;
+    private final LLVMParserRuntime runtime;
     private final boolean isEnabled;
     private final StaticValueAccessVisitor staticValueAccessVisitor;
 
-    LLVMRuntimeDebugInformation(FrameDescriptor frame, NodeFactory factory, LLVMContext context, List<FrameSlot> notNullableSlots, LLVMSymbolReadResolver symbols) {
+    LLVMRuntimeDebugInformation(FrameDescriptor frame, NodeFactory factory, LLVMContext context, List<FrameSlot> notNullableSlots, LLVMSymbolReadResolver symbols, LLVMParserRuntime runtime) {
         this.frame = frame;
         this.factory = factory;
         this.context = context;
         this.notNullableSlots = notNullableSlots;
         this.symbols = symbols;
+        this.runtime = runtime;
         this.isEnabled = context.getEnv().getOptions().get(SulongEngineOption.ENABLE_LVI);
         this.staticValueAccessVisitor = new StaticValueAccessVisitor();
     }
@@ -162,12 +163,8 @@ final class LLVMRuntimeDebugInformation {
         }
 
         @Override
-        public void visit(GlobalVariable global) {
-            if (global.isReadOnly()) {
-                visitSimpleConstant(global);
-            } else {
-                super.visit(global);
-            }
+        public void visit(GlobalConstant constant) {
+            visitSimpleConstant(constant);
         }
 
         @Override
@@ -180,12 +177,6 @@ final class LLVMRuntimeDebugInformation {
 
     public boolean isEnabled() {
         return isEnabled;
-    }
-
-    private static boolean mustDereferenceValue(MDExpression expr, LLVMSourceType type, SymbolImpl value) {
-        // sometimes at O1+ llvm drops a dbg.declare to a dbg.value without adding a Dwarf.DEREF to
-        // it
-        return DwarfOpcode.isDeref(expr) || (type != null && !type.isPointer() && value instanceof AllocateInstruction);
     }
 
     void registerStaticDebugSymbols(FunctionDefinition fn) {
@@ -212,13 +203,17 @@ final class LLVMRuntimeDebugInformation {
 
             } else if (local.isSingleValue()) {
                 final DbgValueInstruction dbg = local.getSingleValue();
+                boolean mustDereference = false;
+
                 final MDExpression expr = dbg.getExpression();
-                final SymbolImpl value = dbg.getValue();
-                if (expr.getElementCount() != 0) {
+                if (DwarfOpcode.isDeref(expr)) {
+                    mustDereference = true;
+
+                } else if (expr.getElementCount() != 0) {
                     continue;
                 }
-                final boolean mustDereference = mustDereferenceValue(expr, local.getSourceType(), value);
 
+                final SymbolImpl value = dbg.getValue();
                 staticValueAccessVisitor.registerStaticAccess(local, value, mustDereference);
             }
         }
@@ -286,6 +281,7 @@ final class LLVMRuntimeDebugInformation {
             return null;
         }
 
+        boolean mustDereference = isDeclaration;
         int partIndex = -1;
         int[] clearParts = null;
 
@@ -300,6 +296,9 @@ final class LLVMRuntimeDebugInformation {
             } else {
                 clearParts = clearSiblings.stream().mapToInt(Integer::intValue).toArray();
             }
+        }
+        if (DwarfOpcode.isDeref(expression)) {
+            mustDereference = true;
         }
 
         if (partIndex < 0 && variable.hasFragments()) {
@@ -317,10 +316,8 @@ final class LLVMRuntimeDebugInformation {
             }
         }
 
-        final boolean mustDereference = isDeclaration || mustDereferenceValue(expression, variable.getSourceType(), value);
-
         final FrameSlot targetSlot = frame.findOrAddFrameSlot(variable.getSymbol(), MetaType.DEBUG, FrameSlotKind.Object);
-        final LLVMExpressionNode containerRead = factory.createFrameRead(MetaType.DEBUG, targetSlot);
+        final LLVMExpressionNode containerRead = factory.createFrameRead(runtime, MetaType.DEBUG, targetSlot);
         return factory.createDebugWrite(mustDereference, valueRead, targetSlot, containerRead, partIndex, clearParts);
     }
 
