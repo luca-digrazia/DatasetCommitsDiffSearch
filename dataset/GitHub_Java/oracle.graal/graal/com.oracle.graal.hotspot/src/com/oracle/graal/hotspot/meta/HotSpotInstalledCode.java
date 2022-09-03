@@ -71,7 +71,7 @@ public abstract class HotSpotInstalledCode extends CompilerObject implements Ins
     }
 
     /**
-     * @return a copy of this code blob if it is {@linkplain #isValid() valid}, null otherwise.
+     * @returns a copy of this code blob if it is {@linkplain #isValid() valid}, null otherwise.
      */
     public byte[] getBlob() {
         if (!isValid()) {
