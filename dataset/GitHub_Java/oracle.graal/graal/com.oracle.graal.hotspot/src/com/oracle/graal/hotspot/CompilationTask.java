@@ -107,13 +107,6 @@ public class CompilationTask implements Runnable, Comparable<Object> {
     private final int id;
     private final AtomicReference<CompilationStatus> status;
 
-    /**
-     * The executor processing the Graal compilation queue this task was placed on. This will be
-     * null for blocking compilations or if compilations are scheduled as native HotSpot
-     * {@linkplain #ctask CompileTask}s.
-     */
-    private final ExecutorService executor;
-
     private StructuredGraph graph;
 
     /**
@@ -136,8 +129,7 @@ public class CompilationTask implements Runnable, Comparable<Object> {
      */
     private final long ctask;
 
-    public CompilationTask(ExecutorService executor, HotSpotBackend backend, HotSpotResolvedJavaMethod method, int entryBCI, long ctask, boolean blocking) {
-        this.executor = executor;
+    public CompilationTask(HotSpotBackend backend, HotSpotResolvedJavaMethod method, int entryBCI, long ctask, boolean blocking) {
         this.backend = backend;
         this.method = method;
         this.entryBCI = entryBCI;
@@ -173,7 +165,7 @@ public class CompilationTask implements Runnable, Comparable<Object> {
     public void run() {
         withinEnqueue.set(Boolean.FALSE);
         try {
-            runCompilation();
+            runCompilation(true);
         } finally {
             withinEnqueue.set(Boolean.TRUE);
             status.set(CompilationStatus.Finished);
@@ -243,14 +235,7 @@ public class CompilationTask implements Runnable, Comparable<Object> {
         return method.getCompilationProfilingInfo(osrCompilation);
     }
 
-    public void runCompilation() {
-        if (executor != null && executor.isShutdown()) {
-            // We don't want to do any unnecessary compilation is the Graal compilation
-            // queue has been shutdown. Note that we leave the JVM_ACC_QUEUED bit set
-            // for the method so that it won't be re-scheduled for compilation.
-            return;
-        }
-
+    public void runCompilation(boolean clearFromCompilationQueue) {
         /*
          * no code must be outside this try/finally because it could happen otherwise that
          * clearQueuedForCompilation() is not executed
@@ -417,7 +402,7 @@ public class CompilationTask implements Runnable, Comparable<Object> {
                 c2vm.notifyCompilationStatistics(id, method, entryBCI != INVOCATION_ENTRY_BCI, processedBytes, time, timeUnitsPerSecond, installedCode);
             }
 
-            if (executor != null) {
+            if (clearFromCompilationQueue) {
                 assert method.isQueuedForCompilation();
                 method.clearQueuedForCompilation();
             }
