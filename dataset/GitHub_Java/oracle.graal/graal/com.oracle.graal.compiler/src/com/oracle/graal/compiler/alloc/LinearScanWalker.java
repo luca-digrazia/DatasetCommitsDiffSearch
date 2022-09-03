@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,22 +34,22 @@ import com.oracle.graal.compiler.alloc.Interval.RegisterBinding;
 import com.oracle.graal.compiler.alloc.Interval.RegisterPriority;
 import com.oracle.graal.compiler.alloc.Interval.SpillState;
 import com.oracle.graal.compiler.alloc.Interval.State;
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.MoveOp;
+import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.util.*;
 
 /**
  */
-class LinearScanWalker extends IntervalWalker {
+final class LinearScanWalker extends IntervalWalker {
 
-    protected Register[] availableRegs;
+    private Register[] availableRegs;
 
-    protected final int[] usePos;
-    protected final int[] blockPos;
+    private final int[] usePos;
+    private final int[] blockPos;
 
-    protected List<Interval>[] spillIntervals;
+    private List<Interval>[] spillIntervals;
 
     private MoveResolver moveResolver; // for ordering spill moves
 
@@ -79,7 +79,7 @@ class LinearScanWalker extends IntervalWalker {
 
         // If all allocatable registers are caller saved, then no registers are live across a call
         // site. The register allocator can save time not trying to find a register at a call site.
-        allocator.callKillsRegisters = allocator.frameMap.getRegisterConfig().areAllAllocatableRegistersCallerSaved();
+        allocator.callKillsRegisters = allocator.frameMap.registerConfig.areAllAllocatableRegistersCallerSaved();
 
         moveResolver = new MoveResolver(allocator);
         spillIntervals = Util.uncheckedCast(new List[allocator.registers.length]);
@@ -430,7 +430,7 @@ class LinearScanWalker extends IntervalWalker {
 
             splitPart.setInsertMoveWhenActivated(moveNecessary);
 
-            assert splitPart.from() >= currentPosition : "cannot append new interval before current walk position";
+            assert splitPart.from() >= currentInterval.currentFrom() : "cannot append new interval before current walk position";
             unhandledLists.addToListSortedByStartAndUsePositions(RegisterBinding.Any, splitPart);
 
             if (Debug.isLogEnabled()) {
@@ -466,7 +466,6 @@ class LinearScanWalker extends IntervalWalker {
                     assert interval.firstUsage(RegisterPriority.ShouldHaveRegister) > currentPosition : "interval must not have use position before currentPosition";
 
                     allocator.assignSpillSlot(interval);
-                    handleSpillSlot(interval);
                     allocator.changeSpillState(interval, minSplitPos);
 
                     // Also kick parent intervals out of register to memory when they have no use
@@ -481,7 +480,6 @@ class LinearScanWalker extends IntervalWalker {
                                 // parent is never used, so kick it out of its assigned register
                                 Debug.log("kicking out interval %d out of its register because it is never used", parent.operandNumber);
                                 allocator.assignSpillSlot(parent);
-                                handleSpillSlot(parent);
                             } else {
                                 // do not go further back because the register is actually used by
                                 // the interval
@@ -510,7 +508,6 @@ class LinearScanWalker extends IntervalWalker {
 
                     Interval spilledPart = interval.split(optimalSplitPos, allocator);
                     allocator.assignSpillSlot(spilledPart);
-                    handleSpillSlot(spilledPart);
                     allocator.changeSpillState(spilledPart, optimalSplitPos);
 
                     if (!allocator.isBlockBegin(optimalSplitPos)) {
@@ -529,14 +526,6 @@ class LinearScanWalker extends IntervalWalker {
                 }
             }
         }
-    }
-
-    /**
-     * This is called for every interval that is assigned to a stack slot.
-     */
-    protected void handleSpillSlot(Interval interval) {
-        assert interval.location() != null && (interval.canMaterialize() || isStackSlot(interval.location())) : "interval not assigned to a stack slot " + interval;
-        // Do nothing. Stack slots are not processed in this implementation.
     }
 
     void splitStackInterval(Interval interval) {
@@ -773,7 +762,7 @@ class LinearScanWalker extends IntervalWalker {
     }
 
     void initVarsForAlloc(Interval interval) {
-        availableRegs = allocator.frameMap.getRegisterConfig().getAllocatableRegisters(interval.kind().getPlatformKind());
+        availableRegs = allocator.frameMap.registerConfig.getAllocatableRegisters(interval.kind());
     }
 
     static boolean isMove(LIRInstruction op, Interval from, Interval to) {
@@ -847,7 +836,8 @@ class LinearScanWalker extends IntervalWalker {
 
     // allocate a physical register or memory location to an interval
     @Override
-    protected boolean activateCurrent(Interval interval) {
+    boolean activateCurrent() {
+        Interval interval = currentInterval;
         boolean result = true;
 
         try (Indent indent = Debug.logAndIndent("activating interval %s,  splitParent: %d", interval, interval.splitParent().operandNumber)) {

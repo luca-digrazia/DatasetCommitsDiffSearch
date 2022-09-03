@@ -355,15 +355,6 @@ public class Debug {
     }
 
     /**
-     * @see #log(String, Object)
-     */
-    public static void log(String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6) {
-        if (ENABLED) {
-            DebugScope.getInstance().log(format, arg1, arg2, arg3, arg4, arg5, arg6);
-        }
-    }
-
-    /**
      * Prints a message to the current debug scope's logging stream. This method must only be called
      * if debugging is {@linkplain Debug#isEnabled() enabled} as it incurs allocation at the call
      * site. If possible, call one of the other {@code log()} methods in this class that take a
@@ -380,10 +371,9 @@ public class Debug {
     }
 
     /**
-     * This override exists to catch cases when {@link #log(String, Object)} is called with one
-     * argument bound to a varargs method parameter. It will bind to this method instead of the
-     * single arg variant and produce a deprecation warning instead of silently wrapping the
-     * Object[] inside of another Object[].
+     * This override exists to catch cases when log is called with one argument bound to a varargs
+     * method parameter. It will bind to this method instead of the single arg variant and produce a
+     * deprecation warning instead of silently wrapping the Object[] inside of another Object[].
      */
     @Deprecated
     public static void log(String format, Object[] args) {
@@ -391,41 +381,18 @@ public class Debug {
         logv(format, args);
     }
 
-    public static void dump(Object object, String msg) {
-        if (ENABLED && DebugScope.getInstance().isDumpEnabled()) {
-            DebugScope.getInstance().dump(object, msg);
-        }
-    }
-
-    public static void dump(Object object, String format, Object arg) {
-        if (ENABLED && DebugScope.getInstance().isDumpEnabled()) {
-            DebugScope.getInstance().dump(object, format, arg);
-        }
-    }
-
-    public static void dump(Object object, String format, Object arg1, Object arg2) {
-        if (ENABLED && DebugScope.getInstance().isDumpEnabled()) {
-            DebugScope.getInstance().dump(object, format, arg1, arg2);
-        }
-    }
-
-    public static void dump(Object object, String format, Object arg1, Object arg2, Object arg3) {
-        if (ENABLED && DebugScope.getInstance().isDumpEnabled()) {
-            DebugScope.getInstance().dump(object, format, arg1, arg2, arg3);
-        }
-    }
-
     /**
-     * This override exists to catch cases when {@link #dump(Object, String, Object)} is called with
-     * one argument bound to a varargs method parameter. It will bind to this method instead of the
-     * single arg variant and produce a deprecation warning instead of silently wrapping the
-     * Object[] inside of another Object[].
+     * The same as {@link #log}, but without line termination and without indentation.
      */
-    @Deprecated
-    public static void dump(Object object, String format, Object[] args) {
-        assert false : "shouldn't use this";
+    public static void printf(String msg, Object... args) {
+        if (ENABLED && DebugScope.getInstance().isLogEnabled()) {
+            DebugScope.getInstance().printf(msg, args);
+        }
+    }
+
+    public static void dump(Object object, String msg, Object... args) {
         if (ENABLED && DebugScope.getInstance().isDumpEnabled()) {
-            DebugScope.getInstance().dump(object, format, args);
+            DebugScope.getInstance().dump(object, msg, args);
         }
     }
 

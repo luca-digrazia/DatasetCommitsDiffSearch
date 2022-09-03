@@ -23,73 +23,29 @@
 package com.oracle.graal.debug;
 
 /**
- * Represents an indentation level for logging.
- * <p>
- * Note that calling the logging/indent/outdent methods of this interface updates the last used
- * Indent of the current DebugScope. If no instance of Indent is available (e.g. at the beginning of
- * a method), then the corresponding static methods of the Debug class should be used. They perform
- * logging and indentation based on the last used Indent of the current DebugScope.
+ * Object used to close a debug {@link Debug#indent() indentation} scope.
  * <p>
  * Example usage:
- * 
+ *
  * <pre>
- *      void method() {
- *      
- *          Indent in = Debug.logIndent("header message");
+ *
+ *      try (Indent i1 = Debug.logAndIndent("header message")) {
  *          ...
- *          in.log("message");
+ *          Debug.log("message");
  *          ...
- *          Indent in2 = in.logIndent("sub-header message");
- *          ...
- *          {
- *              in2.log("inner message");
+ *          try (Indent i2 = Debug.logAndIndent(sub-header message")) {
+ *              ...
+ *              Debug.log("inner message");
+ *              ...
  *          }
- *          ...
- *          in.outdent();
  *      }
+ *
  * </pre>
  */
-public interface Indent {
+public interface Indent extends AutoCloseable {
 
     /**
-     * Prints an indented message to the DebugLevel's logging stream if logging is enabled.
-     * 
-     * @param msg The format string of the log message
-     * @param args The arguments referenced by the log message string
-     * @see Debug#log
+     * Closes the current indentation scope.
      */
-    void log(String msg, Object... args);
-
-    /**
-     * Turns on/off logging for this indentation level.
-     * 
-     * @param enabled If true, logging is enabled, otherwise disabled
-     */
-    void setEnabled(boolean enabled);
-
-    /**
-     * Creates a new indentation level (by adding some spaces).
-     * 
-     * @return The new indentation level
-     * @see Debug#indent
-     */
-    Indent indent();
-
-    /**
-     * A convenience function which combines {@link #log} and {@link #indent}.
-     * 
-     * @param msg The format string of the log message
-     * @param args The arguments referenced by the log message string
-     * @return The new indentation level
-     * @see Debug#logIndent
-     */
-    Indent logIndent(String msg, Object... args);
-
-    /**
-     * Restores the previous indent level. Calling this method is important to restore the correct
-     * last used Indent in the current DebugScope.
-     * 
-     * @return The indent level from which this Indent was created.
-     */
-    Indent outdent();
+    void close();
 }

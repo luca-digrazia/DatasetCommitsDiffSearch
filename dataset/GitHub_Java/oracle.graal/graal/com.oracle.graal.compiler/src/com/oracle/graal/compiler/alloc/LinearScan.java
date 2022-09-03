@@ -884,16 +884,17 @@ public final class LinearScan {
         }
     }
 
-    private static NodeLIRBuilder getNodeLIRGeneratorFromDebugContext() {
+    private static NodeLIRGenerator getNodeLIRGeneratorFromDebugContext() {
         if (Debug.isEnabled()) {
-            NodeLIRBuilder lirGen = Debug.contextLookup(NodeLIRBuilder.class);
+            NodeLIRGenerator lirGen = Debug.contextLookup(NodeLIRGenerator.class);
+            assert lirGen != null;
             return lirGen;
         }
         return null;
     }
 
     private static ValueNode getValueForOperandFromDebugContext(Value value) {
-        NodeLIRBuilder gen = getNodeLIRGeneratorFromDebugContext();
+        NodeLIRGenerator gen = getNodeLIRGeneratorFromDebugContext();
         if (gen != null) {
             return gen.valueForOperand(value);
         }
