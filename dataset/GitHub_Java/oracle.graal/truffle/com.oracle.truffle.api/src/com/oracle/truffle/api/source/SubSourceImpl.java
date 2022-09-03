@@ -48,6 +48,11 @@ final class SubSourceImpl extends Content {
     }
 
     @Override
+    void reset() {
+        assert false;
+    }
+
+    @Override
     public String getName() {
         return base.getName();
     }
