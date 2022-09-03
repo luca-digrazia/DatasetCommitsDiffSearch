@@ -377,8 +377,8 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
     }
 
     @Override
-    public Collection<RootCallTarget> getCallTargets() {
-        return Collections.unmodifiableSet(callTargets.keySet());
+    public List<RootCallTarget> getCallTargets() {
+        return new ArrayList<>(callTargets.keySet());
     }
 
     public void notifyTransferToInterpreter() {
