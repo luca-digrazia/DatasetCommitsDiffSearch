@@ -32,6 +32,9 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.options.Option;
+import jdk.vm.ci.options.OptionType;
+import jdk.vm.ci.options.OptionValue;
 
 import com.oracle.graal.compiler.common.CollectionsFactory;
 import com.oracle.graal.debug.Debug;
@@ -41,9 +44,6 @@ import com.oracle.graal.debug.DebugTimer;
 import com.oracle.graal.debug.Fingerprint;
 import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
 
 /**
  * This class is a graph container, it contains the set of nodes that belong to this graph.
@@ -55,10 +55,6 @@ public class Graph {
         public static final OptionValue<Boolean> VerifyGraalGraphs = new OptionValue<>(true);
         @Option(help = "Perform expensive verification of graph inputs, usages, successors and predecessors", type = OptionType.Debug)//
         public static final OptionValue<Boolean> VerifyGraalGraphEdges = new OptionValue<>(false);
-        @Option(help = "Graal graph compression is performed when percent of live nodes falls below this value", type = OptionType.Debug)//
-        public static final OptionValue<Integer> GraphCompressionThreshold = new OptionValue<>(70);
-        @Option(help = "Use Unsafe to clone graph nodes thus avoiding copying fields that will be re-initialized anyway", type = OptionType.Debug)//
-        public static final OptionValue<Boolean> CloneNodesWithUnsafe = new OptionValue<>(true);
     }
 
     public final String name;
@@ -755,7 +751,11 @@ public class Graph {
 
     static final Node PLACE_HOLDER = new PlaceHolderNode();
 
-    public static final int COMPRESSION_THRESHOLD = Options.GraphCompressionThreshold.getValue();
+    /**
+     * When the percent of live nodes in {@link #nodes} fall below this number, a call to
+     * {@link #maybeCompress()} will actually do compression.
+     */
+    public static final int COMPRESSION_THRESHOLD = Integer.getInteger("graal.graphCompressionThreshold", 70);
 
     private static final DebugMetric GraphCompressions = Debug.metric("GraphCompressions");
 

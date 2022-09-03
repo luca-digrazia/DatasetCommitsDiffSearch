@@ -241,7 +241,8 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                 Node newNode = node.graph().findDuplicate(node);
                 if (newNode != null) {
                     assert !(node instanceof FixedNode || newNode instanceof FixedNode);
-                    node.replaceAtUsagesAndDelete(newNode);
+                    node.replaceAtUsages(newNode);
+                    node.safeDelete();
                     METRIC_GLOBAL_VALUE_NUMBERING_HITS.increment();
                     Debug.log("GVN applied and new node is %1s", newNode);
                     return true;
@@ -332,9 +333,16 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                     canonical = graph.addOrUniqueWithInputs(canonical);
                 }
                 if (node instanceof FloatingNode) {
-                    assert canonical == null || !(canonical instanceof FixedNode) || (canonical.predecessor() != null || canonical instanceof StartNode || canonical instanceof AbstractMergeNode) : node +
-                                    " -> " + canonical + " : replacement should be floating or fixed and connected";
-                    node.replaceAtUsagesAndDelete(canonical);
+                    if (canonical == null) {
+                        // case 1
+                        node.replaceAtUsages(null);
+                        graph.removeFloating((FloatingNode) node);
+                    } else {
+                        // case 2
+                        assert !(canonical instanceof FixedNode) || (canonical.predecessor() != null || canonical instanceof StartNode || canonical instanceof AbstractMergeNode) : node + " -> " +
+                                        canonical + " : replacement should be floating or fixed and connected";
+                        graph.replaceFloating((FloatingNode) node, canonical);
+                    }
                 } else {
                     assert node instanceof FixedNode && node.predecessor() != null : node + " -> " + canonical + " : node should be fixed & connected (" + node.predecessor() + ")";
                     FixedNode fixed = (FixedNode) node;

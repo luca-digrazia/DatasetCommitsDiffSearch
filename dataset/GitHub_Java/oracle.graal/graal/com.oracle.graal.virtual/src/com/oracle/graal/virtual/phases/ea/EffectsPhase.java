@@ -33,7 +33,6 @@ import com.oracle.graal.graph.Graph.NodeEventScope;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.spi.Simplifiable;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
 import com.oracle.graal.nodes.cfg.ControlFlowGraph;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
@@ -76,14 +75,14 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
         boolean changed = false;
         for (int iteration = 0; iteration < maxIterations; iteration++) {
             try (Scope s = Debug.scope(isEnabled() ? "iteration " + iteration : null)) {
-                ScheduleResult schedule;
+                SchedulePhase schedule;
                 ControlFlowGraph cfg;
                 if (unscheduled) {
                     schedule = null;
                     cfg = ControlFlowGraph.compute(graph, true, true, false, false);
                 } else {
-                    new SchedulePhase(SchedulePhase.SchedulingStrategy.EARLIEST).apply(graph, false);
-                    schedule = graph.getLastSchedule();
+                    schedule = new SchedulePhase(SchedulePhase.SchedulingStrategy.EARLIEST);
+                    schedule.apply(graph, false);
                     cfg = schedule.getCFG();
                 }
                 try (Scope scheduleScope = Debug.scope("EffectsPhaseWithSchedule", schedule)) {
@@ -128,5 +127,5 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
         }
     }
 
-    protected abstract Closure<?> createEffectsClosure(PhaseContextT context, ScheduleResult schedule, ControlFlowGraph cfg);
+    protected abstract Closure<?> createEffectsClosure(PhaseContextT context, SchedulePhase schedule, ControlFlowGraph cfg);
 }
