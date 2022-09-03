@@ -22,16 +22,11 @@
  */
 package org.graalvm.compiler.truffle.phases;
 
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrumentationTableSize;
-
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaUtil;
+import jdk.vm.ci.meta.ResolvedJavaField;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.debug.MethodFilter;
@@ -45,18 +40,20 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.java.StoreIndexedNode;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.truffle.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.OptimizedDirectCallNode;
 import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaUtil;
-import jdk.vm.ci.meta.ResolvedJavaField;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrumentationTableSize;
 
 public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
     private static final String[] OMITTED_STACK_PATTERNS = new String[]{
@@ -68,12 +65,12 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
     };
     public static Instrumentation instrumentation = new Instrumentation();
     private static final String ACCESS_TABLE_FIELD_NAME = "ACCESS_TABLE";
-    private static final int ACCESS_TABLE_SIZE = TruffleInstrumentationTableSize.getValue(TruffleCompilerOptions.getOptions());
+    private static final int ACCESS_TABLE_SIZE = TruffleInstrumentationTableSize.getValue();
     public static final long[] ACCESS_TABLE = new long[ACCESS_TABLE_SIZE];
     protected final MethodFilter[] methodFilter;
 
-    public InstrumentPhase(OptionValues options) {
-        String filterValue = instrumentationFilter(options);
+    public InstrumentPhase() {
+        String filterValue = instrumentationFilter();
         if (filterValue != null) {
             methodFilter = MethodFilter.parse(filterValue);
         } else {
@@ -81,8 +78,8 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
         }
     }
 
-    protected String instrumentationFilter(OptionValues options) {
-        return TruffleCompilerOptions.TruffleInstrumentFilter.getValue(options);
+    protected String instrumentationFilter() {
+        return TruffleCompilerOptions.TruffleInstrumentFilter.getValue();
     }
 
     protected static void insertCounter(StructuredGraph graph, HighTierContext context, JavaConstant tableConstant,
@@ -119,7 +116,7 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
 
     protected abstract int instrumentationPointSlotCount();
 
-    protected abstract boolean instrumentPerInlineSite(OptionValues options);
+    protected abstract boolean instrumentPerInlineSite();
 
     protected abstract Instrumentation.Point createPoint(int id, int startIndex, Node n);
 
@@ -143,20 +140,6 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
     }
 
     public static class Instrumentation {
-
-        private Comparator<Point> pointsComparator = new Comparator<Point>() {
-            @Override
-            public int compare(Point x, Point y) {
-                long diff = y.getHotness() - x.getHotness();
-                if (diff < 0) {
-                    return -1;
-                } else if (diff == 0) {
-                    return 0;
-                } else {
-                    return 1;
-                }
-            }
-        };
 
         private Comparator<Map.Entry<String, Point>> entriesComparator = new Comparator<Map.Entry<String, Point>>() {
             @Override
@@ -186,7 +169,7 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
                 if (!MethodFilter.matches(methodFilter, pos.getMethod())) {
                     return null;
                 }
-                if (phase.instrumentPerInlineSite(node.getOptions())) {
+                if (phase.instrumentPerInlineSite()) {
                     StringBuilder sb = new StringBuilder();
                     while (pos != null) {
                         MetaUtil.appendLocation(sb.append("at "), pos.getMethod(), pos.getBCI());
@@ -206,8 +189,8 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
             }
         }
 
-        private static String prettify(String key, Point p, OptionValues options) {
-            if (p.isPrettified(options)) {
+        private static String prettify(String key, Point p) {
+            if (p.isPrettified()) {
                 StringBuilder sb = new StringBuilder();
                 NodeSourcePosition pos = p.getPosition();
                 NodeSourcePosition lastPos = null;
@@ -259,54 +242,21 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
             }
         }
 
-        public synchronized ArrayList<String> accessTableToList(OptionValues options) {
-
-            /*
-             * Using sortedEntries.addAll(pointMap.entrySet(), instead of the iteration bellow, is
-             * not safe and is detected by FindBugs. From FindBugs:
-             *
-             * "The entrySet() method is allowed to return a view of the underlying Map in which a
-             * single Entry object is reused and returned during the iteration. As of Java 1.6, both
-             * IdentityHashMap and EnumMap did so. When iterating through such a Map, the Entry
-             * value is only valid until you advance to the next iteration. If, for example, you try
-             * to pass such an entrySet to an addAll method, things will go badly wrong."
-             */
-            List<Map.Entry<String, Point>> sortedEntries = new ArrayList<>();
-            for (Map.Entry<String, Point> entry : pointMap.entrySet()) {
-                Map.Entry<String, Point> immutableEntry = new AbstractMap.SimpleImmutableEntry<>(entry.getKey(), entry.getValue());
-                sortedEntries.add(immutableEntry);
-            }
-
-            Collections.sort(sortedEntries, entriesComparator);
-
-            ArrayList<String> list = new ArrayList<>();
-            for (Map.Entry<String, Point> entry : sortedEntries) {
-                list.add(prettify(entry.getKey(), entry.getValue(), options) + CodeUtil.NEW_LINE + entry.getValue());
-            }
-            return list;
+        public synchronized ArrayList<String> accessTableToList() {
+            return pointMap.entrySet().stream().sorted(entriesComparator).map(entry -> prettify(entry.getKey(), entry.getValue()) + CodeUtil.NEW_LINE + entry.getValue()).collect(
+                            Collectors.toCollection(ArrayList::new));
         }
 
         public synchronized ArrayList<String> accessTableToHistogram() {
-            long totalExecutions = 0;
-            for (Point point : pointMap.values()) {
-                totalExecutions += point.getHotness();
-            }
-
-            List<Point> sortedPoints = new ArrayList<>();
-            sortedPoints.addAll(pointMap.values());
-
-            Collections.sort(sortedPoints, pointsComparator);
-
-            ArrayList<String> histogram = new ArrayList<>();
-            for (Point point : sortedPoints) {
-                int length = (int) ((1.0 * point.getHotness() / totalExecutions) * 80);
+            long totalExecutions = pointMap.values().stream().mapToLong(v -> v.getHotness()).sum();
+            return pointMap.entrySet().stream().sorted(entriesComparator).map(entry -> {
+                int length = (int) ((1.0 * entry.getValue().getHotness() / totalExecutions) * 80);
                 String bar = String.join("", Collections.nCopies(length, "*"));
-                histogram.add(String.format("%3d: %s", point.getId(), bar));
-            }
-            return histogram;
+                return String.format("%3d: %s", entry.getValue().getId(), bar);
+            }).collect(Collectors.toCollection(ArrayList::new));
         }
 
-        public synchronized void dumpAccessTable(OptionValues options) {
+        public synchronized void dumpAccessTable() {
             // Dump accumulated profiling information.
             TTY.println("Execution profile (sorted by hotness)");
             TTY.println("=====================================");
@@ -314,7 +264,7 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
                 TTY.println(line);
             }
             TTY.println();
-            for (String line : accessTableToList(options)) {
+            for (String line : accessTableToList()) {
                 TTY.println(line);
                 TTY.println();
             }
@@ -373,7 +323,7 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
 
             public abstract long getHotness();
 
-            public abstract boolean isPrettified(OptionValues options);
+            public abstract boolean isPrettified();
         }
     }
 }

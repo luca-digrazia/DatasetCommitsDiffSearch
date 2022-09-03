@@ -23,13 +23,11 @@
 package org.graalvm.compiler.truffle.phases;
 
 import jdk.vm.ci.meta.JavaConstant;
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.truffle.TruffleCallBoundary;
 import org.graalvm.compiler.truffle.TruffleCompilerOptions;
@@ -62,10 +60,6 @@ import org.graalvm.compiler.truffle.TruffleCompilerOptions;
  */
 public class InstrumentTruffleBoundariesPhase extends InstrumentPhase {
 
-    public InstrumentTruffleBoundariesPhase(OptionValues options, SnippetReflectionProvider snippetReflection, long[] accessTable) {
-        super(options, snippetReflection, accessTable);
-    }
-
     @Override
     protected void instrumentGraph(StructuredGraph graph, HighTierContext context, JavaConstant tableConstant) {
         for (Node n : graph.getNodes()) {
@@ -84,8 +78,8 @@ public class InstrumentTruffleBoundariesPhase extends InstrumentPhase {
     }
 
     @Override
-    protected boolean instrumentPerInlineSite(OptionValues options) {
-        return TruffleCompilerOptions.TruffleInstrumentBoundariesPerInlineSite.getValue(options);
+    protected boolean instrumentPerInlineSite() {
+        return TruffleCompilerOptions.TruffleInstrumentBoundariesPerInlineSite.getValue();
     }
 
     @Override
@@ -93,7 +87,7 @@ public class InstrumentTruffleBoundariesPhase extends InstrumentPhase {
         return new BoundaryPoint(id, startIndex, n.getNodeSourcePosition());
     }
 
-    public class BoundaryPoint extends Instrumentation.Point {
+    public static class BoundaryPoint extends Instrumentation.Point {
         BoundaryPoint(int id, int rawIndex, NodeSourcePosition position) {
             super(id, rawIndex, position);
         }
@@ -104,13 +98,13 @@ public class InstrumentTruffleBoundariesPhase extends InstrumentPhase {
         }
 
         @Override
-        public boolean isPrettified(OptionValues options) {
-            return TruffleCompilerOptions.TruffleInstrumentBoundariesPerInlineSite.getValue(options);
+        public boolean isPrettified() {
+            return TruffleCompilerOptions.TruffleInstrumentBoundariesPerInlineSite.getValue();
         }
 
         @Override
         public long getHotness() {
-            return accessTable[rawIndex];
+            return ACCESS_TABLE[rawIndex];
         }
 
         @Override

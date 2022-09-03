@@ -22,16 +22,13 @@
  */
 package org.graalvm.compiler.truffle.phases;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import jdk.vm.ci.meta.JavaConstant;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.truffle.TruffleCompilerOptions;
-
-import jdk.vm.ci.meta.JavaConstant;
 
 /**
  * Instruments {@link IfNode}s in the graph, by adding execution counters to the true and the false
@@ -62,10 +59,6 @@ import jdk.vm.ci.meta.JavaConstant;
  */
 public class InstrumentBranchesPhase extends InstrumentPhase {
 
-    public InstrumentBranchesPhase(OptionValues options, SnippetReflectionProvider snippetReflection, long[] accessTable) {
-        super(options, snippetReflection, accessTable);
-    }
-
     @Override
     protected void instrumentGraph(StructuredGraph graph, HighTierContext context, JavaConstant tableConstant) {
         for (IfNode n : graph.getNodes().filter(IfNode.class)) {
@@ -83,8 +76,8 @@ public class InstrumentBranchesPhase extends InstrumentPhase {
     }
 
     @Override
-    protected boolean instrumentPerInlineSite(OptionValues options) {
-        return TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue(options);
+    protected boolean instrumentPerInlineSite() {
+        return TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue();
     }
 
     @Override
@@ -111,7 +104,7 @@ public class InstrumentBranchesPhase extends InstrumentPhase {
         }
     }
 
-    public class IfPoint extends InstrumentPhase.Instrumentation.Point {
+    public static class IfPoint extends InstrumentPhase.Instrumentation.Point {
         IfPoint(int id, int rawIndex, NodeSourcePosition position) {
             super(id, rawIndex, position);
         }
@@ -122,16 +115,16 @@ public class InstrumentBranchesPhase extends InstrumentPhase {
         }
 
         @Override
-        public boolean isPrettified(OptionValues options) {
-            return TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue(options);
+        public boolean isPrettified() {
+            return TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue();
         }
 
         public long ifVisits() {
-            return accessTable[rawIndex];
+            return ACCESS_TABLE[rawIndex];
         }
 
         public long elseVisits() {
-            return accessTable[rawIndex + 1];
+            return ACCESS_TABLE[rawIndex + 1];
         }
 
         public BranchState getBranchState() {
