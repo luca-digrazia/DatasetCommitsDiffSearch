@@ -2617,26 +2617,18 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             NodeData node = specialization.getNode();
             CodeTypeElement clazz = getElement();
 
-            List<ExecutableTypeData> primaryExecutes = null;
-            int lastEvaluatedCount = -1;
-
             for (ExecutableTypeData execType : node.getExecutableTypes()) {
                 if (execType.isFinal()) {
                     continue;
                 }
-                if (execType.getEvaluatedCount() != lastEvaluatedCount) {
-                    lastEvaluatedCount = execType.getEvaluatedCount();
-                    primaryExecutes = findFunctionalExecutableType(specialization, lastEvaluatedCount);
-                }
-
-                CodeTreeBuilder builder = new CodeTreeBuilder(null);
-                builder.getTree().setEnclosingElement(execType.getMessageElement());
-
-                CodeTree result = createExecuteBody(builder, specialization, execType, primaryExecutes);
+                CodeExecutableElement executeMethod = createExecutableTypeOverride(execType, true);
+                clazz.add(executeMethod);
+                CodeTreeBuilder builder = executeMethod.getBuilder();
+                CodeTree result = createExecuteBody(builder, specialization, execType);
                 if (result != null) {
-                    CodeExecutableElement method = createExecutableTypeOverride(execType, true);
-                    method.createBuilder().tree(result);
-                    clazz.add(method);
+                    builder.tree(result);
+                } else {
+                    clazz.remove(executeMethod);
                 }
             }
         }
@@ -2692,8 +2684,10 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             return builder.getRoot();
         }
 
-        private CodeTree createExecuteBody(CodeTreeBuilder parent, SpecializationData specialization, ExecutableTypeData execType, List<ExecutableTypeData> primaryExecutes) {
+        private CodeTree createExecuteBody(CodeTreeBuilder parent, SpecializationData specialization, ExecutableTypeData execType) {
             CodeTreeBuilder builder = new CodeTreeBuilder(parent);
+
+            List<ExecutableTypeData> primaryExecutes = findFunctionalExecutableType(specialization, execType.getEvaluatedCount());
 
             if (primaryExecutes.contains(execType) || primaryExecutes.isEmpty()) {
                 builder.tree(createFunctionalExecute(builder, specialization, execType));
@@ -2784,9 +2778,10 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
 
             List<ExecutableTypeData> filteredTypes = new ArrayList<>();
             for (ExecutableTypeData compareType : otherTypes) {
-                if (ElementUtils.typeEquals(compareType.getType().getPrimitiveType(), primaryType.getPrimitiveType())) {
-                    filteredTypes.add(compareType);
+                if (!ElementUtils.typeEquals(compareType.getType().getPrimitiveType(), primaryType.getPrimitiveType())) {
+                    continue;
                 }
+                filteredTypes.add(compareType);
             }
 
             // no direct matches found use generic where the type is Object
