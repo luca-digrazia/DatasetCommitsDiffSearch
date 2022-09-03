@@ -22,13 +22,8 @@
  */
 package com.oracle.graal.compiler.common.type;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.MemoryAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-import com.oracle.graal.compiler.common.spi.LIRKindTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.spi.*;
 
 public class ObjectStamp extends AbstractObjectStamp {
 
@@ -44,6 +39,11 @@ public class ObjectStamp extends AbstractObjectStamp {
     @Override
     public Stamp unrestricted() {
         return StampFactory.object();
+    }
+
+    @Override
+    public LIRKind getLIRKind(LIRKindTool tool) {
+        return tool.getObjectKind();
     }
 
     @Override
@@ -66,20 +66,11 @@ public class ObjectStamp extends AbstractObjectStamp {
     }
 
     @Override
-    public boolean isCompatible(Constant constant) {
-        if (constant instanceof JavaConstant) {
-            return ((JavaConstant) constant).getJavaKind().isObject();
+    public Constant asConstant() {
+        if (alwaysNull()) {
+            return Constant.NULL_OBJECT;
+        } else {
+            return null;
         }
-        return false;
-    }
-
-    @Override
-    public LIRKind getLIRKind(LIRKindTool tool) {
-        return tool.getObjectKind();
-    }
-
-    @Override
-    public Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement) {
-        return provider.readObjectConstant(base, displacement);
     }
 }
