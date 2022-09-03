@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -53,6 +53,7 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
         new LLVMLauncher().launch(args);
     }
 
+    boolean printResult = false;
     String[] programArgs;
     File file;
     private VersionAction versionAction = VersionAction.None;
@@ -83,6 +84,9 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
             // Ignore fall through
             switch (option) {
                 case "--": // --
+                    break;
+                case "--print-result":
+                    printResult = true;
                     break;
                 case "--show-version":
                     versionAction = VersionAction.PrintAndContinue;
@@ -207,7 +211,11 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
             if (!library.canExecute()) {
                 throw abort("no main function found");
             }
-            return library.execute().asInt();
+            int status = library.execute().asInt();
+            if (printResult) {
+                System.out.println("Result: " + status);
+            }
+            return status;
         } catch (PolyglotException e) {
             if (e.isExit()) {
                 return e.getExitStatus();
@@ -236,9 +244,9 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
                 break;
             }
         }
-        System.err.println(e.isHostException() ? e.asHostException().toString() : e.getMessage());
+        System.out.println(e.isHostException() ? e.asHostException().toString() : e.getMessage());
         for (PolyglotException.StackFrame s : stackTrace) {
-           System.err.println("\tat " + s);
+           System.out.println("\tat " + s);
         }
     }
 }
