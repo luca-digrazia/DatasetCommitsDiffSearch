@@ -36,7 +36,6 @@ public class Graph {
     private final ArrayList<Node> nodes;
     private final StartNode start;
     int nextId;
-    int deletedNodeCount;
 
     static int nextGraphId = 0;
     int id = nextGraphId++;
@@ -49,14 +48,6 @@ public class Graph {
     public Graph() {
         nodes = new ArrayList<Node>();
         start = new StartNode(this);
-    }
-
-    public int getDeletedNodeCount() {
-        return deletedNodeCount;
-    }
-
-    public int getNodeCount() {
-        return nodes.size() - getDeletedNodeCount();
     }
 
     public List<Node> getNodes() {
@@ -84,12 +75,10 @@ public class Graph {
             } while (nextNode == null || !type.isInstance(nextNode));
         }
 
-        @Override
         public boolean hasNext() {
             return nextNode != null;
         }
 
-        @Override
         @SuppressWarnings("unchecked")
         public T next() {
             try {
@@ -99,7 +88,6 @@ public class Graph {
             }
         }
 
-        @Override
         public void remove() {
             throw new UnsupportedOperationException();
         }
@@ -107,7 +95,6 @@ public class Graph {
 
     public <T extends Node> Iterable<T> getNodes(final Class<T> type) {
         return new Iterable<T>() {
-            @Override
             public Iterator<T> iterator() {
                 return new TypedNodeIterator<T>(type, nodes.iterator());
             }
@@ -122,7 +109,6 @@ public class Graph {
 
     void unregister(Node node) {
         nodes.set(node.id(), Node.Null);
-        deletedNodeCount++;
     }
 
     public StartNode start() {
@@ -139,14 +125,6 @@ public class Graph {
 
     public NodeFlood createNodeFlood() {
         return new NodeFlood(this);
-    }
-
-    public NodeWorkList createNodeWorkList() {
-        return new NodeWorkList(this);
-    }
-
-    public NodeWorkList createNodeWorkList(boolean fill, int iterationLimitPerNode) {
-        return new NodeWorkList(this, fill, iterationLimitPerNode);
     }
 
     public Map<Node, Node> addDuplicate(Collection<Node> nodes, Map<Node, Node> replacements) {

@@ -36,14 +36,14 @@ import com.sun.cri.ri.*;
 
 public class InliningPhase extends Phase {
 
-    private final GraalCompilation compilation;
+    private final C1XCompilation compilation;
     private final IR ir;
 
     private final Queue<Invoke> invokes = new ArrayDeque<Invoke>();
     private final Queue<RiMethod> methods = new ArrayDeque<RiMethod>();
     private int inliningSize;
 
-    public InliningPhase(GraalCompilation compilation, IR ir) {
+    public InliningPhase(C1XCompilation compilation, IR ir) {
         this.compilation = compilation;
         this.ir = ir;
     }
@@ -54,37 +54,37 @@ public class InliningPhase extends Phase {
         inliningSize += method.code().length;
     }
 
+    static HashMap<RiMethod, Integer> methodCount = new HashMap<RiMethod, Integer>();
     @Override
     protected void run(Graph graph) {
         inliningSize = compilation.method.code().length;
-        int iterations = GraalOptions.MaximumRecursiveInlineLevel;
+        int iterations = C1XOptions.MaximumRecursiveInlineLevel;
+
+
         do {
-            for (Node node : graph.getNodes()) {
-                if (node instanceof Invoke) {
-                    Invoke invoke = (Invoke) node;
-                    RiMethod target = invoke.target;
-                    if (!checkInliningConditions(invoke) || !target.isResolved() || Modifier.isNative(target.accessFlags())) {
-                        continue;
+            for (Invoke invoke : graph.getNodes(Invoke.class)) {
+                RiMethod target = invoke.target;
+                if (!checkInliningConditions(invoke) || !target.isResolved() || Modifier.isNative(target.accessFlags())) {
+                    continue;
+                }
+                if (target.canBeStaticallyBound()) {
+                    if (checkInliningConditions(invoke.target)) {
+                        addToQueue(invoke, invoke.target);
                     }
-                    if (target.canBeStaticallyBound()) {
-                        if (checkInliningConditions(invoke.target)) {
-                            addToQueue(invoke, invoke.target);
-                        }
-                    } else {
-                        RiMethod concrete = invoke.target.holder().uniqueConcreteMethod(invoke.target);
-                        if (concrete != null && concrete.isResolved() && !Modifier.isNative(concrete.accessFlags())) {
-                            if (checkInliningConditions(concrete)) {
-                                if (GraalOptions.TraceInlining) {
-                                    System.out.println("registering concrete method assumption...");
-                                }
-                                compilation.assumptions.recordConcreteMethod(invoke.target, concrete);
-                                addToQueue(invoke, concrete);
+                } else {
+                    RiMethod concrete = invoke.target.holder().uniqueConcreteMethod(invoke.target);
+                    if (concrete != null && concrete.isResolved() && !Modifier.isNative(concrete.accessFlags())) {
+                        if (checkInliningConditions(concrete)) {
+                            if (C1XOptions.TraceInlining) {
+                                System.out.println("registering concrete method assumption...");
                             }
+                            compilation.assumptions.recordConcreteMethod(invoke.target, concrete);
+                            addToQueue(invoke, concrete);
                         }
                     }
-                    if (inliningSize > GraalOptions.MaximumInstructionCount) {
-                        break;
-                    }
+                }
+                if (inliningSize > C1XOptions.MaximumInstructionCount) {
+                    break;
                 }
             }
 
@@ -97,23 +97,43 @@ public class InliningPhase extends Phase {
             while ((invoke = invokes.poll()) != null) {
                 RiMethod method = methods.remove();
                 inlineMethod(invoke, method);
+
+                if (methodCount.get(method) == null) {
+                    methodCount.put(method, 1);
+                } else {
+                    methodCount.put(method, methodCount.get(method) + 1);
+                }
             }
             DeadCodeEliminationPhase dce = new DeadCodeEliminationPhase();
             dce.apply(graph);
+            if (dce.deletedNodeCount > 0) {
+                ir.verifyAndPrint("After dead code elimination");
+            }
+            ir.verifyAndPrint("After inlining iteration");
 
-            if (inliningSize > GraalOptions.MaximumInstructionCount) {
-                if (GraalOptions.TraceInlining) {
+            if (inliningSize > C1XOptions.MaximumInstructionCount) {
+                if (C1XOptions.TraceInlining) {
                     System.out.println("inlining stopped: MaximumInstructionCount reached");
                 }
                 break;
             }
         } while(--iterations > 0);
+
+        int inlined = 0;
+        int duplicate = 0;
+        for (Map.Entry<RiMethod, Integer> entry : methodCount.entrySet()) {
+            inlined += entry.getValue();
+            duplicate += entry.getValue() - 1;
+        }
+        if (inlined > 0) {
+            System.out.printf("overhead_: %d (%5.3f %%)\n", duplicate, duplicate * 100.0 / inlined);
+        }
     }
 
     private boolean checkInliningConditions(Invoke invoke) {
         String name = invoke.id() + ": " + CiUtil.format("%H.%n(%p):%r", invoke.target, false);
         if (invoke.predecessors().size() == 0) {
-            if (GraalOptions.TraceInlining) {
+            if (C1XOptions.TraceInlining) {
                 System.out.println("not inlining " + name + " because the invoke is dead code");
             }
             return false;
@@ -123,17 +143,17 @@ public class InliningPhase extends Phase {
 
     private boolean checkInliningConditions(RiMethod method) {
         String name = null;
-        if (GraalOptions.TraceInlining) {
+        if (C1XOptions.TraceInlining) {
             name = CiUtil.format("%H.%n(%p):%r", method, false) + " (" + method.code().length + " bytes)";
         }
-        if (method.code().length > GraalOptions.MaximumInlineSize) {
-            if (GraalOptions.TraceInlining) {
+        if (method.code().length > C1XOptions.MaximumInlineSize) {
+            if (C1XOptions.TraceInlining) {
                 System.out.println("not inlining " + name + " because of code size");
             }
             return false;
         }
         if (!method.holder().isInitialized()) {
-            if (GraalOptions.TraceInlining) {
+            if (C1XOptions.TraceInlining) {
                 System.out.println("not inlining " + name + " because of non-initialized class");
             }
             return false;
@@ -146,7 +166,7 @@ public class InliningPhase extends Phase {
         FrameState stateAfter = invoke.stateAfter();
         Instruction exceptionEdge = invoke.exceptionEdge();
 
-        if (GraalOptions.TraceInlining) {
+        if (C1XOptions.TraceInlining) {
             System.out.printf("Building graph for %s, locals: %d, stack: %d\n", name, method.maxLocals(), method.maxStackSize());
         }
 
@@ -192,7 +212,7 @@ public class InliningPhase extends Phase {
             }
         }
 
-        if (GraalOptions.TraceInlining) {
+        if (C1XOptions.TraceInlining) {
             ir.printGraph("Subgraph " + CiUtil.format("%H.%n(%p):%r", method, false), graph);
             System.out.println("inlining " + name + ": " + frameStates.size() + " frame states, " + nodes.size() + " nodes");
         }
@@ -208,6 +228,17 @@ public class InliningPhase extends Phase {
         replacements.put(startNode, pred);
 
         Map<Node, Node> duplicates = compilation.graph.addDuplicate(nodes, replacements);
+
+        int monitorIndexDelta = stateAfter.locksSize();
+        if (monitorIndexDelta > 0) {
+            System.out.println("Adjusting locks");
+            for (Map.Entry<Node, Node> entry : duplicates.entrySet()) {
+                if (entry.getValue() instanceof MonitorAddress) {
+                    MonitorAddress address = (MonitorAddress) entry.getValue();
+                    address.setMonitorIndex(address.monitorIndex() + monitorIndexDelta);
+                }
+            }
+        }
 
         if (returnNode != null) {
             List<Node> usages = new ArrayList<Node>(invoke.usages());
@@ -274,8 +305,8 @@ public class InliningPhase extends Phase {
             }
         }
 
-        if (GraalOptions.TraceInlining) {
-            ir.printGraph("After inlining " + CiUtil.format("%H.%n(%p):%r", method, false), compilation.graph);
+        if (C1XOptions.TraceInlining) {
+            ir.verifyAndPrint("After inlining " + CiUtil.format("%H.%n(%p):%r", method, false));
         }
     }
 }

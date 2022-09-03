@@ -33,10 +33,13 @@ import com.sun.cri.ci.*;
  */
 public final class MonitorAddress extends Value {
 
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
+
     private int monitorIndex;
 
     public MonitorAddress(int monitorIndex, Graph graph) {
-        super(CiKind.Word, graph);
+        super(CiKind.Word, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.monitorIndex = monitorIndex;
     }
 

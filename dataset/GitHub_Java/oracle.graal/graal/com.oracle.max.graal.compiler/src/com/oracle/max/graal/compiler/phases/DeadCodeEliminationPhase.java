@@ -30,12 +30,16 @@ import com.oracle.max.graal.graph.*;
 
 public class DeadCodeEliminationPhase extends Phase {
 
+    private NodeBitMap alive;
     private NodeFlood flood;
     private Graph graph;
+
+    public int deletedNodeCount;
 
     @Override
     protected void run(Graph graph) {
         this.graph = graph;
+        this.alive = graph.createNodeBitMap();
         this.flood = graph.createNodeFlood();
 
         flood.add(graph.start());
@@ -51,8 +55,8 @@ public class DeadCodeEliminationPhase extends Phase {
 
         new PhiSimplifier(graph);
 
-        if (GraalOptions.TraceDeadCodeElimination) {
-            System.out.printf("dead code elimination finished\n");
+        if (C1XOptions.TraceDeadCodeElimination) {
+            System.out.printf("dead code elimination: deleted %d nodes\n", deletedNodeCount);
         }
     }
 
@@ -90,6 +94,7 @@ public class DeadCodeEliminationPhase extends Phase {
         for (Node node : graph.getNodes()) {
             if (node != Node.Null && !flood.isMarked(node) && isCFG(node)) {
                 node.delete();
+                deletedNodeCount++;
             }
         }
     }
@@ -98,17 +103,13 @@ public class DeadCodeEliminationPhase extends Phase {
         for (Node node : graph.getNodes()) {
             if (node != Node.Null && flood.isMarked(node)) {
                 for (Node input : node.inputs()) {
-                    if (!isCFG(input)) {
-                        flood.add(input);
-                    }
+                    flood.add(input);
                 }
             }
         }
         for (Node current : flood) {
             for (Node input : current.inputs()) {
-                if (!isCFG(input)) {
-                    flood.add(input);
-                }
+                flood.add(input);
             }
         }
     }
@@ -125,6 +126,7 @@ public class DeadCodeEliminationPhase extends Phase {
         for (Node node : graph.getNodes()) {
             if (node != Node.Null && !flood.isMarked(node) && !isCFG(node)) {
                 node.delete();
+                deletedNodeCount++;
             }
         }
     }

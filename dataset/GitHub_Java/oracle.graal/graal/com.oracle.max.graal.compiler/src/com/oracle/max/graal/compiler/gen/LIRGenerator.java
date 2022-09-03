@@ -159,7 +159,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    protected final GraalCompilation compilation;
+    protected final C1XCompilation compilation;
     protected final IR ir;
     protected final XirSupport xirSupport;
     protected final RiXirGenerator xir;
@@ -179,7 +179,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     private ArrayList<DeoptimizationStub> deoptimizationStubs;
     private FrameState lastState;
 
-    public LIRGenerator(GraalCompilation compilation) {
+    public LIRGenerator(C1XCompilation compilation) {
         this.compilation = compilation;
         this.ir = compilation.hir();
         this.xir = compilation.compiler.xir;
@@ -217,7 +217,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         blockDoProlog(block);
         this.currentBlock = block;
 
-        if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
+        if (C1XOptions.TraceLIRGeneratorLevel >= 1) {
             TTY.println("BEGIN Generating LIR for block B" + block.blockID());
         }
 
@@ -236,9 +236,9 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
             if (stateBefore != null) {
                 lastState = stateBefore;
-                if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
+                if (C1XOptions.TraceLIRGeneratorLevel >= 2) {
                     TTY.println("STATE CHANGE (stateBefore)");
-                    if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
+                    if (C1XOptions.TraceLIRGeneratorLevel >= 3) {
                         TTY.println(stateBefore.toString());
                     }
                 }
@@ -249,9 +249,9 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
             if (stateAfter != null) {
                 lastState = stateAfter;
-                if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
+                if (C1XOptions.TraceLIRGeneratorLevel >= 2) {
                     TTY.println("STATE CHANGE");
-                    if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
+                    if (C1XOptions.TraceLIRGeneratorLevel >= 3) {
                         TTY.println(stateAfter.toString());
                     }
                 }
@@ -262,7 +262,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             block.lir().jump(block.blockSuccessors().get(0));
         }
 
-        if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
+        if (C1XOptions.TraceLIRGeneratorLevel >= 1) {
             TTY.println("END Generating LIR for block B" + block.blockID());
         }
 
@@ -499,7 +499,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         CiValue destinationAddress = null;
         // emitting the template earlier can ease pressure on register allocation, but the argument loading can destroy an
         // implicit calling convention between the XirSnippet and the call.
-        if (!GraalOptions.InvokeSnippetAfterArguments) {
+        if (!C1XOptions.InvokeSnippetAfterArguments) {
             destinationAddress = emitXir(snippet, x, info.copy(), x.target(), false);
         }
 
@@ -508,7 +508,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         List<CiValue> pointerSlots = new ArrayList<CiValue>(2);
         List<CiValue> argList = visitInvokeArguments(cc, x, pointerSlots);
 
-        if (GraalOptions.InvokeSnippetAfterArguments) {
+        if (C1XOptions.InvokeSnippetAfterArguments) {
             destinationAddress = emitXir(snippet, x, info.copy(), null, x.target(), false, pointerSlots);
         }
 
@@ -590,7 +590,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         CiValue tag = load(x.value());
         setNoResult(x);
 
-        if (x.numberOfCases() == 0 || x.numberOfCases() < GraalOptions.SequentialSwitchLimit) {
+        if (x.numberOfCases() == 0 || x.numberOfCases() < C1XOptions.SequentialSwitchLimit) {
             int len = x.numberOfCases();
             for (int i = 0; i < len; i++) {
                 lir.cmp(Condition.EQ, tag, x.keyAt(i));
@@ -611,7 +611,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
-    public void visitNullCheck(FixedNullCheck x) {
+    public void visitNullCheck(NullCheck x) {
         CiValue value = load(x.object());
         LIRDebugInfo info = stateFor(x);
         lir.nullCheck(value, info);
@@ -702,7 +702,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     protected CiValue emitXir(XirSnippet snippet, Value instruction, LIRDebugInfo info, LIRDebugInfo infoAfter, RiMethod method, boolean setInstructionResult, List<CiValue> pointerSlots) {
-        if (GraalOptions.PrintXirTemplates) {
+        if (C1XOptions.PrintXirTemplates) {
             TTY.println("Emit XIR template " + snippet.template.name);
         }
 
@@ -725,7 +725,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                 assert operands[resultOperand.index] == null;
             }
             operands[resultOperand.index] = outputOperand;
-            if (GraalOptions.PrintXirTemplates) {
+            if (C1XOptions.PrintXirTemplates) {
                 TTY.println("Output operand: " + outputOperand);
             }
         }
@@ -761,7 +761,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             operands[x.index] = op;
             operandArray[i] = op;
             operandIndicesArray[i] = x.index;
-            if (GraalOptions.PrintXirTemplates) {
+            if (C1XOptions.PrintXirTemplates) {
                 TTY.println("Input operand: " + x);
             }
         }
@@ -774,7 +774,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             operands[x.index] = newOp;
             operandArray[i + inputOperands.length] = newOp;
             operandIndicesArray[i + inputOperands.length] = x.index;
-            if (GraalOptions.PrintXirTemplates) {
+            if (C1XOptions.PrintXirTemplates) {
                 TTY.println("InputTemp operand: " + x);
             }
         }
@@ -785,7 +785,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             operands[x.index] = op;
             operandArray[i + inputOperands.length + inputTempOperands.length] = op;
             operandIndicesArray[i + inputOperands.length + inputTempOperands.length] = x.index;
-            if (GraalOptions.PrintXirTemplates) {
+            if (C1XOptions.PrintXirTemplates) {
                 TTY.println("Temp operand: " + x);
             }
         }
@@ -851,7 +851,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         setNoResult(x);
 
         // TODO: tune the defaults for the controls used to determine what kind of translation to use
-        if (x.numberOfCases() == 0 || x.numberOfCases() <= GraalOptions.SequentialSwitchLimit) {
+        if (x.numberOfCases() == 0 || x.numberOfCases() <= C1XOptions.SequentialSwitchLimit) {
             int loKey = x.lowKey();
             int len = x.numberOfCases();
             for (int i = 0; i < len; i++) {
@@ -862,7 +862,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         } else {
             SwitchRange[] switchRanges = createLookupRanges(x);
             int rangeDensity = x.numberOfCases() / switchRanges.length;
-            if (rangeDensity >= GraalOptions.RangeTestsSwitchDensity) {
+            if (rangeDensity >= C1XOptions.RangeTestsSwitchDensity) {
                 visitSwitchRanges(switchRanges, tag, getLIRBlock(x.defaultSuccessor()));
             } else {
                 List<Instruction> nonDefaultSuccessors = x.blockSuccessors().subList(0, x.numberOfCases());
@@ -883,7 +883,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     private void blockDoEpilog() {
-        if (GraalOptions.PrintIRWithLIR) {
+        if (C1XOptions.PrintIRWithLIR) {
             TTY.println();
         }
 
@@ -893,7 +893,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     private void blockDoProlog(LIRBlock block) {
-        if (GraalOptions.PrintIRWithLIR) {
+        if (C1XOptions.PrintIRWithLIR) {
             TTY.print(block.toString());
         }
         // set up the list of LIR instructions
@@ -950,10 +950,10 @@ public abstract class LIRGenerator extends ValueVisitor {
         // XXX: linear search might be kind of slow for big basic blocks
         int index = constants.indexOf(c);
         if (index != -1) {
-            GraalMetrics.LoadConstantIterations += index;
+            C1XMetrics.LoadConstantIterations += index;
             return variablesForConstants.get(index);
         }
-        GraalMetrics.LoadConstantIterations += constants.size();
+        C1XMetrics.LoadConstantIterations += constants.size();
 
         CiVariable result = newVariable(kind);
         lir.move(c, result);
@@ -1214,16 +1214,16 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     void doRoot(Value instr) {
-        if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
+        if (C1XOptions.TraceLIRGeneratorLevel >= 2) {
             TTY.println("Emitting LIR for instruction " + instr);
         }
         currentInstruction = instr;
 
-        if (GraalOptions.TraceLIRVisit) {
+        if (C1XOptions.TraceLIRVisit) {
             TTY.println("Visiting    " + instr);
         }
         instr.accept(this);
-        if (GraalOptions.TraceLIRVisit) {
+        if (C1XOptions.TraceLIRVisit) {
             TTY.println("Operand for " + instr + " = " + instr.operand());
         }
     }
@@ -1396,7 +1396,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     protected CiValue setResult(Value x, CiVariable operand) {
         x.setOperand(operand);
-        if (GraalOptions.DetailedAsserts) {
+        if (C1XOptions.DetailedAsserts) {
             operands.recordResult(operand, x);
         }
         return operand;

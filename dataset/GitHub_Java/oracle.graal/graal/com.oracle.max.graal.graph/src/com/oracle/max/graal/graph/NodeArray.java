@@ -45,21 +45,14 @@ public class NodeArray extends AbstractList<Node> {
         return this.node;
     }
 
-    Node silentSet(int index, Node node) {
-        Node result = nodes[index];
-        nodes[index] = node;
-        return result;
-    }
-
     @Override
     public Node set(int index, Node node) {
-        assert !self().isDeleted() : "trying to set input/successor of deleted node: " + self().shortName();
-        assert node == Node.Null || node.graph == self().graph : "node is from different graph: (this=" + self() + ") and (node=" + node + ")";
+        assert node == Node.Null || node.graph == self().graph : "node is from different graph: (self=" + self() + ") and (node=" + node + ")";
         assert node == Node.Null || node.id() != Node.DeletedID : "inserted node must not be deleted";
         Node old = nodes[index];
 
         if (old != node) {
-            silentSet(index, node);
+            nodes[index] = node;
             if (self().inputs == this) {
                 if (old != null) {
                     old.usages.remove(self());
@@ -115,10 +108,6 @@ public class NodeArray extends AbstractList<Node> {
         return false;
     }
 
-    public int remove(Node n) {
-        return replace(n, null);
-    }
-
     public int replace(Node toReplace, Node replacement) {
         int result = 0;
         for (int i = 0; i < nodes.length; i++) {
@@ -130,23 +119,7 @@ public class NodeArray extends AbstractList<Node> {
         return result;
     }
 
-    int silentRemove(Node n) {
-        return silentReplace(n, null);
-    }
-
-    int silentReplace(Node toReplace, Node replacement) {
-        int result = 0;
-        for (int i = 0; i < nodes.length; i++) {
-            if (nodes[i] == toReplace) {
-                silentSet(i, replacement);
-                result++;
-            }
-        }
-        return result;
-    }
-
     public void setAndClear(int index, Node clearedNode, int clearedIndex) {
-        assert !self().isDeleted() : "trying to setAndClear successor of deleted node: " + self().shortName();
         assert self().successors == this;
         Node value = clearedNode.successors.get(clearedIndex);
         assert value != Node.Null;

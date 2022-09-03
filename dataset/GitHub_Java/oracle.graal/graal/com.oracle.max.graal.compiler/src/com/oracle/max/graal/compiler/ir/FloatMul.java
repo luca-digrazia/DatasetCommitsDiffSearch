@@ -22,7 +22,6 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
@@ -32,7 +31,6 @@ import com.sun.cri.ci.*;
  *
  */
 public final class FloatMul extends FloatArithmetic {
-    private static final FloatMulCanonicalizerOp CANONICALIZER = new FloatMulCanonicalizerOp();
 
     /**
      * @param opcode
@@ -53,54 +51,8 @@ public final class FloatMul extends FloatArithmetic {
 
     @Override
     public Node copy(Graph into) {
-        return new FloatMul(kind, null, null, isStrictFP(), into);
+        FloatMul x = new FloatMul(kind, null, null, isStrictFP(), into);
+        return x;
     }
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T extends Op> T lookup(Class<T> clazz) {
-        if (clazz == CanonicalizerOp.class) {
-            return (T) CANONICALIZER;
-        }
-        return super.lookup(clazz);
-    }
-
-    private static class FloatMulCanonicalizerOp implements CanonicalizerOp {
-        @Override
-        public Node canonical(Node node) {
-            FloatMul mul = (FloatMul) node;
-            Value x = mul.x();
-            Value y = mul.y();
-            CiKind kind = mul.kind;
-            Graph graph = mul.graph();
-            if (x.isConstant() && !y.isConstant()) {
-                mul.swapOperands();
-                Value t = y;
-                y = x;
-                x = t;
-            }
-            if (x.isConstant()) {
-                if (kind == CiKind.Float) {
-                    return Constant.forFloat(x.asConstant().asFloat() * y.asConstant().asFloat(), graph);
-                } else {
-                    assert kind == CiKind.Double;
-                    return Constant.forDouble(x.asConstant().asDouble() * y.asConstant().asDouble(), graph);
-                }
-            } else if (y.isConstant()) {
-                if (kind == CiKind.Float) {
-                    float c = y.asConstant().asFloat();
-                    if (c == 0.0f) {
-                        return Constant.forFloat(0.0f, graph);
-                    }
-                } else {
-                    assert kind == CiKind.Double;
-                    double c = y.asConstant().asDouble();
-                    if (c == 0.0) {
-                        return Constant.forDouble(0.0, graph);
-                    }
-                }
-            }
-            return mul;
-        }
-    }
 }
