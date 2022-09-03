@@ -271,7 +271,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 GuardingNode nullCheck = nullCheckReturn[0];
                 assert nullCheckReturn[0] != null || createNullCheck(array, storeIndexed, tool) == null;
                 ValueNode arrayClass = createReadHub(graph, array, nullCheck, tool);
-                ValueNode componentHub = createReadArrayComponentHub(graph, arrayClass, storeIndexed);
+                ValueNode componentHub = createReadArrayComponentHub(graph, arrayClass, storeIndexed, tool);
                 checkCastNode = graph.add(new CheckCastDynamicNode(componentHub, value, true));
                 graph.addBeforeFixed(storeIndexed, checkCastNode);
                 value = checkCastNode;
@@ -676,7 +676,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     protected abstract ValueNode createReadHub(StructuredGraph graph, ValueNode object, GuardingNode guard, LoweringTool tool);
 
-    protected abstract ValueNode createReadArrayComponentHub(StructuredGraph graph, ValueNode arrayHub, FixedNode anchor);
+    protected abstract ValueNode createReadArrayComponentHub(StructuredGraph graph, ValueNode arrayHub, FixedNode anchor, LoweringTool tool);
 
     protected PiNode getBoundsCheckedIndex(AccessIndexedNode n, LoweringTool tool, GuardingNode[] nullCheckReturn) {
         StructuredGraph graph = n.graph();
