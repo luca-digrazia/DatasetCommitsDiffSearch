@@ -32,7 +32,11 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class CardTableAddressNode extends FloatingNode implements LIRLowerable {
 
-    public CardTableAddressNode() {
+    public static CardTableAddressNode create() {
+        return new CardTableAddressNode();
+    }
+
+    protected CardTableAddressNode() {
         super(StampFactory.forKind(Kind.Long));
     }
 

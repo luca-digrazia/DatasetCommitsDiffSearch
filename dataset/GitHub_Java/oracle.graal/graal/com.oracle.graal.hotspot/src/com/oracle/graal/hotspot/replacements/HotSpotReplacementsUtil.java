@@ -569,7 +569,7 @@ public class HotSpotReplacementsUtil {
 
     public static Word loadWordFromObject(Object object, int offset) {
         ReplacementsUtil.staticAssert(offset != hubOffset(), "Use loadHubIntrinsic instead of loadWordFromObject");
-        return loadWordFromObjectIntrinsic(object, offset, getWordKind(), LocationIdentity.any());
+        return loadWordFromObjectIntrinsic(object, offset, getWordKind(), LocationIdentity.ANY_LOCATION);
     }
 
     public static Word loadWordFromObject(Object object, int offset, LocationIdentity identity) {
@@ -593,14 +593,22 @@ public class HotSpotReplacementsUtil {
     @NodeIntrinsic(value = WriteRegisterNode.class, setStampFromReturnType = true)
     public static native void writeRegisterAsWord(@ConstantNodeParameter Register register, Word value);
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic(value = UnsafeLoadNode.class, setStampFromReturnType = true)
-    private static native Word loadWordFromObjectIntrinsic(Object object, long offset, @ConstantNodeParameter Kind wordKind, @ConstantNodeParameter LocationIdentity locationIdentity);
+    private static Word loadWordFromObjectIntrinsic(Object object, long offset, @ConstantNodeParameter Kind wordKind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+        return Word.unsigned(unsafeReadWord(object, offset));
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic(value = LoadHubNode.class)
+    public static KlassPointer loadHubIntrinsic(Object object, GuardingNode anchor) {
+        return KlassPointer.fromWord(Word.unsigned(unsafeReadKlassPointer(object)));
+    }
 
     @NodeIntrinsic(value = LoadHubNode.class)
-    public static native KlassPointer loadHubIntrinsic(Object object, GuardingNode anchor);
-
-    @NodeIntrinsic(value = LoadHubNode.class)
-    public static native KlassPointer loadHubIntrinsic(Object object);
+    public static KlassPointer loadHubIntrinsic(Object object) {
+        return KlassPointer.fromWord(Word.unsigned(unsafeReadKlassPointer(object)));
+    }
 
     @Fold
     public static int log2WordSize() {
@@ -651,6 +659,13 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int arrayKlassOffset() {
         return config().arrayKlassOffset;
+    }
+
+    public static final LocationIdentity KLASS_NODE_CLASS = NamedLocationIdentity.immutable("KlassNodeClass");
+
+    @Fold
+    public static int instanceKlassNodeClassOffset() {
+        return config().instanceKlassNodeClassOffset;
     }
 
     public static final LocationIdentity CLASS_MIRROR_LOCATION = NamedLocationIdentity.immutable("Klass::_java_mirror");

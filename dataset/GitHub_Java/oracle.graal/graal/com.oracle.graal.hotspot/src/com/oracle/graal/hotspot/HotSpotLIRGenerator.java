@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,14 @@
  */
 package com.oracle.graal.hotspot;
 
-import com.oracle.jvmci.code.StackSlotValue;
-import com.oracle.jvmci.meta.DeoptimizationReason;
-import com.oracle.jvmci.meta.Value;
-import com.oracle.jvmci.meta.DeoptimizationAction;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
 
 /**
  * This interface defines the contract a HotSpot backend LIR generator needs to fulfill in addition
@@ -62,7 +60,7 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @param saveRegisterOp saved registers
      */
     default void emitLeaveCurrentStackFrame(SaveRegistersOp saveRegisterOp) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     /**
@@ -72,7 +70,7 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @param initialInfo
      */
     default void emitLeaveDeoptimizedStackFrame(Value frameSize, Value initialInfo) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     /**
@@ -84,7 +82,7 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @param saveRegisterOp
      */
     default void emitEnterUnpackFramesStackFrame(Value framePc, Value senderSp, Value senderFp, SaveRegistersOp saveRegisterOp) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     /**
@@ -93,7 +91,7 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @param saveRegisterOp
      */
     default void emitLeaveUnpackFramesStackFrame(SaveRegistersOp saveRegisterOp) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     /**
@@ -105,7 +103,7 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @param initialInfo
      */
     default void emitPushInterpreterFrame(Value frameSize, Value framePc, Value senderSp, Value initialInfo) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     /**
@@ -116,7 +114,7 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @return a {@code Deoptimization::UnrollBlock} pointer
      */
     default Value emitUncommonTrapCall(Value trapRequest, SaveRegistersOp saveRegisterOp) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     /**
@@ -126,15 +124,15 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      * @return a {@code Deoptimization::UnrollBlock} pointer
      */
     default Value emitDeoptimizationFetchUnrollInfoCall(SaveRegistersOp saveRegisterOp) {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     default Value emitCardTableShift() {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     default Value emitCardTableAddress() {
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     /**
@@ -147,6 +145,4 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
     Value emitCompress(Value pointer, CompressEncoding encoding, boolean nonNull);
 
     Value emitUncompress(Value pointer, CompressEncoding encoding, boolean nonNull);
-
-    void emitPrefetchAllocate(Value address);
 }

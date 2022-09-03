@@ -67,11 +67,6 @@ public class HotSpotVMConfig extends CompilerObject {
      */
     public final int maxFrameSize = 16 * 1024;
 
-    @Override
-    public String toString() {
-        return getClass().getSimpleName();
-    }
-
     HotSpotVMConfig(CompilerToVM compilerToVm) {
         compilerToVm.initializeConfiguration(this);
         assert verifyInitialization();

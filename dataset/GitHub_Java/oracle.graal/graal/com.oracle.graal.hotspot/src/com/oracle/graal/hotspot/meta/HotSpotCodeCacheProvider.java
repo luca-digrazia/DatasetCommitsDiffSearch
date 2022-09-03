@@ -239,12 +239,12 @@ public class HotSpotCodeCacheProvider implements CodeCacheProvider {
         return installedCode;
     }
 
-    public InstalledCode installMethod(HotSpotResolvedJavaMethod method, CompilationResult compResult, long graalEnv, boolean isDefault) {
+    public InstalledCode installMethod(HotSpotResolvedJavaMethod method, CompilationResult compResult, long ctask, boolean isDefault) {
         if (compResult.getId() == -1) {
             compResult.setId(method.allocateCompileId(compResult.getEntryBCI()));
         }
         HotSpotInstalledCode installedCode = new HotSpotNmethod(method, compResult.getName(), isDefault);
-        runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(method, compResult, graalEnv), installedCode, method.getSpeculationLog());
+        runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(method, compResult, ctask), installedCode, method.getSpeculationLog());
         return logOrDump(installedCode, compResult);
     }
 
@@ -327,10 +327,10 @@ public class HotSpotCodeCacheProvider implements CodeCacheProvider {
             boolean compressed = COMPRESSED_NULL.equals(constant);
             size = target.getSizeInBytes(compressed ? Kind.Int : target.wordKind);
             builder = DataBuilder.zero(size);
-        } else if (constant instanceof SerializableConstant) {
-            SerializableConstant s = (SerializableConstant) constant;
-            size = s.getSerializedSize();
-            builder = DataBuilder.serializable(s);
+        } else if (constant instanceof PrimitiveConstant) {
+            PrimitiveConstant prim = (PrimitiveConstant) constant;
+            size = target.getSizeInBytes(prim.getKind());
+            builder = DataBuilder.primitive(prim);
         } else {
             throw GraalInternalError.shouldNotReachHere();
         }

@@ -32,7 +32,11 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class CardTableShiftNode extends FloatingNode implements LIRLowerable {
 
-    public CardTableShiftNode() {
+    public static CardTableShiftNode create() {
+        return new CardTableShiftNode();
+    }
+
+    protected CardTableShiftNode() {
         super(StampFactory.intValue());
     }
 
