@@ -32,6 +32,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.nodes.*;
 
 public class ObjectCloneNode extends MacroNode implements VirtualizableAllocation, ArrayLengthProvider {
@@ -69,8 +70,7 @@ public class ObjectCloneNode extends MacroNode implements VirtualizableAllocatio
             method = ObjectCloneSnippets.instanceCloneMethod;
         }
         ResolvedJavaMethod snippetMethod = tool.getRuntime().lookupJavaMethod(method);
-        Replacements replacements = tool.getReplacements();
-        StructuredGraph snippetGraph = replacements.getSnippet(snippetMethod);
+        StructuredGraph snippetGraph = (StructuredGraph) snippetMethod.getCompilerStorage().get(Snippet.class);
 
         assert snippetGraph != null : "ObjectCloneSnippets should be installed";
         return snippetGraph;
@@ -103,7 +103,7 @@ public class ObjectCloneNode extends MacroNode implements VirtualizableAllocatio
                     newEntryState[i] = originalState.getEntry(i);
                 }
                 VirtualObjectNode newVirtual = originalVirtual.duplicate();
-                tool.createVirtualObject(newVirtual, newEntryState, null);
+                tool.createVirtualObject(newVirtual, newEntryState, 0);
                 tool.replaceWithVirtual(newVirtual);
             }
         } else {
@@ -134,7 +134,7 @@ public class ObjectCloneNode extends MacroNode implements VirtualizableAllocatio
                             }
                         }
                     });
-                    tool.createVirtualObject(newVirtual, state, null);
+                    tool.createVirtualObject(newVirtual, state, 0);
                     tool.replaceWithVirtual(newVirtual);
                 }
             }

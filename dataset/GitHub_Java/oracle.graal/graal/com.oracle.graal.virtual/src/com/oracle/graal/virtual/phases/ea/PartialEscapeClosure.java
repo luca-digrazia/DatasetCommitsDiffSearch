@@ -110,7 +110,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                 trace("%s ", node);
                 deleted = false;
             }
-            if (GraalOptions.OptEarlyReadElimination) {
+            if (GraalOptions.PEAReadCache) {
                 if (!deleted) {
                     if (node instanceof StoreFieldNode) {
                         METRIC_STOREFIELD_RECORDED.increment();

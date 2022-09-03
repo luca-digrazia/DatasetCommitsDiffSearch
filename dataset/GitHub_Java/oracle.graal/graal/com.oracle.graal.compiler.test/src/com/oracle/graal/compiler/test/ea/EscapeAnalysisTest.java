@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
-import java.util.concurrent.*;
-
+import junit.framework.*;
 import junit.framework.Assert;
 
 import org.junit.Test;
@@ -31,8 +30,6 @@ import org.junit.Test;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
@@ -86,8 +83,8 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
 
     public static int testMonitorSnippet() {
         Integer x = new Integer(0);
-        Double y = new Double(0);
-        Object z = new Object();
+        Integer[] y = new Integer[0];
+        Integer[] z = new Integer[1];
         synchronized (x) {
             synchronized (y) {
                 synchronized (z) {
@@ -109,8 +106,8 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
      */
     public static int testMonitor2Snippet() {
         Integer x = new Integer(0);
-        Double y = new Double(0);
-        Object z = new Object();
+        Integer[] y = new Integer[0];
+        Integer[] z = new Integer[1];
         synchronized (x) {
             synchronized (y) {
                 synchronized (z) {
@@ -164,20 +161,6 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
         return obj.x;
     }
 
-    @Test
-    public void testModifyingLoop() {
-        testEscapeAnalysis("testModifyingLoopSnippet", Constant.forInt(1), false);
-    }
-
-    public int testModifyingLoopSnippet(int a) {
-        TestObject obj = new TestObject(1, 2);
-        for (int i = 0; i < a; i++) {
-            obj.x = 3;
-            notInlineable();
-        }
-        return obj.x <= 3 ? 1 : 0;
-    }
-
     public static class TestObject2 {
 
         Object o;
@@ -209,32 +192,28 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
         return obj2.o instanceof TestObject2;
     }
 
-    private ReturnNode testEscapeAnalysis(String snippet, final Constant expectedConstantResult, final boolean iterativeEscapeAnalysis) {
-        ResolvedJavaMethod method = runtime.lookupJavaMethod(getMethod(snippet));
-        final StructuredGraph graph = new StructuredGraph(method);
-
-        return Debug.scope("GraalCompiler", new Object[]{graph, method, runtime}, new Callable<ReturnNode>() {
-
-            public ReturnNode call() {
-                new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
-                for (Invoke n : graph.getInvokes()) {
-                    n.setInliningRelevance(1);
-                }
-
-                Assumptions assumptions = new Assumptions(false);
-                new InliningPhase(runtime(), null, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
-                new PartialEscapeAnalysisPhase(runtime(), assumptions, iterativeEscapeAnalysis, false).apply(graph);
-                Assert.assertEquals(1, graph.getNodes(ReturnNode.class).count());
-                ReturnNode returnNode = graph.getNodes(ReturnNode.class).first();
-                if (expectedConstantResult != null) {
-                    Assert.assertTrue(returnNode.result().toString(), returnNode.result().isConstant());
-                    Assert.assertEquals(expectedConstantResult, returnNode.result().asConstant());
-                }
-                int newInstanceCount = graph.getNodes(NewInstanceNode.class).count() + graph.getNodes(NewArrayNode.class).count() + graph.getNodes(MaterializeObjectNode.class).count();
-                Assert.assertEquals(0, newInstanceCount);
-                return returnNode;
+    private ReturnNode testEscapeAnalysis(String snippet, Constant expectedConstantResult, boolean iterativeEscapeAnalysis) {
+        StructuredGraph graph = parse(snippet);
+        try {
+            for (Invoke n : graph.getInvokes()) {
+                n.setInliningRelevance(1);
             }
-        });
+
+            Assumptions assumptions = new Assumptions(false);
+            new InliningPhase(runtime(), null, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
+            new DeadCodeEliminationPhase().apply(graph);
+            new PartialEscapeAnalysisPhase(runtime(), assumptions, iterativeEscapeAnalysis).apply(graph);
+            Assert.assertEquals(1, graph.getNodes(ReturnNode.class).count());
+            ReturnNode returnNode = graph.getNodes(ReturnNode.class).first();
+            if (expectedConstantResult != null) {
+                Assert.assertTrue(returnNode.result().toString(), returnNode.result().isConstant());
+                Assert.assertEquals(expectedConstantResult, returnNode.result().asConstant());
+            }
+            int newInstanceCount = graph.getNodes(NewInstanceNode.class).count() + graph.getNodes(NewArrayNode.class).count() + graph.getNodes(MaterializeObjectNode.class).count();
+            Assert.assertEquals(0, newInstanceCount);
+            return returnNode;
+        } catch (AssertionFailedError t) {
+            throw new RuntimeException(t.getMessage() + "\n" + getCanonicalGraphString(graph), t);
+        }
     }
 }

@@ -204,7 +204,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
         new ComputeProbabilityPhase().apply(graph);
         Assumptions assumptions = new Assumptions(false);
         new InliningPhase(runtime(), null, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-        GraalOptions.OptEarlyReadElimination = true;
+        GraalOptions.PEAReadCache = true;
         new PartialEscapeAnalysisPhase(runtime(), assumptions, false).apply(graph);
     }
 }
