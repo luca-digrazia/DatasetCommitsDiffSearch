@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.spi;
 
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
@@ -35,8 +34,7 @@ import com.oracle.graal.nodes.virtual.*;
 public interface Virtualizable {
 
     public static enum EscapeState {
-        Virtual,
-        Materialized
+        Virtual, Materialized
     }
 
     public abstract static class State {
@@ -47,9 +45,9 @@ public interface Virtualizable {
 
         public abstract ValueNode getEntry(int index);
 
-        public abstract void addLock(MonitorIdNode monitorId);
+        public abstract void addLock(int depth);
 
-        public abstract MonitorIdNode removeLock();
+        public abstract int removeLock();
 
         public abstract ValueNode getMaterializedValue();
     }
