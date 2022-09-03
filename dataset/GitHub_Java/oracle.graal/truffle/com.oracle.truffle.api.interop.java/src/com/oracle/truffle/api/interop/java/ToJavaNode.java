@@ -79,7 +79,7 @@ abstract class ToJavaNode extends Node {
             boolean hasSize = primitive.hasSize((TruffleObject) value);
             convertedValue = asJavaObject(targetType.clazz, targetType, (TruffleObject) value, hasSize);
         } else {
-            assert targetType.clazz.isAssignableFrom(value.getClass()) : value.getClass().getName() + " is not assignable to " + targetType;
+            assert targetType.clazz.isAssignableFrom(value.getClass());
             convertedValue = value;
         }
         return convertedValue;
@@ -197,6 +197,13 @@ abstract class ToJavaNode extends Node {
             }
         }
         return ret;
+    }
+
+    @SuppressWarnings("all")
+    @TruffleBoundary
+    static Object message(TypeAndClass<?> convertTo, final Message m, Object receiver, Object... arr) throws InteropException {
+        Node n = m.createNode();
+        return new TemporaryRoot(TruffleLanguage.class, n).call((TruffleObject) receiver, arr, convertTo);
     }
 
 }
