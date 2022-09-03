@@ -312,13 +312,5 @@ public class TruffleCompilerOptions {
     @Option(help = "Maximum number of instrumentation counters available.")
     public static final OptionKey<Integer> TruffleInstrumentationTableSize = new OptionKey<>(10000);
 
-    @Option(help = "Whether to enable economy-mode compilations.")
-    public static final OptionKey<Boolean> TruffleEconomyMode = new OptionKey<>(false);
-
-    @Option(help = "Whether to do profiling in low-tier compilations.")
-    public static final OptionKey<Boolean> TruffleLowTierProfiling = new OptionKey<>(false);
-
-    @Option(help = "Whether to use low-tier compilations.")
-    public static final OptionKey<Boolean> TruffleLowTier = new OptionKey<>(false);
     // @formatter:on
 }
