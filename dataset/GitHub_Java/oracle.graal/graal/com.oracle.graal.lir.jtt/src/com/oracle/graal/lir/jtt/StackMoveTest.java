@@ -22,50 +22,27 @@
  */
 package com.oracle.graal.lir.jtt;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
 import org.junit.*;
 
-import com.oracle.graal.lir.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
 
 public class StackMoveTest extends LIRTest {
-    private static class StackCopySpec extends LIRTestSpecification {
+    private static final LIRTestSpecification stackCopy = new LIRTestSpecification() {
         @Override
         public void generate(LIRGeneratorTool gen, Value a) {
             FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
-            LIRKind lirKind = getLIRKind(a);
-
             // create slots
-            StackSlotValue s1 = frameMapBuilder.allocateSpillSlot(lirKind);
-            StackSlotValue s2 = frameMapBuilder.allocateSpillSlot(lirKind);
-
-            // start emit
+            StackSlotValue s1 = frameMapBuilder.allocateSpillSlot(a.getLIRKind());
+            StackSlotValue s2 = frameMapBuilder.allocateSpillSlot(a.getLIRKind());
+            // move stuff around
             gen.emitMove(s1, a);
-            Value copy1 = gen.emitMove(s1);
             gen.append(gen.getSpillMoveFactory().createStackMove(s2, s1));
-            Variable result = gen.emitMove(s2);
-            // end emit
-
-            // set output and result
-            setResult(result);
-            setOutput("slotcopy", copy1);
-            setOutput("slot1", s1);
-            setOutput("slot2", s2);
+            setResult(gen.emitMove(s2));
         }
-
-        protected LIRKind getLIRKind(Value value) {
-            return value.getLIRKind();
-        }
-    }
-
-    private static final LIRTestSpecification stackCopy = new StackCopySpec();
-
-    /*
-     * int
-     */
+    };
 
     @SuppressWarnings("unused")
     @LIRIntrinsic
@@ -73,26 +50,18 @@ public class StackMoveTest extends LIRTest {
         return a;
     }
 
-    public int[] testInt(int a, int[] out) {
-        out[0] = copyInt(stackCopy, a);
-        out[1] = getOutput(stackCopy, "slotcopy", a);
-        out[2] = getOutput(stackCopy, "slot1", a);
-        out[3] = getOutput(stackCopy, "slot2", a);
-        return out;
+    public int testInt(int a) {
+        return copyInt(stackCopy, a);
     }
 
     @Test
     public void runInt() throws Throwable {
-        runTest("testInt", Integer.MIN_VALUE, supply(() -> new int[4]));
-        runTest("testInt", -1, supply(() -> new int[4]));
-        runTest("testInt", 0, supply(() -> new int[4]));
-        runTest("testInt", 1, supply(() -> new int[4]));
-        runTest("testInt", Integer.MAX_VALUE, supply(() -> new int[4]));
+        runTest("testInt", Integer.MIN_VALUE);
+        runTest("testInt", -1);
+        runTest("testInt", 0);
+        runTest("testInt", 1);
+        runTest("testInt", Integer.MAX_VALUE);
     }
-
-    /*
-     * long
-     */
 
     @SuppressWarnings("unused")
     @LIRIntrinsic
@@ -100,26 +69,18 @@ public class StackMoveTest extends LIRTest {
         return a;
     }
 
-    public long[] testLong(long a, long[] out) {
-        out[0] = copyLong(stackCopy, a);
-        out[1] = getOutput(stackCopy, "slotcopy", a);
-        out[2] = getOutput(stackCopy, "slot1", a);
-        out[3] = getOutput(stackCopy, "slot2", a);
-        return out;
+    public long testLong(long a) {
+        return copyLong(stackCopy, a);
     }
 
     @Test
     public void runLong() throws Throwable {
-        runTest("testLong", Long.MIN_VALUE, supply(() -> new long[3]));
-        runTest("testLong", -1L, supply(() -> new long[3]));
-        runTest("testLong", 0L, supply(() -> new long[3]));
-        runTest("testLong", 1L, supply(() -> new long[3]));
-        runTest("testLong", Long.MAX_VALUE, supply(() -> new long[3]));
+        runTest("testLong", Long.MIN_VALUE);
+        runTest("testLong", -1L);
+        runTest("testLong", 0L);
+        runTest("testLong", 1L);
+        runTest("testLong", Long.MAX_VALUE);
     }
-
-    /*
-     * float
-     */
 
     @SuppressWarnings("unused")
     @LIRIntrinsic
@@ -127,28 +88,20 @@ public class StackMoveTest extends LIRTest {
         return a;
     }
 
-    public float[] testFloat(float a, float[] out) {
-        out[0] = copyFloat(stackCopy, a);
-        out[1] = getOutput(stackCopy, "slotcopy", a);
-        out[2] = getOutput(stackCopy, "slot1", a);
-        out[3] = getOutput(stackCopy, "slot2", a);
-        return out;
+    public float testFloat(float a) {
+        return copyFloat(stackCopy, a);
     }
 
     @Test
     public void runFloat() throws Throwable {
-        runTest("testFloat", Float.MIN_VALUE, supply(() -> new float[3]));
-        runTest("testFloat", -1f, supply(() -> new float[3]));
-        runTest("testFloat", -0.1f, supply(() -> new float[3]));
-        runTest("testFloat", 0f, supply(() -> new float[3]));
-        runTest("testFloat", 0.1f, supply(() -> new float[3]));
-        runTest("testFloat", 1f, supply(() -> new float[3]));
-        runTest("testFloat", Float.MAX_VALUE, supply(() -> new float[3]));
+        runTest("testFloat", Float.MIN_VALUE);
+        runTest("testFloat", -1f);
+        runTest("testFloat", -0.1f);
+        runTest("testFloat", 0f);
+        runTest("testFloat", 0.1f);
+        runTest("testFloat", 1f);
+        runTest("testFloat", Float.MAX_VALUE);
     }
-
-    /*
-     * double
-     */
 
     @SuppressWarnings("unused")
     @LIRIntrinsic
@@ -156,90 +109,19 @@ public class StackMoveTest extends LIRTest {
         return a;
     }
 
-    public double[] testDouble(double a, double[] out) {
-        out[0] = copyDouble(stackCopy, a);
-        out[1] = getOutput(stackCopy, "slotcopy", a);
-        out[2] = getOutput(stackCopy, "slot1", a);
-        out[3] = getOutput(stackCopy, "slot2", a);
-        return out;
+    public double testDouble(double a) {
+        return copyDouble(stackCopy, a);
     }
 
     @Test
     public void runDouble() throws Throwable {
-        runTest("testDouble", Double.MIN_VALUE, supply(() -> new double[3]));
-        runTest("testDouble", -1., supply(() -> new double[3]));
-        runTest("testDouble", -0.1, supply(() -> new double[3]));
-        runTest("testDouble", 0., supply(() -> new double[3]));
-        runTest("testDouble", 0.1, supply(() -> new double[3]));
-        runTest("testDouble", 1., supply(() -> new double[3]));
-        runTest("testDouble", Double.MAX_VALUE, supply(() -> new double[3]));
+        runTest("testDouble", Double.MIN_VALUE);
+        runTest("testDouble", -1.);
+        runTest("testDouble", -0.1);
+        runTest("testDouble", 0.);
+        runTest("testDouble", 0.1);
+        runTest("testDouble", 1.);
+        runTest("testDouble", Double.MAX_VALUE);
     }
 
-    /*
-     * short
-     */
-
-    private static final LIRTestSpecification shortStackCopy = new StackCopySpec() {
-        @Override
-        protected LIRKind getLIRKind(Value value) {
-            return LIRKind.value(Kind.Short);
-        }
-    };
-
-    @SuppressWarnings("unused")
-    @LIRIntrinsic
-    public static short copyShort(LIRTestSpecification spec, short a) {
-        return a;
-    }
-
-    public short[] testShort(short a, short[] out) {
-        out[0] = copyShort(shortStackCopy, a);
-        out[1] = getOutput(shortStackCopy, "slotcopy", a);
-        out[2] = getOutput(shortStackCopy, "slot1", a);
-        out[3] = getOutput(shortStackCopy, "slot2", a);
-        return out;
-    }
-
-    @Test
-    public void runShort() throws Throwable {
-        runTest("testShort", Short.MIN_VALUE, supply(() -> new short[3]));
-        runTest("testShort", (short) -1, supply(() -> new short[3]));
-        runTest("testShort", (short) 0, supply(() -> new short[3]));
-        runTest("testShort", (short) 1, supply(() -> new short[3]));
-        runTest("testShort", Short.MAX_VALUE, supply(() -> new short[3]));
-    }
-
-    /*
-     * byte
-     */
-
-    private static final LIRTestSpecification byteStackCopy = new StackCopySpec() {
-        @Override
-        protected LIRKind getLIRKind(Value value) {
-            return LIRKind.value(Kind.Byte);
-        }
-    };
-
-    @SuppressWarnings("unused")
-    @LIRIntrinsic
-    public static byte copyByte(LIRTestSpecification spec, byte a) {
-        return a;
-    }
-
-    public byte[] testByte(byte a, byte[] out) {
-        out[0] = copyByte(byteStackCopy, a);
-        out[1] = getOutput(byteStackCopy, "slotcopy", a);
-        out[2] = getOutput(byteStackCopy, "slot1", a);
-        out[3] = getOutput(byteStackCopy, "slot2", a);
-        return out;
-    }
-
-    @Test
-    public void runByte() throws Throwable {
-        runTest("testByte", Byte.MIN_VALUE, supply(() -> new byte[3]));
-        runTest("testByte", (byte) -1, supply(() -> new byte[3]));
-        runTest("testByte", (byte) 0, supply(() -> new byte[3]));
-        runTest("testByte", (byte) 1, supply(() -> new byte[3]));
-        runTest("testByte", Byte.MAX_VALUE, supply(() -> new byte[3]));
-    }
 }
