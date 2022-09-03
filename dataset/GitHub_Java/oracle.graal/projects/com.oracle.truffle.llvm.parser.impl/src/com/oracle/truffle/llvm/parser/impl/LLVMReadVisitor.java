@@ -70,7 +70,7 @@ import com.intel.llvm.ireditor.lLVM_IR.ValueRef;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 
-public final class LLVMReadVisitor {
+public class LLVMReadVisitor {
 
     private final List<FrameSlot> reads = new ArrayList<>();
     private FrameDescriptor frameDescriptor;
