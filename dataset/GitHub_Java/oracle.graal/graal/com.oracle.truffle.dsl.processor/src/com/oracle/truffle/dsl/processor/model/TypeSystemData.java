@@ -60,7 +60,6 @@ public class TypeSystemData extends Template {
                 primitiveTypeMirrors.add(typeData.getPrimitiveType());
                 boxedTypeMirrors.add(typeData.getBoxedType());
                 cachedTypes.put(ElementUtils.getUniqueIdentifier(typeData.getPrimitiveType()), typeData);
-                cachedTypes.put(ElementUtils.getUniqueIdentifier(typeData.getBoxedType()), typeData);
             }
         }
     }
@@ -119,10 +118,6 @@ public class TypeSystemData extends Template {
         return primitiveTypeMirrors;
     }
 
-    public Set<String> getTypeIdentifiers() {
-        return cachedTypes.keySet();
-    }
-
     public List<TypeData> getTypes() {
         return types;
     }
@@ -132,7 +127,7 @@ public class TypeSystemData extends Template {
     }
 
     public TypeData getGenericTypeData() {
-        TypeData result = types.get(types.size() - 2);
+        TypeData result = types.get(types.size() - 1);
         assert result.getBoxedType() == genericType;
         return result;
     }
