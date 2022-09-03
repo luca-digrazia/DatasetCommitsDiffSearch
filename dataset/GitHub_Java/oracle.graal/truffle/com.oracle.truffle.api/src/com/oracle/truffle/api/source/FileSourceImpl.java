@@ -32,11 +32,10 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
-import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
 
-final class FileSourceImpl extends Content implements Content.CreateURI {
+final class FileSourceImpl extends Content {
 
     private final File file;
     private final String name; // Name used originally to describe the source
@@ -89,16 +88,6 @@ final class FileSourceImpl extends Content implements Content.CreateURI {
     @Override
     public URL getURL() {
         return null;
-    }
-
-    @Override
-    URI getURI() {
-        return createURIOnce(this);
-    }
-
-    @Override
-    public URI createURI() {
-        return file.toURI();
     }
 
     @Override

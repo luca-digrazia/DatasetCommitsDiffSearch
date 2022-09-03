@@ -38,8 +38,8 @@ abstract class Content {
 
     abstract String getCode();
 
-    String getCode(int offset, int length) {
-        return getCode().substring(offset, offset + length);
+    String getCode(int byteOffset, int codeLength) {
+        return getCode().substring(byteOffset, byteOffset + codeLength);
     }
 
     abstract String getName();

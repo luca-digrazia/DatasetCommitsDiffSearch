@@ -32,9 +32,7 @@ import java.net.URL;
 final class AppendableLiteralSourceImpl extends Content {
 
     private final String name;
-    // Checkstyle: stop
-    private final StringBuffer text = new StringBuffer();
-    // Checkstyle: resume
+    @SuppressFBWarnings("Dont use old synchronized collection classes") private final StringBuffer text = new StringBuffer();
 
     AppendableLiteralSourceImpl(String name) {
         this.name = name;
