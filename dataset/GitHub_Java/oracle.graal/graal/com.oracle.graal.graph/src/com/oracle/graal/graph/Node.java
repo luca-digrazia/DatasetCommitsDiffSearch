@@ -27,6 +27,7 @@ import static com.oracle.graal.graph.Graph.*;
 import java.lang.annotation.*;
 import java.util.*;
 
+import com.oracle.graal.graph.Graph.NodeChangedListener;
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.graph.NodeClass.Position;
 import com.oracle.graal.graph.iterators.*;
@@ -59,26 +60,13 @@ public abstract class Node implements Cloneable, Formattable {
     static final int ALIVE_ID_START = 0;
 
     /**
-     * Denotes a non-optional node input. This should be applied to exactly the fields of a node
-     * that are of type {@link Node} or {@link NodeInputList}. Nodes that update fields of type
-     * {@link Node} outside of their constructor should call {@link Node#updateUsages(Node, Node)}
-     * just prior to doing the update of the input.
+     * Denotes a node input. This should be applied to exactly the fields of a node that are of type
+     * {@link Node}. Nodes that update their inputs outside of their constructor should call
+     * {@link Node#updateUsages(Node, Node)} just prior to doing the update of the input.
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.FIELD)
     public static @interface Input {
-        InputType value() default InputType.Value;
-    }
-
-    /**
-     * Denotes an optional node input. This should be applied to exactly the fields of a node that
-     * are of type {@link Node} or {@link NodeInputList}. Nodes that update fields of type
-     * {@link Node} outside of their constructor should call {@link Node#updateUsages(Node, Node)}
-     * just prior to doing the update of the input.
-     */
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target(ElementType.FIELD)
-    public static @interface OptionalInput {
         InputType value() default InputType.Value;
     }
 
@@ -571,7 +559,7 @@ public abstract class Node implements Cloneable, Formattable {
                     assert assertTrue(result, "not found in usages, old input: %s", oldInput);
                 }
             }
-            maybeNotifyInputChanged(this);
+            maybeNotifyChanged(this);
             if (newInput != null) {
                 if (newInput.recordsUsages()) {
                     newInput.addUsage(this);
@@ -641,7 +629,7 @@ public abstract class Node implements Cloneable, Formattable {
             boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
             assert assertTrue(result, "not found in inputs, usage: %s", usage);
             if (other != null) {
-                maybeNotifyInputChanged(usage);
+                maybeNotifyChanged(usage);
                 if (other.recordsUsages()) {
                     other.addUsage(usage);
                 }
@@ -663,7 +651,7 @@ public abstract class Node implements Cloneable, Formattable {
                 boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
                 assert assertTrue(result, "not found in inputs, usage: %s", usage);
                 if (other != null) {
-                    maybeNotifyInputChanged(usage);
+                    maybeNotifyChanged(usage);
                     if (other.recordsUsages()) {
                         other.addUsage(usage);
                     }
@@ -697,22 +685,22 @@ public abstract class Node implements Cloneable, Formattable {
         }
     }
 
-    private void maybeNotifyInputChanged(Node node) {
+    private void maybeNotifyChanged(Node usage) {
         if (graph != null) {
             assert !graph.isFrozen();
-            NodeEventListener listener = graph.nodeEventListener;
+            NodeChangedListener listener = graph.inputChangedListener;
             if (listener != null) {
-                listener.inputChanged(node);
+                listener.nodeChanged(usage);
             }
         }
     }
 
-    private void maybeNotifyZeroInputs(Node node) {
+    private void maybeNotifyZeroInputs(Node oldInput) {
         if (graph != null) {
             assert !graph.isFrozen();
-            NodeEventListener listener = graph.nodeEventListener;
+            NodeChangedListener listener = graph.usagesDroppedToZeroListener;
             if (listener != null) {
-                listener.usagesDroppedToZero(node);
+                listener.nodeChanged(oldInput);
             }
         }
     }
@@ -822,6 +810,17 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     /**
+     * Must be overridden by subclasses that implement {@link Canonicalizable}. The implementation
+     * in {@link Node} exists to obviate the need to cast a node before invoking
+     * {@link Canonicalizable#canonical(CanonicalizerTool)}.
+     *
+     * @param tool
+     */
+    public Node canonical(CanonicalizerTool tool) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
      * Must be overridden by subclasses that implement {@link Simplifiable}. The implementation in
      * {@link Node} exists to obviate the need to cast a node before invoking
      * {@link Simplifiable#simplify(SimplifierTool)}.
@@ -893,11 +892,6 @@ public abstract class Node implements Cloneable, Formattable {
                     }
                 }
             }
-        }
-        NodeClassIterator iterator = inputs().withNullIterator();
-        while (iterator.hasNext()) {
-            Position pos = iterator.nextPosition();
-            assert pos.isInputOptional(this) || pos.get(this) != null : "non-optional input " + pos.getInputName(this) + " cannot be null in " + this + " (fix nullness or use @OptionalInput)";
         }
         if (predecessor != null) {
             assertFalse(predecessor.isDeleted(), "predecessor %s must never be deleted", predecessor);
