@@ -48,7 +48,6 @@ import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.nodes.CurrentJavaThreadNode;
 import org.graalvm.compiler.hotspot.replacements.AESCryptSubstitutions;
 import org.graalvm.compiler.hotspot.replacements.BigIntegerSubstitutions;
-import org.graalvm.compiler.hotspot.replacements.CounterModeSubstitutions;
 import org.graalvm.compiler.hotspot.replacements.CRC32CSubstitutions;
 import org.graalvm.compiler.hotspot.replacements.CRC32Substitutions;
 import org.graalvm.compiler.hotspot.replacements.CallSiteTargetNode;
@@ -64,7 +63,6 @@ import org.graalvm.compiler.hotspot.replacements.ReflectionSubstitutions;
 import org.graalvm.compiler.hotspot.replacements.SHA2Substitutions;
 import org.graalvm.compiler.hotspot.replacements.SHA5Substitutions;
 import org.graalvm.compiler.hotspot.replacements.SHASubstitutions;
-import org.graalvm.compiler.hotspot.replacements.StringUTF16Substitutions;
 import org.graalvm.compiler.hotspot.replacements.ThreadSubstitutions;
 import org.graalvm.compiler.hotspot.word.HotSpotWordTypes;
 import org.graalvm.compiler.nodes.ComputeObjectAddressNode;
@@ -169,11 +167,9 @@ public class HotSpotGraphBuilderPlugins {
                 registerBigIntegerPlugins(invocationPlugins, config, replacementBytecodeProvider);
                 registerSHAPlugins(invocationPlugins, config, replacementBytecodeProvider);
                 registerGHASHPlugins(invocationPlugins, config, metaAccess, foreignCalls);
-                registerCounterModePlugins(invocationPlugins, config, replacementBytecodeProvider);
                 registerUnsafePlugins(invocationPlugins, replacementBytecodeProvider);
                 StandardGraphBuilderPlugins.registerInvocationPlugins(metaAccess, snippetReflection, invocationPlugins, replacementBytecodeProvider, true, false);
                 registerArrayPlugins(invocationPlugins, replacementBytecodeProvider);
-                registerStringPlugins(invocationPlugins, replacementBytecodeProvider);
 
                 for (NodeIntrinsicPluginFactory factory : GraalServices.load(NodeIntrinsicPluginFactory.class)) {
                     factory.registerPlugins(invocationPlugins, nodeIntrinsificationProvider);
@@ -396,14 +392,6 @@ public class HotSpotGraphBuilderPlugins {
         r.registerMethodSubstitution(HotSpotArraySubstitutions.class, "newInstance", Class.class, int.class);
     }
 
-    private static void registerStringPlugins(InvocationPlugins plugins, BytecodeProvider bytecodeProvider) {
-        if (!Java8OrEarlier) {
-            final Registration utf16r = new Registration(plugins, "java.lang.StringUTF16", bytecodeProvider);
-            utf16r.registerMethodSubstitution(StringUTF16Substitutions.class, "toBytes", char[].class, int.class, int.class);
-            utf16r.registerMethodSubstitution(StringUTF16Substitutions.class, "getChars", byte[].class, int.class, int.class, char[].class, int.class);
-        }
-    }
-
     private static void registerThreadPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, WordTypes wordTypes, GraalHotSpotVMConfig config, BytecodeProvider bytecodeProvider) {
         Registration r = new Registration(plugins, Thread.class, bytecodeProvider);
         r.register0("currentThread", new InvocationPlugin() {
@@ -540,14 +528,6 @@ public class HotSpotGraphBuilderPlugins {
                                     return true;
                                 }
                             });
-        }
-    }
-
-    private static void registerCounterModePlugins(InvocationPlugins plugins, GraalHotSpotVMConfig config, BytecodeProvider bytecodeProvider) {
-        if (config.useAESCTRIntrinsics) {
-            assert config.counterModeAESCrypt != 0L;
-            Registration r = new Registration(plugins, "com.sun.crypto.provider.CounterMode", bytecodeProvider);
-            r.registerMethodSubstitution(CounterModeSubstitutions.class, "implCrypt", Receiver.class, byte[].class, int.class, int.class, byte[].class, int.class);
         }
     }
 
