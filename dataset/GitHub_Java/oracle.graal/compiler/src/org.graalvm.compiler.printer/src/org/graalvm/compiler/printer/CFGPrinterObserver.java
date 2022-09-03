@@ -37,7 +37,6 @@ import java.util.List;
 import org.graalvm.compiler.bytecode.BytecodeDisassembler;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.code.DisassemblerProvider;
-import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.alloc.Trace;
 import org.graalvm.compiler.core.common.alloc.TraceBuilderResult;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
@@ -73,7 +72,6 @@ public class CFGPrinterObserver implements DebugDumpHandler {
     private CFGPrinter cfgPrinter;
     private File cfgFile;
     private JavaMethod curMethod;
-    private CompilationIdentifier curCompilation;
     private List<String> curDecorators = Collections.emptyList();
 
     @Override
@@ -94,7 +92,6 @@ public class CFGPrinterObserver implements DebugDumpHandler {
      */
     private boolean checkMethodScope(DebugContext debug) {
         JavaMethod method = null;
-        CompilationIdentifier compilation = null;
         ArrayList<String> decorators = new ArrayList<>();
         for (Object o : debug.context()) {
             if (o instanceof JavaMethod) {
@@ -105,33 +102,22 @@ public class CFGPrinterObserver implements DebugDumpHandler {
                 if (graph.method() != null) {
                     method = graph.method();
                     decorators.clear();
-                    compilation = graph.compilationId();
                 }
             } else if (o instanceof DebugDumpScope) {
                 DebugDumpScope debugDumpScope = (DebugDumpScope) o;
                 if (debugDumpScope.decorator) {
                     decorators.add(debugDumpScope.name);
                 }
-            } else if (o instanceof CompilationResult) {
-                CompilationResult compilationResult = (CompilationResult) o;
-                compilation = compilationResult.getCompilationId();
             }
         }
 
-        if (method == null && compilation == null) {
+        if (method == null) {
             return false;
         }
 
-        if (compilation != null) {
-            if (!compilation.equals(curCompilation) || !curDecorators.equals(decorators)) {
-                cfgPrinter.printCompilation(compilation);
-            }
-        } else {
-            if (!method.equals(curMethod) || !curDecorators.equals(decorators)) {
-                cfgPrinter.printCompilation(method);
-            }
+        if (!method.equals(curMethod) || !curDecorators.equals(decorators)) {
+            cfgPrinter.printCompilation(method);
         }
-        curCompilation = compilation;
         curMethod = method;
         curDecorators = decorators;
         return true;
@@ -291,7 +277,6 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             cfgPrinter = null;
             curDecorators = Collections.emptyList();
             curMethod = null;
-            curCompilation = null;
         }
     }
 

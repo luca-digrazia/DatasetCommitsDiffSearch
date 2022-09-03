@@ -75,7 +75,7 @@ public class DebugOptions {
     public static final OptionKey<String> Time = new OptionKey<>(null);
 
     @Option(help = "Pattern for scope(s) in which verification is enabled (see DebugFilter and Debug.verify).", type = OptionType.Debug)
-    public static final OptionKey<String> Verify = new OptionKey<>(Assertions.assertionsEnabled() ? "" : null);
+    public static final OptionKey<String> Verify = new OptionKey<>(Assertions.ENABLED ? "" : null);
     @Option(help = "Pattern for scope(s) in which dumping is enabled (see DebugFilter and Debug.dump)", type = OptionType.Debug)
     public static final OptionKey<String> Dump = new OptionKey<>(null);
     @Option(help = "Pattern for scope(s) in which logging is enabled (see DebugFilter and Debug.log)", type = OptionType.Debug)
@@ -115,7 +115,7 @@ public class DebugOptions {
     @Option(help = "The directory where various Graal dump files are written.")
     public static final OptionKey<String> DumpPath = new OptionKey<>("dumps");
     @Option(help = "Print the name of each dump file path as it's created.")
-    public static final OptionKey<Boolean> ShowDumpFiles = new OptionKey<>(Assertions.assertionsEnabled());
+    public static final OptionKey<Boolean> ShowDumpFiles = new OptionKey<>(Assertions.ENABLED);
 
     @Option(help = "Enable dumping to the C1Visualizer. Enabling this option implies PrintBackendCFG.", type = OptionType.Debug)
     public static final OptionKey<Boolean> PrintCFG = new OptionKey<>(false);
@@ -180,7 +180,7 @@ public class DebugOptions {
     /**
      * Gets the directory in which {@link DebugDumpHandler}s can generate output. This will be the
      * directory specified by {@link #DumpPath} if it has been set otherwise it will be derived from
-     * the default value of {@link #DumpPath} and {@link PathUtilities#getGlobalTimeStamp()}.
+     * the default value of {@link #DumpPath} and {@link UniquePathUtilities#getGlobalTimeStamp()}.
      *
      * This method will ensure the returned directory exists, printing a message to {@link TTY} if
      * it creates it.
@@ -193,7 +193,7 @@ public class DebugOptions {
         if (DumpPath.hasBeenSet(options)) {
             dumpDir = Paths.get(DumpPath.getValue(options));
         } else {
-            dumpDir = Paths.get(DumpPath.getValue(options), String.valueOf(PathUtilities.getGlobalTimeStamp()));
+            dumpDir = Paths.get(DumpPath.getValue(options), String.valueOf(UniquePathUtilities.getGlobalTimeStamp()));
         }
         dumpDir = dumpDir.toAbsolutePath();
         if (!Files.exists(dumpDir)) {
