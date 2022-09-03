@@ -120,7 +120,6 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
@@ -132,6 +131,8 @@ import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMFloatNuller;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMIntNuller;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMLongNuller;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMObjectNuller;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
@@ -173,6 +174,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
 
     private static final TypeResolver typeResolver = new TypeResolver();
     private FrameDescriptor frameDescriptor;
+    private LLVMContext currentContext;
     private FrameDescriptor globalFrameDescriptor;
     private List<LLVMNode> functionEpilogue;
     private Map<FunctionHeader, Map<String, Integer>> functionToLabelMapping;
@@ -188,44 +190,21 @@ public class LLVMVisitor implements LLVMParserRuntime {
 
     private NativeLookup nativeLookup;
 
-    private Object[] mainArgs;
-
-    private Source sourceFile;
-
-    public LLVMVisitor(LLVMOptimizationConfiguration optimizationConfiguration, Object[] mainArgs, Source sourceFile) {
+    public LLVMVisitor(LLVMContext context, LLVMOptimizationConfiguration optimizationConfiguration) {
+        currentContext = context;
         this.optimizationConfiguration = optimizationConfiguration;
-        this.mainArgs = mainArgs;
-        this.sourceFile = sourceFile;
         LLVMTypeHelper.setParserRuntime(this);
     }
 
-    public class ParserResult {
-
-        private final RootCallTarget mainFunction;
-        private final Map<LLVMFunction, RootCallTarget> parsedFunctions;
-
-        public ParserResult(RootCallTarget mainFunction, Map<LLVMFunction, RootCallTarget> parsedFunctions) {
-            this.mainFunction = mainFunction;
-            this.parsedFunctions = parsedFunctions;
-        }
-
-        public RootCallTarget getMainFunction() {
-            return mainFunction;
-        }
-
-        public Map<LLVMFunction, RootCallTarget> getParsedFunctions() {
-            return parsedFunctions;
-        }
-    }
-
-    public ParserResult getMain(Model model, NodeFactoryFacade facade) {
-        Map<LLVMFunction, RootCallTarget> parsedFunctions = visit(model, facade);
+    public RootCallTarget getMain(Model model, NodeFactoryFacade facade) {
+        visit(model, facade);
+        currentContext.getFunctionRegistry();
         LLVMFunction mainFunction = LLVMFunction.createFromName("@main");
-        RootCallTarget mainCallTarget = parsedFunctions.get(mainFunction);
+        RootCallTarget mainCallTarget = currentContext.getFunctionRegistry().lookup(mainFunction);
         int argParamCount = mainFunction.getLlvmParamTypes().length;
         RootNode globalFunction;
         LLVMNode[] staticInits = globalNodes.toArray(new LLVMNode[globalNodes.size()]);
-        int argsCount = mainArgs.length + 1;
+        int argsCount = currentContext.getMainArguments().length + 1;
         if (argParamCount == 0) {
             globalFunction = factoryFacade.createGlobalRootNode(staticInits, mainCallTarget, deallocations);
         } else {
@@ -233,8 +212,8 @@ public class LLVMVisitor implements LLVMParserRuntime {
                 globalFunction = factoryFacade.createGlobalRootNode(staticInits, mainCallTarget, deallocations, argsCount);
             } else {
                 Object[] args = new Object[argsCount];
-                args[0] = sourceFile;
-                System.arraycopy(mainArgs, 0, args, 1, mainArgs.length);
+                args[0] = currentContext.getSourceFile();
+                System.arraycopy(currentContext.getMainArguments(), 0, args, 1, currentContext.getMainArguments().length);
                 LLVMParserAsserts.assertNoNullElement(args);
                 LLVMAddress allocatedArgsStartAddress = getArgsAsStringArray(args);
                 // Checkstyle: stop magic number check
@@ -251,7 +230,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
             }
         }
         RootCallTarget wrappedCallTarget = Truffle.getRuntime().createCallTarget(wrapMainFunction(Truffle.getRuntime().createCallTarget(globalFunction)));
-        return new ParserResult(wrappedCallTarget, parsedFunctions);
+        return wrappedCallTarget;
     }
 
     private RootNode wrapMainFunction(RootCallTarget mainCallTarget) {
@@ -285,7 +264,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         return stringArgs;
     }
 
-    public Map<LLVMFunction, RootCallTarget> visit(Model model, NodeFactoryFacade facade) {
+    public List<LLVMFunction> visit(Model model, NodeFactoryFacade facade) {
         this.factoryFacade = facade;
         List<EObject> objects = model.eContents();
         List<LLVMFunction> functions = new ArrayList<>();
@@ -324,10 +303,11 @@ public class LLVMVisitor implements LLVMParserRuntime {
                 throw new AssertionError(object);
             }
         }
+        currentContext.getFunctionRegistry().register(functionCallTargets);
         List<LLVMNode> globalVarNodes = addGlobalVars(this, staticVars);
         globalNodes.addAll(globalVarNodes);
         deallocations = globalDeallocations.toArray(new LLVMAddress[globalDeallocations.size()]);
-        return functionCallTargets;
+        return functions;
     }
 
     private static void setTargetInfo(List<EObject> objects) {
@@ -370,7 +350,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
                     LLVMExpressionNode functionLoadTarget = factoryFacade.createGetElementPtr(LLVMBaseType.I32, loadedStruct, oneLiteralNode, indexedTypeLength);
                     LLVMExpressionNode loadedFunction = factoryFacade.createLoad(functionType, functionLoadTarget);
                     LLVMExpressionNode[] argNodes = new LLVMExpressionNode[]{factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, getStackPointerSlot())};
-                    assert argNodes.length == factoryFacade.getArgStartIndex();
+                    assert argNodes.length == LLVMCallNode.ARG_START_INDEX;
                     LLVMNode functionCall = factoryFacade.createFunctionCall(loadedFunction, argNodes, LLVMBaseType.VOID);
                     globalVarNodes.add(functionCall);
                 }
@@ -563,7 +543,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         EList<Parameter> pars = functionHeader.getParameters().getParameters();
         LLVMExpressionNode stackPointerNode = factoryFacade.createFunctionArgNode(0, LLVMBaseType.ADDRESS);
         formalParamInits.add(factoryFacade.createFrameWrite(LLVMBaseType.ADDRESS, stackPointerNode, getStackPointerSlot()));
-        int argIndex = factoryFacade.getArgStartIndex();
+        int argIndex = LLVMCallNode.ARG_START_INDEX;
         if (resolve(functionHeader.getRettype()).isStruct()) {
             LLVMExpressionNode functionRetParNode = factoryFacade.createFunctionArgNode(argIndex++, LLVMBaseType.STRUCT);
             LLVMNode retValue = createAssignment((String) retSlot.getIdentifier(), functionRetParNode, functionHeader.getRettype());
@@ -906,7 +886,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
 
     private LLVMNode getWriteNode(LLVMExpressionNode result, FrameSlot slot, EObject type) {
         LLVMBaseType baseType = getLLVMType(type);
-        FrameSlotKind frameSlotKind = factoryFacade.getFrameSlotKind(resolve(type));
+        FrameSlotKind frameSlotKind = factoryFacade.getFrameSlotKind(baseType);
         slot.setKind(frameSlotKind);
         return factoryFacade.createFrameWrite(baseType, result, slot);
     }

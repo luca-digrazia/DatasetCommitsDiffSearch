@@ -45,7 +45,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.test.spec.SpecificationEntry;
 import com.oracle.truffle.llvm.tools.Clang;
 import com.oracle.truffle.llvm.tools.ProgrammingLanguage;
 import com.oracle.truffle.llvm.tools.util.PathUtil;
@@ -77,13 +76,12 @@ public class LLVMTestSuite extends RemoteTestSuiteBase {
         return getTestCasesFromConfigFile(configFile, testSuite, new TestCaseGenerator() {
 
             @Override
-            public List<TestCaseFiles> getCompiledTestCaseFiles(SpecificationEntry toBeCompiled) {
-                File toBeCompiledFile = toBeCompiled.getFile();
-                String expectedOutputName = PathUtil.replaceExtension(toBeCompiledFile.getAbsolutePath(), LLVM_REFERENCE_OUTPUT_EXTENSION);
+            public List<TestCaseFiles> getCompiledTestCaseFiles(File toBeCompiled) {
+                String expectedOutputName = PathUtil.replaceExtension(toBeCompiled.getAbsolutePath(), LLVM_REFERENCE_OUTPUT_EXTENSION);
                 File expectedOutputFile = new File(expectedOutputName);
-                File dest = TestHelper.getTempLLFile(toBeCompiledFile, "_main");
+                File dest = TestHelper.getTempLLFile(toBeCompiled, "_main");
                 try {
-                    TestCaseFiles result = TestHelper.compileToLLVMIRWithClang(toBeCompiledFile, dest, expectedOutputFile, toBeCompiled.getFlags());
+                    TestCaseFiles result = TestHelper.compileToLLVMIRWithClang(toBeCompiled, dest, expectedOutputFile);
                     return Arrays.asList(result);
                 } catch (Exception e) {
                     return Collections.emptyList();
@@ -92,15 +90,14 @@ public class LLVMTestSuite extends RemoteTestSuiteBase {
             }
 
             @Override
-            public TestCaseFiles getBitCodeTestCaseFiles(SpecificationEntry bitCode) {
-                File bitCodeFile = bitCode.getFile();
+            public TestCaseFiles getBitCodeTestCaseFiles(File bitCodeFile) {
                 String expectedOutputName = PathUtil.replaceExtension(bitCodeFile.getAbsolutePath(), LLVM_REFERENCE_OUTPUT_EXTENSION);
                 File expectedOutputFile = new File(expectedOutputName);
                 TestCaseFiles testCaseFiles;
                 if (expectedOutputFile.exists()) {
-                    testCaseFiles = TestCaseFiles.createFromBitCodeFile(bitCodeFile, expectedOutputFile, bitCode.getFlags());
+                    testCaseFiles = TestCaseFiles.createFromBitCodeFile(bitCodeFile, expectedOutputFile);
                 } else {
-                    testCaseFiles = TestCaseFiles.createFromBitCodeFile(bitCodeFile, bitCode.getFlags());
+                    testCaseFiles = TestCaseFiles.createFromBitCodeFile(bitCodeFile);
                 }
                 return testCaseFiles;
             }
@@ -126,16 +123,10 @@ public class LLVMTestSuite extends RemoteTestSuiteBase {
         }
         List<String> actualLines = launchRemote(tuple);
         int actualReturnValue = parseAndRemoveReturnValue(actualLines);
-        boolean pass = expectedLines.equals(actualLines);
-        boolean undefinedReturnCode = tuple.hasFlag(TestCaseFlag.UNDEFINED_RETURN_CODE);
-        if (!undefinedReturnCode) {
-            pass &= expectedReturnValue == actualReturnValue;
-        }
+        boolean pass = expectedLines.equals(actualLines) && expectedReturnValue == actualReturnValue;
         recordTestCase(tuple, pass);
         assertEquals(bitCodeFile.getAbsolutePath(), expectedLines, actualLines);
-        if (!undefinedReturnCode) {
-            assertEquals(bitCodeFile.getAbsolutePath(), expectedReturnValue, actualReturnValue);
-        }
+        assertEquals(bitCodeFile.getAbsolutePath(), expectedReturnValue, actualReturnValue);
     }
 
 }

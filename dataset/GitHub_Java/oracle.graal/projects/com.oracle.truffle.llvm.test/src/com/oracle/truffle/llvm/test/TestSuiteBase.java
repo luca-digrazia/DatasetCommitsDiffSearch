@@ -65,7 +65,7 @@ public abstract class TestSuiteBase {
     private static List<File> parserErrorTests;
     private static Map<UnsupportedReason, List<File>> unsupportedErrorTests;
 
-    protected void recordTestCase(TestCaseFiles tuple, boolean pass) {
+    void recordTestCase(TestCaseFiles tuple, boolean pass) {
         if (pass) {
             if (!succeedingTests.contains(tuple.getOriginalFile()) && !failingTests.contains(tuple.getOriginalFile())) {
                 succeedingTests.add(tuple.getOriginalFile());
@@ -77,7 +77,7 @@ public abstract class TestSuiteBase {
         }
     }
 
-    protected void recordError(TestCaseFiles tuple, Throwable error) {
+    void recordError(TestCaseFiles tuple, Throwable error) {
         Throwable currentError = error;
         if (!failingTests.contains(tuple.getOriginalFile())) {
             failingTests.add(tuple.getOriginalFile());
@@ -112,7 +112,7 @@ public abstract class TestSuiteBase {
         }
     }
 
-    protected static void printList(String header, List<File> files) {
+    static void printList(String header, List<File> files) {
         if (files.size() != 0) {
             LLVMLogger.info(header + " (" + files.size() + "):");
             files.stream().forEach(t -> LLVMLogger.info(t.toString()));
@@ -141,7 +141,7 @@ public abstract class TestSuiteBase {
         }
     }
 
-    protected interface TestCaseGenerator {
+    interface TestCaseGenerator {
 
         ProgrammingLanguage[] getSupportedLanguages();
 
@@ -150,7 +150,7 @@ public abstract class TestSuiteBase {
         List<TestCaseFiles> getCompiledTestCaseFiles(File toBeCompiled);
     }
 
-    protected static class TestCaseGeneratorImpl implements TestCaseGenerator {
+    static class TestCaseGeneratorImpl implements TestCaseGenerator {
 
         @Override
         public TestCaseFiles getBitCodeTestCaseFiles(File bitCodeFile) {
@@ -200,7 +200,7 @@ public abstract class TestSuiteBase {
 
     }
 
-    protected static List<TestCaseFiles[]> getTestCasesFromConfigFile(File configFile, File testSuite, TestCaseGenerator gen) throws IOException, AssertionError {
+    static List<TestCaseFiles[]> getTestCasesFromConfigFile(File configFile, File testSuite, TestCaseGenerator gen) throws IOException, AssertionError {
         TestSpecification testSpecification = SpecificationFileReader.readSpecificationFolder(configFile, testSuite);
         List<File> includedFiles = testSpecification.getIncludedFiles();
         if (LLVMOptions.discoveryTestModeEnabled()) {
@@ -260,15 +260,15 @@ public abstract class TestSuiteBase {
         return allBitcodeFiles;
     }
 
-    protected static List<TestCaseFiles> applyOpt(List<TestCaseFiles> allBitcodeFiles, OptOptions pass, String name) {
+    static List<TestCaseFiles> applyOpt(List<TestCaseFiles> allBitcodeFiles, OptOptions pass, String name) {
         return getFilteredOptStream(allBitcodeFiles).map(f -> optimize(f, pass, name)).collect(Collectors.toList());
     }
 
-    protected static Stream<TestCaseFiles> getFilteredOptStream(List<TestCaseFiles> allBitcodeFiles) {
+    static Stream<TestCaseFiles> getFilteredOptStream(List<TestCaseFiles> allBitcodeFiles) {
         return allBitcodeFiles.parallelStream().filter(f -> !f.getOriginalFile().getParent().endsWith(LLVMPaths.NO_OPTIMIZATIONS_FOLDER_NAME));
     }
 
-    protected static TestCaseFiles optimize(TestCaseFiles toBeOptimized, OptOptions optOptions, String name) {
+    static TestCaseFiles optimize(TestCaseFiles toBeOptimized, OptOptions optOptions, String name) {
         File destinationFile = TestHelper.getTempLLFile(toBeOptimized.getOriginalFile(), "_" + name);
         Opt.optimizeBitcodeFile(toBeOptimized.getBitCodeFile(), destinationFile, optOptions);
         return TestCaseFiles.createFromCompiledFile(toBeOptimized.getOriginalFile(), destinationFile);

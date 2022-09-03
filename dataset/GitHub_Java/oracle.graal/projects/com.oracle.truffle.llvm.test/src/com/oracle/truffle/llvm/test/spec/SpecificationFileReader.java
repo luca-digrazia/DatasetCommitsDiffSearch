@@ -36,12 +36,10 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.test.TestCaseFlag;
 import com.oracle.truffle.llvm.test.TestHelper;
 
 public class SpecificationFileReader {
@@ -69,12 +67,12 @@ public class SpecificationFileReader {
 
     public static TestSpecification readSpecificationFolder(File directory, File testRoot) throws IOException {
         LLVMLogger.info("\tread specification files in " + directory);
-        List<SpecificationEntry> includeFiles = getSpecificationFiles(directory, testRoot, FILE_NAME_INCLUDE_FILTER);
-        List<SpecificationEntry> excludeFiles = getSpecificationFiles(directory, testRoot, FILE_NAME_EXCLUDE_FILTER);
+        List<File> includeFiles = getSpecificationFiles(directory, testRoot, FILE_NAME_INCLUDE_FILTER);
+        List<File> excludeFiles = getSpecificationFiles(directory, testRoot, FILE_NAME_EXCLUDE_FILTER);
         return new TestSpecification(includeFiles, excludeFiles);
     }
 
-    private static List<SpecificationEntry> getSpecificationFiles(File directory, File testRoot, FilenameFilter filter) throws AssertionError, IOException {
+    private static List<File> getSpecificationFiles(File directory, File testRoot, FilenameFilter filter) throws AssertionError, IOException {
         return getFiles(getSpecificationFileNames(directory, filter), testRoot);
     }
 
@@ -94,35 +92,29 @@ public class SpecificationFileReader {
         return fileLines;
     }
 
-    private static List<SpecificationEntry> getFiles(List<String> fileLines, File testRoot) {
-        List<SpecificationEntry> testCases = new ArrayList<>();
+    private static List<File> getFiles(List<String> fileLines, File testRoot) {
+        List<File> files = new ArrayList<>();
         List<String> allLines = fileLines.stream().filter(l -> !l.startsWith(ONE_LINE_COMMENT)).filter(l -> !l.equals("")).collect(Collectors.toList());
         for (String line : allLines) {
-            String[] parts = line.split(" ");
-            String fileName = parts[0].trim();
-            Set<TestCaseFlag> flags = Stream.of(parts).skip(1).map(p -> TestCaseFlag.valueOf(p)).collect(Collectors.toSet());
-            if (fileName.endsWith(RECURSIVE_INCLUDE_FROM_FOLDER)) {
-                File directory = new File(testRoot, fileName.substring(0, fileName.length() - 2));
+            String trimmedLine = line.trim();
+            if (line.endsWith(RECURSIVE_INCLUDE_FROM_FOLDER)) {
+                File directory = new File(testRoot, trimmedLine.substring(0, trimmedLine.length() - 2));
                 if (!directory.isDirectory()) {
                     throw new AssertionError(directory + " is not a directory!");
                 }
-                testCases.addAll(getEntries(TestHelper.getFiles(directory, true), flags));
+                files.addAll(TestHelper.getFiles(directory, true));
             } else {
-                File currentFile = new File(testRoot, fileName);
+                File currentFile = new File(testRoot, line);
                 if (currentFile.isDirectory()) {
-                    testCases.addAll(getEntries(TestHelper.getFiles(currentFile, false), flags));
+                    files.addAll(TestHelper.getFiles(currentFile, false));
                 } else if (currentFile.exists()) {
-                    testCases.add(new SpecificationEntry(currentFile, flags));
+                    files.add(currentFile);
                 } else {
                     throw new AssertionError(currentFile.getAbsolutePath() + " does not exist!");
                 }
             }
         }
-        return testCases;
-    }
-
-    private static List<SpecificationEntry> getEntries(List<File> files, Set<TestCaseFlag> flags) {
-        return files.stream().map(f -> new SpecificationEntry(f, flags)).collect(Collectors.toList());
+        return files;
     }
 
 }
