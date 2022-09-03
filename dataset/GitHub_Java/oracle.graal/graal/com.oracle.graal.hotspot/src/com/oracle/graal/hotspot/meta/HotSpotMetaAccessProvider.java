@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.graph.UnsafeAccess.*;
-
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
@@ -78,25 +76,7 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
     }
 
     public ResolvedJavaField lookupJavaField(Field reflectionField) {
-        String name = reflectionField.getName();
-        Class<?> fieldHolder = reflectionField.getDeclaringClass();
-        Class<?> fieldType = reflectionField.getType();
-        // java.lang.reflect.Field's modifiers should be enough here since VM internal modifier bits
-        // are not used (yet).
-        final int modifiers = reflectionField.getModifiers();
-        final long offset = Modifier.isStatic(modifiers) ? unsafe.staticFieldOffset(reflectionField) : unsafe.objectFieldOffset(reflectionField);
-        final boolean internal = false;
-
-        ResolvedJavaType holder = HotSpotResolvedObjectType.fromClass(fieldHolder);
-        ResolvedJavaType type = HotSpotResolvedObjectType.fromClass(fieldType);
-
-        if (offset != -1) {
-            HotSpotResolvedObjectType resolved = (HotSpotResolvedObjectType) holder;
-            return resolved.createField(name, type, offset, modifiers, internal);
-        } else {
-            // TODO this cast will not succeed
-            return (ResolvedJavaField) new HotSpotUnresolvedField(holder, name, type);
-        }
+        return runtime.getCompilerToVM().getJavaField(reflectionField);
     }
 
     private static int intMaskRight(int n) {
