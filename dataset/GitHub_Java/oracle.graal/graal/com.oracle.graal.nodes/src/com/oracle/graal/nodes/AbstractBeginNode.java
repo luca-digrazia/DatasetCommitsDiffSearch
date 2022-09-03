@@ -22,79 +22,49 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.graph.iterators.NodePredicates.*;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 
-import java.util.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.extended.AnchoringNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+@NodeInfo(allowedUsageTypes = {InputType.Guard, InputType.Anchor})
+public abstract class AbstractBeginNode extends FixedWithNextNode implements LIRLowerable, GuardingNode, AnchoringNode, IterableNodeType {
 
-public abstract class AbstractBeginNode extends FixedWithNextNode implements StateSplit, LIRLowerable, Simplifiable, Node.IterableNodeType, GuardingNode {
+    public static final NodeClass<AbstractBeginNode> TYPE = NodeClass.create(AbstractBeginNode.class);
 
-    @Input(notDataflow = true) private FrameState stateAfter;
-
-    public FrameState stateAfter() {
-        return stateAfter;
+    protected AbstractBeginNode(NodeClass<? extends AbstractBeginNode> c) {
+        this(c, StampFactory.forVoid());
     }
 
-    public void setStateAfter(FrameState x) {
-        assert x == null || x.isAlive() : "frame state must be in a graph";
-        updateUsages(stateAfter, x);
-        stateAfter = x;
-    }
-
-    public boolean hasSideEffect() {
-        return false;
-    }
-
-    protected AbstractBeginNode() {
-        super(StampFactory.dependency());
-    }
-
-    protected AbstractBeginNode(Stamp stamp) {
-        super(stamp);
-    }
-
-    public static AbstractBeginNode begin(FixedNode with) {
-        if (with instanceof AbstractBeginNode) {
-            return (AbstractBeginNode) with;
-        }
-        AbstractBeginNode begin = with.graph().add(new BeginNode());
-        begin.setNext(with);
-        return begin;
-    }
-
-    @Override
-    public void simplify(SimplifierTool tool) {
-        FixedNode prev = (FixedNode) this.predecessor();
-        if (prev == null) {
-            // This is the start node.
-        } else if (prev instanceof ControlSplitNode) {
-            // This begin node is necessary.
-        } else {
-            // This begin node can be removed and all guards moved up to the preceding begin node.
-            prepareDelete();
-            tool.addToWorkList(next());
-            graph().removeFixed(this);
-        }
+    protected AbstractBeginNode(NodeClass<? extends AbstractBeginNode> c, Stamp stamp) {
+        super(c, stamp);
     }
 
     public static AbstractBeginNode prevBegin(FixedNode from) {
-        Node prevBegin = from;
-        while (prevBegin != null) {
-            if (prevBegin instanceof AbstractBeginNode) {
-                return (AbstractBeginNode) prevBegin;
+        Node next = from;
+        while (next != null) {
+            if (next instanceof AbstractBeginNode) {
+                AbstractBeginNode begin = (AbstractBeginNode) next;
+                return begin;
             }
-            prevBegin = prevBegin.predecessor();
+            next = next.predecessor();
         }
         return null;
     }
 
     private void evacuateGuards(FixedNode evacuateFrom) {
-        if (!usages().isEmpty()) {
+        if (!hasNoUsages()) {
             AbstractBeginNode prevBegin = prevBegin(evacuateFrom);
             assert prevBegin != null;
             for (Node anchored : anchored().snapshot()) {
@@ -108,26 +78,17 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements Sta
     }
 
     public void prepareDelete(FixedNode evacuateFrom) {
-        removeProxies();
         evacuateGuards(evacuateFrom);
-    }
-
-    public void removeProxies() {
-        for (ProxyNode vpn : proxies().snapshot()) {
-            // can not use graph.replaceFloating because vpn.value may be null during killCFG
-            vpn.replaceAtUsages(vpn.value());
-            vpn.safeDelete();
-        }
     }
 
     @Override
     public boolean verify() {
-        assertTrue(predecessor() != null || this == graph().start() || this instanceof MergeNode, "begin nodes must be connected");
+        assertTrue(predecessor() != null || this == graph().start() || this instanceof AbstractMergeNode, "begin nodes must be connected");
         return super.verify();
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
+    public void generate(NodeLIRBuilderTool gen) {
         // nop
     }
 
@@ -136,15 +97,11 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements Sta
     }
 
     public NodeIterable<Node> anchored() {
-        return usages().filter(isNotA(ProxyNode.class));
-    }
-
-    public NodeIterable<ProxyNode> proxies() {
-        return usages().filter(ProxyNode.class);
+        return usages();
     }
 
     public NodeIterable<FixedNode> getBlockNodes() {
-        return new AbstractNodeIterable<FixedNode>() {
+        return new NodeIterable<FixedNode>() {
 
             @Override
             public Iterator<FixedNode> iterator() {
@@ -157,7 +114,7 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements Sta
 
         private FixedNode current;
 
-        public BlockNodeIterator(FixedNode next) {
+        BlockNodeIterator(FixedNode next) {
             this.current = next;
         }
 
@@ -184,10 +141,5 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements Sta
         public void remove() {
             throw new UnsupportedOperationException();
         }
-    }
-
-    @Override
-    public AbstractBeginNode asNode() {
-        return this;
     }
 }

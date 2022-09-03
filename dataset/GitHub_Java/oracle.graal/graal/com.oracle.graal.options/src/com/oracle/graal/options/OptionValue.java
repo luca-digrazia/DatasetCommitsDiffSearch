@@ -86,7 +86,9 @@ public class OptionValue<T> {
             Entry<OptionValue<?>, Object> single = overrides.entrySet().iterator().next();
             OptionValue<?> option = single.getKey();
             Object overrideValue = single.getValue();
-            return new SingleOverrideScope(option, overrideValue);
+            if (!overrideValue.equals(option.getValue())) {
+                return new SingleOverrideScope(option, overrideValue);
+            }
         }
         return new MultipleOverridesScope(current, overrides);
     }
@@ -257,25 +259,6 @@ public class OptionValue<T> {
     }
 
     /**
-     * Returns true if the option has been set in any way. Note that this doesn't mean that the
-     * current value is different than the default.
-     */
-    public boolean hasBeenSet() {
-        if (!(this instanceof StableOptionValue)) {
-            getValue(); // ensure initialized
-
-            OverrideScope overrideScope = getOverrideScope();
-            if (overrideScope != null) {
-                T override = overrideScope.getOverride(this);
-                if (override != null) {
-                    return true;
-                }
-            }
-        }
-        return value != DEFAULT;
-    }
-
-    /**
      * Gets the value of this option.
      */
     public T getValue() {
@@ -437,7 +420,9 @@ public class OptionValue<T> {
                 if (option instanceof StableOptionValue) {
                     throw new IllegalArgumentException("Cannot override stable option " + option);
                 }
-                this.overrides.put(option, e.getValue());
+                if (!e.getValue().equals(option.getValue())) {
+                    this.overrides.put(option, e.getValue());
+                }
             }
             if (!this.overrides.isEmpty()) {
                 setOverrideScope(this);

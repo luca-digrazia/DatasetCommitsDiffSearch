@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.nodes.cfg;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
+import jdk.vm.ci.meta.LocationIdentity;
+
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
 import com.oracle.graal.compiler.common.cfg.Loop;
@@ -39,8 +39,6 @@ import com.oracle.graal.nodes.LoopEndNode;
 import com.oracle.graal.nodes.memory.MemoryCheckpoint;
 
 public final class Block extends AbstractBlockBase<Block> {
-
-    public static final Block[] EMPTY_ARRAY = new Block[0];
 
     protected final AbstractBeginNode beginNode;
 
@@ -97,11 +95,11 @@ public final class Block extends AbstractBlockBase<Block> {
     }
 
     public Block getFirstPredecessor() {
-        return getPredecessors()[0];
+        return getPredecessors().get(0);
     }
 
     public Block getFirstSuccessor() {
-        return getSuccessors()[0];
+        return getSuccessors().get(0);
     }
 
     public Block getEarliestPostDominated() {
@@ -289,38 +287,5 @@ public final class Block extends AbstractBlockBase<Block> {
                 this.getDominator().calcKillLocationsBetweenThisAndTarget(result, stopBlock);
             }
         }
-    }
-
-    @Override
-    public void delete() {
-
-        // adjust successor and predecessor lists
-        Block next = getSuccessors()[0];
-        for (Block pred : getPredecessors()) {
-            Block[] predSuccs = pred.successors;
-            Block[] newPredSuccs = new Block[predSuccs.length];
-            for (int i = 0; i < predSuccs.length; ++i) {
-                if (predSuccs[i] == this) {
-                    newPredSuccs[i] = next;
-                } else {
-                    newPredSuccs[i] = predSuccs[i];
-                }
-            }
-            pred.setSuccessors(newPredSuccs);
-        }
-
-        ArrayList<Block> newPreds = new ArrayList<>();
-        for (int i = 0; i < next.getPredecessorCount(); i++) {
-            Block curPred = next.getPredecessors()[i];
-            if (curPred == this) {
-                for (Block b : getPredecessors()) {
-                    newPreds.add(b);
-                }
-            } else {
-                newPreds.add(curPred);
-            }
-        }
-
-        next.setPredecessors(newPreds.toArray(new Block[0]));
     }
 }

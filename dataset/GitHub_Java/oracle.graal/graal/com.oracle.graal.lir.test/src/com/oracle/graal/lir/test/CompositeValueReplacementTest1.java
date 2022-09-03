@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,26 @@
  */
 package com.oracle.graal.lir.test;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static org.junit.Assert.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.COMPOSITE;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
-import org.junit.*;
+import java.util.EnumSet;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.lir.*;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
+
+import org.junit.Test;
+
+import com.oracle.graal.lir.CompositeValue;
+import com.oracle.graal.lir.InstructionValueConsumer;
+import com.oracle.graal.lir.InstructionValueProcedure;
+import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 /**
  * This test verifies that {@link CompositeValue}s are immutable, i.e. that a write to a component
@@ -38,21 +49,34 @@ import com.oracle.graal.lir.asm.*;
  */
 public class CompositeValueReplacementTest1 {
 
-    private static class NestedCompositeValue extends CompositeValue {
+    private static class TestCompositeValue extends CompositeValue {
 
-        private static final long serialVersionUID = -8804214200173503527L;
         @Component({REG, OperandFlag.ILLEGAL}) protected Value value;
 
-        public NestedCompositeValue(Value value) {
+        TestCompositeValue(Value value) {
             super(LIRKind.Illegal);
             this.value = value;
         }
 
+        private static final EnumSet<OperandFlag> flags = EnumSet.of(OperandFlag.REG, OperandFlag.ILLEGAL);
+
+        @Override
+        public CompositeValue forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueProcedure proc) {
+            Value newValue = proc.doValue(inst, value, mode, flags);
+            if (!value.identityEquals(newValue)) {
+                return new TestCompositeValue(newValue);
+            }
+            return this;
+        }
+
+        @Override
+        protected void visitEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc) {
+            proc.visitValue(inst, value, mode, flags);
+        }
     }
 
     private static class DummyValue extends Value {
 
-        private static final long serialVersionUID = -645435039553382737L;
         private final int id;
         private static int counter = 1;
 
@@ -94,11 +118,13 @@ public class CompositeValueReplacementTest1 {
 
     }
 
-    private static class TestOp extends LIRInstruction {
+    private static final class TestOp extends LIRInstruction {
+        public static final LIRInstructionClass<TestOp> TYPE = LIRInstructionClass.create(TestOp.class);
 
-        @Use({COMPOSITE}) protected NestedCompositeValue compValue;
+        @Use({COMPOSITE}) protected TestCompositeValue compValue;
 
-        public TestOp(NestedCompositeValue compValue) {
+        TestOp(TestCompositeValue compValue) {
+            super(TYPE);
             this.compValue = compValue;
         }
 
@@ -109,95 +135,26 @@ public class CompositeValueReplacementTest1 {
 
     }
 
-    private static NestedCompositeValue createNestedCompValue(Value value, int nestingLevel) {
-        NestedCompositeValue compValue = new NestedCompositeValue(value);
-        for (int i = 0; i < nestingLevel; i++) {
-            compValue = new NestedCompositeValue(compValue);
-        }
-        return compValue;
-    }
-
     @Test
     public void replaceCompValueTest0() {
         DummyValue dummyValue1 = new DummyValue();
         DummyValue dummyValue2 = new DummyValue();
         DummyValue dummyValue3 = new DummyValue();
-        NestedCompositeValue compValue1 = createNestedCompValue(dummyValue1, 0);
+        TestCompositeValue compValue1 = new TestCompositeValue(dummyValue1);
         LIRInstruction op1 = new TestOp(compValue1);
         LIRInstruction op2 = new TestOp(compValue1);
 
-        op1.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue1, value);
-                return dummyValue2;
-            }
+        op1.forEachInput((instruction, value, mode, flags) -> {
+            assertEquals(dummyValue1, value);
+            return dummyValue2;
         });
 
-        op2.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue1, value);
-                return dummyValue3;
-            }
+        op2.forEachInput((instruction, value, mode, flags) -> {
+            assertEquals(dummyValue1, value);
+            return dummyValue3;
         });
 
-        op1.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue2, value);
-                return value;
-            }
-        });
-
-        op2.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue3, value);
-                return value;
-            }
-        });
-    }
-
-    @Test
-    public void replaceCompValueTest1() {
-        DummyValue dummyValue1 = new DummyValue();
-        DummyValue dummyValue2 = new DummyValue();
-        DummyValue dummyValue3 = new DummyValue();
-        NestedCompositeValue compValue1 = createNestedCompValue(dummyValue1, 1);
-        LIRInstruction op1 = new TestOp(compValue1);
-        LIRInstruction op2 = new TestOp(compValue1);
-
-        op1.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue1, value);
-                return dummyValue2;
-            }
-        });
-
-        op2.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue1, value);
-                return dummyValue3;
-            }
-        });
-
-        op1.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue2, value);
-                return value;
-            }
-        });
-
-        op2.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue3, value);
-                return value;
-            }
-        });
+        op1.visitEachInput((instruction, value, mode, flags) -> assertEquals(dummyValue2, value));
+        op2.visitEachInput((instruction, value, mode, flags) -> assertEquals(dummyValue3, value));
     }
 }

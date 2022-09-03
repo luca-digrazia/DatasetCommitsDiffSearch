@@ -36,6 +36,7 @@ import static jdk.vm.ci.sparc.SPARC.g0;
 import static jdk.vm.ci.sparc.SPARC.g5;
 import static jdk.vm.ci.sparc.SPARC.sp;
 
+import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,7 @@ import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import sun.misc.Unsafe;
 
 import com.oracle.graal.asm.Assembler;
 import com.oracle.graal.asm.Label;
@@ -67,7 +69,6 @@ import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.hotspot.HotSpotDataBuilder;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.HotSpotHostBackend;
-import com.oracle.graal.hotspot.HotSpotLIRGenerationResult;
 import com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.stubs.Stub;
@@ -134,13 +135,13 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public LIRGeneratorTool newLIRGenerator(LIRGenerationResult lirGenRes) {
-        return new SPARCHotSpotLIRGenerator(getProviders(), config(), lirGenRes);
+    public LIRGeneratorTool newLIRGenerator(CallingConvention cc, LIRGenerationResult lirGenRes) {
+        return new SPARCHotSpotLIRGenerator(getProviders(), config(), cc, lirGenRes);
     }
 
     @Override
-    public LIRGenerationResult newLIRGenerationResult(String compilationUnitName, LIR lir, FrameMapBuilder frameMapBuilder, StructuredGraph graph, Object stub) {
-        return new HotSpotLIRGenerationResult(compilationUnitName, lir, frameMapBuilder, makeCallingConvention(graph, (Stub) stub), stub);
+    public LIRGenerationResult newLIRGenerationResult(String compilationUnitName, LIR lir, FrameMapBuilder frameMapBuilder, ResolvedJavaMethod method, Object stub) {
+        return new SPARCHotSpotLIRGenerationResult(compilationUnitName, lir, frameMapBuilder, stub);
     }
 
     @Override
@@ -148,19 +149,38 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         return new SPARCHotSpotNodeLIRBuilder(graph, lirGen, new SPARCNodeMatchRules(lirGen));
     }
 
-    @Override
-    protected void bangStackWithOffset(CompilationResultBuilder crb, int bangOffset) {
-        // Use SPARCAddress to get the final displacement including the stack bias.
-        SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
-        SPARCAddress address = new SPARCAddress(sp, -bangOffset);
-        if (SPARCAssembler.isSimm13(address.getDisplacement())) {
-            masm.stx(g0, address);
-        } else {
-            try (ScratchRegister sc = masm.getScratchRegister()) {
-                Register scratch = sc.getRegister();
-                assert isGlobalRegister(scratch) : "Only global (g1-g7) registers are allowed if the frame was not initialized here. Got register " + scratch;
-                masm.setx(address.getDisplacement(), scratch, false);
-                masm.stx(g0, new SPARCAddress(sp, scratch));
+    /**
+     * Emits code to do stack overflow checking.
+     *
+     * @param afterFrameInit specifies if the stack pointer has already been adjusted to allocate
+     *            the current frame
+     */
+    protected static void emitStackOverflowCheck(CompilationResultBuilder crb, int pagesToBang, boolean afterFrameInit) {
+        if (pagesToBang > 0) {
+            SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
+            final int frameSize = crb.frameMap.totalFrameSize();
+            if (frameSize > 0) {
+                int lastFramePage = frameSize / UNSAFE.pageSize();
+                // emit multiple stack bangs for methods with frames larger than a page
+                for (int i = 0; i <= lastFramePage; i++) {
+                    int disp = (i + pagesToBang) * UNSAFE.pageSize();
+                    if (afterFrameInit) {
+                        disp -= frameSize;
+                    }
+                    crb.blockComment("[stack overflow check]");
+                    // Use SPARCAddress to get the final displacement including the stack bias.
+                    SPARCAddress address = new SPARCAddress(sp, -disp);
+                    if (SPARCAssembler.isSimm13(address.getDisplacement())) {
+                        masm.stx(g0, address);
+                    } else {
+                        try (ScratchRegister sc = masm.getScratchRegister()) {
+                            Register scratch = sc.getRegister();
+                            assert afterFrameInit || isGlobalRegister(scratch) : "Only global (g1-g7) registers are allowed if the frame was not initialized here. Got register " + scratch;
+                            masm.setx(address.getDisplacement(), scratch, false);
+                            masm.stx(g0, new SPARCAddress(sp, scratch));
+                        }
+                    }
+                }
             }
         }
     }
@@ -182,7 +202,9 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
             final int frameSize = crb.frameMap.totalFrameSize();
             final int stackpoinerChange = -frameSize;
             SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
-            emitStackOverflowCheck(crb);
+            if (!isStub && pagesToBang > 0) {
+                emitStackOverflowCheck(crb, pagesToBang, false);
+            }
 
             if (SPARCAssembler.isSimm13(stackpoinerChange)) {
                 masm.save(sp, stackpoinerChange, sp);
@@ -218,7 +240,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
     @Override
     public CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGenRes, FrameMap frameMap, CompilationResult compilationResult, CompilationResultBuilderFactory factory) {
-        HotSpotLIRGenerationResult gen = (HotSpotLIRGenerationResult) lirGenRes;
+        SPARCHotSpotLIRGenerationResult gen = (SPARCHotSpotLIRGenerationResult) lirGenRes;
         LIR lir = gen.getLIR();
         assert gen.getDeoptimizationRescueSlot() == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
 
@@ -229,7 +251,6 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         DataBuilder dataBuilder = new HotSpotDataBuilder(getCodeCache().getTarget());
         CompilationResultBuilder crb = factory.createBuilder(getProviders().getCodeCache(), getProviders().getForeignCalls(), frameMap, masm, dataBuilder, frameContext, compilationResult);
         crb.setTotalFrameSize(frameMap.totalFrameSize());
-        crb.setMaxInterpreterFrameSize(gen.getMaxInterpreterFrameSize());
         StackSlot deoptimizationRescueSlot = gen.getDeoptimizationRescueSlot();
         if (deoptimizationRescueSlot != null && stub == null) {
             crb.compilationResult.setCustomStackAreaOffset(frameMap.offsetForStackSlot(deoptimizationRescueSlot));
@@ -485,5 +506,21 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
         return new SPARCHotSpotRegisterAllocationConfig(registerConfigNonNull);
+    }
+
+    private static final Unsafe UNSAFE = initUnsafe();
+
+    private static Unsafe initUnsafe() {
+        try {
+            return Unsafe.getUnsafe();
+        } catch (SecurityException se) {
+            try {
+                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafe.setAccessible(true);
+                return (Unsafe) theUnsafe.get(Unsafe.class);
+            } catch (Exception e) {
+                throw new RuntimeException("exception while trying to get Unsafe", e);
+            }
+        }
     }
 }

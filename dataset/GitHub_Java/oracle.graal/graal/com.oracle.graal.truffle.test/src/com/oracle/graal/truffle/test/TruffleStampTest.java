@@ -1,14 +1,41 @@
+/*
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.graal.truffle.test;
 
-import static org.hamcrest.CoreMatchers.*;
-import static org.junit.Assert.*;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.sameInstance;
+import static org.junit.Assert.assertThat;
 
-import org.junit.*;
-import org.junit.experimental.theories.*;
-import org.junit.runner.*;
+import org.junit.Before;
+import org.junit.experimental.theories.DataPoints;
+import org.junit.experimental.theories.Theories;
+import org.junit.experimental.theories.Theory;
+import org.junit.runner.RunWith;
 
-import com.oracle.graal.truffle.*;
-import com.oracle.truffle.api.*;
+import com.oracle.graal.truffle.DefaultTruffleStamp;
+import com.oracle.graal.truffle.TruffleStamp;
+import com.oracle.truffle.api.TypedObject;
 
 @RunWith(Theories.class)
 public class TruffleStampTest {
@@ -16,9 +43,11 @@ public class TruffleStampTest {
     private static final Object TYPE1 = new Object();
     private static final Object TYPE2 = new Object();
 
-    @DataPoints public static Object[] data = new Object[]{1, 2, 1.0d, 2.0d, "1", "2", null,//
+    // @formatter:off
+    @DataPoints public static Object[] data = new Object[]{1, 2, 1.0d, 2.0d, "1", "2", null,
                     new TestTypedObject(TYPE1), new TestTypedObject(TYPE1), new TestTypedObject(TYPE2), //
                     new Object[]{1, "a", new TestTypedObject(TYPE1)}, new Object[0]};
+    // @formatter:on
 
     private TruffleStamp stamp;
 
@@ -134,7 +163,7 @@ public class TruffleStampTest {
 
         private final Object type;
 
-        public TestTypedObject(Object type) {
+        TestTypedObject(Object type) {
             this.type = type;
         }
 

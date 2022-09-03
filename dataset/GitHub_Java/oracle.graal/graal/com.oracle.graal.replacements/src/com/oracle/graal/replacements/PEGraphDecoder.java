@@ -229,8 +229,8 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         @Override
-        public boolean intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, ValueNode[] args) {
-            return false;
+        public void intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, ValueNode[] args) {
+            throw unimplemented();
         }
 
         @Override
@@ -637,7 +637,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
         } else if (node instanceof ForeignCallNode) {
             ForeignCallNode foreignCall = (ForeignCallNode) node;
-            if (foreignCall.getBci() == BytecodeFrame.UNKNOWN_BCI && methodScope.invokeData != null) {
+            if (foreignCall.getBci() == BytecodeFrame.UNKNOWN_BCI) {
                 foreignCall.setBci(methodScope.invokeData.invoke.bci());
             }
         }

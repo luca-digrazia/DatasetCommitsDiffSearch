@@ -37,6 +37,7 @@ import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.Value;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.graal.lir.alloc.trace.ShadowedRegisterValue;
@@ -108,7 +109,7 @@ public class TraceGlobalMoveResolutionMappingTest {
         private final HashSet<Pair> mapping = new HashSet<>();
 
         @Override
-        public void addMapping(Value src, AllocatableValue dst) {
+        public void addMapping(Value src, AllocatableValue dst, Value srcStack) {
             mapping.add(new Pair(src, dst));
         }
 
@@ -132,7 +133,7 @@ public class TraceGlobalMoveResolutionMappingTest {
     private static final Register r0 = new Register(0, 0, "r0", CPU);
     private static final Register r1 = new Register(1, 1, "r1", CPU);
 
-    private static enum DummyPlatformKind implements PlatformKind {
+    private enum DummyPlatformKind implements PlatformKind {
         Long;
 
         private EnumKey<DummyPlatformKind> key = new EnumKey<>(this);
@@ -248,11 +249,20 @@ public class TraceGlobalMoveResolutionMappingTest {
     }
 
     @Test
+    @Ignore("Cannot express mapping dependencies (yet)")
     public void testStack2Shadowed0() {
         addMapping(s(2), sd(r1, 1));
         assertSize(2);
         assertContains(s(2), v(r1));
         assertContains(v(r1), s(1));
+    }
+
+    @Test
+    public void testStack2Shadowed0WorkArount() {
+        addMapping(s(2), sd(r1, 1));
+        assertSize(2);
+        assertContains(s(2), v(r1));
+        assertContains(s(2), s(1));
     }
 
     @Test

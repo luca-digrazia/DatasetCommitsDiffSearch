@@ -22,17 +22,22 @@
  */
 package com.oracle.graal.compiler.gen;
 
-import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.*;
+import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.BCI;
+import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.END;
+import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.INSTRUCTION;
+import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.USE;
+import static com.oracle.graal.compiler.gen.InstructionPrinter.InstructionLineColumn.VALUE;
 
-import com.oracle.max.criutils.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.debug.LogStream;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.ValueNodeUtil;
 
 /**
- * A {@link ValueVisitor} for {@linkplain #printInstruction(ValueNode) printing}
- * an {@link FixedWithNextNode} as an expression or statement.
+ * A utility for {@linkplain #printInstruction(ValueNode) printing} a node as an expression or
+ * statement.
  */
 public class InstructionPrinter {
-
 
     /**
      * The columns printed in a tabulated instruction
@@ -50,7 +55,7 @@ public class InstructionPrinter {
         USE(7, "use"),
 
         /**
-         * The instruction as a {@linkplain com.oracle.graal.compiler.util.Util#valueString(com.oracle.graal.compiler.ir.Value) value}.
+         * The instruction as a value.
          */
         VALUE(12, "tid"),
 
@@ -64,7 +69,7 @@ public class InstructionPrinter {
         final int position;
         final String label;
 
-        private InstructionLineColumn(int position, String label) {
+        InstructionLineColumn(int position, String label) {
             this.position = position;
             this.label = label;
         }
@@ -72,6 +77,7 @@ public class InstructionPrinter {
         /**
          * Prints this column's label to a given stream after padding the stream with '_' characters
          * until its {@linkplain LogStream#position() position} is equal to this column's position.
+         *
          * @param out the print stream
          */
         public void printLabel(LogStream out) {
@@ -80,8 +86,9 @@ public class InstructionPrinter {
         }
 
         /**
-         * Prints space characters to a given stream until its {@linkplain LogStream#position() position}
-         * is equal to this column's position.
+         * Prints space characters to a given stream until its {@linkplain LogStream#position()
+         * position} is equal to this column's position.
+         *
          * @param out the print stream
          */
         public void advance(LogStream out) {
@@ -100,7 +107,8 @@ public class InstructionPrinter {
     }
 
     /**
-     * Prints a header for the tabulated data printed by {@link #printInstructionListing(ValueNode)}.
+     * Prints a header for the tabulated data printed by {@link #printInstructionListing(ValueNode)}
+     * .
      */
     public void printInstructionListingHeader() {
         BCI.printLabel(out);
@@ -112,20 +120,15 @@ public class InstructionPrinter {
     }
 
     /**
-     * Prints an instruction listing on one line. The instruction listing is composed of the
-     * columns specified by {@link InstructionLineColumn}.
+     * Prints an instruction listing on one line. The instruction listing is composed of the columns
+     * specified by {@link InstructionLineColumn}.
      *
      * @param instruction the instruction to print
      */
     public void printInstructionListing(ValueNode instruction) {
         int indentation = out.indentationLevel();
-        out.fillTo(BCI.position + indentation, ' ').
-             print(0).
-             fillTo(USE.position + indentation, ' ').
-             print("0").
-             fillTo(VALUE.position + indentation, ' ').
-             print(ValueNodeUtil.valueString(instruction)).
-             fillTo(INSTRUCTION.position + indentation, ' ');
+        out.fillTo(BCI.position + indentation, ' ').print(0).fillTo(USE.position + indentation, ' ').print("0").fillTo(VALUE.position + indentation, ' ').print(ValueNodeUtil.valueString(instruction)).fillTo(
+                        INSTRUCTION.position + indentation, ' ');
         printInstruction(instruction);
         if (instruction instanceof StateSplit) {
             out.print("  [state: " + ((StateSplit) instruction).stateAfter() + "]");

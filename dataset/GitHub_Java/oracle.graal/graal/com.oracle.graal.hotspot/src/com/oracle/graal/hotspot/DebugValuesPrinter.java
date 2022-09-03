@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,14 +22,23 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.compiler.GraalDebugConfig.*;
+import static com.oracle.graal.debug.GraalDebugConfig.Options.DebugValueSummary;
+import static com.oracle.graal.debug.GraalDebugConfig.Options.DebugValueThreadFilter;
+import static com.oracle.graal.debug.GraalDebugConfig.Options.SuppressZeroDebugValues;
 
-import java.io.*;
-import java.util.*;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.internal.*;
+import jdk.vm.ci.common.JVMCIError;
+
+import com.oracle.graal.debug.TTY;
+import com.oracle.graal.debug.internal.DebugValue;
+import com.oracle.graal.debug.internal.DebugValueMap;
+import com.oracle.graal.debug.internal.KeyRegistry;
 
 /**
  * Facility for printing the {@linkplain KeyRegistry#getDebugValues() values} collected across all
@@ -37,77 +46,71 @@ import com.oracle.graal.debug.internal.*;
  */
 public class DebugValuesPrinter {
 
-    public void printDebugValues(String phase, boolean reset) throws GraalInternalError {
-        if (Debug.areUnconditionalMetricsEnabled() || Debug.areUnconditionalTimersEnabled() || (Debug.isEnabled() && areMetricsOrTimersEnabled())) {
-            TTY.println();
-            if (phase != null) {
-                TTY.println("<DebugValues:" + phase + ">");
-            } else {
-                TTY.println("<DebugValues>");
-            }
-            List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
-            List<DebugValue> debugValues = KeyRegistry.getDebugValues();
-            if (debugValues.size() > 0) {
-                try {
-                    ArrayList<DebugValue> sortedValues = new ArrayList<>(debugValues);
-                    Collections.sort(sortedValues);
+    public void printDebugValues() throws JVMCIError {
+        TTY.println();
+        TTY.println("<DebugValues>");
+        List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
+        List<DebugValue> debugValues = KeyRegistry.getDebugValues();
+        if (debugValues.size() > 0) {
+            try {
+                ArrayList<DebugValue> sortedValues = new ArrayList<>(debugValues);
+                Collections.sort(sortedValues);
 
-                    String summary = DebugValueSummary.getValue();
-                    if (summary == null) {
-                        summary = "Complete";
-                    }
-                    switch (summary) {
-                        case "Name":
-                            printSummary(topLevelMaps, sortedValues);
-                            break;
-                        case "Partial": {
-                            DebugValueMap globalMap = new DebugValueMap("Global");
-                            for (DebugValueMap map : topLevelMaps) {
-                                flattenChildren(map, globalMap);
-                            }
-                            globalMap.normalize();
-                            printMap(new DebugValueScope(null, globalMap), sortedValues);
-                            break;
-                        }
-                        case "Complete": {
-                            DebugValueMap globalMap = new DebugValueMap("Global");
-                            for (DebugValueMap map : topLevelMaps) {
-                                globalMap.addChild(map);
-                            }
-                            globalMap.group();
-                            globalMap.normalize();
-                            printMap(new DebugValueScope(null, globalMap), sortedValues);
-                            break;
-                        }
-                        case "Thread":
-                            for (DebugValueMap map : topLevelMaps) {
-                                TTY.println("Showing the results for thread: " + map.getName());
-                                map.group();
-                                map.normalize();
-                                printMap(new DebugValueScope(null, map), sortedValues);
-                            }
-                            break;
-                        default:
-                            throw new GraalInternalError("Unknown summary type: %s", summary);
-                    }
-                    if (reset) {
-                        for (DebugValueMap topLevelMap : topLevelMaps) {
-                            topLevelMap.reset();
-                        }
-                    }
-                } catch (Throwable e) {
-                    // Don't want this to change the exit status of the VM
-                    PrintStream err = System.err;
-                    err.println("Error while printing debug values:");
-                    e.printStackTrace();
+                String summary = DebugValueSummary.getValue();
+                if (summary == null) {
+                    summary = "Complete";
                 }
-            }
-            if (phase != null) {
-                TTY.println("</DebugValues:" + phase + ">");
-            } else {
-                TTY.println("</DebugValues>");
+                if (DebugValueThreadFilter.getValue() != null && topLevelMaps.size() != 0) {
+                    topLevelMaps = topLevelMaps.stream().filter(map -> Pattern.compile(DebugValueThreadFilter.getValue()).matcher(map.getName()).find()).collect(Collectors.toList());
+                    if (topLevelMaps.size() == 0) {
+                        TTY.println("Warning: DebugValueThreadFilter=%s eliminated all maps so nothing will be printed", DebugValueThreadFilter.getValue());
+                    }
+                }
+                switch (summary) {
+                    case "Name":
+                        printSummary(topLevelMaps, sortedValues);
+                        break;
+                    case "Partial": {
+                        DebugValueMap globalMap = new DebugValueMap("Global");
+                        for (DebugValueMap map : topLevelMaps) {
+                            flattenChildren(map, globalMap);
+                        }
+                        globalMap.normalize();
+                        printMap(new DebugValueScope(null, globalMap), sortedValues);
+                        break;
+                    }
+                    case "Complete": {
+                        DebugValueMap globalMap = new DebugValueMap("Global");
+                        for (DebugValueMap map : topLevelMaps) {
+                            globalMap.addChild(map);
+                        }
+                        globalMap.group();
+                        globalMap.normalize();
+                        printMap(new DebugValueScope(null, globalMap), sortedValues);
+                        break;
+                    }
+                    case "Thread":
+                        for (DebugValueMap map : topLevelMaps) {
+                            TTY.println("Showing the results for thread: " + map.getName());
+                            map.group();
+                            map.normalize();
+                            printMap(new DebugValueScope(null, map), sortedValues);
+                        }
+                        break;
+                    default:
+                        throw new JVMCIError("Unknown summary type: %s", summary);
+                }
+                for (DebugValueMap topLevelMap : topLevelMaps) {
+                    topLevelMap.reset();
+                }
+            } catch (Throwable e) {
+                // Don't want this to change the exit status of the VM
+                PrintStream err = System.err;
+                err.println("Error while printing debug values:");
+                e.printStackTrace();
             }
         }
+        TTY.println("</DebugValues>");
     }
 
     private void flattenChildren(DebugValueMap map, DebugValueMap globalMap) {
@@ -150,7 +153,7 @@ public class DebugValuesPrinter {
         final DebugValueMap map;
         private boolean printed;
 
-        public DebugValueScope(DebugValueScope parent, DebugValueMap map) {
+        DebugValueScope(DebugValueScope parent, DebugValueMap map) {
             this.parent = parent;
             this.map = map;
             this.level = parent == null ? 0 : parent.level + 1;

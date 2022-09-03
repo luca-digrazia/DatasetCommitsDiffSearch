@@ -27,11 +27,18 @@ import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import java.util.function.Function;
 
+import jdk.vm.ci.aarch64.AArch64Kind;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.asm.Label;
 import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.asm.aarch64.AArch64Address;
 import com.oracle.graal.asm.aarch64.AArch64Assembler;
-import com.oracle.graal.asm.aarch64.AArch64Assembler.ConditionFlag;
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler.PatchLabelKind;
 import com.oracle.graal.code.CompilationResult.JumpTable;
@@ -42,17 +49,8 @@ import com.oracle.graal.lir.LabelRef;
 import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.StandardOp;
 import com.oracle.graal.lir.SwitchStrategy;
-import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
 import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
-
-import jdk.vm.ci.aarch64.AArch64Kind;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
 
 public class AArch64ControlFlow {
 
@@ -160,23 +158,18 @@ public class AArch64ControlFlow {
         public static final LIRInstructionClass<StrategySwitchOp> TYPE = LIRInstructionClass.create(StrategySwitchOp.class);
 
         private final Constant[] keyConstants;
-        protected final SwitchStrategy strategy;
-        private final Function<Condition, ConditionFlag> converter;
+        private final SwitchStrategy strategy;
+        private final Function<Condition, AArch64Assembler.ConditionFlag> converter;
         private final LabelRef[] keyTargets;
         private final LabelRef defaultTarget;
         @Alive protected Value key;
         // TODO (das) This could be optimized: We only need the scratch register in case of a
-        // datapatch, or too large immediates.
+        // datapatch, or too large
+        // immediates.
         @Temp protected Value scratch;
 
-        public StrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch,
-                        Function<Condition, ConditionFlag> converter) {
-            this(TYPE, strategy, keyTargets, defaultTarget, key, scratch, converter);
-        }
-
-        protected StrategySwitchOp(LIRInstructionClass<? extends StrategySwitchOp> c, SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch,
-                        Function<Condition, ConditionFlag> converter) {
-            super(c);
+        public StrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch, Function<Condition, AArch64Assembler.ConditionFlag> converter) {
+            super(TYPE);
             this.strategy = strategy;
             this.converter = converter;
             this.keyConstants = strategy.getKeyConstants();
@@ -190,23 +183,26 @@ public class AArch64ControlFlow {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            strategy.run(new SwitchClosure(asRegister(key), crb, masm));
+            strategy.run(new SwitchClosure(crb, masm));
         }
 
-        public class SwitchClosure extends BaseSwitchClosure {
+        private class SwitchClosure extends SwitchStrategy.BaseSwitchClosure {
+            private final AArch64MacroAssembler masm;
+            private final CompilationResultBuilder crb;
 
-            protected final Register keyRegister;
-            protected final CompilationResultBuilder crb;
-            protected final AArch64MacroAssembler masm;
-
-            protected SwitchClosure(Register keyRegister, CompilationResultBuilder crb, AArch64MacroAssembler masm) {
+            SwitchClosure(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
                 super(crb, masm, keyTargets, defaultTarget);
-                this.keyRegister = keyRegister;
-                this.crb = crb;
                 this.masm = masm;
+                this.crb = crb;
             }
 
-            protected void emitComparison(Constant c) {
+            @Override
+            protected void conditionalJump(int index, Condition condition, Label target) {
+                emitComparison(keyConstants[index]);
+                masm.branchConditionally(converter.apply(condition), target);
+            }
+
+            private void emitComparison(Constant c) {
                 JavaConstant jc = (JavaConstant) c;
                 ConstantValue constVal = new ConstantValue(LIRKind.value(key.getPlatformKind()), c);
                 switch (jc.getJavaKind()) {
@@ -224,12 +220,6 @@ public class AArch64ControlFlow {
                     default:
                         throw new JVMCIError("switch only supported for int, long and object");
                 }
-            }
-
-            @Override
-            protected void conditionalJump(int index, Condition condition, Label target) {
-                emitComparison(keyConstants[index]);
-                masm.branchConditionally(converter.apply(condition), target);
             }
         }
     }
@@ -295,7 +285,7 @@ public class AArch64ControlFlow {
 
     private static void emitCompare(CompilationResultBuilder crb, AArch64MacroAssembler masm, Value key, Value scratchValue, ConstantValue c) {
         long imm = c.getJavaConstant().asLong();
-        final int size = key.getPlatformKind().getSizeInBytes() * Byte.SIZE;
+        int size = key.getPlatformKind().getSizeInBytes() * Byte.SIZE;
         if (AArch64MacroAssembler.isComparisonImmediate(imm)) {
             masm.cmp(size, asRegister(key), (int) imm);
         } else {

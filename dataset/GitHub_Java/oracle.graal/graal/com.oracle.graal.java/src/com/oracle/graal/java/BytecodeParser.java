@@ -1377,8 +1377,11 @@ public class BytecodeParser implements GraphBuilderContext {
         }
         MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, targetMethod, args, returnType, profile));
 
+        // be conservative if information was not recorded (could result in endless
+        // recompiles otherwise)
         Invoke invoke;
-        if (omitInvokeExceptionEdge(callTarget)) {
+        if (lastInlineInfo == InlineInfo.DO_NOT_INLINE_NO_EXCEPTION || graphBuilderConfig.omitAllExceptionEdges() ||
+                        (!StressInvokeWithExceptionNode.getValue() && optimisticOpts.useExceptionProbability() && profilingInfo != null && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
             invoke = createInvoke(callTarget, resultType);
         } else {
             invoke = createInvokeWithException(callTarget, resultType);
@@ -1390,19 +1393,6 @@ public class BytecodeParser implements GraphBuilderContext {
         for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
             plugin.notifyNotInlined(this, targetMethod, invoke);
         }
-    }
-
-    /**
-     * If the method returns true, the invocation of the given {@link MethodCallTargetNode call
-     * target} does not need an exception edge.
-     *
-     * @param callTarget The call target.
-     */
-    protected boolean omitInvokeExceptionEdge(MethodCallTargetNode callTarget) {
-        // be conservative if information was not recorded (could result in endless
-        // recompiles otherwise)
-        return lastInlineInfo == InlineInfo.DO_NOT_INLINE_NO_EXCEPTION || graphBuilderConfig.omitAllExceptionEdges() ||
-                        (!StressInvokeWithExceptionNode.getValue() && optimisticOpts.useExceptionProbability() && profilingInfo != null && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE);
     }
 
     /**
@@ -2048,7 +2038,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
     private ValueNode synchronizedObject(FrameStateBuilder state, ResolvedJavaMethod target) {
         if (target.isStatic()) {
-            return appendConstant(getConstantReflection().asJavaClass(target.getDeclaringClass()));
+            return appendConstant(target.getDeclaringClass().getJavaClass());
         } else {
             return state.loadLocal(0, JavaKind.Object);
         }
@@ -2651,7 +2641,7 @@ public class BytecodeParser implements GraphBuilderContext {
             // this is a load of class constant which might be unresolved
             JavaType type = (JavaType) con;
             if (type instanceof ResolvedJavaType) {
-                frameState.push(JavaKind.Object, appendConstant(getConstantReflection().asJavaClass((ResolvedJavaType) type)));
+                frameState.push(JavaKind.Object, appendConstant(((ResolvedJavaType) type).getJavaClass()));
             } else {
                 handleUnresolvedLoadConstant(type);
             }

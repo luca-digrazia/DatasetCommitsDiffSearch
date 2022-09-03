@@ -1,9 +1,31 @@
+/*
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.graal.truffle;
 
-import java.util.*;
+import java.util.Arrays;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.TypedObject;
+import com.oracle.truffle.api.nodes.NodeInfo;
 
 public final class DefaultTruffleStamp {
 
@@ -24,6 +46,7 @@ public final class DefaultTruffleStamp {
             return ArrayStamp.INSTANCE.joinValue(value);
         } else if (!useInstanceStamps(value)) {
             Object type = getTypeIdentifier(value);
+            assert value != null;
             if (type != NO_TYPE) {
                 return new TypeStamp(value.getClass(), type);
             } else {
@@ -35,6 +58,9 @@ public final class DefaultTruffleStamp {
     }
 
     private static boolean useInstanceStamps(Object value) {
+        if (value == null) {
+            return true;
+        }
         if (TruffleCompilerOptions.TruffleSplittingTypeInstanceStamps.getValue()) {
             if (value instanceof TypedObject) {
                 return true;
@@ -53,7 +79,7 @@ public final class DefaultTruffleStamp {
         return NO_TYPE;
     }
 
-    private static abstract class ValueStamp implements TruffleStamp {
+    private abstract static class ValueStamp implements TruffleStamp {
 
         Class<?> getClazz() {
             return NO_CLASS;
@@ -116,7 +142,7 @@ public final class DefaultTruffleStamp {
         private final Class<?> clazz;
         private final Object type;
 
-        public InstanceStamp(Object instance) {
+        InstanceStamp(Object instance) {
             this.instance = instance;
             this.type = instance != null ? getTypeIdentifier(instance) : NO_TYPE;
             this.clazz = instance != null ? instance.getClass() : NO_CLASS;
@@ -192,7 +218,7 @@ public final class DefaultTruffleStamp {
         private final Class<?> clazz;
         private final Object type;
 
-        public TypeStamp(Class<?> clazz, Object type) {
+        TypeStamp(Class<?> clazz, Object type) {
             this.clazz = clazz;
             this.type = type;
             assert type != NO_TYPE;
@@ -255,7 +281,7 @@ public final class DefaultTruffleStamp {
 
         private final Class<?> clazz;
 
-        public ClassStamp(Class<?> clazz) {
+        ClassStamp(Class<?> clazz) {
             this.clazz = clazz;
         }
 
@@ -299,7 +325,7 @@ public final class DefaultTruffleStamp {
 
     }
 
-    private final static class ArrayStamp implements TruffleStamp {
+    private static final class ArrayStamp implements TruffleStamp {
 
         private static final ArrayStamp INSTANCE = new ArrayStamp(getInstance());
 
@@ -310,13 +336,13 @@ public final class DefaultTruffleStamp {
         private final TruffleStamp[] stampArray;
         private final int length;
 
-        public ArrayStamp(TruffleStamp stamp) {
+        ArrayStamp(TruffleStamp stamp) {
             this.stampArray = new TruffleStamp[MAX_STAMPED_ARGUMENTS];
             Arrays.fill(this.stampArray, stamp);
             this.length = UNINITIALIZED_LENGTH;
         }
 
-        public ArrayStamp(TruffleStamp[] profiledTypes, int length) {
+        ArrayStamp(TruffleStamp[] profiledTypes, int length) {
             this.stampArray = profiledTypes;
             this.length = length;
         }

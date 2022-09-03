@@ -40,14 +40,10 @@ import com.oracle.truffle.sl.runtime.SLNull;
 @NodeInfo(shortName = "generateDummyNodes")
 public abstract class SLGenerateDummyNodesBuiltin extends SLGraalRuntimeBuiltin {
 
-    SLGenerateDummyNodesBuiltin() {
-        super(SLGenerateDummyNodesBuiltin.class);
-    }
-
     @Specialization
     public Object generateNodes(long count) {
         CompilerAsserts.neverPartOfCompilation("generateNodes should never get optimized.");
-        FrameInstance callerFrame = Truffle.getRuntime().getCurrentFrame();
+        FrameInstance callerFrame = Truffle.getRuntime().getCallerFrame();
         SLRootNode root = (SLRootNode) callerFrame.getCallNode().getRootNode();
         root.getBodyNode().replace(createBinaryTree((int) (count - 1)));
         return SLNull.SINGLETON;

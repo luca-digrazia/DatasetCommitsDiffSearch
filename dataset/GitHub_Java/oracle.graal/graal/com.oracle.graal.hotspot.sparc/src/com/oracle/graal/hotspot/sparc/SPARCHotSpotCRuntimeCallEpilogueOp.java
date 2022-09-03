@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,52 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.sparc.SPARC.*;
-import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
+import static jdk.vm.ci.sparc.SPARC.g0;
+import static jdk.vm.ci.sparc.SPARCKind.XWORD;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.sparc.*;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.asm.sparc.SPARCAddress;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.sparc.SPARCDelayedControlTransfer;
+import com.oracle.graal.lir.sparc.SPARCLIRInstruction;
+import com.oracle.graal.lir.sparc.SPARCMove;
 
 @Opcode("CRUNTIME_CALL_EPILOGUE")
 final class SPARCHotSpotCRuntimeCallEpilogueOp extends SPARCLIRInstruction {
+    public static final LIRInstructionClass<SPARCHotSpotCRuntimeCallEpilogueOp> TYPE = LIRInstructionClass.create(SPARCHotSpotCRuntimeCallEpilogueOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(11);
+
+    private final int threadLastJavaSpOffset;
+    private final int threadLastJavaPcOffset;
+    private final int threadJavaFrameAnchorFlagsOffset;
+    private final Register thread;
+    @Use({REG, STACK}) protected Value threadTemp;
+
+    SPARCHotSpotCRuntimeCallEpilogueOp(int threadLastJavaSpOffset, int threadLastJavaPcOffset, int threadJavaFrameAnchorFlagsOffset, Register thread, Value threadTemp) {
+        super(TYPE, SIZE);
+        this.threadLastJavaSpOffset = threadLastJavaSpOffset;
+        this.threadLastJavaPcOffset = threadLastJavaPcOffset;
+        this.threadJavaFrameAnchorFlagsOffset = threadJavaFrameAnchorFlagsOffset;
+        this.thread = thread;
+        this.threadTemp = threadTemp;
+    }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
-        Register thread = graalRuntime().getRuntime().threadRegister();
+    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
 
         // Restore the thread register when coming back from the runtime.
-        new Mov(l7, thread).emit(masm);
+        SPARCMove.move(crb, masm, thread.asValue(LIRKind.value(XWORD)), threadTemp, SPARCDelayedControlTransfer.DUMMY);
 
-        // Reset last Java frame.
-        new Stx(g0, new SPARCAddress(thread, graalRuntime().getConfig().threadLastJavaSpOffset)).emit(masm);
+        // Reset last Java frame, last Java PC and flags.
+        masm.stx(g0, new SPARCAddress(thread, threadLastJavaSpOffset));
+        masm.stx(g0, new SPARCAddress(thread, threadLastJavaPcOffset));
+        masm.stw(g0, new SPARCAddress(thread, threadJavaFrameAnchorFlagsOffset));
     }
 }

@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.jtt.optimize;
 
-import java.lang.reflect.*;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.graal.jtt.*;
+import com.oracle.graal.jtt.JTTTest;
 
 public class ConditionalElimination01 extends JTTTest {
 
@@ -35,7 +35,7 @@ public class ConditionalElimination01 extends JTTTest {
 
     private static class A {
 
-        public A(int y) {
+        A(int y) {
             this.y = y;
         }
 
@@ -43,7 +43,7 @@ public class ConditionalElimination01 extends JTTTest {
     }
 
     @Override
-    protected void before(Method method) {
+    protected void before(ResolvedJavaMethod method) {
         super.before(method);
         x = 0;
     }

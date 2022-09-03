@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,8 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
+import jdk.vm.ci.meta.LocationIdentity;
+
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.nodes.FixedNode;
 
@@ -33,7 +34,6 @@ import com.oracle.graal.nodes.FixedNode;
  */
 public interface MemoryCheckpoint extends MemoryNode {
 
-    @Override
     FixedNode asNode();
 
     interface Single extends MemoryCheckpoint {

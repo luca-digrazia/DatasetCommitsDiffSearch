@@ -28,10 +28,11 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import jdk.vm.ci.meta.JavaConstant;
+
 import com.oracle.graal.compiler.common.cfg.Loop;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.nodes.AbstractBeginNode;
 import com.oracle.graal.nodes.BeginNode;
@@ -62,8 +63,6 @@ import com.oracle.graal.phases.schedule.SchedulePhase;
 import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
 import com.oracle.graal.phases.tiers.MidTierContext;
 
-import jdk.vm.ci.meta.JavaConstant;
-
 /**
  * This phase lowers {@link GuardNode GuardNodes} into corresponding control-flow structure and
  * {@link DeoptimizeNode DeoptimizeNodes}.
@@ -78,7 +77,7 @@ import jdk.vm.ci.meta.JavaConstant;
  */
 public class GuardLoweringPhase extends BasePhase<MidTierContext> {
 
-    private static final DebugCounter counterImplicitNullCheck = Debug.counter("ImplicitNullCheck");
+    private static final DebugMetric metricImplicitNullCheck = Debug.metric("ImplicitNullCheck");
 
     private static class UseImplicitNullChecks extends ScheduledNodeIterator {
 
@@ -152,7 +151,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
                 } else {
                     assert guard instanceof GuardNode;
                 }
-                counterImplicitNullCheck.increment();
+                metricImplicitNullCheck.increment();
                 access.setGuard(null);
                 FixedAccessNode fixedAccess;
                 if (access instanceof FloatingAccessNode) {
@@ -225,29 +224,26 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
             }
         }
 
-        @SuppressWarnings("try")
         private void lowerToIf(GuardNode guard) {
-            try (DebugCloseable position = guard.withNodeSourcePosition()) {
-                StructuredGraph graph = guard.graph();
-                AbstractBeginNode fastPath = graph.add(new BeginNode());
-                @SuppressWarnings("deprecation")
-                int debugId = useGuardIdAsDebugId ? guard.getId() : DeoptimizeNode.DEFAULT_DEBUG_ID;
-                DeoptimizeNode deopt = graph.add(new DeoptimizeNode(guard.getAction(), guard.getReason(), debugId, guard.getSpeculation(), null));
-                AbstractBeginNode deoptBranch = BeginNode.begin(deopt);
-                AbstractBeginNode trueSuccessor;
-                AbstractBeginNode falseSuccessor;
-                insertLoopExits(deopt);
-                if (guard.isNegated()) {
-                    trueSuccessor = deoptBranch;
-                    falseSuccessor = fastPath;
-                } else {
-                    trueSuccessor = fastPath;
-                    falseSuccessor = deoptBranch;
-                }
-                IfNode ifNode = graph.add(new IfNode(guard.getCondition(), trueSuccessor, falseSuccessor, trueSuccessor == fastPath ? 1 : 0));
-                guard.replaceAndDelete(fastPath);
-                insert(ifNode, fastPath);
+            StructuredGraph graph = guard.graph();
+            AbstractBeginNode fastPath = graph.add(new BeginNode());
+            @SuppressWarnings("deprecation")
+            int debugId = useGuardIdAsDebugId ? guard.getId() : DeoptimizeNode.DEFAULT_DEBUG_ID;
+            DeoptimizeNode deopt = graph.add(new DeoptimizeNode(guard.getAction(), guard.getReason(), debugId, guard.getSpeculation(), null));
+            AbstractBeginNode deoptBranch = BeginNode.begin(deopt);
+            AbstractBeginNode trueSuccessor;
+            AbstractBeginNode falseSuccessor;
+            insertLoopExits(deopt);
+            if (guard.isNegated()) {
+                trueSuccessor = deoptBranch;
+                falseSuccessor = fastPath;
+            } else {
+                trueSuccessor = fastPath;
+                falseSuccessor = deoptBranch;
             }
+            IfNode ifNode = graph.add(new IfNode(guard.getCondition(), trueSuccessor, falseSuccessor, trueSuccessor == fastPath ? 1 : 0));
+            guard.replaceAndDelete(fastPath);
+            insert(ifNode, fastPath);
         }
 
         private void insertLoopExits(DeoptimizeNode deopt) {
@@ -288,5 +284,4 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
         }
         new LowerGuards(block, Debug.isDumpEnabledForMethod() || Debug.isLogEnabledForMethod()).processNodes(block, schedule);
     }
-
 }

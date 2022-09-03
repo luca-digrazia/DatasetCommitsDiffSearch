@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,41 +22,52 @@
  */
 package com.oracle.graal.truffle;
 
-import java.io.*;
-import java.lang.reflect.*;
-import java.util.*;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.phases.util.Providers;
 
 public class TruffleExpansionLogger {
 
+    private final Providers providers;
     private final ExpansionTree root;
     private final Map<MethodCallTargetNode, ExpansionTree> callToParentTree = new HashMap<>();
 
-    public TruffleExpansionLogger(StructuredGraph graph) {
+    public TruffleExpansionLogger(Providers providers, StructuredGraph graph) {
+        this.providers = providers;
         root = new ExpansionTree(null, null, graph.method(), -1);
         registerParentInCalls(root, graph);
     }
 
     public void preExpand(MethodCallTargetNode callTarget, StructuredGraph inliningGraph) {
-        ResolvedJavaMethod sourceMethod = callTarget.invoke().getState().method();
+        ResolvedJavaMethod sourceMethod = callTarget.invoke().stateAfter().method();
 
         int sourceMethodBci = callTarget.invoke().bci();
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
-        Object targetReceiver = null;
-        if (!Modifier.isStatic(sourceMethod.getModifiers())) {
-            targetReceiver = callTarget.arguments().first().asConstant().asObject();
+        ResolvedJavaType targetReceiverType = null;
+        if (!sourceMethod.isStatic() && callTarget.receiver() != null && callTarget.receiver().isConstant()) {
+            targetReceiverType = providers.getMetaAccess().lookupJavaType(callTarget.arguments().first().asJavaConstant());
         }
 
-        ExpansionTree parent = callToParentTree.get(callTarget);
-        assert parent != null;
-        callToParentTree.remove(callTarget);
-        ExpansionTree tree = new ExpansionTree(parent, targetReceiver, targetMethod, sourceMethodBci);
-        registerParentInCalls(tree, inliningGraph);
+        if (targetReceiverType != null) {
+            ExpansionTree parent = callToParentTree.get(callTarget);
+            assert parent != null;
+            callToParentTree.remove(callTarget);
+            ExpansionTree tree = new ExpansionTree(parent, targetReceiverType, targetMethod, sourceMethodBci);
+            registerParentInCalls(tree, inliningGraph);
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -80,26 +91,27 @@ public class TruffleExpansionLogger {
     }
 
     private void registerParentInCalls(ExpansionTree parentTree, StructuredGraph graph) {
-        for (MethodCallTargetNode target : graph.getNodes(MethodCallTargetNode.class)) {
+        for (MethodCallTargetNode target : graph.getNodes(MethodCallTargetNode.TYPE)) {
             callToParentTree.put(target, parentTree);
         }
     }
 
-    public void print() {
+    public void print(OptimizedCallTarget target) {
+        System.out.printf("Expansion tree for %s: %n", target);
         root.print(System.out);
     }
 
     private static final class ExpansionTree implements Comparable<ExpansionTree> {
 
         private final ExpansionTree parent;
-        private final Object targetReceiver;
+        private final ResolvedJavaType targetReceiverType;
         private final ResolvedJavaMethod targetMethod;
         private final int parentBci;
         private final List<ExpansionTree> children = new ArrayList<>();
 
-        public ExpansionTree(ExpansionTree parent, Object receiver, ResolvedJavaMethod targetMethod, int parentBci) {
+        ExpansionTree(ExpansionTree parent, ResolvedJavaType targetReceiverType, ResolvedJavaMethod targetMethod, int parentBci) {
             this.parent = parent;
-            this.targetReceiver = receiver;
+            this.targetReceiverType = targetReceiverType;
             this.targetMethod = targetMethod;
             this.parentBci = parentBci;
             if (parent != null) {
@@ -133,15 +145,16 @@ public class TruffleExpansionLogger {
                 className = className.substring(lastIndex + 1, className.length());
             }
 
-            lastIndex = className.lastIndexOf('$');
-            if (lastIndex != -1) {
-                className = className.substring(lastIndex + 1, className.length());
-            }
+            className = extractInnerClassName(className);
 
             String constantType = "";
-            if (targetReceiver != null) {
-                if (!targetReceiver.getClass().getSimpleName().equals(className)) {
-                    constantType = "<" + targetReceiver.getClass().getSimpleName() + ">";
+            if (targetReceiverType != null) {
+                String javaName = targetReceiverType.toJavaName(false);
+
+                javaName = extractInnerClassName(javaName);
+
+                if (!javaName.equals(className)) {
+                    constantType = "<" + javaName + ">";
                 }
             }
 
@@ -160,6 +173,14 @@ public class TruffleExpansionLogger {
             }
         }
 
+        private static String extractInnerClassName(String className) {
+            int lastIndex = className.lastIndexOf('$');
+            if (lastIndex != -1) {
+                return className.substring(lastIndex + 1, className.length());
+            }
+            return className;
+        }
+
         private static String formatSource(StackTraceElement e) {
             if (e == null) {
                 return "";
@@ -171,7 +192,7 @@ public class TruffleExpansionLogger {
                     return String.format("(%s)", e.getFileName());
                 }
             } else {
-                return String.format("(Unknown Source)");
+                return "(Unknown Source)";
             }
         }
     }

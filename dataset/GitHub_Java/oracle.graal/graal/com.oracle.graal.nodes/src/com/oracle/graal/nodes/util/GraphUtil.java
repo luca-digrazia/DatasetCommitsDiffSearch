@@ -30,7 +30,6 @@ import java.util.Iterator;
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.code.SourceStackTrace;
-import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -75,9 +74,7 @@ public class GraphUtil {
              * while processing one branch.
              */
             for (Node successor : node.successors()) {
-                if (successor != null) {
-                    killCFG(successor, tool);
-                }
+                killCFG(successor, tool);
             }
         }
         node.replaceAtPredecessor(null);
@@ -135,14 +132,14 @@ public class GraphUtil {
         if (node != null && node.isAlive()) {
             node.markDeleted();
 
-            for (Node in : node.inputs()) {
+            node.acceptInputs((n, in) -> {
                 if (in.isAlive()) {
-                    in.removeUsage(node);
+                    in.removeUsage(n);
                     if (in.hasNoUsages() && !(in instanceof FixedNode)) {
                         killWithUnusedFloatingInputs(in);
                     }
                 }
-            }
+            });
 
             ArrayList<Node> usageToKill = null;
             for (Node usage : node.usages()) {
@@ -157,9 +154,8 @@ public class GraphUtil {
                 for (Node usage : usageToKill) {
                     if (usage.isAlive()) {
                         if (usage instanceof PhiNode) {
-                            PhiNode phiNode = (PhiNode) usage;
                             usage.replaceFirstInput(node, null);
-                            if (phiNode.merge() == null || !phiNode.hasValidInput()) {
+                            if (!((PhiNode) usage).hasValidInput()) {
                                 propagateKill(usage);
                             }
                         } else {
@@ -173,7 +169,7 @@ public class GraphUtil {
 
     public static void killWithUnusedFloatingInputs(Node node) {
         node.safeDelete();
-        for (Node in : node.inputs()) {
+        node.acceptInputs((n, in) -> {
             if (in.isAlive() && !(in instanceof FixedNode)) {
                 if (in.hasNoUsages()) {
                     killWithUnusedFloatingInputs(in);
@@ -187,7 +183,7 @@ public class GraphUtil {
                     killWithUnusedFloatingInputs(in);
                 }
             }
-        }
+        });
     }
 
     public static void removeFixedWithUnusedInputs(FixedWithNextNode fixed) {
@@ -588,13 +584,11 @@ public class GraphUtil {
         private final MetaAccessProvider metaAccess;
         private final ConstantReflectionProvider constantReflection;
         private final boolean canonicalizeReads;
-        private final Assumptions assumptions;
 
-        DefaultSimplifierTool(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, boolean canonicalizeReads, Assumptions assumptions) {
+        DefaultSimplifierTool(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, boolean canonicalizeReads) {
             this.metaAccess = metaAccess;
             this.constantReflection = constantReflection;
             this.canonicalizeReads = canonicalizeReads;
-            this.assumptions = assumptions;
         }
 
         public MetaAccessProvider getMetaAccess() {
@@ -628,13 +622,9 @@ public class GraphUtil {
 
         public void addToWorkList(Iterable<? extends Node> nodes) {
         }
-
-        public Assumptions getAssumptions() {
-            return assumptions;
-        }
     }
 
-    public static SimplifierTool getDefaultSimplifier(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, boolean canonicalizeReads, Assumptions assumptions) {
-        return new DefaultSimplifierTool(metaAccess, constantReflection, canonicalizeReads, assumptions);
+    public static SimplifierTool getDefaultSimplifier(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, boolean canonicalizeReads) {
+        return new DefaultSimplifierTool(metaAccess, constantReflection, canonicalizeReads);
     }
 }

@@ -31,8 +31,9 @@ import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 /**
  * Ensures that an element is only in the worklist once.
  *
+ * @param <T>
  */
-class UniqueWorkList extends ArrayDeque<AbstractBlockBase<?>> {
+class UniqueWorkList<T extends AbstractBlockBase<T>> extends ArrayDeque<T> {
     private static final long serialVersionUID = 8009554570990975712L;
     BitSet valid;
 
@@ -41,8 +42,8 @@ class UniqueWorkList extends ArrayDeque<AbstractBlockBase<?>> {
     }
 
     @Override
-    public AbstractBlockBase<?> poll() {
-        AbstractBlockBase<?> result = super.poll();
+    public T poll() {
+        T result = super.poll();
         if (result != null) {
             valid.set(result.getId(), false);
         }
@@ -50,7 +51,7 @@ class UniqueWorkList extends ArrayDeque<AbstractBlockBase<?>> {
     }
 
     @Override
-    public boolean add(AbstractBlockBase<?> pred) {
+    public boolean add(T pred) {
         if (!valid.get(pred.getId())) {
             valid.set(pred.getId(), true);
             return super.add(pred);
@@ -59,9 +60,9 @@ class UniqueWorkList extends ArrayDeque<AbstractBlockBase<?>> {
     }
 
     @Override
-    public boolean addAll(Collection<? extends AbstractBlockBase<?>> collection) {
+    public boolean addAll(Collection<? extends T> collection) {
         boolean changed = false;
-        for (AbstractBlockBase<?> element : collection) {
+        for (T element : collection) {
             if (!valid.get(element.getId())) {
                 valid.set(element.getId(), true);
                 super.add(element);

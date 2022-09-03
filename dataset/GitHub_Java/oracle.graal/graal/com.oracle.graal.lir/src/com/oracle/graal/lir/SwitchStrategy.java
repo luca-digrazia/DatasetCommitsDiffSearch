@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,24 @@
  */
 package com.oracle.graal.lir;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.nodes.calc.*;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+
+import com.oracle.graal.asm.Assembler;
+import com.oracle.graal.asm.Label;
+import com.oracle.graal.compiler.common.calc.Condition;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 /**
  * This class encapsulates different strategies on how to generate code for switch instructions.
- * 
- * The {@link #getBestStrategy(double[], Constant[], LabelRef[])} method can be used to get strategy
- * with the smallest average effort (average number of comparisons until a decision is reached). The
- * strategy returned by this method will have its averageEffort set, while a strategy constructed
- * directly will not.
+ *
+ * The {@link #getBestStrategy(double[], JavaConstant[], LabelRef[])} method can be used to get
+ * strategy with the smallest average effort (average number of comparisons until a decision is
+ * reached). The strategy returned by this method will have its averageEffort set, while a strategy
+ * constructed directly will not.
  */
 public abstract class SwitchStrategy {
 
@@ -43,7 +47,7 @@ public abstract class SwitchStrategy {
         /**
          * Generates a conditional or unconditional jump. The jump will be unconditional if
          * condition is null. If defaultTarget is true, then the jump will go the the default.
-         * 
+         *
          * @param index Index of the value and the jump target (only used if defaultTarget == false)
          * @param condition The condition on which to jump (can be null)
          * @param defaultTarget true if the jump should go to the default target, false if index
@@ -54,7 +58,7 @@ public abstract class SwitchStrategy {
         /**
          * Generates a conditional jump to the target with the specified index. The fall through
          * should go to the default target.
-         * 
+         *
          * @param index Index of the value and the jump target
          * @param condition The condition on which to jump
          * @param canFallThrough true if this is the last instruction in the switch statement, to
@@ -64,7 +68,7 @@ public abstract class SwitchStrategy {
 
         /**
          * Create a new label and generate a conditional jump to it.
-         * 
+         *
          * @param index Index of the value and the jump target
          * @param condition The condition on which to jump
          * @return a new Label
@@ -89,11 +93,11 @@ public abstract class SwitchStrategy {
     public abstract static class BaseSwitchClosure implements SwitchClosure {
 
         private final CompilationResultBuilder crb;
-        private final AbstractAssembler masm;
+        private final Assembler masm;
         private final LabelRef[] keyTargets;
         private final LabelRef defaultTarget;
 
-        public BaseSwitchClosure(CompilationResultBuilder crb, AbstractAssembler masm, LabelRef[] keyTargets, LabelRef defaultTarget) {
+        public BaseSwitchClosure(CompilationResultBuilder crb, Assembler masm, LabelRef[] keyTargets, LabelRef defaultTarget) {
             this.crb = crb;
             this.masm = masm;
             this.keyTargets = keyTargets;
@@ -116,9 +120,9 @@ public abstract class SwitchStrategy {
         }
 
         public void conditionalJumpOrDefault(int index, Condition condition, boolean canFallThrough) {
-            if (canFallThrough && defaultTarget.isCodeEmittingOrderSuccessorEdge(crb.getCurrentBlockIndex())) {
+            if (canFallThrough && crb.isSuccessorEdge(defaultTarget)) {
                 conditionalJump(index, condition, keyTargets[index].label());
-            } else if (canFallThrough && keyTargets[index].isCodeEmittingOrderSuccessorEdge(crb.getCurrentBlockIndex())) {
+            } else if (canFallThrough && crb.isSuccessorEdge(keyTargets[index])) {
                 conditionalJump(index, condition.negate(), defaultTarget.label());
             } else {
                 conditionalJump(index, condition, keyTargets[index].label());
@@ -150,11 +154,11 @@ public abstract class SwitchStrategy {
 
         private int defaultEffort;
         private int defaultCount;
-        private final int[] keyEfforts = new int[keyConstants.length];
-        private final int[] keyCounts = new int[keyConstants.length];
+        private final int[] keyEfforts = new int[keyProbabilities.length];
+        private final int[] keyCounts = new int[keyProbabilities.length];
         private final LabelRef[] keyTargets;
 
-        public EffortClosure(LabelRef[] keyTargets) {
+        EffortClosure(LabelRef[] keyTargets) {
             this.keyTargets = keyTargets;
         }
 
@@ -182,7 +186,7 @@ public abstract class SwitchStrategy {
         public double getAverageEffort() {
             double defaultProbability = 1;
             double effort = 0;
-            for (int i = 0; i < keyConstants.length; i++) {
+            for (int i = 0; i < keyProbabilities.length; i++) {
                 effort += keyEfforts[i] * keyProbabilities[i] / keyCounts[i];
                 defaultProbability -= keyProbabilities[i];
             }
@@ -191,31 +195,19 @@ public abstract class SwitchStrategy {
     }
 
     public final double[] keyProbabilities;
-    public final Constant[] keyConstants;
     private double averageEffort = -1;
     private EffortClosure effortClosure;
 
-    public SwitchStrategy(double[] keyProbabilities, Constant[] keyConstants) {
-        assert keyConstants.length == keyProbabilities.length && keyConstants.length >= 2;
+    public SwitchStrategy(double[] keyProbabilities) {
+        assert keyProbabilities.length >= 2;
         this.keyProbabilities = keyProbabilities;
-        this.keyConstants = keyConstants;
     }
+
+    public abstract Constant[] getKeyConstants();
 
     public double getAverageEffort() {
         assert averageEffort >= 0 : "average effort was not calculated yet for this strategy";
         return averageEffort;
-    }
-
-    /**
-     * Looks for the end of a stretch of key constants that are successive numbers and have the same
-     * target.
-     */
-    protected int getSliceEnd(SwitchClosure closure, int pos) {
-        int slice = pos;
-        while (slice < (keyConstants.length - 1) && keyConstants[slice + 1].asLong() == keyConstants[slice].asLong() + 1 && closure.isSameTarget(slice, slice + 1)) {
-            slice++;
-        }
-        return slice;
     }
 
     /**
@@ -253,10 +245,13 @@ public abstract class SwitchStrategy {
      */
     public static class SequentialStrategy extends SwitchStrategy {
         private final Integer[] indexes;
+        private final Constant[] keyConstants;
 
         public SequentialStrategy(final double[] keyProbabilities, Constant[] keyConstants) {
-            super(keyProbabilities, keyConstants);
+            super(keyProbabilities);
+            assert keyProbabilities.length == keyConstants.length;
 
+            this.keyConstants = keyConstants;
             int keyCount = keyConstants.length;
             indexes = new Integer[keyCount];
             for (int i = 0; i < keyCount; i++) {
@@ -268,6 +263,11 @@ public abstract class SwitchStrategy {
                     return keyProbabilities[o1] < keyProbabilities[o2] ? 1 : keyProbabilities[o1] > keyProbabilities[o2] ? -1 : 0;
                 }
             });
+        }
+
+        @Override
+        public Constant[] getKeyConstants() {
+            return keyConstants;
         }
 
         @Override
@@ -283,13 +283,43 @@ public abstract class SwitchStrategy {
     }
 
     /**
+     * Base class for strategies that rely on primitive integer keys.
+     */
+    private abstract static class PrimitiveStrategy extends SwitchStrategy {
+        protected final JavaConstant[] keyConstants;
+
+        protected PrimitiveStrategy(double[] keyProbabilities, JavaConstant[] keyConstants) {
+            super(keyProbabilities);
+            assert keyProbabilities.length == keyConstants.length;
+            this.keyConstants = keyConstants;
+        }
+
+        @Override
+        public JavaConstant[] getKeyConstants() {
+            return keyConstants;
+        }
+
+        /**
+         * Looks for the end of a stretch of key constants that are successive numbers and have the
+         * same target.
+         */
+        protected int getSliceEnd(SwitchClosure closure, int pos) {
+            int slice = pos;
+            while (slice < (keyConstants.length - 1) && keyConstants[slice + 1].asLong() == keyConstants[slice].asLong() + 1 && closure.isSameTarget(slice, slice + 1)) {
+                slice++;
+            }
+            return slice;
+        }
+    }
+
+    /**
      * This strategy divides the keys into ranges of successive keys with the same target and
      * creates comparisons for these ranges.
      */
-    public static class RangesStrategy extends SwitchStrategy {
+    public static class RangesStrategy extends PrimitiveStrategy {
         private final Integer[] indexes;
 
-        public RangesStrategy(final double[] keyProbabilities, Constant[] keyConstants) {
+        public RangesStrategy(final double[] keyProbabilities, JavaConstant[] keyConstants) {
             super(keyProbabilities, keyConstants);
 
             int keyCount = keyConstants.length;
@@ -347,13 +377,13 @@ public abstract class SwitchStrategy {
      * This strategy recursively subdivides the list of keys to create a binary search based on
      * probabilities.
      */
-    public static class BinaryStrategy extends SwitchStrategy {
+    public static class BinaryStrategy extends PrimitiveStrategy {
 
         private static final double MIN_PROBABILITY = 0.00001;
 
         private final double[] probabilitySums;
 
-        public BinaryStrategy(double[] keyProbabilities, Constant[] keyConstants) {
+        public BinaryStrategy(double[] keyProbabilities, JavaConstant[] keyConstants) {
             super(keyProbabilities, keyConstants);
             probabilitySums = new double[keyProbabilities.length + 1];
             double sum = 0;
@@ -457,7 +487,7 @@ public abstract class SwitchStrategy {
 
     public abstract void run(SwitchClosure closure);
 
-    private static SwitchStrategy[] getStrategies(double[] keyProbabilities, Constant[] keyConstants, LabelRef[] keyTargets) {
+    private static SwitchStrategy[] getStrategies(double[] keyProbabilities, JavaConstant[] keyConstants, LabelRef[] keyTargets) {
         SwitchStrategy[] strategies = new SwitchStrategy[]{new SequentialStrategy(keyProbabilities, keyConstants), new RangesStrategy(keyProbabilities, keyConstants),
                         new BinaryStrategy(keyProbabilities, keyConstants)};
         for (SwitchStrategy strategy : strategies) {
@@ -473,7 +503,7 @@ public abstract class SwitchStrategy {
      * Creates all switch strategies for the given switch, evaluates them (based on average effort)
      * and returns the best one.
      */
-    public static SwitchStrategy getBestStrategy(double[] keyProbabilities, Constant[] keyConstants, LabelRef[] keyTargets) {
+    public static SwitchStrategy getBestStrategy(double[] keyProbabilities, JavaConstant[] keyConstants, LabelRef[] keyTargets) {
         SwitchStrategy[] strategies = getStrategies(keyProbabilities, keyConstants, keyTargets);
         double bestEffort = Integer.MAX_VALUE;
         SwitchStrategy bestStrategy = null;

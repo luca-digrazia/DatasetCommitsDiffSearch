@@ -173,9 +173,7 @@ public final class SchedulePhase extends Phase {
         private BlockMap<ArrayList<FloatingReadNode>> calcLatestBlocks(SchedulingStrategy strategy, NodeMap<Block> currentNodeMap, BlockMap<List<Node>> earliestBlockToNodesMap, NodeBitMap visited,
                         BlockMap<List<Node>> latestBlockToNodesMap, boolean immutableGraph) {
             BlockMap<ArrayList<FloatingReadNode>> watchListMap = new BlockMap<>(cfg);
-            Block[] reversePostOrder = cfg.reversePostOrder();
-            for (int j = reversePostOrder.length - 1; j >= 0; --j) {
-                Block currentBlock = reversePostOrder[j];
+            for (Block currentBlock : cfg.postOrder()) {
                 List<Node> blockToNodes = earliestBlockToNodesMap.get(currentBlock);
                 LocationSet killed = null;
                 int previousIndex = blockToNodes.size();
@@ -527,7 +525,7 @@ public final class SchedulePhase extends Phase {
 
         private void scheduleEarliestIterative(BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap visited, StructuredGraph graph, boolean immutableGraph) {
 
-            BitSet floatingReads = new BitSet(cfg.getBlocks().length);
+            BitSet floatingReads = new BitSet(cfg.getBlocks().size());
 
             // Add begin nodes as the first entry and set the block for phi nodes.
             for (Block b : cfg.getBlocks()) {
@@ -553,9 +551,7 @@ public final class SchedulePhase extends Phase {
             NodeStack stack = new NodeStack();
 
             // Start analysis with control flow ends.
-            Block[] reversePostOrder = cfg.reversePostOrder();
-            for (int j = reversePostOrder.length - 1; j >= 0; --j) {
-                Block b = reversePostOrder[j];
+            for (Block b : cfg.postOrder()) {
                 FixedNode endNode = b.getEndNode();
                 if (isFixedEnd(endNode)) {
                     stack.push(endNode);
@@ -710,16 +706,36 @@ public final class SchedulePhase extends Phase {
                     }
 
                     if (current instanceof PhiNode) {
-                        processStackPhi(stack, (PhiNode) current);
+                        PhiNode phiNode = (PhiNode) current;
+                        AbstractMergeNode merge = phiNode.merge();
+                        for (int i = 0; i < merge.forwardEndCount(); ++i) {
+                            Node input = phiNode.valueAt(i);
+                            if (input != null) {
+                                stack.push(input);
+                            }
+                        }
                     } else if (current instanceof ProxyNode) {
-                        processStackProxy(stack, (ProxyNode) current);
+                        ProxyNode proxyNode = (ProxyNode) current;
+                        for (Node input : proxyNode.inputs()) {
+                            if (input != proxyNode.proxyPoint()) {
+                                stack.push(input);
+                            }
+                        }
                     } else if (current instanceof FrameState) {
-                        processStackFrameState(stack, current);
+                        for (Node input : current.inputs()) {
+                            if (input instanceof StateSplit && ((StateSplit) input).stateAfter() == current) {
+                                // Ignore the cycle.
+                            } else {
+                                stack.push(input);
+                            }
+                        }
                     } else {
                         current.pushInputs(stack);
                     }
                 } else {
+
                     stack.pop();
+
                     if (nodeToBlock.get(current) == null) {
                         Block curBlock = cfg.blockFor(current);
                         if (curBlock == null) {
@@ -760,35 +776,6 @@ public final class SchedulePhase extends Phase {
                             }
                         }
                     }
-                }
-            }
-        }
-
-        private static void processStackFrameState(NodeStack stack, Node current) {
-            for (Node input : current.inputs()) {
-                if (input instanceof StateSplit && ((StateSplit) input).stateAfter() == current) {
-                    // Ignore the cycle.
-                } else {
-                    stack.push(input);
-                }
-            }
-        }
-
-        private static void processStackProxy(NodeStack stack, ProxyNode proxyNode) {
-            LoopExitNode proxyPoint = proxyNode.proxyPoint();
-            for (Node input : proxyNode.inputs()) {
-                if (input != proxyPoint) {
-                    stack.push(input);
-                }
-            }
-        }
-
-        private static void processStackPhi(NodeStack stack, PhiNode phiNode) {
-            AbstractMergeNode merge = phiNode.merge();
-            for (int i = 0; i < merge.forwardEndCount(); ++i) {
-                Node input = phiNode.valueAt(i);
-                if (input != null) {
-                    stack.push(input);
                 }
             }
         }

@@ -22,15 +22,28 @@
  */
 package com.oracle.graal.phases.common.inlining.walker;
 
-import static com.oracle.graal.graph.util.CollectionsAccess.*;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.function.ToDoubleFunction;
 
-import java.util.*;
-import java.util.function.*;
-
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-
-import edu.umd.cs.findbugs.annotations.*;
+import com.oracle.graal.compiler.common.SuppressFBWarnings;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeWorkList;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.ControlSinkNode;
+import com.oracle.graal.nodes.ControlSplitNode;
+import com.oracle.graal.nodes.EndNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.Invoke;
+import com.oracle.graal.nodes.LoopBeginNode;
+import com.oracle.graal.nodes.LoopEndNode;
+import com.oracle.graal.nodes.LoopExitNode;
+import com.oracle.graal.nodes.MergeNode;
+import com.oracle.graal.nodes.StartNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.phases.common.inlining.InliningUtil;
 
 public class ComputeInliningRelevance {
 
@@ -71,13 +84,13 @@ public class ComputeInliningRelevance {
             rootScope = new Scope(graph.start(), null);
         } else {
             if (nodeRelevances == null) {
-                nodeRelevances = newNodeIdentityMap(EXPECTED_MIN_INVOKE_COUNT + graph.getNodeCount() / EXPECTED_INVOKE_RATIO);
+                nodeRelevances = Node.newIdentityMap(EXPECTED_MIN_INVOKE_COUNT + InliningUtil.getNodeCount(graph) / EXPECTED_INVOKE_RATIO);
             }
             NodeWorkList workList = graph.createNodeWorkList();
-            Map<LoopBeginNode, Scope> loops = newNodeIdentityMap(EXPECTED_LOOP_COUNT);
+            Map<LoopBeginNode, Scope> loops = Node.newIdentityMap(EXPECTED_LOOP_COUNT);
 
             loops.put(null, new Scope(graph.start(), null));
-            for (LoopBeginNode loopBegin : graph.getNodes(LoopBeginNode.class)) {
+            for (LoopBeginNode loopBegin : graph.getNodes(LoopBeginNode.TYPE)) {
                 createLoopScope(loopBegin, loops);
             }
 
@@ -116,9 +129,9 @@ public class ComputeInliningRelevance {
                         parent = loops.get(null);
                         break;
                     } else {
-                        assert current.getClass() == MergeNode.class : current;
+                        assert current instanceof MergeNode : current;
                         // follow any path upwards - it doesn't matter which one
-                        current = ((MergeNode) current).forwardEndAt(0);
+                        current = ((AbstractMergeNode) current).forwardEndAt(0);
                     }
                 } else if (current instanceof LoopExitNode) {
                     // if we reach a loop exit then we follow this loop and have the same parent
@@ -152,12 +165,12 @@ public class ComputeInliningRelevance {
          */
         private double scopeRelevanceWithinParent = UNINITIALIZED;
 
-        public Scope(FixedNode start, Scope parent) {
+        Scope(FixedNode start, Scope parent) {
             this.start = start;
             this.parent = parent;
         }
 
-        @SuppressFBWarnings("FE_FLOATING_POINT_EQUALITY")
+        @SuppressFBWarnings(value = "FE_FLOATING_POINT_EQUALITY", justification = "comparing against -1D is accurate")
         public double getFastPathMinProbability() {
             if (fastPathMinProbability == UNINITIALIZED) {
                 fastPathMinProbability = Math.max(EPSILON, computeFastPathMinProbability(start));
@@ -169,7 +182,7 @@ public class ComputeInliningRelevance {
          * Computes the ratio between the probabilities of the current scope's entry point and the
          * parent scope's fastPathMinProbability.
          */
-        @SuppressFBWarnings("FE_FLOATING_POINT_EQUALITY")
+        @SuppressFBWarnings(value = "FE_FLOATING_POINT_EQUALITY", justification = "comparing against -1D is accurate")
         public double getScopeRelevanceWithinParent() {
             if (scopeRelevanceWithinParent == UNINITIALIZED) {
                 if (start instanceof LoopBeginNode) {
@@ -280,7 +293,7 @@ public class ComputeInliningRelevance {
         int pathBeginCount = pathBeginNodes.size();
 
         for (Node sux : controlSplit.successors()) {
-            double probability = controlSplit.probability((BeginNode) sux);
+            double probability = controlSplit.probability((AbstractBeginNode) sux);
             if (probability > maxProbability) {
                 maxProbability = probability;
                 maxSux = sux;

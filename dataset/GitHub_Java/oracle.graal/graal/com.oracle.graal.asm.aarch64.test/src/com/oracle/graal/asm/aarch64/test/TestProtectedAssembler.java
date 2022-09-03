@@ -121,33 +121,33 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    protected void ldxr(int size, Register rt, Register rn) {
-        super.ldxr(size, rt, rn);
+    protected void ldxr(int size, Register rt, AArch64Address address) {
+        super.ldxr(size, rt, address);
     }
 
     @Override
-    protected void stxr(int size, Register rs, Register rt, Register rn) {
-        super.stxr(size, rs, rt, rn);
+    protected void stxr(int size, Register rs, Register rt, AArch64Address address) {
+        super.stxr(size, rs, rt, address);
     }
 
     @Override
-    protected void ldar(int size, Register rt, Register rn) {
-        super.ldar(size, rt, rn);
+    protected void ldar(int size, Register rt, AArch64Address address) {
+        super.ldar(size, rt, address);
     }
 
     @Override
-    protected void stlr(int size, Register rt, Register rn) {
-        super.stlr(size, rt, rn);
+    protected void stlr(int size, Register rt, AArch64Address address) {
+        super.stlr(size, rt, address);
     }
 
     @Override
-    public void ldaxr(int size, Register rt, Register rn) {
-        super.ldaxr(size, rt, rn);
+    public void ldaxr(int size, Register rt, AArch64Address address) {
+        super.ldaxr(size, rt, address);
     }
 
     @Override
-    public void stlxr(int size, Register rs, Register rt, Register rn) {
-        super.stlxr(size, rs, rt, rn);
+    public void stlxr(int size, Register rs, Register rt, AArch64Address address) {
+        super.stlxr(size, rs, rt, address);
     }
 
     @Override

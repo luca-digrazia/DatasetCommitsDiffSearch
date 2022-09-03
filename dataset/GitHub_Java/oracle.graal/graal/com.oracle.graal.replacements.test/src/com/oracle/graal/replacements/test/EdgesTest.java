@@ -22,10 +22,9 @@
  */
 package com.oracle.graal.replacements.test;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
-
 import java.lang.reflect.Method;
+
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -41,17 +40,15 @@ import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.java.InstanceOfNode;
+import com.oracle.graal.nodes.java.CheckCastNode;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.inlining.InliningPhase;
 import com.oracle.graal.phases.common.inlining.policy.InlineMethodSubstitutionsPolicy;
 import com.oracle.graal.phases.tiers.HighTierContext;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
 public class EdgesTest extends GraalCompilerTest {
 
-    @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+    @NodeInfo
     static final class TestNode extends Node {
         public static final NodeClass<TestNode> TYPE = NodeClass.create(TestNode.class);
         @Input NodeInputList<ValueNode> itail;
@@ -127,7 +124,7 @@ public class EdgesTest extends GraalCompilerTest {
         HighTierContext context = getDefaultHighTierContext();
         new InliningPhase(new InlineMethodSubstitutionsPolicy(), new CanonicalizerPhase()).apply(g, context);
         new CanonicalizerPhase().apply(g, context);
-        Assert.assertTrue(g.getNodes().filter(InstanceOfNode.class).isEmpty());
+        Assert.assertTrue(g.getNodes().filter(CheckCastNode.class).isEmpty());
     }
 
     private static Method getMethod(final String name, Class<?>... parameters) {

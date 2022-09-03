@@ -22,8 +22,11 @@
  */
 package com.oracle.graal.jtt.loop;
 
-import com.oracle.graal.jtt.*;
-import org.junit.*;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
+import org.junit.Test;
+
+import com.oracle.graal.jtt.JTTTest;
 
 /*
  */
@@ -45,7 +48,7 @@ public class LoopNewInstance extends JTTTest {
 
         private boolean exists;
 
-        public Blop() {
+        Blop() {
             if (!exists) {
                 count++;
             }
@@ -54,7 +57,7 @@ public class LoopNewInstance extends JTTTest {
     }
 
     @Override
-    protected void before() {
+    protected void before(ResolvedJavaMethod m) {
         count = 0;
     }
 

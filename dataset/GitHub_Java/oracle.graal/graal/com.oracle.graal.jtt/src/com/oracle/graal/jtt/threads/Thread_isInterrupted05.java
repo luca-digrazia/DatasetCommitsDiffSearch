@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.jtt.threads;
 
-import com.oracle.graal.jtt.*;
-import org.junit.*;
+import org.junit.Test;
+
+import com.oracle.graal.jtt.JTTTest;
 
 /*
  */
@@ -47,7 +48,7 @@ public class Thread_isInterrupted05 extends JTTTest {
 
         Throwable throwable;
 
-        public WaitInterruptee() {
+        WaitInterruptee() {
             super("WaitInterruptee");
         }
 
@@ -66,7 +67,7 @@ public class Thread_isInterrupted05 extends JTTTest {
         }
     }
 
-    @Test
+    @Test(timeout = 20000)
     public void run0() throws Throwable {
         runTest("test");
     }

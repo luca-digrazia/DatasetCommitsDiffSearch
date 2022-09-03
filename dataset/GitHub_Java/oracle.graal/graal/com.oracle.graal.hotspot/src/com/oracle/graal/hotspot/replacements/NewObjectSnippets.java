@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@ package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.compiler.common.GraalOptions.SnippetCounters;
 import static com.oracle.graal.compiler.common.calc.UnsignedMath.belowThan;
+import static com.oracle.graal.hotspot.nodes.CStringNode.cstring;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.CLASS_ARRAY_KLASS_LOCATION;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.HUB_WRITE_LOCATION;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.MARK_WORD_LOCATION;
@@ -60,7 +61,6 @@ import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
 import static com.oracle.graal.replacements.ReplacementsUtil.REPLACEMENTS_ASSERTIONS_ENABLED;
 import static com.oracle.graal.replacements.ReplacementsUtil.staticAssert;
 import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
-import static com.oracle.graal.replacements.nodes.CStringConstant.cstring;
 import static com.oracle.graal.replacements.nodes.ExplodeLoopNode.explodeLoop;
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
 import static jdk.vm.ci.hotspot.HotSpotMetaAccessProvider.computeArrayAllocationSize;
@@ -73,10 +73,10 @@ import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LocationIdentity;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.debug.Debug;

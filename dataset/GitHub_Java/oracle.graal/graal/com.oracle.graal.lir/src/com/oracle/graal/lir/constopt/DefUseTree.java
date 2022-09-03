@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,42 +22,46 @@
  */
 package com.oracle.graal.lir.constopt;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.MoveOp;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.Value;
+
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.StandardOp.LoadConstantOp;
+import com.oracle.graal.lir.Variable;
 
 /**
  * Represents def-use tree of a constant.
  */
 class DefUseTree {
-    private final LIRInstruction instruction;
-    private final AbstractBlock<?> block;
+    private final LoadConstantOp instruction;
+    private final AbstractBlockBase<?> block;
     private final List<UseEntry> uses;
 
-    public DefUseTree(LIRInstruction instruction, AbstractBlock<?> block) {
-        assert instruction instanceof MoveOp : "Not a MoveOp: " + instruction;
-        this.instruction = instruction;
+    DefUseTree(LIRInstruction instruction, AbstractBlockBase<?> block) {
+        assert instruction instanceof LoadConstantOp : "Not a LoadConstantOp: " + instruction;
+        this.instruction = (LoadConstantOp) instruction;
         this.block = block;
         this.uses = new ArrayList<>();
     }
 
     public Variable getVariable() {
-        return (Variable) ((MoveOp) instruction).getResult();
+        return (Variable) instruction.getResult();
     }
 
-    public JavaConstant getConstant() {
-        return (JavaConstant) ((MoveOp) instruction).getInput();
+    public Constant getConstant() {
+        return instruction.getConstant();
     }
 
     public LIRInstruction getInstruction() {
-        return instruction;
+        return (LIRInstruction) instruction;
     }
 
-    public AbstractBlock<?> getBlock() {
+    public AbstractBlockBase<?> getBlock() {
         return block;
     }
 
@@ -66,8 +70,8 @@ class DefUseTree {
         return "DefUseTree [" + instruction + "|" + block + "," + uses + "]";
     }
 
-    public void addUsage(AbstractBlock<?> b, LIRInstruction inst, ValuePosition position) {
-        uses.add(new UseEntry(b, inst, position));
+    public void addUsage(AbstractBlockBase<?> b, LIRInstruction inst, Value value) {
+        uses.add(new UseEntry(b, inst, value));
     }
 
     public int usageCount() {

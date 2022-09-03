@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.graph;
 
+import static com.oracle.graal.graph.Edges.Type.Successors;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -397,9 +399,9 @@ public class Graph {
         return add(node);
     }
 
-    public <T extends Node> T addWithoutUniqueWithInputs(T node) {
+    public <T extends Node> void addWithoutUniqueWithInputs(T node) {
         addInputs(node);
-        return addHelper(node);
+        addHelper(node);
     }
 
     public <T extends Node> T addOrUniqueWithInputs(T node) {
@@ -410,24 +412,16 @@ public class Graph {
         return add(node);
     }
 
-    private final class AddInputsFilter extends Node.EdgeVisitor {
-
-        @Override
-        public Node apply(Node self, Node input) {
-            if (!input.isAlive()) {
+    private <T extends Node> void addInputs(T node) {
+        NodePosIterator iterator = node.inputs().iterator();
+        while (iterator.hasNext()) {
+            Position pos = iterator.nextPosition();
+            Node input = pos.get(node);
+            if (input != null && !input.isAlive()) {
                 assert !input.isDeleted();
-                return addOrUniqueWithInputs(input);
-            } else {
-                return input;
+                pos.initialize(node, addOrUniqueWithInputs(input));
             }
         }
-
-    }
-
-    private AddInputsFilter addInputsFilter = new AddInputsFilter();
-
-    private <T extends Node> void addInputs(T node) {
-        node.applyInputs(addInputsFilter);
     }
 
     private <T extends Node> T addHelper(T node) {
@@ -629,18 +623,20 @@ public class Graph {
             int minCount = Integer.MAX_VALUE;
             Node minCountNode = null;
             for (Node input : node.inputs()) {
-                int usageCount = input.getUsageCount();
-                if (usageCount == earlyExitUsageCount) {
-                    return null;
-                } else if (usageCount < minCount) {
-                    minCount = usageCount;
-                    minCountNode = input;
+                if (input != null) {
+                    int usageCount = input.getUsageCount();
+                    if (usageCount == earlyExitUsageCount) {
+                        return null;
+                    } else if (usageCount < minCount) {
+                        minCount = usageCount;
+                        minCountNode = input;
+                    }
                 }
             }
             if (minCountNode != null) {
                 for (Node usage : minCountNode.usages()) {
-                    if (usage != node && nodeClass == usage.getNodeClass() && node.valueEquals(usage) && nodeClass.equalInputs(node, usage) &&
-                                    nodeClass.equalSuccessors(node, usage)) {
+                    if (usage != node && nodeClass == usage.getNodeClass() && node.valueEquals(usage) && nodeClass.getInputEdges().areEqualIn(node, usage) &&
+                                    nodeClass.getEdges(Successors).areEqualIn(node, usage)) {
                         return (T) usage;
                     }
                 }

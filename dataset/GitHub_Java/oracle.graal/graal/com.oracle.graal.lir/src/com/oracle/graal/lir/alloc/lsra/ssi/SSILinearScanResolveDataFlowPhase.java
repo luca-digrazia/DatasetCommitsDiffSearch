@@ -22,19 +22,28 @@
  */
 package com.oracle.graal.lir.alloc.lsra.ssi;
 
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRValueUtil.asConstant;
+import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
+import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
+import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
+import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import java.util.*;
+import java.util.HashMap;
 
-import jdk.internal.jvmci.meta.*;
+import jdk.vm.ci.meta.Value;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.alloc.lsra.*;
-import com.oracle.graal.lir.ssa.SSAUtils.PhiValueVisitor;
-import com.oracle.graal.lir.ssi.*;
+import com.oracle.graal.compiler.common.CollectionsFactory;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugMetric;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.alloc.lsra.Interval;
+import com.oracle.graal.lir.alloc.lsra.LinearScan;
+import com.oracle.graal.lir.alloc.lsra.LinearScanResolveDataFlowPhase;
+import com.oracle.graal.lir.alloc.lsra.MoveResolver;
+import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
+import com.oracle.graal.lir.ssi.SSIUtil;
 
 public class SSILinearScanResolveDataFlowPhase extends LinearScanResolveDataFlowPhase {
 
@@ -54,11 +63,11 @@ public class SSILinearScanResolveDataFlowPhase extends LinearScanResolveDataFlow
          */
         for (AbstractBlockBase<?> toBlock : allocator.sortedBlocks()) {
             if (toBlock.getPredecessorCount() != 0) {
-                SSIUtils.removeIncoming(allocator.getLIR(), toBlock);
+                SSIUtil.removeIncoming(allocator.getLIR(), toBlock);
             } else {
                 assert allocator.getLIR().getControlFlowGraph().getStartBlock().equals(toBlock);
             }
-            SSIUtils.removeOutgoing(allocator.getLIR(), toBlock);
+            SSIUtil.removeOutgoing(allocator.getLIR(), toBlock);
         }
     }
 
@@ -68,17 +77,17 @@ public class SSILinearScanResolveDataFlowPhase extends LinearScanResolveDataFlow
 
         if (midBlock != null) {
             HashMap<Value, Value> map = CollectionsFactory.newMap();
-            SSIUtils.forEachValuePair(allocator.getLIR(), midBlock, fromBlock, (to, from) -> map.put(to, from));
+            SSIUtil.forEachValuePair(allocator.getLIR(), midBlock, fromBlock, (to, from) -> map.put(to, from));
 
             MyPhiValueVisitor visitor = new MyPhiValueVisitor(moveResolver, toBlock, fromBlock);
-            SSIUtils.forEachValuePair(allocator.getLIR(), toBlock, midBlock, (to, from) -> {
-                Value phiOut = isConstant(from) ? from : map.get(from);
+            SSIUtil.forEachValuePair(allocator.getLIR(), toBlock, midBlock, (to, from) -> {
+                Value phiOut = isJavaConstant(from) ? from : map.get(from);
                 assert phiOut != null : "No entry for " + from;
                 visitor.visit(to, phiOut);
             });
         } else {
             // default case
-            SSIUtils.forEachValuePair(allocator.getLIR(), toBlock, fromBlock, new MyPhiValueVisitor(moveResolver, toBlock, fromBlock));
+            SSIUtil.forEachValuePair(allocator.getLIR(), toBlock, fromBlock, new MyPhiValueVisitor(moveResolver, toBlock, fromBlock));
         }
 
     }
@@ -88,7 +97,7 @@ public class SSILinearScanResolveDataFlowPhase extends LinearScanResolveDataFlow
         final int toId;
         final int fromId;
 
-        public MyPhiValueVisitor(MoveResolver moveResolver, AbstractBlockBase<?> toBlock, AbstractBlockBase<?> fromBlock) {
+        MyPhiValueVisitor(MoveResolver moveResolver, AbstractBlockBase<?> toBlock, AbstractBlockBase<?> fromBlock) {
             this.moveResolver = moveResolver;
             toId = allocator.getFirstLirInstructionId(toBlock);
             fromId = allocator.getLastLirInstructionId(fromBlock);
@@ -107,9 +116,9 @@ public class SSILinearScanResolveDataFlowPhase extends LinearScanResolveDataFlow
                 return;
             }
             Interval toInterval = allocator.splitChildAtOpId(allocator.intervalFor(phiIn), toId, LIRInstruction.OperandMode.DEF);
-            if (isConstant(phiOut)) {
+            if (isConstantValue(phiOut)) {
                 numSSIResolutionMoves.increment();
-                moveResolver.addMapping(phiOut, toInterval);
+                moveResolver.addMapping(asConstant(phiOut), toInterval);
             } else {
                 Interval fromInterval = allocator.splitChildAtOpId(allocator.intervalFor(phiOut), fromId, LIRInstruction.OperandMode.DEF);
                 if (fromInterval != toInterval) {

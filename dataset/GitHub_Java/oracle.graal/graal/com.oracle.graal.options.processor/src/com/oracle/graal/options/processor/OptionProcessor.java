@@ -131,6 +131,11 @@ public class OptionProcessor extends AbstractProcessor {
             optionName = fieldName;
         }
 
+        if (!Character.isUpperCase(optionName.charAt(0))) {
+            processingEnv.getMessager().printMessage(Kind.ERROR, "Option name must start with capital letter", element);
+            return;
+        }
+
         DeclaredType declaredOptionValueType = declaredFieldType;
         while (!types.isSameType(types.erasure(declaredOptionValueType), types.erasure(optionValueType))) {
             List<? extends TypeMirror> directSupertypes = types.directSupertypes(declaredFieldType);
@@ -281,7 +286,7 @@ public class OptionProcessor extends AbstractProcessor {
         final String declaringClass;
         final VariableElement field;
 
-        public OptionInfo(String name, String help, String type, String declaringClass, VariableElement field) {
+        OptionInfo(String name, String help, String type, String declaringClass, VariableElement field) {
             this.name = name;
             this.help = help;
             this.type = type;
@@ -306,7 +311,7 @@ public class OptionProcessor extends AbstractProcessor {
         final List<OptionInfo> options = new ArrayList<>();
         final Set<Element> originatingElements = new HashSet<>();
 
-        public OptionsInfo(Element topDeclaringType) {
+        OptionsInfo(Element topDeclaringType) {
             this.topDeclaringType = topDeclaringType;
         }
     }

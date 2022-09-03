@@ -100,4 +100,21 @@ class AMD64HotSpotRegisterAllocationConfig extends RegisterAllocationConfig {
 
         return super.initAllocatable(allocatableRegisters.toArray(new Register[allocatableRegisters.size()]));
     }
+
+    @Override
+    protected AllocatableRegisters createAllocatableRegisters(Register[] registers) {
+        int min = Integer.MAX_VALUE;
+        int max = Integer.MIN_VALUE;
+        for (Register reg : registers) {
+            int number = reg.number;
+            if (number < min) {
+                min = number;
+            }
+            if (number > max) {
+                max = number;
+            }
+        }
+        assert min < max;
+        return new AllocatableRegisters(registers, min, max);
+    }
 }

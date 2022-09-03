@@ -24,7 +24,9 @@ package com.oracle.graal.lir.dfa;
 
 import java.util.List;
 
-import com.oracle.graal.compiler.common.LIRKind;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.LIRFrameState;
@@ -36,10 +38,6 @@ import com.oracle.graal.lir.phases.AllocationPhase;
 import com.oracle.graal.lir.util.IndexedValueMap;
 import com.oracle.graal.lir.util.ValueSet;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
-
 /**
  * Record all derived reference base pointers in a frame state.
  */
@@ -47,12 +45,12 @@ public final class MarkBasePointersPhase extends AllocationPhase {
 
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, AllocationContext context) {
-        new Marker(lirGenRes.getLIR(), null).build();
+        new Marker<B>(lirGenRes.getLIR(), null).build();
     }
 
-    private static final class Marker extends LocationMarker<Marker.BasePointersSet> {
+    private static final class Marker<T extends AbstractBlockBase<T>> extends LocationMarker<T, Marker<T>.BasePointersSet> {
 
-        private final class BasePointersSet extends ValueSet<Marker.BasePointersSet> {
+        private final class BasePointersSet extends ValueSet<Marker<T>.BasePointersSet> {
 
             private final IndexedValueMap variables;
 
@@ -65,14 +63,14 @@ public final class MarkBasePointersPhase extends AllocationPhase {
             }
 
             @Override
-            public Marker.BasePointersSet copy() {
+            public Marker<T>.BasePointersSet copy() {
                 return new BasePointersSet(this);
             }
 
             @Override
             public void put(Value v) {
-                Variable base = (Variable) v.getValueKind(LIRKind.class).getDerivedReferenceBase();
-                assert !base.getValueKind(LIRKind.class).isValue();
+                Variable base = (Variable) v.getLIRKind().getDerivedReferenceBase();
+                assert !base.getLIRKind().isValue();
                 variables.put(base.index, base);
             }
 
@@ -83,11 +81,12 @@ public final class MarkBasePointersPhase extends AllocationPhase {
 
             @Override
             public void remove(Value v) {
-                Variable base = (Variable) v.getValueKind(LIRKind.class).getDerivedReferenceBase();
-                assert !base.getValueKind(LIRKind.class).isValue();
+                Variable base = (Variable) v.getLIRKind().getDerivedReferenceBase();
+                assert !base.getLIRKind().isValue();
                 variables.put(base.index, null);
             }
 
+            @SuppressWarnings("unchecked")
             @Override
             public boolean equals(Object obj) {
                 if (obj instanceof Marker.BasePointersSet) {
@@ -109,18 +108,13 @@ public final class MarkBasePointersPhase extends AllocationPhase {
         }
 
         @Override
-        protected Marker.BasePointersSet newLiveValueSet() {
+        protected Marker<T>.BasePointersSet newLiveValueSet() {
             return new BasePointersSet();
         }
 
         @Override
         protected boolean shouldProcessValue(Value operand) {
-            ValueKind<?> kind = operand.getValueKind();
-            if (kind instanceof LIRKind) {
-                return ((LIRKind) kind).isDerivedReference();
-            } else {
-                return false;
-            }
+            return operand.getLIRKind().isDerivedReference();
         }
 
         @Override

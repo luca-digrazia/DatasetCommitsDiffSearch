@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,11 @@
  */
 package com.oracle.graal.compiler.common.calc;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.PrimitiveConstant;
 
 /**
  * Condition codes used in conditionals.
@@ -82,7 +84,7 @@ public enum Condition {
 
     public final String operator;
 
-    private Condition(String operator) {
+    Condition(String operator) {
         this.operator = operator;
     }
 
@@ -321,8 +323,8 @@ public enum Condition {
      * @return {@link Boolean#TRUE} if the comparison is known to be true, {@link Boolean#FALSE} if
      *         the comparison is known to be false
      */
-    public boolean foldCondition(Constant lt, Constant rt, ConstantReflectionProvider constantReflection) {
-        assert !lt.getKind().isNumericFloat() && !rt.getKind().isNumericFloat();
+    public boolean foldCondition(JavaConstant lt, JavaConstant rt, ConstantReflectionProvider constantReflection) {
+        assert !lt.getJavaKind().isNumericFloat() && !rt.getJavaKind().isNumericFloat();
         return foldCondition(lt, rt, constantReflection, false);
     }
 
@@ -337,128 +339,132 @@ public enum Condition {
      *         false
      */
     public boolean foldCondition(Constant lt, Constant rt, ConstantReflectionProvider constantReflection, boolean unorderedIsTrue) {
-        switch (lt.getKind()) {
-            case Boolean:
-            case Byte:
-            case Char:
-            case Short:
-            case Int: {
-                int x = lt.asInt();
-                int y = rt.asInt();
-                switch (this) {
-                    case EQ:
-                        return x == y;
-                    case NE:
-                        return x != y;
-                    case LT:
-                        return x < y;
-                    case LE:
-                        return x <= y;
-                    case GT:
-                        return x > y;
-                    case GE:
-                        return x >= y;
-                    case AE:
-                        return UnsignedMath.aboveOrEqual(x, y);
-                    case BE:
-                        return UnsignedMath.belowOrEqual(x, y);
-                    case AT:
-                        return UnsignedMath.aboveThan(x, y);
-                    case BT:
-                        return UnsignedMath.belowThan(x, y);
-                    default:
-                        throw new GraalInternalError("expected condition: %s", this);
-                }
-            }
-            case Long: {
-                long x = lt.asLong();
-                long y = rt.asLong();
-                switch (this) {
-                    case EQ:
-                        return x == y;
-                    case NE:
-                        return x != y;
-                    case LT:
-                        return x < y;
-                    case LE:
-                        return x <= y;
-                    case GT:
-                        return x > y;
-                    case GE:
-                        return x >= y;
-                    case AE:
-                        return UnsignedMath.aboveOrEqual(x, y);
-                    case BE:
-                        return UnsignedMath.belowOrEqual(x, y);
-                    case AT:
-                        return UnsignedMath.aboveThan(x, y);
-                    case BT:
-                        return UnsignedMath.belowThan(x, y);
-                    default:
-                        throw new GraalInternalError("expected condition: %s", this);
-                }
-            }
-            case Object: {
-                Boolean equal = constantReflection.constantEquals(lt, rt);
-                if (equal != null) {
+        if (lt instanceof PrimitiveConstant) {
+            PrimitiveConstant lp = (PrimitiveConstant) lt;
+            PrimitiveConstant rp = (PrimitiveConstant) rt;
+            switch (lp.getJavaKind()) {
+                case Boolean:
+                case Byte:
+                case Char:
+                case Short:
+                case Int: {
+                    int x = lp.asInt();
+                    int y = rp.asInt();
                     switch (this) {
                         case EQ:
-                            return equal.booleanValue();
+                            return x == y;
                         case NE:
-                            return !equal.booleanValue();
+                            return x != y;
+                        case LT:
+                            return x < y;
+                        case LE:
+                            return x <= y;
+                        case GT:
+                            return x > y;
+                        case GE:
+                            return x >= y;
+                        case AE:
+                            return UnsignedMath.aboveOrEqual(x, y);
+                        case BE:
+                            return UnsignedMath.belowOrEqual(x, y);
+                        case AT:
+                            return UnsignedMath.aboveThan(x, y);
+                        case BT:
+                            return UnsignedMath.belowThan(x, y);
                         default:
-                            throw new GraalInternalError("expected condition: %s", this);
+                            throw new JVMCIError("expected condition: %s", this);
                     }
                 }
+                case Long: {
+                    long x = lp.asLong();
+                    long y = rp.asLong();
+                    switch (this) {
+                        case EQ:
+                            return x == y;
+                        case NE:
+                            return x != y;
+                        case LT:
+                            return x < y;
+                        case LE:
+                            return x <= y;
+                        case GT:
+                            return x > y;
+                        case GE:
+                            return x >= y;
+                        case AE:
+                            return UnsignedMath.aboveOrEqual(x, y);
+                        case BE:
+                            return UnsignedMath.belowOrEqual(x, y);
+                        case AT:
+                            return UnsignedMath.aboveThan(x, y);
+                        case BT:
+                            return UnsignedMath.belowThan(x, y);
+                        default:
+                            throw new JVMCIError("expected condition: %s", this);
+                    }
+                }
+                case Float: {
+                    float x = lp.asFloat();
+                    float y = rp.asFloat();
+                    if (Float.isNaN(x) || Float.isNaN(y)) {
+                        return unorderedIsTrue;
+                    }
+                    switch (this) {
+                        case EQ:
+                            return x == y;
+                        case NE:
+                            return x != y;
+                        case LT:
+                            return x < y;
+                        case LE:
+                            return x <= y;
+                        case GT:
+                            return x > y;
+                        case GE:
+                            return x >= y;
+                        default:
+                            throw new JVMCIError("expected condition: %s", this);
+                    }
+                }
+                case Double: {
+                    double x = lp.asDouble();
+                    double y = rp.asDouble();
+                    if (Double.isNaN(x) || Double.isNaN(y)) {
+                        return unorderedIsTrue;
+                    }
+                    switch (this) {
+                        case EQ:
+                            return x == y;
+                        case NE:
+                            return x != y;
+                        case LT:
+                            return x < y;
+                        case LE:
+                            return x <= y;
+                        case GT:
+                            return x > y;
+                        case GE:
+                            return x >= y;
+                        default:
+                            throw new JVMCIError("expected condition: %s", this);
+                    }
+                }
+                default:
+                    throw new JVMCIError("expected value kind %s while folding condition: %s", lp.getJavaKind(), this);
             }
-            case Float: {
-                float x = lt.asFloat();
-                float y = rt.asFloat();
-                if (Float.isNaN(x) || Float.isNaN(y)) {
-                    return unorderedIsTrue;
-                }
-                switch (this) {
-                    case EQ:
-                        return x == y;
-                    case NE:
-                        return x != y;
-                    case LT:
-                        return x < y;
-                    case LE:
-                        return x <= y;
-                    case GT:
-                        return x > y;
-                    case GE:
-                        return x >= y;
-                    default:
-                        throw new GraalInternalError("expected condition: %s", this);
-                }
+        } else {
+            Boolean equal = constantReflection.constantEquals(lt, rt);
+            if (equal == null) {
+                throw new JVMCIError("could not fold %s %s %s", lt, this, rt);
             }
-            case Double: {
-                double x = lt.asDouble();
-                double y = rt.asDouble();
-                if (Double.isNaN(x) || Double.isNaN(y)) {
-                    return unorderedIsTrue;
-                }
-                switch (this) {
-                    case EQ:
-                        return x == y;
-                    case NE:
-                        return x != y;
-                    case LT:
-                        return x < y;
-                    case LE:
-                        return x <= y;
-                    case GT:
-                        return x > y;
-                    case GE:
-                        return x >= y;
-                    default:
-                        throw new GraalInternalError("expected condition: %s", this);
-                }
+            switch (this) {
+                case EQ:
+                    return equal.booleanValue();
+                case NE:
+                    return !equal.booleanValue();
+                default:
+                    throw new JVMCIError("expected condition: %s", this);
             }
-            default:
-                throw new GraalInternalError("expected value kind %s while folding condition: %s", lt.getKind(), this);
         }
     }
 

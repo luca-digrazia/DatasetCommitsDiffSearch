@@ -24,10 +24,14 @@ package com.oracle.graal.hotspot.meta;
 
 import java.lang.reflect.Type;
 
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
 import com.oracle.graal.compiler.common.GraalOptions;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.phases.AheadOfTimeVerificationPhase;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.FrameState;
@@ -37,17 +41,13 @@ import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.replacements.nodes.MacroNode;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
 /**
  * Extension of {@link InvocationPlugins} that disables plugins based on runtime configuration.
  */
 final class HotSpotInvocationPlugins extends InvocationPlugins {
-    final GraalHotSpotVMConfig config;
+    final HotSpotVMConfig config;
 
-    HotSpotInvocationPlugins(GraalHotSpotVMConfig config, MetaAccessProvider metaAccess) {
+    HotSpotInvocationPlugins(HotSpotVMConfig config, MetaAccessProvider metaAccess) {
         super(metaAccess);
         this.config = config;
     }
@@ -73,7 +73,7 @@ final class HotSpotInvocationPlugins extends InvocationPlugins {
                 assert plugin.inlineOnly() : String.format("plugin that creates a %s (%s) must return true for inlineOnly(): %s", MacroNode.class.getSimpleName(), node, plugin);
             }
         }
-        if (GraalOptions.ImmutableCode.getValue(b.getOptions())) {
+        if (GraalOptions.ImmutableCode.getValue()) {
             for (Node node : newNodes) {
                 if (node.hasUsages() && node instanceof ConstantNode) {
                     ConstantNode c = (ConstantNode) node;
@@ -94,7 +94,7 @@ final class HotSpotInvocationPlugins extends InvocationPlugins {
     }
 
     private static boolean isClass(ConstantNode node) {
-        ResolvedJavaType type = StampTool.typeOrNull(node);
-        return type != null && "Ljava/lang/Class;".equals(type.getName());
+        ResolvedJavaType typeOrNull = StampTool.typeOrNull(node);
+        return typeOrNull != null && "Ljava/lang/Class;".equals(typeOrNull.getName());
     }
 }

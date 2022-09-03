@@ -22,17 +22,19 @@
  */
 package com.oracle.graal.compiler.amd64.test;
 
-import com.oracle.jvmci.code.StackSlotValue;
-import com.oracle.jvmci.meta.JavaConstant;
-import com.oracle.jvmci.meta.PrimitiveConstant;
-import static org.junit.Assume.*;
+import static org.junit.Assume.assumeTrue;
+import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.PrimitiveConstant;
 
-import org.junit.*;
+import org.junit.Before;
+import org.junit.Test;
 
-import com.oracle.graal.amd64.*;
-import com.oracle.graal.lir.framemap.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.jtt.*;
+import com.oracle.graal.lir.VirtualStackSlot;
+import com.oracle.graal.lir.framemap.FrameMapBuilder;
+import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.lir.jtt.LIRTest;
+import com.oracle.graal.lir.jtt.LIRTestSpecification;
 
 public class ConstantStackMoveTest extends LIRTest {
     @Before
@@ -43,7 +45,7 @@ public class ConstantStackMoveTest extends LIRTest {
     private static class LoadConstantStackSpec extends LIRTestSpecification {
         protected final Object primitive;
 
-        public LoadConstantStackSpec(Object primitive) {
+        LoadConstantStackSpec(Object primitive) {
             this.primitive = primitive;
         }
 
@@ -52,16 +54,16 @@ public class ConstantStackMoveTest extends LIRTest {
             FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
             // create slots
             PrimitiveConstant constantValue = JavaConstant.forBoxedPrimitive(primitive);
-            StackSlotValue s1 = frameMapBuilder.allocateSpillSlot(constantValue.getLIRKind());
+            VirtualStackSlot s1 = frameMapBuilder.allocateSpillSlot(gen.target().getLIRKind(constantValue.getJavaKind()));
             // move stuff around
-            gen.emitMove(s1, constantValue);
+            gen.emitMoveConstant(s1, constantValue);
             gen.emitBlackhole(s1);
             setResult(gen.emitMove(s1));
         }
     }
 
     private static final class LoadConstantStackSpecByte extends LoadConstantStackSpec {
-        public LoadConstantStackSpecByte(byte primitive) {
+        LoadConstantStackSpecByte(byte primitive) {
             super(primitive);
         }
 
@@ -71,7 +73,7 @@ public class ConstantStackMoveTest extends LIRTest {
     }
 
     private static final class LoadConstantStackSpecShort extends LoadConstantStackSpec {
-        public LoadConstantStackSpecShort(short primitive) {
+        LoadConstantStackSpecShort(short primitive) {
             super(primitive);
         }
 
@@ -81,7 +83,7 @@ public class ConstantStackMoveTest extends LIRTest {
     }
 
     private static final class LoadConstantStackSpecInteger extends LoadConstantStackSpec {
-        public LoadConstantStackSpecInteger(int primitive) {
+        LoadConstantStackSpecInteger(int primitive) {
             super(primitive);
         }
 
@@ -91,7 +93,7 @@ public class ConstantStackMoveTest extends LIRTest {
     }
 
     private static final class LoadConstantStackSpecLong extends LoadConstantStackSpec {
-        public LoadConstantStackSpecLong(long primitive) {
+        LoadConstantStackSpecLong(long primitive) {
             super(primitive);
         }
 
@@ -101,7 +103,7 @@ public class ConstantStackMoveTest extends LIRTest {
     }
 
     private static final class LoadConstantStackSpecFloat extends LoadConstantStackSpec {
-        public LoadConstantStackSpecFloat(float primitive) {
+        LoadConstantStackSpecFloat(float primitive) {
             super(primitive);
         }
 
@@ -111,7 +113,7 @@ public class ConstantStackMoveTest extends LIRTest {
     }
 
     private static final class LoadConstantStackSpecDouble extends LoadConstantStackSpec {
-        public LoadConstantStackSpecDouble(double primitive) {
+        LoadConstantStackSpecDouble(double primitive) {
             super(primitive);
         }
 

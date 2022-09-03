@@ -22,9 +22,13 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.*;
+import jdk.vm.ci.meta.Assumptions.AssumptionResult;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
-import com.oracle.graal.api.meta.*;
+import org.junit.Assert;
+import org.junit.Ignore;
+import org.junit.Test;
 
 public class FindUniqueConcreteMethodBugTest extends GraalCompilerTest {
 
@@ -59,8 +63,8 @@ public class FindUniqueConcreteMethodBugTest extends GraalCompilerTest {
         test("getLabelLength", tenant);
 
         ResolvedJavaMethod expected = null;
-        ResolvedJavaMethod actual = getMetaAccess().lookupJavaType(AbstractPerson.class).findUniqueConcreteMethod(ifaceMethod);
-        Assert.assertEquals(expected, actual);
+        AssumptionResult<ResolvedJavaMethod> actual = getMetaAccess().lookupJavaType(AbstractPerson.class).findUniqueConcreteMethod(ifaceMethod);
+        Assert.assertEquals(expected, actual.getResult());
 
     }
 
@@ -90,7 +94,7 @@ public class FindUniqueConcreteMethodBugTest extends GraalCompilerTest {
     static class PersonImpl extends AbstractPerson {
         public String name;
 
-        public PersonImpl(String name) {
+        PersonImpl(String name) {
             this.name = name;
         }
 
@@ -102,7 +106,7 @@ public class FindUniqueConcreteMethodBugTest extends GraalCompilerTest {
     static class TenantImpl extends AbstractPerson implements Tenant {
         public int id;
 
-        public TenantImpl(int id) {
+        TenantImpl(int id) {
             this.id = id;
         }
 

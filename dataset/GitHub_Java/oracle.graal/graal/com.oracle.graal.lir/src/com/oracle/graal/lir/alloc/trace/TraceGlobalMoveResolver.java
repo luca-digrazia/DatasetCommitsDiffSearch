@@ -39,10 +39,16 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 
-import com.oracle.graal.compiler.common.LIRKind;
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
-import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.LIRInsertionBuffer;
 import com.oracle.graal.lir.LIRInstruction;
@@ -53,18 +59,12 @@ import com.oracle.graal.lir.framemap.FrameMapBuilderTool;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.RegisterArray;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Value;
-
 /**
  */
 final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveResolver {
 
-    private static final DebugCounter cycleBreakingSlotsAllocated = Debug.counter("TraceRA[cycleBreakingSlotsAllocated(global)]");
-    private static final DebugCounter cycleBreakingSlotsReused = Debug.counter("TraceRA[cycleBreakingSlotsReused(global)]");
+    private static final DebugMetric cycleBreakingSlotsAllocated = Debug.metric("TraceRA[cycleBreakingSlotsAllocated(global)]");
+    private static final DebugMetric cycleBreakingSlotsReused = Debug.metric("TraceRA[cycleBreakingSlotsReused(global)]");
 
     private int insertIdx;
     private LIRInsertionBuffer insertionBuffer; // buffer where moves are inserted
@@ -96,7 +96,7 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
             if (isRegister(location)) {
                 registerBlocked[asRegister(location).number] += direction;
             } else {
-                throw GraalError.shouldNotReachHere("unhandled value " + location);
+                throw JVMCIError.shouldNotReachHere("unhandled value " + location);
             }
         }
     }
@@ -116,7 +116,7 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
         if (isRegister(location)) {
             return registerBlocked[asRegister(location).number];
         }
-        throw GraalError.shouldNotReachHere("unhandled value " + location);
+        throw JVMCIError.shouldNotReachHere("unhandled value " + location);
     }
 
     private static boolean areMultipleReadsAllowed() {
@@ -131,7 +131,7 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
         return spillMoveFactory;
     }
 
-    private RegisterArray getRegisters() {
+    private Register[] getRegisters() {
         return frameMapBuilder.getRegisterConfig().getAllocatableRegisters();
     }
 
@@ -145,7 +145,7 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
 
         this.frameMapBuilder = res.getFrameMapBuilder();
         this.spillMoveFactory = spillMoveFactory;
-        this.registerBlocked = new int[arch.getRegisters().size()];
+        this.registerBlocked = new int[arch.getRegisters().length];
 
         FrameMapBuilderTool frameMapBuilderTool = (FrameMapBuilderTool) frameMapBuilder;
         this.stackBlocked = new int[frameMapBuilderTool.getNumberOfStackSlots()];
@@ -159,7 +159,7 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
             assert stackBlocked[i] == 0 : "stack map must be empty before and after processing";
         }
         assert mappingFrom.size() == 0 && mappingTo.size() == 0 && mappingFromStack.size() == 0 : "list must be empty before and after processing";
-        for (int i = 0; i < getRegisters().size(); i++) {
+        for (int i = 0; i < getRegisters().length; i++) {
             assert registerBlocked[i] == 0 : "register map must be empty before and after processing";
         }
         return true;
@@ -286,7 +286,7 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
         }
         if (isRegister(from) && isRegister(to) && asRegister(from).equals(asRegister(to))) {
             // Values differ but Registers are the same
-            assert LIRKind.verifyMoveKinds(to.getValueKind(), from.getValueKind()) : String.format("Same register but Kind mismatch %s <- %s", to, from);
+            assert LIRKind.verifyMoveKinds(to.getLIRKind(), from.getLIRKind()) : String.format("Same register but Kind mismatch %s <- %s", to, from);
             return true;
         }
         return false;
@@ -312,7 +312,7 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
 
     private void insertMove(Value fromOperand, AllocatableValue toOperand) {
         assert !fromOperand.equals(toOperand) : "from and to are equal: " + fromOperand + " vs. " + toOperand;
-        assert LIRKind.verifyMoveKinds(fromOperand.getValueKind(), fromOperand.getValueKind()) : "move between different types";
+        assert LIRKind.verifyMoveKinds(fromOperand.getLIRKind(), fromOperand.getLIRKind()) : "move between different types";
         assert insertIdx != -1 : "must setup insert position first";
 
         insertionBuffer.append(insertIdx, createMove(fromOperand, toOperand));
@@ -349,11 +349,10 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
                 block(from);
             }
 
-            ArrayList<AllocatableValue> busySpillSlots = null;
+            int spillCandidate = -1;
             while (mappingFrom.size() > 0) {
                 boolean processedInterval = false;
 
-                int spillCandidate = -1;
                 for (int i = mappingFrom.size() - 1; i >= 0; i--) {
                     Value fromLocation = mappingFrom.get(i);
                     AllocatableValue toLocation = mappingTo.get(i);
@@ -361,18 +360,12 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
                         // this interval can be processed because target is free
                         insertMove(fromLocation, toLocation);
                         unblock(fromLocation);
-                        if (isStackSlotValue(toLocation)) {
-                            if (busySpillSlots == null) {
-                                busySpillSlots = new ArrayList<>(2);
-                            }
-                            busySpillSlots.add(toLocation);
-                        }
                         mappingFrom.remove(i);
                         mappingFromStack.remove(i);
                         mappingTo.remove(i);
 
                         processedInterval = true;
-                    } else if (fromLocation != null && isRegister(fromLocation) && (busySpillSlots == null || !busySpillSlots.contains(mappingFromStack.get(i)))) {
+                    } else if (fromLocation != null && isRegister(fromLocation)) {
                         // this interval cannot be processed now because target is not free
                         // it starts in a register, so it is a possible candidate for spilling
                         spillCandidate = i;
@@ -408,7 +401,7 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
                 }
             }
             if (spillSlot == null) {
-                spillSlot = frameMapBuilder.allocateSpillSlot(from.getValueKind());
+                spillSlot = frameMapBuilder.allocateSpillSlot(from.getLIRKind());
                 cycleBreakingSlotsAllocated.increment();
                 Debug.log("created new slot for spilling: %s", spillSlot);
                 // insert a move from register to stack and update the mapping
@@ -443,9 +436,9 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
         }
 
         assert !from.equals(to) : "from and to interval equal: " + from;
-        assert LIRKind.verifyMoveKinds(to.getValueKind(), from.getValueKind()) : String.format("Kind mismatch: %s vs. %s, from=%s, to=%s", from.getValueKind(), to.getValueKind(), from, to);
-        assert fromStack == null || LIRKind.verifyMoveKinds(to.getValueKind(), fromStack.getValueKind()) : String.format("Kind mismatch: %s vs. %s, fromStack=%s, to=%s", fromStack.getValueKind(),
-                        to.getValueKind(), fromStack, to);
+        assert LIRKind.verifyMoveKinds(to.getLIRKind(), from.getLIRKind()) : String.format("Kind mismatch: %s vs. %s, from=%s, to=%s", from.getLIRKind(), to.getLIRKind(), from, to);
+        assert fromStack == null || LIRKind.verifyMoveKinds(to.getLIRKind(), fromStack.getLIRKind()) : String.format("Kind mismatch: %s vs. %s, fromStack=%s, to=%s", fromStack.getLIRKind(),
+                        to.getLIRKind(), fromStack, to);
         mappingFrom.add(from);
         mappingFromStack.add(fromStack);
         mappingTo.add(to);
@@ -465,7 +458,7 @@ final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhase.MoveR
         if (isVirtualStackSlot(stackSlotValue)) {
             return getStackArrayIndex(asVirtualStackSlot(stackSlotValue));
         }
-        throw GraalError.shouldNotReachHere("value is not a stack slot: " + stackSlotValue);
+        throw JVMCIError.shouldNotReachHere("value is not a stack slot: " + stackSlotValue);
     }
 
     private int getStackArrayIndex(StackSlot stackSlot) {

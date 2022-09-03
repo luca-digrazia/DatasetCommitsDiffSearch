@@ -22,24 +22,49 @@
  */
 package com.oracle.graal.lir.test;
 
-import static org.junit.Assert.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.Register.RegisterCategory;
-import jdk.internal.jvmci.meta.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.Register.RegisterCategory;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.PlatformKind;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.utils.*;
+import com.oracle.graal.lir.Variable;
+import com.oracle.graal.lir.util.GenericValueMap;
 
 public class GenericValueMapTest {
+
+    private enum DummyKind implements PlatformKind {
+        Long;
+
+        private EnumKey<DummyKind> key = new EnumKey<>(this);
+
+        public Key getKey() {
+            return key;
+        }
+
+        public int getSizeInBytes() {
+            return 8;
+        }
+
+        public int getVectorLength() {
+            return 1;
+        }
+
+        public char getTypeChar() {
+            return 'l';
+        }
+    }
 
     @Test
     public void run0() {
         RegisterCategory cat = new RegisterCategory("regs");
 
         RegisterValue reg = new Register(0, 0, "reg0", cat).asValue();
-        Variable var = new Variable(LIRKind.value(Kind.Long), 0);
+        Variable var = new Variable(LIRKind.value(DummyKind.Long), 0);
         Object obj0 = new Object();
         Object obj1 = new Object();
 
