@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,12 +23,12 @@
 package org.graalvm.compiler.nodes.calc;
 
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_8;
-import static org.graalvm.compiler.nodes.calc.BinaryArithmeticNode.getArithmeticOpTable;
+
+import java.util.EnumMap;
 
 import org.graalvm.compiler.core.common.calc.FloatConvert;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.FloatConvertOp;
-import org.graalvm.compiler.core.common.type.ArithmeticOpTable.UnaryOp;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool;
@@ -55,8 +53,16 @@ public final class FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> 
 
     protected final FloatConvert op;
 
+    private static final EnumMap<FloatConvert, SerializableUnaryFunction<FloatConvertOp>> getOps;
+    static {
+        getOps = new EnumMap<>(FloatConvert.class);
+        for (FloatConvert op : FloatConvert.values()) {
+            getOps.put(op, table -> table.getFloatConvert(op));
+        }
+    }
+
     public FloatConvertNode(FloatConvert op, ValueNode input) {
-        super(TYPE, getArithmeticOpTable(input).getFloatConvert(op), input);
+        super(TYPE, getOps.get(op), input);
         this.op = op;
     }
 
@@ -66,11 +72,6 @@ public final class FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> 
             return synonym;
         }
         return new FloatConvertNode(op, input);
-    }
-
-    @Override
-    protected UnaryOp<FloatConvertOp> getOp(ArithmeticOpTable table) {
-        return table.getFloatConvert(op);
     }
 
     public FloatConvert getFloatConvert() {

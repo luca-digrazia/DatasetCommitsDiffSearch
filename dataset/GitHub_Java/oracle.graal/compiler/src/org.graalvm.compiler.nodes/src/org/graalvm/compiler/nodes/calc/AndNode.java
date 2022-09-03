@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -51,7 +49,7 @@ public final class AndNode extends BinaryArithmeticNode<And> implements Narrowab
     public static final NodeClass<AndNode> TYPE = NodeClass.create(AndNode.class);
 
     public AndNode(ValueNode x, ValueNode y) {
-        super(TYPE, getArithmeticOpTable(x).getAnd(), x, y);
+        super(TYPE, ArithmeticOpTable::getAnd, x, y);
     }
 
     public static ValueNode create(ValueNode x, ValueNode y, NodeView view) {
@@ -62,11 +60,6 @@ public final class AndNode extends BinaryArithmeticNode<And> implements Narrowab
             return tryConstantFold;
         }
         return canonical(null, op, stamp, x, y, view);
-    }
-
-    @Override
-    protected BinaryOp<And> getOp(ArithmeticOpTable table) {
-        return table.getAnd();
     }
 
     @Override

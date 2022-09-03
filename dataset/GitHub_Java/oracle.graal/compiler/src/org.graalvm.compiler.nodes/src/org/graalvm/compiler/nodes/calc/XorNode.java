@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -50,7 +48,7 @@ public final class XorNode extends BinaryArithmeticNode<Xor> implements BinaryCo
     public static final NodeClass<XorNode> TYPE = NodeClass.create(XorNode.class);
 
     public XorNode(ValueNode x, ValueNode y) {
-        super(TYPE, getArithmeticOpTable(x).getXor(), x, y);
+        super(TYPE, ArithmeticOpTable::getXor, x, y);
         assert x.stamp(NodeView.DEFAULT).isCompatible(y.stamp(NodeView.DEFAULT));
     }
 
@@ -62,11 +60,6 @@ public final class XorNode extends BinaryArithmeticNode<Xor> implements BinaryCo
             return tryConstantFold;
         }
         return canonical(null, op, stamp, x, y, view);
-    }
-
-    @Override
-    protected BinaryOp<Xor> getOp(ArithmeticOpTable table) {
-        return table.getXor();
     }
 
     @Override
