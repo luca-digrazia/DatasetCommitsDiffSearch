@@ -412,23 +412,13 @@ public abstract class GraalCompilerState {
     }
 
     /**
-     * Executes a {@link LIRPhase} within a given {@code context}.
-     */
-    protected <C> void applyLIRPhase(LIRPhase<C> phase, C context) {
-        phase.apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, context);
-    }
-
-    /**
      * Executes the {@link PreAllocationStage}.
      *
      * {@link LIRPhase phases} can be changed by overriding {@link #createLIRSuites()}.
      */
     protected final void preAllocationStage() {
-        applyLIRPhase(getLIRSuites().getPreAllocationOptimizationStage(), createPreAllocationOptimizationContext());
-    }
-
-    protected PreAllocationOptimizationContext createPreAllocationOptimizationContext() {
-        return new PreAllocationOptimizationContext(lirGenTool);
+        PreAllocationOptimizationContext preAllocOptContext = new PreAllocationOptimizationContext(lirGenTool);
+        getLIRSuites().getPreAllocationOptimizationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, preAllocOptContext);
     }
 
     /**
@@ -437,11 +427,8 @@ public abstract class GraalCompilerState {
      * {@link LIRPhase phases} can be changed by overriding {@link #createLIRSuites()}.
      */
     protected final void allocationStage() {
-        applyLIRPhase(getLIRSuites().getAllocationStage(), createAllocationContext());
-    }
-
-    protected AllocationContext createAllocationContext() {
-        return new AllocationContext(lirGenTool.getSpillMoveFactory(), request.backend.newRegisterAllocationConfig(registerConfig));
+        AllocationContext allocContext = new AllocationContext(lirGenTool.getSpillMoveFactory(), request.backend.newRegisterAllocationConfig(registerConfig));
+        getLIRSuites().getAllocationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, allocContext);
     }
 
     /**
@@ -450,11 +437,8 @@ public abstract class GraalCompilerState {
      * {@link LIRPhase phases} can be changed by overriding {@link #createLIRSuites()}.
      */
     protected final void postAllocationStage() {
-        applyLIRPhase(getLIRSuites().getPostAllocationOptimizationStage(), createPostAllocationOptimizationContext());
-    }
-
-    protected PostAllocationOptimizationContext createPostAllocationOptimizationContext() {
-        return new PostAllocationOptimizationContext(lirGenTool);
+        PostAllocationOptimizationContext postAllocOptContext = new PostAllocationOptimizationContext(lirGenTool);
+        getLIRSuites().getPostAllocationOptimizationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, postAllocOptContext);
     }
 
     /**
