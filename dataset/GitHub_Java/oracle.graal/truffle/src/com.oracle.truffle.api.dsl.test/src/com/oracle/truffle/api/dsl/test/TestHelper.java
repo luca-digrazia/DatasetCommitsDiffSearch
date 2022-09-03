@@ -230,6 +230,13 @@ class TestHelper {
         return ((SlowPathCounterRoot) node.getRootNode()).getSlowPathCount();
     }
 
+    static int isSlowPath(Node node) {
+        if (!(node.getRootNode() instanceof SlowPathCounterRoot)) {
+            throw new IllegalArgumentException("Not instrumented. Instrument with instrumentSlowPath");
+        }
+        return ((SlowPathCounterRoot) node.getRootNode()).getSlowPathCount();
+    }
+
     static void instrumentSlowPath(Node node) {
         if (node.getParent() != null) {
             throw new IllegalArgumentException("Node already adopted.");
