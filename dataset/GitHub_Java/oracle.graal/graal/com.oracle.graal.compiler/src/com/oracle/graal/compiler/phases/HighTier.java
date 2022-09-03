@@ -31,6 +31,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.cfs.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.phases.ea.*;
@@ -40,16 +41,13 @@ public class HighTier extends PhaseSuite<HighTierContext> {
     public static class Options {
 
         // @formatter:off
-        @Option(help = "Enable inlining", type = OptionType.Expert)
+        @Option(help = "Enable inlining")
         public static final OptionValue<Boolean> Inline = new OptionValue<>(true);
         // @formatter:on
     }
 
     public HighTier() {
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        if (ImmutableCode.getValue()) {
-            canonicalizer.disableReadCanonicalization();
-        }
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue());
 
         if (OptCanonicalizer.getValue()) {
             appendPhase(canonicalizer);
@@ -62,9 +60,14 @@ public class HighTier extends PhaseSuite<HighTierContext> {
                 appendPhase(new InliningPhase(canonicalizer));
                 appendPhase(new DeadCodeEliminationPhase(Optional));
 
-                if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
+                boolean reduceOrEliminate = FlowSensitiveReduction.getValue() || ConditionalElimination.getValue();
+                if (reduceOrEliminate && OptCanonicalizer.getValue()) {
                     appendPhase(canonicalizer);
-                    appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, false));
+                    if (FlowSensitiveReduction.getValue()) {
+                        appendPhase(new IterativeFlowSensitiveReductionPhase(canonicalizer));
+                    } else {
+                        appendPhase(new IterativeConditionalEliminationPhase(canonicalizer));
+                    }
                 }
             }
         }
@@ -73,6 +76,10 @@ public class HighTier extends PhaseSuite<HighTierContext> {
 
         if (FullUnroll.getValue()) {
             appendPhase(new LoopFullUnrollPhase(canonicalizer));
+        }
+
+        if (OptTailDuplication.getValue()) {
+            appendPhase(new TailDuplicationPhase(canonicalizer));
         }
 
         if (PartialEscapeAnalysis.getValue()) {
@@ -84,12 +91,8 @@ public class HighTier extends PhaseSuite<HighTierContext> {
         }
 
         if (OptLoopTransform.getValue()) {
-            if (LoopPeeling.getValue()) {
-                appendPhase(new LoopPeelingPhase());
-            }
-            if (LoopUnswitch.getValue()) {
-                appendPhase(new LoopUnswitchingPhase());
-            }
+            appendPhase(new LoopTransformHighPhase());
+            appendPhase(new LoopTransformLowPhase());
         }
         appendPhase(new RemoveValueProxyPhase());
 

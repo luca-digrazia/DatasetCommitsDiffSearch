@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -94,7 +94,7 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
                         if (ys[i] == null) {
                             continue;
                         }
-                        if (xs[i] instanceof PrimitiveConstant && ys[i] instanceof PrimitiveConstant &&
+                        if (xs[i].getKind() != Kind.Object && ys[i].getKind() != Kind.Object &&
                                         compare.condition().foldCondition(xs[i], ys[i], null, compare.unorderedIsTrue()) == fixedGuard.isNegated()) {
                             visitDeoptBegin(BeginNode.prevBegin(mergePredecessor), fixedGuard.getAction(), fixedGuard.getReason(), graph);
                         }
@@ -124,7 +124,7 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
             IfNode ifNode = (IfNode) deoptBegin.predecessor();
             BeginNode otherBegin = ifNode.trueSuccessor();
             LogicNode conditionNode = ifNode.condition();
-            FixedGuardNode guard = graph.add(new FixedGuardNode(conditionNode, deoptReason, deoptAction, deoptBegin == ifNode.trueSuccessor()));
+            FixedGuardNode guard = graph.add(FixedGuardNode.create(conditionNode, deoptReason, deoptAction, deoptBegin == ifNode.trueSuccessor()));
             FixedWithNextNode pred = (FixedWithNextNode) ifNode.predecessor();
             BeginNode survivingSuccessor;
             if (deoptBegin == ifNode.trueSuccessor()) {
@@ -162,7 +162,7 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         FixedNode next = deoptPred.next();
 
         if (!(next instanceof DeoptimizeNode)) {
-            DeoptimizeNode newDeoptNode = graph.add(new DeoptimizeNode(deoptAction, deoptReason));
+            DeoptimizeNode newDeoptNode = graph.add(DeoptimizeNode.create(deoptAction, deoptReason));
             deoptPred.setNext(newDeoptNode);
             assert deoptPred == newDeoptNode.predecessor();
             GraphUtil.killCFG(next);

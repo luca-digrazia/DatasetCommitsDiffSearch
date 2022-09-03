@@ -34,7 +34,7 @@ public class DeadCodeEliminationPhase extends Phase {
 
     public static class Options {
         // @formatter:off
-        @Option(help = "Disable optional dead code eliminations", type = OptionType.Debug)
+        @Option(help = "Disable optional dead code eliminations")
         public static final OptionValue<Boolean> ReduceDCE = new OptionValue<>(true);
         // @formatter:on
     }

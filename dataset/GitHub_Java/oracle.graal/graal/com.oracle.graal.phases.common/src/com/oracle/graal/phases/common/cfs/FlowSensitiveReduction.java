@@ -306,7 +306,8 @@ public class FlowSensitiveReduction extends FixedGuardReduction {
      */
     private MethodCallTargetNode deverbosifyInputsCopyOnWrite(MethodCallTargetNode parent) {
         final CallTargetNode.InvokeKind ik = parent.invokeKind();
-        boolean shouldDowncastReceiver = ik.isIndirect();
+        final boolean shouldTryDevirt = (ik == CallTargetNode.InvokeKind.Interface || ik == CallTargetNode.InvokeKind.Virtual);
+        boolean shouldDowncastReceiver = shouldTryDevirt;
         MethodCallTargetNode changed = null;
         for (ValueNode i : FlowUtil.distinctValueAndConditionInputs(parent)) {
             ValueNode j = (ValueNode) reasoner.deverbosify(i);
@@ -591,7 +592,7 @@ public class FlowSensitiveReduction extends FixedGuardReduction {
         if (type == null) {
             return;
         }
-        ResolvedJavaMethod method = type.resolveConcreteMethod(callTarget.targetMethod(), invoke.getContextType());
+        ResolvedJavaMethod method = type.resolveMethod(callTarget.targetMethod(), invoke.getContextType());
         if (method == null) {
             return;
         }

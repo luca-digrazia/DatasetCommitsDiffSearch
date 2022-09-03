@@ -269,7 +269,7 @@ public class GraalCompiler {
 
             try (Scope s = Debug.scope("Allocator", nodeLirGen)) {
                 if (backend.shouldAllocateRegisters()) {
-                    LinearScan.allocate(target, lir, frameMap);
+                    new LinearScan(target, lir, frameMap).allocate();
                 }
             } catch (Throwable e) {
                 throw Debug.handle(e);

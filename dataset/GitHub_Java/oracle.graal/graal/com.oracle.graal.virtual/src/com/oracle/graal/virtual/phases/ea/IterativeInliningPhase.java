@@ -32,6 +32,7 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.cfs.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 
@@ -65,16 +66,21 @@ public class IterativeInliningPhase extends AbstractInliningPhase {
 
                 Map<Invoke, Double> hints = PEAInliningHints.getValue() ? PartialEscapePhase.getHints(graph) : null;
 
-                InliningPhase inlining = new InliningPhase(hints, new CanonicalizerPhase());
+                InliningPhase inlining = new InliningPhase(hints, new CanonicalizerPhase(true));
                 inlining.setMaxMethodsPerInlining(simple ? 1 : Integer.MAX_VALUE);
                 inlining.apply(graph, context);
                 progress |= inlining.getInliningCount() > 0;
 
                 new DeadCodeEliminationPhase(Optional).apply(graph);
 
-                if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
+                boolean reduceOrEliminate = FlowSensitiveReduction.getValue() || ConditionalElimination.getValue();
+                if (reduceOrEliminate && OptCanonicalizer.getValue()) {
                     canonicalizer.apply(graph, context);
-                    new IterativeConditionalEliminationPhase(canonicalizer, false).apply(graph, context);
+                    if (FlowSensitiveReduction.getValue()) {
+                        new IterativeFlowSensitiveReductionPhase(canonicalizer).apply(graph, context);
+                    } else {
+                        new IterativeConditionalEliminationPhase(canonicalizer).apply(graph, context);
+                    }
                 }
                 if (!progress) {
                     break;
