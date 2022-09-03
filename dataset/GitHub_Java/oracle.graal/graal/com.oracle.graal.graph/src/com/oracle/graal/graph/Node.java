@@ -104,9 +104,6 @@ public abstract class Node implements Cloneable, Formattable {
         /**
          * Determines if the stamp of the instantiated intrinsic node has its stamp set from the
          * return type of the annotated method.
-         * <p>
-         * When it is set to true, the stamp that is passed in to the constructor of ValueNode is
-         * ignored and can therefore safely be {@code null}.
          */
         boolean setStampFromReturnType() default false;
     }
@@ -459,7 +456,7 @@ public abstract class Node implements Cloneable, Formattable {
                 oldSuccessor.predecessor = null;
             }
             if (newSuccessor != null) {
-                assert assertTrue(newSuccessor.predecessor == null, "unexpected non-null predecessor in new successor (%s): %s, this=%s", newSuccessor, newSuccessor.predecessor, this);
+                assert assertTrue(newSuccessor.predecessor == null, "unexpected non-null predecessor in new successor (%s): %s", newSuccessor, newSuccessor.predecessor);
                 newSuccessor.predecessor = this;
             }
         }
@@ -596,11 +593,7 @@ public abstract class Node implements Cloneable, Formattable {
 
     static int count = 0;
 
-    public final Node clone(Graph into) {
-        return clone(into, true);
-    }
-
-    final Node clone(Graph into, boolean clearInputsAndSuccessors) {
+    public Node clone(Graph into) {
         NodeClass nodeClass = getNodeClass();
         if (nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
             Node otherNode = into.findNodeInCache(this);
@@ -615,10 +608,8 @@ public abstract class Node implements Cloneable, Formattable {
         } catch (CloneNotSupportedException e) {
             throw new GraalInternalError(e).addContext(this);
         }
-        if (clearInputsAndSuccessors) {
-            nodeClass.clearInputs(newNode);
-            nodeClass.clearSuccessors(newNode);
-        }
+        nodeClass.clearInputs(newNode);
+        nodeClass.clearSuccessors(newNode);
         newNode.graph = into;
         newNode.typeCacheNext = null;
         newNode.id = INITIAL_ID;
@@ -631,11 +622,7 @@ public abstract class Node implements Cloneable, Formattable {
         if (nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
             into.putNodeIntoCache(newNode);
         }
-        newNode.afterClone(this);
         return newNode;
-    }
-
-    protected void afterClone(@SuppressWarnings("unused") Node other) {
     }
 
     public boolean verify() {
