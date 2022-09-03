@@ -31,16 +31,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
+
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
-import org.graalvm.polyglot.tck.Snippet;
 import org.graalvm.polyglot.proxy.ProxyArray;
+import org.graalvm.polyglot.proxy.ProxyExecutable;
 import org.graalvm.polyglot.proxy.ProxyObject;
 import org.graalvm.polyglot.proxy.ProxyPrimitive;
-import org.graalvm.polyglot.tck.TypeDescriptor;
 import org.graalvm.polyglot.tck.LanguageProvider;
+import org.graalvm.polyglot.tck.Snippet;
+import org.graalvm.polyglot.tck.TypeDescriptor;
 
 public final class JavaHostLanguageProvider implements LanguageProvider {
     private static final String ID = "java-host";
@@ -56,72 +59,76 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
     @Override
     public Collection<? extends Snippet> createValueConstructors(final Context context) {
         final List<Snippet> result = new ArrayList<>();
+        final Map<Class<?>, Primitive> primitives = new HashMap<>();
+        primitives.put(Boolean.class, Primitive.create("boolean", false, TypeDescriptor.BOOLEAN));
+        primitives.put(Byte.class, Primitive.create("byte", Byte.MIN_VALUE, TypeDescriptor.NUMBER));
+        primitives.put(Short.class, Primitive.create("short", Short.MIN_VALUE, TypeDescriptor.NUMBER));
+        primitives.put(Character.class, Primitive.create("char", ' ', TypeDescriptor.STRING));
+        primitives.put(Integer.class, Primitive.create("int", Integer.MAX_VALUE, TypeDescriptor.NUMBER));   // Integer.MIN_VALUE
+                                                                                                            // is
+                                                                                                            // NA
+                                                                                                            // for
+                                                                                                            // fast-r
+        primitives.put(Long.class, Primitive.create("long", Long.MIN_VALUE, TypeDescriptor.NUMBER));
+        primitives.put(Float.class, Primitive.create("float", Float.MAX_VALUE, TypeDescriptor.NUMBER));
+        primitives.put(Double.class, Primitive.create("double", Double.MAX_VALUE, TypeDescriptor.NUMBER));
+        primitives.put(String.class, Primitive.create("java.lang.String", "TEST", TypeDescriptor.STRING));
+
         // Java primitives
-        Snippet.Builder opb = Snippet.newBuilder("boolean", export(context, () -> false), TypeDescriptor.BOOLEAN);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("byte", export(context, () -> Byte.MIN_VALUE), TypeDescriptor.NUMBER);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("short", export(context, () -> Short.MIN_VALUE), TypeDescriptor.NUMBER);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("char", export(context, () -> ' '), TypeDescriptor.STRING);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("int", export(context, () -> Integer.MAX_VALUE), TypeDescriptor.NUMBER);    // Integer.MIN_VALUE
-        // is
-        // NA
-        // for
-        // fast-r
-        result.add(opb.build());
-        opb = Snippet.newBuilder("long", export(context, () -> Long.MIN_VALUE), TypeDescriptor.NUMBER);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("float", export(context, () -> Float.MAX_VALUE), TypeDescriptor.NUMBER);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("double", export(context, () -> Double.MAX_VALUE), TypeDescriptor.NUMBER);
-        result.add(opb.build());
-        // String
-        opb = Snippet.newBuilder("java.lang.String", export(context, () -> "TEST"), TypeDescriptor.STRING);
-        result.add(opb.build());
+        for (Primitive primitive : primitives.values()) {
+            result.add(createPrimitive(context, primitive));
+        }
         // Arrays
-        opb = Snippet.newBuilder("Array<int>", export(context, () -> new int[]{1, 2}),
-                        TypeDescriptor.union(TypeDescriptor.OBJECT, TypeDescriptor.array(TypeDescriptor.NUMBER)));
-        result.add(opb.build());
-        opb = Snippet.newBuilder("Array<java.lang.Object>", export(context, () -> new Object[]{1, "TEST"}),
-                        TypeDescriptor.union(TypeDescriptor.OBJECT, TypeDescriptor.ARRAY));
-        result.add(opb.build());
-        // Proxies
-        opb = Snippet.newBuilder("Proxy<boolean>", export(context, () -> new ProxyPrimitiveImpl(false)), TypeDescriptor.BOOLEAN);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("Proxy<byte>", export(context, () -> new ProxyPrimitiveImpl(Byte.MIN_VALUE)), TypeDescriptor.NUMBER);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("Proxy<short>", export(context, () -> new ProxyPrimitiveImpl(Short.MIN_VALUE)), TypeDescriptor.NUMBER);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("Proxy<char>", export(context, () -> new ProxyPrimitiveImpl(' ')), TypeDescriptor.STRING);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("Proxy<int>", export(context, () -> new ProxyPrimitiveImpl(Integer.MAX_VALUE)), TypeDescriptor.NUMBER);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("Proxy<long>", export(context, () -> new ProxyPrimitiveImpl(Long.MIN_VALUE)), TypeDescriptor.NUMBER);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("Proxy<float>", export(context, () -> new ProxyPrimitiveImpl(Float.MAX_VALUE)), TypeDescriptor.NUMBER);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("Proxy<double>", export(context, () -> new ProxyPrimitiveImpl(Double.MAX_VALUE)), TypeDescriptor.NUMBER);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("Proxy<java.lang.String>", export(context, () -> new ProxyPrimitiveImpl("TEST")), TypeDescriptor.STRING);
-        result.add(opb.build());
-        opb = Snippet.newBuilder("Proxy<Array<int>>", export(context, () -> ProxyArray.fromArray(1, 2)),
-                        TypeDescriptor.union(TypeDescriptor.OBJECT, TypeDescriptor.array(TypeDescriptor.NUMBER)));
-        result.add(opb.build());
-        opb = Snippet.newBuilder("Proxy<Array<java.lang.Object>>", export(context, () -> ProxyArray.fromArray(1, "TEST")),
-                        TypeDescriptor.union(TypeDescriptor.OBJECT, TypeDescriptor.ARRAY));
-        result.add(opb.build());
+        result.add(Snippet.newBuilder("Array<int>", export(context, new ValueSupplier<>(new int[]{1, 2})),
+                        TypeDescriptor.array(TypeDescriptor.NUMBER)).build());
+        result.add(Snippet.newBuilder("Array<java.lang.Object>", export(context, new ValueSupplier<>(new Object[]{1, "TEST"})),
+                        TypeDescriptor.array(TypeDescriptor.union(TypeDescriptor.NUMBER, TypeDescriptor.STRING))).build());
+        // Primitive Proxies
+        for (Primitive primitive : primitives.values()) {
+            result.add(createProxyPrimitive(context, primitive));
+        }
+        // Array Proxies
+        result.add(createProxyArray(context, null));
+        for (Primitive primitive : primitives.values()) {
+            result.add(createProxyArray(context, primitive));
+        }
+        // Object Proxies
+        result.add(Snippet.newBuilder("Proxy<java.lang.Object{}>", export(context, new ValueSupplier<>(ProxyObject.fromMap(Collections.emptyMap()))), TypeDescriptor.OBJECT).build());
         final Map<String, Object> props = new HashMap<>();
         props.put("name", "test");
-        opb = Snippet.newBuilder("Proxy<java.lang.Object>", export(context, () -> ProxyObject.fromMap(props)), TypeDescriptor.OBJECT);
-        result.add(opb.build());
+        result.add(Snippet.newBuilder("Proxy<java.lang.Object{name}>", export(context, new ValueSupplier<>(ProxyObject.fromMap(props))), TypeDescriptor.OBJECT).build());
+        // Executable Proxies
+        // Generic executable
+        result.add(Snippet.newBuilder(
+                        "ProxyExecutable<...>",
+                        export(context, new ValueSupplier<>(new ProxyExecutableImpl())),
+                        TypeDescriptor.EXECUTABLE).build());
+        // No-args execuable
+        result.add(Snippet.newBuilder(
+                        "ProxyExecutable<>",
+                        export(context, new ValueSupplier<>(new ProxyExecutableImpl(ProxyExecutableImpl.EMPTY, 0))),
+                        TypeDescriptor.executable(TypeDescriptor.ANY)).build());
+        for (Primitive primitive : new Primitive[]{
+                        primitives.get(Boolean.class),
+                        primitives.get(Integer.class),
+                        primitives.get(String.class)}) {
+            result.add(createProxyExecutable(context, primitive));
+        }
         return Collections.unmodifiableCollection(result);
     }
 
     @Override
     public Value createIdentityFunction(final Context context) {
-        return null;
+        final String symbolName = "$$java-identity$$"; // some symbol unlikely to conflict
+        Value oldValue = context.importSymbol(symbolName);
+        context.exportSymbol(symbolName, new ProxyExecutable() {
+            public Object execute(Value... arguments) {
+                return arguments[0];
+            }
+        });
+        Value javaIdentity = context.importSymbol(symbolName);
+        context.exportSymbol(symbolName, oldValue);
+        return javaIdentity;
     }
 
     @Override
@@ -144,6 +151,46 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
         return Collections.emptySet();
     }
 
+    private static Snippet createPrimitive(
+                    final Context context,
+                    final Primitive primitive) {
+        return Snippet.newBuilder(
+                        primitive.name,
+                        export(context,
+                                        new ValueSupplier<>(primitive.value)),
+                        primitive.type).build();
+    }
+
+    private static Snippet createProxyPrimitive(
+                    final Context context,
+                    final Primitive primitive) {
+        return Snippet.newBuilder(
+                        String.format("Proxy<%s>", primitive.name),
+                        export(context, new ValueSupplier<>(new ProxyPrimitiveImpl(primitive.value))),
+                        primitive.type).build();
+    }
+
+    private static Snippet createProxyArray(
+                    final Context context,
+                    final Primitive primitive) {
+        return Snippet.newBuilder(
+                        String.format("Proxy<Array<%s>>", primitive == null ? "" : primitive.name),
+                        export(context, new ValueSupplier<>(primitive == null ? ProxyArray.fromArray() : ProxyArray.fromArray(primitive.value, primitive.value))),
+                        primitive == null
+                                        ? TypeDescriptor.array(TypeDescriptor.intersection(TypeDescriptor.ARRAY, TypeDescriptor.BOOLEAN, TypeDescriptor.EXECUTABLE, TypeDescriptor.HOST_OBJECT,
+                                                        TypeDescriptor.NATIVE_POINTER, TypeDescriptor.NULL, TypeDescriptor.NUMBER, TypeDescriptor.OBJECT, TypeDescriptor.STRING))
+                                        : TypeDescriptor.array(primitive.type)).build();
+    }
+
+    private static Snippet createProxyExecutable(
+                    final Context context,
+                    final Primitive primitive) {
+        return Snippet.newBuilder(
+                        String.format("ProxyExecutable<%s,%s>", primitive.name, primitive.name),
+                        export(context, new ValueSupplier<>(new ProxyExecutableImpl(primitive, 2))),
+                        TypeDescriptor.executable(primitive.type, primitive.type, primitive.type)).build();
+    }
+
     private static Value export(final Context context, final Supplier<Object> s) {
         context.exportSymbol("tmp", s);
         return context.importSymbol("tmp");
@@ -160,6 +207,127 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
         @Override
         public Object asPrimitive() {
             return primitiveValue;
+        }
+    }
+
+    private static final class ValueSupplier<T> implements Supplier<T> {
+        private final T value;
+
+        ValueSupplier(T value) {
+            this.value = value;
+        }
+
+        @Override
+        public T get() {
+            return value;
+        }
+    }
+
+    private static final class Primitive {
+        final String name;
+        final Object value;
+        final TypeDescriptor type;
+
+        private Primitive(final String name, final Object value, final TypeDescriptor type) {
+            this.name = name;
+            this.value = value;
+            this.type = type;
+        }
+
+        static Primitive create(final String name, final Object value, final TypeDescriptor type) {
+            return new Primitive(name, value, type);
+        }
+    }
+
+    private static final class ProxyExecutableImpl implements ProxyExecutable {
+        private static final Consumer<? super Value> EMPTY = new Consumer<Value>() {
+            @Override
+            public void accept(Value t) {
+            }
+        };
+        private Consumer<? super Value> verifier;
+        private final int arity;
+
+        /**
+         * Generic executable.
+         */
+        ProxyExecutableImpl() {
+            this(EMPTY, -1);
+        }
+
+        /**
+         * Executable with concrete parameter types.
+         *
+         * @param expectedType the expected primitive type
+         * @param arity number of required parameters of expectedType
+         */
+        ProxyExecutableImpl(
+                        final Primitive primitive,
+                        final int arity) {
+            this(createVerifier(primitive), arity);
+        }
+
+        ProxyExecutableImpl(
+                        final Consumer<? super Value> verifier,
+                        final int arity) {
+            Objects.requireNonNull(verifier);
+            this.verifier = verifier;
+            this.arity = arity;
+        }
+
+        @Override
+        public Object execute(Value... arguments) {
+            if (this.arity > arguments.length) {
+                throw new AssertionError(String.format("Not enought arguments, required: %d, given: %d", this.arity, arguments.length));
+            }
+            for (int i = 0; i < arity; i++) {
+                verifier.accept(arguments[i]);
+            }
+            return null;
+        }
+
+        private static Consumer<? super Value> createVerifier(final Primitive primitive) {
+            if (TypeDescriptor.NUMBER == primitive.type) {
+                return new Consumer<Value>() {
+                    @Override
+                    public void accept(Value value) {
+                        if (!value.isNumber()) {
+                            throw new AssertionError(String.format("Expected NUMBER, got: %s", value));
+                        }
+                        if (value.fitsInByte()) {
+                            value.asByte();
+                        }
+                        if (value.fitsInInt()) {
+                            value.asInt();
+                        }
+                        if (value.fitsInLong()) {
+                            value.asLong();
+                        }
+                        if (value.fitsInFloat()) {
+                            value.asFloat();
+                        }
+                        if (value.fitsInDouble()) {
+                            value.asDouble();
+                        }
+                    }
+                };
+            } else if (TypeDescriptor.BOOLEAN == primitive.type) {
+                return new Consumer<Value>() {
+                    @Override
+                    public void accept(Value value) {
+                        value.asBoolean();
+                    }
+                };
+            } else if (TypeDescriptor.STRING == primitive.type) {
+                return new Consumer<Value>() {
+                    @Override
+                    public void accept(Value value) {
+                        value.asString();
+                    }
+                };
+            } else {
+                return EMPTY;
+            }
         }
     }
 }
