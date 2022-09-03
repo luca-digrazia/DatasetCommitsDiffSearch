@@ -115,23 +115,11 @@ public class StringSubstitutionsTest extends MethodSubstitutionTest {
 
     @Test
     public void testIndexOfConstantUTF16() {
-        test("indexOfConstantUTF16case1");
-        test("indexOfConstantUTF16case2");
-        test("indexOfConstantUTF16case3");
+        test("indexOfConstantUTF16");
     }
 
-    public int indexOfConstantUTF16case1() {
+    public int indexOfConstantUTF16() {
         return ("grga " + ((char) 0x10D) + "varak").indexOf(((char) 0x10D) + "varak");
-    }
-
-    public int indexOfConstantUTF16case2() {
-        int index = ("grga " + ((char) 0xD) + "varak").indexOf(((char) 0x10D) + "varak");
-        return index;
-    }
-
-    public int indexOfConstantUTF16case3() {
-        int index = ("grga " + ((char) 0x100) + "varak").indexOf(((char) 0x10D) + "varak");
-        return index;
     }
 
     @Test
