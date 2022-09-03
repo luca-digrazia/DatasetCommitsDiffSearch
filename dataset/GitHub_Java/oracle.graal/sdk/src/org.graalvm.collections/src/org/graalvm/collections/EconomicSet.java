@@ -146,7 +146,7 @@ public interface EconomicSet<E> extends UnmodifiableEconomicSet<E> {
      * @since 1.0
      */
     static <E> EconomicSet<E> create(Equivalence strategy) {
-        return EconomicMapImpl.create(strategy, true);
+        return EconomicMapImpl.create(strategy);
     }
 
     /**
@@ -178,7 +178,7 @@ public interface EconomicSet<E> extends UnmodifiableEconomicSet<E> {
      * @since 1.0
      */
     static <E> EconomicSet<E> create(Equivalence strategy, int initialCapacity) {
-        return EconomicMapImpl.create(strategy, initialCapacity, true);
+        return EconomicMapImpl.create(strategy, initialCapacity);
     }
 
     /**
@@ -188,6 +188,6 @@ public interface EconomicSet<E> extends UnmodifiableEconomicSet<E> {
      * @since 1.0
      */
     static <E> EconomicSet<E> create(Equivalence strategy, UnmodifiableEconomicSet<E> c) {
-        return EconomicMapImpl.create(strategy, c, true);
+        return EconomicMapImpl.create(strategy, c);
     }
 }
