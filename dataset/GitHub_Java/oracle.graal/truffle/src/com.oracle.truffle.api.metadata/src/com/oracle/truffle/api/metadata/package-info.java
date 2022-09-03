@@ -23,6 +23,12 @@
  * questions.
  */
 
+/*
+ @ApiInfo(
+ group="Truffle"
+ )
+ */
+
 /**
  * The metadata package provides scope APIs related to declared guest language variables. Tools are
  * the main client of these APIs.
@@ -30,8 +36,9 @@
  * Services declared in this package are registered by directly implementing the
  * {@link com.oracle.truffle.api.TruffleLanguage} with the appropriate service interface.
  * <p>
- * This package was deprecated since 0.30 in favor of {@link com.oracle.truffle.api.Scope} class and
- * {@link com.oracle.truffle.api.TruffleLanguage#findScopes}.
+ * This package was deprecated since 0.30 in favor of {@link com.oracle.truffle.api.Scope} class,
+ * {@link com.oracle.truffle.api.TruffleLanguage#findLocalScopes} and
+ * {@link com.oracle.truffle.api.instrumentation.TruffleInstrument.Env#findLocalScopes}.
  *
  * @since 0.26
  * @deprecated
