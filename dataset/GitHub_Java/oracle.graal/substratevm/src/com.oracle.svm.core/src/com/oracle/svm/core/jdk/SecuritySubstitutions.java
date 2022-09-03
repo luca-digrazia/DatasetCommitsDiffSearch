@@ -45,6 +45,7 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.svm.core.annotate.Alias;
+import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.InjectAccessors;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
@@ -119,6 +120,11 @@ final class Target_java_security_AccessControlContext {
 @Substitute
 @TargetClass(java.security.ProtectionDomain.class)
 final class Target_java_security_ProtectionDomain {
+}
+
+@Delete
+@TargetClass(className = "java.util.jar.JarVerifier")
+final class Target_java_util_jar_JarVerifier {
 }
 
 @TargetClass(java.security.SecureRandom.class)

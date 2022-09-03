@@ -161,6 +161,7 @@ import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.os.IsDefined;
+import com.oracle.svm.core.posix.PosixOSInterface.Util_java_io_FileDescriptor;
 import com.oracle.svm.core.posix.headers.Dirent;
 import com.oracle.svm.core.posix.headers.Dirent.DIR;
 import com.oracle.svm.core.posix.headers.Dirent.dirent;
@@ -232,7 +233,7 @@ public final class PosixJavaNIOSubstitutions {
     // Checkstyle: resume
 
     protected static IOException throwIOExceptionWithLastError(String defaultMsg) throws IOException {
-        throw new IOException(PosixUtils.lastErrorString(defaultMsg));
+        throw new IOException(PosixOSInterface.lastErrorString(defaultMsg));
     }
 
     protected static int handle(int rv, String msg) throws IOException {
@@ -306,7 +307,7 @@ public final class PosixJavaNIOSubstitutions {
     }
 
     protected static int fdval(FileDescriptor fdo) {
-        return PosixUtils.getFD(fdo);
+        return Util_java_io_FileDescriptor.getFD(fdo);
     }
 
     protected static <T extends PointerBase> T dlsym(PointerBase handle, String name) {
@@ -469,12 +470,12 @@ public final class PosixJavaNIOSubstitutions {
 
         @Substitute
         private static int fdVal(FileDescriptor fd) {
-            return PosixUtils.getFD(fd);
+            return Util_java_io_FileDescriptor.getFD(fd);
         }
 
         @Substitute
         private static void setfdVal(FileDescriptor fd, int value) {
-            PosixUtils.setFD(fd, value);
+            Util_java_io_FileDescriptor.setFD(fd, value);
         }
 
         @Substitute
@@ -900,7 +901,7 @@ public final class PosixJavaNIOSubstitutions {
             }
             // 276
             // 277     rv = NET_Bind(fdval(env, fdo), (struct sockaddr *)&sa, sa_len);
-            rv = JavaNetNetUtilMD.NET_Bind(PosixUtils.getFD(fd), sa, sa_len_Pointer.read());
+            rv = JavaNetNetUtilMD.NET_Bind(Util_java_io_FileDescriptor.getFD(fd), sa, sa_len_Pointer.read());
             // 278     if (rv != 0) {
             if (rv != 0) {
             // 279         handleSocketError(env, errno);
@@ -917,7 +918,7 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         static void listen(FileDescriptor fdo, int backlog) throws IOException {
             // 286     if (listen(fdval(env, fdo), backlog) < 0)
-            if (Target_os.listen(PosixUtils.getFD(fdo), backlog) < 0) {
+            if (Target_os.listen(Util_java_io_FileDescriptor.getFD(fdo), backlog) < 0) {
                 // 287         handleSocketError(env, errno);
                 Util_sun_nio_ch_Net.handleSocketError(Errno.errno());
             }
@@ -1216,7 +1217,7 @@ public final class PosixJavaNIOSubstitutions {
             }
             //        109
             //        110     (*env)->SetIntField(env, newfdo, fd_fdID, newfd);
-            PosixUtils.setFD(newfdo, newfd);
+            PosixOSInterface.Util_java_io_FileDescriptor.setFD(newfdo, newfd);
             //        111     remote_ia = NET_SockaddrToInetAddress(env, sa, (int *)&remote_port);
             remote_ia = JavaNetNetUtil.NET_SockaddrToInetAddress(sa_Pointer.read(), remote_port_Pointer);
             //        112     free((void *)sa);

@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
-import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.graalvm.nativeimage.ImageSingletons;
@@ -250,13 +249,13 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
         } else if (substituteAnnotation != null) {
             handleSubstitutionClass(annotatedClass, originalClass);
         } else {
-            handleAliasClass(annotatedClass, originalClass, targetClassAnnotation);
+            handleAliasClass(annotatedClass, originalClass);
         }
     }
 
-    private void handleAliasClass(Class<?> annotatedClass, Class<?> originalClass, TargetClass targetClassAnnotation) {
+    private void handleAliasClass(Class<?> annotatedClass, Class<?> originalClass) {
         String expectedName = "Target_" + originalClass.getName().replace('.', '_').replace('$', '_');
-        if (VerifyNamingConventions.getValue() && targetClassAnnotation.classNameProvider() == TargetClass.NoClassNameProvider.class) {
+        if (VerifyNamingConventions.getValue()) {
             guarantee(annotatedClass.getSimpleName().equals(expectedName), "Naming convention violation: %s must be named %s", annotatedClass, expectedName);
         }
 
@@ -726,19 +725,9 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
         String className;
         if (target.value() != TargetClass.class) {
             guarantee(target.className().isEmpty(), "Both class and class name specified for substitution");
-            guarantee(target.classNameProvider() == TargetClass.NoClassNameProvider.class, "Both class and classNameProvider specified for substitution");
             className = target.value().getName();
-        } else if (target.classNameProvider() != TargetClass.NoClassNameProvider.class) {
-            try {
-                Constructor<? extends Function<TargetClass, String>> classNameProviderConstructor = target.classNameProvider().getDeclaredConstructor();
-                classNameProviderConstructor.setAccessible(true);
-                Function<TargetClass, String> classNameProvider = classNameProviderConstructor.newInstance();
-                className = classNameProvider.apply(target);
-            } catch (NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
-                throw UserError.abort("Cannot instantiate classNameProvider: " + target.classNameProvider().getTypeName() + ". The class must have a parameterless constructor.");
-            }
         } else {
-            guarantee(!target.className().isEmpty(), "Neither class, className, or classNameProvider specified for substitution");
+            guarantee(!target.className().isEmpty(), "Neither class nor class name specified for substitution");
             className = target.className();
         }
         Class<?> holder = imageClassLoader.findClassByName(className, false);
