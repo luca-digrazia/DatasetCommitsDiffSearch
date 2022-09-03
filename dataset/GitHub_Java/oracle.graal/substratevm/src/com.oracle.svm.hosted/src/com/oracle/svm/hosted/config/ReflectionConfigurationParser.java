@@ -25,6 +25,9 @@ package com.oracle.svm.hosted.config;
 import static com.oracle.svm.core.SubstrateOptions.PrintFlags;
 
 import java.io.File;
+
+// Checkstyle: allow reflection
+
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -41,13 +44,11 @@ import com.oracle.shadowed.com.google.gson.stream.JsonReader;
 import com.oracle.shadowed.com.google.gson.stream.JsonToken;
 import com.oracle.svm.core.RuntimeReflection.ReflectionRegistry;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.ImageClassLoader;
+import com.oracle.svm.hosted.option.HostedOptionParser;
 
 import jdk.vm.ci.meta.MetaUtil;
-
-// Checkstyle: allow reflection
 
 /**
  * Parses JSON describing classes, methods and fields and registers them with a
@@ -119,7 +120,7 @@ public final class ReflectionConfigurationParser {
             }
             throw UserError.abort("Error parsing " + featureName + " configuration in " + location + json + ":\n" + errorMessage +
                             "\nVerify that the configuration matches the schema described in the " +
-                            SubstrateOptionsParser.commandArgument(PrintFlags, "+") + " output for option " + option.getName() + ".");
+                            HostedOptionParser.commandArgument(PrintFlags, "+") + " output for option " + option.getName() + ".");
         }
     }
 
