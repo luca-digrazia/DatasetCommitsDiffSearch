@@ -488,19 +488,16 @@ public class Context implements AutoCloseable {
         return true;
     }
 
-    private NoContext leave;
+    private Leave leave;
     int activeInvocations;
 
-    /**
-     * Enters a scope that disables the {@linkplain Context#getCurrent() current} context. The
-     * disabled scope is exited when {@link NoContext#close()} is called on the returned object.
-     */
-    public NoContext leave() {
-        return new NoContext();
+    public Leave leave() {
+        return new Leave();
     }
 
-    public class NoContext implements AutoCloseable {
-        NoContext() {
+    public class Leave implements AutoCloseable {
+
+        Leave() {
             assert currentContext.get() == Context.this;
             assert Context.this.leave == null;
             Context.this.leave = this;
