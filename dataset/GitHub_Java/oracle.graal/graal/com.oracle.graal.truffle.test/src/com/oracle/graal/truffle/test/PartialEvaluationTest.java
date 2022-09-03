@@ -36,7 +36,7 @@ import com.oracle.graal.java.*;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.*;
@@ -57,10 +57,8 @@ public class PartialEvaluationTest extends GraalCompilerTest {
     public PartialEvaluationTest() {
         // Make sure Truffle runtime is initialized.
         Assert.assertTrue(Truffle.getRuntime() instanceof GraalTruffleRuntime);
-        Replacements truffleReplacements = ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements();
-        TruffleCache truffleCache = new TruffleCache(getMetaAccess(), getConstantReflection(), getCodeCache(), getLowerer(), GraphBuilderConfiguration.getDefault(), TruffleCompilerImpl.Optimizations,
-                        truffleReplacements);
-        this.partialEvaluator = new PartialEvaluator(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), truffleReplacements, truffleCache);
+        this.partialEvaluator = new PartialEvaluator(runtime, ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements(), new TruffleCache(runtime, GraphBuilderConfiguration.getDefault(),
+                        TruffleCompilerImpl.Optimizations, ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements()));
 
         DebugEnvironment.initialize(System.out);
     }
@@ -108,7 +106,7 @@ public class PartialEvaluationTest extends GraalCompilerTest {
             public StructuredGraph call() {
                 StructuredGraph resultGraph = partialEvaluator.createGraph(compilable, assumptions);
                 CanonicalizerPhase canonicalizer = new CanonicalizerPhase(canonicalizeReads);
-                PhaseContext context = new PhaseContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), assumptions, replacements);
+                PhaseContext context = new PhaseContext(runtime, assumptions, replacements);
 
                 if (resultGraph.hasLoops()) {
                     boolean unrolled;
@@ -120,7 +118,7 @@ public class PartialEvaluationTest extends GraalCompilerTest {
                             if (ex.counted().isConstantMaxTripCount()) {
                                 long constant = ex.counted().constantMaxTripCount();
                                 if (constant <= UNROLL_LIMIT) {
-                                    LoopTransformations.fullUnroll(ex, context, canonicalizer);
+                                    LoopTransformations.fullUnroll(ex, runtime, assumptions, canonicalizeReads);
                                     Debug.dump(resultGraph, "After loop unrolling %d times", constant);
 
                                     canonicalizer.apply(resultGraph, context);
@@ -133,7 +131,7 @@ public class PartialEvaluationTest extends GraalCompilerTest {
                 }
 
                 new DeadCodeEliminationPhase().apply(resultGraph);
-                new PartialEscapePhase(true, canonicalizer).apply(resultGraph, context);
+                new PartialEscapePhase(true).apply(resultGraph, context);
 
                 if (TruffleInlinePrinter.getValue()) {
                     InlinePrinterProcessor.printTree();
@@ -163,7 +161,7 @@ public class PartialEvaluationTest extends GraalCompilerTest {
             frameState.replaceAtUsages(null);
             frameState.safeDelete();
         }
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), new Assumptions(false), replacements));
+        new CanonicalizerPhase.Instance(runtime, new Assumptions(false), true).apply(graph);
         new DeadCodeEliminationPhase().apply(graph);
     }
 
@@ -171,37 +169,34 @@ public class PartialEvaluationTest extends GraalCompilerTest {
 
         StructuredGraph graphResult = Debug.scope("Truffle", new DebugDumpScope("Comparison: " + methodName), new Callable<StructuredGraph>() {
 
-            @SuppressWarnings("deprecation")
             public StructuredGraph call() {
                 Assumptions assumptions = new Assumptions(false);
                 StructuredGraph graph = parse(methodName);
-                PhaseContext context = new PhaseContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), assumptions, replacements);
-                CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
-                canonicalizer.apply(graph, context);
+                CanonicalizerPhase.Instance canonicalizerPhase = new CanonicalizerPhase.Instance(runtime, assumptions, true);
+                canonicalizerPhase.apply(graph);
 
                 // Additional inlining.
                 final PhasePlan plan = new PhasePlan();
-                GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(getMetaAccess(), GraphBuilderConfiguration.getEagerDefault(), TruffleCompilerImpl.Optimizations);
+                GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getEagerDefault(), TruffleCompilerImpl.Optimizations);
                 plan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
-                canonicalizer.addToPhasePlan(plan, context);
+                plan.addPhase(PhasePosition.AFTER_PARSING, canonicalizerPhase);
                 plan.addPhase(PhasePosition.AFTER_PARSING, new DeadCodeEliminationPhase());
 
                 new ConvertDeoptimizeToGuardPhase().apply(graph);
-                canonicalizer.apply(graph, context);
+                canonicalizerPhase.apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
 
-                HighTierContext highTierContext = new HighTierContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), assumptions, replacements, null, plan,
-                                OptimisticOptimizations.NONE);
-                InliningPhase inliningPhase = new InliningPhase(canonicalizer);
-                inliningPhase.apply(graph, highTierContext);
+                HighTierContext context = new HighTierContext(runtime, assumptions, replacements, null, plan, OptimisticOptimizations.NONE);
+                InliningPhase inliningPhase = new InliningPhase();
+                inliningPhase.apply(graph, context);
                 removeFrameStates(graph);
 
                 new ConvertDeoptimizeToGuardPhase().apply(graph);
-                canonicalizer.apply(graph, context);
+                canonicalizerPhase.apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
 
-                new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, context);
-                canonicalizer.apply(graph, context);
+                new LoweringPhase(LoweringType.BEFORE_GUARDS).apply(graph, context);
+                canonicalizerPhase.apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
                 return graph;
             }

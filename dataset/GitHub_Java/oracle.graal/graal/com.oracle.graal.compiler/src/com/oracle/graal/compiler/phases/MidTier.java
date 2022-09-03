@@ -25,6 +25,7 @@ package com.oracle.graal.compiler.phases;
 import static com.oracle.graal.phases.GraalOptions.*;
 
 import com.oracle.graal.loop.phases.*;
+import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
@@ -46,11 +47,11 @@ public class MidTier extends PhaseSuite<MidTierContext> {
         appendPhase(new LockEliminationPhase());
 
         if (OptReadElimination.getValue()) {
-            appendPhase(new EarlyReadEliminationPhase(canonicalizer));
+            appendPhase(new EarlyReadEliminationPhase());
         }
 
         if (OptFloatingReads.getValue()) {
-            IncrementalCanonicalizerPhase<MidTierContext> incCanonicalizer = new IncrementalCanonicalizerPhase<>(canonicalizer);
+            IncrementalCanonicalizerPhase<MidTierContext> incCanonicalizer = new IncrementalCanonicalizerPhase<>();
             incCanonicalizer.appendPhase(new FloatingReadPhase());
             appendPhase(incCanonicalizer);
             if (OptReadElimination.getValue()) {
@@ -68,7 +69,7 @@ public class MidTier extends PhaseSuite<MidTierContext> {
         }
 
         if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
-            appendPhase(new IterativeConditionalEliminationPhase(canonicalizer));
+            appendPhase(new IterativeConditionalEliminationPhase());
         }
 
         if (OptEliminatePartiallyRedundantGuards.getValue()) {
@@ -85,11 +86,9 @@ public class MidTier extends PhaseSuite<MidTierContext> {
 
         appendPhase(new GuardLoweringPhase());
 
-        appendPhase(new LoweringPhase(canonicalizer));
+        appendPhase(new LoweringPhase(LoweringType.AFTER_GUARDS));
 
         appendPhase(new FrameStateAssignmentPhase());
-
-        appendPhase(new DeoptimizationGroupingPhase());
 
         if (OptCanonicalizer.getValue()) {
             appendPhase(canonicalizer);

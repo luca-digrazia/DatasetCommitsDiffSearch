@@ -22,18 +22,16 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
 
 public class EarlyReadEliminationPhase extends EffectsPhase<PhaseContext> {
 
-    public EarlyReadEliminationPhase(CanonicalizerPhase canonicalizer) {
-        super(1, canonicalizer, true);
+    public EarlyReadEliminationPhase() {
+        super(1);
     }
 
     @Override
@@ -44,8 +42,7 @@ public class EarlyReadEliminationPhase extends EffectsPhase<PhaseContext> {
     }
 
     @Override
-    protected Closure<?> createEffectsClosure(PhaseContext context, SchedulePhase schedule, ControlFlowGraph cfg) {
-        assert schedule == null;
-        return new ReadEliminationClosure(cfg);
+    protected Closure<?> createEffectsClosure(PhaseContext context, SchedulePhase schedule) {
+        return new ReadEliminationClosure(schedule);
     }
 }

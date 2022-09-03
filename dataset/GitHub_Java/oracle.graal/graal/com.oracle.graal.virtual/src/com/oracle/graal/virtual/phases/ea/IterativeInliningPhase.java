@@ -25,9 +25,9 @@ package com.oracle.graal.virtual.phases.ea;
 import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
+import java.util.concurrent.*;
 
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
@@ -53,32 +53,34 @@ public class IterativeInliningPhase extends AbstractInliningPhase {
     }
 
     private void runIterations(final StructuredGraph graph, final boolean simple, final HighTierContext context) {
-        for (int iteration = 0; iteration < EscapeAnalysisIterations.getValue(); iteration++) {
-            try (Scope s = Debug.scope("iteration " + iteration)) {
-                boolean progress = false;
-                PartialEscapePhase ea = new PartialEscapePhase(false, canonicalizer);
-                boolean eaResult = ea.runAnalysis(graph, context);
-                progress |= eaResult;
+        Boolean continueIteration = true;
+        for (int iteration = 0; iteration < EscapeAnalysisIterations.getValue() && continueIteration; iteration++) {
+            continueIteration = Debug.scope("iteration " + iteration, new Callable<Boolean>() {
 
-                Map<Invoke, Double> hints = PEAInliningHints.getValue() ? PartialEscapePhase.getHints(graph) : null;
+                @Override
+                public Boolean call() {
+                    boolean progress = false;
+                    PartialEscapePhase ea = new PartialEscapePhase(false);
+                    boolean eaResult = ea.runAnalysis(graph, context);
+                    progress |= eaResult;
 
-                InliningPhase inlining = new InliningPhase(hints, new CanonicalizerPhase(true));
-                inlining.setMaxMethodsPerInlining(simple ? 1 : Integer.MAX_VALUE);
-                inlining.apply(graph, context);
-                progress |= inlining.getInliningCount() > 0;
+                    Map<Invoke, Double> hints = PEAInliningHints.getValue() ? PartialEscapePhase.getHints(graph) : null;
 
-                new DeadCodeEliminationPhase().apply(graph);
+                    InliningPhase inlining = new InliningPhase(hints);
+                    inlining.setMaxMethodsPerInlining(simple ? 1 : Integer.MAX_VALUE);
+                    inlining.apply(graph, context);
+                    progress |= inlining.getInliningCount() > 0;
 
-                if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
-                    canonicalizer.apply(graph, context);
-                    new IterativeConditionalEliminationPhase(canonicalizer).apply(graph, context);
+                    new DeadCodeEliminationPhase().apply(graph);
+
+                    if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
+                        canonicalizer.apply(graph, context);
+                        new IterativeConditionalEliminationPhase().apply(graph, context);
+                    }
+
+                    return progress;
                 }
-                if (!progress) {
-                    break;
-                }
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
+            });
         }
     }
 }

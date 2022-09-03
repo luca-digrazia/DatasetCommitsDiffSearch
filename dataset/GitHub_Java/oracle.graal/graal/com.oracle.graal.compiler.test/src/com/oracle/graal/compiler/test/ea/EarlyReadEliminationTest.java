@@ -41,8 +41,8 @@ public class EarlyReadEliminationTest extends PEAReadEliminationTest {
     protected void processMethod(final String snippet) {
         graph = parse(snippet);
         Assumptions assumptions = new Assumptions(false);
-        HighTierContext context = new HighTierContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), assumptions, replacements, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
-        new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
-        new EarlyReadEliminationPhase(new CanonicalizerPhase(true)).apply(graph, context);
+        HighTierContext context = new HighTierContext(runtime(), assumptions, replacements, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
+        new InliningPhase().apply(graph, context);
+        new EarlyReadEliminationPhase().apply(graph, context);
     }
 }

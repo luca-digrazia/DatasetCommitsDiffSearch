@@ -22,10 +22,12 @@
  */
 package com.oracle.graal.phases.common;
 
+import static com.oracle.graal.phases.GraalOptions.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.util.*;
 import com.oracle.graal.phases.tiers.*;
@@ -34,15 +36,9 @@ public class IterativeConditionalEliminationPhase extends BasePhase<PhaseContext
 
     private static final int MAX_ITERATIONS = 256;
 
-    private final CanonicalizerPhase canonicalizer;
-
-    public IterativeConditionalEliminationPhase(CanonicalizerPhase canonicalizer) {
-        this.canonicalizer = canonicalizer;
-    }
-
     @Override
     protected void run(StructuredGraph graph, PhaseContext context) {
-        ConditionalEliminationPhase eliminate = new ConditionalEliminationPhase(context.getMetaAccess());
+        ConditionalEliminationPhase eliminate = new ConditionalEliminationPhase(context.getRuntime());
         HashSetNodeChangeListener listener = new HashSetNodeChangeListener();
         int count = 0;
         while (true) {
@@ -59,10 +55,10 @@ public class IterativeConditionalEliminationPhase extends BasePhase<PhaseContext
                     listener.getChangedNodes().add(node);
                 }
             }
-            canonicalizer.applyIncremental(graph, context, listener.getChangedNodes());
+            new CanonicalizerPhase.Instance(context.getRuntime(), context.getAssumptions(), !AOTCompilation.getValue(), listener.getChangedNodes(), null).apply(graph);
             listener.getChangedNodes().clear();
             if (++count > MAX_ITERATIONS) {
-                throw new BailoutException("Number of iterations in ConditionalEliminationPhase phase exceeds " + MAX_ITERATIONS);
+                throw new BailoutException("Number of iterations in conditional elimination phase exceeds " + MAX_ITERATIONS);
             }
         }
     }
