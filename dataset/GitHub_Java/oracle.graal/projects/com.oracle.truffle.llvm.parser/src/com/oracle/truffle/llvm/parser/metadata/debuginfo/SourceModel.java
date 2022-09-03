@@ -191,7 +191,6 @@ public final class SourceModel {
 
         private final LinkedList<Integer> removeFromBlock = new LinkedList<>();
         private int blockInstIndex = 0;
-        private DbgValueInstruction lastDbgValue = null;
 
         private SourceFunction currentFunction = null;
         private InstructionBlock currentBlock = null;
@@ -273,7 +272,6 @@ public final class SourceModel {
         @Override
         public void visit(InstructionBlock block) {
             currentBlock = block;
-            lastDbgValue = null;
             for (blockInstIndex = 0; blockInstIndex < block.getInstructionCount(); blockInstIndex++) {
                 block.getInstruction(blockInstIndex).accept(this);
             }
@@ -283,6 +281,7 @@ public final class SourceModel {
                 }
                 removeFromBlock.clear();
             }
+            currentBlock = null;
         }
 
         @Override
@@ -397,17 +396,8 @@ public final class SourceModel {
                     index = l;
                 }
                 final DbgValueInstruction dbgValue = new DbgValueInstruction(value, variable, index, expression);
-
-                if (dbgValue.equals(lastDbgValue)) {
-                    // at higher optimization levels llvm often duplicates the @llvm.dbg.value
-                    // intrinsic call, we remove it again to avoid unnecessary runtime overhead
-                    removeFromBlock.addFirst(blockInstIndex);
-
-                } else {
-                    variable.addValue(dbgValue);
-                    currentBlock.set(blockInstIndex, dbgValue);
-                    lastDbgValue = dbgValue;
-                }
+                variable.addValue(dbgValue);
+                currentBlock.set(blockInstIndex, dbgValue);
             }
         }
     }
