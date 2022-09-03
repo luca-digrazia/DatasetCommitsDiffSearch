@@ -135,7 +135,7 @@ public abstract class DebugValue {
                 try {
                     properties = new ValuePropertiesCollection(getDebugger(), getSourceRoot(), map.entrySet());
                 } catch (Exception ex) {
-                    if (isUnsupportedException(ex)) {
+                    if (ex instanceof InteropException || ex.getCause() instanceof InteropException) {
                         // Not supported, no properties
                     } else {
                         throw ex;
@@ -144,10 +144,6 @@ public abstract class DebugValue {
             }
         }
         return properties;
-    }
-
-    private static boolean isUnsupportedException(Throwable ex) {
-        return ex instanceof InteropException || isUnsupportedException(ex.getCause());
     }
 
     /*
