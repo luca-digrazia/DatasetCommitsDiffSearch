@@ -53,7 +53,7 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
     }
 
     public boolean isOptimized() {
-        return isValid() || installedCodeTask != null;
+        return installedCode.isValid() || installedCodeTask != null;
     }
 
     @Override
@@ -72,7 +72,8 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
     }
 
     private Object compiledCallFallback(Object[] args) {
-        if (isValid()) {
+        InstalledCode currentInstalledCode = installedCode;
+        if (currentInstalledCode.isValid()) {
             reinstallCallMethodShortcut();
         }
         return interpreterCall(args);
@@ -87,9 +88,10 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
 
     @Override
     protected void invalidate(Node oldNode, Node newNode, CharSequence reason) {
-        if (isValid()) {
+        InstalledCode m = this.installedCode;
+        if (m.isValid()) {
             CompilerAsserts.neverPartOfCompilation();
-            invalidate();
+            m.invalidate();
             compilationProfile.reportInvalidated();
             logOptimizedInvalidated(this, oldNode, newNode, reason);
         }
@@ -115,9 +117,9 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
 
         if (compilationEnabled && compilationPolicy.shouldCompile(compilationProfile)) {
             compile();
-            if (isValid()) {
+            if (installedCode.isValid()) {
                 try {
-                    return executeVarargs(new Object[]{this, args});
+                    return installedCode.executeVarargs(new Object[]{this, args});
                 } catch (InvalidInstalledCodeException ex) {
                 }
             }
