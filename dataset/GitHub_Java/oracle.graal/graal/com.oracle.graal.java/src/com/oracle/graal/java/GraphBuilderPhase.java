@@ -34,7 +34,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
-import com.oracle.graal.api.meta.ProfilingInfo.TriState;
+import com.oracle.graal.api.meta.ProfilingInfo.ExceptionSeen;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.debug.*;
@@ -960,7 +960,7 @@ public class GraphBuilderPhase extends Phase {
 
     protected void emitExplicitExceptions(ValueNode receiver, ValueNode outOfBoundsIndex) {
         assert receiver != null;
-        if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbabilityForOperations() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
+        if (optimisticOpts.useExceptionProbabilityForOperations() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE) {
             return;
         }
 
@@ -1123,7 +1123,7 @@ public class GraphBuilderPhase extends Phase {
     protected Invoke createInvokeNode(MethodCallTargetNode callTarget, Kind resultType) {
         // be conservative if information was not recorded (could result in endless recompiles
         // otherwise)
-        if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
+        if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE)) {
             InvokeNode invoke = new InvokeNode(callTarget, bci());
             ValueNode result = appendWithBCI(currentGraph.add(invoke));
             frameState.pushReturn(resultType, result);
@@ -1153,18 +1153,18 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private MonitorEnterNode genMonitorEnter(ValueNode x) {
-        MonitorEnterNode monitorEnter = currentGraph.add(new MonitorEnterNode(x, frameState.lockDepth()));
         frameState.pushLock(x);
+        MonitorEnterNode monitorEnter = currentGraph.add(new MonitorEnterNode(x));
         appendWithBCI(monitorEnter);
         return monitorEnter;
     }
 
     private MonitorExitNode genMonitorExit(ValueNode x) {
         ValueNode lockedObject = frameState.popLock();
-        MonitorExitNode monitorExit = currentGraph.add(new MonitorExitNode(x, frameState.lockDepth()));
         if (GraphUtil.originalValue(lockedObject) != GraphUtil.originalValue(x)) {
             throw new BailoutException("unbalanced monitors: mismatch at monitorexit, %s != %s", GraphUtil.originalValue(x), GraphUtil.originalValue(lockedObject));
         }
+        MonitorExitNode monitorExit = currentGraph.add(new MonitorExitNode(x));
         appendWithBCI(monitorExit);
         return monitorExit;
     }
@@ -1568,7 +1568,7 @@ public class GraphBuilderPhase extends Phase {
         }
 
         synchronizedEpilogue(FrameState.AFTER_BCI);
-        if (frameState.lockDepth() != 0) {
+        if (!frameState.locksEmpty()) {
             throw new BailoutException("unbalanced monitors");
         }
         ReturnNode returnNode = currentGraph.add(new ReturnNode(x));
