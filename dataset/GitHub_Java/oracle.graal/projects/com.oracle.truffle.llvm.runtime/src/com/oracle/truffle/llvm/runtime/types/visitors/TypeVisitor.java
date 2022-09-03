@@ -27,71 +27,39 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.runtime.types;
+package com.oracle.truffle.llvm.runtime.types.visitors;
 
-import java.util.Objects;
+import com.oracle.truffle.llvm.runtime.types.ArrayType;
+import com.oracle.truffle.llvm.runtime.types.FunctionType;
+import com.oracle.truffle.llvm.runtime.types.MetaType;
+import com.oracle.truffle.llvm.runtime.types.OpaqueType;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.StructureType;
+import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
+import com.oracle.truffle.llvm.runtime.types.VectorType;
+import com.oracle.truffle.llvm.runtime.types.VoidType;
 
-import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
-import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
+public interface TypeVisitor {
 
-public class OpaqueType extends Type {
+    void visit(FunctionType functionType);
 
-    private String name = LLVMIdentifier.UNKNOWN;
+    void visit(PrimitiveType primitiveType);
 
-    public OpaqueType() {
-    }
+    void visit(MetaType metaType);
 
-    public String getName() {
-        return name;
-    }
+    void visit(PointerType pointerType);
 
-    public void setName(String name) {
-        this.name = LLVMIdentifier.toLocalIdentifier(name);
-    }
+    void visit(ArrayType arrayType);
 
-    @Override
-    public int getBitSize() {
-        return 0;
-    }
+    void visit(StructureType structureType);
 
-    @Override
-    public void accept(TypeVisitor visitor) {
-        visitor.visit(this);
-    }
+    void visit(VectorType vectorType);
 
-    @Override
-    public int getAlignment(DataSpecConverter targetDataLayout) {
-        return Long.BYTES;
-    }
+    void visit(VariableBitWidthType vectorType);
 
-    @Override
-    public int getSize(DataSpecConverter targetDataLayout) {
-        return 0;
-    }
+    void visit(VoidType vectorType);
 
-    @Override
-    public String toString() {
-        if (name.equals(LLVMIdentifier.UNKNOWN)) {
-            return "opaque";
-        } else {
-            return name;
-        }
-    }
+    void visit(OpaqueType opaqueType);
 
-    @Override
-    public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + ((name == null) ? 0 : name.hashCode());
-        return result;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof OpaqueType) {
-            OpaqueType other = (OpaqueType) obj;
-            return Objects.equals(name, other.name);
-        }
-        return false;
-    }
 }
