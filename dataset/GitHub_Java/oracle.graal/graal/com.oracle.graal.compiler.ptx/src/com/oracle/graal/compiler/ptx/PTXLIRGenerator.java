@@ -36,11 +36,11 @@ import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
-import com.oracle.graal.lir.ptx.*;
 import com.oracle.graal.lir.ptx.PTXArithmetic.Op1Stack;
 import com.oracle.graal.lir.ptx.PTXArithmetic.Op2Reg;
 import com.oracle.graal.lir.ptx.PTXArithmetic.Op2Stack;
 import com.oracle.graal.lir.ptx.PTXArithmetic.ShiftOp;
+import com.oracle.graal.lir.ptx.*;
 import com.oracle.graal.lir.ptx.PTXCompare.CompareOp;
 import com.oracle.graal.lir.ptx.PTXControlFlow.BranchOp;
 import com.oracle.graal.lir.ptx.PTXControlFlow.ReturnOp;
@@ -51,6 +51,7 @@ import com.oracle.graal.lir.ptx.PTXMove.StoreOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.ptx.*;
 
 /**
  * This class implements the PTX specific portion of the LIR generator.
@@ -113,49 +114,40 @@ public class PTXLIRGenerator extends LIRGenerator {
         }
     }
 
-    private PTXAddressValue prepareAddress(Kind kind, Value base, int displacement, Value index, int scale) {
-        AllocatableValue baseRegister;
+    private PTXAddress prepareAddress(Kind kind, Value base, int displacement, Value index, int scale) {
+        Value baseRegister = base;
         long finalDisp = displacement;
         if (isConstant(base)) {
             if (asConstant(base).isNull()) {
-                baseRegister = AllocatableValue.UNUSED;
+                baseRegister = Value.ILLEGAL;
             } else if (asConstant(base).getKind() != Kind.Object) {
                 finalDisp += asConstant(base).asLong();
-                baseRegister = AllocatableValue.UNUSED;
-            } else {
-                baseRegister = load(base);
+                baseRegister = Value.ILLEGAL;
             }
-        } else if (base == Value.ILLEGAL) {
-            baseRegister = AllocatableValue.UNUSED;
-        } else {
-            baseRegister = asAllocatable(base);
         }
 
         if (index != Value.ILLEGAL) {
             if (isConstant(index)) {
                 finalDisp += asConstant(index).asLong() * scale;
             } else {
-                Value indexRegister;
+                Value indexRegister = index;
                 if (scale != 1) {
                     indexRegister = emitMul(index, Constant.forInt(scale));
-                } else {
-                    indexRegister = index;
                 }
-
-                if (baseRegister == AllocatableValue.UNUSED) {
-                    baseRegister = asAllocatable(indexRegister);
+                if (baseRegister == Value.ILLEGAL) {
+                    baseRegister = indexRegister;
                 } else {
                     baseRegister = emitAdd(baseRegister, indexRegister);
                 }
             }
         }
 
-        return new PTXAddressValue(kind, baseRegister, finalDisp);
+        return new PTXAddress(kind, baseRegister, finalDisp);
     }
 
     @Override
     public Variable emitLoad(Kind kind, Value base, int displacement, Value index, int scale, boolean canTrap) {
-        PTXAddressValue loadAddress = prepareAddress(kind, base, displacement, index, scale);
+        PTXAddress loadAddress = prepareAddress(kind, base, displacement, index, scale);
         Variable result = newVariable(loadAddress.getKind());
         append(new LoadOp(result, loadAddress, canTrap ? state() : null));
         return result;
@@ -163,7 +155,7 @@ public class PTXLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value inputVal, boolean canTrap) {
-        PTXAddressValue storeAddress = prepareAddress(kind, base, displacement, index, scale);
+        PTXAddress storeAddress = prepareAddress(kind, base, displacement, index, scale);
         Variable input = load(inputVal);
         append(new StoreOp(storeAddress, input, canTrap ? state() : null));
     }
@@ -350,7 +342,7 @@ public class PTXLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason) {
-        append(new ReturnOp(Value.ILLEGAL));
+        throw new InternalError("NYI");
     }
 
     @Override

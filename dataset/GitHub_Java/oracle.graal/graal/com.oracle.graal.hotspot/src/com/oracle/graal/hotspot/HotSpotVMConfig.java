@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,14 +37,11 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int codeEntryAlignment;
     public boolean verifyOops;
     public boolean ciTime;
-    public boolean printCompilation;
-    public boolean printInlining;
     public boolean useFastLocking;
     public boolean useTLAB;
     public boolean useBiasedLocking;
     public boolean usePopCountInstruction;
     public boolean useAESIntrinsics;
-    public boolean useG1GC;
 
     // offsets, ...
     public int stackShadowPages;
@@ -172,11 +169,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int uninitializedIdentityHashCodeValue;
 
     /**
-     * Offset of the pending deoptimization field.
-     */
-    public int pendingDeoptimizationOffset;
-
-    /**
      * Mark word right shift to get identity hash code.
      */
     public int identityHashCodeShift;
@@ -217,16 +209,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int cardtableShift;
     public long safepointPollingAddress;
     public boolean isPollingPageFar;
-
-    /**
-     * G1 Collector Related Values.
-     */
-    public int g1CardQueueIndexOffset;
-    public int g1CardQueueBufferOffset;
-    public int logOfHRGrainBytes;
-    public int g1SATBQueueMarkingOffset;
-    public int g1SATBQueueIndexOffset;
-    public int g1SATBQueueBufferOffset;
 
     /**
      * The offset of the _java_mirror field (of type {@link Class}) in a Klass.
@@ -330,9 +312,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long handleDeoptStub;
     public long monitorEnterStub;
     public long monitorExitStub;
-    public long wbPreCallStub;
-    public long wbPostCallStub;
-
     public long verifyOopStub;
     public long vmErrorStub;
     public long deoptimizeStub;
