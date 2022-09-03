@@ -29,7 +29,7 @@ import java.lang.reflect.*;
  * Represents a resolved Java method. Methods, like fields and types, are resolved through
  * {@link ConstantPool constant pools}.
  */
-public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget, ModifiersProvider {
+public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget {
 
     /**
      * Returns the bytecode of this method, if the method has code. The returned byte array does not
@@ -69,10 +69,10 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget, ModifiersP
     int getMaxStackSize();
 
     /**
-     * {@inheritDoc}
-     * <p>
-     * Only the {@linkplain Modifier#methodModifiers() method flags} specified in the JVM
-     * specification will be included in the returned mask.
+     * Returns the Java language modifiers for this method, as an integer. The {@link Modifier}
+     * class should be used to decode the modifiers. Only the
+     * {@linkplain Modifier#methodModifiers() method flags} specified in the JVM specification will
+     * be included in the returned mask.
      */
     int getModifiers();
 
@@ -114,6 +114,8 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget, ModifiersP
      * @return {@code true} if this method can be statically bound
      */
     boolean canBeStaticallyBound();
+
+    boolean isSynchronized();
 
     /**
      * Returns the list of exception handlers for this method.
@@ -218,10 +220,9 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget, ModifiersP
     Constant getEncoding();
 
     /**
-     * Checks if this method is present in the virtual table for subtypes of the specified
-     * {@linkplain ResolvedJavaType type}.
+     * Checks if this method is present in the virtual table.
      *
-     * @return true is this method is present in the virtual table for subtypes of this type.
+     * @return true is this method is present in the virtual table
      */
-    boolean isInVirtualMethodTable(ResolvedJavaType resolved);
+    boolean isInVirtualMethodTable();
 }

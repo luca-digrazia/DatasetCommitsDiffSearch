@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.baseline;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-import static java.lang.reflect.Modifier.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import java.util.*;
 
@@ -32,19 +31,19 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.bytecode.*;
-import com.oracle.graal.cfg.*;
 import com.oracle.graal.compiler.alloc.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.calc.FloatConvertNode.FloatConvert;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.*;
@@ -106,7 +105,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
                 }
             }
 
-            if (isSynchronized(method.getModifiers())) {
+            if (method.isSynchronized()) {
                 throw GraalInternalError.unimplemented("Handle synchronized methods");
             }
 

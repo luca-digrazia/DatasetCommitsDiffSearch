@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.api.meta.test;
 
+import static java.lang.reflect.Modifier.*;
 import static org.junit.Assert.*;
 
 import java.lang.annotation.*;
@@ -51,9 +52,9 @@ public class TestResolvedJavaMethod extends MethodUniverse {
             if (code == null) {
                 assertTrue(m.getCodeSize() == 0);
             } else {
-                if (m.isAbstract()) {
+                if (isAbstract(m.getModifiers())) {
                     assertTrue(code.length == 0);
-                } else if (!m.isNative()) {
+                } else if (!isNative(m.getModifiers())) {
                     assertTrue(code.length > 0);
                 }
             }
@@ -68,9 +69,9 @@ public class TestResolvedJavaMethod extends MethodUniverse {
         for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
             ResolvedJavaMethod m = e.getValue();
             int codeSize = m.getCodeSize();
-            if (m.isAbstract()) {
+            if (isAbstract(m.getModifiers())) {
                 assertTrue(codeSize == 0);
-            } else if (!m.isNative()) {
+            } else if (!isNative(m.getModifiers())) {
                 assertTrue(codeSize > 0);
             }
         }
@@ -267,18 +268,6 @@ public class TestResolvedJavaMethod extends MethodUniverse {
         assertTrue(2 <= method2StackSize && method2StackSize <= 4);
     }
 
-    @Test
-    public void isDefaultTest() {
-        for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
-            ResolvedJavaMethod m = e.getValue();
-            assertEquals(e.getKey().isDefault(), m.isDefault());
-        }
-        for (Map.Entry<Constructor<?>, ResolvedJavaMethod> e : constructors.entrySet()) {
-            ResolvedJavaMethod m = e.getValue();
-            assertFalse(m.isDefault());
-        }
-    }
-
     private Method findTestMethod(Method apiMethod) {
         String testName = apiMethod.getName() + "Test";
         for (Method m : getClass().getDeclaredMethods()) {
@@ -303,8 +292,7 @@ public class TestResolvedJavaMethod extends MethodUniverse {
         "getLineNumberTable",
         "getLocalVariableTable",
         "isInVirtualMethodTable",
-        "toParameterTypes",
-        "getParameterAnnotation"
+        "isDefault" // tested in TestResolvedJavaMethodJDK8
     };
     // @formatter:on
 

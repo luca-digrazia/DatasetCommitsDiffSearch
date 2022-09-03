@@ -23,7 +23,7 @@
 package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
 import java.lang.annotation.*;
@@ -186,7 +186,8 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public boolean canBeStaticallyBound() {
-        return (isFinal() || isPrivate() || isStatic() || holder.isFinal()) && !isAbstract();
+        int modifiers = getModifiers();
+        return (Modifier.isFinal(modifiers) || Modifier.isPrivate(modifiers) || Modifier.isStatic(modifiers) || Modifier.isFinal(holder.getModifiers())) && !Modifier.isAbstract(modifiers);
     }
 
     @Override
@@ -313,17 +314,18 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public boolean isClassInitializer() {
-        return "<clinit>".equals(name) && isStatic();
+        return "<clinit>".equals(name) && Modifier.isStatic(getModifiers());
     }
 
     @Override
     public boolean isConstructor() {
-        return "<init>".equals(name) && !isStatic();
+        return "<init>".equals(name) && !Modifier.isStatic(getModifiers());
     }
 
     @Override
     public int getMaxLocals() {
-        if (isAbstract() || isNative()) {
+        int modifiers = getModifiers();
+        if (Modifier.isAbstract(modifiers) || Modifier.isNative(modifiers)) {
             return 0;
         }
         HotSpotVMConfig config = runtime().getConfig();
@@ -332,7 +334,8 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public int getMaxStackSize() {
-        if (isAbstract() || isNative()) {
+        int modifiers = getModifiers();
+        if (Modifier.isAbstract(modifiers) || Modifier.isNative(modifiers)) {
             return 0;
         }
         HotSpotVMConfig config = runtime().getConfig();
@@ -484,6 +487,10 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         return ((getModifiers() & mask) == Modifier.PUBLIC) && getDeclaringClass().isInterface();
     }
 
+    public boolean isSynchronized() {
+        return Modifier.isSynchronized(getModifiers());
+    }
+
     @Override
     public Type[] getGenericParameterTypes() {
         if (isConstructor()) {
@@ -604,9 +611,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public boolean isInVirtualMethodTable() {
-        // TODO (gd) this should probably take a ResolvedJavaType as argument so that we can take
-        // advantage of miranda & default methods.
-        return !holder.isInterface() && getVtableIndex() >= 0;
+        return getVtableIndex() >= 0;
     }
 
     /**
@@ -615,7 +620,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
      * @return virtual table index
      */
     private int getVtableIndex() {
-        assert !holder.isInterface() : this;
+        assert !Modifier.isInterface(holder.getModifiers());
         HotSpotVMConfig config = runtime().getConfig();
         int result = unsafe.getInt(metaspaceMethod + config.methodVtableIndexOffset);
         assert result >= config.nonvirtualVtableIndex : "must be linked";
