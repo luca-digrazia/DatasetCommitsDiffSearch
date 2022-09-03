@@ -23,6 +23,7 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
+import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.hotspot.nodes.*;
@@ -36,21 +37,25 @@ public class ThreadSubstitutions {
 
     @MethodSubstitution
     public static Thread currentThread() {
-        return (Thread) CurrentJavaThreadNode.get().readObject(threadObjectOffset(), FINAL_LOCATION);
+        return CurrentThread.get();
     }
+
+    @Alias(declaringClass = Thread.class) private long eetop;
 
     @MethodSubstitution(isStatic = false)
     public static boolean isInterrupted(final Thread thisObject, boolean clearInterrupted) {
-        Word javaThread = CurrentJavaThreadNode.get();
-        Object thread = javaThread.readObject(threadObjectOffset(), FINAL_LOCATION);
+        Thread thread = CurrentThread.get();
         if (thisObject == thread) {
-            Word osThread = javaThread.readWord(osThreadOffset(), FINAL_LOCATION);
-            boolean interrupted = osThread.readInt(osThreadInterruptedOffset(), ANY_LOCATION) != 0;
+            ThreadSubstitutions threadAlias = unsafeCast(thread, ThreadSubstitutions.class, false, true);
+            Word rawThread = Word.unsigned(threadAlias.eetop);
+            Word osThread = rawThread.readWord(osThreadOffset(), FINAL_LOCATION);
+            int int0 = osThread.readInt(osThreadInterruptedOffset(), UNKNOWN_LOCATION);
+            boolean interrupted = int0 != 0;
             if (!interrupted || !clearInterrupted) {
                 return interrupted;
             }
         }
 
-        return ThreadIsInterruptedStubCall.call(thisObject, clearInterrupted);
+        return ThreadIsInterruptedStubCall.call(thisObject, clearInterrupted) != 0;
     }
 }
