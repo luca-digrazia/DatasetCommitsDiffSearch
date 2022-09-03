@@ -1076,7 +1076,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
              * Returns a block begin node with the specified state. If the specified probability is
              * 0, the block deoptimizes immediately.
              */
-            private AbstractBeginNode createBlockTarget(double probability, BciBlock block, HIRFrameStateBuilder stateAfter) {
+            @Override
+            protected AbstractBeginNode createBlockTarget(double probability, BciBlock block, HIRFrameStateBuilder stateAfter) {
                 FixedNode target = createTarget(probability, block, stateAfter);
                 AbstractBeginNode begin = AbstractBeginNode.begin(target);
 
