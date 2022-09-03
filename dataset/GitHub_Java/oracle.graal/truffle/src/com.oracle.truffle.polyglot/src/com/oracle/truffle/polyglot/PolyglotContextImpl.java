@@ -434,7 +434,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     private void checkAllThreadAccesses() {
-        assert Thread.holdsLock(this);
         Thread current = Thread.currentThread();
         List<PolyglotLanguage> deniedLanguages = null;
         for (PolyglotLanguageContext context : contexts) {
@@ -762,24 +761,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         if (hostValue instanceof Value) {
             return (Value) hostValue;
         }
-        PolyglotLanguageContext context = null;
-        Object guestValue = null;
-        if (hostValue instanceof PolyglotList) {
-            context = ((PolyglotList<?>) hostValue).languageContext;
-            guestValue = ((PolyglotList<?>) hostValue).guestObject;
-        } else if (hostValue instanceof PolyglotMap) {
-            context = ((PolyglotMap<?, ?>) hostValue).languageContext;
-            guestValue = ((PolyglotMap<?, ?>) hostValue).guestObject;
-        } else if (hostValue instanceof PolyglotFunction) {
-            context = ((PolyglotFunction<?, ?>) hostValue).languageContext;
-            guestValue = ((PolyglotFunction<?, ?>) hostValue).guestObject;
-        }
-        if (context == null) {
-            context = getHostContext();
-            return context.asValue(context.toGuestValue(hostValue));
-        } else {
-            return context.asValue(guestValue);
-        }
+        PolyglotLanguageContext hostContext = getHostContext();
+        return hostContext.asValue(hostContext.toGuestValue(hostValue));
     }
 
     void waitForClose() {
@@ -988,7 +971,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     PolyglotThreadInfo getCurrentThreadInfo() {
-        assert Thread.holdsLock(this);
         PolyglotThreadInfo currentTInfo = currentThreadInfo;
 
         if (currentTInfo.thread != Thread.currentThread()) {
