@@ -33,23 +33,22 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
+import jdk.vm.ci.inittimer.InitTimer;
+import jdk.vm.ci.runtime.JVMCICompilerFactory;
+import jdk.vm.ci.runtime.JVMCIRuntime;
+import jdk.vm.ci.services.Services;
+
 import com.oracle.graal.options.GraalJarsOptionDescriptorsProvider;
 import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
 import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.options.OptionsParser;
 import com.oracle.graal.phases.tiers.CompilerConfiguration;
-import com.oracle.graal.serviceprovider.GraalServices;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.hotspot.services.HotSpotJVMCICompilerFactory;
-import jdk.vm.ci.inittimer.InitTimer;
-import jdk.vm.ci.runtime.JVMCIRuntime;
-
-public abstract class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFactory {
+public abstract class HotSpotGraalCompilerFactory implements JVMCICompilerFactory {
 
     /**
      * The name of the system property specifying a file containing extra Graal option settings.
@@ -75,19 +74,15 @@ public abstract class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFa
         return GRAAL_OPTION_PROPERTY_PREFIX + value.getName() + "=" + value.getValue();
     }
 
-    @Override
-    public void onSelection() {
+    static {
         initializeOptions();
     }
 
     static class Options {
 
         // @formatter:off
-        @Option(help = "In tiered mode compile Graal and JVMCI using optimized first tier code.", type = OptionType.Expert)
+        @Option(help = "In tiered mode compile the compiler itself using optimized first tier code.", type = OptionType.Expert)
         public static final OptionValue<Boolean> CompileGraalWithC1Only = new OptionValue<>(true);
-
-        @Option(help = "Hook into VM-level mechanism for denoting compilations to be performed in first tier.", type = OptionType.Expert)
-        public static final OptionValue<Boolean> UseTrivialPrefixes = new OptionValue<>(true);
         // @formatter:on
 
     }
@@ -97,7 +92,7 @@ public abstract class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFa
 
         static {
             try (InitTimer t = timer("HotSpotBackendFactory.register")) {
-                for (HotSpotBackendFactory backend : GraalServices.load(HotSpotBackendFactory.class)) {
+                for (HotSpotBackendFactory backend : Services.load(HotSpotBackendFactory.class)) {
                     backend.register();
                 }
             }
@@ -108,66 +103,58 @@ public abstract class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFa
         }
     }
 
-    private static boolean optionsInitialized;
-
     /**
-     * Initializes options if they haven't already been initialized.
-     *
-     * Initialization means first parsing the options in the file denoted by the
-     * {@code VM.getSavedProperty(String) saved} system property named
-     * {@value HotSpotGraalCompilerFactory#GRAAL_OPTIONS_FILE_PROPERTY_NAME} if the file exists
-     * followed by parsing the options encoded in saved system properties whose names start with
-     * {@code "graal.option."}. Key/value pairs are parsed from the aforementioned file with
-     * {@link Properties#load(java.io.Reader)}.
+     * Parses the options in the file denoted by the {@code VM.getSavedProperty(String) saved}
+     * system property named {@value HotSpotGraalCompilerFactory#GRAAL_OPTIONS_FILE_PROPERTY_NAME}
+     * if the file exists followed by the options encoded in saved system properties whose names
+     * start with {@code "graal.option."}. Key/value pairs are parsed from the file denoted by
+     * {@code "graal.options.file"} with {@link Properties#load(java.io.Reader)}.
      */
     @SuppressWarnings("try")
-    private static synchronized void initializeOptions() {
-        if (!optionsInitialized) {
-            try (InitTimer t = timer("InitializeOptions")) {
-                boolean jdk8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
-                GraalJarsOptionDescriptorsProvider odp = jdk8OrEarlier ? GraalJarsOptionDescriptorsProvider.create() : null;
+    private static void initializeOptions() {
+        try (InitTimer t = timer("InitializeOptions")) {
+            boolean jdk8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
+            GraalJarsOptionDescriptorsProvider odp = jdk8OrEarlier ? GraalJarsOptionDescriptorsProvider.create() : null;
 
-                String optionsFile = System.getProperty(GRAAL_OPTIONS_FILE_PROPERTY_NAME);
+            String optionsFile = System.getProperty(GRAAL_OPTIONS_FILE_PROPERTY_NAME);
 
-                if (optionsFile != null) {
-                    File graalOptions = new File(optionsFile);
-                    if (graalOptions.exists()) {
-                        try (FileReader fr = new FileReader(graalOptions)) {
-                            Properties props = new Properties();
-                            props.load(fr);
-                            Map<String, String> optionSettings = new HashMap<>();
-                            for (Map.Entry<Object, Object> e : props.entrySet()) {
-                                optionSettings.put((String) e.getKey(), (String) e.getValue());
-                            }
-                            try {
-                                OptionsParser.parseOptions(optionSettings, null, odp, null);
-                            } catch (Throwable e) {
-                                throw new InternalError("Error parsing an option from " + graalOptions, e);
-                            }
-                        } catch (IOException e) {
-                            throw new InternalError("Error reading " + graalOptions, e);
+            if (optionsFile != null) {
+                File graalOptions = new File(optionsFile);
+                if (graalOptions.exists()) {
+                    try (FileReader fr = new FileReader(graalOptions)) {
+                        Properties props = new Properties();
+                        props.load(fr);
+                        Map<String, String> optionSettings = new HashMap<>();
+                        for (Map.Entry<Object, Object> e : props.entrySet()) {
+                            optionSettings.put((String) e.getKey(), (String) e.getValue());
                         }
+                        try {
+                            OptionsParser.parseOptions(optionSettings, null, odp, null);
+                        } catch (Throwable e) {
+                            throw new InternalError("Error parsing an option from " + graalOptions, e);
+                        }
+                    } catch (IOException e) {
+                        throw new InternalError("Error reading " + graalOptions, e);
                     }
                 }
-
-                Properties savedProps = getSavedProperties(jdk8OrEarlier);
-
-                Map<String, String> optionSettings = new HashMap<>();
-                for (Map.Entry<Object, Object> e : savedProps.entrySet()) {
-                    String name = (String) e.getKey();
-                    if (name.startsWith(GRAAL_OPTION_PROPERTY_PREFIX)) {
-                        if (name.equals(GRAAL_OPTIONS_FILE_PROPERTY_NAME) || name.equals(GRAAL_VERSION_PROPERTY_NAME) || name.equals(PROFILE_OPTIONVALUE_PROPERTY_NAME)) {
-                            // Ignore well known properties that do not denote an option
-                        } else {
-                            String value = (String) e.getValue();
-                            optionSettings.put(name.substring(GRAAL_OPTION_PROPERTY_PREFIX.length()), value);
-                        }
-                    }
-                }
-
-                OptionsParser.parseOptions(optionSettings, null, odp, null);
             }
-            optionsInitialized = true;
+
+            Properties savedProps = getSavedProperties(jdk8OrEarlier);
+
+            Map<String, String> optionSettings = new HashMap<>();
+            for (Map.Entry<Object, Object> e : savedProps.entrySet()) {
+                String name = (String) e.getKey();
+                if (name.startsWith(GRAAL_OPTION_PROPERTY_PREFIX)) {
+                    if (name.equals(GRAAL_OPTIONS_FILE_PROPERTY_NAME) || name.equals(GRAAL_VERSION_PROPERTY_NAME) || name.equals(PROFILE_OPTIONVALUE_PROPERTY_NAME)) {
+                        // Ignore well known properties that do not denote an option
+                    } else {
+                        String value = (String) e.getValue();
+                        optionSettings.put(name.substring(GRAAL_OPTION_PROPERTY_PREFIX.length()), value);
+                    }
+                }
+            }
+
+            OptionsParser.parseOptions(optionSettings, null, odp, null);
         }
     }
 
@@ -201,35 +188,9 @@ public abstract class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFa
 
     @Override
     public String[] getTrivialPrefixes() {
-        if (Options.UseTrivialPrefixes.getValue()) {
-            if (Options.CompileGraalWithC1Only.getValue()) {
-                return new String[]{"jdk/vm/ci", "com/oracle/graal"};
-            }
+        if (Options.CompileGraalWithC1Only.getValue()) {
+            return new String[]{"jdk/vm/ci", "com/oracle/graal"};
         }
         return null;
-    }
-
-    @Override
-    public int getCompilationLevelAdjustment(HotSpotVMConfig config) {
-        if (!Options.UseTrivialPrefixes.getValue()) {
-            if (Options.CompileGraalWithC1Only.getValue()) {
-                // We only decide using the class declaring the method
-                // so no need to have the method name and signature
-                // symbols converted to a String.
-                return config.compLevelAdjustmentByHolder;
-            }
-        }
-        return config.compLevelAdjustmentNone;
-    }
-
-    @Override
-    public int adjustCompilationLevel(HotSpotVMConfig config, Class<?> declaringClass, String name, String signature, boolean isOsr, int level) {
-        if (level > config.compilationLevelSimple) {
-            String declaringClassName = declaringClass.getName();
-            if (declaringClassName.startsWith("jdk.vm.ci") || declaringClassName.startsWith("com.oracle.graal")) {
-                return config.compilationLevelSimple;
-            }
-        }
-        return level;
     }
 }
