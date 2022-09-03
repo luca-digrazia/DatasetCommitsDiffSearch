@@ -22,32 +22,16 @@
  */
 package com.oracle.graal.debug;
 
-import static com.oracle.graal.debug.Debug.Initialization.INITIALIZER_PROPERTY_NAME;
-import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.INTERCEPT;
-import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.LOG_METHOD;
-import static java.util.FormattableFlags.LEFT_JUSTIFY;
-import static java.util.FormattableFlags.UPPERCASE;
+import static com.oracle.graal.debug.Debug.Initialization.*;
+import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.*;
+import static java.util.FormattableFlags.*;
 
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.ConcurrentModificationException;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.TimeUnit;
-
-import jdk.vm.ci.service.Services;
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.*;
 
 import com.oracle.graal.debug.DelegatingDebugConfig.Level;
-import com.oracle.graal.debug.internal.DebugHistogramImpl;
-import com.oracle.graal.debug.internal.DebugScope;
-import com.oracle.graal.debug.internal.MemUseTrackerImpl;
-import com.oracle.graal.debug.internal.MetricImpl;
-import com.oracle.graal.debug.internal.TimerImpl;
+import com.oracle.graal.debug.internal.*;
 
 /**
  * Scope based debugging facility. This facility is {@link #isEnabled()} if assertions are enabled
@@ -56,18 +40,12 @@ import com.oracle.graal.debug.internal.TimerImpl;
  */
 public class Debug {
 
-    static {
-        for (DebugInitializationPropertyProvider p : Services.load(DebugInitializationPropertyProvider.class)) {
-            p.apply();
-        }
-    }
-
     /**
      * Class to assist with initialization of {@link Debug}.
      */
     public static class Initialization {
 
-        public static final String INITIALIZER_PROPERTY_NAME = "jvmci.debug.enable";
+        public static final String INITIALIZER_PROPERTY_NAME = "graal.debug.enable";
 
         private static boolean initialized;
 
@@ -573,26 +551,6 @@ public class Debug {
     public static void log(int logLevel, String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6, Object arg7, Object arg8) {
         if (ENABLED) {
             DebugScope.getInstance().log(logLevel, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
-        }
-    }
-
-    public static void log(String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6, Object arg7, Object arg8, Object arg9) {
-        log(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
-    }
-
-    public static void log(int logLevel, String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6, Object arg7, Object arg8, Object arg9) {
-        if (ENABLED) {
-            DebugScope.getInstance().log(logLevel, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
-        }
-    }
-
-    public static void log(String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6, Object arg7, Object arg8, Object arg9, Object arg10) {
-        log(DEFAULT_LOG_LEVEL, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
-    }
-
-    public static void log(int logLevel, String format, Object arg1, Object arg2, Object arg3, Object arg4, Object arg5, Object arg6, Object arg7, Object arg8, Object arg9, Object arg10) {
-        if (ENABLED) {
-            DebugScope.getInstance().log(logLevel, format, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
         }
     }
 
@@ -1347,19 +1305,19 @@ public class Debug {
         }
     };
 
-    public static final String ENABLE_UNSCOPED_TIMERS_PROPERTY_NAME = "jvmci.debug.unscopedTimers";
-    public static final String ENABLE_UNSCOPED_METRICS_PROPERTY_NAME = "jvmci.debug.unscopedMetrics";
-    public static final String ENABLE_UNSCOPED_MEM_USE_TRACKERS_PROPERTY_NAME = "jvmci.debug.unscopedMemUseTrackers";
+    public static final String ENABLE_UNSCOPED_TIMERS_PROPERTY_NAME = "graal.debug.unscopedTimers";
+    public static final String ENABLE_UNSCOPED_METRICS_PROPERTY_NAME = "graal.debug.unscopedMetrics";
+    public static final String ENABLE_UNSCOPED_MEM_USE_TRACKERS_PROPERTY_NAME = "graal.debug.unscopedMemUseTrackers";
 
     /**
      * @see #timer(CharSequence)
      */
-    public static final String ENABLE_TIMER_PROPERTY_NAME_PREFIX = "jvmci.debug.timer.";
+    public static final String ENABLE_TIMER_PROPERTY_NAME_PREFIX = "graal.debug.timer.";
 
     /**
      * @see #metric(CharSequence)
      */
-    public static final String ENABLE_METRIC_PROPERTY_NAME_PREFIX = "jvmci.debug.metric.";
+    public static final String ENABLE_METRIC_PROPERTY_NAME_PREFIX = "graal.debug.metric.";
 
     /**
      * Set of unconditionally enabled metrics. Possible values and their meanings:
