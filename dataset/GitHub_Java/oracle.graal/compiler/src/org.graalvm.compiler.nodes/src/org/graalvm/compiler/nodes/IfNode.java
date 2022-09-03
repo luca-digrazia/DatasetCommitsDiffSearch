@@ -935,7 +935,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
 
                 if (result.graph() == null) {
                     result = graph().addOrUniqueWithInputs(result);
-                    result.setNodeSourcePosition(condition.getNodeSourcePosition());
                 }
                 IfNode newIfNode = graph().add(new IfNode(result, trueBegin, falseBegin, trueSuccessorProbability));
                 newIfNode.setNodeSourcePosition(getNodeSourcePosition());
