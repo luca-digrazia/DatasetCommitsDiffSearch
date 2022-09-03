@@ -22,12 +22,22 @@
  */
 package com.oracle.truffle.object.basic;
 
-import java.lang.invoke.*;
-
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.object.*;
-import com.oracle.truffle.object.*;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.object.BooleanLocation;
+import com.oracle.truffle.api.object.DoubleLocation;
+import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.api.object.FinalLocationException;
+import com.oracle.truffle.api.object.IncompatibleLocationException;
+import com.oracle.truffle.api.object.IntLocation;
+import com.oracle.truffle.api.object.Location;
+import com.oracle.truffle.api.object.LongLocation;
+import com.oracle.truffle.api.object.ObjectLocation;
+import com.oracle.truffle.api.object.Property;
+import com.oracle.truffle.api.object.Shape;
+import com.oracle.truffle.object.LocationImpl;
 import com.oracle.truffle.object.LocationImpl.InternalLongLocation;
+
+import java.lang.invoke.MethodHandle;
 
 /**
  * Property location.
@@ -79,7 +89,7 @@ public abstract class BasicLocations {
         }
 
         @Override
-        protected String getWhereString() {
+        public String getWhereString() {
             return "[" + index + "]";
         }
     }
@@ -116,7 +126,7 @@ public abstract class BasicLocations {
         }
 
         @Override
-        protected String getWhereString() {
+        public String getWhereString() {
             return "@" + index;
         }
     }
@@ -277,9 +287,17 @@ public abstract class BasicLocations {
         @Override
         public final void setInternal(DynamicObject store, Object value) throws IncompatibleLocationException {
             if (canStore(value)) {
-                setLongInternal(store, ((Number) value).longValue());
+                setLongInternal(store, longValue(value));
             } else {
                 throw incompatibleLocation();
+            }
+        }
+
+        private long longValue(Object value) {
+            if (!allowInt || value instanceof Long) {
+                return ((Long) value).longValue();
+            } else {
+                return ((Integer) value).longValue();
             }
         }
 
@@ -431,9 +449,17 @@ public abstract class BasicLocations {
         @Override
         public final void setInternal(DynamicObject store, Object value) throws IncompatibleLocationException {
             if (canStore(value)) {
-                setLongInternal(store, ((Number) value).longValue());
+                setLongInternal(store, longValue(value));
             } else {
                 throw incompatibleLocation();
+            }
+        }
+
+        private long longValue(Object value) {
+            if (!allowInt || value instanceof Long) {
+                return ((Long) value).longValue();
+            } else {
+                return ((Integer) value).longValue();
             }
         }
 
@@ -451,6 +477,11 @@ public abstract class BasicLocations {
         public Class<Long> getType() {
             return long.class;
         }
+
+        @Override
+        public boolean equals(Object obj) {
+            return super.equals(obj) && this.allowInt == ((LongLocationDecorator) obj).allowInt;
+        }
     }
 
     public abstract static class SimpleLongFieldLocation extends FieldLocation implements InternalLongLocation {
@@ -467,7 +498,7 @@ public abstract class BasicLocations {
         @Override
         public final void setInternal(DynamicObject store, Object value) throws IncompatibleLocationException {
             if (canStore(value)) {
-                setLongInternal(store, ((Number) value).longValue());
+                setLongInternal(store, ((Long) value).longValue());
             } else {
                 throw incompatibleLocation();
             }
@@ -542,6 +573,10 @@ public abstract class BasicLocations {
             longLocation.setLongInternal(store, value);
         }
 
+        public final InternalLongLocation getInternalLocation() {
+            return longLocation;
+        }
+
         @Override
         public final int primitiveFieldCount() {
             return ((LocationImpl) longLocation).primitiveFieldCount();
@@ -555,6 +590,21 @@ public abstract class BasicLocations {
         @Override
         public final void accept(LocationVisitor locationVisitor) {
             ((LocationImpl) longLocation).accept(locationVisitor);
+        }
+
+        @Override
+        public String getWhereString() {
+            return longLocation.getWhereString();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return super.equals(obj) && this.longLocation.equals(((PrimitiveLocationDecorator) obj).longLocation);
+        }
+
+        @Override
+        public int hashCode() {
+            return longLocation.hashCode();
         }
     }
 
@@ -638,9 +688,17 @@ public abstract class BasicLocations {
         @Override
         public final void setInternal(DynamicObject store, Object value) throws IncompatibleLocationException {
             if (canStore(value)) {
-                setDouble(store, ((Number) value).doubleValue(), null);
+                setDouble(store, doubleValue(value), null);
             } else {
                 throw incompatibleLocation();
+            }
+        }
+
+        private double doubleValue(Object value) {
+            if (!allowInt || value instanceof Double) {
+                return ((Double) value).doubleValue();
+            } else {
+                return ((Integer) value).doubleValue();
             }
         }
 
@@ -661,6 +719,11 @@ public abstract class BasicLocations {
 
         public Class<Double> getType() {
             return double.class;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return super.equals(obj) && this.allowInt == ((DoubleLocationDecorator) obj).allowInt;
         }
     }
 
