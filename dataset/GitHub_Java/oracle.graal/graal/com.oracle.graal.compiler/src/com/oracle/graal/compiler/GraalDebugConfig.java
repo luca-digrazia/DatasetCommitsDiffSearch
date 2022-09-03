@@ -38,15 +38,15 @@ public class GraalDebugConfig implements DebugConfig {
     // @formatter:off
     @Option(help = "Enable scope-based debugging", name = "Debug")
     public static final OptionValue<Boolean> DebugEnabled = new OptionValue<>(true);
-    @Option(help = "Pattern for scope(s) to in which dumping is enabled (see DebugFilter and Debug.dump)")
+    @Option(help = "Scopes to be dumped")
     public static final OptionValue<String> Dump = new OptionValue<>(null);
-    @Option(help = "Pattern for scope(s) to in which metering is enabled (see DebugFilter and Debug.metric)")
+    @Option(help = "Scopes to be metered")
     public static final OptionValue<String> Meter = new OptionValue<>(null);
-    @Option(help = "Pattern for scope(s) to in which timing is enabled (see DebugFilter and Debug.timer)")
+    @Option(help = "Scopes to be timed")
     public static final OptionValue<String> Time = new OptionValue<>(null);
-    @Option(help = "Pattern for scope(s) to in which logging is enabled (see DebugFilter and Debug.log)")
+    @Option(help = "Scopes to be logged")
     public static final OptionValue<String> Log = new OptionValue<>(null);
-    @Option(help = "Pattern for filtering debug scope output based on method context (see MethodFilter)")
+    @Option(help = "Filters debug scope output by method name/pattern")
     public static final OptionValue<String> MethodFilter = new OptionValue<>(null);
     @Option(help = "How to print metric and timing values:%n" +
                    "Name - aggregate by unqualified name%n" +
