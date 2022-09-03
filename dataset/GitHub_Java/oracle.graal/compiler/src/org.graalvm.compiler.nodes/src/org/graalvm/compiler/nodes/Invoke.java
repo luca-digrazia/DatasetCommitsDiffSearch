@@ -42,6 +42,7 @@ public interface Invoke extends StateSplit, Lowerable, MemoryCheckpoint.Single, 
 
     CallTargetNode callTarget();
 
+
     @Override
     int bci();
 

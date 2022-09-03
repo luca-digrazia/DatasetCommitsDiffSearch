@@ -73,7 +73,11 @@ public class RemoveUnwindPhase extends Phase {
          * deleted nodes during graph traversal.
          */
         for (InvokeWithExceptionNode node : invocations) {
-            node.replaceWithInvoke();
+            InvokeNode replacement = node.graph().add(new InvokeNode(node.callTarget(), node.bci(), node.stamp(NodeView.DEFAULT), node.getLocationIdentity()));
+            replacement.setStateAfter(node.stateAfter());
+
+            node.killExceptionEdge();
+            node.graph().replaceSplit(node, replacement, node.next());
         }
     }
 

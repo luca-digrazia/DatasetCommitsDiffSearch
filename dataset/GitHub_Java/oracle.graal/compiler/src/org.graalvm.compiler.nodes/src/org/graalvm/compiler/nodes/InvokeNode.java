@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -81,7 +81,7 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     protected final int bci;
     protected boolean polymorphic;
     protected boolean useForInlining;
-    protected final LocationIdentity identity;
+    protected LocationIdentity identity;
 
     public InvokeNode(CallTargetNode callTarget, int bci) {
         this(callTarget, bci, callTarget.returnStamp().getTrustedStamp());
@@ -102,13 +102,6 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
         this.polymorphic = false;
         this.useForInlining = true;
         this.identity = identity;
-    }
-
-    public InvokeNode copyWithBci(int newBci) {
-        InvokeNode invoke = new InvokeNode(callTarget, newBci, stamp, identity);
-        invoke.setUseForInlining(useForInlining);
-        invoke.setPolymorphic(polymorphic);
-        return invoke;
     }
 
     @Override
@@ -177,7 +170,6 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     public LocationIdentity getLocationIdentity() {
         return identity;
     }
-
 
     @Override
     public void lower(LoweringTool tool) {

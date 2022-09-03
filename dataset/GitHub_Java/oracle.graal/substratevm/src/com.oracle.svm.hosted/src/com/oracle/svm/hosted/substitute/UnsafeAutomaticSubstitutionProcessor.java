@@ -892,7 +892,11 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
          */
         for (InvokeWithExceptionNode invoke : graph.getNodes().filter(InvokeWithExceptionNode.class)) {
             if (noCheckedExceptionsSet.contains(invoke.callTarget().targetMethod())) {
-                invoke.replaceWithInvoke();
+                InvokeNode replacement = invoke.graph().add(new InvokeNode(invoke.callTarget(), invoke.bci(), invoke.stamp(NodeView.DEFAULT), invoke.getLocationIdentity()));
+                replacement.setStateAfter(invoke.stateAfter());
+
+                invoke.killExceptionEdge();
+                invoke.graph().replaceSplit(invoke, replacement, invoke.next());
             }
         }
         new CanonicalizerPhase().apply(graph, context);
