@@ -141,6 +141,7 @@ public class WindowsUtils {
             }
         }
     }
+    
 
     private static long performanceFrequency = 0L;
     public static long NANOSECS_PER_SEC = 1000000000L;
@@ -162,3 +163,4 @@ public class WindowsUtils {
         return (long) ((current / freq) * NANOSECS_PER_SEC);
     }
 }
+
