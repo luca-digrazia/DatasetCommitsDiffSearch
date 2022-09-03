@@ -447,8 +447,6 @@ public class EngineTest {
                                 return true;
                             } else if (tree == Message.IS_NULL) {
                                 return false;
-                            } else if (tree == Message.HAS_SIZE) {
-                                return false;
                             } else if (tree == Message.UNBOX) {
                                 return 42;
                             }

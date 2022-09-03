@@ -29,10 +29,6 @@ import com.oracle.truffle.api.nodes.Node;
 
 final class JavaInteropAccessor extends Accessor {
 
-    EngineSupport engine() {
-        return engineSupport();
-    }
-
     @Override
     protected JavaInteropSupport javaInteropSupport() {
         return new JavaInteropSupport() {

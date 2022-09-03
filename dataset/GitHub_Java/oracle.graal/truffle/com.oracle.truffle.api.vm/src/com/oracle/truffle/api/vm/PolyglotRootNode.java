@@ -109,9 +109,8 @@ abstract class PolyglotRootNode extends RootNode {
                 engineObject.assertEngine(engine);
                 args[i] = engineObject.getDelegate();
             }
-            if (args[i] != null && !isPrimitiveType(args[i].getClass())) {
-                args[i] = JavaInterop.asTruffleObject(args[i]);
-            }
+            // TODO use node based API to call into JavaInterop.asTruffleValue
+            args[i] = JavaInterop.asTruffleValue(args[i]);
         }
     }
 
