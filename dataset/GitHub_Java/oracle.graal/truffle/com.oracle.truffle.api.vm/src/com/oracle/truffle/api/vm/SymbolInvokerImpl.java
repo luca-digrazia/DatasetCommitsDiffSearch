@@ -37,7 +37,6 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.profiles.ConditionProfile;
 
 final class SymbolInvokerImpl {
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -58,21 +57,23 @@ final class SymbolInvokerImpl {
     }
 
     @SuppressWarnings("rawtypes")
-    public static RootNode createTemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function) {
-        return new TemporaryRoot(lang, foreignAccess, function);
+    public static RootNode createTemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function, int argumentLength) {
+        return new TemporaryRoot(lang, foreignAccess, function, argumentLength);
     }
 
     static class TemporaryRoot extends RootNode {
         @Child private Node foreignAccess;
         @Child private ConvertNode convert;
+        private final int argumentLength;
         private final TruffleObject function;
 
         @SuppressWarnings("rawtypes")
-        TemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function) {
+        TemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function, int argumentLength) {
             super(lang, null, null);
             this.foreignAccess = foreignAccess;
             this.convert = new ConvertNode();
             this.function = function;
+            this.argumentLength = argumentLength;
         }
 
         @Override
@@ -125,7 +126,6 @@ final class SymbolInvokerImpl {
         @Child private Node isNull;
         @Child private Node isBoxed;
         @Child private Node unbox;
-        private final ConditionProfile isBoxedProfile = ConditionProfile.createBinaryProfile();
 
         ConvertNode() {
             this.isNull = Message.IS_NULL.createNode();
@@ -143,7 +143,7 @@ final class SymbolInvokerImpl {
 
         private Object convert(VirtualFrame frame, TruffleObject obj) {
             boolean isBoxedResult = ForeignAccess.sendIsBoxed(isBoxed, frame, obj);
-            if (isBoxedProfile.profile(isBoxedResult)) {
+            if (isBoxedResult) {
                 try {
                     return ForeignAccess.sendUnbox(unbox, frame, obj);
                 } catch (UnsupportedMessageException e) {
