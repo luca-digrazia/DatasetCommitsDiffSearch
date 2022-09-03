@@ -187,20 +187,28 @@ class JavaObjectMessageResolution {
         @Child private ToJavaNode toJava = ToJavaNodeGen.create();
 
         public Object access(VirtualFrame frame, JavaObject receiver, String name, Object value) {
-            Object obj = receiver.obj;
-            if (obj instanceof Map) {
-                @SuppressWarnings("unchecked")
-                Map<Object, Object> map = (Map<Object, Object>) obj;
-                Object convertedValue = toJava.execute(frame, value, TypeAndClass.ANY);
-                return map.put(name, convertedValue);
+            try {
+                Object obj = receiver.obj;
+                if (obj instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<Object, Object> map = (Map<Object, Object>) obj;
+                    Object convertedValue = toJava.execute(frame, value, TypeAndClass.ANY);
+                    return map.put(name, convertedValue);
+                }
+                if (TruffleOptions.AOT) {
+                    throw UnsupportedMessageException.raise(Message.WRITE);
+                }
+                try {
+                    Field f = JavaInteropReflect.findField(receiver, name);
+                    Object convertedValue = toJava.execute(frame, value, new TypeAndClass<>(f.getGenericType(), f.getType()));
+                    JavaInteropReflect.setField(obj, f, convertedValue);
+                    return JavaObject.NULL;
+                } catch (NoSuchFieldException ex) {
+                    throw new RuntimeException(ex);
+                }
+            } catch (IllegalAccessException ex) {
+                throw new RuntimeException(ex);
             }
-            if (TruffleOptions.AOT) {
-                throw UnsupportedMessageException.raise(Message.WRITE);
-            }
-            Field f = JavaInteropReflect.findField(receiver, name);
-            Object convertedValue = toJava.execute(frame, value, new TypeAndClass<>(f.getGenericType(), f.getType()));
-            JavaInteropReflect.setField(obj, f, convertedValue);
-            return JavaObject.NULL;
         }
 
         @Child private ArrayWriteNode write = ArrayWriteNodeGen.create();
