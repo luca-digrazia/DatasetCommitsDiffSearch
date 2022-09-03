@@ -99,7 +99,7 @@ public interface NodeFactoryFacade {
      */
     LLVMNode createLLVMIntrinsic(String functionName, Object[] argNodes, FunctionDef functionDef);
 
-    LLVMNode createTruffleIntrinsic(String functionName, LLVMExpressionNode[] argNodes);
+    LLVMNode createTruffleGetArgIntrinsic(LLVMExpressionNode argNode);
 
     LLVMNode createRetVoid();
 
