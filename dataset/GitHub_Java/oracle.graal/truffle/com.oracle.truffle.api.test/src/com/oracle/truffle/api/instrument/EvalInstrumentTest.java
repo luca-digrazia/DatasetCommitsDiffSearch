@@ -34,13 +34,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrument.EvalInstrumentListener;
-import com.oracle.truffle.api.instrument.Instrument;
-import com.oracle.truffle.api.instrument.Instrumenter;
-import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.SyntaxTag;
-import com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag;
-import com.oracle.truffle.api.instrument.impl.DefaultProbeListener;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
@@ -49,6 +42,8 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
  * Tests the kind of instrumentation where a client can provide guest language code to be
  * <em>spliced</em> directly into the AST.
  */
+@Deprecated
+@SuppressWarnings("deprecation")
 public class EvalInstrumentTest {
 
     PolyglotEngine vm;
@@ -56,7 +51,6 @@ public class EvalInstrumentTest {
 
     @Before
     public void before() {
-        // TODO (mlvdv) eventually abstract this
         try {
             vm = PolyglotEngine.newBuilder().build();
             final Field field = PolyglotEngine.class.getDeclaredField("instrumenter");
@@ -84,11 +78,11 @@ public class EvalInstrumentTest {
         final Source source13 = InstrumentationTestingLanguage.createAdditionSource13("testEvalInstrumentListener");
 
         final Probe[] addNodeProbe = new Probe[1];
-        instrumenter.addProbeListener(new DefaultProbeListener() {
+        instrumenter.addProbeListener(new com.oracle.truffle.api.instrument.impl.DefaultProbeListener() {
 
             @Override
             public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
-                if (tag == InstrumentTestTag.ADD_TAG) {
+                if (tag == com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.ADD_TAG) {
                     addNodeProbe[0] = probe;
                 }
             }
@@ -101,14 +95,14 @@ public class EvalInstrumentTest {
         final int[] evalCount = {0};
         final Instrument instrument = instrumenter.attach(addNodeProbe[0], source42, new EvalInstrumentListener() {
 
-            public void onExecution(Node node, VirtualFrame vFrame, Object result) {
+            public void onExecution(Node node, VirtualFrame frame, Object result) {
                 evalCount[0] = evalCount[0] + 1;
                 if (result instanceof Integer) {
                     evalResult[0] = (Integer) result;
                 }
             }
 
-            public void onFailure(Node node, VirtualFrame vFrame, Exception ex) {
+            public void onFailure(Node node, VirtualFrame frame, Exception ex) {
                 fail("Eval test evaluates without exception");
 
             }

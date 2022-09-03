@@ -22,18 +22,12 @@
  */
 package com.oracle.truffle.api;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
+import org.junit.Assert;
+import org.junit.Test;
+
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.utilities.InstrumentationTestMode;
-
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
 
 /**
  * <h3>Using Final Fields in Node Classes</h3>
@@ -52,21 +46,10 @@ import org.junit.Test;
  * </p>
  *
  * <p>
- * The next part of the Truffle API introduction is at
- * {@link com.oracle.truffle.api.ReplaceTest}.
+ * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.ReplaceTest}.
  * </p>
  */
 public class FinalFieldTest {
-
-    @Before
-    public void before() {
-        InstrumentationTestMode.set(true);
-    }
-
-    @After
-    public void after() {
-        InstrumentationTestMode.set(false);
-    }
 
     @Test
     public void test() {
@@ -81,7 +64,7 @@ public class FinalFieldTest {
 
         @Children private final TestChildNode[] children;
 
-        public TestRootNode(TestChildNode[] children) {
+        TestRootNode(TestChildNode[] children) {
             super(TestingLanguage.class, null, null);
             this.children = children;
         }
@@ -100,8 +83,7 @@ public class FinalFieldTest {
 
         private final int value;
 
-        public TestChildNode(int value) {
-            super(null);
+        TestChildNode(int value) {
             this.value = value;
         }
 

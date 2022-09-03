@@ -48,7 +48,6 @@ public abstract class RootNode extends Node {
     final Class<? extends TruffleLanguage> language;
     private RootCallTarget callTarget;
     @CompilationFinal private FrameDescriptor frameDescriptor;
-    private final SourceSection sourceSection;
 
     /**
      * Creates new root node. Each {@link RootNode} is associated with a particular language - if
@@ -68,14 +67,14 @@ public abstract class RootNode extends Node {
         this(language, sourceSection, frameDescriptor, true);
     }
 
+    @SuppressWarnings("deprecation")
     private RootNode(Class<? extends TruffleLanguage> language, SourceSection sourceSection, FrameDescriptor frameDescriptor, boolean checkLanguage) {
-        super();
+        super(sourceSection);
         if (checkLanguage) {
             if (!TruffleLanguage.class.isAssignableFrom(language)) {
                 throw new IllegalStateException();
             }
         }
-        this.sourceSection = sourceSection;
         this.language = language;
         if (frameDescriptor == null) {
             this.frameDescriptor = new FrameDescriptor();
@@ -90,11 +89,6 @@ public abstract class RootNode extends Node {
         RootNode root = (RootNode) super.copy();
         root.frameDescriptor = frameDescriptor;
         return root;
-    }
-
-    @Override
-    public SourceSection getSourceSection() {
-        return sourceSection;
     }
 
     /**
@@ -174,10 +168,8 @@ public abstract class RootNode extends Node {
         }
     }
 
-    /**
-     * @since 0.8 or earlier
-     * @deprecated
-     */
+    /** @since 0.8 or earlier */
+    @SuppressWarnings("deprecation")
     @Deprecated
     public final void applyInstrumentation() {
         if (isInstrumentable()) {

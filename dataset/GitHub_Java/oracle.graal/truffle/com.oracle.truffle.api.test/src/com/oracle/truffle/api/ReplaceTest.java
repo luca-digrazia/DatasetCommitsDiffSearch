@@ -22,23 +22,16 @@
  */
 package com.oracle.truffle.api;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.utilities.InstrumentationTestMode;
+import static org.junit.Assert.assertEquals;
 
 import java.util.Iterator;
 
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
-
-import static org.junit.Assert.assertEquals;
-
 import org.junit.Test;
+
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 
 /**
  * <h3>Replacing Nodes at Run Time</h3>
@@ -60,16 +53,6 @@ import org.junit.Test;
  * </p>
  */
 public class ReplaceTest {
-
-    @Before
-    public void before() {
-        InstrumentationTestMode.set(true);
-    }
-
-    @After
-    public void after() {
-        InstrumentationTestMode.set(false);
-    }
 
     @Test
     public void test() {
@@ -101,7 +84,7 @@ public class ReplaceTest {
 
         @Children private final ValueNode[] children;
 
-        public TestRootNode(ValueNode[] children) {
+        TestRootNode(ValueNode[] children) {
             super(TestingLanguage.class, null, null);
             this.children = children;
         }
@@ -118,8 +101,7 @@ public class ReplaceTest {
 
     abstract class ValueNode extends Node {
 
-        public ValueNode() {
-            super(null);
+        ValueNode() {
         }
 
         abstract int execute();
@@ -129,7 +111,7 @@ public class ReplaceTest {
 
         private final String value;
 
-        public UnresolvedNode(String value) {
+        UnresolvedNode(String value) {
             this.value = value;
         }
 

@@ -22,9 +22,9 @@
  */
 package com.oracle.truffle.api;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
+import org.junit.Assert;
+import org.junit.Test;
+
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
@@ -33,12 +33,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.api.utilities.InstrumentationTestMode;
-
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
 
 /**
  * <h3>Specializing Return Types</h3>
@@ -54,16 +48,6 @@ import org.junit.Test;
  * </p>
  */
 public class ReturnTypeSpecializationTest {
-
-    @Before
-    public void before() {
-        InstrumentationTestMode.set(true);
-    }
-
-    @After
-    public void after() {
-        InstrumentationTestMode.set(false);
-    }
 
     @Test
     public void test() {
@@ -83,7 +67,7 @@ public class ReturnTypeSpecializationTest {
         @Child TestChildNode left;
         @Child TestChildNode right;
 
-        public TestRootNode(FrameDescriptor descriptor, TestChildNode left, TestChildNode right) {
+        TestRootNode(FrameDescriptor descriptor, TestChildNode left, TestChildNode right) {
             super(TestingLanguage.class, null, descriptor);
             this.left = left;
             this.right = right;
@@ -98,8 +82,7 @@ public class ReturnTypeSpecializationTest {
 
     abstract class TestChildNode extends Node {
 
-        public TestChildNode() {
-            super(null);
+        TestChildNode() {
         }
 
         abstract Object execute(VirtualFrame frame);
@@ -117,7 +100,7 @@ public class ReturnTypeSpecializationTest {
 
         protected final FrameSlot slot;
 
-        public FrameSlotNode(FrameSlot slot) {
+        FrameSlotNode(FrameSlot slot) {
             this.slot = slot;
         }
     }

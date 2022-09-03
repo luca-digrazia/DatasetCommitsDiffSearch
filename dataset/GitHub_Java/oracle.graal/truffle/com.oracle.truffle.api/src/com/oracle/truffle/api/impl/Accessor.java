@@ -38,13 +38,11 @@ import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.instrument.Instrumenter;
-import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
@@ -55,10 +53,11 @@ import com.oracle.truffle.api.source.Source;
 public abstract class Accessor {
     private static Accessor API;
     private static Accessor SPI;
-    static Accessor NODES;
+    private static Accessor NODES;
     private static Accessor INSTRUMENT;
     static Accessor INSTRUMENTHANDLER;
     private static Accessor DEBUG;
+    private static Accessor OPTIMIZEDCALLTARGET;
     private static final ThreadLocal<Object> CURRENT_VM = new ThreadLocal<>();
 
     static {
@@ -88,13 +87,15 @@ public abstract class Accessor {
                 return null;
             }
 
+            @SuppressWarnings("deprecation")
             @Override
             protected boolean isInstrumentable(Node node) {
                 return false;
             }
 
+            @SuppressWarnings("deprecation")
             @Override
-            protected WrapperNode createWrapperNode(Node node) {
+            protected com.oracle.truffle.api.instrument.WrapperNode createWrapperNode(Node node) {
                 return null;
             }
 
@@ -112,12 +113,14 @@ public abstract class Accessor {
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException(ex);
         }
+        try {
+            Class.forName("com.oracle.truffle.api.debug.Debugger", true, Accessor.class.getClassLoader());
+        } catch (ClassNotFoundException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     protected Accessor() {
-        if (!this.getClass().getName().startsWith("com.oracle.truffle.api")) {
-            throw new IllegalStateException();
-        }
         if (this.getClass().getSimpleName().endsWith("API")) {
             if (API != null) {
                 throw new IllegalStateException();
@@ -143,6 +146,11 @@ public abstract class Accessor {
                 throw new IllegalStateException();
             }
             DEBUG = this;
+        } else if (this.getClass().getSimpleName().endsWith("OptimizedCallTarget")) {
+            if (OPTIMIZEDCALLTARGET != null) {
+                throw new IllegalStateException();
+            }
+            OPTIMIZEDCALLTARGET = this;
         } else {
             if (SPI != null) {
                 throw new IllegalStateException();
@@ -151,7 +159,9 @@ public abstract class Accessor {
         }
     }
 
-    protected Env attachEnv(Object vm, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Instrumenter instrumenter, Map<String, Object> config) {
+    protected Env attachEnv(Object vm, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn,
+                    @SuppressWarnings("deprecation") com.oracle.truffle.api.instrument.Instrumenter instrumenter,
+                    Map<String, Object> config) {
         return API.attachEnv(vm, language, stdOut, stdErr, stdIn, instrumenter, config);
     }
 
@@ -178,6 +188,7 @@ public abstract class Accessor {
     /**
      * Provided by each {@linkplain TruffleLanguage language implementation}.
      */
+    @Deprecated
     @SuppressWarnings("rawtypes")
     protected boolean isInstrumentable(Object vm, Node node) {
         final RootNode rootNode = node.getRootNode();
@@ -186,6 +197,7 @@ public abstract class Accessor {
         return isInstrumentable(node, language);
     }
 
+    @Deprecated
     protected boolean isInstrumentable(Node node, TruffleLanguage<?> language) {
         return API.isInstrumentable(node, language);
     }
@@ -193,15 +205,18 @@ public abstract class Accessor {
     /**
      * Provided by each {@linkplain TruffleLanguage language implementation}.
      */
-    @SuppressWarnings("rawtypes")
-    protected WrapperNode createWrapperNode(Object vm, Node node) {
+    @Deprecated
+    @SuppressWarnings({"rawtypes", "deprecation"})
+    protected com.oracle.truffle.api.instrument.WrapperNode createWrapperNode(Object vm, Node node) {
         final RootNode rootNode = node.getRootNode();
         Class<? extends TruffleLanguage> languageClazz = findLanguage(rootNode);
         TruffleLanguage language = findLanguageImpl(vm, languageClazz, null);
         return createWrapperNode(node, language);
     }
 
-    protected WrapperNode createWrapperNode(Node node, TruffleLanguage<?> language) {
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    protected com.oracle.truffle.api.instrument.WrapperNode createWrapperNode(Node node, TruffleLanguage<?> language) {
         return API.createWrapperNode(node, language);
     }
 
@@ -214,8 +229,9 @@ public abstract class Accessor {
         return NODES.findLanguage(n);
     }
 
-    @SuppressWarnings("rawtypes")
-    protected Class<? extends TruffleLanguage> findLanguage(Probe probe) {
+    @SuppressWarnings({"rawtypes", "deprecation"})
+    @Deprecated
+    protected Class<? extends TruffleLanguage> findLanguage(com.oracle.truffle.api.instrument.Probe probe) {
         return INSTRUMENT.findLanguage(probe);
     }
 
@@ -255,7 +271,9 @@ public abstract class Accessor {
         return SPI.findLanguageImpl(vm, languageClass, mimeType);
     }
 
-    protected Instrumenter getInstrumenter(Object known) {
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    protected com.oracle.truffle.api.instrument.Instrumenter getInstrumenter(Object known) {
         Object vm;
         if (known == null) {
             vm = CURRENT_VM.get();
@@ -268,16 +286,18 @@ public abstract class Accessor {
         return SPI.getInstrumenter(vm);
     }
 
-    protected Instrumenter createInstrumenter(Object vm) {
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    protected com.oracle.truffle.api.instrument.Instrumenter createInstrumenter(Object vm) {
         return INSTRUMENT.createInstrumenter(vm);
     }
 
-    protected void addInstrumentation(Object instrumentationHandler, Object key, Class<?> instrumentationClass) {
-        INSTRUMENTHANDLER.addInstrumentation(instrumentationHandler, key, instrumentationClass);
+    protected void addInstrument(Object instrumentationHandler, Object key, Class<?> instrumentClass) {
+        INSTRUMENTHANDLER.addInstrument(instrumentationHandler, key, instrumentClass);
     }
 
-    protected void disposeInstrumentation(Object instrumentationHandler, Object key, boolean cleanupRequired) {
-        INSTRUMENTHANDLER.disposeInstrumentation(instrumentationHandler, key, cleanupRequired);
+    protected void disposeInstrument(Object instrumentationHandler, Object key, boolean cleanupRequired) {
+        INSTRUMENTHANDLER.disposeInstrument(instrumentationHandler, key, cleanupRequired);
     }
 
     protected Object getInstrumentationHandler(Object known) {
@@ -363,10 +383,14 @@ public abstract class Accessor {
         return NODES.isInstrumentable(rootNode);
     }
 
-    protected void installRootNode(RootNode node) {
+    /**
+     * Invoked by OPTIMIZED_CALL_TARGET accessor or DefaultCallTarget and implemented by
+     * instrumentation.
+     */
+    protected void initializeCallTarget(RootCallTarget target) {
         Accessor accessor = INSTRUMENTHANDLER;
         if (accessor != null) {
-            accessor.installRootNode(node);
+            accessor.initializeCallTarget(target);
         }
     }
 
@@ -374,14 +398,15 @@ public abstract class Accessor {
         INSTRUMENTHANDLER.collectEnvServices(collectTo, vm, impl, context);
     }
 
-    protected void detachFromInstrumentation(Object vm, Env context) {
-        INSTRUMENTHANDLER.detachFromInstrumentation(vm, context);
+    protected void detachLanguageFromInstrumentation(Object vm, Env context) {
+        INSTRUMENTHANDLER.detachLanguageFromInstrumentation(vm, context);
     }
 
     protected void dispose(TruffleLanguage<?> impl, Env env) {
         API.dispose(impl, env);
     }
 
+    @Deprecated
     protected void probeAST(RootNode rootNode) {
         INSTRUMENT.probeAST(rootNode);
     }
@@ -404,10 +429,33 @@ public abstract class Accessor {
         return API.toString(language, env, obj);
     }
 
+    protected boolean supportsOnLoopCount() {
+        return false;
+    }
+
+    @SuppressWarnings("deprecation")
+    protected void onLoopCount(Node source, int count) {
+        // optimized calltarget is not existent on default runtimes
+        if (OPTIMIZEDCALLTARGET != null) {
+            if (OPTIMIZEDCALLTARGET.supportsOnLoopCount()) {
+                OPTIMIZEDCALLTARGET.onLoopCount(source, count);
+            } else {
+                // needs an additional compatibilty check so older graal runtimes
+                // still run with newer truffle versions
+                RootNode root = source.getRootNode();
+                if (root != null) {
+                    RootCallTarget target = root.getCallTarget();
+                    if (target instanceof com.oracle.truffle.api.LoopCountReceiver) {
+                        ((com.oracle.truffle.api.LoopCountReceiver) target).reportLoopCount(count);
+                    }
+                }
+            }
+        }
+    }
+
     static <T extends TruffleLanguage<?>> T findLanguageByClass(Object vm, Class<T> languageClass) {
         Env env = API.findLanguage(vm, languageClass);
         TruffleLanguage<?> language = API.findLanguage(env);
         return languageClass.cast(language);
     }
-
 }

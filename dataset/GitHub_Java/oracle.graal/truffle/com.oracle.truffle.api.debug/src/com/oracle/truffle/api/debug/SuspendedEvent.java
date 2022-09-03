@@ -143,8 +143,7 @@ public final class SuspendedEvent {
      * <li>User breakpoints are disabled.</li>
      * <li>Execution will continue until either:
      * <ol>
-     * <li>execution arrives at a node with the tag {@link Debugger#HALT_TAG}, <strong>or:</strong>
-     * </li>
+     * <li>execution arrives at a node with the tag {@link Debugger#HALT_TAG}, <strong>or:</strong></li>
      * <li>execution completes.</li>
      * </ol>
      * <li>StepInto mode persists only through one resumption (i.e. {@code stepIntoCount} steps),
@@ -166,8 +165,7 @@ public final class SuspendedEvent {
      * <li>User breakpoints are enabled.</li>
      * <li>Execution will continue until either:
      * <ol>
-     * <li>execution arrives at the nearest enclosing call site on the stack, <strong>or</strong>
-     * </li>
+     * <li>execution arrives at the nearest enclosing call site on the stack, <strong>or</strong></li>
      * <li>execution completes.</li>
      * </ol>
      * <li>StepOut mode persists only through one resumption, and reverts by default to Continue

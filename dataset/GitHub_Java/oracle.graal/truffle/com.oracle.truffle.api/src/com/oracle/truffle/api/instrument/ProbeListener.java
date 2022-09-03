@@ -24,29 +24,38 @@
  */
 package com.oracle.truffle.api.instrument;
 
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 
 /**
- * An observer of events related to {@link Probe}s: creating and tagging.
+ * An observer of events related to {@link Probe}s: creation of new Probes and the addition of new
+ * {@linkplain SyntaxTag SyntaxTags} to existing Probes.
+ *
+ * @since 0.8 or earlier
  */
+@SuppressWarnings("deprecation")
+@Deprecated
 public interface ProbeListener {
 
     /**
      * Notifies that all registered {@link ASTProber}s are about to be applied to a newly
      * constructed AST.
      *
-     * @param source source code from which the AST was constructed
+     * @param rootNode parent of the newly created AST
+     * @since 0.8 or earlier
      */
-    void startASTProbing(Source source);
+    void startASTProbing(RootNode rootNode);
 
     /**
-     * Notifies that a {@link Probe} has been newly attached to an AST via {@link Node#probe()}.
+     * Notifies that a {@link Probe} has been newly attached to an AST via
+     * {@link Instrumenter#probe(Node)}.
      * <p>
      * There can be no more than one {@link Probe} at a node; this notification will only be
-     * delivered the first time {@linkplain Node#probe() probe()} is called at a particular AST
+     * delivered the first time {@linkplain Instrumenter#probe(Node)} is called at a particular AST
      * node. There will also be no notification when the AST to which the Probe is attached is
      * cloned.
+     *
+     * @since 0.8 or earlier
      */
     void newProbeInserted(Probe probe);
 
@@ -66,6 +75,7 @@ public interface ProbeListener {
      * @param tag the tag that has been newly added (subsequent additions of the tag are
      *            unreported).
      * @param tagValue an optional value associated with the tag for the purposes of reporting.
+     * @since 0.8 or earlier
      */
     void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue);
 
@@ -73,8 +83,9 @@ public interface ProbeListener {
      * Notifies that the application of all registered {@link ASTProber}s to a newly constructed AST
      * has completed.
      *
-     * @param source source code from which the AST was constructed
+     * @param rootNode parent of the newly created AST
+     * @since 0.8 or earlier
      */
-    void endASTProbing(Source source);
+    void endASTProbing(RootNode rootNode);
 
 }

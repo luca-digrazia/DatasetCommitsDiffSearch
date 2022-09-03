@@ -466,6 +466,7 @@ public abstract class ProbeInstrument extends Instrument {
         void notifyIsCompiled(boolean isCompiled);
     }
 
+    @SuppressWarnings("unused")
     private static final class TruffleOptInstrument extends ProbeInstrument {
 
         private final TruffleOptListener toolOptListener;

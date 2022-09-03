@@ -55,7 +55,6 @@ import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.Accessor;
-import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -101,7 +100,7 @@ import com.oracle.truffle.api.source.Source;
  *
  * @since 0.9
  */
-@SuppressWarnings({"rawtypes", "deprecation"})
+@SuppressWarnings("rawtypes")
 public class PolyglotEngine {
     static final boolean JAVA_INTEROP_ENABLED = !TruffleOptions.AOT;
     static final Logger LOG = Logger.getLogger(PolyglotEngine.class.getName());
@@ -114,7 +113,7 @@ public class PolyglotEngine {
     private final OutputStream out;
     private final EventConsumer<?>[] handlers;
     private final Map<String, Object> globals;
-    private final Instrumenter instrumenter;
+    @SuppressWarnings("deprecation") private final com.oracle.truffle.api.instrument.Instrumenter instrumenter;
     private final Object instrumentationHandler; // new instrumentation
     private final Map<String, Instrument> instruments;
     private final List<Object[]> config;
@@ -498,7 +497,6 @@ public class PolyglotEngine {
                         LOG.log(Level.SEVERE, "Error disposing " + instrument, ex);
                     }
                 }
-
                 return null;
             }
         };
@@ -534,7 +532,7 @@ public class PolyglotEngine {
         }
     }
 
-    @SuppressWarnings({"try"})
+    @SuppressWarnings({"try", "deprecation"})
     final Object invokeForeign(final Node foreignNode, VirtualFrame frame, final TruffleObject receiver) throws IOException {
         assertNoTruffle();
         Object res;
@@ -663,19 +661,11 @@ public class PolyglotEngine {
         dispatch(type, ev);
     }
 
-    /**
-     * just to make javac happy.
-     * 
-     * @param event
-     */
+    @SuppressWarnings("unused")
     void dispatchSuspendedEvent(Object event) {
     }
 
-    /**
-     * just to make javac happy.
-     * 
-     * @param event
-     */
+    @SuppressWarnings("unused")
     void dispatchExecutionEvent(Object event) {
     }
 
@@ -957,7 +947,7 @@ public class PolyglotEngine {
         void setEnabledImpl(final boolean enabled, boolean cleanup) {
             if (this.enabled != enabled) { // check again for thread safety
                 if (enabled) {
-                    SPI.addInstrument(instrumentationHandler, this, getCache().getInstrumentationClass());
+                    SPI.addInstrument(instrumentationHandler, this, getCache().getInstrumentClass());
                 } else {
                     SPI.disposeInstrument(instrumentationHandler, this, cleanup);
                 }
@@ -1118,6 +1108,7 @@ public class PolyglotEngine {
         return null;
     }
 
+    @SuppressWarnings("deprecation")
     @Deprecated
     TruffleLanguage<?> findLanguage(com.oracle.truffle.api.instrument.Probe probe) {
         return findLanguage(SPI.findLanguage(probe));
@@ -1170,7 +1161,7 @@ public class PolyglotEngine {
 
         @Override
         protected Env attachEnv(Object obj, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn,
-                        com.oracle.truffle.api.instrument.Instrumenter instrumenter,
+                        @SuppressWarnings("deprecation") com.oracle.truffle.api.instrument.Instrumenter instrumenter,
                         Map<String, Object> config) {
             PolyglotEngine vm = (PolyglotEngine) obj;
             return super.attachEnv(vm, language, stdOut, stdErr, stdIn, instrumenter, config);
@@ -1191,6 +1182,7 @@ public class PolyglotEngine {
             return super.languageGlobal(env);
         }
 
+        @SuppressWarnings("deprecation")
         @Deprecated
         @Override
         protected com.oracle.truffle.api.instrument.Instrumenter createInstrumenter(Object vm) {
@@ -1202,6 +1194,7 @@ public class PolyglotEngine {
             return super.createInstrumentationHandler(vm, out, err, in);
         }
 
+        @SuppressWarnings("deprecation")
         @Deprecated
         @Override
         protected com.oracle.truffle.api.instrument.Instrumenter getInstrumenter(Object obj) {
@@ -1226,8 +1219,8 @@ public class PolyglotEngine {
         }
 
         @Override
-        protected void addInstrument(Object instrumentationHandler, Object key, Class<?> instrumentationClass) {
-            super.addInstrument(instrumentationHandler, key, instrumentationClass);
+        protected void addInstrument(Object instrumentationHandler, Object key, Class<?> instrumentClass) {
+            super.addInstrument(instrumentationHandler, key, instrumentClass);
         }
 
         @Override
@@ -1235,6 +1228,7 @@ public class PolyglotEngine {
             super.disposeInstrument(instrumentationHandler, key, cleanupRequired);
         }
 
+        @SuppressWarnings("deprecation")
         @Deprecated
         @Override
         protected Class<? extends TruffleLanguage> findLanguage(com.oracle.truffle.api.instrument.Probe probe) {

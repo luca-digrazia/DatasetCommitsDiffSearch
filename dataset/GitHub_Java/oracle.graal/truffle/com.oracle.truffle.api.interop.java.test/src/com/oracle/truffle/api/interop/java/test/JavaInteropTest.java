@@ -31,7 +31,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.List;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -47,65 +46,53 @@ import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.interop.java.MethodMessage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import java.util.Map;
 
 public class JavaInteropTest {
-    public class Data {
-        public int x;
-        public double y;
-        public String[] arr;
-        public Object value;
-        public Object map;
-
-        public double plus(double a, double b) {
-            return a + b;
-        }
-
-        public Object assertThis(Object param) {
-            assertSame("When a Java object is passed into Truffle and back, it is again the same object", this, param);
-            assertThisCalled = true;
-            return this;
-        }
-    }
+    public int x;
+    public double y;
+    public String[] arr;
+    public Object value;
 
     private TruffleObject obj;
-    private Data data;
     private XYPlus xyp;
     private boolean assertThisCalled;
 
-    @Before
-    public void initObjects() {
-        data = new Data();
-        obj = JavaInterop.asTruffleObject(data);
-        xyp = JavaInterop.asJavaObject(XYPlus.class, obj);
-        InstrumentationTestMode.set(true);
+    public double plus(double a, double b) {
+        return a + b;
     }
 
-    @After
-    public void after() {
-        InstrumentationTestMode.set(false);
+    public Object assertThis(Object param) {
+        assertSame("When a Java object is passed into Truffle and back, it is again the same object", this, param);
+        assertThisCalled = true;
+        return this;
+    }
+
+    @Before
+    public void initObjects() {
+        obj = JavaInterop.asTruffleObject(this);
+        xyp = JavaInterop.asJavaObject(XYPlus.class, obj);
     }
 
     @Test
     public void doubleWrap() {
-        data.x = 32;
-        data.y = 10.1;
+        x = 32;
+        y = 10.1;
         assertEquals("Assume delegated", 42.1d, xyp.plus(xyp.x(), xyp.y()), 0.05);
     }
 
     @Test
     public void writeX() {
         xyp.x(10);
-        assertEquals("Changed", 10, data.x);
+        assertEquals("Changed", 10, x);
     }
 
     @Test
     public void assertThisIsSame() {
         assertThisCalled = false;
-        XYPlus anotherThis = xyp.assertThis(data);
+        XYPlus anotherThis = xyp.assertThis(this);
         assertTrue(assertThisCalled);
 
-        data.x = 44;
+        x = 44;
         assertEquals(44, anotherThis.x());
 
         assertEquals("The two proxies are equal", anotherThis, xyp);
@@ -120,7 +107,7 @@ public class JavaInteropTest {
 
     @Test
     public void arrayHasSize() {
-        data.arr = new String[]{"Hello", "World", "!"};
+        arr = new String[]{"Hello", "World", "!"};
         Object arrObj = message(Message.READ, obj, "arr");
         assertTrue("It's obj: " + arrObj, arrObj instanceof TruffleObject);
         TruffleObject truffleArr = (TruffleObject) arrObj;
@@ -133,7 +120,7 @@ public class JavaInteropTest {
 
     @Test
     public void arrayAsList() {
-        data.arr = new String[]{"Hello", "World", "!"};
+        arr = new String[]{"Hello", "World", "!"};
         List<String> list = xyp.arr();
         assertEquals("Three elements", 3, list.size());
         assertEquals("Hello", list.get(0));
@@ -142,21 +129,7 @@ public class JavaInteropTest {
 
         list.set(1, "there");
 
-        assertEquals("there", data.arr[1]);
-    }
-
-    @Test
-    public void objectsAsMap() {
-        data.x = 10;
-        data.y = 33.3;
-        data.map = this;
-        Map<String,Object> map = xyp.map();
-
-        assertEquals("x", map.get("x"), 10);
-        assertEquals("y", map.get("y"), 33.3);
-
-        map.put("x", 13);
-        assertEquals("x changed", data.x, 13);
+        assertEquals("there", arr[1]);
     }
 
     @Test
@@ -166,14 +139,12 @@ public class JavaInteropTest {
 
     @Test
     public void integerCanBeConvertedFromAnObjectField() {
-        data.value = 42;
+        value = 42;
         assertEquals((Integer) 42, xyp.value());
     }
 
     public interface XYPlus {
         List<String> arr();
-
-        Map<String,Object> map();
 
         int x();
 

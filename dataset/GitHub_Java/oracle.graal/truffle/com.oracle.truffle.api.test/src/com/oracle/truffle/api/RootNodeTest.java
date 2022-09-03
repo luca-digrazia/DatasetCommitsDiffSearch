@@ -22,17 +22,11 @@
  */
 package com.oracle.truffle.api;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
+import org.junit.Assert;
+import org.junit.Test;
+
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.utilities.InstrumentationTestMode;
-
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
 
 /**
  * <h3>Creating a Root Node</h3>
@@ -48,21 +42,10 @@ import org.junit.Test;
  * </p>
  *
  * <p>
- * The next part of the Truffle API introduction is at
- * {@link com.oracle.truffle.api.ChildNodeTest}.
+ * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.ChildNodeTest}.
  * </p>
  */
 public class RootNodeTest {
-
-    @Before
-    public void before() {
-        InstrumentationTestMode.set(true);
-    }
-
-    @After
-    public void after() {
-        InstrumentationTestMode.set(false);
-    }
 
     @Test
     public void test() {
@@ -75,7 +58,7 @@ public class RootNodeTest {
 
     class TestRootNode extends RootNode {
 
-        public TestRootNode() {
+        TestRootNode() {
             super(TestingLanguage.class, null, null);
         }
 

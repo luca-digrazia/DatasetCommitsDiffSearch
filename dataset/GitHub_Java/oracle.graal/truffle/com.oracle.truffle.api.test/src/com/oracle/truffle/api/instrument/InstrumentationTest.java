@@ -29,24 +29,14 @@ import static org.junit.Assert.fail;
 import java.io.IOException;
 import java.lang.reflect.Field;
 
+import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrument.ASTProber;
-import com.oracle.truffle.api.instrument.Instrumenter;
-import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.ProbeInstrument;
-import com.oracle.truffle.api.instrument.SimpleInstrumentListener;
-import com.oracle.truffle.api.instrument.StandardInstrumentListener;
-import com.oracle.truffle.api.instrument.SyntaxTag;
-import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.instrument.InstrumentationTestNodes.TestAdditionNode;
 import com.oracle.truffle.api.instrument.InstrumentationTestNodes.TestLanguageNode;
 import com.oracle.truffle.api.instrument.InstrumentationTestNodes.TestValueNode;
-import com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag;
-import com.oracle.truffle.api.instrument.impl.DefaultProbeListener;
-import com.oracle.truffle.api.instrument.impl.DefaultSimpleInstrumentListener;
-import com.oracle.truffle.api.instrument.impl.DefaultStandardInstrumentListener;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -60,11 +50,21 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
  * {@link WrapperNode} that propagate execution events through a {@link Probe} to any instances of
  * {@link ProbeInstrument} that might be attached to the particular probe by tools.
  */
+@Deprecated
+@SuppressWarnings("deprecation")
 public class InstrumentationTest {
 
+    private PolyglotEngine vm;
+
+    @After
+    public void dispose() {
+        vm.dispose();
+    }
+
     @Test
+    @Ignore
     public void testProbing() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, IOException {
-        final PolyglotEngine vm = PolyglotEngine.newBuilder().build();
+        vm = PolyglotEngine.newBuilder().build();
         final Field field = PolyglotEngine.class.getDeclaredField("instrumenter");
         field.setAccessible(true);
         final Instrumenter instrumenter = (Instrumenter) field.get(vm);
@@ -72,14 +72,14 @@ public class InstrumentationTest {
         final Source source = InstrumentationTestingLanguage.createAdditionSource13("testProbing");
 
         final Probe[] probes = new Probe[3];
-        instrumenter.addProbeListener(new DefaultProbeListener() {
+        instrumenter.addProbeListener(new com.oracle.truffle.api.instrument.impl.DefaultProbeListener() {
 
             @Override
             public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
-                if (tag == InstrumentTestTag.ADD_TAG) {
+                if (tag == com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.ADD_TAG) {
                     assertEquals(probes[0], null);
                     probes[0] = probe;
-                } else if (tag == InstrumentTestTag.VALUE_TAG) {
+                } else if (tag == com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.VALUE_TAG) {
                     if (probes[1] == null) {
                         probes[1] = probe;
                     } else if (probes[2] == null) {
@@ -104,9 +104,10 @@ public class InstrumentationTest {
     }
 
     @Test
+    @Ignore
     public void testTagging() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, IOException {
 
-        final PolyglotEngine vm = PolyglotEngine.newBuilder().build();
+        vm = PolyglotEngine.newBuilder().build();
         final Field field = PolyglotEngine.class.getDeclaredField("instrumenter");
         field.setAccessible(true);
         final Instrumenter instrumenter = (Instrumenter) field.get(vm);
@@ -126,8 +127,8 @@ public class InstrumentationTest {
         assertEquals(probeListener.probeCount, 3);
         assertEquals(probeListener.tagCount, 3);
 
-        assertEquals(instrumenter.findProbesTaggedAs(InstrumentTestTag.ADD_TAG).size(), 1);
-        assertEquals(instrumenter.findProbesTaggedAs(InstrumentTestTag.VALUE_TAG).size(), 2);
+        assertEquals(instrumenter.findProbesTaggedAs(com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.ADD_TAG).size(), 1);
+        assertEquals(instrumenter.findProbesTaggedAs(com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.VALUE_TAG).size(), 2);
     }
 
     private static void checkCounters(Probe probe, PolyglotEngine vm, Source source, TestCounter counterA, TestCounter counterB, TestCounter counterC) throws IOException {
@@ -213,7 +214,7 @@ public class InstrumentationTest {
         public Instrumenter instrumenter;
         private ProbeInstrument instrument;
 
-        public TestSimpleInstrumentCounter(Instrumenter instrumenter) {
+        TestSimpleInstrumentCounter(Instrumenter instrumenter) {
             this.instrumenter = instrumenter;
         }
 
@@ -265,7 +266,7 @@ public class InstrumentationTest {
         public final Instrumenter instrumenter;
         public ProbeInstrument instrument;
 
-        public TestStandardInstrumentCounter(Instrumenter instrumenter) {
+        TestStandardInstrumentCounter(Instrumenter instrumenter) {
             this.instrumenter = instrumenter;
         }
 
@@ -283,19 +284,19 @@ public class InstrumentationTest {
         public void attach(Probe probe) {
             instrument = instrumenter.attach(probe, new StandardInstrumentListener() {
 
-                public void onEnter(Probe p, Node node, VirtualFrame vFrame) {
+                public void onEnter(Probe p, Node node, VirtualFrame frame) {
                     enterCount++;
                 }
 
-                public void onReturnVoid(Probe p, Node node, VirtualFrame vFrame) {
+                public void onReturnVoid(Probe p, Node node, VirtualFrame frame) {
                     leaveCount++;
                 }
 
-                public void onReturnValue(Probe p, Node node, VirtualFrame vFrame, Object result) {
+                public void onReturnValue(Probe p, Node node, VirtualFrame frame, Object result) {
                     leaveCount++;
                 }
 
-                public void onReturnExceptional(Probe p, Node node, VirtualFrame vFrame, Throwable exception) {
+                public void onReturnExceptional(Probe p, Node node, VirtualFrame frame, Throwable exception) {
                     leaveCount++;
                 }
             }, "Instrumentation Test Counter");
@@ -325,10 +326,10 @@ public class InstrumentationTest {
                 final TestLanguageNode testNode = (TestLanguageNode) node;
 
                 if (node instanceof TestValueNode) {
-                    instrumenter.probe(testNode).tagAs(InstrumentTestTag.VALUE_TAG, null);
+                    instrumenter.probe(testNode).tagAs(com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.VALUE_TAG, null);
 
                 } else if (node instanceof TestAdditionNode) {
-                    instrumenter.probe(testNode).tagAs(InstrumentTestTag.ADD_TAG, null);
+                    instrumenter.probe(testNode).tagAs(com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.ADD_TAG, null);
 
                 }
             }
@@ -344,7 +345,7 @@ public class InstrumentationTest {
     /**
      * Counts the number of "enter" events at probed nodes using the simplest AST listener.
      */
-    static final class TestSimpleInstrumentListener extends DefaultSimpleInstrumentListener {
+    static final class TestSimpleInstrumentListener extends com.oracle.truffle.api.instrument.impl.DefaultSimpleInstrumentListener {
 
         public int counter = 0;
 
@@ -357,17 +358,17 @@ public class InstrumentationTest {
     /**
      * Counts the number of "enter" events at probed nodes using the AST listener.
      */
-    static final class TestASTInstrumentListener extends DefaultStandardInstrumentListener {
+    static final class TestASTInstrumentListener extends com.oracle.truffle.api.instrument.impl.DefaultStandardInstrumentListener {
 
         public int counter = 0;
 
         @Override
-        public void onEnter(Probe probe, Node node, VirtualFrame vFrame) {
+        public void onEnter(Probe probe, Node node, VirtualFrame frame) {
             counter++;
         }
     }
 
-    private static final class TestProbeListener extends DefaultProbeListener {
+    private static final class TestProbeListener extends com.oracle.truffle.api.instrument.impl.DefaultProbeListener {
 
         public int probeCount = 0;
         public int tagCount = 0;

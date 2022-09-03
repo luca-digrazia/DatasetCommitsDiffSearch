@@ -29,7 +29,8 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
- * A receiver of Truffle AST <em>before</em> execution events that can act on behalf of an external client.
+ * A receiver of Truffle AST <em>before</em> execution events that can act on behalf of an external
+ * client.
  * <p>
  * The {@link Probe} argument provides access to the {@link SourceSection} associated with the
  * event, as well as any {@link SyntaxTag}s that have been applied at that program's location.
@@ -39,19 +40,25 @@ import com.oracle.truffle.api.source.SourceSection;
  * {@link SimpleInstrumentListener}.
  * <p>
  * Clients are free, of course, to record additional information in the listener implementation that
- * carries additional information about the context and reason for the particular {@link ProbeInstrument}
- * that is to be created from the listener.
+ * carries additional information about the context and reason for the particular
+ * {@link ProbeInstrument} that is to be created from the listener.
  * <p>
  * Notification is fully synchronous, so overrides have performance implications. Non-trivial
  * methods should be coded with Truffle guidelines and cautions in mind.
+ *
+ * @since 0.8 or earlier
  */
+@SuppressWarnings("deprecation")
+@Deprecated
 public interface StandardBeforeInstrumentListener {
 
     /**
      * Receive notification that an AST node's execute method is about to be called.
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
+     *
+     * @since 0.8 or earlier
      */
-    void onEnter(Probe probe, Node node, VirtualFrame vFrame);
+    void onEnter(Probe probe, Node node, VirtualFrame frame);
 
 }

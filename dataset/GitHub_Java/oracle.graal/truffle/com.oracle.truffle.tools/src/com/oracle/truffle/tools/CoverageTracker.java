@@ -24,36 +24,40 @@
  */
 package com.oracle.truffle.tools;
 
-import java.io.*;
-import java.util.*;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.TreeSet;
 
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.instrument.impl.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.source.LineLocation;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
 
 /**
- * An {@link InstrumentationTool} that counts interpreter <em>execution calls</em> to AST nodes that
- * hold a specified {@linkplain SyntaxTag syntax tag}, tabulated by source and line number
- * associated with each node. Syntax tags are presumed to be applied external to the tool. If no tag
- * is specified, {@linkplain StandardSyntaxTag#STATEMENT STATEMENT} is used, corresponding to
- * conventional behavior for code coverage tools.
- * <p>
- * No counts will be kept for execution in sources that hold the {@link SourceTag}
- * {@link Tags#NO_COVERAGE}.
+ * An {@linkplain Instrumenter.Tool Instrumentation Tool} that counts interpreter
+ * <em>execution calls</em> to AST nodes that hold a specified {@linkplain SyntaxTag syntax tag},
+ * tabulated by source and line number associated with each node. Syntax tags are presumed to be
+ * applied external to the tool. If no tag is specified, {@linkplain
+ * com.oracle.truffle.api.instrument.StandardSyntaxTag.#STATEMENT STATEMENT} is used, corresponding
+ * to conventional behavior for code coverage tools.
  * <p>
  * <b>Tool Life Cycle</b>
  * <p>
- * See {@link InstrumentationTool} for the life cycle common to all such tools.
+ * See {@linkplain Instrumenter.Tool Instrumentation Tool} for the life cycle common to all such
+ * tools.
  * <p>
  * <b>Execution Counts</b>
  * <p>
  * <ul>
  * <li>"Execution call" on a node is is defined as invocation of a node method that is instrumented
- * to produce the event {@link SimpleInstrumentListener#enter(Probe)};</li>
- * <li>Execution calls are tabulated only at <em>instrumented</em> nodes, i.e. those for which
- * {@linkplain Node#isInstrumentable() isInstrumentable() == true};</li>
+ * to produce the event {@link SimpleInstrumentListener#onEnter(Probe)};</li>
+ * <li>Execution calls are tabulated only at nodes where the guest languages supports
+ * {@linkplain Instrumenter#probe(Node) probing}.</li>
  * <li>Execution calls are tabulated only at nodes present in the AST when originally created;
  * dynamically added nodes will not be instrumented.</li>
  * </ul>
@@ -68,68 +72,51 @@ import com.oracle.truffle.api.source.*;
  * any time in a simple textual format, with no other effect on the state of the tool.
  * </p>
  *
- * @see Instrument
+ * @see ProbeInstrument
  * @see SyntaxTag
  */
-public final class CoverageTracker extends InstrumentationTool {
-
-    public enum Tags implements SourceTag {
-
-        /**
-         * Report no counts for sources holding this tag.
-         */
-        NO_COVERAGE("No Coverage", "Coverage Tracker will igore");
-
-        private final String name;
-        private final String description;
-
-        private Tags(String name, String description) {
-            this.name = name;
-            this.description = description;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public String getDescription() {
-            return description;
-        }
-    }
+@SuppressWarnings("deprecation")
+@Deprecated
+public final class CoverageTracker extends com.oracle.truffle.api.instrument.Instrumenter.Tool {
 
     /** Counting data. */
     private final Map<LineLocation, CoverageRecord> coverageMap = new HashMap<>();
 
     /** Needed for disposal. */
-    private final List<Instrument> instruments = new ArrayList<>();
+    private final List<com.oracle.truffle.api.instrument.ProbeInstrument> instruments = new ArrayList<>();
 
     /**
      * Coverage counting is restricted to nodes holding this tag.
      */
-    private final SyntaxTag countingTag;
+    private final com.oracle.truffle.api.instrument.SyntaxTag countingTag;
 
-    private final ProbeListener probeListener;
+    private final com.oracle.truffle.api.instrument.ProbeListener probeListener;
 
     /**
-     * Create a per-line coverage tool for nodes tagged as {@linkplain StandardSyntaxTag#STATEMENT
-     * statements} in subsequently created ASTs.
+     * Create a per-line coverage tool for nodes tagged as {@linkplain
+     * com.oracle.truffle.api.instrument.StandardSyntaxTag.#STATEMENT statements} in subsequently
+     * created ASTs.
      */
     public CoverageTracker() {
-        this(StandardSyntaxTag.STATEMENT);
+        this(com.oracle.truffle.api.instrument.StandardSyntaxTag.STATEMENT);
     }
 
     /**
      * Create a per-line coverage tool for nodes tagged as specified, presuming that tags applied
      * outside this tool.
      */
-    public CoverageTracker(SyntaxTag tag) {
+    public CoverageTracker(com.oracle.truffle.api.instrument.SyntaxTag tag) {
         this.probeListener = new CoverageProbeListener();
         this.countingTag = tag;
     }
 
     @Override
     protected boolean internalInstall() {
-        Probe.addProbeListener(probeListener);
+        final com.oracle.truffle.api.instrument.Instrumenter instrumenter = getInstrumenter();
+        for (com.oracle.truffle.api.instrument.Probe probe : instrumenter.findProbesTaggedAs(countingTag)) {
+            addCoverageCounter(probe);
+        }
+        instrumenter.addProbeListener(probeListener);
         return true;
     }
 
@@ -140,8 +127,8 @@ public final class CoverageTracker extends InstrumentationTool {
 
     @Override
     protected void internalDispose() {
-        Probe.removeProbeListener(probeListener);
-        for (Instrument instrument : instruments) {
+        getInstrumenter().removeProbeListener(probeListener);
+        for (com.oracle.truffle.api.instrument.ProbeInstrument instrument : instruments) {
             instrument.dispose();
         }
     }
@@ -253,10 +240,10 @@ public final class CoverageTracker extends InstrumentationTool {
      * A listener for events at each instrumented AST location. This listener counts
      * "execution calls" to the instrumented node.
      */
-    private final class CoverageRecord extends DefaultSimpleInstrumentListener {
+    private final class CoverageRecord extends com.oracle.truffle.api.instrument.impl.DefaultSimpleInstrumentListener {
 
         private final SourceSection srcSection; // The text of the code being counted
-        private Instrument instrument;  // The attached Instrument, in case need to remove.
+        private com.oracle.truffle.api.instrument.ProbeInstrument instrument;
         private long count = 0;
 
         CoverageRecord(SourceSection srcSection) {
@@ -264,7 +251,7 @@ public final class CoverageTracker extends InstrumentationTool {
         }
 
         @Override
-        public void enter(Probe probe) {
+        public void onEnter(com.oracle.truffle.api.instrument.Probe probe) {
             if (isEnabled()) {
                 count++;
             }
@@ -275,46 +262,47 @@ public final class CoverageTracker extends InstrumentationTool {
     private static final class LineLocationEntryComparator implements Comparator<Entry<LineLocation, CoverageRecord>> {
 
         public int compare(Entry<LineLocation, CoverageRecord> e1, Entry<LineLocation, CoverageRecord> e2) {
-            return LineLocation.COMPARATOR.compare(e1.getKey(), e2.getKey());
+            return e1.getKey().compareTo(e2.getKey());
         }
     }
 
     /**
      * Attach a counting instrument to each node that is assigned a specified tag.
      */
-    private class CoverageProbeListener extends DefaultProbeListener {
+    private class CoverageProbeListener extends com.oracle.truffle.api.instrument.impl.DefaultProbeListener {
 
         @Override
-        public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
+        public void probeTaggedAs(com.oracle.truffle.api.instrument.Probe probe, com.oracle.truffle.api.instrument.SyntaxTag tag, Object tagValue) {
             if (countingTag == tag) {
-
-                final SourceSection srcSection = probe.getProbedSourceSection();
-                if (srcSection == null) {
-                    // TODO (mlvdv) report this?
-                } else if (!srcSection.getSource().isTaggedAs(Tags.NO_COVERAGE)) {
-                    // Get the source line where the
-                    final LineLocation lineLocation = srcSection.getLineLocation();
-                    CoverageRecord record = coverageMap.get(lineLocation);
-                    if (record != null) {
-                        // Another node starts on same line; count only the first (textually)
-                        if (srcSection.getCharIndex() > record.srcSection.getCharIndex()) {
-                            // Existing record, corresponds to code earlier on line
-                            return;
-                        } else {
-                            // Existing record, corresponds to code at a later position; replace it
-                            record.instrument.dispose();
-                        }
-                    }
-
-                    final CoverageRecord coverage = new CoverageRecord(srcSection);
-                    final Instrument instrument = Instrument.create(coverage, CoverageTracker.class.getSimpleName());
-                    coverage.instrument = instrument;
-                    instruments.add(instrument);
-                    probe.attach(instrument);
-                    coverageMap.put(lineLocation, coverage);
-                }
+                addCoverageCounter(probe);
             }
         }
     }
 
+    private void addCoverageCounter(com.oracle.truffle.api.instrument.Probe probe) {
+        final SourceSection srcSection = probe.getProbedSourceSection();
+        if (srcSection == null) {
+            // TODO (mlvdv) report this?
+            return;
+        }
+        // Get the source line where the
+        final LineLocation lineLocation = srcSection.getLineLocation();
+        CoverageRecord record = coverageMap.get(lineLocation);
+        if (record != null) {
+            // Another node starts on same line; count only the first (textually)
+            if (srcSection.getCharIndex() > record.srcSection.getCharIndex()) {
+                // Existing record, corresponds to code earlier on line
+                return;
+            } else {
+                // Existing record, corresponds to code at a later position; replace it
+                record.instrument.dispose();
+            }
+        }
+
+        final CoverageRecord coverageRecord = new CoverageRecord(srcSection);
+        final com.oracle.truffle.api.instrument.ProbeInstrument instrument = getInstrumenter().attach(probe, coverageRecord, CoverageTracker.class.getSimpleName());
+        coverageRecord.instrument = instrument;
+        instruments.add(instrument);
+        coverageMap.put(lineLocation, coverageRecord);
+    }
 }

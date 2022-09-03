@@ -54,7 +54,6 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
-import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.runtime.SLFunction;
 
 public class SLJavaInteropTest {
@@ -75,10 +74,10 @@ public class SLJavaInteropTest {
 
     @Test
     public void asFunction() throws Exception {
-        String scriptText = "function test() {\n" + "    println(\"Called!\");\n" + "}\n";
-        Source script = Source.fromText(scriptText, "Test").withMimeType(SLLanguage.MIME_TYPE);
+        String scriptText = "function main() {\n" + "    println(\"Called!\");\n" + "}\n";
+        Source script = Source.fromText(scriptText, "Test").withMimeType("application/x-sl");
         engine.eval(script);
-        PolyglotEngine.Value main = engine.findGlobalSymbol("test");
+        PolyglotEngine.Value main = engine.findGlobalSymbol("main");
         final Object value = main.get();
         assertTrue("It's truffle object", value instanceof TruffleObject);
         SLFunction rawFunction = main.as(SLFunction.class);
@@ -87,25 +86,5 @@ public class SLJavaInteropTest {
         runnable.run();
 
         assertEquals("Called!\n", os.toString("UTF-8"));
-    }
-
-    @Test
-    public void asFunctionWithArg() throws Exception {
-        String scriptText = "function values(a, b) {\n" + //
-                        "  println(\"Called with \" + a + \" and \" + b);\n" + //
-                        "}\n"; //
-        Source script = Source.fromText(scriptText, "Test").withMimeType("application/x-sl");
-        engine.eval(script);
-        PolyglotEngine.Value fn = engine.findGlobalSymbol("values");
-        final Object value = fn.get();
-        assertTrue("It's truffle object", value instanceof TruffleObject);
-        PassInValues valuesIn = JavaInterop.asJavaFunction(PassInValues.class, (TruffleObject) value);
-        valuesIn.call("OK", "Fine");
-
-        assertEquals("Called with OK and Fine\n", os.toString("UTF-8"));
-    }
-
-    interface PassInValues {
-        void call(Object a, Object b);
     }
 }

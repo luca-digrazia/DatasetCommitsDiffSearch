@@ -24,22 +24,25 @@
  */
 package com.oracle.truffle.api.instrument;
 
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.RootNode;
 
 /**
- * Enables instrumentation by attaching {@linkplain Probe Probes} to some nodes in a (newly created,
- * not yet executed) AST.
+ * Enables {@linkplain Instrumenter Instrumentation} by attaching {@linkplain Probe Probes} to some
+ * nodes in a (newly created, not yet executed) {@link RootNode}.
  *
- * @see Probe
- * @see Probe#addProbeListener(ProbeListener)
+ * @see Instrumenter#probe(com.oracle.truffle.api.nodes.Node)
+ * @since 0.8 or earlier
  */
+@SuppressWarnings("deprecation")
+@Deprecated
 public interface ASTProber {
 
     /**
-     * Walk the AST starting at a node and enable instrumentation at selected nodes by attaching
-     * {@linkplain Probe Probes} to them. Ignore {@linkplain Node#isInstrumentable()
-     * non-instrumentable} nodes.
+     * Walk the root's AST and enable instrumentation at selected nodes by attaching
+     * {@linkplain Probe Probes} to them.
+     *
+     * @since 0.8 or earlier
      */
-    void probeAST(Node node);
+    void probeAST(Instrumenter instrumenter, RootNode rootNode);
 
 }

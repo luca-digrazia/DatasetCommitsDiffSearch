@@ -25,14 +25,9 @@ package com.oracle.truffle.api;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
@@ -43,7 +38,6 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.utilities.InstrumentationTestMode;
 
 /**
  * <h3>Storing Values in Frame Slots</h3>
@@ -78,16 +72,6 @@ import com.oracle.truffle.api.utilities.InstrumentationTestMode;
  */
 public class FrameTest {
 
-    @Before
-    public void before() {
-        InstrumentationTestMode.set(true);
-    }
-
-    @After
-    public void after() {
-        InstrumentationTestMode.set(false);
-    }
-
     @Test
     public void test() throws SecurityException, IllegalArgumentException {
         TruffleRuntime runtime = Truffle.getRuntime();
@@ -113,7 +97,7 @@ public class FrameTest {
         @Child TestChildNode left;
         @Child TestChildNode right;
 
-        public TestRootNode(FrameDescriptor descriptor, TestChildNode left, TestChildNode right) {
+        TestRootNode(FrameDescriptor descriptor, TestChildNode left, TestChildNode right) {
             super(TestingLanguage.class, null, descriptor);
             this.left = left;
             this.right = right;
@@ -127,8 +111,7 @@ public class FrameTest {
 
     abstract class TestChildNode extends Node {
 
-        public TestChildNode() {
-            super(null);
+        TestChildNode() {
         }
 
         abstract int execute(VirtualFrame frame);
@@ -138,7 +121,7 @@ public class FrameTest {
 
         protected final FrameSlot slot;
 
-        public FrameSlotNode(FrameSlot slot) {
+        FrameSlotNode(FrameSlot slot) {
             this.slot = slot;
         }
     }
@@ -178,7 +161,7 @@ public class FrameTest {
 
         class FrameRootNode extends RootNode {
 
-            public FrameRootNode() {
+            FrameRootNode() {
                 super(TestingLanguage.class, null, null);
             }
 

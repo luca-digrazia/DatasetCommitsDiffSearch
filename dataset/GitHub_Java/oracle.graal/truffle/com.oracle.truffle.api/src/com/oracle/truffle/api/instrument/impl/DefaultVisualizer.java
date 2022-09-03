@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,21 +24,23 @@
  */
 package com.oracle.truffle.api.instrument.impl;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.SourceSection;
 
-public class DefaultVisualizer implements Visualizer {
+@SuppressWarnings("deprecation")
+@Deprecated
+public class DefaultVisualizer implements com.oracle.truffle.api.instrument.Visualizer {
 
-    private final ASTPrinter astPrinter;
+    private final com.oracle.truffle.api.instrument.ASTPrinter astPrinter;
 
     public DefaultVisualizer() {
         this.astPrinter = new DefaultASTPrinter();
     }
 
-    public ASTPrinter getASTPrinter() {
+    public com.oracle.truffle.api.instrument.ASTPrinter getASTPrinter() {
         return astPrinter;
     }
 
@@ -74,6 +76,9 @@ public class DefaultVisualizer implements Visualizer {
     }
 
     public String displayValue(Object value, int trim) {
+        if (value == null) {
+            return "<empty>";
+        }
         return trim(value.toString(), trim);
     }
 

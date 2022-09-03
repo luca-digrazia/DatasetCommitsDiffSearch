@@ -39,6 +39,7 @@ public final class DefaultCallTarget implements RootCallTarget {
     private final RootNode rootNode;
     private volatile boolean initialized;
 
+    @SuppressWarnings("deprecation")
     DefaultCallTarget(RootNode function) {
         this.rootNode = function;
         this.rootNode.adoptChildren();
@@ -90,7 +91,7 @@ public final class DefaultCallTarget implements RootCallTarget {
             if (!this.initialized) {
                 Accessor accessor = Accessor.INSTRUMENTHANDLER;
                 if (accessor != null) {
-                    accessor.installRootNode(rootNode);
+                    accessor.initializeCallTarget(this);
                 }
                 this.initialized = true;
             }

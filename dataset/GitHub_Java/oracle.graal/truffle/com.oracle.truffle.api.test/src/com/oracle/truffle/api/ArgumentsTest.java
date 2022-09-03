@@ -22,18 +22,12 @@
  */
 package com.oracle.truffle.api;
 
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.utilities.InstrumentationTestMode;
 
 /**
  * <h3>Passing Arguments</h3>
@@ -52,21 +46,10 @@ import com.oracle.truffle.api.utilities.InstrumentationTestMode;
  * </p>
  *
  * <p>
- * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.FrameTest}
- * .
+ * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.FrameTest} .
  * </p>
  */
 public class ArgumentsTest {
-
-    @Before
-    public void before() {
-        InstrumentationTestMode.set(true);
-    }
-
-    @After
-    public void after() {
-        InstrumentationTestMode.set(false);
-    }
 
     @Test
     public void test() {
@@ -101,7 +84,6 @@ public class ArgumentsTest {
         private final int index;
 
         TestArgumentNode(int index) {
-            super(null);
             this.index = index;
         }
 

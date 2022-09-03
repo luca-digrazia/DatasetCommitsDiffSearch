@@ -24,10 +24,11 @@
  */
 package com.oracle.truffle.api.instrument;
 
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.source.SourceSection;
 
 /**
- * A receiver of Truffle execution events that can act on behalf of an external client.
+ * A receiver of Truffle AST execution events (containing minimal information) that can act on
+ * behalf of an external client.
  * <p>
  * The {@link Probe} instance provides access to the {@link SourceSection} associated with the
  * event, as well as any {@link SyntaxTag}s that have been applied at that program's location.
@@ -37,38 +38,53 @@ import com.oracle.truffle.api.source.*;
  * execution state should use {@link StandardInstrumentListener}.
  * <p>
  * Clients are free, of course, to record additional information in the listener implementation that
- * carries additional information about the context and reason for the particular {@link Instrument}
- * that is to be created from the listener.
+ * carries additional information about the context and reason for the particular
+ * {@link ProbeInstrument} that is to be created from the listener.
+ * <p>
+ * Notification is fully synchronous, so overrides have performance implications. Non-trivial
+ * methods should be coded with Truffle guidelines and cautions in mind.
+ *
+ * @since 0.8 or earlier
  */
+@SuppressWarnings("deprecation")
+@Deprecated
 public interface SimpleInstrumentListener {
 
     /**
      * Receive notification that a program location is about to be executed.
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
+     *
+     * @since 0.8 or earlier
      */
-    void enter(Probe probe);
+    void onEnter(Probe probe);
 
     /**
      * Receive notification that a program location's {@code void}-valued execution has just
      * completed.
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
+     *
+     * @since 0.8 or earlier
      */
-    void returnVoid(Probe probe);
+    void onReturnVoid(Probe probe);
 
     /**
      * Receive notification that a program location's execution has just completed and returned a
      * value (boxed if primitive).
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
+     *
+     * @since 0.8 or earlier
      */
-    void returnValue(Probe probe, Object result);
+    void onReturnValue(Probe probe, Object result);
 
     /**
      * Receive notification that a program location's execution has just thrown an exception.
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
+     *
+     * @since 0.8 or earlier
      */
-    void returnExceptional(Probe probe, Exception exception);
+    void onReturnExceptional(Probe probe, Throwable exception);
 }

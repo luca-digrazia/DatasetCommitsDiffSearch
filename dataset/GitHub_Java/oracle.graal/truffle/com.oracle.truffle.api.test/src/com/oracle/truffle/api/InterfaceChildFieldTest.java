@@ -22,37 +22,21 @@
  */
 package com.oracle.truffle.api;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
+import java.util.Iterator;
+
+import org.junit.Assert;
+import org.junit.Test;
+
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInterface;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.utilities.InstrumentationTestMode;
-
-import java.util.Iterator;
-
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
 
 /**
  * Test child fields declared with interface types instead of {@link Node} subclasses.
  */
 public class InterfaceChildFieldTest {
-
-    @Before
-    public void before() {
-        InstrumentationTestMode.set(true);
-    }
-
-    @After
-    public void after() {
-        InstrumentationTestMode.set(false);
-    }
 
     @Test
     public void testChild() {
@@ -99,7 +83,7 @@ public class InterfaceChildFieldTest {
 
         @Child private TestChildInterface child;
 
-        public TestRootNode(TestChildInterface child) {
+        TestRootNode(TestChildInterface child) {
             super(TestingLanguage.class, null, null);
             this.child = child;
         }
@@ -115,8 +99,7 @@ public class InterfaceChildFieldTest {
     }
 
     class TestLeafNode extends Node implements TestChildInterface {
-        public TestLeafNode() {
-            super(null);
+        TestLeafNode() {
         }
 
         public int executeIntf() {
@@ -125,8 +108,7 @@ public class InterfaceChildFieldTest {
     }
 
     class TestLeaf2Node extends Node implements TestChildInterface {
-        public TestLeaf2Node() {
-            super(null);
+        TestLeaf2Node() {
         }
 
         public int executeIntf() {
@@ -139,8 +121,7 @@ public class InterfaceChildFieldTest {
         @Child private TestChildInterface left;
         @Child private TestChildInterface right;
 
-        public TestChildNode(TestChildInterface left, TestChildInterface right) {
-            super(null);
+        TestChildNode(TestChildInterface left, TestChildInterface right) {
             this.left = left;
             this.right = right;
         }
@@ -155,8 +136,7 @@ public class InterfaceChildFieldTest {
 
         @Children private final TestChildInterface[] children;
 
-        public TestChildrenNode(TestChildInterface[] children) {
-            super(null);
+        TestChildrenNode(TestChildInterface[] children) {
             this.children = children;
         }
 

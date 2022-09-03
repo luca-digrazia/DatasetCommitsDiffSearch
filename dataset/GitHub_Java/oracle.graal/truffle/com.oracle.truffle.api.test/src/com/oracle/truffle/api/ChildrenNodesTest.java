@@ -22,20 +22,14 @@
  */
 package com.oracle.truffle.api;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
+import java.util.Iterator;
+
+import org.junit.Assert;
+import org.junit.Test;
+
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.utilities.InstrumentationTestMode;
-
-import java.util.Iterator;
-
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
 
 /**
  * <h3>Creating an Array of Children Nodes</h3>
@@ -50,21 +44,11 @@ import org.junit.Test;
  * </p>
  *
  * <p>
- * The next part of the Truffle API introduction is at
- * {@link com.oracle.truffle.api.FinalFieldTest}.
+ * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.FinalFieldTest}
+ * .
  * </p>
  */
 public class ChildrenNodesTest {
-
-    @Before
-    public void before() {
-        InstrumentationTestMode.set(true);
-    }
-
-    @After
-    public void after() {
-        InstrumentationTestMode.set(false);
-    }
 
     @Test
     public void test() {
@@ -87,7 +71,7 @@ public class ChildrenNodesTest {
 
         @Children private final TestChildNode[] children;
 
-        public TestRootNode(TestChildNode[] children) {
+        TestRootNode(TestChildNode[] children) {
             super(TestingLanguage.class, null, null);
             this.children = children;
         }
@@ -104,8 +88,7 @@ public class ChildrenNodesTest {
 
     class TestChildNode extends Node {
 
-        public TestChildNode() {
-            super(null);
+        TestChildNode() {
         }
 
         public int execute() {
@@ -140,7 +123,7 @@ public class ChildrenNodesTest {
         @Children private final TestChildNode[] children1;
         @Children private final TestChildNode[] children2;
 
-        public TestRoot2Node(TestChildNode[] children1, TestChildNode[] children2) {
+        TestRoot2Node(TestChildNode[] children1, TestChildNode[] children2) {
             super(new TestChildNode[0]);
             this.children1 = children1;
             this.children2 = children2;

@@ -24,26 +24,33 @@
  */
 package com.oracle.truffle.api.instrument;
 
-import com.oracle.truffle.api.instrument.ProbeFailure.Reason;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.Node;
 
 /**
- * An exception thrown when {@link Node#probe()} fails because of an implementation failure.
+ * An exception thrown when {@link Instrumenter#probe(Node)} fails because of an implementation
+ * failure.
  * <p>
  * Language and tool implementations should ensure that clients of tools never see this exception.
+ *
+ * @since 0.8 or earlier
  */
+@SuppressWarnings("deprecation")
+@Deprecated
 public class ProbeException extends RuntimeException {
     static final long serialVersionUID = 1L;
     private final ProbeFailure failure;
 
-    public ProbeException(Reason reason, Node parent, Node child, Object wrapper) {
+    /** @since 0.8 or earlier */
+    public ProbeException(com.oracle.truffle.api.instrument.ProbeFailure.Reason reason, Node parent, Node child, Object wrapper) {
         this.failure = new ProbeFailure(reason, parent, child, wrapper);
     }
 
+    /** @since 0.8 or earlier */
     public ProbeFailure getFailure() {
         return failure;
     }
 
+    /** @since 0.8 or earlier */
     @Override
     public String toString() {
         return failure.getMessage();

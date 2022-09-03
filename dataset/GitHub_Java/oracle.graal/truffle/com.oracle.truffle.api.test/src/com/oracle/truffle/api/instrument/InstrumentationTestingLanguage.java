@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,11 +29,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.instrument.ASTProber;
-import com.oracle.truffle.api.instrument.Instrumenter;
-import com.oracle.truffle.api.instrument.SyntaxTag;
-import com.oracle.truffle.api.instrument.Visualizer;
-import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.instrument.InstrumentationTestNodes.InstrumentationTestRootNode;
 import com.oracle.truffle.api.instrument.InstrumentationTestNodes.TestAdditionNode;
 import com.oracle.truffle.api.instrument.InstrumentationTestNodes.TestLanguageNode;
@@ -44,6 +39,8 @@ import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 
+@Deprecated
+@SuppressWarnings("deprecation")
 @TruffleLanguage.Registration(name = "instrumentationTestLanguage", version = "0", mimeType = "text/x-instTest")
 public final class InstrumentationTestingLanguage extends TruffleLanguage<Object> {
 
@@ -62,7 +59,7 @@ public final class InstrumentationTestingLanguage extends TruffleLanguage<Object
         return Source.fromText(CONSTANT_SOURCE_TEXT, testName).withMimeType("text/x-instTest");
     }
 
-    static enum InstrumentTestTag implements SyntaxTag {
+    enum InstrumentTestTag implements SyntaxTag {
 
         ADD_TAG("addition", "test language addition node"),
 
@@ -71,7 +68,7 @@ public final class InstrumentationTestingLanguage extends TruffleLanguage<Object
         private final String name;
         private final String description;
 
-        private InstrumentTestTag(String name, String description) {
+        InstrumentTestTag(String name, String description) {
             this.name = name;
             this.description = description;
         }

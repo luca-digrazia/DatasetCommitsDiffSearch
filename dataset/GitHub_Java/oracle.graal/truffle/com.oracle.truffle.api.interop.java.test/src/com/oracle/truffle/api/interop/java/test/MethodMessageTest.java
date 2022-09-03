@@ -24,11 +24,16 @@
  */
 package com.oracle.truffle.api.interop.java.test;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import org.junit.Test;
+
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.interop.java.MethodMessage;
-import static org.junit.Assert.*;
-import org.junit.Test;
 
 public class MethodMessageTest {
     interface MathWrap {
@@ -68,6 +73,9 @@ public class MethodMessageTest {
     @Test
     public void workWithAnArray() throws Exception {
         TruffleObject arr = JavaInterop.asTruffleObject(new Object[]{1, 2, 3});
+
+        Boolean itIsAnArray = (Boolean) JavaInteropTest.message(Message.HAS_SIZE, arr);
+        assertTrue("Yes, array", itIsAnArray);
 
         MaxFunction wrap = JavaInterop.asJavaObject(MaxFunction.class, arr);
 

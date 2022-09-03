@@ -22,17 +22,11 @@
  */
 package com.oracle.truffle.api;
 
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.utilities.InstrumentationTestMode;
 
 /**
  * <h3>Calling Another Tree</h3>
@@ -44,21 +38,10 @@ import com.oracle.truffle.api.utilities.InstrumentationTestMode;
  * </p>
  *
  * <p>
- * The next part of the Truffle API introduction is at
- * {@link com.oracle.truffle.api.ArgumentsTest}.
+ * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.ArgumentsTest}.
  * </p>
  */
 public class CallTest {
-
-    @Before
-    public void before() {
-        InstrumentationTestMode.set(true);
-    }
-
-    @After
-    public void after() {
-        InstrumentationTestMode.set(false);
-    }
 
     @Test
     public void test() {
@@ -91,7 +74,7 @@ public class CallTest {
 
         private final int value;
 
-        public ConstantRootNode(int value) {
+        ConstantRootNode(int value) {
             super(TestingLanguage.class, null, null);
             this.value = value;
         }

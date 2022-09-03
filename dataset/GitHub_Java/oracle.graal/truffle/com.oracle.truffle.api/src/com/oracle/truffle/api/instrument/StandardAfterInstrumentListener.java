@@ -40,33 +40,43 @@ import com.oracle.truffle.api.source.SourceSection;
  * {@link SimpleInstrumentListener}.
  * <p>
  * Clients are free, of course, to record additional information in the listener implementation that
- * carries additional information about the context and reason for the particular {@link ProbeInstrument}
- * that is to be created from the listener.
+ * carries additional information about the context and reason for the particular
+ * {@link ProbeInstrument} that is to be created from the listener.
  * <p>
  * Notification is fully synchronous, so overrides have performance implications. Non-trivial
  * methods should be coded with Truffle guidelines and cautions in mind.
+ *
+ * @since 0.8 or earlier
  */
+@SuppressWarnings("deprecation")
+@Deprecated
 public interface StandardAfterInstrumentListener {
 
     /**
      * Receive notification that an AST Node's {@code void}-valued execute method has just returned.
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
+     *
+     * @since 0.8 or earlier
      */
-    void onReturnVoid(Probe probe, Node node, VirtualFrame vFrame);
+    void onReturnVoid(Probe probe, Node node, VirtualFrame frame);
 
     /**
      * Receive notification that an AST Node's execute method has just returned a value (boxed if
      * primitive).
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
+     *
+     * @since 0.8 or earlier
      */
-    void onReturnValue(Probe probe, Node node, VirtualFrame vFrame, Object result);
+    void onReturnValue(Probe probe, Node node, VirtualFrame frame, Object result);
 
     /**
      * Receive notification that an AST Node's execute method has just thrown an exception.
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
+     *
+     * @since 0.8 or earlier
      */
-    void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Exception exception);
+    void onReturnExceptional(Probe probe, Node node, VirtualFrame frame, Throwable exception);
 }
