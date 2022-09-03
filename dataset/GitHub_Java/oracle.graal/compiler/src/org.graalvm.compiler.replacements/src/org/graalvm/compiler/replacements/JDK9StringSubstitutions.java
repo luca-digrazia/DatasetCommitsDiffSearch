@@ -34,10 +34,7 @@ import org.graalvm.compiler.replacements.nodes.ArrayEqualsNode;
 // JaCoCo Exclude
 
 /**
- * Substitutions for {@link String} methods for JDK9 and later.
- *
- * {@link String} changed in JDK9 to contain a byte array instead of a char array. We therefore need
- * new substitutions for the related methods.
+ * Substitutions for {@link String} methods.
  */
 @ClassSubstitution(String.class)
 public class JDK9StringSubstitutions {
