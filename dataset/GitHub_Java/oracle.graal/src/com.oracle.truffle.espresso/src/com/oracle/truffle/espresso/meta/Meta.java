@@ -446,10 +446,6 @@ public final class Meta {
             return meta(method.getDeclaringClass());
         }
 
-        public MethodInfo rawMethod() {
-            return method;
-        }
-
         /**
          * Invoke guest method, parameters and return value are converted to host world. Primitives,
          * primitive arrays are shared, and are passed verbatim, conversions are provided for String
