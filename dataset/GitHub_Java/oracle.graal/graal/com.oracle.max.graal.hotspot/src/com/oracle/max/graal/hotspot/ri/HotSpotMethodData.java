@@ -363,11 +363,7 @@ public final class HotSpotMethodData extends CompilerObject {
             return createRiTypeProfile(sparseTypes, counts, totalCount, entries);
         }
 
-        protected long getTypesNotRecordedExecutionCount(HotSpotMethodData data, int position) {
-            // checkcast/aastore/instanceof profiling in the HotSpot template-based interpreter was adjusted so that the counter
-            // is incremented to indicate the polymorphic case instead of decrementing it for failed type checks
-            return getCounterValue(data, position);
-        }
+        protected abstract long getTypesNotRecordedExecutionCount(HotSpotMethodData data, int position);
 
         private static RiTypeProfile createRiTypeProfile(RiResolvedType[] sparseTypes, double[] counts, long totalCount, int entries) {
             RiResolvedType[] types;
@@ -414,6 +410,12 @@ public final class HotSpotMethodData extends CompilerObject {
         public int getExecutionCount(HotSpotMethodData data, int position) {
             return -1;
         }
+
+        @Override
+        protected long getTypesNotRecordedExecutionCount(HotSpotMethodData data, int position) {
+            // TODO (ch) if types do not fit, profiling is skipped for typechecks
+            return 0;
+        }
     }
 
     private static class VirtualCallData extends AbstractTypeData {
@@ -434,6 +436,11 @@ public final class HotSpotMethodData extends CompilerObject {
 
             total += getCounterValue(data, position);
             return truncateLongToInt(total);
+        }
+
+        @Override
+        protected long getTypesNotRecordedExecutionCount(HotSpotMethodData data, int position) {
+            return getCounterValue(data, position);
         }
     }
 
