@@ -42,7 +42,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
 final class TruffleList<T> extends AbstractList<T> {
-    final TruffleObject array;
+    private final TruffleObject array;
     private final Class<T> elementClass;
     private final Type elementType;
     private final CallTarget callRead;
