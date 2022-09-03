@@ -24,12 +24,10 @@
  */
 package com.oracle.truffle.api;
 
-import com.oracle.truffle.api.nodes.ControlFlowException;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-import java.util.concurrent.Callable;
+import java.lang.annotation.*;
+import java.util.concurrent.*;
+
+import com.oracle.truffle.api.nodes.*;
 
 /**
  * Directives that influence the optimizations of the Truffle compiler. All of the operations have
