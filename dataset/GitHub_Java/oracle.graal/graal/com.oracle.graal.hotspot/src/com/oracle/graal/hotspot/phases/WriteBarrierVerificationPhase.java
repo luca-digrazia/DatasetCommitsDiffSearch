@@ -25,7 +25,6 @@ package com.oracle.graal.hotspot.phases;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -33,36 +32,41 @@ import com.oracle.graal.nodes.extended.WriteNode.WriteBarrierType;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
 
-/**
- * Verification phase that checks if, for every write, at least one write barrier is present at all
- * paths leading to the previous safepoint. For every write, necessitating a write barrier, a
- * bottom-up traversal of the graph is performed up to the previous safepoints via all possible
- * paths. If, for a certain path, no write barrier satisfying the processed write is found, an
- * assertion is generated.
- */
 public class WriteBarrierVerificationPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        processWrites(graph);
+        processSafepoints(graph);
     }
 
-    private static void processWrites(StructuredGraph graph) {
-        List<Node> processedWrites = new LinkedList<>();
+    private static void processSafepoints(StructuredGraph graph) {
         for (Node node : graph.getNodes()) {
-            if (isObjectWrite(node) && !processedWrites.contains(node)) {
-                validateWrite(node);
-                processedWrites.add(node);
+            if (isSafepoint(node)) {
+                verifyWrites(node);
             }
         }
     }
 
+    private static void verifyWrites(Node safepoint) {
+        Deque<Node> frontier = new ArrayDeque<>();
+        List<Node> processedWrites = new LinkedList<>();
+        expandFrontier(frontier, safepoint);
+        while (!frontier.isEmpty()) {
+            Node currentNode = frontier.removeFirst();
+            if (isSafepoint(currentNode)) {
+                continue;
+            }
+            if (isObjectWrite(currentNode) && !processedWrites.contains(currentNode)) {
+                validateWrite(currentNode);
+                processedWrites.add(currentNode);
+            }
+            expandFrontier(frontier, currentNode);
+        }
+
+    }
+
     private static void validateWrite(Node write) {
-        /*
-         * The currently validated write is checked in order to discover if it has an appropriate
-         * attached write barrier.
-         */
-        if (hasAttachedBarrier(write)) {
+        if (hasCorrectAttachedBarrier(write)) {
             return;
         }
         Deque<Node> frontier = new ArrayDeque<>();
@@ -70,14 +74,14 @@ public class WriteBarrierVerificationPhase extends Phase {
         while (!frontier.isEmpty()) {
             Node currentNode = frontier.removeFirst();
             assert !isSafepoint(currentNode) : "Write barrier must be present";
-            if (!(currentNode instanceof SerialWriteBarrier) || ((currentNode instanceof SerialWriteBarrier) && !validateBarrier(write, currentNode))) {
+            if (!(currentNode instanceof SerialWriteBarrier) || ((currentNode instanceof SerialWriteBarrier) && !foundCorrectBarrier(write, currentNode))) {
                 expandFrontier(frontier, currentNode);
             }
         }
     }
 
-    private static boolean hasAttachedBarrier(Node node) {
-        return (((FixedWithNextNode) node).next() instanceof SerialWriteBarrier) && validateBarrier(node, ((FixedWithNextNode) node).next());
+    private static boolean hasCorrectAttachedBarrier(Node node) {
+        return (((FixedWithNextNode) node).next() instanceof SerialWriteBarrier) && foundCorrectBarrier(node, ((FixedWithNextNode) node).next());
     }
 
     private static boolean isObjectWrite(Node node) {
@@ -91,8 +95,7 @@ public class WriteBarrierVerificationPhase extends Phase {
     private static void expandFrontier(Deque<Node> frontier, Node node) {
         for (Node previousNode : node.cfgPredecessors()) {
             if (previousNode != null) {
-                // Control split nodes are processed only once.
-                if ((previousNode instanceof ControlSplitNode) && frontier.contains(previousNode)) {
+                if (previousNode instanceof ControlSplitNode && frontier.contains(previousNode)) {
                     continue;
                 }
                 frontier.addFirst(previousNode);
@@ -101,10 +104,10 @@ public class WriteBarrierVerificationPhase extends Phase {
     }
 
     private static boolean isSafepoint(Node node) {
-        return ((node instanceof DeoptimizingNode) && ((DeoptimizingNode) node).canDeoptimize()) || (node instanceof LoopBeginNode);
+        return (node instanceof DeoptimizingNode) && ((DeoptimizingNode) node).canDeoptimize();
     }
 
-    private static boolean validateBarrier(Node write, Node barrier) {
+    private static boolean foundCorrectBarrier(Node write, Node barrier) {
         SerialWriteBarrier barrierNode = (SerialWriteBarrier) barrier;
         if (write instanceof WriteNode) {
             WriteNode writeNode = (WriteNode) write;
