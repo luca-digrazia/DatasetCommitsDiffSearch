@@ -36,11 +36,6 @@ import com.oracle.graal.sparc.*;
  */
 @Opcode("DEOPT_CALLER")
 final class SPARCHotSpotDeoptimizeCallerOp extends SPARCHotSpotEpilogueOp {
-    public static final LIRInstructionClass<SPARCHotSpotDeoptimizeCallerOp> TYPE = LIRInstructionClass.create(SPARCHotSpotDeoptimizeCallerOp.class);
-
-    protected SPARCHotSpotDeoptimizeCallerOp() {
-        super(TYPE);
-    }
 
     @Override
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {

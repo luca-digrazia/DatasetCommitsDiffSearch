@@ -258,9 +258,6 @@ public class SPARCControlFlow {
                 @Override
                 protected void conditionalJump(int index, Condition condition, Label target) {
                     switch (key.getKind()) {
-                        case Char:
-                        case Byte:
-                        case Short:
                         case Int:
                             if (crb.codeCache.needsDataPatch(keyConstants[index])) {
                                 crb.recordInlineDataInCode(keyConstants[index]);

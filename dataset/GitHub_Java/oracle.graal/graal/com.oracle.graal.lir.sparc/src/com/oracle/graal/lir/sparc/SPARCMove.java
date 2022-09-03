@@ -411,16 +411,14 @@ public class SPARCMove {
             if (isRegister(result)) {
                 const2reg(crb, masm, result, (Constant) input);
             } else if (isStackSlot(result)) {
-                try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
-                    Register scratch = sc.getRegister();
-                    Constant constant = asConstant(input);
-                    if (constant.isNull()) {
-                        new Clr(scratch).emit(masm);
-                    } else {
-                        new Setx(constant.asLong(), scratch).emit(masm);
-                    }
-                    reg2stack(crb, masm, result, scratch.asValue(LIRKind.derive(input)));
+                Register scratch = g1;
+                Constant constant = asConstant(input);
+                if (constant.isNull()) {
+                    new Clr(scratch).emit(masm);
+                } else {
+                    new Setx(constant.asLong(), scratch).emit(masm);
                 }
+                reg2stack(crb, masm, result, scratch.asValue(LIRKind.derive(input)));
             } else {
                 throw GraalInternalError.shouldNotReachHere("Result is a: " + result);
             }
