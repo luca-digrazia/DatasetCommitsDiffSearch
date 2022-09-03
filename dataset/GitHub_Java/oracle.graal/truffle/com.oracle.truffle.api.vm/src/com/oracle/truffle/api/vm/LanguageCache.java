@@ -31,7 +31,6 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -47,14 +46,18 @@ import com.oracle.truffle.api.TruffleOptions;
  * cache with languages found in application classloader.
  */
 final class LanguageCache {
-    private static final boolean PRELOAD = TruffleOptions.AOT;
-    private static final Map<String, LanguageCache> CACHE = TruffleOptions.AOT ? new HashMap<String, LanguageCache>() : null;
+    private static final boolean PRELOAD;
+    private static final Map<String, LanguageCache> CACHE;
     private TruffleLanguage<?> language;
-    private final ClassLoader loader;
     private final String className;
     private final Set<String> mimeTypes;
     private final String name;
     private final String version;
+
+    static {
+        CACHE = TruffleOptions.AOT ? initializeLanguages(loader()) : null;
+        PRELOAD = CACHE != null;
+    }
 
     /**
      * This method initializes all languages under the provided classloader.
@@ -65,26 +68,16 @@ final class LanguageCache {
      * @param loader The classloader to be used for finding languages.
      * @return A map of initialized languages.
      */
-    @SuppressWarnings("unused")
-    private static Map<String, LanguageCache> initializeLanguages(final ClassLoader loader) {
+    private static Map<String, LanguageCache> initializeLanguages(ClassLoader loader) {
         Map<String, LanguageCache> map;
-
-        PolyglotLocator singleLoaderLocator = new PolyglotLocator() {
-            @Override
-            public void locate(PolyglotLocator.Response response) {
-                response.registerClassLoader(loader);
-            }
-        };
-
-        map = createLanguages(singleLoaderLocator);
+        map = createLanguages(loader);
         for (LanguageCache info : map.values()) {
-            info.createLanguage();
+            info.createLanguage(loader);
         }
         return map;
     }
 
-    private LanguageCache(String prefix, Properties info, TruffleLanguage<?> language, ClassLoader loader) {
-        this.loader = loader;
+    private LanguageCache(String prefix, Properties info, TruffleLanguage<?> language) {
         this.className = info.getProperty(prefix + "className");
         this.name = info.getProperty(prefix + "name");
         this.version = info.getProperty(prefix + "version");
@@ -100,22 +93,28 @@ final class LanguageCache {
         this.language = language;
     }
 
-    static Map<String, LanguageCache> languages(PolyglotLocator locator) {
+    private static ClassLoader loader() {
+        ClassLoader l;
+        if (PolyglotEngine.JDK8OrEarlier) {
+            l = PolyglotEngine.class.getClassLoader();
+            if (l == null) {
+                l = ClassLoader.getSystemClassLoader();
+            }
+        } else {
+            l = ModuleResourceLocator.createLoader();
+        }
+        return l;
+    }
+
+    static Map<String, LanguageCache> languages() {
         if (PRELOAD) {
             return CACHE;
         }
-        return createLanguages(locator);
+        return createLanguages(loader());
     }
 
-    private static Map<String, LanguageCache> createLanguages(PolyglotLocator locator) {
+    private static Map<String, LanguageCache> createLanguages(ClassLoader loader) {
         Map<String, LanguageCache> map = new LinkedHashMap<>();
-        for (ClassLoader loader : PolyglotLocator.Response.loaders(locator)) {
-            createLanguages(loader, map);
-        }
-        return map;
-    }
-
-    private static void createLanguages(ClassLoader loader, Map<String, LanguageCache> map) {
         Enumeration<URL> en;
         try {
             en = loader.getResources("META-INF/truffle/language");
@@ -139,12 +138,13 @@ final class LanguageCache {
                 if (p.getProperty(prefix + "name") == null) {
                     break;
                 }
-                LanguageCache l = new LanguageCache(prefix, p, null, loader);
+                LanguageCache l = new LanguageCache(prefix, p, null);
                 for (String mimeType : l.getMimeTypes()) {
                     map.put(mimeType, l);
                 }
             }
         }
+        return map;
     }
 
     Set<String> getMimeTypes() {
@@ -164,12 +164,12 @@ final class LanguageCache {
             return language;
         }
         if (create) {
-            createLanguage();
+            createLanguage(loader());
         }
         return language;
     }
 
-    private void createLanguage() {
+    private void createLanguage(ClassLoader loader) {
         try {
             TruffleLanguage<?> result;
             Class<?> langClazz = Class.forName(className, true, loader);

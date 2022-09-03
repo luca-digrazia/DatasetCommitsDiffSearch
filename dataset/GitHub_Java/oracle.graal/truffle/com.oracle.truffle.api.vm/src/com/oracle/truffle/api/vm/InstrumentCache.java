@@ -50,7 +50,6 @@ final class InstrumentCache {
     private final String id;
     private final String name;
     private final String version;
-    private final ClassLoader loader;
 
     static {
         List<InstrumentCache> instruments = null;
@@ -64,8 +63,20 @@ final class InstrumentCache {
         PRELOAD = CACHE != null;
     }
 
-    InstrumentCache(String prefix, Properties info, ClassLoader loader) {
-        this.loader = loader;
+    private static ClassLoader loader() {
+        ClassLoader l;
+        if (PolyglotEngine.JDK8OrEarlier) {
+            l = PolyglotEngine.class.getClassLoader();
+            if (l == null) {
+                l = ClassLoader.getSystemClassLoader();
+            }
+        } else {
+            l = ModuleResourceLocator.createLoader();
+        }
+        return l;
+    }
+
+    InstrumentCache(String prefix, Properties info) {
         this.className = info.getProperty(prefix + "className");
         this.name = info.getProperty(prefix + "name");
         this.version = info.getProperty(prefix + "version");
@@ -78,19 +89,13 @@ final class InstrumentCache {
         }
     }
 
-    static List<InstrumentCache> load(PolyglotLocator customLocator) {
+    static List<InstrumentCache> load(ClassLoader customLoader) {
         if (PRELOAD) {
             return CACHE;
         }
+        ClassLoader loader = customLoader == null ? loader() : customLoader;
         List<InstrumentCache> list = new ArrayList<>();
         Set<String> classNamesUsed = new HashSet<>();
-        for (ClassLoader loader : PolyglotLocator.Response.loaders(customLocator)) {
-            loadForOne(loader, list, classNamesUsed);
-        }
-        return list;
-    }
-
-    private static void loadForOne(ClassLoader loader, List<InstrumentCache> list, Set<String> classNamesUsed) {
         Enumeration<URL> en;
         try {
             en = loader.getResources("META-INF/truffle/instrument");
@@ -118,16 +123,16 @@ final class InstrumentCache {
                 // we don't want multiple instruments with the same class name
                 if (!classNamesUsed.contains(className)) {
                     classNamesUsed.add(className);
-                    list.add(new InstrumentCache(prefix, p, loader));
+                    list.add(new InstrumentCache(prefix, p));
                 }
             }
         }
         Collections.sort(list, new Comparator<InstrumentCache>() {
-            @Override
             public int compare(InstrumentCache o1, InstrumentCache o2) {
                 return o1.getId().compareTo(o2.getId());
             }
         });
+        return list;
     }
 
     String getId() {
@@ -151,7 +156,7 @@ final class InstrumentCache {
 
     private void loadClass() {
         try {
-            instrumentClass = Class.forName(className, true, loader);
+            instrumentClass = Class.forName(className, true, loader());
         } catch (Exception ex) {
             throw new IllegalStateException("Cannot initialize " + getName() + " instrument with implementation " + className, ex);
         }
