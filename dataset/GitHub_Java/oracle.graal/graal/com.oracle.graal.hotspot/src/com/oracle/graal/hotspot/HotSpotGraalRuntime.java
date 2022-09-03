@@ -161,33 +161,33 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
 
     public JavaType lookupType(String name, HotSpotResolvedJavaType accessingClass, boolean eagerResolve) {
         if (name.length() == 1 && vmToCompiler instanceof VMToCompilerImpl) {
-            VMToCompilerImpl impl = (VMToCompilerImpl) vmToCompiler;
+            VMToCompilerImpl exitsNative = (VMToCompilerImpl) vmToCompiler;
             Kind kind = Kind.fromPrimitiveOrVoidTypeChar(name.charAt(0));
             switch(kind) {
                 case Boolean:
-                    return impl.typeBoolean;
+                    return exitsNative.typeBoolean;
                 case Byte:
-                    return impl.typeByte;
+                    return exitsNative.typeByte;
                 case Char:
-                    return impl.typeChar;
+                    return exitsNative.typeChar;
                 case Double:
-                    return impl.typeDouble;
+                    return exitsNative.typeDouble;
                 case Float:
-                    return impl.typeFloat;
+                    return exitsNative.typeFloat;
                 case Illegal:
                     break;
                 case Int:
-                    return impl.typeInt;
+                    return exitsNative.typeInt;
                 case Jsr:
                     break;
                 case Long:
-                    return impl.typeLong;
+                    return exitsNative.typeLong;
                 case Object:
                     break;
                 case Short:
-                    return impl.typeShort;
+                    return exitsNative.typeShort;
                 case Void:
-                    return impl.typeVoid;
+                    return exitsNative.typeVoid;
             }
         }
         return compilerToVm.lookupType(name, accessingClass, eagerResolve);
