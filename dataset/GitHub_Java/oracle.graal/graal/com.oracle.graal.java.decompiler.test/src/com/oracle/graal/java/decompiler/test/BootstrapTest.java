@@ -22,26 +22,9 @@
  */
 package com.oracle.graal.java.decompiler.test;
 
-import java.lang.reflect.*;
+public class BootstrapTest {
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.java.decompiler.test.example.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.printer.*;
+    public static void main(String[] args) {
 
-public class Test {
-
-    /**
-     * @param args
-     * @throws SecurityException
-     * @throws NoSuchMethodException
-     */
-    public static void main(String[] args) throws NoSuchMethodException, SecurityException {
-        DebugEnvironment.initialize(System.out);
-        GraalCodeCacheProvider runtime = Graal.getRequiredCapability(GraalCodeCacheProvider.class);
-        Method method = Example.class.getDeclaredMethod("loop7", new Class[]{int.class, int.class});
-        final ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
-        TestUtil.compileMethod(javaMethod);
     }
 }

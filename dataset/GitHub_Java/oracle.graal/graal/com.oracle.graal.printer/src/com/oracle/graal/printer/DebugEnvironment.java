@@ -37,11 +37,11 @@ public class DebugEnvironment {
         Debug.enable();
         List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
         dumpHandlers.add(new GraphPrinterDumpHandler());
-        if (PrintCFG.getValue() || PrintBackendCFG.getValue()) {
-            if (PrintBinaryGraphs.getValue() && PrintCFG.getValue()) {
-                TTY.println("Complete C1Visualizer dumping slows down PrintBinaryGraphs: use -G:-PrintCFG to disable it");
+        if (PrintCFG.getValue()) {
+            if (PrintBinaryGraphs.getValue()) {
+                TTY.println("CFG dumping slows down PrintBinaryGraphs: use -G:-PrintCFG to disable it");
             }
-            dumpHandlers.add(new CFGPrinterObserver(PrintCFG.getValue()));
+            dumpHandlers.add(new CFGPrinterObserver());
         }
         if (DecompileAfterPhase.getValue() != null) {
             dumpHandlers.add(new DecompilerDebugDumpHandler());

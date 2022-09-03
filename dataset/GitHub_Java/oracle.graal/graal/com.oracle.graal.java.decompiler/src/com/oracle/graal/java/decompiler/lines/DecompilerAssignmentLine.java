@@ -23,46 +23,41 @@
 package com.oracle.graal.java.decompiler.lines;
 
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.java.decompiler.block.*;
 import com.oracle.graal.nodes.*;
 
-public abstract class DecompilerSyntaxLine {
+public class DecompilerAssignmentLine extends DecompilerSyntaxLine {
 
-    protected final Node node;
-    protected final DecompilerBlock block;
+    private final NodeClassIterable inputs;
 
-    protected DecompilerSyntaxLine(DecompilerBlock block, Node node) {
-        this.node = node;
-        this.block = block;
+    public DecompilerAssignmentLine(DecompilerBlock block, Node node) {
+        super(block, node);
+        this.inputs = node.inputs();
     }
 
-    public Node getNode() {
-        return node;
+    @Override
+    public String getAsString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(getStringRepresentation(node));
+        sb.append(" = ");
+        sb.append(getStatement());
+        return sb.toString();
     }
 
-    public abstract String getAsString();
-
-    public DecompilerBlock getBlock() {
-        return block;
-    }
-
-    protected static String getStringRepresentation(Node node) {
-        if (node instanceof ConstantNode) {
-            return String.valueOf(((ConstantNode) node).asConstant().asBoxedValue());
-        } else if (node instanceof LocalNode) {
-            return "local_" + ((LocalNode) node).index();
+    public String getStatement() {
+        StringBuilder sb = new StringBuilder();
+        if (node instanceof CallTargetNode) {
+            CallTargetNode callTarget = (CallTargetNode) node;
+            sb.append(callTarget.targetName());
         } else {
-            return getVariable(node);
+            sb.append(node.toString(Verbosity.Name));
+            sb.append(" ");
+            for (Node n : inputs) {
+                sb.append(getStringRepresentation(n));
+                sb.append(", ");
+            }
         }
+        return sb.toString();
     }
-
-    @SuppressWarnings("deprecation")
-    protected static String getVariable(Node node) {
-        if (node != null) {
-            return "var_" + node.getId();
-        } else {
-            return "null";
-        }
-    }
-
 }

@@ -20,28 +20,23 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.java.decompiler.test;
+package com.oracle.graal.java.decompiler.lines;
 
-import java.lang.reflect.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.java.decompiler.block.*;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.java.decompiler.test.example.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.printer.*;
+public class DecompilerProxyLine extends DecompilerSyntaxLine {
 
-public class Test {
+    private final Node proxy;
 
-    /**
-     * @param args
-     * @throws SecurityException
-     * @throws NoSuchMethodException
-     */
-    public static void main(String[] args) throws NoSuchMethodException, SecurityException {
-        DebugEnvironment.initialize(System.out);
-        GraalCodeCacheProvider runtime = Graal.getRequiredCapability(GraalCodeCacheProvider.class);
-        Method method = Example.class.getDeclaredMethod("loop7", new Class[]{int.class, int.class});
-        final ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
-        TestUtil.compileMethod(javaMethod);
+    public DecompilerProxyLine(DecompilerBlock block, Node node, Node proxy) {
+        super(block, node);
+        this.proxy = proxy;
     }
+
+    @Override
+    public String getAsString() {
+        return getVariable(node) + " = " + getStringRepresentation(proxy);
+    }
+
 }
