@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "-")
-public class IntegerSubNode extends IntegerArithmeticNode implements Canonicalizable {
+public class IntegerSubNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
 
     public IntegerSubNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
@@ -37,13 +37,7 @@ public class IntegerSubNode extends IntegerArithmeticNode implements Canonicaliz
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(StampTool.sub(x().stamp(), y().stamp()));
-    }
-
-    @Override
-    public Constant evalConst(Constant... inputs) {
-        assert inputs.length == 2;
-        return Constant.forIntegerKind(kind(), inputs[0].asLong() - inputs[1].asLong(), null);
+        return updateStamp(StampTool.sub(x().integerStamp(), y().integerStamp()));
     }
 
     @Override
@@ -86,7 +80,12 @@ public class IntegerSubNode extends IntegerArithmeticNode implements Canonicaliz
             }
         }
         if (x().isConstant() && y().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
+            if (kind() == Kind.Int) {
+                return ConstantNode.forInt(x().asConstant().asInt() - y().asConstant().asInt(), graph());
+            } else {
+                assert kind() == Kind.Long;
+                return ConstantNode.forLong(x().asConstant().asLong() - y().asConstant().asLong(), graph());
+            }
         } else if (y().isConstant()) {
             long c = y().asConstant().asLong();
             if (c == 0) {
@@ -118,7 +117,7 @@ public class IntegerSubNode extends IntegerArithmeticNode implements Canonicaliz
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
+    public void generate(LIRGeneratorTool gen) {
         gen.setResult(this, gen.emitSub(gen.operand(x()), gen.operand(y())));
     }
 }

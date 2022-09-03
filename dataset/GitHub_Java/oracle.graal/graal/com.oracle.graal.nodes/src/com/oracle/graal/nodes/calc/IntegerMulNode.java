@@ -29,16 +29,10 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "*")
-public class IntegerMulNode extends IntegerArithmeticNode implements Canonicalizable {
+public class IntegerMulNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
 
     public IntegerMulNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
-    }
-
-    @Override
-    public Constant evalConst(Constant... inputs) {
-        assert inputs.length == 2;
-        return Constant.forIntegerKind(kind(), inputs[0].asLong() * inputs[1].asLong(), null);
     }
 
     @Override
@@ -47,7 +41,12 @@ public class IntegerMulNode extends IntegerArithmeticNode implements Canonicaliz
             return graph().unique(new IntegerMulNode(kind(), y(), x()));
         }
         if (x().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
+            if (kind() == Kind.Int) {
+                return ConstantNode.forInt(x().asConstant().asInt() * y().asConstant().asInt(), graph());
+            } else {
+                assert kind() == Kind.Long;
+                return ConstantNode.forLong(x().asConstant().asLong() * y().asConstant().asLong(), graph());
+            }
         } else if (y().isConstant()) {
             long c = y().asConstant().asLong();
             if (c == 1) {
@@ -72,7 +71,7 @@ public class IntegerMulNode extends IntegerArithmeticNode implements Canonicaliz
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
+    public void generate(LIRGeneratorTool gen) {
         Value op1 = gen.operand(x());
         Value op2 = gen.operand(y());
         if (!y().isConstant() && !FloatAddNode.livesLonger(this, y(), gen)) {
