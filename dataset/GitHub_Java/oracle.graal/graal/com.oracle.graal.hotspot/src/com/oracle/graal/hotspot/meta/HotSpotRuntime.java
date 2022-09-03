@@ -54,6 +54,7 @@ import static com.oracle.graal.hotspot.stubs.NewArrayStub.*;
 import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
 import static com.oracle.graal.hotspot.stubs.NewMultiArrayStub.*;
 import static com.oracle.graal.hotspot.stubs.OSRMigrationEndStub.*;
+import static com.oracle.graal.hotspot.stubs.RegisterFinalizerStub.*;
 import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 import static com.oracle.graal.hotspot.stubs.ThreadIsInterruptedStub.*;
 import static com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub.*;
@@ -254,6 +255,14 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         /*             ret */ ret(word),
                         /* arg0:    thread */ nativeCallingConvention(word,
                     /* arg1: returnAddress */                         word));
+        addStubCall(REGISTER_FINALIZER,
+                        /*             ret */ ret(Kind.Void),
+                        /* arg0:    object */ javaCallingConvention(Kind.Object));
+
+        addCRuntimeCall(REGISTER_FINALIZER_C, config.registerFinalizerAddress,
+                        /*             ret */ ret(Kind.Void),
+                        /* arg0:    thread */ nativeCallingConvention(word,
+                        /* arg1:    object */                         Kind.Object));
 
         addStubCall(NEW_ARRAY,
                         /*             ret */ ret(Kind.Object),
@@ -561,6 +570,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         link(new NewInstanceStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_INSTANCE)));
         link(new NewArrayStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_ARRAY)));
         link(new NewMultiArrayStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_MULTI_ARRAY)));
+        link(new RegisterFinalizerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(REGISTER_FINALIZER)));
         link(new ThreadIsInterruptedStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(THREAD_IS_INTERRUPTED)));
         link(new ExceptionHandlerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(EXCEPTION_HANDLER)));
         link(new UnwindExceptionToCallerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(UNWIND_EXCEPTION_TO_CALLER)));
@@ -577,16 +587,15 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         link(new WriteBarrierPreStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(WRITE_BARRIER_PRE)));
         link(new WriteBarrierPostStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(WRITE_BARRIER_POST)));
 
-        linkRuntimeCall(IDENTITY_HASHCODE, config.identityHashCodeAddress, replacements);
-        linkRuntimeCall(REGISTER_FINALIZER, config.registerFinalizerAddress, replacements);
+        CompilerToVM c2vm = graalRuntime.getCompilerToVM();
+        link(new RuntimeCallStub(config.identityHashCodeAddress, IDENTITY_HASHCODE, true, this, replacements, globalStubRegConfig, c2vm));
     }
 
     private static void link(Stub stub) {
         stub.getLinkage().setStub(stub);
     }
 
-    private void linkRuntimeCall(Descriptor descriptor, long address, Replacements replacements) {
-        RuntimeCallStub stub = new RuntimeCallStub(address, descriptor, true, this, replacements, globalStubRegConfig, graalRuntime.getCompilerToVM());
+    private void link(RuntimeCallStub stub) {
         HotSpotRuntimeCallTarget linkage = stub.getLinkage();
         HotSpotRuntimeCallTarget targetLinkage = stub.getTargetLinkage();
         linkage.setStub(stub);
@@ -745,7 +754,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             ArrayLengthNode arrayLengthNode = (ArrayLengthNode) n;
             ValueNode array = arrayLengthNode.array();
             ReadNode arrayLengthRead = graph.add(new ReadNode(array, ConstantLocationNode.create(LocationNode.FINAL_LOCATION, Kind.Int, config.arrayLengthOffset, graph), StampFactory.positiveInt()));
-            tool.createNullCheckGuard(arrayLengthRead, array);
+            tool.createNullCheckGuard(arrayLengthRead.dependencies(), array);
             graph.replaceFixedWithFixed(arrayLengthNode, arrayLengthRead);
         } else if (n instanceof Invoke) {
             Invoke invoke = (Invoke) n;
@@ -754,7 +763,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                 NodeInputList<ValueNode> parameters = callTarget.arguments();
                 ValueNode receiver = parameters.size() <= 0 ? null : parameters.get(0);
                 if (!callTarget.isStatic() && receiver.kind() == Kind.Object && !receiver.objectStamp().nonNull()) {
-                    tool.createNullCheckGuard(invoke, receiver);
+                    tool.createNullCheckGuard(invoke.asNode().dependencies(), receiver);
                 }
                 JavaType[] signature = MetaUtil.signatureToTypes(callTarget.targetMethod().getSignature(), callTarget.isStatic() ? null : callTarget.targetMethod().getDeclaringClass());
 
@@ -796,7 +805,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             ValueNode object = loadField.isStatic() ? ConstantNode.forObject(field.getDeclaringClass().mirror(), this, graph) : loadField.object();
             assert loadField.kind() != Kind.Illegal;
             ReadNode memoryRead = graph.add(new ReadNode(object, createFieldLocation(graph, field), loadField.stamp()));
-            tool.createNullCheckGuard(memoryRead, object);
+            tool.createNullCheckGuard(memoryRead.dependencies(), object);
 
             graph.replaceFixedWithFixed(loadField, memoryRead);
 
@@ -812,7 +821,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             ValueNode object = storeField.isStatic() ? ConstantNode.forObject(field.getDeclaringClass().mirror(), this, graph) : storeField.object();
             WriteBarrierType barrierType = getFieldStoreBarrierType(storeField);
             WriteNode memoryWrite = graph.add(new WriteNode(object, storeField.value(), createFieldLocation(graph, field), barrierType));
-            tool.createNullCheckGuard(memoryWrite, object);
+            tool.createNullCheckGuard(memoryWrite.dependencies(), object);
             memoryWrite.setStateAfter(storeField.stateAfter());
             graph.replaceFixedWithFixed(storeField, memoryWrite);
             FixedWithNextNode last = memoryWrite;
@@ -832,15 +841,15 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             cas.setWriteBarrierType(getCompareAndSwapBarrier(cas));
         } else if (n instanceof LoadIndexedNode) {
             LoadIndexedNode loadIndexed = (LoadIndexedNode) n;
-            GuardingNode boundsCheck = createBoundsCheck(loadIndexed, tool);
+            ValueNode boundsCheck = createBoundsCheck(loadIndexed, tool);
             Kind elementKind = loadIndexed.elementKind();
             LocationNode arrayLocation = createArrayLocation(graph, elementKind, loadIndexed.index());
             ReadNode memoryRead = graph.add(new ReadNode(loadIndexed.array(), arrayLocation, loadIndexed.stamp()));
-            memoryRead.setGuard(boundsCheck);
+            memoryRead.dependencies().add(boundsCheck);
             graph.replaceFixedWithFixed(loadIndexed, memoryRead);
         } else if (n instanceof StoreIndexedNode) {
             StoreIndexedNode storeIndexed = (StoreIndexedNode) n;
-            GuardingNode boundsCheck = createBoundsCheck(storeIndexed, tool);
+            ValueNode boundsCheck = createBoundsCheck(storeIndexed, tool);
             Kind elementKind = storeIndexed.elementKind();
             LocationNode arrayLocation = createArrayLocation(graph, elementKind, storeIndexed.index());
             ValueNode value = storeIndexed.value();
@@ -867,7 +876,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             }
             WriteBarrierType barrierType = getArrayStoreBarrierType(storeIndexed);
             WriteNode memoryWrite = graph.add(new WriteNode(array, value, arrayLocation, barrierType));
-            memoryWrite.setGuard(boundsCheck);
+            memoryWrite.dependencies().add(boundsCheck);
             memoryWrite.setStateAfter(storeIndexed.stateAfter());
             graph.replaceFixedWithFixed(storeIndexed, memoryWrite);
 
@@ -878,7 +887,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             ReadNode memoryRead = graph.add(new ReadNode(load.object(), location, load.stamp()));
             // An unsafe read must not floating outside its block as may float above an explicit
             // null check on its object.
-            memoryRead.setGuard(AbstractBeginNode.prevBegin(load));
+            memoryRead.dependencies().add(AbstractBeginNode.prevBegin(load));
             graph.replaceFixedWithFixed(load, memoryRead);
         } else if (n instanceof UnsafeStoreNode) {
             UnsafeStoreNode store = (UnsafeStoreNode) n;
@@ -901,7 +910,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             graph.replaceFixed(loadMethodNode, metaspaceMethod);
         } else if (n instanceof FixedGuardNode) {
             FixedGuardNode node = (FixedGuardNode) n;
-            ValueAnchorNode newAnchor = graph.add(new ValueAnchorNode(tool.createGuard(node.condition(), node.getReason(), node.getAction(), node.isNegated()).asNode()));
+            ValueAnchorNode newAnchor = graph.add(new ValueAnchorNode(tool.createGuard(node.condition(), node.getReason(), node.getAction(), node.isNegated())));
             graph.replaceFixedWithFixed(node, newAnchor);
         } else if (n instanceof CommitAllocationNode) {
             CommitAllocationNode commit = (CommitAllocationNode) n;
@@ -1053,7 +1062,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         LocationNode location = ConstantLocationNode.create(LocationNode.FINAL_LOCATION, wordKind, config.hubOffset, graph);
         assert !object.isConstant() || object.asConstant().isNull();
         ReadNode hub = graph.add(new ReadNode(object, location, StampFactory.forKind(wordKind())));
-        tool.createNullCheckGuard(hub, object);
+        tool.createNullCheckGuard(hub.dependencies(), object);
         return hub;
     }
 
@@ -1108,10 +1117,10 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         return IndexedLocationNode.create(LocationNode.getArrayLocation(elementKind), elementKind, getArrayBaseOffset(elementKind), index, graph, scale);
     }
 
-    private static GuardingNode createBoundsCheck(AccessIndexedNode n, LoweringTool tool) {
+    private static ValueNode createBoundsCheck(AccessIndexedNode n, LoweringTool tool) {
         StructuredGraph graph = n.graph();
         ArrayLengthNode arrayLength = graph.add(new ArrayLengthNode(n.array()));
-        GuardingNode guard = tool.createGuard(graph.unique(new IntegerBelowThanNode(n.index(), arrayLength)), BoundsCheckException, InvalidateReprofile);
+        ValueNode guard = tool.createGuard(graph.unique(new IntegerBelowThanNode(n.index(), arrayLength)), BoundsCheckException, InvalidateReprofile);
 
         graph.addBeforeFixed(n, arrayLength);
         return guard;

@@ -29,8 +29,8 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
@@ -44,7 +44,7 @@ public abstract class SnippetStub extends Stub implements Snippets {
     static class Template extends AbstractTemplates {
 
         Template(HotSpotRuntime runtime, Replacements replacements, TargetDescription target, Class<? extends Snippets> declaringClass) {
-            super(runtime, runtime, runtime, runtime, replacements, target);
+            super(runtime, replacements, target);
             this.info = snippet(declaringClass, null);
         }
 
@@ -66,7 +66,7 @@ public abstract class SnippetStub extends Stub implements Snippets {
      * 
      * @param linkage linkage details for a call to the stub
      */
-    public SnippetStub(HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotForeignCallLinkage linkage) {
+    public SnippetStub(HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage) {
         super(runtime, replacements, linkage);
         this.snippet = new Template(runtime, replacements, target, getClass());
     }
@@ -77,20 +77,9 @@ public abstract class SnippetStub extends Stub implements Snippets {
     }
 
     /**
-     * Adds the arguments to this snippet stub.
+     * Adds the {@linkplain ConstantParameter constant} arguments of this stub.
      */
-    protected Arguments makeArguments(SnippetInfo stub) {
-        Arguments args = new Arguments(stub, GuardsStage.FLOATING_GUARDS);
-        for (int i = 0; i < stub.getParameterCount(); i++) {
-            args.add(stub.getParameterName(i), null);
-        }
-        return args;
-    }
-
-    @Override
-    protected Object debugScopeContext() {
-        return getInstalledCodeOwner();
-    }
+    protected abstract Arguments makeArguments(SnippetInfo stub);
 
     @Override
     public ResolvedJavaMethod getInstalledCodeOwner() {
@@ -99,6 +88,7 @@ public abstract class SnippetStub extends Stub implements Snippets {
 
     @Override
     public String toString() {
-        return "Stub<" + format("%h.%n", getInstalledCodeOwner()) + ">";
+        ResolvedJavaMethod method = getInstalledCodeOwner();
+        return "Stub<" + (method != null ? format("%h.%n", method) : linkage) + ">";
     }
 }
