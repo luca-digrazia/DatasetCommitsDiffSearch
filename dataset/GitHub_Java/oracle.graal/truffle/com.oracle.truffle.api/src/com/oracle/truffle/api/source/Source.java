@@ -194,12 +194,27 @@ public abstract class Source {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromFileName from compiled code");
         assert chars != null;
 
-        final File file = new File(fileName);
-        // We are going to trust that the fileName is readable.
-        final String path = file.getCanonicalPath();
-        Content content = new ClientManagedFileSourceImpl(file, fileName, path, chars);
-        Source source = new Impl(content);
-        return source;
+        Source source = null;
+        if (source == null) {
+            final File file = new File(fileName);
+            // We are going to trust that the fileName is readable.
+            final String path = file.getCanonicalPath();
+            final WeakReference<Source> pathRef = null;
+            source = pathRef == null ? null : pathRef.get();
+            if (source == null) {
+                Content content = new ClientManagedFileSourceImpl(file, fileName, path, chars);
+                source = new Impl(content);
+                return source;
+            }
+        }
+        if (source.content() instanceof ClientManagedFileSourceImpl) {
+            final ClientManagedFileSourceImpl modifiableSource = (ClientManagedFileSourceImpl) source.content();
+            modifiableSource.setCode(chars);
+            source.clearTextMap();
+            return source;
+        } else {
+            throw new IOException("Attempt to modify contents of a file Source");
+        }
     }
 
     /**
@@ -789,14 +804,14 @@ public abstract class Source {
     /**
      * Associates the source with specified name.
      *
-     * @param newName name to be returned from {@link #getName()} method
+     * @param name name to be returned from {@link #getName()} method
      * @return new (identical) source, with changed {@link #getName()}
      * @since 0.14
      */
-    public final Source withName(String newName) {
+    public final Source withName(String name) {
         try {
             Source another = (Source) clone();
-            another.name = newName;
+            another.name = name;
             return another;
         } catch (CloneNotSupportedException ex) {
             throw new IllegalStateException(ex);
@@ -806,14 +821,14 @@ public abstract class Source {
     /**
      * Associates the source with specified short name.
      *
-     * @param newShortName name to be returned from {@link #getShortName()} method
+     * @param shortName name to be returned from {@link #getShortName()} method
      * @return new (identical) source, with changed {@link #getShortName()}
      * @since 0.14
      */
-    public final Source withShortName(String newShortName) {
+    public final Source withShortName(String shortName) {
         try {
             Source another = (Source) clone();
-            another.shortName = newShortName;
+            another.shortName = shortName;
             return another;
         } catch (CloneNotSupportedException ex) {
             throw new IllegalStateException(ex);
@@ -823,14 +838,14 @@ public abstract class Source {
     /**
      * Associates the source with specified short name.
      *
-     * @param newPath name to be returned from {@link #getPath()} method
+     * @param path name to be returned from {@link #getPath()} method
      * @return new (identical) source, with changed {@link #getPath()}
      * @since 0.14
      */
-    public final Source withPath(String newPath) {
+    public final Source withPath(String path) {
         try {
             Source another = (Source) clone();
-            another.path = newPath;
+            another.path = path;
             return another;
         } catch (CloneNotSupportedException ex) {
             throw new IllegalStateException(ex);
