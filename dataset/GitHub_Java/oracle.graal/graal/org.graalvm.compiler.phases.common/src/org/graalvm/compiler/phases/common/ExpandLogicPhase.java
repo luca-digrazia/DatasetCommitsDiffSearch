@@ -46,7 +46,6 @@ public class ExpandLogicPhase extends Phase {
             processBinary(logic);
         }
         assert graph.getNodes(ShortCircuitOrNode.TYPE).isEmpty();
-        graph.setAllowShortCircuitOr(false);
     }
 
     private static void processBinary(ShortCircuitOrNode binary) {
