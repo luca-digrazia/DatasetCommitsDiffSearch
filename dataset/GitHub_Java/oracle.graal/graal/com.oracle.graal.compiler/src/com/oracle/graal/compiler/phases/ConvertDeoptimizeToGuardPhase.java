@@ -78,14 +78,13 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
             IfNode ifNode = (IfNode) deoptBegin.predecessor();
             BeginNode otherBegin = ifNode.trueSuccessor();
             BooleanNode conditionNode = ifNode.compare();
-            boolean negated = false;
             if (deoptBegin == ifNode.trueSuccessor()) {
-                negated = true;
+                conditionNode = conditionNode.negate();
                 otherBegin = ifNode.falseSuccessor();
             }
             BeginNode ifBlockBegin = findBeginNode(ifNode);
             Debug.log("Converting %s on %-5s branch of %s to guard for remaining branch %s. IfBegin=%s", deopt, deoptBegin == ifNode.trueSuccessor() ? "true" : "false", ifNode, otherBegin, ifBlockBegin);
-            FixedGuardNode guard = graph.add(new FixedGuardNode(conditionNode, deopt.reason(), deopt.action(), negated, deopt.leafGraphId()));
+            FixedGuardNode guard = graph.add(new FixedGuardNode(conditionNode, deopt.reason(), deopt.action(), deopt.leafGraphId()));
             otherBegin.replaceAtUsages(ifBlockBegin);
             FixedNode next = otherBegin.next();
             otherBegin.setNext(null);

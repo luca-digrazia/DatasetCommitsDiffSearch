@@ -882,7 +882,15 @@ public class InliningUtil {
             returnDuplicate.clearInputs();
             Node n = invoke.next();
             invoke.setNext(null);
-            returnDuplicate.replaceAndDelete(n);
+            if (n instanceof BeginNode) {
+                BeginNode begin = (BeginNode) n;
+                FixedNode next = begin.next();
+                begin.setNext(null);
+                returnDuplicate.replaceAndDelete(next);
+                begin.safeDelete();
+            } else {
+                returnDuplicate.replaceAndDelete(n);
+            }
         }
 
         invoke.node().clearInputs();

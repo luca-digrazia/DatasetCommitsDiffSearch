@@ -30,9 +30,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.max.cri.ri.*;
 
-/**
- * Processes all {@link Lowerable} nodes to do their lowering.
- */
 public class LoweringPhase extends Phase {
 
     private final GraalRuntime runtime;
