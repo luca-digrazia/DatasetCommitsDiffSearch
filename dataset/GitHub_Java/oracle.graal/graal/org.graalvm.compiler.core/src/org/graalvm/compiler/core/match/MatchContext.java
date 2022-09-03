@@ -35,8 +35,7 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.CompareStrategy;
+import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
 /**
@@ -86,7 +85,7 @@ public class MatchContext {
 
     public Result captureNamedValue(String name, Class<? extends Node> type, Node value) {
         if (namedNodes == null) {
-            namedNodes = CollectionFactory.newMap(CompareStrategy.EQUALS);
+            namedNodes = EconomicMap.create(Equivalence.DEFAULT);
         }
         NamedNode current = namedNodes.get(name);
         if (current == null) {
@@ -110,7 +109,7 @@ public class MatchContext {
                 // don't interfere with this match.
                 continue;
             } else if ((consumed == null || !consumed.contains(node)) && node != root) {
-                if (LogVerbose.getValue()) {
+                if (LogVerbose.getValue(root.getOptions())) {
                     Debug.log("unexpected node %s", node);
                     for (int j = startIndex; j <= endIndex; j++) {
                         Node theNode = nodes.get(j);
@@ -152,7 +151,7 @@ public class MatchContext {
      * @return Result.OK if the node can be safely consumed.
      */
     public Result consume(Node node) {
-        assert node.getUsageCount() <= 1 : "should have already been checked";
+        assert MatchPattern.isSingleValueUser(node) : "should have already been checked";
 
         // Check NOT_IN_BLOCK first since that usually implies ALREADY_USED
         int index = nodes.indexOf(node);
