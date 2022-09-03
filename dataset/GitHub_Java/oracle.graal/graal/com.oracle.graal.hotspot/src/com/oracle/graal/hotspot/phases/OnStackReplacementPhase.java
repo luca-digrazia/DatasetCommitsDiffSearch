@@ -40,6 +40,7 @@ import com.oracle.graal.nodes.EntryMarkerNode;
 import com.oracle.graal.nodes.EntryProxyNode;
 import com.oracle.graal.nodes.FixedNode;
 import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.ProxyNode;
 import com.oracle.graal.nodes.StartNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
