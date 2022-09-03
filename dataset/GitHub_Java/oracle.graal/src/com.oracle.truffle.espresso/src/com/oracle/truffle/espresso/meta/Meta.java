@@ -66,10 +66,6 @@ public final class Meta {
         INT = knownKlass(int.class);
         DOUBLE = knownKlass(double.class);
         LONG = knownKlass(long.class);
-
-        THROWABLE = knownKlass(Throwable.class);
-        STACK_OVERFLOW_ERROR = knownKlass(StackOverflowError.class);
-        OUT_OF_MEMORY_ERROR = knownKlass(OutOfMemoryError.class);
     }
 
     public static Klass.WithInstance meta(StaticObject obj) {
@@ -139,39 +135,22 @@ public final class Meta {
     public final Klass INT;
     public final Klass DOUBLE;
     public final Klass LONG;
-    public final Klass STACK_OVERFLOW_ERROR;
-    public final Klass OUT_OF_MEMORY_ERROR;
-    public final Klass THROWABLE;
 
     private static boolean isKnownClass(java.lang.Class<?> clazz) {
         // Cheap check: known classes are loaded by the BCL.
         return clazz.getClassLoader() == null;
     }
 
-    public StaticObject createEx(java.lang.Class<?> clazz) {
-        StaticObject ex = throwableKlass(clazz).allocateInstance();
-        meta(ex).method("<init>", void.class).invokeDirect();
-        return ex;
-    }
-
-    public StaticObject createEx(java.lang.Class<?> clazz, String message) {
-        StaticObject ex = throwableKlass(clazz).allocateInstance();
-        meta(ex).method("<init>", void.class, String.class).invoke(message);
-        return ex;
-    }
-
     public EspressoException throwEx(java.lang.Class<?> clazz) {
-        throw new EspressoException(createEx(clazz));
-    }
-
-    public EspressoException throwEx(java.lang.Class<?> clazz, String message) {
-        throw new EspressoException(createEx(clazz, message));
+        StaticObject ex = exceptionKlass(clazz).allocateInstance();
+        meta(ex).method("<init>", void.class).invokeDirect();
+        throw new EspressoException(ex);
     }
 
     @CompilerDirectives.TruffleBoundary
-    public Klass throwableKlass(java.lang.Class<?> exceptionClass) {
+    public Klass exceptionKlass(java.lang.Class<?> exceptionClass) {
         assert isKnownClass(exceptionClass);
-        assert Throwable.class.isAssignableFrom(exceptionClass);
+        assert Exception.class.isAssignableFrom(exceptionClass);
         return knownKlass(exceptionClass);
     }
 
@@ -396,6 +375,7 @@ public final class Meta {
             if (this.isArray() && other.isArray()) {
                 return getComponentType().isAssignableFrom(other.getComponentType());
             }
+
             if (isInterface()) {
                 return other.getInterfacesStream(true).anyMatch(i -> i.rawKlass() == this.rawKlass());
             }
@@ -514,12 +494,7 @@ public final class Meta {
 
         public Meta.Field field(String name) {
             // TODO(peterssen): Improve lookup performance.
-            for (FieldInfo f : klass.getDeclaredFields()) {
-                if (name.equals(f.getName())) {
-                    return new Meta.Field(f);
-                }
-            }
-            return null;
+            return new Meta.Field(Arrays.stream(klass.getDeclaredFields()).filter(f -> name.equals(f.getName())).findAny().orElse(null));
         }
 
         public Field.WithInstance staticField(String name) {
@@ -645,8 +620,9 @@ public final class Meta {
          */
         @CompilerDirectives.TruffleBoundary
         public Object invokeDirect(Object self, Object... args) {
+            assert !isStatic() || ((StaticObjectImpl) self).isStatic();
             if (isStatic()) {
-                assert args.length == method.getSignature().getParameterCount(false);
+                assert args.length == method.getSignature().getParameterCount(!method.isStatic());
                 return method.getCallTarget().call(args);
             } else {
                 assert args.length + 1 /* self */ == method.getSignature().getParameterCount(!method.isStatic());
