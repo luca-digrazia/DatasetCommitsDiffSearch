@@ -22,42 +22,30 @@
  */
 package com.oracle.graal.nodes.java;
 
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code AbstractNewArrayNode} is used for all 1-dimensional array allocations.
  */
-public class AbstractNewArrayNode extends FixedWithNextNode implements Canonicalizable, Lowerable, ArrayLengthProvider, Node.IterableNodeType {
+@NodeInfo
+public abstract class AbstractNewArrayNode extends AbstractNewObjectNode implements ArrayLengthProvider {
 
-    @Input private ValueNode length;
-    private final boolean fillContents;
+    public static final NodeClass<AbstractNewArrayNode> TYPE = NodeClass.create(AbstractNewArrayNode.class);
+    @Input protected ValueNode length;
 
     @Override
     public ValueNode length() {
         return length;
     }
 
-    /**
-     * Constructs a new AbstractNewArrayNode.
-     * 
-     * @param stamp the stamp of the newly created array
-     * @param length the node that produces the length for this allocation.
-     * @param fillContents determines whether the array elements should be initialized to zero/null.
-     */
-    protected AbstractNewArrayNode(Stamp stamp, ValueNode length, boolean fillContents) {
-        super(stamp);
+    protected AbstractNewArrayNode(NodeClass<? extends AbstractNewArrayNode> c, Stamp stamp, ValueNode length, boolean fillContents, FrameState stateBefore) {
+        super(c, stamp, fillContents, stateBefore);
         this.length = length;
-        this.fillContents = fillContents;
-    }
-
-    /**
-     * @return <code>true</code> if the elements of the array will be initialized.
-     */
-    public boolean fillContents() {
-        return fillContents;
     }
 
     /**
@@ -76,16 +64,11 @@ public class AbstractNewArrayNode extends FixedWithNextNode implements Canonical
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (usages().isEmpty() && length.integerStamp().isPositive()) {
-            return null;
-        } else {
-            return this;
+    public void simplify(SimplifierTool tool) {
+        Stamp lengthStamp = length.stamp();
+        if (lengthStamp instanceof IntegerStamp && ((IntegerStamp) lengthStamp).isPositive()) {
+            // otherwise, removing the allocation might swallow a NegativeArraySizeException
+            super.simplify(tool);
         }
-    }
-
-    @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
-        tool.getRuntime().lower(this, tool);
     }
 }

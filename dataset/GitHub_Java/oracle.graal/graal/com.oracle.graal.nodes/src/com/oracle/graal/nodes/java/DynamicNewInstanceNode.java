@@ -22,32 +22,20 @@
  */
 package com.oracle.graal.nodes.java;
 
-import java.lang.reflect.Modifier;
+import java.lang.reflect.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.ValueNode;
-
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.jvmci.meta.*;
 
 @NodeInfo
 public class DynamicNewInstanceNode extends AbstractNewObjectNode implements Canonicalizable {
     public static final NodeClass<DynamicNewInstanceNode> TYPE = NodeClass.create(DynamicNewInstanceNode.class);
 
     @Input ValueNode clazz;
-
-    /**
-     * Class pointer to class.class needs to be exposed earlier than this node is lowered so that it
-     * can be replaced by the AOT machinery. If it's not needed for lowering this input can be
-     * ignored.
-     */
-    @OptionalInput ValueNode classClass;
 
     public DynamicNewInstanceNode(ValueNode clazz, boolean fillContents) {
         this(TYPE, clazz, fillContents, null);
@@ -60,6 +48,14 @@ public class DynamicNewInstanceNode extends AbstractNewObjectNode implements Can
 
     public ValueNode getInstanceType() {
         return clazz;
+    }
+
+    @Override
+    public void simplify(SimplifierTool tool) {
+        /*
+         * Do not call the super implementation: we must not eliminate unused allocations because
+         * throwing an InstantiationException is a possible side effect of an unused allocation.
+         */
     }
 
     @Override
@@ -78,20 +74,11 @@ public class DynamicNewInstanceNode extends AbstractNewObjectNode implements Can
         return new NewInstanceNode(type, fillContents(), stateBefore());
     }
 
-    public static boolean throwsInstantiationException(Class<?> type, Class<?> classClass) {
-        return type.isPrimitive() || type.isArray() || type.isInterface() || Modifier.isAbstract(type.getModifiers()) || type == classClass;
+    public static boolean throwsInstantiationException(Class<?> type) {
+        return type.isPrimitive() || type.isArray() || type.isInterface() || Modifier.isAbstract(type.getModifiers()) || type == Class.class;
     }
 
     public static boolean throwsInstantiationException(ResolvedJavaType type, MetaAccessProvider metaAccess) {
         return type.isPrimitive() || type.isArray() || type.isInterface() || Modifier.isAbstract(type.getModifiers()) || type.equals(metaAccess.lookupJavaType(Class.class));
-    }
-
-    public ValueNode getClassClass() {
-        return classClass;
-    }
-
-    public void setClassClass(ValueNode newClassClass) {
-        updateUsages(classClass, newClassClass);
-        classClass = newClassClass;
     }
 }

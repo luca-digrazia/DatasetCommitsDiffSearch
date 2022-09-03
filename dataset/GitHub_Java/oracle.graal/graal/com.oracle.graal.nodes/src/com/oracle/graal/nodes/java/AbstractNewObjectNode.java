@@ -22,22 +22,23 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_20;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_20;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.DeoptimizingFixedWithNextNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * The {@code AbstractNewObjectNode} is the base class for the new instance and new array nodes.
  */
-@NodeInfo(cycles = CYCLES_20, size = SIZE_20)
-public abstract class AbstractNewObjectNode extends DeoptimizingFixedWithNextNode implements Lowerable {
+@NodeInfo
+public abstract class AbstractNewObjectNode extends DeoptimizingFixedWithNextNode implements Simplifiable, Lowerable {
 
     public static final NodeClass<AbstractNewObjectNode> TYPE = NodeClass.create(AbstractNewObjectNode.class);
     protected final boolean fillContents;
@@ -52,6 +53,56 @@ public abstract class AbstractNewObjectNode extends DeoptimizingFixedWithNextNod
      */
     public boolean fillContents() {
         return fillContents;
+    }
+
+    @Override
+    public void simplify(SimplifierTool tool) {
+        // poor man's escape analysis: check if the object can be trivially removed
+        for (Node usage : usages()) {
+            if (usage instanceof FixedValueAnchorNode) {
+                if (((FixedValueAnchorNode) usage).usages().isNotEmpty()) {
+                    return;
+                }
+            } else if (usage instanceof OffsetAddressNode) {
+                if (((OffsetAddressNode) usage).getBase() != this) {
+                    return;
+                }
+                for (Node access : usage.usages()) {
+                    if (access instanceof WriteNode) {
+                        if (access.usages().isNotEmpty()) {
+                            // we would need to fix up the memory graph if the write has usages
+                            return;
+                        }
+                    } else {
+                        return;
+                    }
+                }
+            } else {
+                return;
+            }
+        }
+        for (Node usage : usages().distinct().snapshot()) {
+            if (usage instanceof OffsetAddressNode) {
+                for (Node access : usage.usages().snapshot()) {
+                    removeUsage(tool, (FixedWithNextNode) access);
+                }
+            } else {
+                removeUsage(tool, (FixedWithNextNode) usage);
+            }
+        }
+        List<Node> snapshot = inputs().snapshot();
+        graph().removeFixed(this);
+        for (Node input : snapshot) {
+            tool.removeIfUnused(input);
+        }
+    }
+
+    private void removeUsage(SimplifierTool tool, FixedWithNextNode usage) {
+        List<Node> snapshot = usage.inputs().snapshot();
+        graph().removeFixed(usage);
+        for (Node input : snapshot) {
+            tool.removeIfUnused(input);
+        }
     }
 
     @Override

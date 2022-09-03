@@ -23,13 +23,12 @@
 //JaCoCo Exclude
 package com.oracle.graal.nodes.java;
 
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * The {@code DynamicNewArrayNode} is used for allocation of arrays when the type is not a
@@ -101,10 +100,6 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode implements Canonic
 
     @NodeIntrinsic
     private static native Object newArray(Class<?> componentType, int length, @ConstantNodeParameter boolean fillContents, @ConstantNodeParameter Kind knownElementKind);
-
-    public static Object newArray(Class<?> componentType, int length, Kind knownElementKind) {
-        return newArray(componentType, length, true, knownElementKind);
-    }
 
     public static Object newUninitializedArray(Class<?> componentType, int length, Kind knownElementKind) {
         return newArray(componentType, length, false, knownElementKind);

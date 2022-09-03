@@ -25,14 +25,13 @@ package com.oracle.graal.nodes.java;
 import java.lang.ref.*;
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * The {@code NewInstanceNode} represents the allocation of an instance class object.
@@ -79,7 +78,7 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
             for (int i = 0; i < state.length; i++) {
                 state[i] = defaultFieldValue(fields[i]);
             }
-            tool.createVirtualObject(virtualObject, state, Collections.<MonitorIdNode> emptyList(), false);
+            tool.createVirtualObject(virtualObject, state, Collections.<MonitorIdNode> emptyList());
             tool.replaceWithVirtual(virtualObject);
         }
     }

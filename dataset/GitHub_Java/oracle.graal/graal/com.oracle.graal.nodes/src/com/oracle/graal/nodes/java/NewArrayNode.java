@@ -24,8 +24,6 @@ package com.oracle.graal.nodes.java;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
@@ -33,6 +31,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * The {@code NewArrayNode} is used for all array allocations where the element type is know at
@@ -84,7 +83,7 @@ public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableA
                     state[i] = defaultForKind;
                 }
                 VirtualObjectNode virtualObject = createVirtualArrayNode(constantLength);
-                tool.createVirtualObject(virtualObject, state, Collections.<MonitorIdNode> emptyList(), false);
+                tool.createVirtualObject(virtualObject, state, Collections.<MonitorIdNode> emptyList());
                 tool.replaceWithVirtual(virtualObject);
             }
         }
