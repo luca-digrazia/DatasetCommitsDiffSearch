@@ -98,6 +98,8 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
                 Constant value = readValue(receiver);
                 if (assumeNonStaticFinalFieldsAsFinal(receiver.asObject().getClass()) || !value.isDefaultForKind()) {
                     return value;
+                } else {
+                    TTY.println("Non-static final field %s.%s=%s", holder, name, value.toString());
                 }
             }
         }
