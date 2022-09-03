@@ -55,11 +55,9 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.OptimisticOptimizations.Optimization;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.printer.*;
 
@@ -139,10 +137,6 @@ public class CompilationTask {
         return providers.getSuites().getDefaultSuites();
     }
 
-    protected LIRSuites getLIRSuites(HotSpotProviders providers) {
-        return providers.getSuites().getDefaultLIRSuites();
-    }
-
     protected PhaseSuite<HighTierContext> getGraphBuilderSuite(HotSpotProviders providers) {
         PhaseSuite<HighTierContext> suite = withSimpleDebugInfoIfRequested(providers.getSuites().getDefaultGraphBuilderSuite());
 
@@ -202,7 +196,7 @@ public class CompilationTask {
                     HotSpotProviders providers = backend.getProviders();
                     BaselineCompiler baselineCompiler = new BaselineCompiler(GraphBuilderConfiguration.getDefault(), providers.getMetaAccess());
                     OptimisticOptimizations optimisticOpts = OptimisticOptimizations.ALL;
-                    result = baselineCompiler.generate(method, -1, backend, new CompilationResult(), method, CompilationResultBuilderFactory.Default, optimisticOpts, providers.getReplacements());
+                    result = baselineCompiler.generate(method, -1, backend, new CompilationResult(), method, CompilationResultBuilderFactory.Default, optimisticOpts);
                 } else {
                     Map<ResolvedJavaMethod, StructuredGraph> graphCache = null;
                     if (GraalOptions.CacheGraphs.getValue()) {
@@ -213,10 +207,10 @@ public class CompilationTask {
                     Replacements replacements = providers.getReplacements();
                     graph = replacements.getMethodSubstitution(method);
                     if (graph == null || entryBCI != INVOCATION_ENTRY_BCI) {
-                        graph = new StructuredGraph(method, entryBCI, AllowAssumptions.from(OptAssumptions.getValue()));
+                        graph = new StructuredGraph(method, entryBCI);
                     } else {
                         // Compiling method substitution - must clone the graph
-                        graph = graph.copy(graph.name, method, AllowAssumptions.from(OptAssumptions.getValue()));
+                        graph = graph.copy();
                     }
                     InlinedBytecodes.add(method.getCodeSize());
                     CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
@@ -228,16 +222,10 @@ public class CompilationTask {
                         cc = new CallingConvention(cc.getStackSize(), cc.getReturn(), tmp.getArgument(0));
                     }
                     Suites suites = getSuites(providers);
-                    LIRSuites lirSuites = getLIRSuites(providers);
                     ProfilingInfo profilingInfo = getProfilingInfo();
                     OptimisticOptimizations optimisticOpts = getOptimisticOpts(profilingInfo);
-                    if (isOSR) {
-                        // In OSR compiles, we cannot rely on never executed code profiles, because
-                        // all code after the OSR loop is never executed.
-                        optimisticOpts.remove(Optimization.RemoveNeverExecutedCode);
-                    }
-                    result = compileGraph(graph, cc, method, providers, backend, backend.getTarget(), graphCache, getGraphBuilderSuite(providers), optimisticOpts, profilingInfo,
-                                    method.getSpeculationLog(), suites, lirSuites, new CompilationResult(), CompilationResultBuilderFactory.Default);
+                    result = compileGraph(graph, null, cc, method, providers, backend, backend.getTarget(), graphCache, getGraphBuilderSuite(providers), optimisticOpts, profilingInfo,
+                                    method.getSpeculationLog(), suites, new CompilationResult(), CompilationResultBuilderFactory.Default);
                 }
                 result.setId(getId());
                 result.setEntryBCI(entryBCI);
