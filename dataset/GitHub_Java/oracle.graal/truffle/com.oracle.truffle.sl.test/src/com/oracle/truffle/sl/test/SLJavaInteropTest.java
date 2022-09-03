@@ -58,7 +58,6 @@ import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.runtime.SLFunction;
 import java.util.List;
 import java.util.Map;
-import static org.junit.Assert.assertSame;
 
 public class SLJavaInteropTest {
 
@@ -166,7 +165,7 @@ public class SLJavaInteropTest {
                         "  obj = new();\n" + //
                         "  obj.key = k;\n" + //
                         "  obj.value = v;\n" + //
-                        "  return sum.sum(obj);\n" + //
+                        "  sum.sum(obj);\n" + //
                         "}\n"; //
         Source script = Source.newBuilder(scriptText).name("Test").mimeType("application/x-sl").build();
         engine.eval(script);
@@ -174,14 +173,11 @@ public class SLJavaInteropTest {
 
         Sum javaSum = new Sum();
         Object sum = javaSum;
-        Object ret1 = fn.execute(sum, "one", 1).get();
-        Object ret2 = fn.execute(sum, "two", 2).as(Object.class);
-        Sum ret3 = fn.execute(sum, "three", 3).as(Sum.class);
+        fn.execute(sum, "one", 1);
+        fn.execute(sum, "two", 2);
+        fn.execute(sum, "three", 3);
 
         assertEquals(6, javaSum.sum);
-        assertSame(ret1, ret2);
-        assertSame(ret3, ret2);
-        assertSame(sum, ret2);
     }
 
     @Test
@@ -316,9 +312,8 @@ public class SLJavaInteropTest {
     public static class Sum {
         int sum;
 
-        public Sum sum(Pair p) {
+        public void sum(Pair p) {
             sum += p.value();
-            return this;
         }
 
         public void sumArray(List<Pair> pairs) {
