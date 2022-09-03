@@ -222,7 +222,7 @@ public final class HotSpotTypeResolvedImpl extends HotSpotType implements HotSpo
 
         long id = offset + ((long) flags << 32);
 
-        // (thomaswue) Must cache the fields, because the local load elimination only works if the objects from two field lookups are equal.
+        // (tw) Must cache the fields, because the local load elimination only works if the objects from two field lookups are equal.
         if (fieldCache == null) {
             fieldCache = new HashMap<>(8);
         } else {

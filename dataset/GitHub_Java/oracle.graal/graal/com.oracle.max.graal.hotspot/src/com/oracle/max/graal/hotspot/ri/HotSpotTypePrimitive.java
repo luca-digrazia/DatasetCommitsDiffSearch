@@ -23,10 +23,11 @@
 package com.oracle.max.graal.hotspot.ri;
 
 import java.lang.annotation.*;
+import java.lang.reflect.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
-import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.hotspot.Compiler;
 
 /**
@@ -49,7 +50,8 @@ public final class HotSpotTypePrimitive extends HotSpotType implements RiResolve
 
     @Override
     public int accessFlags() {
-        return kind.toJavaClass().getModifiers();
+        assert kind != null && kind.toJavaClass() != null;
+        return Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC;
     }
 
     @Override
@@ -73,8 +75,13 @@ public final class HotSpotTypePrimitive extends HotSpotType implements RiResolve
     }
 
     @Override
+    public RiResolvedType leastCommonAncestor(RiResolvedType otherType) {
+        return null;
+    }
+
+    @Override
     public CiConstant getEncoding(Representation r) {
-        throw Util.unimplemented("HotSpotTypePrimitive.getEncoding");
+        throw GraalInternalError.unimplemented("HotSpotTypePrimitive.getEncoding");
     }
 
     @Override
@@ -165,5 +172,10 @@ public final class HotSpotTypePrimitive extends HotSpotType implements RiResolve
     @Override
     public Class< ? > toJava() {
         return kind.toJavaClass();
+    }
+
+    @Override
+    public RiResolvedType resolve(RiResolvedType accessingClass) {
+        return this;
     }
 }
