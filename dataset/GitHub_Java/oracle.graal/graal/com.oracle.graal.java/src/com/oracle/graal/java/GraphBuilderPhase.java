@@ -28,6 +28,7 @@ import static com.oracle.graal.bytecode.Bytecodes.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static java.lang.reflect.Modifier.*;
 
+import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
@@ -219,7 +220,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     liveness = blockMap.liveness;
 
                     lastInstr = currentGraph.start();
-                    if (method.isSynchronized()) {
+                    if (isSynchronized(method.getModifiers())) {
                         // add a monitor enter to the start block
                         currentGraph.start().setStateAfter(frameState.create(BytecodeFrame.BEFORE_BCI));
                         methodSynchronizedObject = synchronizedObject(frameState, method);
@@ -289,7 +290,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     unwindBlock = new ExceptionDispatchBlock();
                     unwindBlock.startBci = -1;
                     unwindBlock.endBci = -1;
-                    unwindBlock.deoptBci = method.isSynchronized() ? BytecodeFrame.UNWIND_BCI : BytecodeFrame.AFTER_EXCEPTION_BCI;
+                    unwindBlock.deoptBci = Modifier.isSynchronized(method.getModifiers()) ? BytecodeFrame.UNWIND_BCI : BytecodeFrame.AFTER_EXCEPTION_BCI;
                     unwindBlock.setId(Integer.MAX_VALUE);
                 }
                 return unwindBlock;
@@ -1161,7 +1162,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             private void synchronizedEpilogue(int bci, ValueNode returnValue) {
-                if (method.isSynchronized()) {
+                if (Modifier.isSynchronized(method.getModifiers())) {
                     MonitorExitNode monitorExit = genMonitorExit(methodSynchronizedObject, returnValue);
                     if (returnValue != null) {
                         frameState.push(returnValue.getKind(), returnValue);
