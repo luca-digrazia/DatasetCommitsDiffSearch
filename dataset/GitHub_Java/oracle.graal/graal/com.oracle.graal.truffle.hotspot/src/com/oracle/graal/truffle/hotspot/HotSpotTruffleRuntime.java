@@ -31,7 +31,6 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleTransf
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreThrown;
 import static com.oracle.graal.truffle.hotspot.UnsafeAccess.UNSAFE;
 import static jdk.internal.jvmci.code.CodeUtil.getCallingConvention;
-import static jdk.internal.jvmci.hotspot.CompilerToVM.compilerToVM;
 import static jdk.internal.jvmci.hotspot.HotSpotVMConfig.config;
 
 import java.util.Arrays;
@@ -55,6 +54,8 @@ import jdk.internal.jvmci.code.CallingConvention.Type;
 import jdk.internal.jvmci.code.CodeCacheProvider;
 import jdk.internal.jvmci.code.CompilationResult;
 import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntime;
+import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider;
 import jdk.internal.jvmci.hotspot.HotSpotResolvedJavaMethod;
 import jdk.internal.jvmci.hotspot.HotSpotSpeculationLog;
 import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
@@ -241,7 +242,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
         MetaAccessProvider metaAccess = providers.getMetaAccess();
         Plugins plugins = new Plugins(new InvocationPlugins(metaAccess));
-        boolean infoPoints = compilerToVM().shouldDebugNonSafepoints();
+        boolean infoPoints = getJVMCIRuntime().getCompilerToVM().shouldDebugNonSafepoints();
         GraphBuilderConfiguration config = infoPoints ? GraphBuilderConfiguration.getInfopointEagerDefault(plugins) : GraphBuilderConfiguration.getEagerDefault(plugins);
         new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), config, OptimisticOptimizations.ALL, null).apply(graph);
 
@@ -350,7 +351,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
     @Override
     public void invalidateInstalledCode(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
-        compilerToVM().invalidateInstalledCode(optimizedCallTarget);
+        getJVMCIRuntime().getCompilerToVM().invalidateInstalledCode(optimizedCallTarget);
         getCompilationNotify().notifyCompilationInvalidated(optimizedCallTarget, source, reason);
     }
 
@@ -361,7 +362,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
     @Override
     public boolean platformEnableInfopoints() {
-        return compilerToVM().shouldDebugNonSafepoints();
+        return getJVMCIRuntime().getCompilerToVM().shouldDebugNonSafepoints();
     }
 
     @Override
