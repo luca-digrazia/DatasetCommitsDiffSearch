@@ -36,10 +36,8 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class GlobalAlias extends GlobalValueSymbol {
 
-    private static final int ALIGN = 0;
-
     public GlobalAlias(Type type, int aliasedValue, Linkage linkage, Visibility visibility) {
-        super(type, aliasedValue, ALIGN, linkage, visibility);
+        super(type, aliasedValue, 0, linkage, visibility);
     }
 
     @Override
@@ -49,7 +47,7 @@ public final class GlobalAlias extends GlobalValueSymbol {
 
     @Override
     public int getAlign() {
-        return getValue() instanceof GlobalValueSymbol ? ((GlobalValueSymbol) getValue()).getAlign() : ALIGN;
+        return getValue() instanceof GlobalValueSymbol ? ((GlobalValueSymbol) getValue()).getAlign() : getAlign();
     }
 
     public static GlobalAlias create(Type type, int aliasedValue, long linkage, long visibility) {
