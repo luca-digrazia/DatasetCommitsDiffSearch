@@ -99,7 +99,10 @@ public abstract class AbstractLanguageLauncher extends Launcher {
         } else {
             builder = Context.newBuilder(getDefaultLanguages()).options(polyglotOptions);
         }
-        builder.allowAllAccess(true);
+        if (!isAOT()) {
+            builder.allowHostAccess(true);
+        }
+        builder.allowCreateThread(true);
 
         launch(builder);
     }
