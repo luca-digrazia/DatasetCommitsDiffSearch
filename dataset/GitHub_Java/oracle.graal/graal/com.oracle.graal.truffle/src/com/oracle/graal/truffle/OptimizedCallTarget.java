@@ -111,14 +111,12 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     private volatile Future<?> compilationTask;
 
-    @Override
     public final RootNode getRootNode() {
         return rootNode;
     }
 
     public OptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode, CompilationPolicy compilationPolicy, SpeculationLog speculationLog) {
         super(rootNode.toString());
-        assert sourceCallTarget == null || sourceCallTarget.sourceCallTarget == null : "Cannot create a clone of a cloned CallTarget";
         this.sourceCallTarget = sourceCallTarget;
         this.speculationLog = speculationLog;
         this.rootNode = rootNode;
@@ -175,7 +173,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
      */
     private void invalidateNodeRewritingAssumption() {
         Assumption oldAssumption = NODE_REWRITING_ASSUMPTION_UPDATER.getAndUpdate(this, new UnaryOperator<Assumption>() {
-            @Override
             public Assumption apply(Assumption prev) {
                 return prev == null ? null : runtime().createAssumption(prev.getName());
             }
@@ -538,7 +535,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     public List<OptimizedDirectCallNode> getCallNodes() {
         final List<OptimizedDirectCallNode> callNodes = new ArrayList<>();
         getRootNode().accept(new NodeVisitor() {
-            @Override
             public boolean visit(Node node) {
                 if (node instanceof OptimizedDirectCallNode) {
                     callNodes.add((OptimizedDirectCallNode) node);
@@ -556,7 +552,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     /*
      * For compatibility of Graal runtime with older Truffle runtime. Remove after 0.12.
      */
-    @Override
     public void reportLoopCount(int count) {
         compilationProfile.reportLoopCount(count);
     }
@@ -654,7 +649,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private static final class NonTrivialNodeCountVisitor implements NodeVisitor {
         public int nodeCount;
 
-        @Override
         public boolean visit(Node node) {
             if (!node.getCost().isTrivial()) {
                 nodeCount++;
