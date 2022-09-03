@@ -191,10 +191,7 @@ public class CompilationWrapperTest extends GraalCompilerTest {
             }
         }
         if (diagnosticProbe != null) {
-            String line = diagnosticProbe.lastMatchingLine;
-            int substringStart = line.indexOf(diagnosticProbe.substring);
-            int substringLength = diagnosticProbe.substring.length();
-            String diagnosticOutputZip = line.substring(substringStart + substringLength).trim();
+            String diagnosticOutputZip = diagnosticProbe.lastMatchingLine.substring(diagnosticProbe.substring.length()).trim();
 
             List<String> dumpPathEntries = Arrays.asList(dumpPath.list());
 
