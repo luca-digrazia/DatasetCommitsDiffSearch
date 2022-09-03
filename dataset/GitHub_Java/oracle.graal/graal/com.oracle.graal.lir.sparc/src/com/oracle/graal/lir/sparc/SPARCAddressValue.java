@@ -34,10 +34,14 @@ public class SPARCAddressValue extends CompositeValue {
 
     private static final long serialVersionUID = -3583286416638228207L;
 
-    @Component({REG, OperandFlag.ILLEGAL}) protected AllocatableValue base;
+    @Component({ REG, OperandFlag.ILLEGAL })
+    protected AllocatableValue base;
+    @Component({ REG, OperandFlag.ILLEGAL })
+    protected AllocatableValue index;
     protected final int displacement;
 
-    public SPARCAddressValue(PlatformKind kind, AllocatableValue baseRegister, int finalDisp) {
+    public SPARCAddressValue(PlatformKind kind, AllocatableValue baseRegister,
+            int finalDisp) {
         super(kind);
         this.base = baseRegister;
         this.displacement = finalDisp;
@@ -53,7 +57,8 @@ public class SPARCAddressValue extends CompositeValue {
     }
 
     public SPARCAddress toAddress() {
-        return new SPARCAddress(toRegister(base), displacement);
+        return new SPARCAddress(toRegister(base), toRegister(index),
+                displacement);
     }
 
 }

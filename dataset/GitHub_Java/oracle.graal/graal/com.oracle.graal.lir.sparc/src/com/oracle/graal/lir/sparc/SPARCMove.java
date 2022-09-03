@@ -22,33 +22,18 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.asRegister;
+import static com.oracle.graal.api.code.ValueUtil.isConstant;
+import static com.oracle.graal.api.code.ValueUtil.isRegister;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Lddf;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldf;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsb;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsh;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsw;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Lduw;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Membar;
-import com.oracle.graal.asm.sparc.SPARCAssembler.NullCheck;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Or;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Stb;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Sth;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Stw;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Stx;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setuw;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.GraalInternalError;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.*;
 import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.sparc.*;
+import com.oracle.graal.lir.asm.TargetMethodAssembler;
 
 public class SPARCMove {
 
@@ -67,33 +52,32 @@ public class SPARCMove {
         }
 
         @Override
-        @SuppressWarnings("unused")
         public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            SPARCAddress addr = address.toAddress();
+            @SuppressWarnings("unused") SPARCAddress addr = address.toAddress();
             switch (kind) {
                 case Byte:
-                    new Ldsb(masm, addr, asRegister(result));
+                    // masm.ld_global_s8(asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 case Short:
-                    new Ldsh(masm, addr, asRegister(result));
+                    // masm.ld_global_s16(asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 case Char:
-                    new Lduw(masm, addr, asRegister(result));
+                    // masm.ld_global_u16(asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 case Int:
-                    new Ldsw(masm, addr, asRegister(result));
+                    // masm.ld_global_s32(asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 case Long:
-                    new Ldx(masm, addr, asRegister(result));
+                    // masm.ld_global_s64(asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 case Float:
-                    new Ldf(masm, addr, asRegister(result));
+                    // masm.ld_global_f32(asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 case Double:
-                    new Lddf(masm, addr, asRegister(result));
+                    // masm.ld_global_f64(asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 case Object:
-                    new Ldx(masm, addr, asRegister(result));
+                    // masm.ld_global_u32(asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
@@ -101,18 +85,49 @@ public class SPARCMove {
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class MembarOp extends SPARCLIRInstruction {
+    public static class StoreOp extends SPARCLIRInstruction {
 
-        private final int barriers;
+        private final Kind kind;
+        @Use({COMPOSITE}) protected SPARCAddressValue address;
+        @Use({REG}) protected AllocatableValue input;
+        @State protected LIRFrameState state;
 
-        public MembarOp(final int barriers) {
-            this.barriers = barriers;
+        public StoreOp(Kind kind, SPARCAddressValue address, AllocatableValue input, LIRFrameState state) {
+            this.kind = kind;
+            this.address = address;
+            this.input = input;
+            this.state = state;
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler asm) {
-            new Membar(asm, barriers);
+        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
+            assert isRegister(input);
+            @SuppressWarnings("unused") SPARCAddress addr = address.toAddress();
+            switch (kind) {
+                case Byte:
+                    // masm.st_global_s8(addr.getBase(), addr.getDisplacement(), asRegister(input));
+                    break;
+                case Short:
+                    // masm.st_global_s8(addr.getBase(), addr.getDisplacement(), asRegister(input));
+                    break;
+                case Int:
+                    // masm.st_global_s32(addr.getBase(), addr.getDisplacement(), asRegister(input));
+                    break;
+                case Long:
+                    // masm.st_global_s64(addr.getBase(), addr.getDisplacement(), asRegister(input));
+                    break;
+                case Float:
+                    // masm.st_global_f32(addr.getBase(), addr.getDisplacement(), asRegister(input));
+                    break;
+                case Double:
+                    // masm.st_global_f64(addr.getBase(), addr.getDisplacement(), asRegister(input));
+                    break;
+                case Object:
+                    // masm.st_global_s32(addr.getBase(), addr.getDisplacement(), asRegister(input));
+                    break;
+                default:
+                    throw GraalInternalError.shouldNotReachHere("missing: " + address.getKind());
+            }
         }
     }
 
@@ -170,88 +185,6 @@ public class SPARCMove {
         }
     }
 
-    public static class NullCheckOp extends SPARCLIRInstruction {
-
-        @Use({REG}) protected AllocatableValue input;
-        @State protected LIRFrameState state;
-
-        public NullCheckOp(Variable input, LIRFrameState state) {
-            this.input = input;
-            this.state = state;
-        }
-
-        @Override
-        @SuppressWarnings("unused")
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            tasm.recordImplicitException(masm.codeBuffer.position(), state);
-            new NullCheck(masm, new SPARCAddress(asRegister(input), 0));
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class StackLoadAddressOp extends SPARCLIRInstruction {
-
-        @Def({REG}) protected AllocatableValue result;
-        @Use({STACK, UNINITIALIZED}) protected StackSlot slot;
-
-        public StackLoadAddressOp(AllocatableValue result, StackSlot slot) {
-            this.result = result;
-            this.slot = slot;
-        }
-
-        @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler asm) {
-            new Ldx(asm, (SPARCAddress) tasm.asAddress(slot), asLongReg(result));
-        }
-    }
-
-    public static class StoreOp extends SPARCLIRInstruction {
-
-        private final Kind kind;
-        @Use({COMPOSITE}) protected SPARCAddressValue address;
-        @Use({REG}) protected AllocatableValue input;
-        @State protected LIRFrameState state;
-
-        public StoreOp(Kind kind, SPARCAddressValue address, AllocatableValue input, LIRFrameState state) {
-            this.kind = kind;
-            this.address = address;
-            this.input = input;
-            this.state = state;
-        }
-
-        @Override
-        @SuppressWarnings("unused")
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            assert isRegister(input);
-            SPARCAddress addr = address.toAddress();
-            switch (kind) {
-                case Byte:
-                    new Stb(masm, asRegister(input), addr);
-                    break;
-                case Short:
-                    new Sth(masm, asRegister(input), addr);
-                    break;
-                case Int:
-                    new Stw(masm, asRegister(input), addr);
-                    break;
-                case Long:
-                    new Stx(masm, asRegister(input), addr);
-                    break;
-                case Float:
-                    new Stx(masm, asRegister(input), addr);
-                    break;
-                case Double:
-                    new Stx(masm, asRegister(input), addr);
-                    break;
-                case Object:
-                    new Stx(masm, asRegister(input), addr);
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere("missing: " + address.getKind());
-            }
-        }
-    }
-
     public static void move(TargetMethodAssembler tasm, SPARCAssembler masm, Value result, Value input) {
         if (isRegister(input)) {
             if (isRegister(result)) {
@@ -270,26 +203,25 @@ public class SPARCMove {
         }
     }
 
-    @SuppressWarnings("unused")
-    private static void reg2reg(SPARCAssembler masm, Value result, Value input) {
+    private static void reg2reg(@SuppressWarnings("unused") SPARCAssembler masm, Value result, Value input) {
         if (asRegister(input).equals(asRegister(result))) {
             return;
         }
         switch (input.getKind()) {
             case Int:
-                new Or(masm, SPARC.r0, asRegister(input), asRegister(result));
+                // masm.mov_s32(asRegister(result), asRegister(input));
                 break;
             case Long:
-                new Or(masm, SPARC.r0, asRegister(input), asRegister(result));
+             // masm.mov_s64(asRegister(result), asRegister(input));
                 break;
             case Float:
-                new Or(masm, SPARC.r0, asRegister(input), asRegister(result));
+             // masm.mov_f32(asRegister(result), asRegister(input));
                 break;
             case Double:
-                new Or(masm, SPARC.r0, asRegister(input), asRegister(result));
+             // masm.mov_f64(asRegister(result), asRegister(input));
                 break;
             case Object:
-                new Or(masm, SPARC.r0, asRegister(input), asRegister(result));
+             // masm.mov_u64(asRegister(result), asRegister(input));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere("missing: " + input.getKind());
@@ -303,22 +235,22 @@ public class SPARCMove {
                 if (tasm.runtime.needsDataPatch(input)) {
                     tasm.recordDataReferenceInCode(input, 0, true);
                 }
-                new Setuw(masm, input.asInt(), asRegister(result));
+             // masm.mov_s32(asRegister(result), input.asInt());
                 break;
             case Long:
                 if (tasm.runtime.needsDataPatch(input)) {
                     tasm.recordDataReferenceInCode(input, 0, true);
                 }
-                new Setx(masm, input.asInt(), null, asRegister(result));
+             // masm.mov_s64(asRegister(result), input.asLong());
                 break;
             case Object:
                 if (input.isNull()) {
-                    new Setx(masm, 0x0L, null, asRegister(result));
+                 // masm.mov_u64(asRegister(result), 0x0L);
                 } else if (tasm.target.inlineObjects) {
                     tasm.recordDataReferenceInCode(input, 0, true);
-                    new Setx(masm, 0xDEADDEADDEADDEADL, null, asRegister(result));
+                 // masm.mov_u64(asRegister(result), 0xDEADDEADDEADDEADL);
                 } else {
-                    throw new InternalError("NYI");
+                 // masm.mov_u64(asRegister(result), tasm.recordDataReferenceInCode(input, 0, false));
                 }
                 break;
             default:

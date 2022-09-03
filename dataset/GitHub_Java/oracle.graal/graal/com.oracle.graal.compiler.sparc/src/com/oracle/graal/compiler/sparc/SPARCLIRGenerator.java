@@ -25,7 +25,6 @@ package com.oracle.graal.compiler.sparc;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.sparc.SPARCArithmetic.*;
-import static com.oracle.graal.lir.sparc.SPARCCompare.*;
 
 import com.oracle.graal.api.code.CallingConvention;
 import com.oracle.graal.api.code.CodeCacheProvider;
@@ -49,14 +48,6 @@ import com.oracle.graal.lir.LabelRef;
 import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.lir.sparc.*;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.Op1Stack;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.Op2Stack;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.Op2Reg;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.ShiftOp;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.Unary1Op;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.Unary2Op;
-import com.oracle.graal.lir.sparc.SPARCCompare.CompareOp;
-import com.oracle.graal.lir.sparc.SPARCControlFlow.BranchOp;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.ReturnOp;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.SequentialSwitchOp;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.TableSwitchOp;
@@ -64,6 +55,10 @@ import com.oracle.graal.lir.sparc.SPARCMove.LoadOp;
 import com.oracle.graal.lir.sparc.SPARCMove.MoveFromRegOp;
 import com.oracle.graal.lir.sparc.SPARCMove.MoveToRegOp;
 import com.oracle.graal.lir.sparc.SPARCMove.StoreOp;
+import com.oracle.graal.lir.sparc.SPARCArithmetic.Op1Stack;
+import com.oracle.graal.lir.sparc.SPARCArithmetic.Op2Stack;
+import com.oracle.graal.lir.sparc.SPARCArithmetic.Unary1Op;
+import com.oracle.graal.lir.sparc.SPARCArithmetic.Unary2Op;
 import com.oracle.graal.nodes.BreakpointNode;
 import com.oracle.graal.nodes.DeoptimizingNode;
 import com.oracle.graal.nodes.DirectCallTargetNode;
@@ -138,26 +133,6 @@ public class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label) {
         switch (left.getKind().getStackKind()) {
-            case Int:
-                append(new CompareOp(ICMP, left, right));
-                append(new BranchOp(cond, label));
-                break;
-            case Long:
-                append(new CompareOp(LCMP, left, right));
-                append(new BranchOp(cond, label));
-                break;
-            case Float:
-                append(new CompareOp(FCMP, left, right));
-                append(new BranchOp(cond, label));
-                break;
-            case Double:
-                append(new CompareOp(DCMP, left, right));
-                append(new BranchOp(cond, label));
-                break;
-            case Object:
-                append(new CompareOp(ACMP, left, right));
-                append(new BranchOp(cond, label));
-                break;
             default:
                 throw GraalInternalError.shouldNotReachHere("" + left.getKind());
         }
@@ -495,51 +470,17 @@ public class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Value emitAnd(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
-        switch (a.getKind()) {
-            case Int:
-                append(new Op2Stack(IAND, result, a, loadNonConst(b)));
-                break;
-            case Long:
-                append(new Op2Stack(LAND, result, a, loadNonConst(b)));
-                break;
-
-            default:
-                throw GraalInternalError.shouldNotReachHere("missing: " + a.getKind());
-        }
-        return result;
+        throw new InternalError("NYI");
     }
 
     @Override
     public Value emitOr(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
-        switch (a.getKind()) {
-            case Int:
-                append(new Op2Stack(IOR, result, a, loadNonConst(b)));
-                break;
-            case Long:
-                append(new Op2Stack(LOR, result, a, loadNonConst(b)));
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere("missing: " + a.getKind());
-        }
-        return result;
+        throw new InternalError("NYI");
     }
 
     @Override
     public Value emitXor(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
-        switch (a.getKind()) {
-            case Int:
-                append(new Op2Stack(IXOR, result, a, loadNonConst(b)));
-                break;
-            case Long:
-                append(new Op2Stack(LXOR, result, a, loadNonConst(b)));
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-        return result;
+        throw new InternalError("NYI");
     }
 
     @Override
@@ -671,7 +612,7 @@ public class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitDeoptimize(DeoptimizationAction action, DeoptimizingNode deopting) {
-        append(new ReturnOp(Value.ILLEGAL));
+        throw new InternalError("NYI");
     }
 
     @Override
@@ -696,8 +637,7 @@ public class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitNullCheck(ValueNode v, DeoptimizingNode deopting) {
-        assert v.kind() == Kind.Object;
-        append(new SPARCMove.NullCheckOp(load(operand(v)), state(deopting)));
+        throw new InternalError("NYI");
     }
 
     @Override
