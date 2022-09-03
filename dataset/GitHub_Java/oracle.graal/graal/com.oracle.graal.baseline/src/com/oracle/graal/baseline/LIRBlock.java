@@ -36,6 +36,11 @@ public class LIRBlock extends AbstractBlockBase<LIRBlock> {
         successors = Collections.emptyList();
     }
 
+    public AbstractBeginNode getBeginNode() {
+        // TODO Auto-generated method stub
+        throw GraalInternalError.unimplemented("Auto-generated method stub");
+    }
+
     public Loop getLoop() {
         // TODO Auto-generated method stub
         return null;

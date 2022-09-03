@@ -123,14 +123,14 @@ public class BaselineCompiler {
         lirGen.emitAdd(Constant.forLong(42), Constant.forLong(73));
 
         List<LIRInstruction> lirList = null;
-        lir.setLIRforBlock(b, lirList);
+        lir.setLir(b, lirList);
 
         // register allocation
         lirGen.getFrameMap().finish();
 
         // emitCode
         Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
-        GraalCompiler.emitCode(backend, assumptions, lirGen, compilationResult, installedCodeOwner, factory);
+        GraalCompiler.emitCode(backend, new long[0], assumptions, lirGen, compilationResult, installedCodeOwner, factory);
 
         return compilationResult;
     }
