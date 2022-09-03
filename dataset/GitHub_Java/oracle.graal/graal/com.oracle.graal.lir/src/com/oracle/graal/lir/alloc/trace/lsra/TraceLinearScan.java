@@ -709,9 +709,8 @@ public final class TraceLinearScan {
 
     // wrapper for Interval.splitChildAtOpId that performs a bailout in product mode
     // instead of returning null
-    @SuppressWarnings("static-method")
     public TraceInterval splitChildAtOpId(TraceInterval interval, int opId, LIRInstruction.OperandMode mode) {
-        TraceInterval result = interval.getSplitChildAtOpId(opId, mode);
+        TraceInterval result = interval.getSplitChildAtOpId(opId, mode, this);
 
         if (result != null) {
             if (Debug.isLogEnabled()) {
@@ -794,13 +793,13 @@ public final class TraceLinearScan {
                 try (Indent indent = Debug.logAndIndent("intervals %s", label)) {
                     for (FixedInterval interval : fixedIntervals) {
                         if (interval != null) {
-                            Debug.log("%s", interval.logString());
+                            Debug.log("%s", interval.logString(this));
                         }
                     }
 
                     for (TraceInterval interval : intervals) {
                         if (interval != null) {
-                            Debug.log("%s", interval.logString());
+                            Debug.log("%s", interval.logString(this));
                         }
                     }
 
@@ -857,31 +856,31 @@ public final class TraceLinearScan {
 
                 if (i1.operandNumber != i) {
                     Debug.log("Interval %d is on position %d in list", i1.operandNumber, i);
-                    Debug.log(i1.logString());
+                    Debug.log(i1.logString(this));
                     throw new JVMCIError("");
                 }
 
                 if (isVariable(i1.operand) && i1.kind().equals(LIRKind.Illegal)) {
                     Debug.log("Interval %d has no type assigned", i1.operandNumber);
-                    Debug.log(i1.logString());
+                    Debug.log(i1.logString(this));
                     throw new JVMCIError("");
                 }
 
                 if (i1.location() == null) {
                     Debug.log("Interval %d has no register assigned", i1.operandNumber);
-                    Debug.log(i1.logString());
+                    Debug.log(i1.logString(this));
                     throw new JVMCIError("");
                 }
 
                 if (i1.isEmpty()) {
                     Debug.log("Interval %d has no Range", i1.operandNumber);
-                    Debug.log(i1.logString());
+                    Debug.log(i1.logString(this));
                     throw new JVMCIError("");
                 }
 
                 if (i1.from() >= i1.to()) {
                     Debug.log("Interval %d has zero length range", i1.operandNumber);
-                    Debug.log(i1.logString());
+                    Debug.log(i1.logString(this));
                     throw new JVMCIError("");
                 }
 
@@ -908,8 +907,8 @@ public final class TraceLinearScan {
                     if (intersects && !isIllegal(l1) && (l1.equals(l2))) {
                         if (DetailedAsserts.getValue()) {
                             Debug.log("Intervals %s and %s overlap and have the same register assigned", i1, i2);
-                            Debug.log(i1.logString());
-                            Debug.log(i2.logString());
+                            Debug.log(i1.logString(this));
+                            Debug.log(i2.logString(this));
                         }
                         throw new BailoutException("");
                     }
@@ -926,8 +925,8 @@ public final class TraceLinearScan {
                     if (intersects && !isIllegal(l1) && (l1.equals(l2))) {
                         if (DetailedAsserts.getValue()) {
                             Debug.log("Intervals %s and %s overlap and have the same register assigned", i1, i2);
-                            Debug.log(i1.logString());
-                            Debug.log(i2.logString());
+                            Debug.log(i1.logString(this));
+                            Debug.log(i2.logString(this));
                         }
                         throw new BailoutException("");
                     }
