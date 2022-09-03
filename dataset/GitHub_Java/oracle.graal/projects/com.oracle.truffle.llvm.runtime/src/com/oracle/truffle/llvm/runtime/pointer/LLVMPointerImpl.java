@@ -29,6 +29,8 @@
  */
 package com.oracle.truffle.llvm.runtime.pointer;
 
+import java.util.Objects;
+
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
@@ -38,6 +40,7 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
+import com.oracle.truffle.llvm.runtime.interop.export.LLVMPointerMessageResolutionForeign;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
 
 @ValueType
@@ -60,14 +63,14 @@ class LLVMPointerImpl implements LLVMManagedPointer, LLVMNativePointer, LLVMObje
             return false;
         }
         LLVMPointerImpl other = (LLVMPointerImpl) obj;
-        return this.object == other.object && this.offset == other.offset;
+        return Objects.equals(this.object, other.object) && this.offset == other.offset;
     }
 
     @Override
     public int hashCode() {
         int result = 1;
-        result = 31 * result + (object == null ? 0 : System.identityHashCode(object));
-        result = 31 * result + (int) offset;
+        result = 31 * result + Objects.hashCode(object);
+        result = 31 * result + Long.hashCode(offset);
         return result;
     }
 
@@ -109,7 +112,11 @@ class LLVMPointerImpl implements LLVMManagedPointer, LLVMNativePointer, LLVMObje
 
     @Override
     public LLVMPointerImpl copy() {
-        return new LLVMPointerImpl(object, offset, exportType);
+        if (CompilerDirectives.inCompiledCode()) {
+            return new LLVMPointerImpl(object, offset, exportType);
+        } else {
+            return this;
+        }
     }
 
     @Override
@@ -134,6 +141,11 @@ class LLVMPointerImpl implements LLVMManagedPointer, LLVMNativePointer, LLVMObje
     }
 
     @Override
+    public ForeignAccess getForeignAccess() {
+        return LLVMPointerMessageResolutionForeign.ACCESS;
+    }
+
+    @Override
     public LLVMObjectNativeLibrary createLLVMObjectNativeLibrary() {
         if (isManaged()) {
             return new LLVMManagedPointerNativeLibrary(LLVMObjectNativeLibrary.createCached(getObject()));
@@ -144,9 +156,8 @@ class LLVMPointerImpl implements LLVMManagedPointer, LLVMNativePointer, LLVMObje
 
     private static final class LLVMManagedPointerNativeLibrary extends LLVMObjectNativeLibrary {
 
+        @Child private LLVMObjectNativeLibrary lib;
         @Child private Node isNull;
-
-        private final LLVMObjectNativeLibrary lib;
 
         private LLVMManagedPointerNativeLibrary(LLVMObjectNativeLibrary lib) {
             this.lib = lib;
