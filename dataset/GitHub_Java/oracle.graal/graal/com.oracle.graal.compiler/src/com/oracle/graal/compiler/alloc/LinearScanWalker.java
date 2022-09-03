@@ -29,6 +29,7 @@ import static com.oracle.graal.lir.LIRValueUtil.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.Register.RegisterFlag;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.alloc.Interval.RegisterBinding;
 import com.oracle.graal.compiler.alloc.Interval.RegisterPriority;
@@ -810,7 +811,8 @@ final class LinearScanWalker extends IntervalWalker {
     }
 
     void initVarsForAlloc(Interval interval) {
-        availableRegs = allocator.frameMap.registerConfig.getAllocatableRegisters(interval.kind());
+        EnumMap<RegisterFlag, Register[]> categorizedRegs = allocator.frameMap.registerConfig.getCategorizedAllocatableRegisters();
+        availableRegs = categorizedRegs.get(asVariable(interval.operand).flag);
     }
 
     static boolean isMove(LIRInstruction op, Interval from, Interval to) {
