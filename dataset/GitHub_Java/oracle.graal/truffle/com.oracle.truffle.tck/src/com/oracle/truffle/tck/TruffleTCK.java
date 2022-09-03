@@ -109,7 +109,7 @@ public abstract class TruffleTCK {
 
     /**
      * Name of function to add two numbers together. The symbol will be invoked with two parameters
-     * of <code>type1</code> and <code>type2</code> and expects result of type {@link Number}
+     * of <code>type1</code> and <code>type2</code> and expects result of type {@link Number} 
      * which's {@link Number#intValue()} is equivalent of <code>param1 + param2</code>. As some
      * languages may have different operations for different types of numbers, the actual types are
      * passed to the method and the implementation can decide to return different symbol based on
@@ -142,17 +142,6 @@ public abstract class TruffleTCK {
      */
     protected String identity() {
         throw new UnsupportedOperationException("identity() method not implemented");
-    }
-
-    /**
-     * Name of a function that adds up two complex numbers. The function accepts two arguments and
-     * provides no return value. The arguments are complex numbers with members called real and
-     * imaginary. The first argument contains the result of the addition.
-     *
-     * @return name of globally exported symbol
-     */
-    protected String complexAdd() {
-        throw new UnsupportedOperationException("complexAdd() method not implemented");
     }
 
     /**
@@ -219,7 +208,7 @@ public abstract class TruffleTCK {
     /**
      * Name of a function that returns a compound object with members representing certain
      * operations. In the JavaScript the object should look like:
-     *
+     * 
      * <pre>
      * <b>var</b> obj = {
      *   'fourtyTwo': function {@link #fourtyTwo()},
@@ -229,7 +218,7 @@ public abstract class TruffleTCK {
      * };
      * <b>return</b> obj;
      * </pre>
-     *
+     * 
      * The returned object shall have three functions that will be obtained and used exactly as
      * described in their Javadoc - e.g. {@link #fourtyTwo()}, {@link #plusInt()} and
      * {@link #returnsNull()}. In addition to that there should be one more function
@@ -256,7 +245,7 @@ public abstract class TruffleTCK {
     public void testFortyTwo() throws Exception {
         PolyglotEngine.Value fourtyTwo = findGlobalSymbol(fourtyTwo());
 
-        Object res = fourtyTwo.execute().get();
+        Object res = fourtyTwo.invoke(null).get();
 
         assert res instanceof Number : "should yield a number, but was: " + res;
 
@@ -279,7 +268,7 @@ public abstract class TruffleTCK {
     public void testNull() throws Exception {
         PolyglotEngine.Value retNull = findGlobalSymbol(returnsNull());
 
-        Object res = retNull.execute().get();
+        Object res = retNull.invoke(null).get();
 
         assertNull("Should yield real Java null", res);
     }
@@ -288,7 +277,7 @@ public abstract class TruffleTCK {
     public void testNullCanBeCastToAnything() throws Exception {
         PolyglotEngine.Value retNull = findGlobalSymbol(returnsNull());
 
-        Object res = retNull.execute().as(CompoundObject.class);
+        Object res = retNull.invoke(null).as(CompoundObject.class);
 
         assertNull("Should yield real Java null", res);
     }
@@ -310,7 +299,7 @@ public abstract class TruffleTCK {
 
         PolyglotEngine.Value plus = findGlobalSymbol(plus(int.class, int.class));
 
-        Number n = plus.execute(a, b).as(Number.class);
+        Number n = plus.invoke(null, a, b).as(Number.class);
         assert a + b == n.intValue() : "The value is correct: (" + a + " + " + b + ") =  " + n.intValue();
     }
 
@@ -321,7 +310,7 @@ public abstract class TruffleTCK {
 
         PolyglotEngine.Value plus = findGlobalSymbol(plus(byte.class, byte.class));
 
-        Number n = plus.execute((byte) a, (byte) b).as(Number.class);
+        Number n = plus.invoke(null, (byte) a, (byte) b).as(Number.class);
         assert a + b == n.intValue() : "The value is correct: (" + a + " + " + b + ") =  " + n.intValue();
     }
 
@@ -332,7 +321,7 @@ public abstract class TruffleTCK {
 
         PolyglotEngine.Value plus = findGlobalSymbol(plus(short.class, short.class));
 
-        Number n = plus.execute((short) a, (short) b).as(Number.class);
+        Number n = plus.invoke(null, (short) a, (short) b).as(Number.class);
         assert a + b == n.intValue() : "The value is correct: (" + a + " + " + b + ") =  " + n.intValue();
     }
 
@@ -343,7 +332,7 @@ public abstract class TruffleTCK {
 
         PolyglotEngine.Value plus = findGlobalSymbol(plus(long.class, long.class));
 
-        Number n = plus.execute(a, b).as(Number.class);
+        Number n = plus.invoke(null, a, b).as(Number.class);
         assert a + b == n.longValue() : "The value is correct: (" + a + " + " + b + ") =  " + n.longValue();
     }
 
@@ -354,7 +343,7 @@ public abstract class TruffleTCK {
 
         PolyglotEngine.Value plus = findGlobalSymbol(plus(float.class, float.class));
 
-        Number n = plus.execute(a, b).as(Number.class);
+        Number n = plus.invoke(null, a, b).as(Number.class);
         assertEquals("Correct value computed", a + b, n.floatValue(), 0.01f);
     }
 
@@ -365,7 +354,7 @@ public abstract class TruffleTCK {
 
         PolyglotEngine.Value plus = findGlobalSymbol(plus(float.class, float.class));
 
-        Number n = plus.execute(a, b).as(Number.class);
+        Number n = plus.invoke(null, a, b).as(Number.class);
         assertEquals("Correct value computed", a + b, n.doubleValue(), 0.01);
     }
 
@@ -396,7 +385,7 @@ public abstract class TruffleTCK {
         PolyglotEngine.Value apply = findGlobalSymbol(applyNumbers());
 
         TruffleObject fn = JavaInterop.asTruffleFunction(LongBinaryOperation.class, new MaxMinObject(true));
-        Object res = apply.execute(fn).get();
+        Object res = apply.invoke(null, fn).get();
 
         assert res instanceof Number : "result should be a number: " + res;
 
@@ -410,7 +399,7 @@ public abstract class TruffleTCK {
         PolyglotEngine.Value apply = findGlobalSymbol(applyNumbers());
 
         TruffleObject fn = JavaInterop.asTruffleFunction(LongBinaryOperation.class, new MaxMinObject(false));
-        final PolyglotEngine.Value result = apply.execute(fn);
+        final PolyglotEngine.Value result = apply.invoke(null, fn);
 
         try {
             Boolean res = result.as(Boolean.class);
@@ -430,7 +419,7 @@ public abstract class TruffleTCK {
         byte value = (byte) RANDOM.nextInt(100);
 
         TruffleObject fn = JavaInterop.asTruffleFunction(ObjectBinaryOperation.class, new ConstantFunction(value));
-        Number n = apply.execute(fn).as(Number.class);
+        Number n = apply.invoke(null, fn).as(Number.class);
         assertEquals("The same value returned", value + 10, n.byteValue());
     }
 
@@ -441,7 +430,7 @@ public abstract class TruffleTCK {
         short value = (short) RANDOM.nextInt(100);
 
         TruffleObject fn = JavaInterop.asTruffleFunction(ObjectBinaryOperation.class, new ConstantFunction(value));
-        Number n = apply.execute(fn).as(Number.class);
+        Number n = apply.invoke(null, fn).as(Number.class);
         assertEquals("The same value returned", value + 10, n.shortValue());
     }
 
@@ -452,7 +441,7 @@ public abstract class TruffleTCK {
         int value = RANDOM.nextInt(100);
 
         TruffleObject fn = JavaInterop.asTruffleFunction(ObjectBinaryOperation.class, new ConstantFunction(value));
-        Number n = apply.execute(fn).as(Number.class);
+        Number n = apply.invoke(null, fn).as(Number.class);
         assertEquals("The same value returned", value + 10, n.intValue());
     }
 
@@ -463,7 +452,7 @@ public abstract class TruffleTCK {
         long value = RANDOM.nextInt(1000);
 
         TruffleObject fn = JavaInterop.asTruffleFunction(ObjectBinaryOperation.class, new ConstantFunction(value));
-        Number n = apply.execute(fn).as(Number.class);
+        Number n = apply.invoke(null, fn).as(Number.class);
         assertEquals("The same value returned", value + 10, n.longValue());
     }
 
@@ -474,7 +463,7 @@ public abstract class TruffleTCK {
         float value = RANDOM.nextInt(1000) + RANDOM.nextFloat();
 
         TruffleObject fn = JavaInterop.asTruffleFunction(ObjectBinaryOperation.class, new ConstantFunction(value));
-        Number n = apply.execute(fn).as(Number.class);
+        Number n = apply.invoke(null, fn).as(Number.class);
         assertEquals("The same value returned", value + 10, n.floatValue(), 0.01);
     }
 
@@ -485,7 +474,7 @@ public abstract class TruffleTCK {
         double value = RANDOM.nextInt(1000) + RANDOM.nextDouble();
 
         TruffleObject fn = JavaInterop.asTruffleFunction(ObjectBinaryOperation.class, new ConstantFunction(value));
-        Number n = apply.execute(fn).as(Number.class);
+        Number n = apply.invoke(null, fn).as(Number.class);
         assertEquals("The same value returned", value + 10, n.doubleValue(), 0.01);
     }
 
@@ -499,7 +488,7 @@ public abstract class TruffleTCK {
 
         byte value = (byte) RANDOM.nextInt(100);
 
-        Number n = (Number) apply.execute(value).get();
+        Number n = (Number) apply.invoke(null, value).get();
         assertEquals("The same value returned", value, n.byteValue());
     }
 
@@ -514,7 +503,7 @@ public abstract class TruffleTCK {
         byte value = (byte) RANDOM.nextInt(100);
         BoxedValue boxed = new BoxedValue(value);
 
-        Number n = (Number) apply.execute(boxed).get();
+        Number n = (Number) apply.invoke(null, boxed).get();
         assertEquals("The same value returned", value, n.byteValue());
     }
 
@@ -527,7 +516,7 @@ public abstract class TruffleTCK {
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
         short value = (short) RANDOM.nextInt(100);
-        Number n = (Number) apply.execute(value).get();
+        Number n = (Number) apply.invoke(null, value).get();
         assertEquals("The same value returned", value, n.shortValue());
     }
 
@@ -542,7 +531,7 @@ public abstract class TruffleTCK {
         short value = (short) RANDOM.nextInt(100);
         BoxedValue boxed = new BoxedValue(value);
 
-        Number n = (Number) apply.execute(boxed).get();
+        Number n = (Number) apply.invoke(null, boxed).get();
         assertEquals("The same value returned", value, n.shortValue());
     }
 
@@ -556,7 +545,7 @@ public abstract class TruffleTCK {
 
         int value = RANDOM.nextInt(100);
 
-        Number n = (Number) apply.execute(value).get();
+        Number n = (Number) apply.invoke(null, value).get();
         assertEquals("The same value returned", value, n.intValue());
     }
 
@@ -571,7 +560,7 @@ public abstract class TruffleTCK {
         int value = RANDOM.nextInt(100);
         BoxedValue boxed = new BoxedValue(value);
 
-        Number n = (Number) apply.execute(boxed).get();
+        Number n = (Number) apply.invoke(null, boxed).get();
         assertEquals("The same value returned", value, n.intValue());
     }
 
@@ -585,7 +574,7 @@ public abstract class TruffleTCK {
 
         long value = RANDOM.nextInt(1000);
 
-        Number n = (Number) apply.execute(value).get();
+        Number n = (Number) apply.invoke(null, value).get();
         assertEquals("The same value returned", value, n.longValue());
     }
 
@@ -600,7 +589,7 @@ public abstract class TruffleTCK {
         long value = RANDOM.nextInt(1000);
         BoxedValue boxed = new BoxedValue(value);
 
-        Number n = (Number) apply.execute(boxed).get();
+        Number n = (Number) apply.invoke(null, boxed).get();
         assertEquals("The same value returned", value, n.longValue());
     }
 
@@ -614,7 +603,7 @@ public abstract class TruffleTCK {
 
         float value = RANDOM.nextInt(1000) + RANDOM.nextFloat();
 
-        Number n = (Number) apply.execute(value).get();
+        Number n = (Number) apply.invoke(null, value).get();
         assertEquals("The same value returned", value, n.floatValue(), 0.01);
     }
 
@@ -629,7 +618,7 @@ public abstract class TruffleTCK {
         float value = RANDOM.nextInt(1000) + RANDOM.nextFloat();
         BoxedValue boxed = new BoxedValue(value);
 
-        Number n = (Number) apply.execute(boxed).get();
+        Number n = (Number) apply.invoke(null, boxed).get();
         assertEquals("The same value returned", value, n.floatValue(), 0.01);
     }
 
@@ -643,7 +632,7 @@ public abstract class TruffleTCK {
 
         double value = RANDOM.nextInt(1000) + RANDOM.nextDouble();
 
-        Number n = (Number) apply.execute(value).get();
+        Number n = (Number) apply.invoke(null, value).get();
         assertEquals("The same value returned", value, n.doubleValue(), 0.01);
     }
 
@@ -658,7 +647,7 @@ public abstract class TruffleTCK {
         double value = RANDOM.nextInt(1000) + RANDOM.nextDouble();
         BoxedValue boxed = new BoxedValue(value);
 
-        Number n = (Number) apply.execute(boxed).get();
+        Number n = (Number) apply.invoke(null, boxed).get();
         assertEquals("The same value returned", value, n.doubleValue(), 0.01);
     }
 
@@ -672,7 +661,7 @@ public abstract class TruffleTCK {
 
         String value = "Value" + RANDOM.nextInt(1000) + RANDOM.nextDouble();
 
-        String ret = (String) apply.execute(value).get();
+        String ret = (String) apply.invoke(null, value).get();
         assertEquals("The same value returned", value, ret);
     }
 
@@ -687,7 +676,7 @@ public abstract class TruffleTCK {
         String value = "Value" + RANDOM.nextInt(1000) + RANDOM.nextDouble();
         BoxedValue boxed = new BoxedValue(value);
 
-        String ret = (String) apply.execute(boxed).get();
+        String ret = (String) apply.invoke(null, boxed).get();
         assertEquals("The same value returned", value, ret);
     }
 
@@ -701,7 +690,7 @@ public abstract class TruffleTCK {
 
         TruffleObject fn = JavaInterop.asTruffleFunction(LongBinaryOperation.class, new MaxMinObject(true));
 
-        Object ret = apply.execute(fn).get();
+        Object ret = apply.invoke(null, fn).get();
         assertSameTruffleObject("The same value returned", fn, ret);
     }
 
@@ -721,13 +710,13 @@ public abstract class TruffleTCK {
         for (int i = 0; i < 10; i++) {
             int quantum = RANDOM.nextInt(10);
             for (int j = 0; j < quantum; j++) {
-                Object res = count1.execute().get();
+                Object res = count1.invoke(null).get();
                 assert res instanceof Number : "expecting number: " + res;
                 ++prev1;
                 assert ((Number) res).intValue() == prev1 : "expecting " + prev1 + " but was " + res;
             }
             for (int j = 0; j < quantum; j++) {
-                Object res = count2.execute().get();
+                Object res = count2.invoke(null).get();
                 assert res instanceof Number : "expecting number: " + res;
                 ++prev2;
                 assert ((Number) res).intValue() == prev2 : "expecting " + prev2 + " but was " + res;
@@ -747,7 +736,7 @@ public abstract class TruffleTCK {
         assertNotNull("Langugage for " + mimeType() + " found", language);
 
         PolyglotEngine.Value function = vm().findGlobalSymbol(globalObjectFunction);
-        Object global = function.execute().get();
+        Object global = function.invoke(null).get();
         assertEquals("Global from the language same with Java obtained one", language.getGlobalObject().get(), global);
     }
 
@@ -760,7 +749,7 @@ public abstract class TruffleTCK {
         assertNotNull(evaluateSource() + " found", function);
 
         double expect = Math.floor(RANDOM.nextDouble() * 100000.0) / 10.0;
-        Object parsed = function.execute("application/x-tck", "" + expect).get();
+        Object parsed = function.invoke(null, "application/x-tck", "" + expect).get();
         assertTrue("Expecting numeric result, was:" + expect, parsed instanceof Number);
         double value = ((Number) parsed).doubleValue();
         assertEquals("Gets the double", expect, value, 0.01);
@@ -773,27 +762,10 @@ public abstract class TruffleTCK {
         String mulCode = multiplyCode(firstVar, secondVar);
         Source source = Source.fromText("TCK42:" + mimeType() + ":" + mulCode, "evaluate " + firstVar + " * " + secondVar).withMimeType("application/x-tck");
         final PolyglotEngine.Value evalSource = vm().eval(source);
-        final PolyglotEngine.Value invokeMul = evalSource.execute(firstVar, secondVar);
+        final PolyglotEngine.Value invokeMul = evalSource.invoke(null, firstVar, secondVar);
         Object result = invokeMul.get();
         assertTrue("Expecting numeric result, was:" + result, result instanceof Number);
         assertEquals("Right value", 42, ((Number) result).intValue());
-    }
-
-    @Test
-    public void testAddComplexNumbers() throws Exception {
-        String id = complexAdd();
-        if (id == null) {
-            return;
-        }
-        PolyglotEngine.Value apply = findGlobalSymbol(id);
-
-        ComplexNumber a = new ComplexNumber(32, 10);
-        ComplexNumber b = new ComplexNumber(10, 32);
-
-        apply.execute(a, b);
-
-        assertEquals(42.0, a.get(ComplexNumber.REAL_IDENTIFIER), 0.1);
-        assertEquals(42.0, a.get(ComplexNumber.IMAGINARY_IDENTIFIER), 0.1);
     }
 
     private PolyglotEngine.Value findGlobalSymbol(String name) throws Exception {
@@ -806,7 +778,7 @@ public abstract class TruffleTCK {
         final String compoundObjectName = compoundObject();
         PolyglotEngine.Value s = vm().findGlobalSymbol(compoundObjectName);
         assert s != null : "Symbol " + compoundObjectName + " is not found!";
-        final PolyglotEngine.Value value = s.execute();
+        final PolyglotEngine.Value value = s.invoke(null);
         CompoundObject obj = value.as(CompoundObject.class);
         assertNotNull("Compound object for " + value + " found", obj);
         int traverse = RANDOM.nextInt(10);
