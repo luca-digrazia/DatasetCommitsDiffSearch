@@ -56,7 +56,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceFunctionType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceStaticMemberType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
@@ -66,7 +65,7 @@ import static com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInfoCache.g
 
 public final class DebugInfoModuleProcessor {
 
-    public static final SourceFunction DEFAULT_FUNCTION = new SourceFunction(LLVMSourceLocation.createUnavailable(LLVMSourceLocation.Kind.FUNCTION, "<unavailable>", "<unavailable>", 0, 0), null);
+    public static final SourceFunction DEFAULT_FUNCTION = new SourceFunction(LLVMSourceLocation.createUnavailable(LLVMSourceLocation.Kind.FUNCTION, "<unavailable>", "<unavailable>", 0, 0));
 
     private DebugInfoModuleProcessor() {
     }
@@ -111,16 +110,7 @@ public final class DebugInfoModuleProcessor {
         @Override
         public void visit(FunctionDefinition function) {
             final MDBaseNode debugInfo = getDebugInfo(function);
-            LLVMSourceLocation scope = null;
-            LLVMSourceFunctionType type = null;
-            if (debugInfo != null) {
-                scope = cache.buildLocation(debugInfo);
-
-                final LLVMSourceType parsedType = cache.parseType(debugInfo);
-                if (parsedType instanceof LLVMSourceFunctionType) {
-                    type = (LLVMSourceFunctionType) parsedType;
-                }
-            }
+            LLVMSourceLocation scope = debugInfo != null ? cache.buildLocation(debugInfo) : null;
 
             if (scope == null) {
                 final String sourceText = String.format("%s:%s", bitcodeSource.getName(), function.getName());
@@ -129,7 +119,7 @@ public final class DebugInfoModuleProcessor {
                 scope = LLVMSourceLocation.createBitcodeFunction(function.getName(), simpleSection);
             }
 
-            final SourceFunction sourceFunction = new SourceFunction(scope, type);
+            final SourceFunction sourceFunction = new SourceFunction(scope);
             function.setSourceFunction(sourceFunction);
             for (SourceVariable local : sourceFunction.getVariables()) {
                 local.processFragments();

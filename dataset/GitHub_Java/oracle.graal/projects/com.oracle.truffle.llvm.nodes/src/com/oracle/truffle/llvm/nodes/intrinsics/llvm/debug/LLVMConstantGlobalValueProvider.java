@@ -33,8 +33,8 @@ import java.util.function.Function;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugTypeConstants;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
+import com.oracle.truffle.llvm.runtime.debug.LLVMDebugTypeConstants;
+import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueProvider;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import static com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableDebugAccess.getManagedValue;
@@ -42,12 +42,12 @@ import static com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableDebugAcce
 import static com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableDebugAccess.isInNative;
 import static com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableDebugAccess.isInitialized;
 
-final class LLVMConstantGlobalValueProvider implements LLVMDebugValue {
+final class LLVMConstantGlobalValueProvider implements LLVMDebugValueProvider {
 
     private final LLVMGlobal global;
     private final LLVMContext context;
     private final LLVMMemory memory;
-    private final LLVMDebugValue.Builder valueBuilder;
+    private final LLVMDebugValueProvider.Builder valueBuilder;
 
     LLVMConstantGlobalValueProvider(LLVMMemory memory, LLVMGlobal global, LLVMContext context, Builder valueBuilder) {
         this.memory = memory;
@@ -61,12 +61,12 @@ final class LLVMConstantGlobalValueProvider implements LLVMDebugValue {
         return canRead(bitOffset, bits, getCurrentValue());
     }
 
-    private boolean canRead(long bitOffset, int bits, LLVMDebugValue currentValue) {
+    private boolean canRead(long bitOffset, int bits, LLVMDebugValueProvider currentValue) {
         return isInitialized(context, global) && currentValue != null && currentValue.canRead(bitOffset, bits);
     }
 
-    private Object doRead(long offset, int size, String kind, Function<LLVMDebugValue, Object> readOperation) {
-        final LLVMDebugValue value = getCurrentValue();
+    private Object doRead(long offset, int size, String kind, Function<LLVMDebugValueProvider, Object> readOperation) {
+        final LLVMDebugValueProvider value = getCurrentValue();
         if (value == null) {
             return UNAVAILABLE_VALUE;
 
@@ -111,7 +111,7 @@ final class LLVMConstantGlobalValueProvider implements LLVMDebugValue {
 
     @Override
     public Object readUnknown(long bitOffset, int bitSize) {
-        final LLVMDebugValue value = getCurrentValue();
+        final LLVMDebugValueProvider value = getCurrentValue();
         if (value != null) {
             return value.readUnknown(bitOffset, bitSize);
         } else {
@@ -121,7 +121,7 @@ final class LLVMConstantGlobalValueProvider implements LLVMDebugValue {
 
     @Override
     public Object computeAddress(long bitOffset) {
-        final LLVMDebugValue value = getCurrentValue();
+        final LLVMDebugValueProvider value = getCurrentValue();
         if (value != null) {
             return value.computeAddress(bitOffset);
         } else {
@@ -136,8 +136,8 @@ final class LLVMConstantGlobalValueProvider implements LLVMDebugValue {
     }
 
     @Override
-    public LLVMDebugValue dereferencePointer(long bitOffset) {
-        final LLVMDebugValue value = getCurrentValue();
+    public LLVMDebugValueProvider dereferencePointer(long bitOffset) {
+        final LLVMDebugValueProvider value = getCurrentValue();
         if (value != null) {
             return value.dereferencePointer(bitOffset);
         } else {
@@ -155,7 +155,7 @@ final class LLVMConstantGlobalValueProvider implements LLVMDebugValue {
         if (isInNative(context, global)) {
             return null;
         }
-        final LLVMDebugValue value = getCurrentValue();
+        final LLVMDebugValueProvider value = getCurrentValue();
         if (value != null && value.isInteropValue()) {
             return value.asInteropValue();
         } else {
@@ -163,7 +163,7 @@ final class LLVMConstantGlobalValueProvider implements LLVMDebugValue {
         }
     }
 
-    private LLVMDebugValue getCurrentValue() {
+    private LLVMDebugValueProvider getCurrentValue() {
         if (isInNative(context, global)) {
             return new LLVMAllocationValueProvider(memory, getNativeLocation(context, global));
         } else {

@@ -118,7 +118,7 @@ public abstract class GlobalValueSymbol implements ValueSymbol, MetadataAttachme
 
     @Override
     public void setName(String name) {
-        this.name = name;
+        this.name = LLVMIdentifier.toGlobalIdentifier(name);
     }
 
     @Override
