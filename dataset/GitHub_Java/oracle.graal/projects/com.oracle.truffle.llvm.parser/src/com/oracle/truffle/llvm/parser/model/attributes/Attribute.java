@@ -84,7 +84,7 @@ public abstract class Attribute {
         SWIFTERROR,
         NORECURSE,
         INACCESSIBLEMEMONLY,
-        INACCESSIBLEMEM_OR_ARGMEMONLY,
+        INACCESSIBLEMEMONLY_OR_ARGMEMONLY,
         ALLOCSIZE,
         WRITEONLY,
         SPECULATABLE;
