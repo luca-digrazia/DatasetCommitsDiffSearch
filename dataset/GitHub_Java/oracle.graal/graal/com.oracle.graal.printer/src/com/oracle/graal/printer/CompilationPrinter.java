@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,15 @@
  */
 package com.oracle.graal.printer;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
+
 import java.io.*;
 import java.util.*;
 
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.meta.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CodeUtil.RefMapFormatter;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.debug.*;
 
 /**
  * Utility for printing compilation related data structures at various compilation phases. The
@@ -112,10 +115,19 @@ public class CompilationPrinter implements Closeable {
     /**
      * Formats given debug info as a multi line string.
      */
-    protected String debugInfoToString(BytecodePosition codePos, ReferenceMap refMap, RegisterSaveLayout calleeSaveInfo) {
+    protected String debugInfoToString(BytecodePosition codePos, ReferenceMap refMap, RegisterSaveLayout calleeSaveInfo, Architecture arch) {
         StringBuilder sb = new StringBuilder();
-        if (refMap != null) {
-            sb.append(refMap.toString());
+        RefMapFormatter formatter = new CodeUtil.NumberedRefMapFormatter();
+
+        if (refMap != null && refMap.hasRegisterRefMap()) {
+            sb.append("reg-ref-map:");
+            refMap.appendRegisterMap(sb, arch != null ? new CodeUtil.DefaultRegFormatter(arch) : formatter);
+            sb.append("\n");
+        }
+
+        if (refMap != null && refMap.hasFrameRefMap()) {
+            sb.append("frame-ref-map:");
+            refMap.appendFrameMap(sb, formatter);
             sb.append("\n");
         }
 
@@ -176,8 +188,8 @@ public class CompilationPrinter implements Closeable {
         if (value == null) {
             return "-";
         }
-        if (value instanceof VirtualObject && !virtualObjects.contains(value)) {
-            virtualObjects.add((VirtualObject) value);
+        if (isVirtualObject(value) && !virtualObjects.contains(asVirtualObject(value))) {
+            virtualObjects.add(asVirtualObject(value));
         }
         return value.toString();
     }
