@@ -24,8 +24,11 @@ package com.sun.c1x.debug;
 
 import java.io.*;
 import java.util.*;
+import java.util.Map.Entry;
 
 import com.oracle.graal.graph.*;
+import com.oracle.max.graal.schedule.*;
+import com.sun.c1x.ir.*;
 
 /**
  * Generates a representation of {@link Graph Graphs} that can be visualized and inspected with the <a
@@ -36,17 +39,20 @@ public class IdealGraphPrinter {
     private static class Edge {
         final int from;
         final int to;
-        final int index;
+        final int fromIndex;
+        final int toIndex;
 
-        Edge(int from, int to, int index) {
+        Edge(int from, int fromIndex, int to, int toIndex) {
             this.from = from;
+            this.fromIndex = fromIndex;
             this.to = to;
-            this.index = index;
+            this.toIndex = toIndex;
         }
     }
 
     private final HashSet<Class<?>> omittedClasses = new HashSet<Class<?>>();
     private final PrintStream stream;
+    private final List<Node> noBlockNodes = new LinkedList<Node>();
 
     /**
      * Creates a new {@link IdealGraphPrinter} that writes to the specified output stream.
@@ -63,21 +69,41 @@ public class IdealGraphPrinter {
     }
 
     /**
-     * Starts a new graph document containing a single group of graphs with the given name, short name and byte code
-     * index (BCI) as properties.
+     * Flushes any buffered output.
      */
-    public void begin(String name, String shortName, int bci) {
-        stream.println("<graphDocument><group>");
+    public void flush() {
+        stream.flush();
+    }
+
+    /**
+     * Starts a new graph document.
+     */
+    public void begin() {
+        stream.println("<graphDocument>");
+    }
+
+    /**
+     * Starts a new group of graphs with the given name, short name and method byte code index (BCI) as properties.
+     */
+    public void beginGroup(String name, String shortName, int bci) {
+        stream.println("<group>");
         stream.printf(" <properties><p name='name'>%s</p></properties>%n", escape(name));
         stream.printf(" <method name='%s' shortName='%s' bci='%d'/>%n", escape(name), escape(shortName), bci);
     }
 
     /**
-     * Finishes the graph document.
+     * Ends the current group.
+     */
+    public void endGroup() {
+        stream.println("</group>");
+    }
+
+    /**
+     * Finishes the graph document and flushes the output stream.
      */
     public void end() {
-        stream.println("</group></graphDocument>");
-        stream.flush();
+        stream.println("</graphDocument>");
+        flush();
     }
 
     /**
@@ -86,8 +112,10 @@ public class IdealGraphPrinter {
     public void print(Graph graph, String title, boolean shortNames) {
         stream.printf(" <graph name='%s'>%n", escape(title));
 
+        Schedule schedule = new Schedule(graph);
+
         stream.println("  <nodes>");
-        List<Edge> edges = printNodes(graph.getNodes(), shortNames);
+        List<Edge> edges = printNodes(graph.getNodes(), shortNames, schedule.getNodeToBlock());
         stream.println("  </nodes>");
 
         stream.println("  <edges>");
@@ -96,41 +124,68 @@ public class IdealGraphPrinter {
         }
         stream.println("  </edges>");
 
+        stream.println("  <controlFlow>");
+        for (Block block : schedule.getBlocks()) {
+            printBlock(graph, block);
+        }
+        printNoBlock();
+        stream.println("  </controlFlow>");
+
         stream.println(" </graph>");
     }
 
-    private List<Edge> printNodes(Collection<Node> nodes, boolean shortNames) {
+    private List<Edge> printNodes(Collection<Node> nodes, boolean shortNames, NodeMap<Block> nodeToBlock) {
         ArrayList<Edge> edges = new ArrayList<Edge>();
 
         for (Node node : nodes) {
-            if (node == Node.Null || omittedClasses.contains(node)) {
+            if (node == Node.Null || omittedClasses.contains(node.getClass())) {
                 continue;
             }
 
-            String name;
-            if (shortNames) {
-                name = node.shortName();
-            } else {
-                name = node.toString();
-            }
+            stream.printf("   <node id='%d'><properties>%n", node.id());
+            stream.printf("    <p name='idx'>%d</p>%n", node.id());
 
-            stream.printf("   <node id='%d'><properties>", node.id());
-            stream.printf("<p name='idx'>%d</p>", node.id());
-            stream.printf("<p name='name'>%s</p>", escape(name));
-            stream.println("</properties></node>");
-
-            int index = 0;
-            for (Node predecessor : node.predecessors()) {
-                if (predecessor != Node.Null && !omittedClasses.contains(predecessor.getClass())) {
-                    edges.add(new Edge(predecessor.id(), node.id(), index));
+            Map<Object, Object> props = node.getDebugProperties();
+            if (!props.containsKey("name") || props.get("name").toString().trim().length() == 0) {
+                String name;
+                if (shortNames) {
+                    name = node.shortName();
+                } else {
+                    name = node.toString();
                 }
-                index++;
+                stream.printf("    <p name='name'>%s</p>%n", escape(name));
             }
+            Block block = nodeToBlock.get(node);
+            if (block != null) {
+                stream.printf("    <p name='block'>%d</p>%n", block.blockID());
+            } else {
+                stream.printf("    <p name='block'>noBlock</p>%n");
+                noBlockNodes.add(node);
+            }
+            for (Entry<Object, Object> entry : props.entrySet()) {
+                String key = entry.getKey().toString();
+                String value = entry.getValue().toString();
+                stream.printf("    <p name='%s'>%s</p>%n", escape(key), escape(value));
+            }
+
+            stream.println("   </properties></node>");
+
+            // successors
+            int fromIndex = 0;
+            for (Node successor : node.successors()) {
+                if (successor != Node.Null && !omittedClasses.contains(successor.getClass())) {
+                    edges.add(new Edge(node.id(), fromIndex, successor.id(), 0));
+                }
+                fromIndex++;
+            }
+
+            // inputs
+            int toIndex = 1;
             for (Node input : node.inputs()) {
                 if (input != Node.Null && !omittedClasses.contains(input.getClass())) {
-                    edges.add(new Edge(input.id(), node.id(), index));
+                    edges.add(new Edge(input.id(), input.successors().size(), node.id(), toIndex));
                 }
-                index++;
+                toIndex++;
             }
         }
 
@@ -138,7 +193,64 @@ public class IdealGraphPrinter {
     }
 
     private void printEdge(Edge edge) {
-        stream.printf("   <edge from='%d' to='%d' index='%d'/>%n", edge.from, edge.to, edge.index);
+        stream.printf("   <edge from='%d' fromIndex='%d' to='%d' toIndex='%d'/>%n", edge.from, edge.fromIndex, edge.to, edge.toIndex);
+    }
+
+    private void printBlock(Graph graph, Block block) {
+        stream.printf("   <block name='%d'>%n", block.blockID());
+        stream.printf("    <successors>%n");
+        for (Block sux : block.getSuccessors()) {
+            stream.printf("     <successor name='%d'/>%n", sux.blockID());
+        }
+        stream.printf("    </successors>%n");
+        stream.printf("    <nodes>%n");
+
+        ArrayList<Node> nodes = new ArrayList<Node>(block.getInstructions());
+        // if this is the first block: add all locals to this block
+        if (nodes.get(0) == graph.start()) {
+            for (Node node : graph.getNodes()) {
+                if (node instanceof Local) {
+                    nodes.add(node);
+                }
+            }
+        }
+        // add all framestates and phis to their blocks
+        for (Node node : block.getInstructions()) {
+            if (node instanceof Instruction && ((Instruction) node).stateAfter() != null) {
+                nodes.add(((Instruction) node).stateAfter());
+            }
+            if (node instanceof Merge) {
+                Merge merge = (Merge) node;
+                if (merge.stateBefore() != null) {
+                    nodes.add(merge.stateBefore());
+                }
+                for (Node usage : merge.usages()) {
+                    if (usage instanceof Phi) {
+                        nodes.add(usage);
+                    }
+                }
+            }
+        }
+
+        for (Node node : nodes) {
+            if (!omittedClasses.contains(node.getClass())) {
+                stream.printf("     <node id='%d'/>%n", node.id());
+            }
+        }
+        stream.printf("    </nodes>%n");
+        stream.printf("   </block>%n", block.blockID());
+    }
+
+    private void printNoBlock() {
+        if (!noBlockNodes.isEmpty()) {
+            stream.printf("   <block name='noBlock'>%n");
+            stream.printf("    <nodes>%n");
+            for (Node node : noBlockNodes) {
+                stream.printf("     <node id='%d'/>%n", node.id());
+            }
+            stream.printf("    </nodes>%n");
+            stream.printf("   </block>%n");
+        }
     }
 
     private String escape(String s) {
