@@ -32,7 +32,6 @@ import static org.graalvm.compiler.lir.LIRValueUtil.isVariable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
@@ -151,20 +150,6 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
         public boolean apply(TraceInterval i) {
             // all TraceIntervals are variable intervals
             return true;
-        }
-    };
-    private static final Comparator<TraceInterval> SORT_BY_FROM_COMP = new Comparator<TraceInterval>() {
-
-        @Override
-        public int compare(TraceInterval a, TraceInterval b) {
-            return a.from() - b.from();
-        }
-    };
-    private static final Comparator<TraceInterval> SORT_BY_SPILL_POS_COMP = new Comparator<TraceInterval>() {
-
-        @Override
-        public int compare(TraceInterval a, TraceInterval b) {
-            return a.spillDefinitionPos() - b.spillDefinitionPos();
         }
     };
 
@@ -499,7 +484,7 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
             int newLen = newList.length;
 
             // conventional sort-algorithm for new intervals
-            Arrays.sort(newList, SORT_BY_FROM_COMP);
+            Arrays.sort(newList, (TraceInterval a, TraceInterval b) -> a.from() - b.from());
 
             // merge old and new list (both already sorted) into one combined list
             TraceInterval[] combinedList = new TraceInterval[oldLen + newLen];
@@ -522,7 +507,7 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
         void sortIntervalsBySpillPos() {
             // TODO (JE): better algorithm?
             // conventional sort-algorithm for new intervals
-            Arrays.sort(sortedIntervals, SORT_BY_SPILL_POS_COMP);
+            Arrays.sort(sortedIntervals, (TraceInterval a, TraceInterval b) -> a.spillDefinitionPos() - b.spillDefinitionPos());
         }
 
         // wrapper for Interval.splitChildAtOpId that performs a bailout in product mode
