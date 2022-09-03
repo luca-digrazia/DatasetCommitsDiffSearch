@@ -41,15 +41,22 @@ public final class LLVMAddress {
 
     private final Type type;
 
+    private final long symbolIndex;
+
     private final long val;
 
-    private LLVMAddress(Type type, long val) {
+    private LLVMAddress(Type type, long val, long index) {
         this.type = type;
         this.val = val;
+        this.symbolIndex = index;
+    }
+
+    private LLVMAddress(long val, long index) {
+        this(null, val, index);
     }
 
     private LLVMAddress(long val) {
-        this(null, val);
+        this(null, val, -1);
     }
 
     public static LLVMAddress fromLong(long val) {
@@ -57,11 +64,15 @@ public final class LLVMAddress {
     }
 
     public static LLVMAddress fromLong(Type type, long val) {
-        return new LLVMAddress(type, val);
+        return new LLVMAddress(type, val, 0);
     }
 
     public Type getType() {
         return type;
+    }
+
+    public long getSymbolIndex() {
+        return symbolIndex;
     }
 
     public long getVal() {
@@ -80,12 +91,12 @@ public final class LLVMAddress {
         return new LLVMAddress(val - decr);
     }
 
-    public LLVMAddress increment(int incr, Type newType) {
-        return increment((long) incr, newType);
+    public LLVMAddress index(int incr, long index) {
+        return this.index((long) incr, index);
     }
 
-    public LLVMAddress increment(long incr, Type newType) {
-        return new LLVMAddress(newType, val + incr);
+    public LLVMAddress index(long incr, long index) {
+        return new LLVMAddress(type, val + incr, index);
     }
 
     @Override
