@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,9 +27,11 @@ package com.oracle.truffle.api.nodes;
 import java.lang.annotation.*;
 
 /**
- * Specifies for a method that the loops with constant number of invocations should be fully unrolled.
+ * Specifies for a method that the loops with constant number of invocations should be fully
+ * unrolled.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface ExplodeLoop {
+    boolean merge() default false;
 }
