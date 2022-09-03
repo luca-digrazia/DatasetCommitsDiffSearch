@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.parser.listeners.function;
 
 import java.util.List;
 
+import com.oracle.truffle.llvm.parser.listeners.IRVersionController;
 import com.oracle.truffle.llvm.parser.listeners.Types;
 import com.oracle.truffle.llvm.parser.model.generators.FunctionGenerator;
 import com.oracle.truffle.llvm.parser.records.Records;
@@ -42,8 +43,8 @@ import com.oracle.truffle.llvm.runtime.types.VoidType;
 public final class FunctionVersion {
 
     public static class FunctionV38 extends Function {
-        public FunctionV38(Types types, List<Type> symbols, FunctionGenerator generator, int mode) {
-            super(types, symbols, generator, mode);
+        public FunctionV38(IRVersionController version, Types types, List<Type> symbols, FunctionGenerator generator, int mode) {
+            super(version, types, symbols, generator, mode);
         }
 
         @Override
@@ -54,7 +55,7 @@ public final class FunctionVersion {
             int count = getIndexAbsolute(args[i++]);
             int align = getAlign(args[i]);
 
-            instructionBlock.createAllocation(type, count, align);
+            code.createAllocation(type, count, align);
 
             symbols.add(type);
         }
@@ -69,7 +70,7 @@ public final class FunctionVersion {
             final long atomicOrdering = args[i++];
             final long synchronizationScope = args[i];
 
-            instructionBlock.createAtomicLoad(type, source, align, isVolatile, atomicOrdering, synchronizationScope);
+            code.createAtomicLoad(type, source, align, isVolatile, atomicOrdering, synchronizationScope);
 
             symbols.add(type);
         }
@@ -88,7 +89,7 @@ public final class FunctionVersion {
             }
 
             final Type returnType = functionType.getReturnType();
-            instructionBlock.createCall(returnType, target, arguments, visibility, linkage);
+            code.createCall(returnType, target, arguments, visibility, linkage);
 
             if (returnType != VoidType.INSTANCE) {
                 symbols.add(returnType);
@@ -110,11 +111,11 @@ public final class FunctionVersion {
                 arguments[j] = getIndex(args[i]);
             }
             final Type returnType = functionType.getReturnType();
-            instructionBlock.createInvoke(returnType, target, arguments, visibility, linkage, normalSuccessorBlock, unwindSuccessorBlock);
+            code.createInvoke(returnType, target, arguments, visibility, linkage, normalSuccessorBlock, unwindSuccessorBlock);
             if (!(returnType instanceof VoidType)) {
                 symbols.add(returnType);
             }
-            isLastBlockTerminated = true;
+            code = null;
         }
 
         @Override
@@ -130,15 +131,15 @@ public final class FunctionVersion {
                 clauseTypes[j] = getIndex(args[i++]);
             }
             symbols.add(type);
-            instructionBlock.createLandingpad(type, isCleanup, clauseKinds, clauseTypes);
+            code.createLandingpad(type, isCleanup, clauseKinds, clauseTypes);
         }
 
         @Override
         protected void createResume(long[] args) {
             int i = 0;
             final Type type = types.get(args[i++]);
-            instructionBlock.createResume(type);
-            isLastBlockTerminated = true;
+            code.createResume(type);
+            code = null;
         }
 
         @Override
@@ -149,7 +150,7 @@ public final class FunctionVersion {
             int align = getAlign(args[i++]);
             boolean isVolatile = args[i] != 0;
 
-            instructionBlock.createLoad(type, source, align, isVolatile);
+            code.createLoad(type, source, align, isVolatile);
 
             symbols.add(type);
         }
@@ -167,17 +168,17 @@ public final class FunctionVersion {
                 caseBlocks[j] = (int) args[i++];
             }
 
-            instructionBlock.createSwitch(condition, defaultBlock, caseValues, caseBlocks);
+            code.createSwitch(condition, defaultBlock, caseValues, caseBlocks);
 
-            isLastBlockTerminated = true;
+            code = null;
         }
 
     }
 
     public static class FunctionV32 extends Function {
 
-        public FunctionV32(Types types, List<Type> symbols, FunctionGenerator generator, int mode) {
-            super(types, symbols, generator, mode);
+        public FunctionV32(IRVersionController version, Types types, List<Type> symbols, FunctionGenerator generator, int mode) {
+            super(version, types, symbols, generator, mode);
         }
 
         @Override
@@ -188,7 +189,7 @@ public final class FunctionVersion {
             int count = getIndexAbsolute(args[i++]);
             int align = getAlign(args[i]);
 
-            instructionBlock.createAllocation(type, count, align);
+            code.createAllocation(type, count, align);
 
             symbols.add(type);
         }
@@ -208,7 +209,7 @@ public final class FunctionVersion {
             final long atomicOrdering = args[i++];
             final long synchronizationScope = args[i];
 
-            instructionBlock.createAtomicLoad(type, source, align, isVolatile, atomicOrdering, synchronizationScope);
+            code.createAtomicLoad(type, source, align, isVolatile, atomicOrdering, synchronizationScope);
 
             symbols.add(type);
         }
@@ -230,7 +231,7 @@ public final class FunctionVersion {
             }
 
             final Type returnType = ((FunctionType) type).getReturnType();
-            instructionBlock.createCall(returnType, target, arguments, visibility, linkage);
+            code.createCall(returnType, target, arguments, visibility, linkage);
 
             if (returnType != VoidType.INSTANCE) {
                 symbols.add(returnType);
@@ -266,7 +267,7 @@ public final class FunctionVersion {
             int align = getAlign(args[i++]);
             boolean isVolatile = args[i] != 0;
 
-            instructionBlock.createLoad(type, source, align, isVolatile);
+            code.createLoad(type, source, align, isVolatile);
 
             symbols.add(type);
         }
@@ -285,9 +286,9 @@ public final class FunctionVersion {
                 caseBlocks[j] = (int) args[i++];
             }
 
-            instructionBlock.createSwitchOld(condition, defaultBlock, caseConstants, caseBlocks);
+            code.createSwitchOld(condition, defaultBlock, caseConstants, caseBlocks);
 
-            isLastBlockTerminated = true;
+            code = null;
         }
     }
 }

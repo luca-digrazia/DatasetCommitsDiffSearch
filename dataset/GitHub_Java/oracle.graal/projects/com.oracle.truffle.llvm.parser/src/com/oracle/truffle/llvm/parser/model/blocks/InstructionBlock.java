@@ -60,7 +60,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.ShuffleVectorIn
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.StoreInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchOldInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.TerminatingInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnreachableInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
@@ -123,11 +122,11 @@ public final class InstructionBlock implements ValueSymbol {
         addInstruction(ConditionalBranchInstruction.fromSymbols(function.getSymbols(), condition, function.getBlock(blockTrue), function.getBlock(blockFalse)));
     }
 
-    public void createCall(Type type, int target, int[] arguments) {
+    public void createCall(Type type, int target, int[] arguments, long visibility, long linkage) {
         if (type == VoidType.INSTANCE) {
-            addInstruction(VoidCallInstruction.fromSymbols(function.getSymbols(), target, arguments));
+            addInstruction(VoidCallInstruction.fromSymbols(function.getSymbols(), target, arguments, visibility, linkage));
         } else {
-            addInstruction(CallInstruction.fromSymbols(function.getSymbols(), type, target, arguments));
+            addInstruction(CallInstruction.fromSymbols(function.getSymbols(), type, target, arguments, visibility, linkage));
         }
     }
 
@@ -135,11 +134,13 @@ public final class InstructionBlock implements ValueSymbol {
         addInstruction(CompareExchangeInstruction.fromSymbols(function.getSymbols(), type, ptr, cmp, replace, isVolatile, successOrdering, synchronizationScope, failureOrdering, isWeak));
     }
 
-    public void createInvoke(Type type, int target, int[] arguments, int regularSuccessorBlock, int unwindSuccessorBlock) {
+    public void createInvoke(Type type, int target, int[] arguments, long visibility, long linkage, int regularSuccessorBlock, int unwindSuccessorBlock) {
         if (type instanceof VoidType) {
-            addInstruction(VoidInvokeInstruction.fromSymbols(function.getSymbols(), target, arguments, function.getBlock(regularSuccessorBlock), function.getBlock(unwindSuccessorBlock)));
+            addInstruction(VoidInvokeInstruction.fromSymbols(function.getSymbols(), target, arguments, visibility, linkage, function.getBlock(regularSuccessorBlock),
+                            function.getBlock(unwindSuccessorBlock)));
         } else {
-            addInstruction(InvokeInstruction.fromSymbols(function.getSymbols(), type, target, arguments, function.getBlock(regularSuccessorBlock), function.getBlock(unwindSuccessorBlock)));
+            addInstruction(InvokeInstruction.fromSymbols(function.getSymbols(), type, target, arguments, visibility, linkage, function.getBlock(regularSuccessorBlock),
+                            function.getBlock(unwindSuccessorBlock)));
         }
     }
 
@@ -147,8 +148,8 @@ public final class InstructionBlock implements ValueSymbol {
         addInstruction(LandingpadInstruction.generate(function.getSymbols(), type, isCleanup, clauseTypes, clauseTODO));
     }
 
-    public void createResume(@SuppressWarnings("unused") Type type, int value) {
-        addInstruction(ResumeInstruction.fromSymbols(function.getSymbols(), value));
+    public void createResume(@SuppressWarnings("unused") Type type) {
+        addInstruction(ResumeInstruction.generate());
     }
 
     public void createCast(Type type, int opcode, int value) {
@@ -232,12 +233,12 @@ public final class InstructionBlock implements ValueSymbol {
         return name;
     }
 
-    public Symbols getFunctionSymbols() {
-        return function.getSymbols();
-    }
-
     public Instruction getInstruction(int index) {
         return instructions.get(index);
+    }
+
+    public Symbols getFunctionSymbols() {
+        return function.getSymbols();
     }
 
     public int getInstructionCount() {
@@ -256,11 +257,6 @@ public final class InstructionBlock implements ValueSymbol {
 
     public void setImplicitName(int label) {
         this.name = LLVMIdentifier.toImplicitBlockName(label);
-    }
-
-    public TerminatingInstruction getTerminatingInstruction() {
-        assert instructions.get(instructions.size() - 1) instanceof TerminatingInstruction : "last instruction must be a terminating instruction";
-        return (TerminatingInstruction) instructions.get(instructions.size() - 1);
     }
 
     @Override
