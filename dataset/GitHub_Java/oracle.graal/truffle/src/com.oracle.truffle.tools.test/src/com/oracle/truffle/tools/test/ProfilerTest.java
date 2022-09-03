@@ -82,7 +82,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertTrue(profiler.hasData());
 
         final com.oracle.truffle.api.source.Source sourceImpl = getSourceImpl(source);
-        final SourceSection rootSection = sourceImpl.createSection(0, 140);
+        final SourceSection rootSection = sourceImpl.createSection(0, 139);
         final SourceSection leafSection = sourceImpl.createSection(17, 16);
         final SourceSection callfooSection = sourceImpl.createSection(47, 27);
         final SourceSection callbarSection = sourceImpl.createSection(88, 27);
@@ -203,7 +203,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertTrue(profiler.hasData());
 
         final com.oracle.truffle.api.source.Source sourceImpl = getSourceImpl(source);
-        final SourceSection rootSection = sourceImpl.createSection(0, 140);
+        final SourceSection rootSection = sourceImpl.createSection(0, 139);
         final SourceSection leafSection = sourceImpl.createSection(17, 16);
         final SourceSection callfooSection = sourceImpl.createSection(47, 27);
         final SourceSection callbarSection = sourceImpl.createSection(88, 27);
@@ -317,7 +317,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         counters = profiler.getCounters();
         final com.oracle.truffle.api.source.Source sourceImpl = getSourceImpl(source);
-        final SourceSection rootSection = sourceImpl.createSection(0, 140);
+        final SourceSection rootSection = sourceImpl.createSection(0, 139);
         final SourceSection leafSection = sourceImpl.createSection(17, 16);
         final SourceSection callfooSection = sourceImpl.createSection(47, 27);
         final SourceSection callbarSection = sourceImpl.createSection(88, 27);
