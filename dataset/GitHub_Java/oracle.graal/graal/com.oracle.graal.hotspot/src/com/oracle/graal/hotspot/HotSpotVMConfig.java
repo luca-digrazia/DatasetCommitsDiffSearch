@@ -289,17 +289,17 @@ public class HotSpotVMConfig extends CompilerObject {
 
             public String getTypeName() {
                 long typeNameAddress = unsafe.getAddress(entryAddress + gHotSpotVMStructEntryTypeNameOffset);
-                return readCString(typeNameAddress);
+                return readCStringAsString(typeNameAddress);
             }
 
             public String getFieldName() {
                 long fieldNameAddress = unsafe.getAddress(entryAddress + gHotSpotVMStructEntryFieldNameOffset);
-                return readCString(fieldNameAddress);
+                return readCStringAsString(fieldNameAddress);
             }
 
             public String getTypeString() {
                 long typeStringAddress = unsafe.getAddress(entryAddress + gHotSpotVMStructEntryTypeStringOffset);
-                return readCString(typeStringAddress);
+                return readCStringAsString(typeStringAddress);
             }
 
             public boolean isStatic() {
@@ -405,12 +405,12 @@ public class HotSpotVMConfig extends CompilerObject {
 
             public String getTypeName() {
                 long typeNameAddress = unsafe.getAddress(entryAddress + gHotSpotVMTypeEntryTypeNameOffset);
-                return readCString(typeNameAddress);
+                return readCStringAsString(typeNameAddress);
             }
 
             public String getSuperclassName() {
                 long superclassNameAddress = unsafe.getAddress(entryAddress + gHotSpotVMTypeEntrySuperclassNameOffset);
-                return readCString(superclassNameAddress);
+                return readCStringAsString(superclassNameAddress);
             }
 
             public boolean isOopType() {
@@ -451,7 +451,7 @@ public class HotSpotVMConfig extends CompilerObject {
 
         public String getName() {
             long nameAddress = unsafe.getAddress(address + nameOffset);
-            return readCString(nameAddress);
+            return readCStringAsString(nameAddress);
         }
 
         public abstract long getValue();
@@ -646,12 +646,12 @@ public class HotSpotVMConfig extends CompilerObject {
 
             public String getType() {
                 long typeAddress = unsafe.getAddress(entryAddress + typeOffset);
-                return readCString(typeAddress);
+                return readCStringAsString(typeAddress);
             }
 
             public String getName() {
                 long nameAddress = unsafe.getAddress(entryAddress + nameOffset);
-                return readCString(nameAddress);
+                return readCStringAsString(nameAddress);
             }
 
             public long getAddr() {
@@ -670,7 +670,7 @@ public class HotSpotVMConfig extends CompilerObject {
                         return Double.valueOf(unsafe.getDouble(getAddr()));
                     case "ccstr":
                     case "ccstrlist":
-                        return readCString(getAddr());
+                        return readCStringAsString(getAddr());
                     default:
                         throw GraalInternalError.shouldNotReachHere(getType());
                 }
@@ -681,6 +681,24 @@ public class HotSpotVMConfig extends CompilerObject {
                 return String.format("Flag[type=%s, name=%s, value=%s]", getType(), getName(), getValue());
             }
         }
+    }
+
+    /**
+     * Read a null-terminated C string from memory and convert it to a Java String.
+     */
+    private static String readCStringAsString(long address) {
+        if (address == 0) {
+            return null;
+        }
+        StringBuffer sb = new StringBuffer();
+        for (int i = 0;; i++) {
+            char c = (char) unsafe.getByte(address + i);
+            if (c == 0) {
+                break;
+            }
+            sb.append(c);
+        }
+        return sb.toString();
     }
 
     // os information, register layout, code generation, ...

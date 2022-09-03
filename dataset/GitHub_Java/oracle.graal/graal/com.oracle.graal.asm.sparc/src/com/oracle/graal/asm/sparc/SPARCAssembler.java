@@ -33,7 +33,7 @@ import com.oracle.graal.sparc.*;
 /**
  * This class implements an assembler that can encode most SPARC instructions.
  */
-public abstract class SPARCAssembler extends Assembler {
+public abstract class SPARCAssembler extends AbstractAssembler {
 
     /**
      * Constructs an assembler for the SPARC architecture.
@@ -89,7 +89,7 @@ public abstract class SPARCAssembler extends Assembler {
         }
 
         public static Fmt00a read(SPARCAssembler masm, int pos) {
-            final int inst = masm.getInt(pos);
+            final int inst = masm.codeBuffer.getInt(pos);
 
             // Make sure it's the right instruction:
             final int op = (inst & OP_MASK) >> OP_SHIFT;
@@ -105,7 +105,7 @@ public abstract class SPARCAssembler extends Assembler {
 
         public void write(SPARCAssembler masm, int pos) {
             verify();
-            masm.emitInt(getInstructionBits(), pos);
+            masm.codeBuffer.emitInt(getInstructionBits(), pos);
         }
 
         public void emit(SPARCAssembler masm) {
@@ -253,7 +253,7 @@ public abstract class SPARCAssembler extends Assembler {
         }
 
         public static Fmt00c read(SPARCAssembler masm, int pos) {
-            final int inst = masm.getInt(pos);
+            final int inst = masm.codeBuffer.getInt(pos);
 
             // Make sure it's the right instruction:
             final int op = (inst & OP_MASK) >> OP_SHIFT;
@@ -274,13 +274,13 @@ public abstract class SPARCAssembler extends Assembler {
 
         public void write(SPARCAssembler masm, int pos) {
             verify();
-            masm.emitInt(getInstructionBits(), pos);
+            masm.codeBuffer.emitInt(getInstructionBits(), pos);
         }
 
         public void emit(SPARCAssembler masm) {
             if (label != null) {
                 final int pos = label.isBound() ? label.position() : patchUnbound(masm, label);
-                final int disp = pos - masm.position();
+                final int disp = pos - masm.codeBuffer.position();
                 setDisp19(disp);
             }
             verify();
@@ -288,7 +288,7 @@ public abstract class SPARCAssembler extends Assembler {
         }
 
         private static int patchUnbound(SPARCAssembler masm, Label label) {
-            label.addPatchAt(masm.position());
+            label.addPatchAt(masm.codeBuffer.position());
             return 0;
         }
 
@@ -370,7 +370,7 @@ public abstract class SPARCAssembler extends Assembler {
         }
 
         public static Fmt01 read(SPARCAssembler masm, int pos) {
-            final int inst = masm.getInt(pos);
+            final int inst = masm.codeBuffer.getInt(pos);
 
             // Make sure it's the right instruction:
             final int op = (inst & OP_MASK) >> OP_SHIFT;
@@ -386,7 +386,7 @@ public abstract class SPARCAssembler extends Assembler {
 
         public void write(SPARCAssembler masm, int pos) {
             verify();
-            masm.emitInt(getInstructionBits(), pos);
+            masm.codeBuffer.emitInt(getInstructionBits(), pos);
         }
 
         public void emit(SPARCAssembler masm) {
@@ -550,7 +550,7 @@ public abstract class SPARCAssembler extends Assembler {
         }
 
         public static Fmt10 read(SPARCAssembler masm, int pos) {
-            final int inst = masm.getInt(pos);
+            final int inst = masm.codeBuffer.getInt(pos);
 
             // Make sure it's the right instruction:
             final int op = (inst & OP_MASK) >> OP_SHIFT;
@@ -571,7 +571,7 @@ public abstract class SPARCAssembler extends Assembler {
 
         public void write(SPARCAssembler masm, int pos) {
             verify();
-            masm.emitInt(getInstructionBits(), pos);
+            masm.codeBuffer.emitInt(getInstructionBits(), pos);
         }
 
         public void emit(SPARCAssembler masm) {
@@ -696,7 +696,7 @@ public abstract class SPARCAssembler extends Assembler {
         }
 
         public static Fmt11 read(SPARCAssembler masm, int pos) {
-            final int inst = masm.getInt(pos);
+            final int inst = masm.codeBuffer.getInt(pos);
 
             // Make sure it's the right instruction:
             final int op = (inst & OP_MASK) >> OP_SHIFT;
@@ -716,7 +716,7 @@ public abstract class SPARCAssembler extends Assembler {
 
         public void write(SPARCAssembler masm, int pos) {
             verify();
-            masm.emitInt(getInstructionBits(), pos);
+            masm.codeBuffer.emitInt(getInstructionBits(), pos);
         }
 
         public void emit(SPARCAssembler masm) {
@@ -832,7 +832,7 @@ public abstract class SPARCAssembler extends Assembler {
         }
 
         public static Fmt10c read(SPARCAssembler masm, int pos) {
-            final int inst = masm.getInt(pos);
+            final int inst = masm.codeBuffer.getInt(pos);
 
             // Make sure it's the right instruction:
             final int op = (inst & OP_MASK) >> OP_SHIFT;
@@ -852,7 +852,7 @@ public abstract class SPARCAssembler extends Assembler {
 
         public void write(SPARCAssembler masm, int pos) {
             verify();
-            masm.emitInt(getInstructionBits(), pos);
+            masm.codeBuffer.emitInt(getInstructionBits(), pos);
         }
 
         public void emit(SPARCAssembler masm) {
@@ -2938,11 +2938,7 @@ public abstract class SPARCAssembler extends Assembler {
     public static class Prefetch extends Fmt11 {
 
         public enum Fcn {
-            SeveralReads(0),
-            OneRead(1),
-            SeveralWritesAndPossiblyReads(2),
-            OneWrite(3),
-            Page(4);
+            SeveralReads(0), OneRead(1), SeveralWritesAndPossiblyReads(2), OneWrite(3), Page(4);
 
             private final int value;
 

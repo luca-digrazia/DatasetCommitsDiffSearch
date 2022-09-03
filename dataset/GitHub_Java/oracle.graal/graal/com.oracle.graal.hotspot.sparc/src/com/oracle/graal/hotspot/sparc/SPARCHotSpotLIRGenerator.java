@@ -51,12 +51,10 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSpotLIRGenerator {
 
     private final HotSpotVMConfig config;
-    private final Object stub;
 
-    public SPARCHotSpotLIRGenerator(StructuredGraph graph, Object stub, HotSpotProviders providers, HotSpotVMConfig config, FrameMap frameMap, CallingConvention cc, LIR lir) {
+    public SPARCHotSpotLIRGenerator(StructuredGraph graph, HotSpotProviders providers, HotSpotVMConfig config, FrameMap frameMap, CallingConvention cc, LIR lir) {
         super(graph, providers, frameMap, cc, lir);
         this.config = config;
-        this.stub = stub;
     }
 
     @Override
@@ -86,19 +84,23 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     @Override
     protected boolean needOnlyOopMaps() {
         // Stubs only need oop maps
-        return stub != null;
+        return graph.start() instanceof StubStartNode;
     }
 
     Stub getStub() {
-        return (Stub) stub;
+        if (graph.start() instanceof StubStartNode) {
+            return ((StubStartNode) graph.start()).getStub();
+        }
+        return null;
     }
 
     @Override
     public Variable emitForeignCall(ForeignCallLinkage linkage, DeoptimizingNode info, Value... args) {
+        Stub stub = getStub();
         Variable result;
 
         if (linkage.canDeoptimize()) {
-            assert info != null || getStub() != null;
+            assert info != null || stub != null;
             HotSpotRegistersProvider registers = getProviders().getRegisters();
             Register thread = registers.getThreadRegister();
             Register stackPointer = registers.getStackPointerRegister();
