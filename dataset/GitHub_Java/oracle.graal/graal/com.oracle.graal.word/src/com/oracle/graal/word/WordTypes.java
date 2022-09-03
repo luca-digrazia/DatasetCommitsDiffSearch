@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.word;
 
+import com.oracle.graal.bytecode.BridgeMethodUtils;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.nodes.ValueNode;
@@ -98,7 +99,7 @@ public class WordTypes {
             wordMethod = wordImplType.resolveConcreteMethod(targetMethod, callingContextType);
         }
         assert wordMethod != null : targetMethod;
-        assert wordMethod.getAnnotation(Operation.class) != null : wordMethod;
+        assert BridgeMethodUtils.getAnnotation(Operation.class, wordMethod) != null;
         return wordMethod;
     }
 
@@ -112,16 +113,16 @@ public class WordTypes {
     /**
      * Determines if a given type is a word type.
      */
-    public boolean isWord(ResolvedJavaType type) {
-        return type != null && wordBaseType.isAssignableFrom(type);
+    public boolean isWord(JavaType type) {
+        return type instanceof ResolvedJavaType && wordBaseType.isAssignableFrom((ResolvedJavaType) type);
     }
 
     /**
      * Gets the kind for a given type, returning the {@linkplain #getWordKind() word kind} if
-     * {@code type} is a {@linkplain #isWord(ResolvedJavaType) word type}.
+     * {@code type} is a {@linkplain #isWord(JavaType) word type}.
      */
     public JavaKind asKind(JavaType type) {
-        if (type instanceof ResolvedJavaType && isWord((ResolvedJavaType) type)) {
+        if (isWord(type)) {
             return wordKind;
         } else {
             return type.getJavaKind();
@@ -133,7 +134,7 @@ public class WordTypes {
     }
 
     /**
-     * Gets the stamp for a given {@linkplain #isWord(ResolvedJavaType) word type}.
+     * Gets the stamp for a given {@linkplain #isWord(JavaType) word type}.
      */
     public Stamp getWordStamp(ResolvedJavaType type) {
         assert isWord(type);

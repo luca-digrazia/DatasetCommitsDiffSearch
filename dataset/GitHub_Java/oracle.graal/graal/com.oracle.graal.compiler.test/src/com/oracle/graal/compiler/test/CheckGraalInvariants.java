@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.INTERCEPT;
 
 import java.io.File;
@@ -192,7 +191,7 @@ public class CheckGraalInvariants extends GraalTest {
                     if (matches(filters, methodName)) {
                         executor.execute(() -> {
                             ResolvedJavaMethod method = metaAccess.lookupJavaMethod(m);
-                            StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO, INVALID_COMPILATION_ID);
+                            StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO);
                             try (DebugConfigScope s = Debug.setConfig(new DelegatingDebugConfig().disable(INTERCEPT)); Debug.Scope ds = Debug.scope("CheckingGraph", graph, method)) {
                                 graphBuilderSuite.apply(graph, context);
                                 // update phi stamps

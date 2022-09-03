@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,41 +22,70 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
-import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.*;
-import static com.oracle.graal.nodes.ConstantNode.*;
+import static com.oracle.graal.compiler.common.LocationIdentity.any;
+import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.POINTER_EQ;
+import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.POINTER_NE;
+import static com.oracle.graal.nodes.ConstantNode.forBoolean;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.hotspot.nodes.type.*;
-import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.api.replacements.SnippetReflectionProvider;
+import com.oracle.graal.bytecode.BridgeMethodUtils;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.hotspot.nodes.LoadIndexedPointerNode;
+import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
+import com.oracle.graal.hotspot.nodes.type.MetaspacePointerStamp;
+import com.oracle.graal.hotspot.nodes.type.MethodPointerStamp;
+import com.oracle.graal.hotspot.word.HotSpotOperation;
 import com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode;
-import com.oracle.graal.java.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.HeapAccess.BarrierType;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.word.phases.*;
+import com.oracle.graal.hotspot.word.PointerCastNode;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.LogicNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.ConditionalNode;
+import com.oracle.graal.nodes.calc.IsNullNode;
+import com.oracle.graal.nodes.calc.PointerEqualsNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.nodes.java.LoadIndexedNode;
+import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
+import com.oracle.graal.nodes.memory.ReadNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.replacements.WordOperationPlugin;
+import com.oracle.graal.word.WordTypes;
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Extends {@link WordOperationPlugin} to handle {@linkplain HotSpotOperation HotSpot word
  * operations}.
  */
 class HotSpotWordOperationPlugin extends WordOperationPlugin {
-    public HotSpotWordOperationPlugin(SnippetReflectionProvider snippetReflection, WordTypes wordTypes) {
+    HotSpotWordOperationPlugin(SnippetReflectionProvider snippetReflection, WordTypes wordTypes) {
         super(snippetReflection, wordTypes);
     }
 
     @Override
-    public boolean apply(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
+    protected LoadIndexedNode createLoadIndexedNode(ValueNode array, ValueNode index) {
+        ResolvedJavaType arrayType = StampTool.typeOrNull(array);
+        Stamp componentStamp = wordTypes.getWordStamp(arrayType.getComponentType());
+        if (componentStamp instanceof MetaspacePointerStamp) {
+            return new LoadIndexedPointerNode(componentStamp, array, index);
+        } else {
+            return super.createLoadIndexedNode(array, index);
+        }
+    }
+
+    @Override
+    public boolean handleInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
         if (!wordTypes.isWordOperation(method)) {
             return false;
         }
 
-        HotSpotOperation operation = method.getAnnotation(HotSpotOperation.class);
+        HotSpotOperation operation = BridgeMethodUtils.getAnnotation(HotSpotOperation.class, method);
         if (operation == null) {
             processWordOperation(b, args, wordTypes.getWordOperation(method, b.getMethod().getDeclaringClass()));
             return true;
@@ -65,9 +94,8 @@ class HotSpotWordOperationPlugin extends WordOperationPlugin {
         return true;
     }
 
-    public void processHotSpotWordOperation(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, HotSpotOperation operation) {
-        Kind returnKind = method.getSignature().getReturnKind();
-        Kind returnStackKind = returnKind.getStackKind();
+    protected void processHotSpotWordOperation(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, HotSpotOperation operation) {
+        JavaKind returnKind = method.getSignature().getReturnKind();
         switch (operation.opcode()) {
             case POINTER_EQ:
             case POINTER_NE:
@@ -79,10 +107,10 @@ class HotSpotWordOperationPlugin extends WordOperationPlugin {
                 assert right.stamp() instanceof MetaspacePointerStamp : right + " " + right.stamp();
                 assert opcode == POINTER_EQ || opcode == POINTER_NE;
 
-                PointerEqualsNode comparison = b.append(new PointerEqualsNode(left, right));
-                ValueNode eqValue = b.append(forBoolean(opcode == POINTER_EQ));
-                ValueNode neValue = b.append(forBoolean(opcode == POINTER_NE));
-                b.push(returnStackKind, b.append(new ConditionalNode(comparison, eqValue, neValue)));
+                PointerEqualsNode comparison = b.add(new PointerEqualsNode(left, right));
+                ValueNode eqValue = b.add(forBoolean(opcode == POINTER_EQ));
+                ValueNode neValue = b.add(forBoolean(opcode == POINTER_NE));
+                b.addPush(returnKind, new ConditionalNode(comparison, eqValue, neValue));
                 break;
 
             case IS_NULL:
@@ -90,45 +118,47 @@ class HotSpotWordOperationPlugin extends WordOperationPlugin {
                 ValueNode pointer = args[0];
                 assert pointer.stamp() instanceof MetaspacePointerStamp;
 
-                IsNullNode isNull = b.append(new IsNullNode(pointer));
-                b.push(returnStackKind, b.append(new ConditionalNode(isNull, b.append(forBoolean(true)), b.append(forBoolean(false)))));
+                LogicNode isNull = b.add(IsNullNode.create(pointer));
+                b.addPush(returnKind, new ConditionalNode(isNull, b.add(forBoolean(true)), b.add(forBoolean(false))));
                 break;
 
             case FROM_POINTER:
                 assert args.length == 1;
-                b.push(returnStackKind, b.append(new PointerCastNode(StampFactory.forKind(wordKind), args[0])));
+                b.addPush(returnKind, new PointerCastNode(StampFactory.forKind(wordKind), args[0]));
                 break;
 
             case TO_KLASS_POINTER:
                 assert args.length == 1;
-                b.push(returnStackKind, b.append(new PointerCastNode(KlassPointerStamp.klass(), args[0])));
+                b.addPush(returnKind, new PointerCastNode(KlassPointerStamp.klass(), args[0]));
                 break;
 
             case TO_METHOD_POINTER:
                 assert args.length == 1;
-                b.push(returnStackKind, b.append(new PointerCastNode(MethodPointerStamp.method(), args[0])));
+                b.addPush(returnKind, new PointerCastNode(MethodPointerStamp.method(), args[0]));
                 break;
 
             case READ_KLASS_POINTER:
                 assert args.length == 2 || args.length == 3;
                 Stamp readStamp = KlassPointerStamp.klass();
-                LocationNode location;
+                AddressNode address = makeAddress(b, args[0], args[1]);
+                LocationIdentity location;
                 if (args.length == 2) {
-                    location = makeLocation(b, args[1], ANY_LOCATION);
+                    location = any();
                 } else {
-                    location = makeLocation(b, args[1], args[2]);
+                    assert args[2].isConstant();
+                    location = snippetReflection.asObject(LocationIdentity.class, args[2].asJavaConstant());
                 }
-                ReadNode read = b.append(new ReadNode(args[0], location, readStamp, BarrierType.NONE));
+                ReadNode read = b.add(new ReadNode(address, location, readStamp, BarrierType.NONE));
                 /*
                  * The read must not float outside its block otherwise it may float above an
                  * explicit zero check on its base address.
                  */
                 read.setGuard(AbstractBeginNode.prevBegin(read));
-                b.push(returnStackKind, read);
+                b.push(returnKind, read);
                 break;
 
             default:
-                throw GraalInternalError.shouldNotReachHere("unknown operation: " + operation.opcode());
+                throw GraalError.shouldNotReachHere("unknown operation: " + operation.opcode());
         }
     }
 }

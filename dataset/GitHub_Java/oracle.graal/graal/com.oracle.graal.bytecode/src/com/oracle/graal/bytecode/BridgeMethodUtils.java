@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.bytecode;
 
-import static com.oracle.graal.bytecode.Bytecodes.ATHROW;
 import static com.oracle.graal.bytecode.Bytecodes.INVOKEINTERFACE;
 import static com.oracle.graal.bytecode.Bytecodes.INVOKESPECIAL;
 import static com.oracle.graal.bytecode.Bytecodes.INVOKESTATIC;
@@ -59,7 +58,6 @@ public class BridgeMethodUtils {
         BytecodeStream stream = new BytecodeStream(code.getCode());
         int opcode = stream.currentBC();
         ResolvedJavaMethod bridged = null;
-        boolean calledAbstractMethodErrorConstructor = false;
         while (opcode != Bytecodes.END) {
             switch (opcode) {
                 case INVOKEVIRTUAL:
@@ -77,24 +75,15 @@ public class BridgeMethodUtils {
                         assert bridged == null || bridged.equals(method) : String.format("Found calls to different methods named %s in bridge method %s%n  callee 1: %s%n  callee 2: %s",
                                         bridge.getName(), bridge.format("%R %H.%n(%P)"), bridged.format("%R %H.%n(%P)"), method.format("%R %H.%n(%P)"));
                         bridged = method;
-                    } else if (method.getName().equals("<init>") && method.getDeclaringClass().getName().equals("Ljava/lang/AbstractMethodError;")) {
-                        calledAbstractMethodErrorConstructor = true;
                     }
                     break;
-                }
-                case ATHROW: {
-                    if (calledAbstractMethodErrorConstructor) {
-                        // This is a miranda method
-                        return null;
-                    }
                 }
             }
             stream.next();
             opcode = stream.currentBC();
         }
         if (bridged == null) {
-            String dis = new BytecodeDisassembler().disassemble(bridge);
-            throw new InternalError(String.format("Couldn't find method bridged by %s:%n%s", bridge.format("%R %H.%n(%P)"), dis));
+            throw new InternalError("Couldn't find method bridged by " + bridge.format("%R %H.%n(%P)"));
         }
         return bridged;
     }
@@ -113,10 +102,7 @@ public class BridgeMethodUtils {
     public static <T extends Annotation> T getAnnotation(Class<T> annotationClass, ResolvedJavaMethod method) {
         T a = method.getAnnotation(annotationClass);
         if (a == null && method.isBridge()) {
-            ResolvedJavaMethod bridged = getBridgedMethod(method);
-            if (bridged != null) {
-                a = bridged.getAnnotation(annotationClass);
-            }
+            a = getBridgedMethod(method).getAnnotation(annotationClass);
         }
         return a;
     }
@@ -128,25 +114,7 @@ public class BridgeMethodUtils {
     public static Annotation[] getAnnotations(ResolvedJavaMethod method) {
         Annotation[] a = method.getAnnotations();
         if (a.length == 0 && method.isBridge()) {
-            ResolvedJavaMethod bridged = getBridgedMethod(method);
-            if (bridged != null) {
-                a = bridged.getAnnotations();
-            }
-        }
-        return a;
-    }
-
-    /**
-     * A helper for {@link ResolvedJavaMethod#getDeclaredAnnotations()} that handles the absence of
-     * annotations on bridge methods where the bridged method has annotations.
-     */
-    public static Annotation[] getDeclaredAnnotations(ResolvedJavaMethod method) {
-        Annotation[] a = method.getAnnotations();
-        if (a.length == 0 && method.isBridge()) {
-            ResolvedJavaMethod bridged = getBridgedMethod(method);
-            if (bridged != null) {
-                a = bridged.getDeclaredAnnotations();
-            }
+            a = getBridgedMethod(method).getAnnotations();
         }
         return a;
     }
@@ -158,10 +126,7 @@ public class BridgeMethodUtils {
     public static Annotation[][] getParameterAnnotations(ResolvedJavaMethod method) {
         Annotation[][] a = method.getParameterAnnotations();
         if (a.length == 0 && method.isBridge()) {
-            ResolvedJavaMethod bridged = getBridgedMethod(method);
-            if (bridged != null) {
-                a = bridged.getParameterAnnotations();
-            }
+            a = getBridgedMethod(method).getParameterAnnotations();
         }
         return a;
     }
@@ -174,10 +139,7 @@ public class BridgeMethodUtils {
     public static <T extends Annotation> T getParameterAnnotation(Class<T> annotationClass, int parameterIndex, ResolvedJavaMethod method) {
         T a = method.getParameterAnnotation(annotationClass, parameterIndex);
         if (a == null && method.isBridge()) {
-            ResolvedJavaMethod bridged = getBridgedMethod(method);
-            if (bridged != null) {
-                a = bridged.getParameterAnnotation(annotationClass, parameterIndex);
-            }
+            a = getBridgedMethod(method).getParameterAnnotation(annotationClass, parameterIndex);
         }
         return a;
     }
