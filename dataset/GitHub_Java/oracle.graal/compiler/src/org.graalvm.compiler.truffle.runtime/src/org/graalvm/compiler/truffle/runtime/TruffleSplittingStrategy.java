@@ -56,7 +56,7 @@ final class TruffleSplittingStrategy {
             }
         }
         if (TruffleCompilerOptions.getValue(TruffleExperimentalSplitting)) {
-            if (polymorphicSpecializationBasedShouldSplit(call, engineData)) {
+            if (pollutionBasedShouldSplit(call, engineData)) {
                 engineData.splitCount += call.getCallTarget().getUninitializedNodeCount();
                 doSplit(call);
             }
@@ -82,7 +82,7 @@ final class TruffleSplittingStrategy {
         }
     }
 
-    private static boolean polymorphicSpecializationBasedShouldSplit(OptimizedDirectCallNode call, GraalTVMCI.EngineData engineData) {
+    private static boolean pollutionBasedShouldSplit(OptimizedDirectCallNode call, GraalTVMCI.EngineData engineData) {
         OptimizedCallTarget callTarget = call.getCurrentCallTarget();
         if (!callTarget.isNeedsSplit()) {
             return false;
