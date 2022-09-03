@@ -130,10 +130,11 @@ public class BoxingEliminationTest extends GraalCompilerTest {
     }
 
     public static int referenceLoopSnippet(int n, int a) {
+        @SuppressWarnings("unused")
         // temporary fix because ordering of ConstantNodes may differ because inlining copies nodes
-        final int increment = 1;
+        int temp = 1;
         int sum = a;
-        for (int i = 0; i < n; i += increment) {
+        for (int i = 0; i < n; i++) {
             sum += i;
         }
         return sum;
