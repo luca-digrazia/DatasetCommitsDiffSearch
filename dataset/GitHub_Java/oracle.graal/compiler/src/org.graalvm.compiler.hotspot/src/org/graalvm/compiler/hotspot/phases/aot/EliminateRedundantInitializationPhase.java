@@ -30,7 +30,6 @@ import java.util.List;
 
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.hotspot.nodes.aot.InitializeKlassNode;
-import org.graalvm.compiler.hotspot.nodes.aot.ResolveConstantNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
@@ -63,29 +62,28 @@ public class EliminateRedundantInitializationPhase extends BasePhase<PhaseContex
     }
 
     /**
-     * Remove redundant {@link InitializeKlassNode} or {@link ResolveConstantNode} instances from
-     * the graph.
+     * Remove redundant {@link InitializeKlassNode} instances from the graph.
      *
      * @param graph the program graph
      */
     private static void removeRedundantInits(StructuredGraph graph) {
-        // Find and remove redundant nodes from the graph.
-        List<FixedWithNextNode> redundantNodes = findRedundantInits(graph);
-        for (FixedWithNextNode n : redundantNodes) {
+        // Find and remove redundant instances of {@link InitializeKlassNode} from the graph.
+        List<InitializeKlassNode> redundantInits = findRedundantInits(graph);
+        for (InitializeKlassNode n : redundantInits) {
             graph.removeFixed(n);
         }
     }
 
     /**
-     * Find {@link InitializeKlassNode} and {@link ResolveConstantNode} instances that can be
-     * removed because there is an existing dominating node.
+     * Find {@link InitializeKlassNode} instances that can be removed because there is an existing
+     * dominating initialization.
      *
      * @param graph the program graph
      */
-    private static List<FixedWithNextNode> findRedundantInits(StructuredGraph graph) {
+    private static List<InitializeKlassNode> findRedundantInits(StructuredGraph graph) {
         EliminateRedundantInitializationIterator i = new EliminateRedundantInitializationIterator(graph.start(), new InitializedTypes());
         i.apply();
-        return i.getRedundantNodes();
+        return i.getRedundantInits();
     }
 
     /**
@@ -108,7 +106,7 @@ public class EliminateRedundantInitializationPhase extends BasePhase<PhaseContex
         }
 
         public boolean contains(ResolvedJavaType type) {
-            if (type.isInterface() || type.isArray()) {
+            if (type.isInterface()) {
                 // Check for exact match for interfaces
                 return types.contains(type);
             }
@@ -121,8 +119,8 @@ public class EliminateRedundantInitializationPhase extends BasePhase<PhaseContex
         }
 
         /**
-         * Merge two given types. Interfaces and arrays have to be the same to merge successfully.
-         * For other types the answer is the LCA.
+         * Merge two given types. Interfaces have to be the same to merge successfully. For other
+         * types the answer is the LCA.
          *
          * @param a initialized type
          * @param b initialized type
@@ -130,8 +128,8 @@ public class EliminateRedundantInitializationPhase extends BasePhase<PhaseContex
          *         no such type exists.
          */
         private static ResolvedJavaType merge(ResolvedJavaType a, ResolvedJavaType b) {
-            // We want exact match for interfaces or arrays
-            if (a.isInterface() || b.isInterface() || a.isArray() || b.isArray()) {
+            // We want exact match for interfaces
+            if (a.isInterface() || b.isInterface()) {
                 if (a.equals(b)) {
                     return a;
                 } else {
@@ -164,9 +162,8 @@ public class EliminateRedundantInitializationPhase extends BasePhase<PhaseContex
                     ResolvedJavaType tc = merge(ta, tb);
                     if (tc != null) {
                         c.add(tc);
-                        if (tc.isInterface() || tc.isArray()) {
-                            // Interfaces and arrays are not going merge with anything else, so bail
-                            // out early.
+                        if (tc.isInterface()) {
+                            // Interface is not going merge with anything else, so bail out early.
                             break;
                         }
                     }
@@ -205,45 +202,31 @@ public class EliminateRedundantInitializationPhase extends BasePhase<PhaseContex
     }
 
     /**
-     * Do data flow analysis of class initializations and array resolutions. Collect redundant
-     * nodes.
+     * Do data flow analysis of class initializations. Collect redundant initialization nodes.
      */
     private static class EliminateRedundantInitializationIterator extends PostOrderNodeIterator<InitializedTypes> {
-        private List<FixedWithNextNode> redundantNodes = new ArrayList<>();
+        private List<InitializeKlassNode> redundantInits = new ArrayList<>();
 
-        public List<FixedWithNextNode> getRedundantNodes() {
-            return redundantNodes;
+        public List<InitializeKlassNode> getRedundantInits() {
+            return redundantInits;
         }
 
         EliminateRedundantInitializationIterator(FixedNode start, InitializedTypes initialState) {
             super(start, initialState);
         }
 
-        private void processType(FixedWithNextNode node, Constant c) {
-            HotSpotMetaspaceConstant klass = (HotSpotMetaspaceConstant) c;
-            ResolvedJavaType t = klass.asResolvedJavaType();
-            if (t != null) {
-                if (state.contains(t)) {
-                    redundantNodes.add(node);
-                } else {
-                    state.add(t);
-                }
-            }
-        }
-
         @Override
         protected void node(FixedNode node) {
             if (node instanceof InitializeKlassNode) {
                 InitializeKlassNode i = (InitializeKlassNode) node;
-                if (i.value().isConstant()) {
-                    processType(i, i.value().asConstant());
-                }
-            } else if (node instanceof ResolveConstantNode) {
-                ResolveConstantNode r = (ResolveConstantNode) node;
-                if (r.hasNoUsages()) {
-                    if (r.value().isConstant()) {
-                        processType(r, r.value().asConstant());
-                    }
+                Constant c = i.value().asConstant();
+                assert c != null : "Klass should be a constant at this point";
+                HotSpotMetaspaceConstant klass = (HotSpotMetaspaceConstant) c;
+                ResolvedJavaType t = klass.asResolvedJavaType();
+                if (state.contains(t)) {
+                    redundantInits.add(i);
+                } else {
+                    state.add(t);
                 }
             }
         }
