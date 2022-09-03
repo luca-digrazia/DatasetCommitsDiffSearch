@@ -22,17 +22,18 @@
  */
 package com.oracle.truffle.dsl.processor;
 
-import java.util.*;
-
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
-
-import com.oracle.truffle.dsl.processor.generator.*;
-import com.oracle.truffle.dsl.processor.java.*;
-import com.oracle.truffle.dsl.processor.java.model.*;
-import com.oracle.truffle.dsl.processor.java.transform.*;
-import com.oracle.truffle.dsl.processor.model.*;
-import com.oracle.truffle.dsl.processor.parser.*;
+import com.oracle.truffle.dsl.processor.generator.CodeTypeElementFactory;
+import com.oracle.truffle.dsl.processor.java.ElementUtils;
+import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
+import com.oracle.truffle.dsl.processor.java.transform.FixWarningsVisitor;
+import com.oracle.truffle.dsl.processor.java.transform.GenerateOverrideVisitor;
+import com.oracle.truffle.dsl.processor.model.Template;
+import com.oracle.truffle.dsl.processor.parser.AbstractParser;
+import java.util.HashSet;
+import java.util.Set;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
 
 /**
  * THIS IS NOT PUBLIC API.
@@ -44,7 +45,7 @@ class AnnotationProcessor<M extends Template> {
 
     private final Set<String> processedElements = new HashSet<>();
 
-    public AnnotationProcessor(AbstractParser<M> parser, CodeTypeElementFactory<M> factory) {
+    AnnotationProcessor(AbstractParser<M> parser, CodeTypeElementFactory<M> factory) {
         this.parser = parser;
         this.factory = factory;
     }
@@ -55,9 +56,12 @@ class AnnotationProcessor<M extends Template> {
 
     @SuppressWarnings({"unchecked"})
     public void process(Element element, boolean callback) {
+        if (!(element instanceof TypeElement)) {
+            return;
+        }
         // since it is not guaranteed to be called only once by the compiler
         // we check for already processed elements to avoid errors when writing files.
-        if (!callback && element instanceof TypeElement) {
+        if (!callback) {
             String qualifiedName = ElementUtils.getQualifiedName((TypeElement) element);
             if (processedElements.contains(qualifiedName)) {
                 return;
