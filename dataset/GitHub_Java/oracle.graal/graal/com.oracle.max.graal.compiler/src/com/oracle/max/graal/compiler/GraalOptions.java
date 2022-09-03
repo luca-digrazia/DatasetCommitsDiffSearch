@@ -70,12 +70,12 @@ public final class GraalOptions {
 
     // escape analysis settings
     public static boolean EscapeAnalysis                     = true;
-    public static int     ForcedInlineEscapeWeight           = 10;
+    public static int     ForcedInlineEscapeWeight           = 100;
     public static boolean PrintEscapeAnalysis                = ____;
 
     // absolute probability analysis
     public static boolean ProbabilityAnalysis                = true;
-    public static int     LoopFrequencyPropagationPolicy     = -2;
+    public static int     LoopFrequencyPropagationPolicy     = 1;
 
     // profiling information
     public static int     MatureExecutionsBranch             = 50;
