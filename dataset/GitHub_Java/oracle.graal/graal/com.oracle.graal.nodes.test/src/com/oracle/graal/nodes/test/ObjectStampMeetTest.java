@@ -27,7 +27,7 @@ import org.junit.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 
-public class ObjectStampMeetTest extends AbstractObjectStampTest {
+public class ObjectStampMeetTest extends ObjectStampTest {
 
     // class A
     // class B extends A
@@ -104,7 +104,7 @@ public class ObjectStampMeetTest extends AbstractObjectStampTest {
     @Test
     public void testMeetInterface0() {
         Stamp a = StampFactory.declared(getType(A.class));
-        Stamp i = StampFactory.declared(getType(I.class), false, true);
+        Stamp i = StampFactory.declared(getType(I.class));
         Assert.assertEquals(StampFactory.declared(getType(Object.class)), meet(a, i));
     }
 
