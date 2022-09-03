@@ -150,11 +150,11 @@ public class GraphUtil {
 
     public static void killWithUnusedFloatingInputs(Node node) {
         node.safeDelete();
-        node.acceptInputs((n, in) -> {
+        for (Node in : node.inputs()) {
             if (in.isAlive() && in.hasNoUsages() && !(in instanceof FixedNode)) {
                 killWithUnusedFloatingInputs(in);
             }
-        });
+        }
     }
 
     public static void removeFixedWithUnusedInputs(FixedWithNextNode fixed) {
@@ -519,11 +519,6 @@ public class GraphUtil {
 
         public boolean canonicalizeReads() {
             return canonicalizeReads;
-        }
-
-        @Override
-        public boolean allUsagesAvailable() {
-            return true;
         }
 
         public void deleteBranch(Node branch) {
