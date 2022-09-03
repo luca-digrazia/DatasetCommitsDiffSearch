@@ -4497,8 +4497,8 @@ public class BytecodeParser implements GraphBuilderContext {
 
         ClassInitializationPlugin classInitializationPlugin = this.graphBuilderConfig.getPlugins().getClassInitializationPlugin();
         if (classInitializationPlugin != null && classInitializationPlugin.shouldApply(this, resolvedField.getDeclaringClass())) {
-            JavaKind[] pushedSlotKinds = {field.getJavaKind()};
-            ValueNode[] pushedValues = {value};
+            JavaKind[] pushedSlotKinds = new JavaKind[]{field.getJavaKind()};
+            ValueNode[] pushedValues = new ValueNode[]{value};
             FrameState stateBefore = frameState.create(bci(), getNonIntrinsicAncestor(), false, pushedSlotKinds, pushedValues);
             assert stackSizeBefore == stateBefore.stackSize();
             classInitializationPlugin.apply(this, resolvedField.getDeclaringClass(), stateBefore);
