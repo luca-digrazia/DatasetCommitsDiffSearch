@@ -563,11 +563,12 @@ public final class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                 }
             }
             if (probability < MIN_PROBABILITY) {
-                probability = MIN_PROBABILITY;
+                block.setProbability(MIN_PROBABILITY);
             } else if (probability > MAX_PROBABILITY) {
-                probability = MAX_PROBABILITY;
+                block.setProbability(MAX_PROBABILITY);
+            } else {
+                block.setProbability(probability);
             }
-            block.setProbability(probability);
         }
 
     }
