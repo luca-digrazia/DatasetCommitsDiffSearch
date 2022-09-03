@@ -24,14 +24,25 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.instrument.Instrument;
 import java.io.IOException;
 
+import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.Probe;
+import com.oracle.truffle.api.source.Source;
+
+/**
+ * Breakpoint in a {@link com.oracle.truffle.api.vm.PolyglotEngine} with
+ * {@link com.oracle.truffle.api.debug debugging turned on}. You can ask
+ * {@link Debugger#setLineBreakpoint(int, com.oracle.truffle.api.source.LineLocation, boolean)} or
+ * {@link Debugger#setTagBreakpoint(int, com.oracle.truffle.api.instrument.SyntaxTag, boolean)} to
+ * create an instance of {@link Breakpoint}.
+ */
+@SuppressWarnings("javadoc")
 public abstract class Breakpoint {
 
     /**
-     * A general model of the states occupied by a breakpoint during its lifetime.
+     * A general model of the states occupied by a {@link Breakpoint} during its lifetime.
      */
     public enum State {
 
@@ -106,8 +117,8 @@ public abstract class Breakpoint {
     }
 
     /**
-     * Enables or disables this breakpoint's AST instrumentation. The breakpoint is enabled by
-     * default.
+     * Enables or disables this breakpoint's AST {@linkplain Instrumenter instrumentation}. The
+     * breakpoint is enabled by default.
      *
      * @param enabled <code>true</code> to activate the instrumentation, <code>false</code> to
      *            deactivate the instrumentation so that it has no effect.
@@ -130,10 +141,10 @@ public abstract class Breakpoint {
     public abstract void setCondition(String expr) throws IOException;
 
     /**
-     * Gets the string, expressed in the Guest Language, that defines the current condition on this
-     * breakpoint; {@code null} if this breakpoint is currently unconditional.
+     * Gets the text that defines the current condition on this breakpoint; {@code null} if this
+     * breakpoint is currently unconditional.
      */
-    public String getCondition() {
+    public Source getCondition() {
         return null;
     }
 
