@@ -1501,64 +1501,51 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             protected void processBlock(BytecodeParser parser, BciBlock block) {
                 // Ignore blocks that have no predecessors by the time their bytecodes are parsed
-                int currentDimension = this.getCurrentDimension();
-                FixedWithNextNode firstInstruction = getFirstInstruction(block, currentDimension);
-                if (firstInstruction == null) {
+                if (block == null || getFirstInstruction(block, this.getCurrentDimension()) == null) {
                     Debug.log("Ignoring block %s", block);
                     return;
                 }
-                try (Indent indent = Debug.logAndIndent("Parsing block %s  firstInstruction: %s  loopHeader: %b", block, firstInstruction, block.isLoopHeader)) {
+                try (Indent indent = Debug.logAndIndent("Parsing block %s  firstInstruction: %s  loopHeader: %b", block, getFirstInstruction(block, this.getCurrentDimension()), block.isLoopHeader)) {
 
-                    lastInstr = firstInstruction;
-                    frameState = getEntryState(block, currentDimension);
+                    lastInstr = getFirstInstruction(block, this.getCurrentDimension());
+                    frameState = getEntryState(block, this.getCurrentDimension());
                     parser.setCurrentFrameState(frameState);
                     currentBlock = block;
 
-                    if (firstInstruction instanceof AbstractMergeNode) {
-                        setMergeStateAfter(block, firstInstruction);
+                    if (lastInstr instanceof AbstractMergeNode) {
+
+                        AbstractMergeNode abstractMergeNode = (AbstractMergeNode) lastInstr;
+                        if (abstractMergeNode.stateAfter() == null) {
+                            int bci = block.startBci;
+                            if (block instanceof ExceptionDispatchBlock) {
+                                bci = ((ExceptionDispatchBlock) block).deoptBci;
+                            }
+                            abstractMergeNode.setStateAfter(frameState.create(bci));
+                        }
                     }
 
                     if (block == blockMap.getReturnBlock()) {
-                        handleReturnBlock();
+                        Kind returnKind = method.getSignature().getReturnKind().getStackKind();
+                        ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
+                        assert frameState.stackSize() == 0;
+                        beforeReturn(x);
+                        this.returnValue = x;
+                        this.beforeReturnNode = this.lastInstr;
                     } else if (block == blockMap.getUnwindBlock()) {
-                        handleUnwindBlock();
+                        if (currentDepth == 0) {
+                            frameState.setRethrowException(false);
+                            createUnwind();
+                        } else {
+                            ValueNode exception = frameState.apop();
+                            this.unwindValue = exception;
+                            this.beforeUnwindNode = this.lastInstr;
+                        }
                     } else if (block instanceof ExceptionDispatchBlock) {
                         createExceptionDispatch((ExceptionDispatchBlock) block);
                     } else {
                         frameState.setRethrowException(false);
                         iterateBytecodesForBlock(block);
                     }
-                }
-            }
-
-            private void handleUnwindBlock() {
-                if (currentDepth == 0) {
-                    frameState.setRethrowException(false);
-                    createUnwind();
-                } else {
-                    ValueNode exception = frameState.apop();
-                    this.unwindValue = exception;
-                    this.beforeUnwindNode = this.lastInstr;
-                }
-            }
-
-            private void handleReturnBlock() {
-                Kind returnKind = method.getSignature().getReturnKind().getStackKind();
-                ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
-                assert frameState.stackSize() == 0;
-                beforeReturn(x);
-                this.returnValue = x;
-                this.beforeReturnNode = this.lastInstr;
-            }
-
-            private void setMergeStateAfter(BciBlock block, FixedWithNextNode firstInstruction) {
-                AbstractMergeNode abstractMergeNode = (AbstractMergeNode) firstInstruction;
-                if (abstractMergeNode.stateAfter() == null) {
-                    int bci = block.startBci;
-                    if (block instanceof ExceptionDispatchBlock) {
-                        bci = ((ExceptionDispatchBlock) block).deoptBci;
-                    }
-                    abstractMergeNode.setStateAfter(frameState.create(bci));
                 }
             }
 
