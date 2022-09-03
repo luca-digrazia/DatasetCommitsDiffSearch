@@ -22,24 +22,17 @@
  */
 package com.oracle.graal.replacements.nodes.arithmetic;
 
-import static com.oracle.graal.compiler.common.type.IntegerStamp.addOverflowsNegatively;
-import static com.oracle.graal.compiler.common.type.IntegerStamp.addOverflowsPositively;
-import static com.oracle.graal.compiler.common.type.IntegerStamp.carryBits;
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.AddNode;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import static com.oracle.graal.compiler.common.type.IntegerStamp.*;
 
 /**
  * Node representing an exact integer addition that will throw an {@link ArithmeticException} in
@@ -56,9 +49,13 @@ public final class IntegerAddExactNode extends AddNode implements IntegerExactAr
     }
 
     @Override
-    public Stamp foldStamp(Stamp stampX, Stamp stampY) {
-        IntegerStamp a = (IntegerStamp) stampX;
-        IntegerStamp b = (IntegerStamp) stampY;
+    public boolean inferStamp() {
+        return updateStamp(foldStamp(x.stamp(), y.stamp()));
+    }
+
+    private static Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
+        IntegerStamp a = (IntegerStamp) stamp1;
+        IntegerStamp b = (IntegerStamp) stamp2;
 
         int bits = a.getBits();
         assert bits == b.getBits();
@@ -134,12 +131,12 @@ public final class IntegerAddExactNode extends AddNode implements IntegerExactAr
         JavaConstant xConst = forX.asJavaConstant();
         JavaConstant yConst = forY.asJavaConstant();
         if (xConst != null && yConst != null) {
-            assert xConst.getJavaKind() == yConst.getJavaKind();
+            assert xConst.getKind() == yConst.getKind();
             try {
-                if (xConst.getJavaKind() == JavaKind.Int) {
+                if (xConst.getKind() == Kind.Int) {
                     return ConstantNode.forInt(Math.addExact(xConst.asInt(), yConst.asInt()));
                 } else {
-                    assert xConst.getJavaKind() == JavaKind.Long;
+                    assert xConst.getKind() == Kind.Long;
                     return ConstantNode.forLong(Math.addExact(xConst.asLong(), yConst.asLong()));
                 }
             } catch (ArithmeticException ex) {
