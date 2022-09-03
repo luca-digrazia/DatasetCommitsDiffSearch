@@ -469,7 +469,7 @@ public final class TypeDescriptor {
     public static TypeDescriptor executable(TypeDescriptor returnType, boolean vararg, TypeDescriptor... parameterTypes) {
         Objects.requireNonNull(returnType, "Return type cannot be null");
         Objects.requireNonNull(parameterTypes, "Parameter types cannot be null");
-        if (isAny(returnType.impl) && parameterTypes.length == 0 && vararg) {
+        if (isAny(returnType.impl) && parameterTypes.length == 0) {
             return EXECUTABLE;
         }
         final List<TypeDescriptorImpl> paramTypeImpls = new ArrayList<>(parameterTypes.length);
@@ -670,17 +670,19 @@ public final class TypeDescriptor {
                 if (!origExec.resolveRetType().isAssignable(origExec.resolveRetType(), byExec.resolveRetType())) {
                     return false;
                 }
-                if (origExec.paramTypes.size() < byExec.paramTypes.size()) {
-                    return false;
-                }
-                if (!byExec.vararg && origExec.paramTypes.size() != byExec.paramTypes.size()) {
-                    return false;
-                }
-                for (int i = 0; i < byExec.paramTypes.size(); i++) {
-                    final TypeDescriptorImpl pt = origExec.paramTypes.get(i);
-                    final TypeDescriptorImpl opt = byExec.paramTypes.get(i);
-                    if (!opt.isAssignable(opt, pt)) {
+                if (!byExec.paramTypes.isEmpty()) {
+                    if (origExec.paramTypes.size() < byExec.paramTypes.size()) {
                         return false;
+                    }
+                    if (!byExec.vararg && origExec.paramTypes.size() != byExec.paramTypes.size()) {
+                        return false;
+                    }
+                    for (int i = 0; i < byExec.paramTypes.size(); i++) {
+                        final TypeDescriptorImpl pt = origExec.paramTypes.get(i);
+                        final TypeDescriptorImpl opt = byExec.paramTypes.get(i);
+                        if (!opt.isAssignable(opt, pt)) {
+                            return false;
+                        }
                     }
                 }
                 return true;
