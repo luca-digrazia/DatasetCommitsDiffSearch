@@ -56,6 +56,8 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
         // @formatter:on
     }
 
+    private CharSequence name;
+
     /**
      * Records time spent in {@link #apply(StructuredGraph, Object, boolean)}.
      */
@@ -82,7 +84,7 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
         static final Pattern NAME_PATTERN = Pattern.compile("[A-Z][A-Za-z0-9]+");
     }
 
-    private static boolean checkName(CharSequence name) {
+    private static boolean checkName(String name) {
         assert NamePatternHolder.NAME_PATTERN.matcher(name).matches() : "illegal phase name: " + name;
         return true;
     }
@@ -125,6 +127,16 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     };
 
     protected BasePhase() {
+        BasePhaseStatistics statistics = statisticsClassValue.get(getClass());
+        timer = statistics.timer;
+        executionCount = statistics.executionCount;
+        memUseTracker = statistics.memUseTracker;
+        inputNodesCount = statistics.inputNodesCount;
+    }
+
+    protected BasePhase(String name) {
+        assert checkName(name);
+        this.name = name;
         BasePhaseStatistics statistics = statisticsClassValue.get(getClass());
         timer = statistics.timer;
         executionCount = statistics.executionCount;
@@ -180,11 +192,6 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     protected CharSequence createName() {
         String className = BasePhase.this.getClass().getName();
         String s = className.substring(className.lastIndexOf(".") + 1); // strip the package name
-        int innerClassPos = s.indexOf('$');
-        if (innerClassPos > 0) {
-            /* Remove inner class name. */
-            s = s.substring(0, innerClassPos);
-        }
         if (s.endsWith("Phase")) {
             s = s.substring(0, s.length() - "Phase".length());
         }
@@ -192,8 +199,9 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     }
 
     public final CharSequence getName() {
-        CharSequence name = createName();
-        assert checkName(name);
+        if (name == null) {
+            name = createName();
+        }
         return name;
     }
 
