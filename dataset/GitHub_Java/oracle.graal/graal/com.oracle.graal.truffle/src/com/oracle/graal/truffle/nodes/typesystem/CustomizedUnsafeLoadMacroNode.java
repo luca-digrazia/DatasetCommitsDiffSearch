@@ -61,11 +61,9 @@ public class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode im
             } else {
                 locationIdentity = ObjectLocationIdentity.create(locationIdentityObject);
             }
-            Node result = graph().add(
-                            new UnsafeLoadNode(objectArgument, offsetArgument, this.getTargetMethod().getSignature().getReturnKind(), locationIdentity, CompareNode.createCompareNode(Condition.EQ,
-                                            conditionArgument, ConstantNode.forBoolean(true, graph()))));
-
-            return result;
+            return graph().add(
+                            new UnsafeLoadNode(objectArgument, offsetArgument, this.stamp().kind(), locationIdentity, CompareNode.createCompareNode(Condition.EQ, conditionArgument,
+                                            ConstantNode.forBoolean(true, graph()))));
         }
         return this;
     }

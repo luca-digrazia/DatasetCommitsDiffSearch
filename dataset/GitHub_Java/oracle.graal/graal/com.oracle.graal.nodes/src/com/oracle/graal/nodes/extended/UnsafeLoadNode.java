@@ -52,7 +52,7 @@ public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtu
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
@@ -63,11 +63,8 @@ public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtu
             if (offsetValue.isConstant()) {
                 long offset = offsetValue.asConstant().asLong();
                 int entryIndex = state.getVirtualObject().entryIndexForOffset(offset);
-                if (entryIndex != -1) {
-                    ValueNode entry = state.getEntry(entryIndex);
-                    if (entry.kind() == accessKind() || state.getVirtualObject().entryKind(entryIndex) == accessKind()) {
-                        tool.replaceWith(entry);
-                    }
+                if (entryIndex != -1 && state.getVirtualObject().entryKind(entryIndex) == accessKind()) {
+                    tool.replaceWith(state.getEntry(entryIndex));
                 }
             }
         }
