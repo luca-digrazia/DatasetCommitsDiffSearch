@@ -33,17 +33,12 @@ import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.options.*;
 
 /**
  * Method substitutions that are VM-independent.
  */
 @ServiceProvider(ReplacementsProvider.class)
 public class GraalMethodSubstitutions implements ReplacementsProvider {
-
-    static class Options {
-        @Option(help = "") public static final OptionValue<Boolean> UseBlackholeSubstitution = new OptionValue<>(true);
-    }
 
     public void registerReplacements(MetaAccessProvider metaAccess, LoweringProvider loweringProvider, SnippetReflectionProvider snippetReflection, Replacements replacements, TargetDescription target) {
         BoxingSubstitutions.registerReplacements(replacements);
@@ -60,18 +55,6 @@ public class GraalMethodSubstitutions implements ReplacementsProvider {
             replacements.registerSubstitutions(Short.class, ShortSubstitutions.class);
             replacements.registerSubstitutions(UnsignedMath.class, UnsignedMathSubstitutions.class);
             replacements.registerSubstitutions(Edges.class, EdgesSubstitutions.class);
-            if (Options.UseBlackholeSubstitution.getValue()) {
-                replacements.registerSubstitutions(new Type() {
-                    public String getTypeName() {
-                        return "org.openjdk.jmh.infra.Blackhole";
-                    }
-                }, BlackholeSubstitutions.class);
-                replacements.registerSubstitutions(new Type() {
-                    public String getTypeName() {
-                        return "org.openjdk.jmh.logic.BlackHole";
-                    }
-                }, BlackholeSubstitutions.class);
-            }
         }
     }
 }
