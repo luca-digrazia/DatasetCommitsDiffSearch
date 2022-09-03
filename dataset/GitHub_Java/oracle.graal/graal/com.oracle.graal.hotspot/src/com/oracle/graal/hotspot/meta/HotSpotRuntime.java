@@ -27,12 +27,12 @@ import static com.oracle.graal.api.code.MemoryBarriers.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.api.meta.Value.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.snippets.SystemSubstitutions.*;
+import static com.oracle.graal.hotspot.snippets.SystemSnippets.*;
 import static com.oracle.graal.java.GraphBuilderPhase.*;
 import static com.oracle.graal.nodes.UnwindNode.*;
 import static com.oracle.graal.nodes.java.RegisterFinalizerNode.*;
 import static com.oracle.graal.snippets.Log.*;
-import static com.oracle.graal.snippets.MathSubstitutionsX86.*;
+import static com.oracle.graal.snippets.MathSnippetsX86.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -303,31 +303,31 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetP
 
     public void installSnippets(SnippetInstaller installer, Assumptions assumptions) {
         if (GraalOptions.IntrinsifyObjectMethods) {
-            installer.installSubstitutions(ObjectSubstitutions.class);
+            installer.install(ObjectSnippets.class);
         }
         if (GraalOptions.IntrinsifySystemMethods) {
-            installer.installSubstitutions(SystemSubstitutions.class);
+            installer.install(SystemSnippets.class);
         }
         if (GraalOptions.IntrinsifyThreadMethods) {
-            installer.installSubstitutions(ThreadSubstitutions.class);
+            installer.install(ThreadSnippets.class);
         }
         if (GraalOptions.IntrinsifyUnsafeMethods) {
-            installer.installSubstitutions(UnsafeSubstitutions.class);
+            installer.install(UnsafeSnippets.class);
         }
         if (GraalOptions.IntrinsifyClassMethods) {
-            installer.installSubstitutions(ClassSubstitutions.class);
+            installer.install(ClassSnippets.class);
         }
         if (GraalOptions.IntrinsifyArrayCopy) {
-            installer.installSnippets(ArrayCopySnippets.class);
+            installer.install(ArrayCopySnippets.class);
         }
 
-        installer.installSnippets(CheckCastSnippets.class);
-        installer.installSnippets(InstanceOfSnippets.class);
-        installer.installSnippets(NewObjectSnippets.class);
-        installer.installSnippets(MonitorSnippets.class);
+        installer.install(CheckCastSnippets.class);
+        installer.install(InstanceOfSnippets.class);
+        installer.install(NewObjectSnippets.class);
+        installer.install(MonitorSnippets.class);
 
-        installer.installSnippets(NewInstanceStub.class);
-        installer.installSnippets(NewArrayStub.class);
+        installer.install(NewInstanceStub.class);
+        installer.install(NewArrayStub.class);
 
         checkcastSnippets = new CheckCastSnippets.Templates(this, assumptions, graalRuntime.getTarget());
         instanceofSnippets = new InstanceOfSnippets.Templates(this, assumptions, graalRuntime.getTarget());

@@ -66,11 +66,6 @@ public class IntegerRemNode extends FixedBinaryNode implements Canonicalizable, 
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.setResult(this, gen.emitRem(gen.operand(x()), gen.operand(y()), this));
-    }
-
-    @Override
-    public boolean canDeoptimize() {
-        return y().integerStamp().contains(0);
+        gen.setResult(this, gen.emitRem(gen.operand(x()), gen.operand(y())));
     }
 }
