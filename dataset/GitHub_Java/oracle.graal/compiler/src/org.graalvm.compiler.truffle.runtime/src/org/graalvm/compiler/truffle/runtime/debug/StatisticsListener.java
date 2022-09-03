@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,10 +24,12 @@
  */
 package org.graalvm.compiler.truffle.runtime.debug;
 
+import static org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions.TruffleCompilationStatisticDetails;
+import static org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions.TruffleCompilationStatistics;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IntSummaryStatistics;
@@ -36,19 +38,20 @@ import java.util.LongSummaryStatistics;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import java.util.WeakHashMap;
 import java.util.function.Function;
 
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.CompilationResultInfo;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
 import org.graalvm.compiler.truffle.runtime.AbstractGraalTruffleRuntimeListener;
-import org.graalvm.compiler.truffle.runtime.EngineData;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.runtime.OptimizedCompilationProfile;
 import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining.CallTreeNodeVisitor;
 import org.graalvm.compiler.truffle.runtime.TruffleInliningDecision;
+import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
+import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
 
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
@@ -116,7 +119,10 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
     private final ThreadLocal<Times> compilationTimes = new ThreadLocal<>();
 
     public static void install(GraalTruffleRuntime runtime) {
-        runtime.addListener(new EngineSensitiveStatisticsListener(runtime));
+        if (TruffleRuntimeOptions.getValue(TruffleCompilationStatistics) ||
+                        TruffleRuntimeOptions.getValue(TruffleCompilationStatisticDetails)) {
+            runtime.addListener(new StatisticsListener(runtime));
+        }
     }
 
     @Override
@@ -130,9 +136,9 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         if (firstCompilation == 0) {
             firstCompilation = System.nanoTime();
         }
-        long timeStamp = target.getInitializedTimestamp();
-        if (timeStamp != 0) {
-            timeToQueue.accept(System.nanoTime() - timeStamp);
+        OptimizedCompilationProfile profile = target.getCompilationProfile();
+        if (profile != null) {
+            timeToQueue.accept(System.nanoTime() - profile.getTimestamp());
         }
     }
 
@@ -151,9 +157,9 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         compilations++;
         final Times times = new Times();
         compilationTimes.set(times);
-        long timeStamp = target.getInitializedTimestamp();
-        if (timeStamp != 0) {
-            timeToCompilation.accept(times.compilationStarted - timeStamp);
+        OptimizedCompilationProfile profile = target.getCompilationProfile();
+        if (profile != null) {
+            timeToCompilation.accept(times.compilationStarted - profile.getTimestamp());
         }
     }
 
@@ -181,7 +187,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         loopCount.accept(callTargetStat.getLoopCount());
 
         truffleTierNodeCount.accept(graph.getNodeCount());
-        if (target.engine.callTargetStatisticDetails) {
+        if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompilationStatisticDetails)) {
             truffleTierNodeStatistics.accept(Arrays.asList(graph.getNodeTypes(true)));
         }
     }
@@ -201,7 +207,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         final Times times = compilationTimes.get();
         times.graalTierFinished = System.nanoTime();
         graalTierNodeCount.accept(graph.getNodeCount());
-        if (target.engine.callTargetStatisticDetails) {
+        if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompilationStatisticDetails)) {
             graalTierNodeStatistics.accept(Arrays.asList(graph.getNodeTypes(true)));
         }
     }
@@ -235,14 +241,14 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
     }
 
     @Override
-    public void onEngineClosed(EngineData runtimeData) {
-        printStatistics(runtimeData);
+    public void onShutdown() {
+        printStatistics();
     }
 
-    private void printStatistics(EngineData runtimeData) {
+    private void printStatistics() {
         GraalTruffleRuntime rt = runtime;
         long endTime = System.nanoTime();
-        rt.log("Truffle runtime statistics for engine " + runtimeData.id);
+        rt.log("Truffle runtime statistics:");
         printStatistic(rt, "Compilations", compilations);
         printStatistic(rt, "  Success", success);
         printStatistic(rt, "  Failed", failures);
@@ -292,7 +298,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         printStatistic(rt, "  Marks", compilationResultMarks);
         printStatistic(rt, "  Data references", compilationResultDataPatches);
 
-        if (runtimeData.callTargetStatisticDetails) {
+        if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompilationStatisticDetails)) {
             printStatistic(rt, "Truffle nodes");
             nodeStatistics.printStatistics(rt, Class::getSimpleName);
             printStatistic(rt, "Graal nodes after Truffle tier");
@@ -476,123 +482,5 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         final long compilationStarted = System.nanoTime();
         long truffleTierFinished;
         long graalTierFinished;
-    }
-
-    private static final class EngineSensitiveStatisticsListener extends AbstractGraalTruffleRuntimeListener {
-
-        private final Map<EngineData, StatisticsListener> activeEngines;
-
-        private EngineSensitiveStatisticsListener(GraalTruffleRuntime runtime) {
-            super(runtime);
-            activeEngines = Collections.synchronizedMap(new WeakHashMap<>());
-        }
-
-        @Override
-        public void onCompilationQueued(OptimizedCallTarget target) {
-            StatisticsListener listener = getOrCreateEngineListener(target.engine);
-            if (listener == null) {
-                return;
-            }
-            listener.onCompilationQueued(target);
-        }
-
-        @Override
-        public void onCompilationStarted(OptimizedCallTarget target) {
-            StatisticsListener listener = getOrCreateEngineListener(target.engine);
-            if (listener == null) {
-                return;
-            }
-            listener.onCompilationStarted(target);
-        }
-
-        @Override
-        public void onCompilationSplit(OptimizedDirectCallNode callNode) {
-            StatisticsListener listener = getEngineListener(callNode.getCallTarget().engine);
-            if (listener == null) {
-                return;
-            }
-            listener.onCompilationSplit(callNode);
-        }
-
-        @Override
-        public void onCompilationDequeued(OptimizedCallTarget target, Object source, CharSequence reason) {
-            StatisticsListener listener = getEngineListener(target.engine);
-            if (listener == null) {
-                return;
-            }
-            listener.onCompilationDequeued(target, source, reason);
-        }
-
-        @Override
-        public void onCompilationInvalidated(OptimizedCallTarget target, Object source, CharSequence reason) {
-            StatisticsListener listener = getEngineListener(target.engine);
-            if (listener == null) {
-                return;
-            }
-            listener.onCompilationInvalidated(target, source, reason);
-        }
-
-        @Override
-        public void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph) {
-            StatisticsListener listener = getEngineListener(target.engine);
-            if (listener == null) {
-                return;
-            }
-            listener.onCompilationTruffleTierFinished(target, inliningDecision, graph);
-        }
-
-        @Override
-        public void onCompilationGraalTierFinished(OptimizedCallTarget target, GraphInfo graph) {
-            StatisticsListener listener = getEngineListener(target.engine);
-            if (listener == null) {
-                return;
-            }
-            listener.onCompilationGraalTierFinished(target, graph);
-        }
-
-        @Override
-        public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result) {
-            StatisticsListener listener = getEngineListener(target.engine);
-            if (listener == null) {
-                return;
-            }
-            listener.onCompilationSuccess(target, inliningDecision, graph, result);
-        }
-
-        @Override
-        public void onCompilationFailed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanentBailout) {
-            StatisticsListener listener = getEngineListener(target.engine);
-            if (listener == null) {
-                return;
-            }
-            listener.onCompilationFailed(target, reason, bailout, permanentBailout);
-        }
-
-        @Override
-        public void onEngineClosed(EngineData runtimeData) {
-            if (!runtimeData.callTargetStatistics) {
-                return;
-            }
-            StatisticsListener listener = activeEngines.remove(runtimeData);
-            if (listener != null) {
-                listener.onEngineClosed(runtimeData);
-            }
-        }
-
-        private StatisticsListener getEngineListener(EngineData runtimeData) {
-            return runtimeData.callTargetStatistics ? activeEngines.get(runtimeData) : null;
-        }
-
-        private StatisticsListener getOrCreateEngineListener(EngineData runtimeData) {
-            if (!runtimeData.callTargetStatistics) {
-                return null;
-            }
-            return activeEngines.computeIfAbsent(runtimeData, new Function<EngineData, StatisticsListener>() {
-                @Override
-                public StatisticsListener apply(EngineData t) {
-                    return new StatisticsListener(runtime);
-                }
-            });
-        }
     }
 }
