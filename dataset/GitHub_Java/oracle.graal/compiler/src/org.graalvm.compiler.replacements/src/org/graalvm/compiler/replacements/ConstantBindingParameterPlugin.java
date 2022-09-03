@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -55,28 +53,26 @@ public class ConstantBindingParameterPlugin implements ParameterPlugin {
 
     @Override
     public FloatingNode interceptParameter(GraphBuilderTool b, int index, StampPair stamp) {
-        if (index < constantArgs.length) {
-            Object arg = constantArgs[index];
-            if (arg != null) {
-                ConstantNode constantNode;
-                if (arg instanceof ConstantNode) {
-                    ConstantNode otherCon = (ConstantNode) arg;
-                    if (otherCon.graph() != b.getGraph()) {
-                        /*
-                         * This is a node from another graph, so copy over extra state into a new
-                         * ConstantNode.
-                         */
-                        constantNode = ConstantNode.forConstant(stamp.getTrustedStamp(), otherCon.getValue(), otherCon.getStableDimension(), otherCon.isDefaultStable(), metaAccess);
-                    } else {
-                        constantNode = otherCon;
-                    }
-                } else if (arg instanceof Constant) {
-                    constantNode = ConstantNode.forConstant(stamp.getTrustedStamp(), (Constant) arg, metaAccess);
+        Object arg = constantArgs[index];
+        if (arg != null) {
+            ConstantNode constantNode;
+            if (arg instanceof ConstantNode) {
+                ConstantNode otherCon = (ConstantNode) arg;
+                if (otherCon.graph() != b.getGraph()) {
+                    /*
+                     * This is a node from another graph, so copy over extra state into a new
+                     * ConstantNode.
+                     */
+                    constantNode = ConstantNode.forConstant(stamp.getTrustedStamp(), otherCon.getValue(), otherCon.getStableDimension(), otherCon.isDefaultStable(), metaAccess);
                 } else {
-                    constantNode = ConstantNode.forConstant(snippetReflection.forBoxed(stamp.getTrustedStamp().getStackKind(), arg), metaAccess);
+                    constantNode = otherCon;
                 }
-                return constantNode;
+            } else if (arg instanceof Constant) {
+                constantNode = ConstantNode.forConstant(stamp.getTrustedStamp(), (Constant) arg, metaAccess);
+            } else {
+                constantNode = ConstantNode.forConstant(snippetReflection.forBoxed(stamp.getTrustedStamp().getStackKind(), arg), metaAccess);
             }
+            return constantNode;
         }
         return null;
     }

@@ -33,7 +33,6 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.Invoke;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
@@ -121,8 +120,8 @@ public class InlineableGraph implements Inlineable {
     }
 
     private static Stamp improvedStamp(ValueNode arg, ParameterNode param) {
-        Stamp joinedStamp = param.stamp(NodeView.DEFAULT).join(arg.stamp(NodeView.DEFAULT));
-        if (joinedStamp == null || joinedStamp.equals(param.stamp(NodeView.DEFAULT))) {
+        Stamp joinedStamp = param.stamp().join(arg.stamp());
+        if (joinedStamp == null || joinedStamp.equals(param.stamp())) {
             return null;
         }
         return joinedStamp;
@@ -163,7 +162,7 @@ public class InlineableGraph implements Inlineable {
                     parameterUsages = trackParameterUsages(param, parameterUsages);
                     // collect param usages before replacing the param
                     param.replaceAtUsagesAndDelete(graph.unique(
-                                    ConstantNode.forConstant(arg.stamp(NodeView.DEFAULT), constant.getValue(), constant.getStableDimension(), constant.isDefaultStable(), context.getMetaAccess())));
+                                    ConstantNode.forConstant(arg.stamp(), constant.getValue(), constant.getStableDimension(), constant.isDefaultStable(), context.getMetaAccess())));
                     // param-node gone, leaving a gap in the sequence given by param.index()
                 } else {
                     Stamp impro = improvedStamp(arg, param);
