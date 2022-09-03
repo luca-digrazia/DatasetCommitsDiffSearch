@@ -39,15 +39,9 @@ public class LoopSafepointEliminationPhase extends BasePhase<MidTierContext> {
             loops.detectedCountedLoops();
             for (LoopEx loop : loops.countedLoops()) {
                 if (loop.lirLoop().children.isEmpty() && loop.counted().getKind() == Kind.Int) {
-                    boolean hasSafepoint = false;
+                    loop.loopBegin().dependencies().add(loop.counted().getOverFlowGuard());
                     for (LoopEndNode loopEnd : loop.loopBegin().loopEnds()) {
-                        hasSafepoint |= loopEnd.canSafepoint();
-                    }
-                    if (hasSafepoint) {
-                        loop.counted().createOverFlowGuard();
-                        for (LoopEndNode loopEnd : loop.loopBegin().loopEnds()) {
-                            loopEnd.disableSafepoint();
-                        }
+                        loopEnd.disableSafepoint();
                     }
                 }
             }
@@ -58,7 +52,7 @@ public class LoopSafepointEliminationPhase extends BasePhase<MidTierContext> {
                 blocks: while (b != loop.lirLoop().header) {
                     assert b != null;
                     for (FixedNode node : b.getNodes()) {
-                        if (node instanceof Invoke || node instanceof ForeignCallNode) {
+                        if (node instanceof Invoke || node instanceof RuntimeCallNode) {
                             loopEnd.disableSafepoint();
                             break blocks;
                         }

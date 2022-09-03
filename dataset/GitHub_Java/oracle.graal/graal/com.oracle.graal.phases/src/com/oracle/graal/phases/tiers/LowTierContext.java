@@ -30,9 +30,8 @@ public class LowTierContext extends PhaseContext {
 
     private final TargetDescription target;
 
-    public LowTierContext(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, LoweringProvider lowerer, Assumptions assumptions,
-                    Replacements replacements, TargetDescription target) {
-        super(metaAccess, codeCache, constantReflection, lowerer, assumptions, replacements);
+    public LowTierContext(MetaAccessProvider runtime, Assumptions assumptions, Replacements replacements, TargetDescription target) {
+        super(runtime, assumptions, replacements);
         this.target = target;
     }
 

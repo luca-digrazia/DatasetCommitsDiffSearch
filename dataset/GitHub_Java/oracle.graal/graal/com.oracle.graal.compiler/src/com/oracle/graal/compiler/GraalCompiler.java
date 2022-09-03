@@ -133,8 +133,9 @@ public class GraalCompiler {
                     new IterativeConditionalEliminationPhase().apply(graph, highTierContext);
                 }
             }
+        } else {
+            TypeProfileProxyNode.cleanFromGraph(graph);
         }
-        TypeProfileProxyNode.cleanFromGraph(graph);
 
         plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
 
