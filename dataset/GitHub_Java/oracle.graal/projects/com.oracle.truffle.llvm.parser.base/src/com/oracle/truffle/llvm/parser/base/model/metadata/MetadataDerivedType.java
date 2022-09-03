@@ -146,8 +146,20 @@ public class MetadataDerivedType implements MetadataBaseNode, MetadataSubtypeNam
         return builder.toString();
     }
 
-    private boolean isOnlyReference() {
-        return size == 0 && align == 0 && offset == 0 && flags == 0;
+    public boolean isOnlyReference() {
+        if (size != 0) {
+            return false;
+        }
+        if (align != 0) {
+            return false;
+        }
+        if (offset != 0) {
+            return false;
+        }
+        if (flags != 0) {
+            return false;
+        }
+        return true;
     }
 
     public MetadataReference getTrueBaseType() {
