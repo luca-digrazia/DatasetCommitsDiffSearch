@@ -24,11 +24,13 @@ package com.oracle.graal.asm.amd64;
 
 import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.api.code.MemoryBarriers.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.asm.NumUtil.*;
 import static com.oracle.graal.asm.amd64.AMD64AsmOptions.*;
 
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 
 /**
@@ -36,13 +38,19 @@ import com.oracle.graal.asm.*;
  */
 public class AMD64Assembler extends AbstractAssembler {
 
+    /**
+     * The kind for pointers and raw registers. Since we know we are 64 bit here, we can hardcode
+     * it.
+     */
+    private static final Kind Word = Kind.Long;
+
     private static final int MinEncodingNeedsRex = 8;
 
     /**
      * A sentinel value used as a place holder in an instruction stream for an address that will be
      * patched.
      */
-    private static final AMD64Address Placeholder = new AMD64Address(rip);
+    private static final AMD64Address Placeholder = new AMD64Address(Kind.Illegal, rip.asValue());
 
     /**
      * The x86 condition codes used for conditional jumps/moves.
@@ -224,8 +232,8 @@ public class AMD64Assembler extends AbstractAssembler {
         assert (reg & 0x07) == reg;
         int regenc = reg << 3;
 
-        Register base = addr.getBase();
-        Register index = addr.getIndex();
+        Register base = isLegal(addr.getBase()) ? asRegister(addr.getBase()) : Register.None;
+        Register index = isLegal(addr.getIndex()) ? asRegister(addr.getIndex()) : Register.None;
 
         AMD64Address.Scale scale = addr.getScale();
         int disp = addr.getDisplacement();
@@ -539,15 +547,6 @@ public class AMD64Assembler extends AbstractAssembler {
         }
     }
 
-    public final void cvtsd2ss(Register dst, AMD64Address src) {
-        assert dst.isFpu();
-        emitByte(0xF2);
-        prefix(src, dst);
-        emitByte(0x0F);
-        emitByte(0x5A);
-        emitOperandHelper(dst, src);
-    }
-
     public final void cvtsd2ss(Register dst, Register src) {
         assert dst.isFpu();
         assert src.isFpu();
@@ -556,15 +555,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0x0F);
         emitByte(0x5A);
         emitByte(0xC0 | encode);
-    }
-
-    public final void cvtsi2sdl(Register dst, AMD64Address src) {
-        assert dst.isFpu();
-        emitByte(0xF2);
-        prefix(src, dst);
-        emitByte(0x0F);
-        emitByte(0x2A);
-        emitOperandHelper(dst, src);
     }
 
     public final void cvtsi2sdl(Register dst, Register src) {
@@ -576,15 +566,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0xC0 | encode);
     }
 
-    public final void cvtsi2ssl(Register dst, AMD64Address src) {
-        assert dst.isFpu();
-        emitByte(0xF3);
-        prefix(src, dst);
-        emitByte(0x0F);
-        emitByte(0x2A);
-        emitOperandHelper(dst, src);
-    }
-
     public final void cvtsi2ssl(Register dst, Register src) {
         assert dst.isFpu();
         emitByte(0xF3);
@@ -592,15 +573,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0x0F);
         emitByte(0x2A);
         emitByte(0xC0 | encode);
-    }
-
-    public final void cvtss2sd(Register dst, AMD64Address src) {
-        assert dst.isFpu();
-        emitByte(0xF3);
-        prefix(src, dst);
-        emitByte(0x0F);
-        emitByte(0x5A);
-        emitOperandHelper(dst, src);
     }
 
     public final void cvtss2sd(Register dst, Register src) {
@@ -613,14 +585,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0xC0 | encode);
     }
 
-    public final void cvttsd2sil(Register dst, AMD64Address src) {
-        emitByte(0xF2);
-        prefix(src, dst);
-        emitByte(0x0F);
-        emitByte(0x2C);
-        emitOperandHelper(dst, src);
-    }
-
     public final void cvttsd2sil(Register dst, Register src) {
         assert src.isFpu();
         emitByte(0xF2);
@@ -628,14 +592,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0x0F);
         emitByte(0x2C);
         emitByte(0xC0 | encode);
-    }
-
-    public final void cvttss2sil(Register dst, AMD64Address src) {
-        emitByte(0xF3);
-        prefix(src, dst);
-        emitByte(0x0F);
-        emitByte(0x2C);
-        emitOperandHelper(dst, src);
     }
 
     public final void cvttss2sil(Register dst, Register src) {
@@ -1105,13 +1061,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0x0F);
         emitByte(0xBF);
         emitByte(0xC0 | encode);
-    }
-
-    public final void movsxw(Register dst, AMD64Address src) {
-        prefix(src, dst);
-        emitByte(0x0F);
-        emitByte(0xBF);
-        emitOperandHelper(dst, src);
     }
 
     public final void movw(AMD64Address dst, int imm16) {
@@ -1835,8 +1784,8 @@ public class AMD64Assembler extends AbstractAssembler {
         }
     }
 
-    private static boolean needsRex(Register reg) {
-        return reg.encoding >= MinEncodingNeedsRex;
+    private static boolean needsRex(Value value) {
+        return isRegister(value) && asRegister(value).encoding >= MinEncodingNeedsRex;
     }
 
     private void prefix(AMD64Address adr) {
@@ -2013,15 +1962,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitOperandHelper(reg, adr);
     }
 
-    public final void cvtsi2sdq(Register dst, AMD64Address src) {
-        assert dst.isFpu();
-        emitByte(0xF2);
-        prefixq(src, dst);
-        emitByte(0x0F);
-        emitByte(0x2A);
-        emitOperandHelper(dst, src);
-    }
-
     public final void cvtsi2sdq(Register dst, Register src) {
         assert dst.isFpu();
         emitByte(0xF2);
@@ -2029,15 +1969,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0x0F);
         emitByte(0x2A);
         emitByte(0xC0 | encode);
-    }
-
-    public final void cvtsi2ssq(Register dst, AMD64Address src) {
-        assert dst.isFpu();
-        emitByte(0xF3);
-        prefixq(src, dst);
-        emitByte(0x0F);
-        emitByte(0x2A);
-        emitOperandHelper(dst, src);
     }
 
     public final void cvtsi2ssq(Register dst, Register src) {
@@ -2049,14 +1980,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0xC0 | encode);
     }
 
-    public final void cvttsd2siq(Register dst, AMD64Address src) {
-        emitByte(0xF2);
-        prefixq(src, dst);
-        emitByte(0x0F);
-        emitByte(0x2C);
-        emitOperandHelper(dst, src);
-    }
-
     public final void cvttsd2siq(Register dst, Register src) {
         assert src.isFpu();
         emitByte(0xF2);
@@ -2064,14 +1987,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0x0F);
         emitByte(0x2C);
         emitByte(0xC0 | encode);
-    }
-
-    public final void cvttss2siq(Register dst, AMD64Address src) {
-        emitByte(0xF3);
-        prefixq(src, dst);
-        emitByte(0x0F);
-        emitByte(0x2C);
-        emitOperandHelper(dst, src);
     }
 
     public final void cvttss2siq(Register dst, Register src) {
@@ -2337,7 +2252,7 @@ public class AMD64Assembler extends AbstractAssembler {
                 // the code where this idiom is used, in particular the
                 // orderAccess code.
                 lock();
-                addl(new AMD64Address(rsp, 0), 0); // Assert the lock# signal here
+                addl(new AMD64Address(Word, RSP, 0), 0); // Assert the lock# signal here
             }
         }
     }
@@ -2378,7 +2293,7 @@ public class AMD64Assembler extends AbstractAssembler {
     }
 
     public void nullCheck(Register r) {
-        testl(AMD64.rax, new AMD64Address(r, 0));
+        testl(AMD64.rax, new AMD64Address(Word, r.asValue(Word), 0));
     }
 
     @Override
@@ -2459,8 +2374,8 @@ public class AMD64Assembler extends AbstractAssembler {
     }
 
     @Override
-    public AMD64Address makeAddress(Register base, int displacement) {
-        return new AMD64Address(base, displacement);
+    public AMD64Address makeAddress(Kind kind, Value base, int displacement) {
+        return new AMD64Address(kind, base, displacement);
     }
 
     @Override
