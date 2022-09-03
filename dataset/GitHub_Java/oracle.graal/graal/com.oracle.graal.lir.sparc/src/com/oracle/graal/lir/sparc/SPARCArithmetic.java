@@ -22,10 +22,7 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.sparc.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.*;
@@ -33,16 +30,19 @@ import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import static jdk.internal.jvmci.sparc.SPARC.*;
-import static jdk.internal.jvmci.sparc.SPARC.CPUFeature.*;
+import static com.oracle.graal.sparc.SPARC.*;
+import static com.oracle.graal.sparc.SPARC.CPUFeature.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.sparc.*;
 
 public enum SPARCArithmetic {
     // @formatter:off
@@ -64,11 +64,9 @@ public enum SPARCArithmetic {
      */
     public static final class Unary2Op extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
         public static final LIRInstructionClass<Unary2Op> TYPE = LIRInstructionClass.create(Unary2Op.class);
-        public static final SizeEstimate SIZE_1 = SizeEstimate.create(1);
-        public static final SizeEstimate SIZE_5 = SizeEstimate.create(5);
 
         @Opcode private final SPARCArithmetic opcode;
-        @Def({REG, HINT}) protected AllocatableValue result;
+        @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue x;
 
         public Unary2Op(SPARCArithmetic opcode, AllocatableValue result, AllocatableValue x) {
@@ -82,19 +80,6 @@ public enum SPARCArithmetic {
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             emitUnary(crb, masm, opcode, result, x, null, delayedControlTransfer);
         }
-
-        @Override
-        public SizeEstimate estimateSize() {
-            switch (opcode) {
-                case F2L:
-                case F2I:
-                case D2L:
-                case D2I:
-                    return SIZE_5;
-                default:
-                    return SIZE_1;
-            }
-        }
     }
 
     /**
@@ -103,9 +88,6 @@ public enum SPARCArithmetic {
      */
     public static final class BinaryRegReg extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
         public static final LIRInstructionClass<BinaryRegReg> TYPE = LIRInstructionClass.create(BinaryRegReg.class);
-        public static final SizeEstimate SIZE_1 = SizeEstimate.create(1);
-        public static final SizeEstimate SIZE_3 = SizeEstimate.create(3);
-        public static final SizeEstimate SIZE_7 = SizeEstimate.create(7);
 
         @Opcode private final SPARCArithmetic opcode;
         @Def({REG}) protected Value result;
@@ -136,19 +118,6 @@ public enum SPARCArithmetic {
             super.verify();
             verifyKind(opcode, result, x, y);
         }
-
-        @Override
-        public SizeEstimate estimateSize() {
-            switch (opcode) {
-                case IMULCC:
-                    return SIZE_7;
-                case IUDIV:
-                case IDIV:
-                    return SIZE_3;
-                default:
-                    return SIZE_1;
-            }
-        }
     }
 
     /**
@@ -156,7 +125,6 @@ public enum SPARCArithmetic {
      */
     public static final class BinaryRegConst extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
         public static final LIRInstructionClass<BinaryRegConst> TYPE = LIRInstructionClass.create(BinaryRegConst.class);
-        public static final SizeEstimate SIZE = SizeEstimate.create(1);
 
         @Opcode private final SPARCArithmetic opcode;
         @Def({REG}) protected AllocatableValue result;
@@ -169,7 +137,7 @@ public enum SPARCArithmetic {
         }
 
         public BinaryRegConst(SPARCArithmetic opcode, AllocatableValue result, Value x, JavaConstant y, LIRFrameState state) {
-            super(TYPE, SIZE);
+            super(TYPE);
             this.opcode = opcode;
             this.result = result;
             this.x = x;
@@ -194,7 +162,6 @@ public enum SPARCArithmetic {
      */
     public static final class RemOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
         public static final LIRInstructionClass<RemOp> TYPE = LIRInstructionClass.create(RemOp.class);
-        public static final SizeEstimate SIZE = SizeEstimate.create(4);
 
         @Opcode private final SPARCArithmetic opcode;
         @Def({REG}) protected Value result;
@@ -205,7 +172,7 @@ public enum SPARCArithmetic {
         @State protected LIRFrameState state;
 
         public RemOp(SPARCArithmetic opcode, Value result, Value x, Value y, LIRFrameState state, LIRGeneratorTool gen) {
-            super(TYPE, SIZE);
+            super(TYPE);
             this.opcode = opcode;
             this.result = result;
             this.x = x;
@@ -232,8 +199,6 @@ public enum SPARCArithmetic {
      */
     public static final class SPARCLMulccOp extends SPARCLIRInstruction {
         public static final LIRInstructionClass<SPARCLMulccOp> TYPE = LIRInstructionClass.create(SPARCLMulccOp.class);
-        public static final SizeEstimate SIZE = SizeEstimate.create(13);
-
         @Def({REG}) protected Value result;
         @Alive({REG}) protected Value x;
         @Alive({REG}) protected Value y;
@@ -241,7 +206,7 @@ public enum SPARCArithmetic {
         @Temp({REG}) protected Value scratch2;
 
         public SPARCLMulccOp(Value result, Value x, Value y, LIRGeneratorTool gen) {
-            super(TYPE, SIZE);
+            super(TYPE);
             this.result = result;
             this.x = x;
             this.y = y;
@@ -297,7 +262,7 @@ public enum SPARCArithmetic {
                 masm.mulx(asIntReg(src1), constant, asIntReg(dst));
                 break;
             case IMULCC:
-                throw JVMCIError.unimplemented();
+                throw GraalInternalError.unimplemented();
             case IDIV:
                 masm.sra(asRegister(src1), 0, asRegister(src1));
                 masm.sdivx(asIntReg(src1), constant, asIntReg(dst));
@@ -373,7 +338,7 @@ public enum SPARCArithmetic {
             case DMUL:
             case DDIV:
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
         if (info != null) {
             assert exceptionOffset != -1;
@@ -466,7 +431,7 @@ public enum SPARCArithmetic {
                 masm.srl(asIntReg(src1), asIntReg(src2), asIntReg(dst));
                 break;
             case IREM:
-                throw JVMCIError.unimplemented();
+                throw GraalInternalError.unimplemented();
             case LADD:
                 delaySlotLir.emitControlTransfer(crb, masm);
                 masm.add(asLongReg(src1), asLongReg(src2), asLongReg(dst));
@@ -488,7 +453,7 @@ public enum SPARCArithmetic {
                 masm.mulx(asLongReg(src1), asLongReg(src2), asLongReg(dst));
                 break;
             case LMULCC:
-                throw JVMCIError.unimplemented();
+                throw GraalInternalError.unimplemented();
             case LDIV:
                 delaySlotLir.emitControlTransfer(crb, masm);
                 exceptionOffset = masm.position();
@@ -545,7 +510,7 @@ public enum SPARCArithmetic {
                 masm.fdivs(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst));
                 break;
             case FREM:
-                throw JVMCIError.unimplemented();
+                throw GraalInternalError.unimplemented();
             case DADD:
                 delaySlotLir.emitControlTransfer(crb, masm);
                 masm.faddd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
@@ -564,13 +529,13 @@ public enum SPARCArithmetic {
                 masm.fdivd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
                 break;
             case DREM:
-                throw JVMCIError.unimplemented();
+                throw GraalInternalError.unimplemented();
             case DAND:
                 delaySlotLir.emitControlTransfer(crb, masm);
                 masm.fandd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
         if (info != null) {
             assert exceptionOffset != -1;
@@ -610,10 +575,10 @@ public enum SPARCArithmetic {
                     masm.sub(asLongReg(src1), asLongReg(scratch2), asLongReg(dst));
                     break;
                 case IUREM:
-                    JVMCIError.unimplemented();
+                    GraalInternalError.unimplemented();
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         } else if (isRegister(src1) && isRegister(src2)) {
             Value srcLeft = src1;
@@ -672,10 +637,10 @@ public enum SPARCArithmetic {
                     masm.sub(asIntReg(scratch1), asIntReg(dst), asIntReg(dst));
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         } else {
-            throw JVMCIError.shouldNotReachHere();
+            throw GraalInternalError.shouldNotReachHere();
         }
         if (info != null) {
             assert exceptionOffset != -1;
@@ -796,7 +761,7 @@ public enum SPARCArithmetic {
                 masm.fnegd(asDoubleReg(src), asDoubleReg(dst));
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere("missing: " + opcode);
+                throw GraalInternalError.shouldNotReachHere("missing: " + opcode);
         }
         if (info != null) {
             assert exceptionOffset != -1;
@@ -885,13 +850,12 @@ public enum SPARCArithmetic {
                 assert rk == Kind.Double && xk == Kind.Double && yk == Kind.Double : "opcode=" + opcode + ", result kind=" + rk + ", x kind=" + xk + ", y kind=" + yk;
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere("missing: " + opcode);
+                throw GraalInternalError.shouldNotReachHere("missing: " + opcode);
         }
     }
 
     public static final class MulHighOp extends SPARCLIRInstruction {
         public static final LIRInstructionClass<MulHighOp> TYPE = LIRInstructionClass.create(MulHighOp.class);
-        public static final SizeEstimate SIZE = SizeEstimate.create(4);
 
         @Opcode private final SPARCArithmetic opcode;
         @Def({REG}) public AllocatableValue result;
@@ -900,7 +864,7 @@ public enum SPARCArithmetic {
         @Temp({REG}) public AllocatableValue scratch;
 
         public MulHighOp(SPARCArithmetic opcode, AllocatableValue x, AllocatableValue y, AllocatableValue result, AllocatableValue scratch) {
-            super(TYPE, SIZE);
+            super(TYPE);
             this.opcode = opcode;
             this.x = x;
             this.y = y;
@@ -941,7 +905,7 @@ public enum SPARCArithmetic {
                     masm.umulxhi(asLongReg(x), asLongReg(y), asLongReg(result));
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         }
     }
