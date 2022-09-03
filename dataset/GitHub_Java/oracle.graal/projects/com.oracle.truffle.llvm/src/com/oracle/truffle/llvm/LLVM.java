@@ -102,7 +102,9 @@ public class LLVM {
                             }
 
                             llvmContext.getFunctionRegistry().register(parserResult.getParsedFunctions());
-                            mainFunctions.add(parserResult.getMainFunction());
+                            if (parserResult.getMainFunction() != null) {
+                                mainFunctions.add(parserResult.getMainFunction());
+                            }
                         });
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
