@@ -29,14 +29,13 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.InlineInvokePlugin.InlineInfo;
 import com.oracle.graal.graphbuilderconf.InvocationPlugins.InvocationPluginReceiver;
 import com.oracle.graal.java.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.extended.*;
@@ -64,11 +63,8 @@ public abstract class PEGraphDecoder extends GraphDecoder {
     protected final StampProvider stampProvider;
 
     protected class PEMethodScope extends MethodScope {
-        /** The state of the caller method. Only non-null during method inlining. */
-        protected final PEMethodScope caller;
-        protected final LoopScope callerLoopScope;
         protected final ResolvedJavaMethod method;
-        protected final InvokeData invokeData;
+        protected final Invoke invoke;
         protected final int inliningDepth;
 
         protected final LoopExplosionPlugin loopExplosionPlugin;
@@ -77,30 +73,21 @@ public abstract class PEGraphDecoder extends GraphDecoder {
         protected final ParameterPlugin parameterPlugin;
         protected final ValueNode[] arguments;
 
-        protected FrameState outerState;
-        protected FrameState exceptionState;
-        protected ExceptionPlaceholderNode exceptionPlaceholderNode;
+        protected FrameState outerFrameState;
         protected BytecodePosition bytecodePosition;
 
-        protected PEMethodScope(StructuredGraph targetGraph, PEMethodScope caller, LoopScope callerLoopScope, EncodedGraph encodedGraph, ResolvedJavaMethod method, InvokeData invokeData,
-                        int inliningDepth, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins, InlineInvokePlugin inlineInvokePlugin, ParameterPlugin parameterPlugin,
-                        ValueNode[] arguments) {
-            super(targetGraph, encodedGraph, loopExplosionKind(method, loopExplosionPlugin));
+        protected PEMethodScope(StructuredGraph targetGraph, MethodScope caller, EncodedGraph encodedGraph, ResolvedJavaMethod method, Invoke invoke, int inliningDepth,
+                        LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins, InlineInvokePlugin inlineInvokePlugin, ParameterPlugin parameterPlugin, ValueNode[] arguments) {
+            super(targetGraph, caller, encodedGraph, loopExplosionKind(method, loopExplosionPlugin));
 
-            this.caller = caller;
-            this.callerLoopScope = callerLoopScope;
             this.method = method;
-            this.invokeData = invokeData;
+            this.invoke = invoke;
             this.inliningDepth = inliningDepth;
             this.loopExplosionPlugin = loopExplosionPlugin;
             this.invocationPlugins = invocationPlugins;
             this.inlineInvokePlugin = inlineInvokePlugin;
             this.parameterPlugin = parameterPlugin;
             this.arguments = arguments;
-        }
-
-        public boolean isInlinedMethod() {
-            return caller != null;
         }
     }
 
@@ -127,7 +114,7 @@ public abstract class PEGraphDecoder extends GraphDecoder {
     }
 
     protected class PENonAppendGraphBuilderContext implements GraphBuilderContext {
-        protected final PEMethodScope methodScope;
+        private final PEMethodScope methodScope;
 
         public PENonAppendGraphBuilderContext(PEMethodScope methodScope) {
             this.methodScope = methodScope;
@@ -225,11 +212,13 @@ public abstract class PEGraphDecoder extends GraphDecoder {
     }
 
     protected class PEAppendGraphBuilderContext extends PENonAppendGraphBuilderContext {
+        protected final Invoke invoke;
         protected FixedWithNextNode lastInstr;
         protected ValueNode pushedNode;
 
-        public PEAppendGraphBuilderContext(PEMethodScope methodScope, FixedWithNextNode lastInstr) {
+        public PEAppendGraphBuilderContext(PEMethodScope methodScope, Invoke invoke, FixedWithNextNode lastInstr) {
             super(methodScope);
+            this.invoke = invoke;
             this.lastInstr = lastInstr;
         }
 
@@ -243,9 +232,7 @@ public abstract class PEGraphDecoder extends GraphDecoder {
 
         @Override
         public FrameState createStateAfter() {
-            Node stateAfter = decodeFloatingNode(methodScope.caller, methodScope.callerLoopScope, methodScope.invokeData.stateAfterOrderId);
-            getGraph().add(stateAfter);
-            return (FrameState) handleFloatingNodeAfterAdd(methodScope.caller, methodScope.callerLoopScope, stateAfter);
+            return invoke.stateAfter().duplicate();
         }
 
         @Override
@@ -287,15 +274,6 @@ public abstract class PEGraphDecoder extends GraphDecoder {
         }
     }
 
-    @NodeInfo
-    static class ExceptionPlaceholderNode extends ValueNode {
-        public static final NodeClass<ExceptionPlaceholderNode> TYPE = NodeClass.create(ExceptionPlaceholderNode.class);
-
-        public ExceptionPlaceholderNode() {
-            super(TYPE, StampFactory.object());
-        }
-    }
-
     public PEGraphDecoder(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, StampProvider stampProvider) {
         this.metaAccess = metaAccess;
         this.constantReflection = constantReflection;
@@ -316,9 +294,8 @@ public abstract class PEGraphDecoder extends GraphDecoder {
 
     public void decode(StructuredGraph targetGraph, ResolvedJavaMethod method, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins, InlineInvokePlugin inlineInvokePlugin,
                     ParameterPlugin parameterPlugin) {
-        PEMethodScope methodScope = new PEMethodScope(targetGraph, null, null, lookupEncodedGraph(method), method, null, 0, loopExplosionPlugin, invocationPlugins, inlineInvokePlugin,
-                        parameterPlugin, null);
-        decode(methodScope, null);
+        PEMethodScope methodScope = new PEMethodScope(targetGraph, null, lookupEncodedGraph(method), method, null, 0, loopExplosionPlugin, invocationPlugins, inlineInvokePlugin, parameterPlugin, null);
+        decode(methodScope);
         cleanupGraph(methodScope);
         methodScope.graph.verify();
     }
@@ -333,6 +310,8 @@ public abstract class PEGraphDecoder extends GraphDecoder {
     protected void checkLoopExplosionIteration(MethodScope s, LoopScope loopScope) {
         PEMethodScope methodScope = (PEMethodScope) s;
 
+        Debug.dump(methodScope.graph, "Loop iteration " + loopScope.loopIteration);
+
         if (loopScope.loopIteration > MaximumLoopExplosionCount.getValue()) {
             String message = "too many loop explosion iterations - does the explosion not terminate for method " + methodScope.method + "?";
             if (FailedLoopExplosionIsFatal.getValue()) {
@@ -344,52 +323,39 @@ public abstract class PEGraphDecoder extends GraphDecoder {
     }
 
     @Override
-    protected void handleInvoke(MethodScope s, LoopScope loopScope, InvokeData invokeData) {
-        PEMethodScope methodScope = (PEMethodScope) s;
-
-        /*
-         * Decode the call target, but do not add it to the graph yet. This avoids adding usages for
-         * all the arguments, which are expensive to remove again when we can inline the method.
-         */
-        assert invokeData.invoke.callTarget() == null : "callTarget edge is ignored during decoding of Invoke";
-        CallTargetNode callTarget = (CallTargetNode) decodeFloatingNode(methodScope, loopScope, invokeData.callTargetOrderId);
-        if (!(callTarget instanceof MethodCallTargetNode) || !trySimplifyInvoke(methodScope, loopScope, invokeData, (MethodCallTargetNode) callTarget)) {
-
-            /* We know that we need an invoke, so now we can add the call target to the graph. */
-            methodScope.graph.add(callTarget);
-            registerNode(loopScope, invokeData.callTargetOrderId, callTarget, false, false);
-            super.handleInvoke(methodScope, loopScope, invokeData);
+    protected void simplifyInvoke(MethodScope s, LoopScope loopScope, int invokeOrderId, Invoke invoke) {
+        if (!(invoke.callTarget() instanceof MethodCallTargetNode)) {
+            return;
         }
-    }
+        PEMethodScope methodScope = (PEMethodScope) s;
+        MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
 
-    protected boolean trySimplifyInvoke(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
         // attempt to devirtualize the call
-        ResolvedJavaMethod specialCallTarget = MethodCallTargetNode.findSpecialCallTarget(callTarget.invokeKind(), callTarget.receiver(), callTarget.targetMethod(), invokeData.contextType);
+        ResolvedJavaType contextType = (invoke.stateAfter() == null && invoke.stateDuring() == null) ? null : invoke.getContextType();
+        ResolvedJavaMethod specialCallTarget = MethodCallTargetNode.findSpecialCallTarget(callTarget.invokeKind(), callTarget.receiver(), callTarget.targetMethod(), contextType);
         if (specialCallTarget != null) {
             callTarget.setTargetMethod(specialCallTarget);
             callTarget.setInvokeKind(InvokeKind.Special);
         }
 
-        if (tryInvocationPlugin(methodScope, loopScope, invokeData, callTarget)) {
-            return true;
+        if (tryInvocationPlugin(methodScope, loopScope, invokeOrderId, invoke)) {
+            return;
         }
-        if (tryInline(methodScope, loopScope, invokeData, callTarget)) {
-            return true;
+        if (tryInline(methodScope, loopScope, invokeOrderId, invoke)) {
+            return;
         }
 
         if (methodScope.inlineInvokePlugin != null) {
-            methodScope.inlineInvokePlugin.notifyOfNoninlinedInvoke(new PENonAppendGraphBuilderContext(methodScope), callTarget.targetMethod(), invokeData.invoke);
+            methodScope.inlineInvokePlugin.notifyOfNoninlinedInvoke(new PENonAppendGraphBuilderContext(methodScope), callTarget.targetMethod(), invoke);
         }
-        return false;
     }
 
-    protected boolean tryInvocationPlugin(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
+    protected boolean tryInvocationPlugin(PEMethodScope methodScope, LoopScope loopScope, int invokeOrderId, Invoke invoke) {
         if (methodScope.invocationPlugins == null) {
             return false;
         }
 
-        Invoke invoke = invokeData.invoke;
-
+        MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
         InvocationPlugin invocationPlugin = methodScope.invocationPlugins.lookupInvocation(targetMethod);
         if (invocationPlugin == null) {
@@ -398,41 +364,52 @@ public abstract class PEGraphDecoder extends GraphDecoder {
 
         ValueNode[] arguments = callTarget.arguments().toArray(new ValueNode[0]);
         FixedWithNextNode invokePredecessor = (FixedWithNextNode) invoke.asNode().predecessor();
+        FixedNode invokeNext = invoke.next();
+        AbstractBeginNode invokeException = null;
+        if (invoke instanceof InvokeWithExceptionNode) {
+            invokeException = ((InvokeWithExceptionNode) invoke).exceptionEdge();
+        }
 
-        /* Remove invoke from graph so that invocation plugin can append nodes to the predecessor. */
         invoke.asNode().replaceAtPredecessor(null);
 
-        PEMethodScope inlineScope = new PEMethodScope(methodScope.graph, methodScope, loopScope, null, targetMethod, invokeData, methodScope.inliningDepth + 1, methodScope.loopExplosionPlugin,
-                        methodScope.invocationPlugins, methodScope.inlineInvokePlugin, null, arguments);
-        PEAppendGraphBuilderContext graphBuilderContext = new PEAppendGraphBuilderContext(inlineScope, invokePredecessor);
+        PEAppendGraphBuilderContext graphBuilderContext = new PEAppendGraphBuilderContext(methodScope, invoke, invokePredecessor);
         InvocationPluginReceiver invocationPluginReceiver = new InvocationPluginReceiver(graphBuilderContext);
-
         if (invocationPlugin.execute(graphBuilderContext, targetMethod, invocationPluginReceiver.init(targetMethod, arguments), arguments)) {
 
             if (graphBuilderContext.lastInstr != null) {
-                registerNode(loopScope, invokeData.invokeOrderId, graphBuilderContext.pushedNode, true, true);
+                registerNode(loopScope, invokeOrderId, graphBuilderContext.pushedNode, true, true);
                 invoke.asNode().replaceAtUsages(graphBuilderContext.pushedNode);
-                graphBuilderContext.lastInstr.setNext(nodeAfterInvoke(methodScope, loopScope, invokeData));
             } else {
                 assert graphBuilderContext.pushedNode == null : "Why push a node when the invoke does not return anyway?";
                 invoke.asNode().replaceAtUsages(null);
             }
 
             deleteInvoke(invoke);
+            if (invokeException != null) {
+                invokeException.safeDelete();
+            }
+
+            if (graphBuilderContext.lastInstr != null) {
+                graphBuilderContext.lastInstr.setNext(invokeNext);
+            } else {
+                invokeNext.replaceAtPredecessor(null);
+                invokeNext.safeDelete();
+            }
             return true;
 
         } else {
-            /* Intrinsification failed, restore original state: invoke is in Graph. */
+            /* Restore original state: invoke is in Graph. */
             invokePredecessor.setNext(invoke.asNode());
             return false;
         }
     }
 
-    protected boolean tryInline(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
-        if (methodScope.inlineInvokePlugin == null || !callTarget.invokeKind().isDirect()) {
+    protected boolean tryInline(PEMethodScope methodScope, LoopScope loopScope, int invokeOrderId, Invoke invoke) {
+        if (methodScope.inlineInvokePlugin == null || !invoke.getInvokeKind().isDirect()) {
             return false;
         }
 
+        MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
         if (!targetMethod.canBeInlined()) {
             return false;
@@ -452,87 +429,55 @@ public abstract class PEGraphDecoder extends GraphDecoder {
             return false;
         }
 
-        Invoke invoke = invokeData.invoke;
-        FixedNode invokeNode = invoke.asNode();
-        FixedWithNextNode predecessor = (FixedWithNextNode) invokeNode.predecessor();
-        invokeNode.replaceAtPredecessor(null);
+        int exceptionObjectOrderId = -1;
+        if (invoke instanceof InvokeWithExceptionNode) {
+            /*
+             * We need to have the regular next node (usually a KillingBeginNode) and the exception
+             * edge node (always an ExceptionObjectNode) fully decoded, because both can be changed
+             * or replaced as part of the inlining process. The GraphEncoder adds these two
+             * successors in a known order (first the regular next node, then the exception edge)
+             * that we can rely on here.
+             */
+            assert ((InvokeWithExceptionNode) invoke).next().next() == null;
+            processNextNode(methodScope, loopScope);
+            assert ((InvokeWithExceptionNode) invoke).next().next() != null;
 
-        PEMethodScope inlineScope = new PEMethodScope(methodScope.graph, methodScope, loopScope, graphToInline, inlineMethod, invokeData, methodScope.inliningDepth + 1,
-                        methodScope.loopExplosionPlugin, methodScope.invocationPlugins, methodScope.inlineInvokePlugin, null, arguments);
+            assert ((InvokeWithExceptionNode) invoke).exceptionEdge().next() == null;
+            exceptionObjectOrderId = loopScope.nodesToProcess.nextSetBit(0);
+            processNextNode(methodScope, loopScope);
+            assert ((InvokeWithExceptionNode) invoke).exceptionEdge().next() != null;
+        }
+
+        PEMethodScope inlineScope = new PEMethodScope(methodScope.graph, methodScope, graphToInline, inlineMethod, invoke, methodScope.inliningDepth + 1, methodScope.loopExplosionPlugin,
+                        methodScope.invocationPlugins, methodScope.inlineInvokePlugin, null, arguments);
         /* Do the actual inlining by decoding the inlineMethod */
-        decode(inlineScope, predecessor);
+        decode(inlineScope);
 
         ValueNode exceptionValue = null;
         if (inlineScope.unwindNode != null) {
             exceptionValue = inlineScope.unwindNode.exception();
         }
-        UnwindNode unwindNode = inlineScope.unwindNode;
 
-        if (invoke instanceof InvokeWithExceptionNode) {
-            InvokeWithExceptionNode invokeWithException = ((InvokeWithExceptionNode) invoke);
-            assert invokeWithException.next() == null;
-            assert invokeWithException.exceptionEdge() == null;
+        FixedNode firstInlinedNode = inlineScope.startNode.next();
+        /* The StartNode was only necessary as a placeholder during decoding. */
+        inlineScope.startNode.safeDelete();
 
-            if (unwindNode != null) {
-                assert unwindNode.predecessor() != null;
-                Node n = makeStubNode(methodScope, loopScope, invokeData.exceptionNextOrderId);
-                unwindNode.replaceAndDelete(n);
-            }
-
-        } else {
-            if (unwindNode != null && !unwindNode.isDeleted()) {
-                DeoptimizeNode deoptimizeNode = methodScope.graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.NotCompiledExceptionHandler));
-                unwindNode.replaceAndDelete(deoptimizeNode);
-            }
-        }
-
-        assert invoke.next() == null;
-
-        ValueNode returnValue;
-        List<ReturnNode> returnNodes = inlineScope.returnNodes;
-        if (!returnNodes.isEmpty()) {
-            FixedNode n;
-            n = nodeAfterInvoke(methodScope, loopScope, invokeData);
-            if (returnNodes.size() == 1) {
-                ReturnNode returnNode = returnNodes.get(0);
-                returnValue = returnNode.result();
-                returnNode.replaceAndDelete(n);
-            } else {
-                AbstractMergeNode merge = methodScope.graph.add(new MergeNode());
-                merge.setStateAfter((FrameState) ensureNodeCreated(methodScope, loopScope, invokeData.stateAfterOrderId));
-                returnValue = InliningUtil.mergeReturns(merge, returnNodes, null);
-                merge.setNext(n);
-            }
-        } else {
-            returnValue = null;
-        }
-        invokeNode.replaceAtUsages(returnValue);
+        assert inlineScope.startNode.stateAfter() == null;
+        ValueNode returnValue = InliningUtil.finishInlining(invoke, methodScope.graph, firstInlinedNode, inlineScope.returnNodes, inlineScope.unwindNode, inlineScope.encodedGraph.getAssumptions(),
+                        inlineScope.encodedGraph.getInlinedMethods(), null);
 
         /*
          * Usage the handles that we have on the return value and the exception to update the
          * orderId->Node table.
          */
-        registerNode(loopScope, invokeData.invokeOrderId, returnValue, true, true);
+        registerNode(loopScope, invokeOrderId, returnValue, true, true);
         if (invoke instanceof InvokeWithExceptionNode) {
-            registerNode(loopScope, invokeData.exceptionOrderId, exceptionValue, true, true);
-        }
-        if (inlineScope.exceptionPlaceholderNode != null) {
-            inlineScope.exceptionPlaceholderNode.replaceAndDelete(exceptionValue);
+            registerNode(loopScope, exceptionObjectOrderId, exceptionValue, true, true);
         }
         deleteInvoke(invoke);
 
         methodScope.inlineInvokePlugin.postInline(inlineMethod);
         return true;
-    }
-
-    public FixedNode nodeAfterInvoke(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData) {
-        FixedNode n;
-        if (invokeData.invoke instanceof InvokeWithExceptionNode) {
-            n = makeStubNode(methodScope, loopScope, invokeData.nextNextOrderId);
-        } else {
-            n = makeStubNode(methodScope, loopScope, invokeData.nextOrderId);
-        }
-        return n;
     }
 
     private static void deleteInvoke(Invoke invoke) {
@@ -542,7 +487,7 @@ public abstract class PEGraphDecoder extends GraphDecoder {
          */
         FrameState frameState = invoke.stateAfter();
         invoke.asNode().safeDelete();
-        assert invoke.callTarget() == null : "must not have been added to the graph yet";
+        invoke.callTarget().safeDelete();
         if (frameState != null && frameState.hasNoUsages()) {
             frameState.safeDelete();
         }
@@ -554,20 +499,15 @@ public abstract class PEGraphDecoder extends GraphDecoder {
     protected void simplifyFixedNode(MethodScope s, LoopScope loopScope, int nodeOrderId, FixedNode node) {
         PEMethodScope methodScope = (PEMethodScope) s;
 
-        if (node instanceof IfNode) {
+        if (node instanceof IfNode && ((IfNode) node).condition() instanceof LogicConstantNode) {
             IfNode ifNode = (IfNode) node;
-            if (ifNode.condition() instanceof LogicNegationNode) {
-                ifNode.eliminateNegation();
-            }
-            if (ifNode.condition() instanceof LogicConstantNode) {
-                boolean condition = ((LogicConstantNode) ifNode.condition()).getValue();
-                AbstractBeginNode survivingSuccessor = ifNode.getSuccessor(condition);
-                AbstractBeginNode deadSuccessor = ifNode.getSuccessor(!condition);
+            boolean condition = ((LogicConstantNode) ifNode.condition()).getValue();
+            AbstractBeginNode survivingSuccessor = ifNode.getSuccessor(condition);
+            AbstractBeginNode deadSuccessor = ifNode.getSuccessor(!condition);
 
-                methodScope.graph.removeSplit(ifNode, survivingSuccessor);
-                assert deadSuccessor.next() == null : "must not be parsed yet";
-                deadSuccessor.safeDelete();
-            }
+            methodScope.graph.removeSplit(ifNode, survivingSuccessor);
+            assert deadSuccessor.next() == null : "must not be parsed yet";
+            deadSuccessor.safeDelete();
 
         } else if (node instanceof IntegerSwitchNode && ((IntegerSwitchNode) node).value().isConstant()) {
             IntegerSwitchNode switchNode = (IntegerSwitchNode) node;
@@ -647,68 +587,31 @@ public abstract class PEGraphDecoder extends GraphDecoder {
         return node;
     }
 
-    protected void ensureOuterStateDecoded(PEMethodScope methodScope) {
-        if (methodScope.outerState == null && methodScope.caller != null) {
-            FrameState stateAtReturn = methodScope.invokeData.invoke.stateAfter();
-            if (stateAtReturn == null) {
-                stateAtReturn = (FrameState) decodeFloatingNode(methodScope.caller, methodScope.callerLoopScope, methodScope.invokeData.stateAfterOrderId);
-            }
-
-            Kind invokeReturnKind = methodScope.invokeData.invoke.asNode().getKind();
-            FrameState outerState = stateAtReturn.duplicateModified(methodScope.graph, methodScope.invokeData.invoke.bci(), stateAtReturn.rethrowException(), true, invokeReturnKind);
-
-            if (methodScope.caller != null) {
-                ensureOuterStateDecoded(methodScope.caller);
-                outerState.setOuterFrameState(methodScope.caller.outerState);
-            }
-            methodScope.outerState = outerState;
-        }
-    }
-
-    protected void ensureStateAfterDecoded(PEMethodScope methodScope) {
-        if (methodScope.invokeData.invoke.stateAfter() == null) {
-            methodScope.invokeData.invoke.setStateAfter((FrameState) ensureNodeCreated(methodScope.caller, methodScope.callerLoopScope, methodScope.invokeData.stateAfterOrderId));
-        }
-    }
-
-    protected void ensureExceptionStateDecoded(PEMethodScope methodScope) {
-        if (methodScope.exceptionState == null && methodScope.caller != null && methodScope.invokeData.invoke instanceof InvokeWithExceptionNode) {
-            ensureStateAfterDecoded(methodScope);
-
-            assert methodScope.exceptionPlaceholderNode == null;
-            methodScope.exceptionPlaceholderNode = methodScope.graph.add(new ExceptionPlaceholderNode());
-            registerNode(methodScope.callerLoopScope, methodScope.invokeData.exceptionOrderId, methodScope.exceptionPlaceholderNode, false, false);
-            FrameState exceptionState = (FrameState) ensureNodeCreated(methodScope.caller, methodScope.callerLoopScope, methodScope.invokeData.exceptionStateOrderId);
-
-            if (methodScope.caller != null) {
-                ensureOuterStateDecoded(methodScope.caller);
-                exceptionState.setOuterFrameState(methodScope.caller.outerState);
-            }
-            methodScope.exceptionState = exceptionState;
-        }
-    }
-
     @Override
     protected Node handleFloatingNodeAfterAdd(MethodScope s, LoopScope loopScope, Node node) {
         PEMethodScope methodScope = (PEMethodScope) s;
 
         if (methodScope.isInlinedMethod()) {
             if (node instanceof SimpleInfopointNode) {
-                methodScope.bytecodePosition = InliningUtil.processSimpleInfopoint(methodScope.invokeData.invoke, (SimpleInfopointNode) node, methodScope.bytecodePosition);
+                methodScope.bytecodePosition = InliningUtil.processSimpleInfopoint(methodScope.invoke, (SimpleInfopointNode) node, methodScope.bytecodePosition);
                 return node;
 
             } else if (node instanceof FrameState) {
-                FrameState frameState = (FrameState) node;
-
-                ensureOuterStateDecoded(methodScope);
-                if (frameState.bci < 0) {
-                    ensureExceptionStateDecoded(methodScope);
+                FrameState stateAtExceptionEdge = null;
+                if (methodScope.invoke instanceof InvokeWithExceptionNode) {
+                    InvokeWithExceptionNode invokeWithException = ((InvokeWithExceptionNode) methodScope.invoke);
+                    ExceptionObjectNode obj = (ExceptionObjectNode) invokeWithException.exceptionEdge();
+                    stateAtExceptionEdge = obj.stateAfter();
                 }
-                return InliningUtil.processFrameState(frameState, methodScope.invokeData.invoke, methodScope.method, methodScope.exceptionState, methodScope.outerState, true);
+                if (methodScope.outerFrameState == null) {
+                    FrameState stateAtReturn = methodScope.invoke.stateAfter();
+                    Kind invokeReturnKind = methodScope.invoke.asNode().getKind();
+                    methodScope.outerFrameState = stateAtReturn.duplicateModifiedDuringCall(methodScope.invoke.bci(), invokeReturnKind);
+                }
+                return InliningUtil.processFrameState((FrameState) node, methodScope.invoke, methodScope.method, stateAtExceptionEdge, methodScope.outerFrameState, true);
 
             } else if (node instanceof MonitorIdNode) {
-                ensureOuterStateDecoded(methodScope);
-                InliningUtil.processMonitorId(methodScope.outerState, (MonitorIdNode) node);
+                InliningUtil.processMonitorId(methodScope.invoke, (MonitorIdNode) node);
                 return node;
             }
         }

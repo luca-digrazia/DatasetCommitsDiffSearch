@@ -116,7 +116,7 @@ public interface GraphBuilderContext {
         if (equivalentValue instanceof StateSplit) {
             StateSplit stateSplit = (StateSplit) equivalentValue;
             if (stateSplit.stateAfter() == null) {
-                setStateAfter(stateSplit);
+                stateSplit.setStateAfter(createStateAfter());
             }
         }
         return equivalentValue;
@@ -150,7 +150,7 @@ public interface GraphBuilderContext {
         if (equivalentValue instanceof StateSplit) {
             StateSplit stateSplit = (StateSplit) equivalentValue;
             if (stateSplit.stateAfter() == null) {
-                setStateAfter(stateSplit);
+                stateSplit.setStateAfter(createStateAfter());
             }
         }
         return equivalentValue;
@@ -194,11 +194,9 @@ public interface GraphBuilderContext {
 
     /**
      * Creates a snap shot of the current frame state with the BCI of the instruction after the one
-     * currently being parsed and assigns it to a given state split node.
-     *
-     * @param stateSplit a node just appended to the graph that needs a frame state
+     * currently being parsed.
      */
-    void setStateAfter(StateSplit stateSplit);
+    FrameState createStateAfter();
 
     /**
      * Gets the parsing context for the method that inlines the method being parsed by this context.

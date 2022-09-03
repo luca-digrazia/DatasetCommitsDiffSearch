@@ -95,8 +95,8 @@ public class TruffleCompilerImpl {
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
 
         GraphBuilderPhase phase = (GraphBuilderPhase) backend.getSuites().getDefaultGraphBuilderSuite().findPhase(GraphBuilderPhase.class).previous();
-        // copy all plugins from the host
-        Plugins plugins = new Plugins(phase.getGraphBuilderConfig().getPlugins());
+        InvocationPlugins invocationPlugins = new InvocationPlugins(phase.getGraphBuilderConfig().getPlugins().getInvocationPlugins());
+        Plugins plugins = new Plugins(invocationPlugins);
         this.config = GraphBuilderConfiguration.getDefault(plugins).withSkippedExceptionTypes(skippedExceptionTypes);
 
         this.partialEvaluator = new PartialEvaluator(providers, config, Graal.getRequiredCapability(SnippetReflectionProvider.class));

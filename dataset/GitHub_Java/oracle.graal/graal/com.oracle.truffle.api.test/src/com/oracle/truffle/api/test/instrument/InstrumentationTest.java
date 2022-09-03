@@ -35,6 +35,11 @@ import com.oracle.truffle.api.instrument.ProbeFailure.Reason;
 import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
 import com.oracle.truffle.api.instrument.impl.*;
 import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.test.instrument.InstrumentationTestNodes.TestAdditionNode;
+import com.oracle.truffle.api.test.instrument.InstrumentationTestNodes.TestLanguageNode;
+import com.oracle.truffle.api.test.instrument.InstrumentationTestNodes.TestLanguageWrapperNode;
+import com.oracle.truffle.api.test.instrument.InstrumentationTestNodes.TestRootNode;
+import com.oracle.truffle.api.test.instrument.InstrumentationTestNodes.TestValueNode;
 
 /**
  * <h3>AST Instrumentation</h3>
@@ -83,7 +88,7 @@ public class InstrumentationTest {
     };
 
     @Test
-    public void testBasicInstrumentation() {
+    public void testInstrumentationStructure() {
         // Create a simple addition AST
         final TruffleRuntime runtime = Truffle.getRuntime();
         final TestValueNode leftValueNode = new TestValueNode(6);
@@ -117,7 +122,7 @@ public class InstrumentationTest {
         assertEquals(13, callTarget1.call());
 
         // Probe the addition node
-        final Probe probe = addNode.probe();
+        addNode.probe();
 
         // Check the modified tree structure
         assertEquals(addNode, leftValueNode.getParent());
@@ -152,109 +157,131 @@ public class InstrumentationTest {
 
         // Check that the "probed" AST still executes correctly
         assertEquals(13, callTarget1.call());
+    }
+
+    @Test
+    public void testListeners() {
+
+        // Create a simple addition AST
+        final TruffleRuntime runtime = Truffle.getRuntime();
+        final TestValueNode leftValueNode = new TestValueNode(6);
+        final TestValueNode rightValueNode = new TestValueNode(7);
+        final TestAdditionNode addNode = new TestAdditionNode(leftValueNode, rightValueNode);
+        final TestRootNode rootNode = new TestRootNode(addNode);
+
+        // Creating a call target sets the parent pointers in this tree and is necessary prior to
+        // checking any parent/child relationships
+        final CallTarget callTarget = runtime.createCallTarget(rootNode);
+        // Probe the addition node
+        final Probe probe = addNode.probe();
+
+        // Check instrumentation with the simplest kind of counters.
+        // They should all be removed when the check is finished.
+        checkCounters(probe, callTarget, rootNode, new TestInstrumentCounter(), new TestInstrumentCounter(), new TestInstrumentCounter());
+
+        // Now try with the more complex flavor of listener
+        checkCounters(probe, callTarget, rootNode, new TestASTInstrumentCounter(), new TestASTInstrumentCounter(), new TestASTInstrumentCounter());
+    }
+
+    private static void checkCounters(Probe probe, CallTarget callTarget, RootNode rootNode, TestCounter counterA, TestCounter counterB, TestCounter counterC) {
 
         // Attach a counting instrument to the probe
-        final TestCounter counterA = new TestCounter();
         counterA.attach(probe);
 
         // Attach a second counting instrument to the probe
-        final TestCounter counterB = new TestCounter();
         counterB.attach(probe);
 
         // Run it again and check that the two instruments are working
-        assertEquals(13, callTarget1.call());
-        assertEquals(counterA.enterCount, 1);
-        assertEquals(counterA.leaveCount, 1);
-        assertEquals(counterB.enterCount, 1);
-        assertEquals(counterB.leaveCount, 1);
+        assertEquals(13, callTarget.call());
+        assertEquals(counterA.enterCount(), 1);
+        assertEquals(counterA.leaveCount(), 1);
+        assertEquals(counterB.enterCount(), 1);
+        assertEquals(counterB.leaveCount(), 1);
 
-        // Remove counterA and check the "instrument chain"
+        // Remove counterA
         counterA.dispose();
-        iterator = probeNode.getChildren().iterator();
 
         // Run it again and check that instrument B is still working but not A
-        assertEquals(13, callTarget1.call());
-        assertEquals(counterA.enterCount, 1);
-        assertEquals(counterA.leaveCount, 1);
-        assertEquals(counterB.enterCount, 2);
-        assertEquals(counterB.leaveCount, 2);
+        assertEquals(13, callTarget.call());
+        assertEquals(counterA.enterCount(), 1);
+        assertEquals(counterA.leaveCount(), 1);
+        assertEquals(counterB.enterCount(), 2);
+        assertEquals(counterB.leaveCount(), 2);
 
         // Simulate a split by cloning the AST
-        final CallTarget callTarget2 = runtime.createCallTarget((TestRootNode) rootNode.copy());
+        final CallTarget callTarget2 = Truffle.getRuntime().createCallTarget((TestRootNode) rootNode.copy());
         // Run the clone and check that instrument B is still working but not A
         assertEquals(13, callTarget2.call());
-        assertEquals(counterA.enterCount, 1);
-        assertEquals(counterA.leaveCount, 1);
-        assertEquals(counterB.enterCount, 3);
-        assertEquals(counterB.leaveCount, 3);
+        assertEquals(counterA.enterCount(), 1);
+        assertEquals(counterA.leaveCount(), 1);
+        assertEquals(counterB.enterCount(), 3);
+        assertEquals(counterB.leaveCount(), 3);
 
         // Run the original and check that instrument B is still working but not A
         assertEquals(13, callTarget2.call());
-        assertEquals(counterA.enterCount, 1);
-        assertEquals(counterA.leaveCount, 1);
-        assertEquals(counterB.enterCount, 4);
-        assertEquals(counterB.leaveCount, 4);
+        assertEquals(counterA.enterCount(), 1);
+        assertEquals(counterA.leaveCount(), 1);
+        assertEquals(counterB.enterCount(), 4);
+        assertEquals(counterB.leaveCount(), 4);
 
         // Attach a second instrument to the probe
-        final TestCounter counterC = new TestCounter();
         counterC.attach(probe);
 
         // Run the original and check that instruments B,C working but not A
-        assertEquals(13, callTarget1.call());
-        assertEquals(counterA.enterCount, 1);
-        assertEquals(counterA.leaveCount, 1);
-        assertEquals(counterB.enterCount, 5);
-        assertEquals(counterB.leaveCount, 5);
-        assertEquals(counterC.enterCount, 1);
-        assertEquals(counterC.leaveCount, 1);
+        assertEquals(13, callTarget.call());
+        assertEquals(counterA.enterCount(), 1);
+        assertEquals(counterA.leaveCount(), 1);
+        assertEquals(counterB.enterCount(), 5);
+        assertEquals(counterB.leaveCount(), 5);
+        assertEquals(counterC.enterCount(), 1);
+        assertEquals(counterC.leaveCount(), 1);
 
         // Run the clone and check that instruments B,C working but not A
         assertEquals(13, callTarget2.call());
-        assertEquals(counterA.enterCount, 1);
-        assertEquals(counterA.leaveCount, 1);
-        assertEquals(counterB.enterCount, 6);
-        assertEquals(counterB.leaveCount, 6);
-        assertEquals(counterC.enterCount, 2);
-        assertEquals(counterC.leaveCount, 2);
+        assertEquals(counterA.enterCount(), 1);
+        assertEquals(counterA.leaveCount(), 1);
+        assertEquals(counterB.enterCount(), 6);
+        assertEquals(counterB.leaveCount(), 6);
+        assertEquals(counterC.enterCount(), 2);
+        assertEquals(counterC.leaveCount(), 2);
 
         // Remove instrumentC
         counterC.dispose();
 
         // Run the original and check that instrument B working but not A,C
-        assertEquals(13, callTarget1.call());
-        assertEquals(counterA.enterCount, 1);
-        assertEquals(counterA.leaveCount, 1);
-        assertEquals(counterB.enterCount, 7);
-        assertEquals(counterB.leaveCount, 7);
-        assertEquals(counterC.enterCount, 2);
-        assertEquals(counterC.leaveCount, 2);
+        assertEquals(13, callTarget.call());
+        assertEquals(counterA.enterCount(), 1);
+        assertEquals(counterA.leaveCount(), 1);
+        assertEquals(counterB.enterCount(), 7);
+        assertEquals(counterB.leaveCount(), 7);
+        assertEquals(counterC.enterCount(), 2);
+        assertEquals(counterC.leaveCount(), 2);
 
         // Run the clone and check that instrument B working but not A,C
         assertEquals(13, callTarget2.call());
-        assertEquals(counterA.enterCount, 1);
-        assertEquals(counterA.leaveCount, 1);
-        assertEquals(counterB.enterCount, 8);
-        assertEquals(counterB.leaveCount, 8);
-        assertEquals(counterC.enterCount, 2);
-        assertEquals(counterC.leaveCount, 2);
+        assertEquals(counterA.enterCount(), 1);
+        assertEquals(counterA.leaveCount(), 1);
+        assertEquals(counterB.enterCount(), 8);
+        assertEquals(counterB.leaveCount(), 8);
+        assertEquals(counterC.enterCount(), 2);
+        assertEquals(counterC.leaveCount(), 2);
 
         // Remove instrumentB
         counterB.dispose();
 
         // Run both the original and clone, check that no instruments working
-        assertEquals(13, callTarget1.call());
+        assertEquals(13, callTarget.call());
         assertEquals(13, callTarget2.call());
-        assertEquals(counterA.enterCount, 1);
-        assertEquals(counterA.leaveCount, 1);
-        assertEquals(counterB.enterCount, 8);
-        assertEquals(counterB.leaveCount, 8);
-        assertEquals(counterC.enterCount, 2);
-        assertEquals(counterC.leaveCount, 2);
+        assertEquals(counterA.enterCount(), 1);
+        assertEquals(counterA.leaveCount(), 1);
+        assertEquals(counterB.enterCount(), 8);
+        assertEquals(counterB.leaveCount(), 8);
+        assertEquals(counterC.enterCount(), 2);
+        assertEquals(counterC.leaveCount(), 2);
     }
 
     @Test
     public void testTagging() {
-
         // Applies appropriate tags
         final TestASTProber astProber = new TestASTProber();
         Probe.registerASTProber(astProber);
@@ -310,306 +337,121 @@ public class InstrumentationTest {
         assertEquals(valueCounter.count, 2);
 
         Probe.unregisterASTProber(astProber);
-
     }
 
-    @Test
-    public void testProbeLite() {
+    private interface TestCounter {
 
-        // Use the "lite-probing" option, limited to a single pass of
-        // probing and a single Instrument at each probed node. This
-        // particular test uses a shared event receiver at every
-        // lite-probed node.
-        final TestEventReceiver receiver = new TestEventReceiver();
+        int enterCount();
 
-        TestASTLiteProber astLiteProber = new TestASTLiteProber(receiver);
-        Probe.registerASTProber(astLiteProber);
+        int leaveCount();
 
-        // Create a simple addition AST
-        final TruffleRuntime runtime = Truffle.getRuntime();
-        final TestValueNode leftValueNode = new TestValueNode(6);
-        final TestValueNode rightValueNode = new TestValueNode(7);
-        final TestAdditionNode addNode = new TestAdditionNode(leftValueNode, rightValueNode);
-        final TestRootNode rootNode = new TestRootNode(addNode);
+        void attach(Probe probe);
 
-        // Creating a call target sets the parent pointers in this tree and is necessary prior to
-        // checking any parent/child relationships
-        final CallTarget callTarget = runtime.createCallTarget(rootNode);
-
-        // Check that the instrument is working as expected.
-        assertEquals(0, receiver.counter);
-        callTarget.call();
-        assertEquals(2, receiver.counter);
-
-        // Check that you can't probe a node that's already received a probeLite() call
-        try {
-            leftValueNode.probe();
-            fail();
-        } catch (IllegalStateException e) {
-        }
-
-        try {
-            rightValueNode.probe();
-            fail();
-        } catch (IllegalStateException e) {
-        }
-
-        // Check tree structure
-        assertTrue(leftValueNode.getParent() instanceof TestLanguageWrapperNode);
-        assertTrue(rightValueNode.getParent() instanceof TestLanguageWrapperNode);
-        TestLanguageWrapperNode leftWrapper = (TestLanguageWrapperNode) leftValueNode.getParent();
-        TestLanguageWrapperNode rightWrapper = (TestLanguageWrapperNode) rightValueNode.getParent();
-        assertEquals(addNode, leftWrapper.getParent());
-        assertEquals(addNode, rightWrapper.getParent());
-        Iterator<Node> iterator = addNode.getChildren().iterator();
-        assertEquals(leftWrapper, iterator.next());
-        assertEquals(rightWrapper, iterator.next());
-        assertFalse(iterator.hasNext());
-        assertEquals(rootNode, addNode.getParent());
-        iterator = rootNode.getChildren().iterator();
-        assertEquals(addNode, iterator.next());
-        assertFalse(iterator.hasNext());
-
-        // Check that you can't get a probe on the wrappers because they were "lite-probed"
-        try {
-            leftWrapper.getProbe();
-            fail();
-        } catch (IllegalStateException e) {
-        }
-        try {
-            rightWrapper.getProbe();
-            fail();
-        } catch (IllegalStateException e) {
-        }
-
-        // Check that you can't probe the wrappers
-        try {
-            leftWrapper.probe();
-            fail();
-        } catch (ProbeException e) {
-            assertEquals(e.getFailure().getReason(), ProbeFailure.Reason.WRAPPER_NODE);
-        }
-        try {
-            rightWrapper.probe();
-            fail();
-        } catch (ProbeException e) {
-            assertEquals(e.getFailure().getReason(), ProbeFailure.Reason.WRAPPER_NODE);
-        }
-        try {
-            leftWrapper.probeLite(null);
-            fail();
-        } catch (ProbeException e) {
-            assertEquals(e.getFailure().getReason(), ProbeFailure.Reason.WRAPPER_NODE);
-        }
-        try {
-            rightWrapper.probeLite(null);
-            fail();
-        } catch (ProbeException e) {
-            assertEquals(e.getFailure().getReason(), ProbeFailure.Reason.WRAPPER_NODE);
-        }
-
-        // Use reflection to check that each WrapperNode has a ProbeLiteNode with a
-        // SimpleEventReceiver
-        try {
-            java.lang.reflect.Field probeNodeField = leftWrapper.getClass().getDeclaredField("probeNode");
-
-            // cheat: probeNode is private, so we change it's accessibility at runtime
-            probeNodeField.setAccessible(true);
-            ProbeNode probeNode = (ProbeNode) probeNodeField.get(leftWrapper);
-
-            // hack: Since ProbeLiteNode is not visible, we do a string compare here
-            assertTrue(probeNode.getClass().toString().endsWith("ProbeLiteNode"));
-
-            // Now we do the same to check the type of the eventReceiver in ProbeLiteNode
-            java.lang.reflect.Field eventReceiverField = probeNode.getClass().getDeclaredField("eventReceiver");
-            eventReceiverField.setAccessible(true);
-            TruffleEventReceiver eventReceiver = (TruffleEventReceiver) eventReceiverField.get(probeNode);
-            assertTrue(eventReceiver instanceof SimpleEventReceiver);
-
-            // Reset accessibility
-            probeNodeField.setAccessible(false);
-            eventReceiverField.setAccessible(false);
-
-        } catch (NoSuchFieldException | SecurityException | IllegalArgumentException | IllegalAccessException e) {
-            fail();
-        }
-
-        Probe.unregisterASTProber(astLiteProber);
-
-    }
-
-    private abstract class TestLanguageNode extends Node {
-        public abstract Object execute(VirtualFrame frame);
-
-        @Override
-        public boolean isInstrumentable() {
-            return true;
-        }
-
-        @Override
-        public WrapperNode createWrapperNode() {
-            return new TestLanguageWrapperNode(this);
-        }
-    }
-
-    @NodeInfo(cost = NodeCost.NONE)
-    private class TestLanguageWrapperNode extends TestLanguageNode implements WrapperNode {
-        @Child private TestLanguageNode child;
-        @Child private ProbeNode probeNode;
-
-        public TestLanguageWrapperNode(TestLanguageNode child) {
-            assert !(child instanceof TestLanguageWrapperNode);
-            this.child = child;
-        }
-
-        @Override
-        public String instrumentationInfo() {
-            return "Wrapper node for testing";
-        }
-
-        @Override
-        public boolean isInstrumentable() {
-            return false;
-        }
-
-        @Override
-        public void insertProbe(ProbeNode newProbeNode) {
-            this.probeNode = newProbeNode;
-        }
-
-        @Override
-        public Probe getProbe() {
-            try {
-                return probeNode.getProbe();
-            } catch (IllegalStateException e) {
-                throw new IllegalStateException("Cannot call getProbe() on a wrapper that has no probe");
-            }
-        }
-
-        @Override
-        public Node getChild() {
-            return child;
-        }
-
-        @Override
-        public Object execute(VirtualFrame frame) {
-            probeNode.enter(child, frame);
-            Object result;
-
-            try {
-                result = child.execute(frame);
-                probeNode.returnValue(child, frame, result);
-            } catch (KillException e) {
-                throw (e);
-            } catch (Exception e) {
-                probeNode.returnExceptional(child, frame, e);
-                throw (e);
-            }
-
-            return result;
-        }
+        void dispose();
     }
 
     /**
-     * A simple node for our test language to store a value.
+     * A counter for the number of times execution enters and leaves a probed AST node.
      */
-    private class TestValueNode extends TestLanguageNode {
-        private final int value;
+    private class TestInstrumentCounter implements TestCounter {
 
-        public TestValueNode(int value) {
-            this.value = value;
+        public int enterCount = 0;
+        public int leaveCount = 0;
+        public final Instrument instrument;
+
+        public TestInstrumentCounter() {
+            this.instrument = Instrument.create(new InstrumentListener() {
+
+                public void enter(Probe probe) {
+                    enterCount++;
+                }
+
+                public void returnVoid(Probe probe) {
+                    leaveCount++;
+                }
+
+                public void returnValue(Probe probe, Object result) {
+                    leaveCount++;
+                }
+
+                public void returnExceptional(Probe probe, Exception exception) {
+                    leaveCount++;
+                }
+
+            }, "Instrumentation Test Counter");
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            return new Integer(this.value);
-        }
-    }
-
-    /**
-     * A node for our test language that adds up two {@link TestValueNode}s.
-     */
-    private class TestAdditionNode extends TestLanguageNode {
-        @Child private TestLanguageNode leftChild;
-        @Child private TestLanguageNode rightChild;
-
-        public TestAdditionNode(TestValueNode leftChild, TestValueNode rightChild) {
-            this.leftChild = insert(leftChild);
-            this.rightChild = insert(rightChild);
+        public int enterCount() {
+            return enterCount;
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            return new Integer(((Integer) leftChild.execute(frame)).intValue() + ((Integer) rightChild.execute(frame)).intValue());
-        }
-    }
-
-    /**
-     * Truffle requires that all guest languages to have a {@link RootNode} which sits atop any AST
-     * of the guest language. This is necessary since creating a {@link CallTarget} is how Truffle
-     * completes an AST. The root nodes serves as our entry point into a program.
-     */
-    private class TestRootNode extends RootNode {
-        @Child private TestLanguageNode body;
-
-        /**
-         * This constructor emulates the global machinery that applies registered probers to every
-         * newly created AST. Global registry is not used, since that would interfere with other
-         * tests run in the same environment.
-         */
-        public TestRootNode(TestLanguageNode body) {
-            super(null);
-            this.body = body;
+        public int leaveCount() {
+            return leaveCount;
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            return body.execute(frame);
+        public void attach(Probe probe) {
+            probe.attach(instrument);
         }
 
         @Override
-        public boolean isCloningAllowed() {
-            return true;
-        }
-
-        @Override
-        public void applyInstrumentation() {
-            Probe.applyASTProbers(body);
+        public void dispose() {
+            instrument.dispose();
         }
     }
 
     /**
      * A counter for the number of times execution enters and leaves a probed AST node.
      */
-    private class TestCounter {
+    private class TestASTInstrumentCounter implements TestCounter {
 
         public int enterCount = 0;
         public int leaveCount = 0;
         public final Instrument instrument;
 
-        public TestCounter() {
-            instrument = Instrument.create(new SimpleEventReceiver() {
+        public TestASTInstrumentCounter() {
+            this.instrument = Instrument.create(new ASTInstrumentListener() {
 
-                @Override
-                public void enter(Node node, VirtualFrame frame) {
+                public void enter(Probe probe, Node node, VirtualFrame vFrame) {
                     enterCount++;
                 }
 
-                @Override
-                public void returnAny(Node node, VirtualFrame frame) {
+                public void returnVoid(Probe probe, Node node, VirtualFrame vFrame) {
                     leaveCount++;
                 }
+
+                public void returnValue(Probe probe, Node node, VirtualFrame vFrame, Object result) {
+                    leaveCount++;
+                }
+
+                public void returnExceptional(Probe probe, Node node, VirtualFrame vFrame, Exception exception) {
+                    leaveCount++;
+                }
+
             }, "Instrumentation Test Counter");
         }
 
+        @Override
+        public int enterCount() {
+            return enterCount;
+        }
+
+        @Override
+        public int leaveCount() {
+            return leaveCount;
+        }
+
+        @Override
         public void attach(Probe probe) {
             probe.attach(instrument);
         }
 
+        @Override
         public void dispose() {
             instrument.dispose();
         }
-
     }
 
     /**
@@ -641,41 +483,29 @@ public class InstrumentationTest {
     }
 
     /**
-     * "lite-probes" every value node with a shared event receiver.
+     * Counts the number of "enter" events at probed nodes using the simplest AST listener.
      */
-    private static final class TestASTLiteProber implements NodeVisitor, ASTProber {
-        private final TruffleEventReceiver eventReceiver;
-
-        public TestASTLiteProber(SimpleEventReceiver simpleEventReceiver) {
-            this.eventReceiver = simpleEventReceiver;
-        }
-
-        public boolean visit(Node node) {
-            if (node instanceof TestValueNode) {
-                final TestLanguageNode testNode = (TestValueNode) node;
-                testNode.probeLite(eventReceiver);
-            }
-            return true;
-        }
-
-        public void probeAST(Node node) {
-            node.accept(this);
-        }
-    }
-
-    /**
-     * Counts the number of "enter" events at probed nodes.
-     *
-     */
-    static final class TestEventReceiver extends SimpleEventReceiver {
+    static final class TestInstrumentListener extends DefaultInstrumentListener {
 
         public int counter = 0;
 
         @Override
-        public void enter(Node node, VirtualFrame frame) {
+        public void enter(Probe probe) {
             counter++;
         }
+    }
 
+    /**
+     * Counts the number of "enter" events at probed nodes using the AST listener.
+     */
+    static final class TestASTInstrumentListener extends DefaultASTInstrumentListener {
+
+        public int counter = 0;
+
+        @Override
+        public void enter(Probe probe, Node node, VirtualFrame vFrame) {
+            counter++;
+        }
     }
 
     /**
@@ -692,10 +522,10 @@ public class InstrumentationTest {
             // where we want to count executions.
             // it will get copied when ASTs cloned, so
             // keep the count in this outer class.
-            probe.attach(Instrument.create(new SimpleEventReceiver() {
+            probe.attach(Instrument.create(new DefaultInstrumentListener() {
 
                 @Override
-                public void enter(Node node, VirtualFrame frame) {
+                public void enter(Probe p) {
                     count++;
                 }
             }, "Instrumentation Test MultiCounter"));
@@ -717,5 +547,4 @@ public class InstrumentationTest {
             tagCount++;
         }
     }
-
 }

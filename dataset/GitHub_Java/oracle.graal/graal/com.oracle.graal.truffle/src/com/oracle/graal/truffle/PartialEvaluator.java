@@ -164,74 +164,28 @@ public class PartialEvaluator {
 
     private class PEInlineInvokePlugin implements InlineInvokePlugin {
 
+        private final boolean duringParsing;
         private Deque<TruffleInlining> inlining;
         private OptimizedDirectCallNode lastDirectCallNode;
         private final Replacements replacements;
 
-        public PEInlineInvokePlugin(TruffleInlining inlining, Replacements replacements) {
+        private final InvocationPlugins invocationPlugins;
+        private final LoopExplosionPlugin loopExplosionPlugin;
+
+        public PEInlineInvokePlugin(TruffleInlining inlining, Replacements replacements, boolean duringParsing, InvocationPlugins invocationPlugins, LoopExplosionPlugin loopExplosionPlugin) {
             this.inlining = new ArrayDeque<>();
             this.inlining.push(inlining);
             this.replacements = replacements;
-        }
-
-        @Override
-        public InlineInfo getInlineInfo(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments, JavaType returnType) {
-            if (original.getAnnotation(TruffleBoundary.class) != null) {
-                return null;
-            }
-            if (replacements != null && replacements.hasSubstitution(original)) {
-                return null;
-            }
-            assert !builder.parsingReplacement();
-            if (TruffleCompilerOptions.TruffleFunctionInlining.getValue()) {
-                if (original.equals(callSiteProxyMethod)) {
-                    ValueNode arg1 = arguments[0];
-                    if (!arg1.isConstant()) {
-                        GraalInternalError.shouldNotReachHere("The direct call node does not resolve to a constant!");
-                    }
-
-                    Object callNode = snippetReflection.asObject(Object.class, (JavaConstant) arg1.asConstant());
-                    if (callNode instanceof OptimizedDirectCallNode) {
-                        OptimizedDirectCallNode directCallNode = (OptimizedDirectCallNode) callNode;
-                        lastDirectCallNode = directCallNode;
-                    }
-                } else if (original.equals(callDirectMethod)) {
-                    TruffleInliningDecision decision = getDecision(inlining.peek(), lastDirectCallNode);
-                    lastDirectCallNode = null;
-                    if (decision != null && decision.isInline()) {
-                        inlining.push(decision);
-                        builder.getAssumptions().record(new AssumptionValidAssumption((OptimizedAssumption) decision.getTarget().getNodeRewritingAssumption()));
-                        return new InlineInfo(callInlinedMethod, false, false);
-                    }
-                }
-            }
-
-            return new InlineInfo(original, false, false);
-        }
-
-        @Override
-        public void postInline(ResolvedJavaMethod inlinedTargetMethod) {
-            if (inlinedTargetMethod.equals(callInlinedMethod)) {
-                inlining.pop();
-            }
-        }
-    }
-
-    private class ParsingInlineInvokePlugin implements InlineInvokePlugin {
-
-        private final Replacements replacements;
-        private final InvocationPlugins invocationPlugins;
-        private final LoopExplosionPlugin loopExplosionPlugin;
-        private final boolean inlineDuringParsing;
-
-        public ParsingInlineInvokePlugin(Replacements replacements, InvocationPlugins invocationPlugins, LoopExplosionPlugin loopExplosionPlugin, boolean inlineDuringParsing) {
-            this.replacements = replacements;
+            this.duringParsing = duringParsing;
             this.invocationPlugins = invocationPlugins;
             this.loopExplosionPlugin = loopExplosionPlugin;
-            this.inlineDuringParsing = inlineDuringParsing;
         }
 
         private boolean hasMethodHandleArgument(ValueNode[] arguments) {
+            /*
+             * We want to process invokes that have a constant MethodHandle parameter. And the
+             * method must be statically bound, otherwise we do not have a single target method.
+             */
             for (ValueNode argument : arguments) {
                 if (argument.isConstant()) {
                     JavaConstant constant = argument.asJavaConstant();
@@ -243,31 +197,58 @@ public class PartialEvaluator {
             return false;
         }
 
-        @Override
         public InlineInfo getInlineInfo(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments, JavaType returnType) {
-            if (invocationPlugins.lookupInvocation(original) != null || loopExplosionPlugin.shouldExplodeLoops(original)) {
+            if (duringParsing && (invocationPlugins.lookupInvocation(original) != null || loopExplosionPlugin.shouldExplodeLoops(original))) {
                 return null;
             }
+
             if (original.getAnnotation(TruffleBoundary.class) != null) {
                 return null;
             }
             if (replacements != null && replacements.hasSubstitution(original)) {
                 return null;
             }
-            if (original.equals(callSiteProxyMethod) || original.equals(callDirectMethod)) {
+            assert !builder.parsingReplacement();
+            if (TruffleCompilerOptions.TruffleFunctionInlining.getValue()) {
+                if (original.equals(callSiteProxyMethod)) {
+                    if (duringParsing) {
+                        return null;
+                    }
+                    ValueNode arg1 = arguments[0];
+                    if (!arg1.isConstant()) {
+                        GraalInternalError.shouldNotReachHere("The direct call node does not resolve to a constant!");
+                    }
+
+                    Object callNode = snippetReflection.asObject(Object.class, (JavaConstant) arg1.asConstant());
+                    if (callNode instanceof OptimizedDirectCallNode) {
+                        OptimizedDirectCallNode directCallNode = (OptimizedDirectCallNode) callNode;
+                        lastDirectCallNode = directCallNode;
+                    }
+                } else if (original.equals(callDirectMethod)) {
+                    if (duringParsing) {
+                        return null;
+                    }
+                    TruffleInliningDecision decision = getDecision(inlining.peek(), lastDirectCallNode);
+                    lastDirectCallNode = null;
+                    if (decision != null && decision.isInline()) {
+                        inlining.push(decision);
+                        builder.getAssumptions().record(new AssumptionValidAssumption((OptimizedAssumption) decision.getTarget().getNodeRewritingAssumption()));
+                        return new InlineInfo(callInlinedMethod, false, false);
+                    }
+                }
+            }
+
+            if (duringParsing && (!original.hasBytecodes() || original.getCode().length >= TrivialInliningSize.getValue() || builder.getDepth() >= InlineDuringParsingMaxDepth.getValue()) &&
+                            !hasMethodHandleArgument(arguments)) {
                 return null;
             }
-            if (hasMethodHandleArgument(arguments)) {
-                /*
-                 * We want to inline invokes that have a constant MethodHandle parameter to remove
-                 * invokedynamic related calls as early as possible.
-                 */
-                return new InlineInfo(original, false, false);
+            return new InlineInfo(original, false, false);
+        }
+
+        public void postInline(ResolvedJavaMethod inlinedTargetMethod) {
+            if (inlinedTargetMethod.equals(callInlinedMethod)) {
+                inlining.pop();
             }
-            if (inlineDuringParsing && original.hasBytecodes() && original.getCode().length < TrivialInliningSize.getValue() && builder.getDepth() < InlineDuringParsingMaxDepth.getValue()) {
-                return new InlineInfo(original, false, false);
-            }
-            return null;
         }
     }
 
@@ -298,7 +279,7 @@ public class PartialEvaluator {
         plugins.setParameterPlugin(new InterceptReceiverPlugin(callTarget));
         callTarget.setInlining(new TruffleInlining(callTarget, new DefaultInliningPolicy()));
 
-        InlineInvokePlugin inlinePlugin = new PEInlineInvokePlugin(callTarget.getInlining(), providers.getReplacements());
+        InlineInvokePlugin inlinePlugin = new PEInlineInvokePlugin(callTarget.getInlining(), providers.getReplacements(), false, null, null);
         if (PrintTruffleExpansionHistogram.getValue()) {
             inlinePlugin = new HistogramInlineInvokePlugin(graph, inlinePlugin);
         }
@@ -322,7 +303,7 @@ public class PartialEvaluator {
         newConfig.setUseProfiling(false);
         Plugins plugins = newConfig.getPlugins();
         plugins.setLoadFieldPlugin(new InterceptLoadFieldPlugin());
-        plugins.setInlineInvokePlugin(new ParsingInlineInvokePlugin(providers.getReplacements(), parsingInvocationPlugins, loopExplosionPlugin, !PrintTruffleExpansionHistogram.getValue()));
+        plugins.setInlineInvokePlugin(new PEInlineInvokePlugin(callTarget.getInlining(), providers.getReplacements(), true, parsingInvocationPlugins, loopExplosionPlugin));
 
         CachingPEGraphDecoder decoder = new CachingPEGraphDecoder(providers, newConfig, AllowAssumptions.from(graph.getAssumptions() != null));
 
@@ -330,7 +311,7 @@ public class PartialEvaluator {
 
         InvocationPlugins decodingInvocationPlugins = new InvocationPlugins(providers.getMetaAccess());
         TruffleGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), decodingInvocationPlugins, false, snippetReflection);
-        InlineInvokePlugin decodingInlinePlugin = new PEInlineInvokePlugin(callTarget.getInlining(), providers.getReplacements());
+        InlineInvokePlugin decodingInlinePlugin = new PEInlineInvokePlugin(callTarget.getInlining(), providers.getReplacements(), false, decodingInvocationPlugins, loopExplosionPlugin);
         if (PrintTruffleExpansionHistogram.getValue()) {
             decodingInlinePlugin = new HistogramInlineInvokePlugin(graph, decodingInlinePlugin);
         }
