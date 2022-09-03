@@ -36,21 +36,21 @@ import com.oracle.graal.nodes.spi.*;
  */
 public final class LoadHubNode extends FloatingGuardedNode implements Lowerable, Canonicalizable, Virtualizable {
 
-    @Input private ValueNode value;
+    @Input private ValueNode object;
 
-    public ValueNode getValue() {
-        return value;
+    public ValueNode object() {
+        return object;
     }
 
-    public LoadHubNode(ValueNode value, Kind kind) {
+    public LoadHubNode(ValueNode object, Kind kind) {
         super(getKind(kind), null);
-        this.value = value;
+        this.object = object;
     }
 
-    public LoadHubNode(ValueNode value, Kind kind, ValueNode guard) {
+    public LoadHubNode(ValueNode object, Kind kind, ValueNode guard) {
         super(getKind(kind), (GuardingNode) guard);
-        assert value != guard;
-        this.value = value;
+        assert object != guard;
+        this.object = object;
     }
 
     private static Stamp getKind(Kind kind) {
@@ -65,8 +65,8 @@ public final class LoadHubNode extends FloatingGuardedNode implements Lowerable,
     @Override
     public Node canonical(CanonicalizerTool tool) {
         MetaAccessProvider metaAccess = tool.getMetaAccess();
-        if (metaAccess != null && value.stamp() instanceof ObjectStamp) {
-            ObjectStamp stamp = (ObjectStamp) value.stamp();
+        if (metaAccess != null && object.stamp() instanceof ObjectStamp) {
+            ObjectStamp stamp = (ObjectStamp) object.stamp();
 
             ResolvedJavaType exactType;
             if (stamp.isExactType()) {
@@ -89,7 +89,7 @@ public final class LoadHubNode extends FloatingGuardedNode implements Lowerable,
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(value);
+        State state = tool.getObjectState(object);
         if (state != null) {
             Constant constantHub = state.getVirtualObject().type().getEncoding(Representation.ObjectHub);
             tool.replaceWithValue(ConstantNode.forConstant(constantHub, tool.getMetaAccessProvider(), graph()));
