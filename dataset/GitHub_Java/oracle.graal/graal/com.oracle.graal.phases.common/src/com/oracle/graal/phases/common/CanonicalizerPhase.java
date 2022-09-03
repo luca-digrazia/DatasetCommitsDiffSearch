@@ -50,6 +50,7 @@ public class CanonicalizerPhase extends Phase {
     private final TargetDescription target;
     private final Assumptions assumptions;
     private final MetaAccessProvider runtime;
+    private final IsImmutablePredicate immutabilityPredicate;
     private final Iterable<Node> initWorkingSet;
 
     private NodeWorkList workList;
@@ -57,7 +58,7 @@ public class CanonicalizerPhase extends Phase {
     private List<Node> snapshotTemp;
 
     public CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions) {
-        this(target, runtime, assumptions, null, 0);
+        this(target, runtime, assumptions, null, 0, null);
     }
 
     /**
@@ -65,24 +66,26 @@ public class CanonicalizerPhase extends Phase {
      * @param runtime
      * @param assumptions
      * @param workingSet the initial working set of nodes on which the canonicalizer works, should be an auto-grow node bitmap
+     * @param immutabilityPredicate
      */
-    public CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, Iterable<Node> workingSet) {
-        this(target, runtime, assumptions, workingSet, 0);
+    public CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, Iterable<Node> workingSet, IsImmutablePredicate immutabilityPredicate) {
+        this(target, runtime, assumptions, workingSet, 0, immutabilityPredicate);
     }
 
     /**
      * @param newNodesMark only the {@linkplain Graph#getNewNodes(int) new nodes} specified by
      *            this mark are processed otherwise all nodes in the graph are processed
      */
-    public CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, int newNodesMark) {
-        this(target, runtime, assumptions, null, newNodesMark);
+    public CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
+        this(target, runtime, assumptions, null, newNodesMark, immutabilityPredicate);
     }
 
-    private CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, Iterable<Node> workingSet, int newNodesMark) {
+    private CanonicalizerPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, Iterable<Node> workingSet, int newNodesMark, IsImmutablePredicate immutabilityPredicate) {
         this.newNodesMark = newNodesMark;
         this.target = target;
         this.assumptions = assumptions;
         this.runtime = runtime;
+        this.immutabilityPredicate = immutabilityPredicate;
         this.initWorkingSet = workingSet;
         this.snapshotTemp = new ArrayList<>();
     }
@@ -98,8 +101,16 @@ public class CanonicalizerPhase extends Phase {
             workList = graph.createNodeWorkList(false, MAX_ITERATION_PER_NODE);
             workList.addAll(initWorkingSet);
         }
-        tool = new Tool(workList, runtime, target, assumptions);
+        tool = new Tool(workList, runtime, target, assumptions, immutabilityPredicate);
         processWorkSet(graph);
+    }
+
+    public interface IsImmutablePredicate {
+        /**
+         * Determines if a given constant is an object/array whose current
+         * fields/elements will never change.
+         */
+        boolean apply(Constant constant);
     }
 
     private void processWorkSet(StructuredGraph graph) {
@@ -277,12 +288,14 @@ public class CanonicalizerPhase extends Phase {
         private final MetaAccessProvider runtime;
         private final TargetDescription target;
         private final Assumptions assumptions;
+        private final IsImmutablePredicate immutabilityPredicate;
 
-        public Tool(NodeWorkList nodeWorkSet, MetaAccessProvider runtime, TargetDescription target, Assumptions assumptions) {
+        public Tool(NodeWorkList nodeWorkSet, MetaAccessProvider runtime, TargetDescription target, Assumptions assumptions, IsImmutablePredicate immutabilityPredicate) {
             this.nodeWorkSet = nodeWorkSet;
             this.runtime = runtime;
             this.target = target;
             this.assumptions = assumptions;
+            this.immutabilityPredicate = immutabilityPredicate;
         }
 
         @Override
@@ -315,6 +328,11 @@ public class CanonicalizerPhase extends Phase {
         @Override
         public void addToWorkList(Node node) {
             nodeWorkSet.addAgain(node);
+        }
+
+        @Override
+        public boolean isImmutable(Constant objectConstant) {
+            return immutabilityPredicate != null && immutabilityPredicate.apply(objectConstant);
         }
     }
 }
