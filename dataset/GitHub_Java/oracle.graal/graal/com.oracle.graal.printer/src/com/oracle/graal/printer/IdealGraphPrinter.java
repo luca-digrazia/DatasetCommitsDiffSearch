@@ -22,36 +22,20 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.graal.compiler.common.GraalOptions.PrintIdealGraphSchedule;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.graph.Graph;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.graph.NodePosIterator;
-import com.oracle.graal.graph.Position;
-import com.oracle.graal.java.BytecodeDisassembler;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.BeginNode;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.java.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.phases.schedule.*;
 
 /**
  * Generates a representation of {@link Graph Graphs} that can be visualized and inspected with the
@@ -90,26 +74,25 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
         endMethod();
     }
 
+    public void print(Graph graph, String title) {
+        print(graph, title, null);
+    }
+
     /**
      * Prints an entire {@link Graph} with the specified title, optionally using short names for
      * nodes.
      */
     @Override
-    public void print(Graph graph, String title) {
+    public void print(Graph graph, String title, SchedulePhase predefinedSchedule) {
         beginGraph(title);
         Set<Node> noBlockNodes = Node.newSet();
-        ScheduleResult schedule = null;
-        if (graph instanceof StructuredGraph) {
-            StructuredGraph structuredGraph = (StructuredGraph) graph;
-            schedule = structuredGraph.getLastSchedule();
-            if (schedule == null && tryToSchedule) {
-                if (PrintIdealGraphSchedule.getValue()) {
-                    try {
-                        SchedulePhase schedulePhase = new SchedulePhase();
-                        schedulePhase.apply(structuredGraph);
-                        schedule = structuredGraph.getLastSchedule();
-                    } catch (Throwable t) {
-                    }
+        SchedulePhase schedule = predefinedSchedule;
+        if (schedule == null && tryToSchedule) {
+            if (PrintIdealGraphSchedule.getValue()) {
+                try {
+                    schedule = new SchedulePhase();
+                    schedule.apply((StructuredGraph) graph);
+                } catch (Throwable t) {
                 }
             }
         }
