@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,9 @@
  */
 package org.graalvm.compiler.hotspot;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+
 import jdk.vm.ci.hotspot.HotSpotVMConfigAccess;
 import jdk.vm.ci.hotspot.HotSpotVMConfigStore;
 
@@ -40,6 +43,19 @@ final class GraalHotSpotVMConfigVersioned extends HotSpotVMConfigAccess {
 
     GraalHotSpotVMConfigVersioned(HotSpotVMConfigStore store) {
         super(store);
+        assert check();
+    }
+
+    private boolean check() {
+        for (Field field : getClass().getDeclaredFields()) {
+            int modifiers = field.getModifiers();
+            if (!Modifier.isStatic(modifiers)) {
+                // javac inlines non-static final fields which means
+                // versioned values are ignored in non-flattened Graal
+                assert !Modifier.isFinal(modifiers) : "Non-static field in " + getClass().getName() + " must not be final: " + field.getName();
+            }
+        }
+        return true;
     }
 
     // JDK-8073583
@@ -90,15 +106,4 @@ final class GraalHotSpotVMConfigVersioned extends HotSpotVMConfigAccess {
     // JDK-8015774
     long codeCacheLowBound = getFieldValue("CompilerToVM::Data::CodeCache_low_bound", Long.class, "address");
     long codeCacheHighBound = getFieldValue("CompilerToVM::Data::CodeCache_high_bound", Long.class, "address");
-
-    // JDK-8229258
-    String markWordClassName = "markOopDesc";
-    String markWordFieldType = "markOop";
-
-    // JDK-8186777
-    int classMirrorOffset = getFieldOffset("Klass::_java_mirror", Integer.class, "oop");
-    boolean classMirrorIsHandle = false;
-
-    // JDK-8220049
-    boolean threadLocalHandshakes = getFlag("ThreadLocalHandshakes", Boolean.class, false);
 }
