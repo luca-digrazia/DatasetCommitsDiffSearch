@@ -232,8 +232,13 @@ public class FlowSensitiveReduction extends FixedGuardReduction {
                 // `begin` denotes the default case of the TypeSwitchNode
                 return;
             }
+            if (state.knownNotToConform(loadHub.object(), type)) {
+                postponedDeopts.addDeoptAfter(begin, UnreachedCode);
+                state.impossiblePath();
+                return;
+            }
             // it's unwarranted to assume loadHub.object() to be non-null
-            state.trackCC(loadHub.object(), type, begin);
+            // it also seems unwarranted state.trackCC(loadHub.object(), type, begin);
         }
     }
 

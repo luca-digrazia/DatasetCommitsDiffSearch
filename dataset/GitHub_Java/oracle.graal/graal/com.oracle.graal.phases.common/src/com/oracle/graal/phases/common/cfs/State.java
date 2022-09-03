@@ -141,18 +141,6 @@ public final class State extends MergeableState<State> implements Cloneable {
         this.falseFacts = new IdentityHashMap<>(other.falseFacts);
     }
 
-    public boolean repOK() {
-        // trueFacts and falseFacts disjoint
-        for (LogicNode trueFact : trueFacts.keySet()) {
-            assert !falseFacts.containsKey(trueFact) : trueFact + " tracked as both true and false fact.";
-        }
-        // no scrutinee tracked as both known-null and known-non-null
-        for (ValueNode subject : knownNull.keySet()) {
-            assert !isNonNull(subject) : subject + " tracked as both known-null and known-non-null.";
-        }
-        return true;
-    }
-
     /**
      * @return A new list containing only those states that are reachable.
      */
@@ -312,9 +300,6 @@ public final class State extends MergeableState<State> implements Cloneable {
 
         this.trueFacts = mergeTrueFacts(withReachableStates, merge);
         this.falseFacts = mergeFalseFacts(withReachableStates, merge);
-
-        assert repOK();
-
         return true;
     }
 
@@ -546,7 +531,6 @@ public final class State extends MergeableState<State> implements Cloneable {
         Witness w = getOrElseAddTypeInfo(object);
         if (w.trackNN(anchor)) {
             versionNr++;
-            assert repOK();
             return true;
         }
         return false;
@@ -579,7 +563,6 @@ public final class State extends MergeableState<State> implements Cloneable {
         if (w.trackCC(observed, anchor)) {
             versionNr++;
             metricTypeRegistered.increment();
-            assert repOK();
             return true;
         }
         return false;
@@ -606,7 +589,6 @@ public final class State extends MergeableState<State> implements Cloneable {
         if (w.trackIO(observed, anchor)) {
             versionNr++;
             metricTypeRegistered.increment();
-            assert repOK();
             return true;
         }
         return false;
@@ -688,7 +670,6 @@ public final class State extends MergeableState<State> implements Cloneable {
         } else {
             addFactPrimordial(condition, isTrue ? trueFacts : falseFacts, anchor);
         }
-        assert repOK();
     }
 
     /**
@@ -800,7 +781,6 @@ public final class State extends MergeableState<State> implements Cloneable {
                 trackNN(original, anchor);
             }
         }
-        assert repOK();
     }
 
     /**
