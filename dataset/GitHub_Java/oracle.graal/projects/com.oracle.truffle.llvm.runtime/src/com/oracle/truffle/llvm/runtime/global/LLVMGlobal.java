@@ -82,13 +82,6 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         return new LLVMGlobal(name, context.getGlobalFrameSlot(symbol, type), type, sourceSymbol);
     }
 
-    public static Object assignManaged(Object object) {
-        if (object instanceof LLVMTruffleObject) {
-            return new Managed((LLVMTruffleObject) object);
-        }
-        return object;
-    }
-
     private LLVMGlobal(String name, FrameSlot slot, Type globalType, LLVMSourceSymbol sourceSymbol) {
         this.name = name;
         this.slot = slot;
@@ -132,18 +125,6 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
 
     private void setFrame(LLVMContext context, Object object) {
         context.getGlobalFrame().setObject(slot, object);
-    }
-
-    /**
-     * Used if a managed object is assign to a global to disambiguate from an assignment of a
-     * pointer.
-     */
-    static final class Managed {
-        final LLVMTruffleObject wrapped;
-
-        protected Managed(LLVMTruffleObject wrapped) {
-            this.wrapped = wrapped;
-        }
     }
 
     @SuppressWarnings("unused")
@@ -280,8 +261,8 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
     private static final class LLVMGlobalNativeLibrary extends LLVMObjectNativeLibrary {
 
         @CompilationFinal private ContextReference<LLVMContext> contextRef;
+
         @CompilationFinal private LLVMMemory memory;
-        @Child private LLVMObjectNativeLibrary recursiveLib;
 
         private LLVMMemory getMemory() {
             if (memory == null) {
@@ -299,14 +280,6 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
             return contextRef.get();
         }
 
-        private LLVMObjectNativeLibrary getNativeLibrary() {
-            if (recursiveLib == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                recursiveLib = insert(LLVMObjectNativeLibrary.createGeneric());
-            }
-            return recursiveLib;
-        }
-
         @Override
         public Object toNative(Object obj) throws InteropException {
             LLVMGlobal global = (LLVMGlobal) obj;
@@ -318,7 +291,8 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         public boolean isPointer(Object obj) {
             LLVMGlobal global = (LLVMGlobal) obj;
             Object value = getContext().getGlobalFrame().getValue(global.slot);
-            return (value instanceof LLVMAddress || value instanceof Managed) && getNativeLibrary().isPointer(value);
+            // TODO deleagate
+            return value instanceof LLVMAddress;
         }
 
         @Override
@@ -329,9 +303,9 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         @Override
         public long asPointer(Object obj) throws InteropException {
             LLVMGlobal global = (LLVMGlobal) obj;
-            Object value = getContext().getGlobalFrame().getValue(global.slot);
-            assert value instanceof LLVMAddress || value instanceof Managed;
-            return getNativeLibrary().asPointer(value);
+            LLVMAddress value = (LLVMAddress) getContext().getGlobalFrame().getValue(global.slot);
+            // TODO deleagate
+            return value.getVal();
         }
     }
 
