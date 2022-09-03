@@ -22,9 +22,11 @@
  */
 package com.oracle.graal.phases.graph;
 
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
+
 import java.util.*;
 
-import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.nodes.*;
 
 public final class ReentrantNodeIterator {
@@ -35,8 +37,8 @@ public final class ReentrantNodeIterator {
         public final Map<LoopExitNode, StateT> exitStates;
 
         public LoopInfo(int endCount, int exitCount) {
-            endStates = Node.newIdentityMap(endCount);
-            exitStates = Node.newIdentityMap(exitCount);
+            endStates = newNodeIdentityMap(endCount);
+            exitStates = newNodeIdentityMap(exitCount);
         }
     }
 
@@ -88,7 +90,7 @@ public final class ReentrantNodeIterator {
     private static <StateT> Map<FixedNode, StateT> apply(NodeIteratorClosure<StateT> closure, FixedNode start, StateT initialState, LoopBeginNode boundary) {
         assert start != null;
         Deque<BeginNode> nodeQueue = new ArrayDeque<>();
-        Map<FixedNode, StateT> blockEndStates = Node.newIdentityMap();
+        Map<FixedNode, StateT> blockEndStates = newNodeIdentityMap();
 
         StateT state = initialState;
         FixedNode current = start;
@@ -108,7 +110,7 @@ public final class ReentrantNodeIterator {
                 state = closure.processNode(current, state);
 
                 if (closure.continueIteration(state)) {
-                    NodePosIterator successors = current.successors().iterator();
+                    NodeClassIterator successors = current.successors().iterator();
                     if (!successors.hasNext()) {
                         if (current instanceof LoopEndNode) {
                             blockEndStates.put(current, state);

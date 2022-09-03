@@ -22,10 +22,11 @@
  */
 package com.oracle.graal.phases.graph;
 
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
+
 import java.util.*;
 
 import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 
@@ -88,7 +89,7 @@ public final class ReentrantBlockIterator {
         /*
          * States are stored on EndNodes before merges, and on BeginNodes after ControlSplitNodes.
          */
-        Map<FixedNode, StateT> states = Node.newIdentityMap();
+        Map<FixedNode, StateT> states = newNodeIdentityMap();
 
         StateT state = initialState;
         Block current = start;
