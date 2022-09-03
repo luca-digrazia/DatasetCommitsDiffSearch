@@ -407,7 +407,6 @@ public class BinaryGraphPrinter implements GraphPrinter {
             writeInt(node.getId());
             writePoolObject(nodeClass);
             writeByte(node.predecessor() == null ? 0 : 1);
-            // properties
             writeShort((char) props.size());
             for (Entry<Object, Object> entry : props.entrySet()) {
                 String key = entry.getKey().toString();
@@ -415,42 +414,54 @@ public class BinaryGraphPrinter implements GraphPrinter {
                 writePropertyObject(entry.getValue());
             }
             // inputs
-            writeEdges(node, nodeClass.getFirstLevelInputPositions());
-            // successors
-            writeEdges(node, nodeClass.getFirstLevelSuccessorPositions());
-
-            props.clear();
-        }
-    }
-
-    private void writeEdges(Node node, Collection<Position> positions) throws IOException {
-        NodeClass nodeClass = node.getNodeClass();
-        for (Position pos : positions) {
-            if (pos.subIndex == NodeClass.NOT_ITERABLE) {
-                Node edge = nodeClass.get(node, pos);
-                writeNodeRef(edge);
-            } else {
-                NodeList<?> list = nodeClass.getNodeList(node, pos);
-                if (list == null) {
-                    writeShort((char) 0);
+            Collection<Position> directInputPositions = nodeClass.getFirstLevelInputPositions();
+            for (Position pos : directInputPositions) {
+                if (pos.subIndex == NodeClass.NOT_ITERABLE) {
+                    Node in = nodeClass.get(node, pos);
+                    if (in != null) {
+                        writeInt(in.getId());
+                    } else {
+                        writeInt(-1);
+                    }
                 } else {
+                    NodeList<?> list = nodeClass.getNodeList(node, pos);
                     int listSize = list.count();
                     assert listSize == ((char) listSize);
                     writeShort((char) listSize);
-                    for (Node edge : list) {
-                        writeNodeRef(edge);
+                    for (Node in : list) {
+                        if (in != null) {
+                            writeInt(in.getId());
+                        } else {
+                            writeInt(-1);
+                        }
                     }
                 }
             }
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    private void writeNodeRef(Node edge) throws IOException {
-        if (edge != null) {
-            writeInt(edge.getId());
-        } else {
-            writeInt(-1);
+            // successors
+            Collection<Position> directSuccessorPositions = nodeClass.getFirstLevelSuccessorPositions();
+            for (Position pos : directSuccessorPositions) {
+                if (pos.subIndex == NodeClass.NOT_ITERABLE) {
+                    Node sux = nodeClass.get(node, pos);
+                    if (sux != null) {
+                        writeInt(sux.getId());
+                    } else {
+                        writeInt(-1);
+                    }
+                } else {
+                    NodeList<?> list = nodeClass.getNodeList(node, pos);
+                    int listSize = list.count();
+                    assert listSize == ((char) listSize);
+                    writeShort((char) listSize);
+                    for (Node sux : list) {
+                        if (sux != null) {
+                            writeInt(sux.getId());
+                        } else {
+                            writeInt(-1);
+                        }
+                    }
+                }
+            }
+            props.clear();
         }
     }
 
