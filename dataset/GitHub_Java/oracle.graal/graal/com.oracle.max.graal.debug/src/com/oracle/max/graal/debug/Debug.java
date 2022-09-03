@@ -30,15 +30,13 @@ import java.util.concurrent.*;
 
 
 public class Debug {
-    private static boolean ENABLED = false;
-
-    public static void enable() {
-        ENABLED = true;
-        DebugScope.initialize();
-    }
+    public static boolean SCOPE = false;
+    public static boolean LOG = false;
+    public static boolean METER = false;
+    public static boolean TIME = false;
 
     public static void sandbox(String name, Runnable runnable) {
-        if (ENABLED) {
+        if (SCOPE) {
             DebugScope.getInstance().scope(name, runnable, null, true, new Object[0]);
         } else {
             runnable.run();
@@ -54,23 +52,15 @@ public class Debug {
     }
 
     public static void scope(String name, Object context, Runnable runnable) {
-        if (ENABLED) {
+        if (SCOPE) {
             DebugScope.getInstance().scope(name, runnable, null, false, new Object[]{context});
         } else {
             runnable.run();
         }
     }
 
-    public static String currentScope() {
-        if (ENABLED) {
-            return DebugScope.getInstance().getQualifiedName();
-        } else {
-            return "";
-        }
-    }
-
     public static <T> T scope(String name, Object context, Callable<T> callable) {
-        if (ENABLED) {
+        if (SCOPE) {
             return DebugScope.getInstance().scope(name, null, callable, false, new Object[]{context});
         } else {
             return DebugScope.call(callable);
@@ -78,19 +68,19 @@ public class Debug {
     }
 
     public static void log(String msg, Object... args) {
-        if (ENABLED && DebugScope.getInstance().isLogEnabled()) {
+        if (LOG) {
             DebugScope.getInstance().log(msg, args);
         }
     }
 
     public static void dump(Object object, String msg, Object... args) {
-        if (ENABLED && DebugScope.getInstance().isDumpEnabled()) {
-            DebugScope.getInstance().dump(object, msg, args);
+        if (LOG) {
+            DebugScope.getInstance().log(msg, args);
         }
     }
 
     public static Iterable<Object> context() {
-        if (ENABLED) {
+        if (SCOPE) {
             return DebugScope.getInstance().getCurrentContext();
         } else {
             return Collections.emptyList();
@@ -98,26 +88,22 @@ public class Debug {
     }
 
     public static DebugMetric metric(String name) {
-        if (ENABLED && DebugScope.getInstance().isMeterEnabled()) {
+        if (METER) {
             return new MetricImpl(name);
         } else {
             return VOID_METRIC;
         }
     }
 
-    public static void setConfig(DebugConfig config) {
-        if (ENABLED) {
-            DebugScope.getInstance().setConfig(config);
-        }
-    }
-
     private static final DebugMetric VOID_METRIC = new DebugMetric() {
+        @Override
         public void increment() { }
+        @Override
         public void add(int value) { }
     };
 
     public static DebugTimer timer(String name) {
-        if (ENABLED && DebugScope.getInstance().isTimerEnabled()) {
+        if (TIME) {
             return new TimerImpl(name);
         } else {
             return VOID_TIMER;
@@ -125,7 +111,9 @@ public class Debug {
     }
 
     private static final DebugTimer VOID_TIMER = new DebugTimer() {
+        @Override
         public void start() { }
+        @Override
         public void stop() { }
     };
 }

@@ -35,8 +35,6 @@ public final class MetricImpl extends DebugValue implements DebugMetric {
     }
 
     public void add(int value) {
-        if (Debug.isMeterEnabled()) {
-            super.addToCurrentValue(value);
-        }
+        super.addToCurrentValue(value);
     }
 }
