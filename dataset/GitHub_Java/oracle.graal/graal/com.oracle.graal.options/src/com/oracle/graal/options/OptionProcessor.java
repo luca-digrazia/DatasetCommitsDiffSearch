@@ -37,23 +37,17 @@ import javax.tools.*;
  * Processes static fields annotated with {@link Option}. An {@link Options} service is generated
  * for each top level class containing at least one such field. These service objects can be
  * retrieved as follows:
- *
+ * 
  * <pre>
  * ServiceLoader&lt;Options&gt; sl = ServiceLoader.loadInstalled(Options.class);
- * for (Options opts : sl) {
- *     for (OptionDescriptor desc : sl) {
- *         // use desc
- *     }
+ * for (OptionDescriptor desc : sl) {
+ *     // use desc
  * }
  * </pre>
  */
+@SupportedSourceVersion(SourceVersion.RELEASE_7)
 @SupportedAnnotationTypes({"com.oracle.graal.options.Option"})
 public class OptionProcessor extends AbstractProcessor {
-
-    @Override
-    public SourceVersion getSupportedSourceVersion() {
-        return SourceVersion.latest();
-    }
 
     private final Set<Element> processed = new HashSet<>();
 
@@ -107,15 +101,7 @@ public class OptionProcessor extends AbstractProcessor {
             optionName = fieldName;
         }
 
-        DeclaredType declaredOptionValueType = declaredFieldType;
-        while (!types.isSameType(types.erasure(declaredOptionValueType), types.erasure(optionValueType))) {
-            List<? extends TypeMirror> directSupertypes = types.directSupertypes(declaredFieldType);
-            assert !directSupertypes.isEmpty();
-            declaredOptionValueType = (DeclaredType) directSupertypes.get(0);
-        }
-
-        assert !declaredOptionValueType.getTypeArguments().isEmpty();
-        String optionType = declaredOptionValueType.getTypeArguments().get(0).toString();
+        String optionType = declaredFieldType.getTypeArguments().get(0).toString();
         if (optionType.startsWith("java.lang.")) {
             optionType = optionType.substring("java.lang.".length());
         }
@@ -194,11 +180,11 @@ public class OptionProcessor extends AbstractProcessor {
             out.println("        return options.iterator();");
             out.println("    }");
             if (needPrivateFieldAccessor) {
-                out.println("    private static " + OptionValue.class.getSimpleName() + "<?> field(Class<?> declaringClass, String fieldName) {");
+                out.println("    private static " + OptionValue.class.getSimpleName() + " field(Class<?> declaringClass, String fieldName) {");
                 out.println("        try {");
                 out.println("            java.lang.reflect.Field field = declaringClass.getDeclaredField(fieldName);");
                 out.println("            field.setAccessible(true);");
-                out.println("            return (" + OptionValue.class.getSimpleName() + "<?>) field.get(null);");
+                out.println("            return (" + OptionValue.class.getSimpleName() + ") field.get(null);");
                 out.println("        } catch (Exception e) {");
                 out.println("            throw (InternalError) new InternalError().initCause(e);");
                 out.println("        }");
@@ -326,4 +312,3 @@ public class OptionProcessor extends AbstractProcessor {
         return true;
     }
 }
-
