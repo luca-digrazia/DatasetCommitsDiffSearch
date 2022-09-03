@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,16 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import com.oracle.jvmci.code.TargetDescription;
-import com.oracle.jvmci.code.TypeCheckHints;
-import com.oracle.jvmci.meta.TriState;
-import com.oracle.jvmci.meta.DeoptimizationReason;
-import com.oracle.jvmci.meta.Assumptions;
-import com.oracle.jvmci.meta.DeoptimizationAction;
-import com.oracle.jvmci.meta.Kind;
-import static com.oracle.jvmci.meta.DeoptimizationAction.*;
-import static com.oracle.jvmci.meta.DeoptimizationReason.*;
+import static com.oracle.graal.api.meta.DeoptimizationAction.*;
+import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.replacements.InstanceOfSnippets.Options.*;
 import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
@@ -46,15 +42,13 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.options.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.Snippet.VarargsParameter;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 import com.oracle.graal.replacements.nodes.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.options.*;
 
 /**
  * Snippets used for implementing the type test of an instanceof instruction. Since instanceof is a
@@ -94,7 +88,6 @@ public class InstanceOfSnippets implements Snippets {
                 return positive ? trueValue : falseValue;
             }
         }
-        hintsMiss.inc();
         // This maybe just be a rare event but it might also indicate a phase change
         // in the application. Ideally we want to use DeoptimizationAction.None for
         // the former but the cost is too high if indeed it is the latter. As such,
@@ -162,7 +155,6 @@ public class InstanceOfSnippets implements Snippets {
                 return positive ? trueValue : falseValue;
             }
         }
-        hintsMiss.inc();
         if (!checkSecondarySubType(hub, objectHub)) {
             return falseValue;
         }
@@ -224,9 +216,9 @@ public class InstanceOfSnippets implements Snippets {
         private final SnippetInfo instanceofWithProfile = snippet(InstanceOfSnippets.class, "instanceofWithProfile");
         private final SnippetInfo instanceofExact = snippet(InstanceOfSnippets.class, "instanceofExact");
         private final SnippetInfo instanceofPrimary = snippet(InstanceOfSnippets.class, "instanceofPrimary");
-        private final SnippetInfo instanceofSecondary = snippet(InstanceOfSnippets.class, "instanceofSecondary", SECONDARY_SUPER_CACHE_LOCATION);
-        private final SnippetInfo instanceofDynamic = snippet(InstanceOfSnippets.class, "instanceofDynamic", SECONDARY_SUPER_CACHE_LOCATION);
-        private final SnippetInfo isAssignableFrom = snippet(InstanceOfSnippets.class, "isAssignableFrom", SECONDARY_SUPER_CACHE_LOCATION);
+        private final SnippetInfo instanceofSecondary = snippet(InstanceOfSnippets.class, "instanceofSecondary");
+        private final SnippetInfo instanceofDynamic = snippet(InstanceOfSnippets.class, "instanceofDynamic");
+        private final SnippetInfo isAssignableFrom = snippet(InstanceOfSnippets.class, "isAssignableFrom");
 
         public Templates(HotSpotProviders providers, TargetDescription target) {
             super(providers, providers.getSnippetReflection(), target);
@@ -303,7 +295,7 @@ public class InstanceOfSnippets implements Snippets {
                 args.add("falseValue", replacer.falseValue);
                 return args;
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
         }
     }

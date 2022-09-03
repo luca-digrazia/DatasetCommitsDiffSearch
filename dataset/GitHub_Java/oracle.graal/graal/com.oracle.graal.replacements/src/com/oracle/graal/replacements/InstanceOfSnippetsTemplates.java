@@ -22,35 +22,20 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.nodes.calc.CompareNode.createCompareNode;
+import static com.oracle.graal.nodes.calc.CompareNode.*;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.TargetDescription;
-
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.ConditionAnchorNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedGuardNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.LogicConstantNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ShortCircuitOrNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.CompareNode;
-import com.oracle.graal.nodes.calc.ConditionalNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.java.ClassIsAssignableFromNode;
-import com.oracle.graal.nodes.java.InstanceOfDynamicNode;
-import com.oracle.graal.nodes.java.InstanceOfNode;
-import com.oracle.graal.nodes.java.TypeCheckNode;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.UsageReplacer;
@@ -110,19 +95,8 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
      */
     protected InstanceOfUsageReplacer createReplacer(FloatingNode instanceOf, Instantiation instantiation, Node usage, final StructuredGraph graph) {
         InstanceOfUsageReplacer replacer;
-        if ((usage instanceof ConditionalNode && !(((ConditionalNode) usage).trueValue().isConstant() && ((ConditionalNode) usage).falseValue().isConstant())) || usage instanceof IfNode ||
-                        usage instanceof FixedGuardNode || usage instanceof ShortCircuitOrNode || usage instanceof ConditionAnchorNode) {
-            ValueNode trueValue = ConstantNode.forInt(1, graph);
-            ValueNode falseValue = ConstantNode.forInt(0, graph);
-            if (instantiation.isInitialized() && (trueValue != instantiation.trueValue || falseValue != instantiation.falseValue)) {
-                /*
-                 * This code doesn't really care what values are used so adopt the values from the
-                 * previous instantiation.
-                 */
-                trueValue = instantiation.trueValue;
-                falseValue = instantiation.falseValue;
-            }
-            replacer = new NonMaterializationUsageReplacer(instantiation, trueValue, falseValue, instanceOf, usage);
+        if (usage instanceof IfNode || usage instanceof FixedGuardNode || usage instanceof ShortCircuitOrNode || usage instanceof GuardingPiNode || usage instanceof ConditionAnchorNode) {
+            replacer = new NonMaterializationUsageReplacer(instantiation, ConstantNode.forInt(1, graph), ConstantNode.forInt(0, graph), instanceOf, usage);
         } else {
             assert usage instanceof ConditionalNode : "unexpected usage of " + instanceOf + ": " + usage;
             ConditionalNode c = (ConditionalNode) usage;
