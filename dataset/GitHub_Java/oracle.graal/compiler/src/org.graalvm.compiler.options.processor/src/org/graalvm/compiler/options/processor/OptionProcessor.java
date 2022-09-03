@@ -174,7 +174,7 @@ public class OptionProcessor extends AbstractProcessor {
             }
             enclosing = enclosing.getEnclosingElement();
         }
-        if (enclosingPackage == null || enclosingPackage.isUnnamed()) {
+        if (enclosingPackage == null) {
             processingEnv.getMessager().printMessage(Kind.ERROR, "Option field cannot be declared in the unnamed package", element);
             return;
         }
@@ -220,14 +220,6 @@ public class OptionProcessor extends AbstractProcessor {
             char firstChar = help.charAt(0);
             if (!Character.isUpperCase(firstChar)) {
                 processingEnv.getMessager().printMessage(Kind.ERROR, "Option help text must start with an upper case letter", element);
-                return;
-            }
-        }
-
-        String optionStabilityName = getAnnotationValue(annotation, "stability", VariableElement.class).getSimpleName().toString();
-        if (optionStabilityName.equals("STABLE")) {
-            if (help.length() == 0) {
-                processingEnv.getMessager().printMessage(Kind.ERROR, "A stable option must have non-empty help text", element);
                 return;
             }
         }
