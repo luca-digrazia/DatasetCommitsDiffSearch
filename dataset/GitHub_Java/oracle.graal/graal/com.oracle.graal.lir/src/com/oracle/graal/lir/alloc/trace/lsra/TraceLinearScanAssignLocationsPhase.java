@@ -34,11 +34,9 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 
-import com.oracle.graal.compiler.common.alloc.Trace;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Indent;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.lir.ConstantValue;
 import com.oracle.graal.lir.InstructionValueProcedure;
 import com.oracle.graal.lir.LIRFrameState;
@@ -58,6 +56,7 @@ import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Value;
 
@@ -69,7 +68,8 @@ import jdk.vm.ci.meta.Value;
 final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocationPhase {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, Trace<B> trace, TraceLinearScanAllocationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
+                    TraceLinearScanAllocationContext context) {
         TraceLinearScan allocator = context.allocator;
         MoveFactory spillMoveFactory = context.spillMoveFactory;
         new Assigner(allocator, spillMoveFactory).assignLocations();
@@ -144,7 +144,7 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
                  */
                 final LIRInstruction instr = allocator.getLIR().getLIRforBlock(block).get(allocator.getLIR().getLIRforBlock(block).size() - 1);
                 if (instr instanceof StandardOp.JumpOp) {
-                    throw GraalError.unimplemented("DebugInfo on jumps are not supported!");
+                    throw JVMCIError.unimplemented("DebugInfo on jumps are not supported!");
                 }
             }
 
@@ -185,7 +185,6 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
         }
 
         private final InstructionValueProcedure assignProc = new InstructionValueProcedure() {
-            @Override
             public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
                 if (isVariable(value)) {
                     return colorLirOperand(instruction, (Variable) value, mode);
@@ -263,7 +262,6 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
 
         private final InstructionValueProcedure colorOutgoingIncomingValues = new InstructionValueProcedure() {
 
-            @Override
             public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
                 if (isVariable(value)) {
                     TraceInterval interval = allocator.intervalFor(value);
@@ -278,4 +276,5 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
             }
         };
     }
+
 }
