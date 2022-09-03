@@ -95,16 +95,17 @@ public interface CompilerToVM {
     void initializeMethod(long metaspaceMethod, HotSpotResolvedJavaMethod method);
 
     /**
-     * Converts a name to a metaspace klass.
+     * Converts a name to a Java type.
      * 
      * @param name a well formed Java type in {@linkplain JavaType#getName() internal} format
      * @param accessingClass the context of resolution (may be null)
      * @param eagerResolve force resolution to a {@link ResolvedJavaType}. If true, this method will
      *            either return a {@link ResolvedJavaType} or throw an exception
-     * @return a metaspace klass for {@code name}
+     * @return a Java type for {@code name} which is guaranteed to be of type
+     *         {@link ResolvedJavaType} if {@code eagerResolve == true}
      * @throws LinkageError if {@code eagerResolve == true} and the resolution failed
      */
-    long lookupType(String name, Class<?> accessingClass, boolean eagerResolve);
+    JavaType lookupType(String name, HotSpotResolvedObjectType accessingClass, boolean eagerResolve);
 
     Object lookupConstantInPool(long metaspaceConstantPool, int cpi);
 
