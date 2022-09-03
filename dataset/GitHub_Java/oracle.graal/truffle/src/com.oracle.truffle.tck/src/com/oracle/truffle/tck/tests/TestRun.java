@@ -81,7 +81,6 @@ public final class TestRun {
         final TestRun otherRun = (TestRun) obj;
         if (!snippet.getKey().equals(otherRun.snippet.getKey()) ||
                         !snippet.getValue().getId().equals(otherRun.snippet.getValue().getId()) ||
-                        snippet.getValue().getExecutableValue() != otherRun.snippet.getValue().getExecutableValue() ||
                         arguments.size() != otherRun.arguments.size()) {
             return false;
         }

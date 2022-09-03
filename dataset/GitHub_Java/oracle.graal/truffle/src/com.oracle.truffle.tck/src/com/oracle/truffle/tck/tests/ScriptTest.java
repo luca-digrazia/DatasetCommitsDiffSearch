@@ -26,9 +26,9 @@ package com.oracle.truffle.tck.tests;
 
 import java.io.IOException;
 import java.util.AbstractMap;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import org.graalvm.polyglot.Value;
 import org.junit.runner.RunWith;
@@ -50,7 +50,7 @@ public class ScriptTest {
     @Parameterized.Parameters(name = "{0}")
     public static Collection<TestRun> createScriptTests() {
         context = new TestContext();
-        final Collection<TestRun> res = new ArrayList<>();
+        final Collection<TestRun> res = new LinkedHashSet<>();
         for (String lang : TestUtil.getRequiredLanguages(context)) {
             for (Snippet script : context.getScripts(null, lang)) {
                 res.add(new TestRun(new AbstractMap.SimpleImmutableEntry<>(lang, script), Collections.emptyList()));
@@ -78,16 +78,18 @@ public class ScriptTest {
     @Test
     public void testScript() {
         Assume.assumeThat(testRun, TEST_RESULT_MATCHER);
-        Value result = null;
+        boolean success = false;
         try {
             try {
-                result = testRun.getSnippet().getExecutableValue().execute(testRun.getActualParameters().toArray());
+                final Value result = testRun.getSnippet().getExecutableValue().execute(testRun.getActualParameters().toArray());
                 TestUtil.validateResult(testRun, result, null);
+                success = true;
             } catch (PolyglotException pe) {
                 TestUtil.validateResult(testRun, null, pe);
+                success = true;
             }
         } finally {
-            TEST_RESULT_MATCHER.accept(new AbstractMap.SimpleImmutableEntry<>(testRun, result != null));
+            TEST_RESULT_MATCHER.accept(new AbstractMap.SimpleImmutableEntry<>(testRun, success));
         }
     }
 }

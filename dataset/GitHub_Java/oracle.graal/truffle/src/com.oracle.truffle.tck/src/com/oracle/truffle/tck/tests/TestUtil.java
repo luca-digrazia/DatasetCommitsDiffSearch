@@ -121,15 +121,7 @@ final class TestUtil {
                     final TestRun testRun,
                     final Value result,
                     final PolyglotException exception) {
-        ResultVerifier verifier = testRun.getSnippet().getResultVerifier();
-        validateResult(verifier, testRun, result, exception);
-    }
-
-    static void validateResult(
-                    final ResultVerifier verifier,
-                    final TestRun testRun,
-                    final Value result,
-                    final PolyglotException exception) {
+        final ResultVerifier verifier = testRun.getSnippet().getResultVerifier();
         if (exception == null) {
             verifier.accept(ResultVerifier.SnippetRun.create(testRun.getSnippet(), testRun.getActualParameters(), result));
             verifyToString(testRun, result);
