@@ -24,86 +24,76 @@ package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
+import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
- * The {@code CheckCast} instruction represents a {@link Bytecodes#CHECKCAST}.
+ * The {@code InstanceOf} instruction represents an instanceof test.
  */
-public final class CheckCast extends TypeCheck {
+public final class NotInstanceOf extends TypeCheck {
 
     private static final int INPUT_COUNT = 0;
     private static final int SUCCESSOR_COUNT = 0;
 
     /**
-     * Creates a new CheckCast instruction.
-     * @param targetClass the class being cast to
-     * @param object the instruction producing the object
+     * Constructs a new InstanceOf instruction.
+     * @param targetClass the target class of the instanceof check
+     * @param object the instruction producing the object input to this instruction
      * @param graph
      */
-    public CheckCast(Constant targetClassInstruction, Value object, Graph graph) {
-        super(targetClassInstruction, object, CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-    }
-
-    /**
-     * Gets the declared type of the result of this instruction.
-     * @return the declared type of the result
-     */
-    @Override
-    public RiType declaredType() {
-        return targetClass();
-    }
-
-    /**
-     * Gets the exact type of the result of this instruction.
-     * @return the exact type of the result
-     */
-    @Override
-    public RiType exactType() {
-        return targetClass().isResolved() ? targetClass().exactType() : null;
+    public NotInstanceOf(Constant targetClassInstruction, Value object, Graph graph) {
+        super(targetClassInstruction, object, CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override
     public void accept(ValueVisitor v) {
-        v.visitCheckCast(this);
     }
 
-//    @Override
-//    public int valueNumber() {
-//        return targetClass().isResolved() ? Util.hash1(Bytecodes.CHECKCAST, object()) : 0;
-//    }
-//
-//    @Override
-//    public boolean valueEqual(Node i) {
-//        return i instanceof CheckCast;
-//    }
+    @Override
+    public int valueNumber() {
+        return Util.hash1(Bytecodes.INSTANCEOF, object());
+    }
+
+    @Override
+    public boolean valueEqual(Node i) {
+        return i instanceof NotInstanceOf;
+    }
 
     @Override
     public void print(LogStream out) {
-        out.print("checkcast(").
-        print(object()).
-        print(",").
-        print(targetClassInstruction()).
-        print(") ").
-        print(CiUtil.toJavaName(targetClass()));
+        out.print("instanceof(").print(object()).print(") ").print(CiUtil.toJavaName(targetClass()));
+    }
+
+    @Override
+    public BooleanNode negate() {
+        return new InstanceOf(targetClassInstruction(), object(), graph());
     }
 
     @Override
     public Node copy(Graph into) {
-        CheckCast x = new CheckCast(null, null, into);
-        return x;
+        return new NotInstanceOf(null, null, into);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T extends Op> T lookup(Class<T> clazz) {
+        if (clazz == CanonicalizerOp.class) {
+            return (T) CANONICALIZER;
+        }
+        return super.lookup(clazz);
     }
 
     private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
         public Node canonical(Node node) {
-            CheckCast checkCast = (CheckCast) node;
-            Value object = checkCast.object();
+            NotInstanceOf notIsInstance = (NotInstanceOf) node;
+            Value object = notIsInstance.object();
             RiType exactType = object.exactType();
             if (exactType != null) {
-                return Constant.forBoolean(exactType.isSubtypeOf(checkCast.targetClass()), node.graph());
+                return Constant.forBoolean(!exactType.isSubtypeOf(notIsInstance.targetClass()), node.graph());
             }
             CiConstant constant = object.asConstant();
             if (constant != null) {
@@ -115,7 +105,7 @@ public final class CheckCast extends TypeCheck {
                     assert false;
                 }
             }
-            return checkCast;
+            return notIsInstance;
         }
     };
 }

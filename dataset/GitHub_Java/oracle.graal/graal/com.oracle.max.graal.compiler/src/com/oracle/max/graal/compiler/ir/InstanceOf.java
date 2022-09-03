@@ -35,7 +35,8 @@ import com.sun.cri.ri.*;
  */
 public final class InstanceOf extends TypeCheck {
 
-    private boolean nullIsTrue;
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     /**
      * Constructs a new InstanceOf instruction.
@@ -43,8 +44,8 @@ public final class InstanceOf extends TypeCheck {
      * @param object the instruction producing the object input to this instruction
      * @param graph
      */
-    public InstanceOf(Constant targetClassInstruction, Value object, boolean nullIsTrue, Graph graph) {
-        super(targetClassInstruction, object, CiKind.Illegal, graph);
+    public InstanceOf(Constant targetClassInstruction, Value object, Graph graph) {
+        super(targetClassInstruction, object, CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override
@@ -67,8 +68,13 @@ public final class InstanceOf extends TypeCheck {
     }
 
     @Override
+    public BooleanNode negate() {
+        return new NotInstanceOf(targetClassInstruction(), object(), graph());
+    }
+
+    @Override
     public Node copy(Graph into) {
-        return new InstanceOf(null, null, nullIsTrue, into);
+        return new InstanceOf(null, null, into);
     }
 
     @SuppressWarnings("unchecked")
