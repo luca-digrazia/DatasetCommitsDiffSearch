@@ -116,10 +116,6 @@ public class SnippetTemplate {
         public boolean isVarargsParameter(int paramIdx) {
             return varargsParameters[paramIdx];
         }
-
-        public String getParameterName(int paramIdx) {
-            return names[paramIdx];
-        }
     }
 
     /**
@@ -287,20 +283,16 @@ public class SnippetTemplate {
             this.templates = new ConcurrentHashMap<>();
         }
 
-        /**
-         * Finds the method in {@code declaringClass} annotated with {@link Snippet} named
-         * {@code methodName}. If {@code methodName} is null, then there must be exactly one snippet
-         * method in {@code declaringClass}.
-         */
         protected SnippetInfo snippet(Class<? extends Snippets> declaringClass, String methodName) {
             Method found = null;
             for (Method method : declaringClass.getDeclaredMethods()) {
-                if (method.getAnnotation(Snippet.class) != null && (methodName == null || method.getName().equals(methodName))) {
-                    assert found == null : "found more than one @" + Snippet.class.getSimpleName() + " method in " + declaringClass + (methodName == null ? "" : " named " + methodName);
+                if (method.getAnnotation(Snippet.class) != null && method.getName().equals(methodName)) {
+                    assert found == null : "found more than one @" + Snippet.class.getSimpleName() + " method " + methodName + " in " + declaringClass;
                     found = method;
                 }
             }
-            assert found != null : "did not find @" + Snippet.class.getSimpleName() + " method in " + declaringClass + (methodName == null ? "" : " named " + methodName);
+            assert found != null : "did not find @" + Snippet.class.getSimpleName() + " method " + methodName + " in " + declaringClass;
+
             return new SnippetInfo(runtime.lookupJavaMethod(found));
         }
 
