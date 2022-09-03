@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -69,7 +67,6 @@ import org.graalvm.compiler.nodes.util.JavaConstantFormattable;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.graphio.GraphBlocks;
 import org.graalvm.graphio.GraphElements;
-import org.graalvm.graphio.GraphLocations;
 import org.graalvm.graphio.GraphOutput;
 import org.graalvm.graphio.GraphStructure;
 import org.graalvm.graphio.GraphTypes;
@@ -78,6 +75,7 @@ import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.Signature;
+import org.graalvm.graphio.GraphLocations;
 
 public class BinaryGraphPrinter implements
                 GraphStructure<BinaryGraphPrinter.GraphInfo, Node, NodeClass<?>, Edges>,
@@ -229,23 +227,29 @@ public class BinaryGraphPrinter implements
     @SuppressWarnings({"unchecked", "rawtypes"})
     public void nodeProperties(GraphInfo info, Node node, Map<String, Object> props) {
         node.getDebugProperties((Map) props);
+        Graph graph = info.graph;
+        ControlFlowGraph cfg = info.cfg;
         NodeMap<Block> nodeToBlocks = info.nodeToBlocks;
-
-        if (nodeToBlocks != null) {
-            Block block = getBlockForNode(node, nodeToBlocks);
-            if (block != null) {
-                props.put("relativeFrequency", block.getRelativeFrequency());
-                props.put("nodeToBlock", block);
+        if (cfg != null && DebugOptions.PrintGraphProbabilities.getValue(graph.getOptions()) && node instanceof FixedNode) {
+            try {
+                props.put("probability", cfg.blockFor(node).probability());
+            } catch (Throwable t) {
+                props.put("probability", 0.0);
+                props.put("probability-exception", t);
             }
         }
 
-        props.put("nodeCostSize", node.estimatedNodeSize());
-        props.put("nodeCostCycles", node.estimatedNodeCycles());
+        try {
+            props.put("NodeCost-Size", node.estimatedNodeSize());
+            props.put("NodeCost-Cycles", node.estimatedNodeCycles());
+        } catch (Throwable t) {
+            props.put("node-cost-exception", t.getMessage());
+        }
 
         if (nodeToBlocks != null) {
             Object block = getBlockForNode(node, nodeToBlocks);
             if (block != null) {
-                props.put("nodeToBlock", block);
+                props.put("node-to-block", block);
             }
         }
 
@@ -283,13 +287,13 @@ public class BinaryGraphPrinter implements
         }
     }
 
-    private Block getBlockForNode(Node node, NodeMap<Block> nodeToBlocks) {
+    private Object getBlockForNode(Node node, NodeMap<Block> nodeToBlocks) {
         if (nodeToBlocks.isNew(node)) {
-            return null;
+            return "NEW (not in schedule)";
         } else {
             Block block = nodeToBlocks.get(node);
             if (block != null) {
-                return block;
+                return block.getId();
             } else if (node instanceof PhiNode) {
                 return getBlockForNode(((PhiNode) node).merge(), nodeToBlocks);
             }
@@ -528,7 +532,7 @@ public class BinaryGraphPrinter implements
             public URI getURI() {
                 String path = e.getFileName();
                 try {
-                    return new URI(null, null, path == null ? "(Unknown Source)" : path, null);
+                    return path == null ? null : new URI(null, null, path, null);
                 } catch (URISyntaxException ex) {
                     throw new IllegalArgumentException(ex);
                 }
