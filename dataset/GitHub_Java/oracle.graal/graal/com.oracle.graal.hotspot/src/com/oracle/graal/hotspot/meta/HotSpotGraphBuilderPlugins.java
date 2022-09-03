@@ -22,66 +22,35 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.JAVA_THREAD_THREAD_OBJECT_LOCATION;
-import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.JAVA_TIME_MILLIS;
-import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.JAVA_TIME_NANOS;
-import static com.oracle.graal.java.BytecodeParserOptions.InlineDuringParsing;
-import static sun.misc.Version.jdkMajorVersion;
-import static sun.misc.Version.jdkMinorVersion;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
+import static com.oracle.graal.java.BytecodeParser.Options.*;
 
-import java.lang.invoke.ConstantCallSite;
-import java.lang.invoke.MutableCallSite;
-import java.lang.invoke.VolatileCallSite;
-import java.util.zip.CRC32;
+import java.lang.invoke.*;
+import java.util.zip.*;
 
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.options.StableOptionValue;
-import sun.reflect.Reflection;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
+import sun.reflect.*;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.graphbuilderconf.ForeignCallPlugin;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.graphbuilderconf.InvocationPlugin;
 import com.oracle.graal.graphbuilderconf.InvocationPlugin.Receiver;
-import com.oracle.graal.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.graphbuilderconf.InvocationPlugins.Registration;
-import com.oracle.graal.graphbuilderconf.MethodSubstitutionPlugin;
-import com.oracle.graal.hotspot.nodes.ClassCastNode;
-import com.oracle.graal.hotspot.nodes.CurrentJavaThreadNode;
-import com.oracle.graal.hotspot.replacements.AESCryptSubstitutions;
-import com.oracle.graal.hotspot.replacements.CRC32Substitutions;
-import com.oracle.graal.hotspot.replacements.CallSiteTargetNode;
-import com.oracle.graal.hotspot.replacements.CipherBlockChainingSubstitutions;
-import com.oracle.graal.hotspot.replacements.HotSpotClassSubstitutions;
-import com.oracle.graal.hotspot.replacements.IdentityHashCodeNode;
-import com.oracle.graal.hotspot.replacements.ObjectCloneNode;
-import com.oracle.graal.hotspot.replacements.ObjectSubstitutions;
-import com.oracle.graal.hotspot.replacements.ReflectionGetCallerClassNode;
-import com.oracle.graal.hotspot.replacements.arraycopy.ArrayCopyNode;
-import com.oracle.graal.hotspot.word.HotSpotWordTypes;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.hotspot.replacements.arraycopy.*;
+import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
-import com.oracle.graal.nodes.memory.address.AddressNode;
-import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
-import com.oracle.graal.nodes.spi.StampProvider;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.replacements.InlineDuringParsingPlugin;
-import com.oracle.graal.replacements.MethodHandlePlugin;
-import com.oracle.graal.replacements.NodeIntrinsificationPhase;
-import com.oracle.graal.replacements.NodeIntrinsificationPlugin;
-import com.oracle.graal.replacements.ReplacementsImpl;
-import com.oracle.graal.replacements.StandardGraphBuilderPlugins;
-import com.oracle.graal.replacements.WordOperationPlugin;
-import com.oracle.graal.word.WordTypes;
+import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.word.*;
 
 /**
  * Defines the {@link Plugins} used when running on HotSpot.
@@ -124,7 +93,7 @@ public class HotSpotGraphBuilderPlugins {
         registerStableOptionPlugins(invocationPlugins, snippetReflection);
         registerAESPlugins(invocationPlugins, config);
         registerCRC32Plugins(invocationPlugins, config);
-        StandardGraphBuilderPlugins.registerInvocationPlugins(metaAccess, invocationPlugins, true);
+        StandardGraphBuilderPlugins.registerInvocationPlugins(metaAccess, invocationPlugins, !config.useHeapProfiler, true);
 
         return plugins;
     }
@@ -134,7 +103,7 @@ public class HotSpotGraphBuilderPlugins {
         r.register1("clone", Receiver.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 ValueNode object = receiver.get();
-                b.addPush(JavaKind.Object, new ObjectCloneNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType(), object));
+                b.addPush(Kind.Object, new ObjectCloneNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType(), object));
                 return true;
             }
 
@@ -153,19 +122,16 @@ public class HotSpotGraphBuilderPlugins {
         r.registerMethodSubstitution(HotSpotClassSubstitutions.class, "isArray", Receiver.class);
         r.registerMethodSubstitution(HotSpotClassSubstitutions.class, "isPrimitive", Receiver.class);
         r.registerMethodSubstitution(HotSpotClassSubstitutions.class, "getSuperclass", Receiver.class);
-
-        if (jdkMajorVersion() >= 1 && jdkMinorVersion() <= 8) {
-            r.registerMethodSubstitution(HotSpotClassSubstitutions.class, "getComponentType", Receiver.class);
-        }
+        r.registerMethodSubstitution(HotSpotClassSubstitutions.class, "getComponentType", Receiver.class);
 
         r.register2("cast", Receiver.class, Object.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode object) {
                 ValueNode javaClass = receiver.get();
                 ValueNode folded = ClassCastNode.tryFold(GraphUtil.originalValue(javaClass), object, b.getConstantReflection(), b.getAssumptions());
                 if (folded != null) {
-                    b.addPush(JavaKind.Object, folded);
+                    b.addPush(Kind.Object, folded);
                 } else {
-                    b.addPush(JavaKind.Object, new ClassCastNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType(), javaClass, object));
+                    b.addPush(Kind.Object, new ClassCastNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType(), javaClass, object));
                 }
                 return true;
             }
@@ -182,9 +148,9 @@ public class HotSpotGraphBuilderPlugins {
                 ValueNode callSite = receiver.get();
                 ValueNode folded = CallSiteTargetNode.tryFold(GraphUtil.originalValue(callSite), b.getMetaAccess(), b.getAssumptions());
                 if (folded != null) {
-                    b.addPush(JavaKind.Object, folded);
+                    b.addPush(Kind.Object, folded);
                 } else {
-                    b.addPush(JavaKind.Object, new CallSiteTargetNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType(), callSite));
+                    b.addPush(Kind.Object, new CallSiteTargetNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType(), callSite));
                 }
                 return true;
             }
@@ -202,7 +168,7 @@ public class HotSpotGraphBuilderPlugins {
         Registration r = new Registration(plugins, Reflection.class);
         r.register0("getCallerClass", new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(JavaKind.Object, new ReflectionGetCallerClassNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType()));
+                b.addPush(Kind.Object, new ReflectionGetCallerClassNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType()));
                 return true;
             }
 
@@ -218,7 +184,7 @@ public class HotSpotGraphBuilderPlugins {
         r.register0("nanoTime", new ForeignCallPlugin(foreignCalls, JAVA_TIME_NANOS));
         r.register1("identityHashCode", Object.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode object) {
-                b.addPush(JavaKind.Int, new IdentityHashCodeNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType(), object));
+                b.addPush(Kind.Int, new IdentityHashCodeNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType(), object));
                 return true;
             }
 
@@ -246,10 +212,10 @@ public class HotSpotGraphBuilderPlugins {
                 boolean compressible = false;
                 ValueNode offset = b.add(ConstantNode.forLong(config.threadObjectOffset));
                 AddressNode address = b.add(new OffsetAddressNode(thread, offset));
-                ValueNode javaThread = WordOperationPlugin.readOp(b, JavaKind.Object, address, JAVA_THREAD_THREAD_OBJECT_LOCATION, BarrierType.NONE, compressible);
+                ValueNode javaThread = WordOperationPlugin.readOp(b, Kind.Object, address, JAVA_THREAD_THREAD_OBJECT_LOCATION, BarrierType.NONE, compressible);
                 boolean exactType = compressible;
                 boolean nonNull = true;
-                b.addPush(JavaKind.Object, new PiNode(javaThread, metaAccess.lookupJavaType(Thread.class), exactType, nonNull));
+                b.addPush(Kind.Object, new PiNode(javaThread, metaAccess.lookupJavaType(Thread.class), exactType, nonNull));
                 return true;
             }
         });
@@ -261,7 +227,7 @@ public class HotSpotGraphBuilderPlugins {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 if (receiver.isConstant()) {
                     StableOptionValue<?> option = snippetReflection.asObject(StableOptionValue.class, (JavaConstant) receiver.get().asConstant());
-                    b.addPush(JavaKind.Object, ConstantNode.forConstant(snippetReflection.forObject(option.getValue()), b.getMetaAccess()));
+                    b.addPush(Kind.Object, ConstantNode.forConstant(HotSpotObjectConstantImpl.forObject(option.getValue()), b.getMetaAccess()));
                     return true;
                 }
                 return false;
@@ -278,24 +244,14 @@ public class HotSpotGraphBuilderPlugins {
             Class<?> c = MethodSubstitutionPlugin.resolveClass("com.sun.crypto.provider.CipherBlockChaining", true);
             if (c != null) {
                 Registration r = new Registration(plugins, c);
-                if (jdkMajorVersion() >= 1 && jdkMinorVersion() <= 8) {
-                    r.registerMethodSubstitution(CipherBlockChainingSubstitutions.class, "encrypt", Receiver.class, byte[].class, int.class, int.class, byte[].class, int.class);
-                    r.registerMethodSubstitution(CipherBlockChainingSubstitutions.class, "decrypt", Receiver.class, byte[].class, int.class, int.class, byte[].class, int.class);
-                } else {
-                    r.registerMethodSubstitution(CipherBlockChainingSubstitutions.class, "implEncrypt", Receiver.class, byte[].class, int.class, int.class, byte[].class, int.class);
-                    r.registerMethodSubstitution(CipherBlockChainingSubstitutions.class, "implDecrypt", Receiver.class, byte[].class, int.class, int.class, byte[].class, int.class);
-                }
+                r.registerMethodSubstitution(CipherBlockChainingSubstitutions.class, "encrypt", Receiver.class, byte[].class, int.class, int.class, byte[].class, int.class);
+                r.registerMethodSubstitution(CipherBlockChainingSubstitutions.class, "decrypt", Receiver.class, byte[].class, int.class, int.class, byte[].class, int.class);
             }
             c = MethodSubstitutionPlugin.resolveClass("com.sun.crypto.provider.AESCrypt", true);
             if (c != null) {
                 Registration r = new Registration(plugins, c);
-                if (jdkMajorVersion() >= 1 && jdkMinorVersion() <= 8) {
-                    r.registerMethodSubstitution(AESCryptSubstitutions.class, "encryptBlock", Receiver.class, byte[].class, int.class, byte[].class, int.class);
-                    r.registerMethodSubstitution(AESCryptSubstitutions.class, "decryptBlock", Receiver.class, byte[].class, int.class, byte[].class, int.class);
-                } else {
-                    r.registerMethodSubstitution(AESCryptSubstitutions.class, "implEncryptBlock", Receiver.class, byte[].class, int.class, byte[].class, int.class);
-                    r.registerMethodSubstitution(AESCryptSubstitutions.class, "implDecryptBlock", Receiver.class, byte[].class, int.class, byte[].class, int.class);
-                }
+                r.registerMethodSubstitution(AESCryptSubstitutions.class, "encryptBlock", Receiver.class, byte[].class, int.class, byte[].class, int.class);
+                r.registerMethodSubstitution(AESCryptSubstitutions.class, "decryptBlock", Receiver.class, byte[].class, int.class, byte[].class, int.class);
             }
         }
     }
@@ -308,13 +264,8 @@ public class HotSpotGraphBuilderPlugins {
             assert config.cipherBlockChainingDecryptAESCryptStub != 0L;
             Registration r = new Registration(plugins, CRC32.class);
             r.registerMethodSubstitution(CRC32Substitutions.class, "update", int.class, int.class);
-            if (jdkMajorVersion() >= 1 && jdkMinorVersion() <= 8) {
-                r.registerMethodSubstitution(CRC32Substitutions.class, "updateBytes", int.class, byte[].class, int.class, int.class);
-                r.registerMethodSubstitution(CRC32Substitutions.class, "updateByteBuffer", int.class, long.class, int.class, int.class);
-            } else {
-                r.registerMethodSubstitution(CRC32Substitutions.class, "updateBytes0", int.class, byte[].class, int.class, int.class);
-                r.registerMethodSubstitution(CRC32Substitutions.class, "updateByteBuffer0", int.class, long.class, int.class, int.class);
-            }
+            r.registerMethodSubstitution(CRC32Substitutions.class, "updateBytes", int.class, byte[].class, int.class, int.class);
+            r.registerMethodSubstitution(CRC32Substitutions.class, "updateByteBuffer", int.class, long.class, int.class, int.class);
         }
     }
 }
