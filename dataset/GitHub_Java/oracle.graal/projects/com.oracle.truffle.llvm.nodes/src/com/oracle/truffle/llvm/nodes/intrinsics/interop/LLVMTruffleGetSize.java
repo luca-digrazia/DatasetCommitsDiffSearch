@@ -35,6 +35,7 @@ import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -50,11 +51,7 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
 
     @Child private Node foreignGetSize = Message.GET_SIZE.createNode();
-    @Child private ForeignToLLVM toLLVM;
-
-    protected LLVMTruffleGetSize(ForeignToLLVMType type) {
-        this.toLLVM = ForeignToLLVM.create(type);
-    }
+    @Child private ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.I32);
 
     private static void checkLLVMTruffleObject(LLVMTruffleObject value) {
         if (value.getOffset() != 0) {
@@ -63,10 +60,10 @@ public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
         }
     }
 
-    private Object getSize(TruffleObject value) {
+    private int getSize(VirtualFrame frame, TruffleObject value) {
         try {
             Object rawValue = ForeignAccess.sendGetSize(foreignGetSize, value);
-            return toLLVM.executeWithTarget(rawValue);
+            return (int) toLLVM.executeWithTarget(frame, rawValue);
         } catch (UnsupportedMessageException e) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);
@@ -74,9 +71,9 @@ public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
     }
 
     @Specialization
-    protected Object doIntrinsic(LLVMTruffleObject value) {
+    protected int doIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
         checkLLVMTruffleObject(value);
-        return getSize(value.getObject());
+        return getSize(frame, value.getObject());
     }
 
     @Fallback

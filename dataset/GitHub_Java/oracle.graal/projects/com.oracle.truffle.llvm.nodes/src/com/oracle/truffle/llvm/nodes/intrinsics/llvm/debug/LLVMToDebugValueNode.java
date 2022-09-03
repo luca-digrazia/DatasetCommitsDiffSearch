@@ -32,20 +32,20 @@ package com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugTypeConstants;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueProvider;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
-import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMAddressVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
@@ -105,9 +105,9 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
     }
 
     @Specialization
-    protected LLVMDebugValueProvider fromAddress(LLVMNativePointer value,
+    protected LLVMDebugValueProvider fromAddress(LLVMAddress value,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return new LLVMConstantValueProvider.Pointer(memory, value);
+        return new LLVMConstantValueProvider.Address(memory, value);
     }
 
     @Specialization
@@ -178,12 +178,12 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
     }
 
     @Specialization
-    protected LLVMDebugValueProvider fromAddressVector(LLVMPointerVector value) {
+    protected LLVMDebugValueProvider fromAddressVector(LLVMAddressVector value) {
         return new LLVMConstantVectorValueProvider.Address(value);
     }
 
     @Specialization
-    protected LLVMDebugValueProvider fromManagedPointer(LLVMManagedPointer value) {
+    protected LLVMDebugValueProvider fromLLVMTruffleObject(LLVMTruffleObject value) {
         return new LLVMConstantValueProvider.InteropValue(value.getObject(), value.getOffset());
     }
 
