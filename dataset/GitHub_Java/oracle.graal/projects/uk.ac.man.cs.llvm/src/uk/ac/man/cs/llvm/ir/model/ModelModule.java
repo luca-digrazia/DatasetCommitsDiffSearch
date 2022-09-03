@@ -27,34 +27,16 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (c) 2016 University of Manchester
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package uk.ac.man.cs.llvm.ir.model;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
 import uk.ac.man.cs.llvm.ir.FunctionGenerator;
 import uk.ac.man.cs.llvm.ir.ModuleGenerator;
+
+import uk.ac.man.cs.llvm.ir.model.constants.BigIntegerConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.BinaryOperationConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.BlockAddressConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.CastConstant;
@@ -62,24 +44,22 @@ import uk.ac.man.cs.llvm.ir.model.constants.CompareConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.Constant;
 import uk.ac.man.cs.llvm.ir.model.constants.FloatingPointConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.GetElementPointerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.InlineAsmConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.NullConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.StringConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.UndefinedConstant;
-import uk.ac.man.cs.llvm.ir.model.enums.BinaryOperator;
-import uk.ac.man.cs.llvm.ir.model.enums.CastOperator;
-import uk.ac.man.cs.llvm.ir.model.enums.CompareOperator;
+import uk.ac.man.cs.llvm.ir.module.TargetDataLayout;
 import uk.ac.man.cs.llvm.ir.types.FloatingPointType;
 import uk.ac.man.cs.llvm.ir.types.FunctionType;
 import uk.ac.man.cs.llvm.ir.types.IntegerType;
 import uk.ac.man.cs.llvm.ir.types.Type;
-import uk.ac.man.cs.llvm.ir.types.VectorType;
 
 public final class ModelModule implements ModuleGenerator {
 
     private final List<Type> types = new ArrayList<>();
 
-    private final List<GlobalValueSymbol> variables = new ArrayList<>();
+    private final List<GlobalValueSymbol> globals = new ArrayList<>();
 
     private final List<FunctionDeclaration> declares = new ArrayList<>();
 
@@ -87,7 +67,20 @@ public final class ModelModule implements ModuleGenerator {
 
     private final Symbols symbols = new Symbols();
 
-    private int currentMethod = -1;
+    private final MetadataBlock metadata = new MetadataBlock();
+
+    private int currentFunction = -1;
+
+    private TargetDataLayout targetDataLayout = null;
+
+    @Override
+    public void createTargetDataLayout(TargetDataLayout layout) {
+        targetDataLayout = layout;
+    }
+
+    public TargetDataLayout getTargetDataLayout() {
+        return targetDataLayout;
+    }
 
     public ModelModule() {
     }
@@ -96,7 +89,7 @@ public final class ModelModule implements ModuleGenerator {
         for (Type type : types) {
             visitor.visit(type);
         }
-        for (GlobalValueSymbol variable : variables) {
+        for (GlobalValueSymbol variable : globals) {
             variable.accept(visitor);
         }
         for (FunctionDefinition define : defines) {
@@ -108,46 +101,36 @@ public final class ModelModule implements ModuleGenerator {
     }
 
     @Override
-    public void createBinaryOperationExpression(Type type, int opcode, int lhs, int rhs) {
-        boolean isFloatingPoint = type instanceof FloatingPointType || (type instanceof VectorType && ((VectorType) type).getElementType() instanceof FloatingPointType);
+    public void createAlias(Type type, int aliasedValue, long linkage) {
+        GlobalAlias alias = new GlobalAlias(type, aliasedValue, linkage);
 
-        symbols.addSymbol(new BinaryOperationConstant(
-                        type,
-                        BinaryOperator.decode(opcode, isFloatingPoint),
-                        symbols.getSymbol(lhs),
-                        symbols.getSymbol(rhs)));
+        symbols.addSymbol(alias);
+        globals.add(alias);
     }
 
     @Override
-    public void createBlockAddress(Type type, int method, int block) {
-        symbols.addSymbol(new BlockAddressConstant(
-                        type,
-                        symbols.getSymbol(method),
-                        null));
+    public void createBinaryOperationExpression(Type type, int opcode, int lhs, int rhs) {
+        symbols.addSymbol(BinaryOperationConstant.fromSymbols(symbols, type, opcode, lhs, rhs));
+    }
+
+    @Override
+    public void createBlockAddress(Type type, int function, int block) {
+        symbols.addSymbol(BlockAddressConstant.fromSymbols(symbols, type, function, block));
     }
 
     @Override
     public void createCastExpression(Type type, int opcode, int value) {
-        CastConstant cast = new CastConstant(type, CastOperator.decode(opcode));
-
-        cast.setValue(symbols.getSymbol(value, cast));
-
-        symbols.addSymbol(cast);
+        symbols.addSymbol(CastConstant.fromSymbols(symbols, type, opcode, value));
     }
 
     @Override
     public void createCompareExpression(Type type, int opcode, int lhs, int rhs) {
-        CompareConstant compare = new CompareConstant(type, CompareOperator.decode(opcode));
-
-        compare.setLHS(symbols.getSymbol(lhs, compare));
-        compare.setRHS(symbols.getSymbol(rhs, compare));
-
-        symbols.addSymbol(compare);
+        symbols.addSymbol(CompareConstant.fromSymbols(symbols, type, opcode, lhs, rhs));
     }
 
     @Override
-    public void createFloatingPoint(Type type, long value) {
-        symbols.addSymbol(new FloatingPointConstant((FloatingPointType) type, value));
+    public void createFloatingPoint(Type type, long[] value) {
+        symbols.addSymbol(FloatingPointConstant.create((FloatingPointType) type, value));
     }
 
     @Override
@@ -162,19 +145,17 @@ public final class ModelModule implements ModuleGenerator {
 
     @Override
     public void createFromValues(Type type, int[] values) {
-        symbols.addSymbol(Constant.createFromValues(type, symbols.getConstants(values)));
+        symbols.addSymbol(Constant.createFromValues(type, symbols, values));
     }
 
     @Override
     public void createGetElementPointerExpression(Type type, int pointer, int[] indices, boolean isInbounds) {
-        GetElementPointerConstant gep = new GetElementPointerConstant(type, isInbounds);
+        symbols.addSymbol(GetElementPointerConstant.fromSymbols(symbols, type, pointer, indices, isInbounds));
+    }
 
-        gep.setBasePointer(symbols.getSymbol(pointer, gep));
-        for (int index : indices) {
-            gep.addIndex(symbols.getSymbol(index, gep));
-        }
-
-        symbols.addSymbol(gep);
+    @Override
+    public void createInlineASM(Type type, long[] args) {
+        symbols.addSymbol(InlineAsmConstant.generate(type, args));
     }
 
     @Override
@@ -183,13 +164,18 @@ public final class ModelModule implements ModuleGenerator {
     }
 
     @Override
+    public void createInteger(Type type, BigInteger value) {
+        symbols.addSymbol(new BigIntegerConstant((IntegerType) type, value));
+    }
+
+    @Override
     public void createFunction(FunctionType type, boolean isPrototype) {
         if (isPrototype) {
-            FunctionDeclaration method = new FunctionDeclaration(type);
-            symbols.addSymbol(method);
-            declares.add(method);
+            FunctionDeclaration function = new FunctionDeclaration(type);
+            symbols.addSymbol(function);
+            declares.add(function);
         } else {
-            FunctionDefinition method = new FunctionDefinition(type);
+            FunctionDefinition method = new FunctionDefinition(type, metadata);
             symbols.addSymbol(method);
             defines.add(method);
         }
@@ -211,35 +197,40 @@ public final class ModelModule implements ModuleGenerator {
     }
 
     @Override
-    public void createVariable(Type type, boolean isConstant, int initialiser, int align) {
-        GlobalValueSymbol variable;
+    public void createGlobal(Type type, boolean isConstant, int initialiser, int align, long linkage) {
+        final GlobalValueSymbol global;
         if (isConstant) {
-            variable = new GlobalConstant(type, initialiser, align);
+            global = GlobalConstant.create(type, initialiser, align, linkage);
         } else {
-            variable = new GlobalVariable(type, initialiser, align);
+            global = GlobalVariable.create(type, initialiser, align, linkage);
         }
-        symbols.addSymbol(variable);
-        variables.add(variable);
+        symbols.addSymbol(global);
+        globals.add(global);
     }
 
     @Override
     public void exitModule() {
-        for (GlobalValueSymbol variable : variables) {
+        for (GlobalValueSymbol variable : globals) {
             variable.initialise(symbols);
         }
     }
 
     @Override
     public FunctionGenerator generateFunction() {
-        while (++currentMethod < symbols.getSize()) {
-            Symbol symbol = symbols.getSymbol(currentMethod);
+        while (++currentFunction < symbols.getSize()) {
+            Symbol symbol = symbols.getSymbol(currentFunction);
             if (symbol instanceof FunctionDefinition) {
-                FunctionDefinition method = (FunctionDefinition) symbol;
-                method.getSymbols().addSymbols(symbols);
-                return method;
+                FunctionDefinition function = (FunctionDefinition) symbol;
+                function.getSymbols().addSymbols(symbols);
+                return function;
             }
         }
-        throw new RuntimeException("Trying to generate undefined method");
+        throw new RuntimeException("Trying to generate undefined function");
+    }
+
+    @Override
+    public MetadataBlock getMetadata() {
+        return metadata;
     }
 
     @Override
@@ -254,5 +245,10 @@ public final class ModelModule implements ModuleGenerator {
     @Override
     public void nameFunction(int index, int offset, String name) {
         symbols.setSymbolName(index, name);
+    }
+
+    @Override
+    public String toString() {
+        return "ModelModule [types=" + types + ", globals=" + globals + ", declares=" + declares + ", defines=" + defines + ", symbols=" + symbols + ", currentFunction=" + currentFunction + "]";
     }
 }
