@@ -168,12 +168,7 @@ public class ValueAPITest {
         assertTrue(context.asValue(new PrivateObject()).getMemberKeys().isEmpty());
 
         for (Object value : HOST_OBJECTS) {
-            if (value instanceof List) {
-                assertValue(context, context.asValue(value), MEMBERS, HOST_OBJECT, ARRAY_ELEMENTS);
-            } else {
-                assertValue(context, context.asValue(value), MEMBERS, HOST_OBJECT);
-            }
-
+            assertValue(context, context.asValue(value), MEMBERS, HOST_OBJECT);
         }
     }
 

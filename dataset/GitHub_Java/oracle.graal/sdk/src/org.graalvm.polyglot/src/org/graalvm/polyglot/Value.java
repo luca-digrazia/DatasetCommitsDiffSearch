@@ -135,8 +135,6 @@ public final class Value {
      *
      * @since 1.0
      */
-    // TODO empty set if the object has no members
-    // TODO is this set writeable?
     public Set<String> getMemberKeys() {
         return impl.getMemberKeys(receiver);
     }
@@ -239,7 +237,6 @@ public final class Value {
      *
      * @since 1.0
      */
-    // TODO document may return null if #isNull().
     public String asString() {
         return impl.asString(receiver);
     }
