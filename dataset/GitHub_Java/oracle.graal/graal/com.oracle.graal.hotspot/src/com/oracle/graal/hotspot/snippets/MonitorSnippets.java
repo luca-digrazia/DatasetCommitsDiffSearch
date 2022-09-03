@@ -74,17 +74,13 @@ public class MonitorSnippets implements SnippetsInterface {
     public static final boolean CHECK_BALANCED_MONITORS = Boolean.getBoolean("graal.monitors.checkBalanced");
 
     @Snippet
-    public static void monitorenter(@Parameter("object") Object object, @ConstantParameter("checkNull") boolean checkNull, @ConstantParameter("trace") boolean trace) {
+    public static void monitorenter(@Parameter("object") Object object, @ConstantParameter("trace") boolean trace) {
         verifyOop(object);
-
-        if (checkNull && object == null) {
-            DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException);
-        }
 
         // Load the mark word - this includes a null-check on object
         final Word mark = loadWordFromObject(object, markOffset());
 
-        final Word lock = beginLockScope(false);
+        final Word lock = beginLockScope(false, wordKind());
 
         trace(trace, "           object: 0x%016lx\n", Word.fromObject(object).toLong());
         trace(trace, "             lock: 0x%016lx\n", lock.toLong());
@@ -105,8 +101,8 @@ public class MonitorSnippets implements SnippetsInterface {
             } else {
                 // The bias pattern is present in the object's mark word. Need to check
                 // whether the bias owner and the epoch are both still current.
-                Word hub = loadHub(object);
-                final Word prototypeMarkWord = loadWordFromWord(hub, prototypeMarkWordOffset());
+                Object hub = loadHub(object);
+                final Word prototypeMarkWord = loadWordFromObject(hub, prototypeMarkWordOffset());
                 final Word thread = thread();
                 final Word tmp = prototypeMarkWord.or(thread).xor(mark).and(~ageMaskInPlace());
                 trace(trace, "prototypeMarkWord: 0x%016lx\n", prototypeMarkWord.toLong());
@@ -249,7 +245,7 @@ public class MonitorSnippets implements SnippetsInterface {
     @Snippet
     public static void monitorenterEliminated() {
         incCounter();
-        beginLockScope(true);
+        beginLockScope(true, wordKind());
     }
 
     /**
@@ -264,7 +260,7 @@ public class MonitorSnippets implements SnippetsInterface {
         }
         // BeginLockScope nodes do not read from object so a use of object
         // cannot float about the null check above
-        final Word lock = beginLockScope(false);
+        final Word lock = beginLockScope(false, wordKind());
         trace(trace, "+lock{stub}", object);
         MonitorEnterStubCall.call(object, lock);
     }
@@ -289,7 +285,7 @@ public class MonitorSnippets implements SnippetsInterface {
             }
         }
 
-        final Word lock = CurrentLockNode.currentLock();
+        final Word lock = CurrentLockNode.currentLock(wordKind());
 
         // Load displaced mark
         final Word displacedMark = loadWordFromWord(lock, lockDisplacedMarkOffset());
@@ -358,7 +354,7 @@ public class MonitorSnippets implements SnippetsInterface {
 
     private static void incCounter() {
         if (CHECK_BALANCED_MONITORS) {
-            final Word counter = MonitorCounterNode.counter();
+            final Word counter = MonitorCounterNode.counter(wordKind());
             final int count = UnsafeLoadNode.load(counter, 0, 0, Kind.Int);
             DirectObjectStoreNode.storeInt(counter, 0, 0, count + 1);
         }
@@ -366,7 +362,7 @@ public class MonitorSnippets implements SnippetsInterface {
 
     private static void decCounter() {
         if (CHECK_BALANCED_MONITORS) {
-            final Word counter = MonitorCounterNode.counter();
+            final Word counter = MonitorCounterNode.counter(wordKind());
             final int count = UnsafeLoadNode.load(counter, 0, 0, Kind.Int);
             DirectObjectStoreNode.storeInt(counter, 0, 0, count - 1);
         }
@@ -374,13 +370,13 @@ public class MonitorSnippets implements SnippetsInterface {
 
     @Snippet
     private static void initCounter() {
-        final Word counter = MonitorCounterNode.counter();
+        final Word counter = MonitorCounterNode.counter(wordKind());
         DirectObjectStoreNode.storeInt(counter, 0, 0, 0);
     }
 
     @Snippet
     private static void checkCounter(String errMsg) {
-        final Word counter = MonitorCounterNode.counter();
+        final Word counter = MonitorCounterNode.counter(wordKind());
         final int count = UnsafeLoadNode.load(counter, 0, 0, Kind.Int);
         if (count != 0) {
             vmError(errMsg, count);
@@ -401,7 +397,7 @@ public class MonitorSnippets implements SnippetsInterface {
 
         public Templates(CodeCacheProvider runtime, boolean useFastLocking) {
             super(runtime, MonitorSnippets.class);
-            monitorenter = snippet("monitorenter", Object.class, boolean.class, boolean.class);
+            monitorenter = snippet("monitorenter", Object.class, boolean.class);
             monitorexit = snippet("monitorexit", Object.class, boolean.class);
             monitorenterStub = snippet("monitorenterStub", Object.class, boolean.class, boolean.class);
             monitorexitStub = snippet("monitorexitStub", Object.class, boolean.class);
@@ -422,7 +418,7 @@ public class MonitorSnippets implements SnippetsInterface {
             ResolvedJavaMethod method = eliminated ? monitorenterEliminated : useFastLocking ? monitorenter : monitorenterStub;
             boolean checkNull = !monitorenterNode.object().stamp().nonNull();
             Key key = new Key(method);
-            if (method != monitorenterEliminated) {
+            if (method == monitorenterStub) {
                 key.add("checkNull", checkNull);
             }
             if (!eliminated) {
