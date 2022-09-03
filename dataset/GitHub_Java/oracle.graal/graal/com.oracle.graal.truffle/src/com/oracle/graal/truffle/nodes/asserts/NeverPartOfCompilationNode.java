@@ -22,27 +22,18 @@
  */
 package com.oracle.graal.truffle.nodes.asserts;
 
-import static com.oracle.graal.nodeinfo.InputType.State;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.util.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.VerificationError;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ControlSinkNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.util.GraphUtil;
-
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public final class NeverPartOfCompilationNode extends ControlSinkNode implements StateSplit, IterableNodeType {
 
     public static final NodeClass<NeverPartOfCompilationNode> TYPE = NodeClass.create(NeverPartOfCompilationNode.class);
     protected final String message;
-    @OptionalInput(State) protected FrameState stateAfter;
+    @OptionalInput(InputType.State) protected FrameState stateAfter;
 
     public NeverPartOfCompilationNode(String message) {
         super(TYPE, StampFactory.forVoid());
@@ -53,19 +44,16 @@ public final class NeverPartOfCompilationNode extends ControlSinkNode implements
         return message;
     }
 
-    @Override
     public FrameState stateAfter() {
         return stateAfter;
     }
 
-    @Override
     public void setStateAfter(FrameState x) {
         assert x == null || x.isAlive() : "frame state must be in a graph";
         updateUsages(stateAfter, x);
         stateAfter = x;
     }
 
-    @Override
     public boolean hasSideEffect() {
         return true;
     }
