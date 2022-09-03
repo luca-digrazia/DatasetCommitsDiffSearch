@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,6 +40,33 @@ import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.asm.*;
 
 public class AMD64Move {
+
+    @Opcode("MOVE")
+    public static class SpillMoveOp extends AMD64LIRInstruction implements MoveOp {
+
+        @Def({REG, STACK}) protected Value result;
+        @Use({REG, STACK, CONST}) protected Value input;
+
+        public SpillMoveOp(Value result, Value input) {
+            this.result = result;
+            this.input = input;
+        }
+
+        @Override
+        public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+            move(tasm, masm, getResult(), getInput());
+        }
+
+        @Override
+        public Value getInput() {
+            return input;
+        }
+
+        @Override
+        public Value getResult() {
+            return result;
+        }
+    }
 
     @Opcode("MOVE")
     public static class MoveToRegOp extends AMD64LIRInstruction implements MoveOp {
@@ -95,38 +122,23 @@ public class AMD64Move {
         }
     }
 
-    public abstract static class MemOp extends AMD64LIRInstruction {
+    public static class LoadOp extends AMD64LIRInstruction {
 
+        @Def({REG}) protected Value result;
         @Use({ADDR}) protected AMD64Address address;
         @State protected LIRFrameState state;
 
-        public MemOp(AMD64Address address, LIRFrameState state) {
+        public LoadOp(Value result, AMD64Address address, LIRFrameState state) {
+            this.result = result;
             this.address = address;
             this.state = state;
         }
-
-        protected abstract void emitMemAccess(AMD64MacroAssembler masm);
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
             if (state != null) {
                 tasm.recordImplicitException(masm.codeBuffer.position(), state);
             }
-            emitMemAccess(masm);
-        }
-    }
-
-    public static class LoadOp extends MemOp {
-
-        @Def({REG}) protected AllocatableValue result;
-
-        public LoadOp(AllocatableValue result, AMD64Address address, LIRFrameState state) {
-            super(address, state);
-            this.result = result;
-        }
-
-        @Override
-        public void emitMemAccess(AMD64MacroAssembler masm) {
             switch (address.getKind()) {
                 case Boolean:
                 case Byte:
@@ -159,17 +171,24 @@ public class AMD64Move {
         }
     }
 
-    public static class StoreOp extends MemOp {
+    public static class StoreOp extends AMD64LIRInstruction {
 
-        @Use({REG}) protected AllocatableValue input;
+        @Use({ADDR}) protected AMD64Address address;
+        @Use({REG}) protected Value input;
+        @State protected LIRFrameState state;
 
-        public StoreOp(AMD64Address address, AllocatableValue input, LIRFrameState state) {
-            super(address, state);
+        public StoreOp(AMD64Address address, Value input, LIRFrameState state) {
+            this.address = address;
             this.input = input;
+            this.state = state;
         }
 
         @Override
-        public void emitMemAccess(AMD64MacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+            if (state != null) {
+                tasm.recordImplicitException(masm.codeBuffer.position(), state);
+            }
+
             assert isRegister(input);
             switch (address.getKind()) {
                 case Boolean:
@@ -201,17 +220,24 @@ public class AMD64Move {
         }
     }
 
-    public static class StoreConstantOp extends MemOp {
+    public static class StoreConstantOp extends AMD64LIRInstruction {
 
-        protected final Constant input;
+        @Use({ADDR}) protected AMD64Address address;
+        @Use({CONST}) protected Constant input;
+        @State protected LIRFrameState state;
 
         public StoreConstantOp(AMD64Address address, Constant input, LIRFrameState state) {
-            super(address, state);
+            this.address = address;
             this.input = input;
+            this.state = state;
         }
 
         @Override
-        public void emitMemAccess(AMD64MacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+            if (state != null) {
+                tasm.recordImplicitException(masm.codeBuffer.position(), state);
+            }
+
             switch (address.getKind()) {
                 case Boolean:
                 case Byte:
@@ -251,10 +277,10 @@ public class AMD64Move {
 
     public static class LeaOp extends AMD64LIRInstruction {
 
-        @Def({REG}) protected AllocatableValue result;
+        @Def({REG}) protected Value result;
         @Use({ADDR, UNINITIALIZED}) protected AMD64Address address;
 
-        public LeaOp(AllocatableValue result, AMD64Address address) {
+        public LeaOp(Value result, AMD64Address address) {
             this.result = result;
             this.address = address;
         }
@@ -267,10 +293,10 @@ public class AMD64Move {
 
     public static class StackLeaOp extends AMD64LIRInstruction {
 
-        @Def({REG}) protected AllocatableValue result;
+        @Def({REG}) protected Value result;
         @Use({STACK, UNINITIALIZED}) protected StackSlot slot;
 
-        public StackLeaOp(AllocatableValue result, StackSlot slot) {
+        public StackLeaOp(Value result, StackSlot slot) {
             this.result = result;
             this.slot = slot;
         }
@@ -297,7 +323,7 @@ public class AMD64Move {
 
     public static class NullCheckOp extends AMD64LIRInstruction {
 
-        @Use protected AllocatableValue input;
+        @Use protected Value input;
         @State protected LIRFrameState state;
 
         public NullCheckOp(Variable input, LIRFrameState state) {
@@ -315,12 +341,12 @@ public class AMD64Move {
     @Opcode("CAS")
     public static class CompareAndSwapOp extends AMD64LIRInstruction {
 
-        @Def protected AllocatableValue result;
+        @Def protected Value result;
         @Use({ADDR}) protected AMD64Address address;
-        @Use protected AllocatableValue cmpValue;
-        @Use protected AllocatableValue newValue;
+        @Use protected Value cmpValue;
+        @Use protected Value newValue;
 
-        public CompareAndSwapOp(AllocatableValue result, AMD64Address address, AllocatableValue cmpValue, AllocatableValue newValue) {
+        public CompareAndSwapOp(Value result, AMD64Address address, Value cmpValue, Value newValue) {
             this.result = result;
             this.address = address;
             this.cmpValue = cmpValue;
@@ -523,7 +549,7 @@ public class AMD64Move {
         }
     }
 
-    protected static void compareAndSwap(TargetMethodAssembler tasm, AMD64MacroAssembler masm, AllocatableValue result, AMD64Address address, AllocatableValue cmpValue, AllocatableValue newValue) {
+    protected static void compareAndSwap(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Value result, AMD64Address address, Value cmpValue, Value newValue) {
         assert asRegister(cmpValue) == AMD64.rax && asRegister(result) == AMD64.rax;
 
         if (tasm.target.isMP) {

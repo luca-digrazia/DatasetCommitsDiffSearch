@@ -156,7 +156,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     @Override
     public void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value inputVal, boolean canTrap) {
         PTXAddress storeAddress = prepareAddress(kind, base, displacement, index, scale);
-        Variable input = load(inputVal);
+        Value input = load(inputVal);
         append(new StoreOp(storeAddress, input, canTrap ? state() : null));
     }
 
@@ -445,6 +445,11 @@ public class PTXLIRGenerator extends LIRGenerator {
         PTXDeoptimizationStub stub = new PTXDeoptimizationStub(action, reason, info, deoptInfo);
         lir.stubs.add(stub);
         return LabelRef.forLabel(stub.label);
+    }
+
+    @Override
+    protected void emitNullCheckGuard(ValueNode object) {
+        throw new InternalError("NYI");
     }
 
     @Override

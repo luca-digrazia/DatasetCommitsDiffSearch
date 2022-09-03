@@ -90,16 +90,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
      */
     private final ArrayList<StackSlot> lockDataSlots;
 
-    /**
-     * Checks whether the supplied constant can be used without loading it into a register for store
-     * operations, i.e., on the right hand side of a memory access.
-     * 
-     * @param c The constant to check.
-     * @return True if the constant can be used directly, false if the constant needs to be in a
-     *         register.
-     */
-    public abstract boolean canStoreConstant(Constant c);
-
     public LIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, LIR lir) {
         this.graph = graph;
         this.runtime = runtime;
@@ -192,14 +182,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public abstract Variable emitMove(Value input);
-
-    public AllocatableValue asAllocatable(Value value) {
-        if (isAllocatableValue(value)) {
-            return asAllocatableValue(value);
-        } else {
-            return emitMove(value);
-        }
-    }
 
     public Variable load(Value value) {
         if (!isVariable(value)) {
@@ -590,7 +572,9 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public void emitGuardCheck(LogicNode comp, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
-        if (comp instanceof LogicConstantNode && ((LogicConstantNode) comp).getValue() != negated) {
+        if (comp instanceof IsNullNode && negated) {
+            emitNullCheckGuard(((IsNullNode) comp).object());
+        } else if (comp instanceof LogicConstantNode && ((LogicConstantNode) comp).getValue() != negated) {
             // True constant, nothing to emit.
             // False constants are handled within emitBranch.
         } else {
@@ -604,6 +588,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             }
         }
     }
+
+    protected abstract void emitNullCheckGuard(ValueNode object);
 
     public void emitBranch(LogicNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRFrameState info) {
         if (node instanceof IsNullNode) {
