@@ -638,7 +638,7 @@ public class ReplacementsImpl implements Replacements {
 
         protected Instance createGraphBuilder(MetaAccessProvider metaAccess, StampProvider stampProvider, ConstantReflectionProvider constantReflection, GraphBuilderConfiguration graphBuilderConfig,
                         OptimisticOptimizations optimisticOpts) {
-            return new GraphBuilderPhase.Instance(metaAccess, stampProvider, constantReflection, graphBuilderConfig, optimisticOpts, true);
+            return new GraphBuilderPhase.Instance(metaAccess, stampProvider, constantReflection, graphBuilderConfig, optimisticOpts);
         }
 
         protected void afterParsing(StructuredGraph graph) {
@@ -681,7 +681,7 @@ public class ReplacementsImpl implements Replacements {
             final StructuredGraph graph = buildInitialGraph(methodToParse);
             try (Scope s = Debug.scope("buildGraph", graph)) {
                 Set<MethodCallTargetNode> doNotInline = null;
-                for (MethodCallTargetNode callTarget : graph.getNodes(MethodCallTargetNode.TYPE)) {
+                for (MethodCallTargetNode callTarget : graph.getNodes(MethodCallTargetNode.class)) {
                     if (doNotInline != null && doNotInline.contains(callTarget)) {
                         continue;
                     }
@@ -737,7 +737,7 @@ public class ReplacementsImpl implements Replacements {
 
                 afterInlining(graph);
 
-                for (LoopEndNode end : graph.getNodes(LoopEndNode.TYPE)) {
+                for (LoopEndNode end : graph.getNodes(LoopEndNode.class)) {
                     end.disableSafepoint();
                 }
 
