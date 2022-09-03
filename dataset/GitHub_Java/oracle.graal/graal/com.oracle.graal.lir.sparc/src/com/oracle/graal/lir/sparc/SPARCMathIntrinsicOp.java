@@ -25,10 +25,9 @@ package com.oracle.graal.lir.sparc;
 import static com.oracle.graal.api.code.ValueUtil.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Fsqrtd;
-import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
 public class SPARCMathIntrinsicOp extends SPARCLIRInstruction {
@@ -48,10 +47,11 @@ public class SPARCMathIntrinsicOp extends SPARCLIRInstruction {
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+    @SuppressWarnings("unused")
+    public void emitCode(TargetMethodAssembler tasm, SPARCAssembler asm) {
         switch (opcode) {
             case SQRT:
-                new Fsqrtd(asDoubleReg(result), asDoubleReg(input)).emit(masm);
+                new Fsqrtd(asm, asDoubleReg(result), asDoubleReg(input));
                 break;
             case LOG:
             case LOG10:

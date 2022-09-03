@@ -25,9 +25,9 @@ package com.oracle.graal.lir.sparc;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Trap;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.*;
 import com.oracle.graal.lir.asm.*;
 
 /**
@@ -52,7 +52,7 @@ public class SPARCBreakpointOp extends SPARCLIRInstruction {
 
     @Override
     @SuppressWarnings("unused")
-    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
-        new Trap(masm, ST_RESERVED_FOR_USER_0);
+    public void emitCode(TargetMethodAssembler tasm, SPARCAssembler asm) {
+        new Trap(asm, ST_RESERVED_FOR_USER_0);
     }
 }

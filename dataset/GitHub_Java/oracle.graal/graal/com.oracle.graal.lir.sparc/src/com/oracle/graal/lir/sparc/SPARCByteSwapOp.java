@@ -24,7 +24,7 @@ package com.oracle.graal.lir.sparc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.Opcode;
 import com.oracle.graal.lir.asm.*;
 
 @Opcode("BSWAP")
@@ -39,7 +39,7 @@ public class SPARCByteSwapOp extends SPARCLIRInstruction {
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+    public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
         SPARCMove.move(tasm, masm, result, input);
         switch (input.getKind()) {
         // case Int:
