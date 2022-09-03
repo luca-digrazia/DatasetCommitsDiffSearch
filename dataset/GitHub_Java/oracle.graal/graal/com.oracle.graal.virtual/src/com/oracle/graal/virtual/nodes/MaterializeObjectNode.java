@@ -54,11 +54,10 @@ public final class MaterializeObjectNode extends FixedWithNextNode implements Vi
         return ConstantNode.forInt(values.size(), graph());
     }
 
-    /**
-     * @return true if the object that will be created is without locks and has only entries that
-     *         are {@link Constant#defaultForKind(Kind)}, false otherwise.
-     */
-    public boolean isDefault() {
+    @Override
+    public void lower(LoweringTool tool) {
+        StructuredGraph graph = (StructuredGraph) graph();
+
         boolean defaultEntries = true;
         if (lockCount > 0) {
             defaultEntries = false;
@@ -70,14 +69,6 @@ public final class MaterializeObjectNode extends FixedWithNextNode implements Vi
                 }
             }
         }
-        return defaultEntries;
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        StructuredGraph graph = (StructuredGraph) graph();
-
-        boolean defaultEntries = isDefault();
 
         if (virtualObject instanceof VirtualInstanceNode) {
             VirtualInstanceNode virtual = (VirtualInstanceNode) virtualObject;
