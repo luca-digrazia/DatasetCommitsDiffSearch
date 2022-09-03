@@ -26,19 +26,17 @@ package com.oracle.svm.core.genscavenge;
 
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.word.Word;
+import org.graalvm.nativeimage.Feature.FeatureAccess;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.hosted.Feature.FeatureAccess;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateUtil;
-import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.heap.GCCause;
 import com.oracle.svm.core.heap.PhysicalMemory;
-import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicUnsigned;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.XOptions;
+import com.oracle.svm.core.util.AtomicUnsigned;
 import com.oracle.svm.core.util.UnsignedUtils;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
@@ -100,22 +98,18 @@ public class HeapPolicy {
         return collectOnAllocationPolicy;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static Word getProducedHeapChunkZapWord() {
         return (Word) producedHeapChunkZapWord;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static int getProducedHeapChunkZapInt() {
         return (int) producedHeapChunkZapInt.rawValue();
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static Word getConsumedHeapChunkZapWord() {
         return (Word) consumedHeapChunkZapWord;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static int getConsumedHeapChunkZapInt() {
         return (int) consumedHeapChunkZapInt.rawValue();
     }
@@ -418,7 +412,7 @@ public class HeapPolicy {
 
             @Override
             public void maybeCauseCollection() {
-                HeapImpl.getHeapImpl().getGCImpl().collectWithoutAllocating(GenScavengeGCCause.OnAllocationAlways);
+                HeapImpl.getHeapImpl().getGCImpl().collectWithoutAllocating("CollectOnAllocationPolicy.Always");
             }
 
             Always() {
@@ -440,7 +434,7 @@ public class HeapPolicy {
                 final HeapImpl heap = HeapImpl.getHeapImpl();
                 /* Has there been enough allocation to provoke a collection? */
                 if (bytesAllocatedSinceLastCollection.get().aboveOrEqual(getMaximumYoungGenerationSize())) {
-                    heap.getGCImpl().collectWithoutAllocating(GenScavengeGCCause.OnAllocationSometimes);
+                    heap.getGCImpl().collectWithoutAllocating("CollectOnAllocation.Sometimes");
                 }
             }
 
@@ -452,13 +446,13 @@ public class HeapPolicy {
 
     public interface HintGCPolicy {
         @SuppressWarnings("SameParameterValue")
-        void maybeCauseCollection(GCCause cause);
+        void maybeCauseCollection(String message);
     }
 
     public static class AlwaysCollectCompletely implements HeapPolicy.HintGCPolicy {
         @Override
-        public void maybeCauseCollection(GCCause cause) {
-            HeapImpl.getHeapImpl().getGC().collectCompletely(cause);
+        public void maybeCauseCollection(String message) {
+            HeapImpl.getHeapImpl().getGC().collectCompletely(message);
         }
     }
 
@@ -468,9 +462,9 @@ public class HeapPolicy {
      */
     public static class ScepticallyCollect implements HeapPolicy.HintGCPolicy {
         @Override
-        public void maybeCauseCollection(GCCause cause) {
+        public void maybeCauseCollection(String message) {
             if (bytesAllocatedSinceLastCollection.get().aboveOrEqual(collectScepticallyThreshold())) {
-                HeapImpl.getHeapImpl().getGCImpl().collect(cause);
+                HeapImpl.getHeapImpl().getGCImpl().collect(message);
             }
         }
 

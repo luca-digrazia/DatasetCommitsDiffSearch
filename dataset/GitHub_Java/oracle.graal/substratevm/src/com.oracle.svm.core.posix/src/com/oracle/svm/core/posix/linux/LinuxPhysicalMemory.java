@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,10 +27,10 @@ package com.oracle.svm.core.posix.linux;
 import java.io.FileInputStream;
 import java.io.IOException;
 
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
@@ -40,10 +40,9 @@ import com.oracle.svm.core.annotate.RestrictHeapAccess.Access;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.heap.PhysicalMemory;
 import com.oracle.svm.core.posix.headers.Unistd;
-import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.util.UnsignedUtils;
 
-@Platforms(InternalPlatform.LINUX_AND_JNI.class)
+@Platforms(Platform.LINUX.class)
 class LinuxPhysicalMemory extends PhysicalMemory {
 
     static class PhysicalMemorySupportImpl implements PhysicalMemorySupport {
@@ -62,7 +61,7 @@ class LinuxPhysicalMemory extends PhysicalMemory {
                 return getSize();
             }
             /* If I can not allocate, return MAX_VALUE. */
-            if (Heap.getHeap().isAllocationDisallowed() || !JavaThreads.currentJavaThreadInitialized()) {
+            if (Heap.getHeap().isAllocationDisallowed()) {
                 return UnsignedUtils.MAX_VALUE;
             }
             /* Compute and cache the physical memory size. Races are idempotent. */

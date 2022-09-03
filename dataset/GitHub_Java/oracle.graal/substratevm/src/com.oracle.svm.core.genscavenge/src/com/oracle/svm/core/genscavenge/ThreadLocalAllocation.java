@@ -104,6 +104,9 @@ public final class ThreadLocalAllocation {
     /** TLAB for regular allocations. */
     public static final FastThreadLocalBytes<Descriptor> regularTLAB = FastThreadLocalFactory.createBytes(ThreadLocalAllocation::getRegularTLABSize);
 
+    /** TLAB for pinned allocations. */
+    public static final FastThreadLocalBytes<Descriptor> pinnedTLAB = FastThreadLocalFactory.createBytes(ThreadLocalAllocation::getPinnedTLABSize);
+
     /** A thread-local free list of aligned chunks. */
     private static final FastThreadLocalWord<AlignedHeader> freeList = FastThreadLocalFactory.createWord();
 
@@ -120,6 +123,11 @@ public final class ThreadLocalAllocation {
 
     @Platforms(Platform.HOSTED_ONLY.class)
     private static int getRegularTLABSize() {
+        return SizeOf.get(Descriptor.class);
+    }
+
+    @Platforms(Platform.HOSTED_ONLY.class)
+    private static int getPinnedTLABSize() {
         return SizeOf.get(Descriptor.class);
     }
 
@@ -318,7 +326,7 @@ public final class ThreadLocalAllocation {
         VMOperation.guaranteeInProgress("ThreadLocalAllocation.disableThreadLocalAllocation");
 
         if (SubstrateOptions.MultiThreaded.getValue()) {
-            for (IsolateThread vmThread = VMThreads.firstThread(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
+            for (IsolateThread vmThread = VMThreads.firstThread(); VMThreads.isNonNullThread(vmThread); vmThread = VMThreads.nextThread(vmThread)) {
                 disableThreadLocalAllocation(vmThread);
             }
         } else {
@@ -333,6 +341,7 @@ public final class ThreadLocalAllocation {
         for (AlignedHeader alignedChunk = popFromThreadLocalFreeList(); alignedChunk.isNonNull(); alignedChunk = popFromThreadLocalFreeList()) {
             HeapChunkProvider.get().consumeAlignedChunk(alignedChunk);
         }
+        retireToSpace(pinnedTLAB.getAddress(vmThread), HeapImpl.getHeapImpl().getOldGeneration().getPinnedFromSpace());
     }
 
     /** Return all allocated virtual memory chunks to HeapChunkProvider. */
@@ -340,13 +349,13 @@ public final class ThreadLocalAllocation {
     static void tearDown() {
         final IsolateThread thread;
         if (SubstrateOptions.MultiThreaded.getValue()) {
-            // no other thread is alive, so it is always safe to access the first thread
-            thread = VMThreads.firstThreadUnsafe();
+            thread = VMThreads.firstThread();
             VMError.guarantee(VMThreads.nextThread(thread).isNull(), "Other isolate threads are still active");
         } else {
             thread = WordFactory.nullPointer();
         }
         freeHeapChunks(regularTLAB.getAddress(thread));
+        freeHeapChunks(pinnedTLAB.getAddress(thread));
         HeapChunkProvider.freeAlignedChunkList(freeList.get());
     }
 
@@ -358,10 +367,12 @@ public final class ThreadLocalAllocation {
 
     public static void suspendThreadLocalAllocation() {
         retireAllocationChunk(regularTLAB.getAddress());
+        retireAllocationChunk(pinnedTLAB.getAddress());
     }
 
     public static void resumeThreadLocalAllocation() {
         resumeAllocationChunk(regularTLAB.getAddress());
+        resumeAllocationChunk(pinnedTLAB.getAddress());
     }
 
     /** Walk objects in this thread's TLABs. */

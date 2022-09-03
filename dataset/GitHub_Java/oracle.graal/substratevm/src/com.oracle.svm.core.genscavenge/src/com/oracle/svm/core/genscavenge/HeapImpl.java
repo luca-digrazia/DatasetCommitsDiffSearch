@@ -24,13 +24,13 @@
  */
 package com.oracle.svm.core.genscavenge;
 
-import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 
 import org.graalvm.compiler.api.replacements.Fold;
@@ -70,10 +70,6 @@ import com.oracle.svm.core.option.RuntimeOptionValues;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.thread.VMOperation;
 import com.oracle.svm.core.util.VMError;
-
-//Checkstyle: stop
-import sun.management.Util;
-//Checkstyle: resume
 
 /** An implementation of a card remembered set generational heap. */
 public class HeapImpl extends Heap {
@@ -274,13 +270,12 @@ public class HeapImpl extends Heap {
 
     /** Allocation is disallowed if ... */
     @Override
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public boolean isAllocationDisallowed() {
         /*
          * This method exists because Heap is the place clients should ask this question, and to
          * aggregate all the reasons allocation might be disallowed.
          */
-        return NoAllocationVerifier.isActive() || gcImpl.collectionInProgress.getState();
+        return (NoAllocationVerifier.isActive() || getGCImpl().collectionInProgress.getState());
     }
 
     /** A guard to place before an allocation, giving the call site and the allocation type. */
@@ -718,15 +713,23 @@ final class HeapImplMemoryMXBean implements MemoryMXBean {
 
     /** Instance fields. */
     private final MemoryMXBeanMemoryVisitor visitor;
+    private final ObjectName objectName;
 
     @Platforms(Platform.HOSTED_ONLY.class)
     HeapImplMemoryMXBean() {
         this.visitor = new MemoryMXBeanMemoryVisitor();
+        ObjectName name;
+        try {
+            name = new ObjectName("java.lang:type=Memory,name=HeapImpl");
+        } catch (MalformedObjectNameException mone) {
+            name = null;
+        }
+        this.objectName = name;
     }
 
     @Override
     public ObjectName getObjectName() {
-        return Util.newObjectName(ManagementFactory.MEMORY_MXBEAN_NAME);
+        return objectName;
     }
 
     @Override
