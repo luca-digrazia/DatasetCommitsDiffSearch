@@ -98,15 +98,11 @@ public class UnsupportedFeatures {
             List<Data> entries = new ArrayList<>(messages.values());
             Collections.sort(entries);
 
-            boolean singleEntry = entries.size() == 1;
-
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             PrintStream printStream = new PrintStream(outputStream);
 
             for (Data entry : entries) {
-                if (!singleEntry) {
-                    printStream.println("Error: " + entry.message);
-                }
+                printStream.println("Error: " + entry.message);
                 if (entry.trace != null) {
                     printStream.println("Trace: " + entry.trace);
                 }
@@ -115,17 +111,15 @@ public class UnsupportedFeatures {
                     ShortestInvokeChainPrinter.print(bb, entry.method, printStream);
                     printStream.println();
                 }
-                if (!singleEntry) {
-                    if (entry.originalException != null && !(entry.originalException instanceof UnsupportedFeatureException)) {
-                        printStream.print("Original exception that caused the problem: ");
-                        entry.originalException.printStackTrace(printStream);
-                    }
+                if (entry.originalException != null && !(entry.originalException instanceof UnsupportedFeatureException)) {
+                    printStream.print("Original exception that caused the problem: ");
+                    entry.originalException.printStackTrace(printStream);
                 }
             }
             printStream.close();
 
             String unsupportedFeaturesMessage;
-            if (singleEntry) {
+            if (entries.size() == 1) {
                 unsupportedFeaturesMessage = entries.get(0).message + "\nDetailed message:\n" + outputStream.toString();
                 throw new UnsupportedFeatureException(unsupportedFeaturesMessage, entries.get(0).originalException);
             } else {
