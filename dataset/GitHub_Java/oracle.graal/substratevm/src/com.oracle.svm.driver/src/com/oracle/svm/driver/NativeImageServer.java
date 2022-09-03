@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -84,8 +82,8 @@ final class NativeImageServer extends NativeImage {
     private volatile Server building = null;
     private final List<FileChannel> openFileChannels = new ArrayList<>();
 
-    NativeImageServer(BuildConfiguration buildConfiguration) {
-        super(buildConfiguration);
+    NativeImageServer(PathsProvider pathsProvider) {
+        super(pathsProvider);
         registerOptionHandler(new ServerOptionHandler(this));
     }
 
@@ -538,7 +536,7 @@ final class NativeImageServer extends NativeImage {
         ProcessBuilder pb = new ProcessBuilder();
         pb.directory(serverDir.toFile());
         List<String> command = pb.command();
-        command.add(canonicalize(config.getJavaExecutable()).toString());
+        command.add(getJavaHome().resolve("bin/java").toString());
         if (!bootClasspath.isEmpty()) {
             command.add(bootClasspath.stream().map(Path::toString).collect(Collectors.joining(":", "-Xbootclasspath/a:", "")));
         }
@@ -561,17 +559,13 @@ final class NativeImageServer extends NativeImage {
                 int selectedPort = serverPort;
                 if (selectedPort == 0) {
                     try (BufferedReader serverStdout = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                        String line;
-                        int readLineTries = 12;
-                        while ((line = serverStdout.readLine()) != null && --readLineTries > 0) {
-                            if (line.startsWith(NativeImageBuildServer.PORT_LOG_MESSAGE_PREFIX)) {
-                                String portStr = line.substring(NativeImageBuildServer.PORT_LOG_MESSAGE_PREFIX.length());
-                                try {
-                                    selectedPort = Integer.parseInt(portStr);
-                                    break;
-                                } catch (NumberFormatException ex) {
-                                    /* Fall through */
-                                }
+                        String line = serverStdout.readLine();
+                        if (line != null && line.startsWith(NativeImageBuildServer.PORT_LOG_MESSAGE_PREFIX)) {
+                            String portStr = line.substring(NativeImageBuildServer.PORT_LOG_MESSAGE_PREFIX.length());
+                            try {
+                                selectedPort = Integer.parseInt(portStr);
+                            } catch (NumberFormatException ex) {
+                                /* Fall through */
                             }
                         }
                         if (selectedPort == 0) {
