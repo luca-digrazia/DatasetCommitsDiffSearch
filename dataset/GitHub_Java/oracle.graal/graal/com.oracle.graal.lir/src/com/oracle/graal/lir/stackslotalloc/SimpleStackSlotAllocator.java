@@ -22,17 +22,15 @@
  */
 package com.oracle.graal.lir.stackslotalloc;
 
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
-import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
@@ -42,8 +40,7 @@ import com.oracle.graal.lir.phases.*;
 public class SimpleStackSlotAllocator extends AllocationPhase implements StackSlotAllocator {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory) {
         lirGenRes.buildFrameMap(this);
     }
 
@@ -60,7 +57,7 @@ public class SimpleStackSlotAllocator extends AllocationPhase implements StackSl
                 slot = mapVirtualStackSlotRange(builder, slotRange);
                 virtualFramesize.add(builder.getFrameMap().spillSlotRangeSize(slotRange.getSlots()));
             } else {
-                throw JVMCIError.shouldNotReachHere("Unknown VirtualStackSlot: " + virtualSlot);
+                throw GraalInternalError.shouldNotReachHere("Unknown VirtualStackSlot: " + virtualSlot);
             }
             allocatedSlots.increment();
             mapping[virtualSlot.getId()] = slot;
@@ -71,7 +68,6 @@ public class SimpleStackSlotAllocator extends AllocationPhase implements StackSl
         }
     }
 
-    @SuppressWarnings("try")
     protected void updateLIR(LIRGenerationResult res, StackSlot[] mapping) {
         try (Scope scope = Debug.scope("StackSlotMappingLIR")) {
             ValueProcedure updateProc = (value, mode, flags) -> {
