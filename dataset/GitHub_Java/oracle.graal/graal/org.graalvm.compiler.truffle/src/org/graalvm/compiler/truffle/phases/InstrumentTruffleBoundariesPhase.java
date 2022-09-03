@@ -78,6 +78,11 @@ public class InstrumentTruffleBoundariesPhase extends InstrumentPhase {
     }
 
     @Override
+    protected String instrumentationFilter() {
+        return TruffleCompilerOptions.TruffleInstrumentBoundariesFilter.getValue();
+    }
+
+    @Override
     protected boolean instrumentPerInlineSite() {
         return TruffleCompilerOptions.TruffleInstrumentBoundariesPerInlineSite.getValue();
     }
@@ -99,7 +104,7 @@ public class InstrumentTruffleBoundariesPhase extends InstrumentPhase {
 
         @Override
         public boolean isPrettified() {
-            return TruffleCompilerOptions.TruffleInstrumentBoundariesPerInlineSite.getValue();
+            return TruffleCompilerOptions.TruffleInstrumentBoundariesPretty.getValue() && TruffleCompilerOptions.TruffleInstrumentBoundariesPerInlineSite.getValue();
         }
 
         @Override

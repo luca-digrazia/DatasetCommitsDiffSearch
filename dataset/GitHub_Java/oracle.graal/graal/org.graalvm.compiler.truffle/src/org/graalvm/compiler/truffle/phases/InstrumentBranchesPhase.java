@@ -76,6 +76,11 @@ public class InstrumentBranchesPhase extends InstrumentPhase {
     }
 
     @Override
+    protected String instrumentationFilter() {
+        return TruffleCompilerOptions.TruffleInstrumentBranchesFilter.getValue();
+    }
+
+    @Override
     protected boolean instrumentPerInlineSite() {
         return TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue();
     }
@@ -116,7 +121,7 @@ public class InstrumentBranchesPhase extends InstrumentPhase {
 
         @Override
         public boolean isPrettified() {
-            return TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue();
+            return TruffleCompilerOptions.TruffleInstrumentBranchesPretty.getValue() && TruffleCompilerOptions.TruffleInstrumentBranchesPerInlineSite.getValue();
         }
 
         public long ifVisits() {

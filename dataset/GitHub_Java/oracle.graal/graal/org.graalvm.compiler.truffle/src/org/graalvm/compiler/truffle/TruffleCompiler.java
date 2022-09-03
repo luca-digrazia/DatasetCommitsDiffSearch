@@ -23,8 +23,6 @@
 package org.graalvm.compiler.truffle;
 
 import static org.graalvm.compiler.core.GraalCompiler.compileGraph;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleExcludeAssertions;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrumentBranches;
 import static org.graalvm.compiler.core.common.CompilationRequestIdentifier.asCompilationRequest;
 
 import java.util.ArrayList;
@@ -47,7 +45,6 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
@@ -106,14 +103,15 @@ public abstract class TruffleCompiler {
 
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
 
-        boolean needSourcePositions = graalTruffleRuntime.enableInfopoints() || TruffleCompilerOptions.getValue(TruffleInstrumentBranches);
+        boolean needSourcePositions = graalTruffleRuntime.enableInfopoints() || TruffleCompilerOptions.TruffleInstrumentBranches.getValue() ||
+                        TruffleCompilerOptions.TruffleInstrumentBoundaries.getValue();
         GraphBuilderConfiguration baseConfig = GraphBuilderConfiguration.getDefault(new Plugins(plugins)).withNodeSourcePosition(needSourcePositions);
-        this.config = baseConfig.withSkippedExceptionTypes(skippedExceptionTypes).withOmitAssertions(TruffleCompilerOptions.getValue(TruffleExcludeAssertions));
+        this.config = baseConfig.withSkippedExceptionTypes(skippedExceptionTypes).withOmitAssertions(TruffleCompilerOptions.TruffleExcludeAssertions.getValue());
 
         this.partialEvaluator = createPartialEvaluator();
 
         if (Debug.isEnabled()) {
-            DebugEnvironment.ensureInitialized(OptionValues.GLOBAL, graalTruffleRuntime.getRequiredGraalCapability(SnippetReflectionProvider.class));
+            DebugEnvironment.ensureInitialized(graalTruffleRuntime.getRequiredGraalCapability(SnippetReflectionProvider.class));
         }
 
         graalTruffleRuntime.reinstallStubs();
@@ -147,7 +145,7 @@ public abstract class TruffleCompiler {
 
         compilationNotify.notifyCompilationStarted(compilable);
 
-        try (CompilationAlarm alarm = CompilationAlarm.trackCompilationPeriod(TruffleCompilerOptions.getOptions())) {
+        try (CompilationAlarm alarm = CompilationAlarm.trackCompilationPeriod()) {
             TruffleInlining inliningDecision = new TruffleInlining(compilable, new DefaultInliningPolicy());
             CompilationIdentifier compilationId = runtime.getCompilationIdentifier(compilable, partialEvaluator.getCompilationRootMethods()[0], backend);
             PhaseSuite<HighTierContext> graphBuilderSuite = createGraphBuilderSuite();
