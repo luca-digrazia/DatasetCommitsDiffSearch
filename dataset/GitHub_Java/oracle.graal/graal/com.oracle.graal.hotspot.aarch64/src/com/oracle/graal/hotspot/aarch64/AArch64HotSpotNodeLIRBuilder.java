@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,19 +29,6 @@ import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 import static jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig.fp;
 import static jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig.inlineCacheRegister;
 import static jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig.metaspaceMethodRegister;
-import jdk.vm.ci.aarch64.AArch64Kind;
-import jdk.vm.ci.amd64.AMD64Kind;
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.ValueUtil;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
 
 import com.oracle.graal.compiler.aarch64.AArch64NodeLIRBuilder;
 import com.oracle.graal.compiler.aarch64.AArch64NodeMatchRules;
@@ -57,8 +44,10 @@ import com.oracle.graal.hotspot.nodes.HotSpotDirectCallTargetNode;
 import com.oracle.graal.hotspot.nodes.HotSpotIndirectCallTargetNode;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.aarch64.AArch64Move.CompareAndSwap;
+import com.oracle.graal.lir.aarch64.AArch64BreakpointOp;
+import com.oracle.graal.lir.aarch64.AArch64Move.CompareAndSwapOp;
 import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.nodes.BreakpointNode;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.DirectCallTargetNode;
 import com.oracle.graal.nodes.FullInfopointNode;
@@ -68,6 +57,20 @@ import com.oracle.graal.nodes.SafepointNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.spi.NodeValueMap;
+
+import jdk.vm.ci.aarch64.AArch64Kind;
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.ValueUtil;
+import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
+import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
 
 /**
  * LIR generator specialized for AArch64 HotSpot.
@@ -93,7 +96,7 @@ public class AArch64HotSpotNodeLIRBuilder extends AArch64NodeLIRBuilder implemen
 
     @Override
     protected void emitPrologue(StructuredGraph graph) {
-        CallingConvention incomingArguments = gen.getCallingConvention();
+        CallingConvention incomingArguments = gen.getResult().getCallingConvention();
         Value[] params = new Value[incomingArguments.getArgumentCount() + 2];
         for (int i = 0; i < incomingArguments.getArgumentCount(); i++) {
             params[i] = incomingArguments.getArgument(i);
@@ -104,8 +107,8 @@ public class AArch64HotSpotNodeLIRBuilder extends AArch64NodeLIRBuilder implemen
                 }
             }
         }
-        params[params.length - 2] = fp.asValue(LIRKind.value(AMD64Kind.QWORD));
-        params[params.length - 1] = lr.asValue(LIRKind.value(AMD64Kind.QWORD));
+        params[params.length - 2] = fp.asValue(LIRKind.value(AArch64Kind.QWORD));
+        params[params.length - 1] = lr.asValue(LIRKind.value(AArch64Kind.QWORD));
 
         gen.emitIncomingValues(params);
 
@@ -149,7 +152,7 @@ public class AArch64HotSpotNodeLIRBuilder extends AArch64NodeLIRBuilder implemen
 
     @Override
     public void emitPatchReturnAddress(ValueNode address) {
-        throw JVMCIError.unimplemented();
+        append(new AArch64HotSpotPatchReturnAddressOp(gen.load(operand(address))));
     }
 
     @Override
@@ -179,6 +182,7 @@ public class AArch64HotSpotNodeLIRBuilder extends AArch64NodeLIRBuilder implemen
 
     @Override
     public void visitDirectCompareAndSwap(DirectCompareAndSwapNode x) {
+        AllocatableValue address = gen.asAllocatable(operand(x.getAddress()));
         AllocatableValue cmpValue = gen.asAllocatable(operand(x.expectedValue()));
         AllocatableValue newValue = gen.asAllocatable(operand(x.newValue()));
         LIRKind kind = cmpValue.getLIRKind();
@@ -186,7 +190,19 @@ public class AArch64HotSpotNodeLIRBuilder extends AArch64NodeLIRBuilder implemen
 
         Variable result = gen.newVariable(newValue.getLIRKind());
         Variable scratch = gen.newVariable(LIRKind.value(AArch64Kind.DWORD));
-        append(new CompareAndSwap(result, cmpValue, newValue, getGen().asAddressValue(operand(x.getAddress())), scratch));
+        append(new CompareAndSwapOp(result, cmpValue, newValue, address, scratch));
         setResult(x, result);
+    }
+
+    @Override
+    public void visitBreakpointNode(BreakpointNode node) {
+        JavaType[] sig = new JavaType[node.arguments().size()];
+        for (int i = 0; i < sig.length; i++) {
+            sig[i] = node.arguments().get(i).stamp().javaType(gen.getMetaAccess());
+        }
+
+        Value[] parameters = visitInvokeArguments(gen.getResult().getFrameMapBuilder().getRegisterConfig().getCallingConvention(HotSpotCallingConventionType.JavaCall, null, sig, gen.target()),
+                        node.arguments());
+        append(new AArch64BreakpointOp(parameters));
     }
 }

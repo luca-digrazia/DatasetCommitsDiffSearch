@@ -113,10 +113,10 @@ import java.util.Arrays;
 import com.oracle.graal.asm.Assembler;
 import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.asm.aarch64.AArch64Address.AddressingMode;
-import com.oracle.graal.debug.GraalError;
 
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
 
 public abstract class AArch64Assembler extends Assembler {
 
@@ -721,7 +721,7 @@ public abstract class AArch64Assembler extends Assembler {
                 case AL:
                 case NV:
                 default:
-                    throw GraalError.shouldNotReachHere();
+                    throw JVMCIError.shouldNotReachHere();
             }
         }
     }
@@ -973,7 +973,7 @@ public abstract class AArch64Assembler extends Assembler {
                 emitInt(memop | LoadStorePreIndexedOp | rs1(address.getBase()) | address.getImmediate() << LoadStoreIndexedImmOffset);
                 break;
             default:
-                throw GraalError.shouldNotReachHere("Unhandled addressing mode: " + address.getAddressingMode());
+                throw JVMCIError.shouldNotReachHere("Unhandled addressing mode: " + address.getAddressingMode());
         }
     }
 
@@ -1002,7 +1002,7 @@ public abstract class AArch64Assembler extends Assembler {
                 emitInt(memop | LoadStorePairOp);
                 break;
             default:
-                throw GraalError.shouldNotReachHere("Unhandled addressing mode: " + address.getAddressingMode());
+                throw JVMCIError.shouldNotReachHere("Unhandled addressing mode: " + address.getAddressingMode());
         }
     }
 
@@ -1786,7 +1786,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param dst general purpose register. May not be null, zero-register or the stackpointer.
      * @param src source register. May not be null, zero-register or the stackpointer.
      */
-    public void rbit(int size, Register dst, Register src) {
+    protected void rbit(int size, Register dst, Register src) {
         dataProcessing1SourceOp(RBIT, dst, src, generalFromSize(size));
     }
 
