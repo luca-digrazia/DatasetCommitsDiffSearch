@@ -32,7 +32,6 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderPlugin;
 import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -58,11 +57,6 @@ public class DelegatingReplacements implements Replacements {
     }
 
     @Override
-    public Class<? extends GraphBuilderPlugin> getIntrinsifyingPlugin(ResolvedJavaMethod method) {
-        return delegate.getIntrinsifyingPlugin(method);
-    }
-
-    @Override
     public StructuredGraph getSnippet(ResolvedJavaMethod method, Object[] args, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition) {
         return delegate.getSnippet(method, args, trackNodeSourcePosition, replaceePosition);
     }
@@ -73,8 +67,8 @@ public class DelegatingReplacements implements Replacements {
     }
 
     @Override
-    public void registerSnippet(ResolvedJavaMethod method, ResolvedJavaMethod original, Object receiver, boolean trackNodeSourcePosition) {
-        delegate.registerSnippet(method, original, receiver, trackNodeSourcePosition);
+    public void registerSnippet(ResolvedJavaMethod method, boolean trackNodeSourcePosition) {
+        delegate.registerSnippet(method, trackNodeSourcePosition);
     }
 
     @Override
