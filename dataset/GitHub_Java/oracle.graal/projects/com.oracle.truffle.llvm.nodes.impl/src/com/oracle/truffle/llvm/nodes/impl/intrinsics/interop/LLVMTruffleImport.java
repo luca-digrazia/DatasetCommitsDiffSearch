@@ -42,8 +42,7 @@ public abstract class LLVMTruffleImport extends LLVMAddressIntrinsic {
     @Specialization
     public Object executeIntrinsic(LLVMAddress value) {
         String id = LLVMTruffleIntrinsicUtil.readString(value);
-        Object foreignObject = LLVMLanguage.INSTANCE.getEnvironment().importSymbol(id);
-        return foreignObject;
+        return LLVMLanguage.INSTANCE.getEnvironment().importSymbol(id);
     }
 
 }

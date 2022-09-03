@@ -32,14 +32,15 @@ package com.oracle.truffle.llvm.nodes.impl.intrinsics.interop;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.internal.SuppressFBWarnings;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleImportCachedFactory.ImportCacheNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsic.LLVMAddressIntrinsic;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 
-@NodeChild(type = LLVMExpressionNode.class)
+@NodeChild(type = LLVMAddressNode.class)
 public abstract class LLVMTruffleImportCached extends LLVMAddressIntrinsic {
 
     @Child private ImportCache cache = ImportCacheNodeGen.create();
@@ -64,6 +65,7 @@ public abstract class LLVMTruffleImportCached extends LLVMAddressIntrinsic {
             return LLVMLanguage.INSTANCE.getEnvironment().importSymbol(name);
         }
 
+        @SuppressFBWarnings("ES_COMPARING_STRINGS_WITH_EQ")
         protected static boolean stringEquals(String s1, String s2) {
             return s1.equals(s2);
         }
