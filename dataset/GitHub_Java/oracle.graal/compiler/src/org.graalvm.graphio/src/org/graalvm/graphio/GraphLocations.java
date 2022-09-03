@@ -37,9 +37,7 @@ package org.graalvm.graphio;
  */
 public interface GraphLocations<M, P, L> {
     /**
-     * Stack trace element for a method, index and position. Returns all applicable source locations
-     * for given code position. Each provided location is expected to represent location in a
-     * different {@link #locationLanguage(java.lang.Object) language}.
+     * Stack trace element for a method, index and position.
      *
      * @param method the method
      * @param bci the index
