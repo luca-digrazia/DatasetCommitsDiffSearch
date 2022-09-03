@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,8 +26,6 @@ import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.api.replacements.SnippetTemplateCache;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
-import org.graalvm.compiler.core.common.CompilationIdentifier;
-import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
@@ -94,17 +90,6 @@ public interface Replacements {
      *         substitute bytecode for {@code method}
      */
     Bytecode getSubstitutionBytecode(ResolvedJavaMethod method);
-
-    /**
-     * Gets a graph produced from the intrinsic for a given method that can be compiled and
-     * installed for the method.
-     *
-     * @param method
-     * @param compilationId
-     * @param debug
-     * @return an intrinsic graph that can be compiled and installed for {@code method} or null
-     */
-    StructuredGraph getIntrinsicGraph(ResolvedJavaMethod method, CompilationIdentifier compilationId, DebugContext debug);
 
     /**
      * Determines if there may be a

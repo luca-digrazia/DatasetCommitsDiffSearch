@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -35,7 +33,6 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
-import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
@@ -58,10 +55,6 @@ public abstract class MethodSubstitutionTest extends GraalCompilerTest {
         return testGraph(snippet, null);
     }
 
-    public BasePhase<HighTierContext> createInliningPhase(StructuredGraph graph) {
-        return new InliningPhase(new CanonicalizerPhase());
-    }
-
     @SuppressWarnings("try")
     protected StructuredGraph testGraph(final String snippet, String name) {
         DebugContext debug = getDebugContext();
@@ -69,7 +62,7 @@ public abstract class MethodSubstitutionTest extends GraalCompilerTest {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES, debug);
             HighTierContext context = getDefaultHighTierContext();
             debug.dump(DebugContext.BASIC_LEVEL, graph, "Graph");
-            createInliningPhase(graph).apply(graph, context);
+            new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
             debug.dump(DebugContext.BASIC_LEVEL, graph, "Graph");
             new CanonicalizerPhase().apply(graph, context);
             new DeadCodeEliminationPhase().apply(graph);

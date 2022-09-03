@@ -651,9 +651,8 @@ public class SnippetTemplate {
                 try (DebugContext debug = openDebugContext(outer, args)) {
                     try (DebugCloseable a = SnippetTemplateCreationTime.start(debug); DebugContext.Scope s = debug.scope("SnippetSpecialization", args.info.method)) {
                         SnippetTemplates.increment(debug);
-                        OptionValues snippetOptions = new OptionValues(options, GraalOptions.TraceInlining, GraalOptions.TraceInliningStubsAndSnippets.getValue(options));
-                        template = new SnippetTemplate(snippetOptions, debug, providers, snippetReflection, args, graph.trackNodeSourcePosition(), replacee);
-                        if (Options.UseSnippetTemplateCache.getValue(snippetOptions) && args.cacheable) {
+                        template = new SnippetTemplate(options, debug, providers, snippetReflection, args, graph.trackNodeSourcePosition(), replacee);
+                        if (Options.UseSnippetTemplateCache.getValue(options) && args.cacheable) {
                             templates.put(args.cacheKey, template);
                         }
                     } catch (Throwable e) {
@@ -1517,7 +1516,9 @@ public class SnippetTemplate {
                 replaceeGraph.getInliningLog().addLog(duplicates, snippet.getInliningLog());
             }
             NodeSourcePosition position = replacee.getNodeSourcePosition();
-            InliningUtil.updateSourcePosition(replaceeGraph, duplicates, mark, position, true);
+            if (position != null) {
+                InliningUtil.updateSourcePosition(replaceeGraph, duplicates, mark, position, true);
+            }
             debug.dump(DebugContext.DETAILED_LEVEL, replaceeGraph, "After inlining snippet %s", snippet.method());
             return duplicates;
         }

@@ -53,8 +53,6 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.graph.Node;
-import org.graalvm.compiler.graph.SourceLanguagePosition;
-import org.graalvm.compiler.graph.SourceLanguagePositionProvider;
 import org.graalvm.compiler.java.ComputeLoopFrequenciesClosure;
 import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -271,7 +269,7 @@ public abstract class PartialEvaluator {
         @Override
         public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments) {
             TruffleCompilerRuntime rt = TruffleCompilerRuntime.getRuntime();
-            InlineInfo inlineInfo = rt.getInlineInfo(original, true);
+            InlineInfo inlineInfo = rt.getInlineInfo(original);
             if (!inlineInfo.allowsInlining()) {
                 return inlineInfo;
             }
@@ -305,20 +303,6 @@ public abstract class PartialEvaluator {
             if (inlinedTargetMethod.equals(callInlinedMethod)) {
                 inlining.pop();
             }
-        }
-    }
-
-    public static class TruffleSourceLanguagePositionProvider implements SourceLanguagePositionProvider {
-
-        private TruffleInliningPlan inliningPlan;
-
-        public TruffleSourceLanguagePositionProvider(TruffleInliningPlan inliningPlan) {
-            this.inliningPlan = inliningPlan;
-        }
-
-        @Override
-        public SourceLanguagePosition getPosition(JavaConstant node) {
-            return inliningPlan.getPosition(node);
         }
     }
 
@@ -361,7 +345,7 @@ public abstract class PartialEvaluator {
             }
 
             TruffleCompilerRuntime rt = TruffleCompilerRuntime.getRuntime();
-            InlineInfo inlineInfo = rt.getInlineInfo(original, true);
+            InlineInfo inlineInfo = rt.getInlineInfo(original);
             if (!inlineInfo.allowsInlining()) {
                 return inlineInfo;
             }
@@ -390,8 +374,7 @@ public abstract class PartialEvaluator {
 
     @SuppressWarnings("unused")
     protected PEGraphDecoder createGraphDecoder(StructuredGraph graph, final HighTierContext tierContext, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins,
-                    InlineInvokePlugin[] inlineInvokePlugins, ParameterPlugin parameterPlugin, NodePlugin[] nodePluginList, ResolvedJavaMethod callInlined,
-                    SourceLanguagePositionProvider sourceLanguagePositionProvider) {
+                    InlineInvokePlugin[] inlineInvokePlugins, ParameterPlugin parameterPlugin, NodePlugin[] nodePluginList, ResolvedJavaMethod callInlined) {
         final GraphBuilderConfiguration newConfig = configForParsing.copy();
         if (newConfig.trackNodeSourcePosition()) {
             graph.setTrackNodeSourcePosition();
@@ -409,7 +392,7 @@ public abstract class PartialEvaluator {
 
         Providers compilationUnitProviders = providers.copyWith(new TruffleConstantFieldProvider(providers.getConstantFieldProvider(), providers.getMetaAccess()));
         return new CachingPEGraphDecoder(architecture, graph, compilationUnitProviders, newConfig, TruffleCompilerImpl.Optimizations, AllowAssumptions.ifNonNull(graph.getAssumptions()),
-                        loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePluginList, callInlined, sourceLanguagePositionProvider);
+                        loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePluginList, callInlined);
     }
 
     protected void doGraphPE(CompilableTruffleAST compilable, StructuredGraph graph, HighTierContext tierContext, TruffleInliningPlan inliningDecision) {
@@ -428,9 +411,7 @@ public abstract class PartialEvaluator {
             inlineInvokePlugins = new InlineInvokePlugin[]{replacements, inlineInvokePlugin};
         }
 
-        SourceLanguagePositionProvider sourceLanguagePosition = new TruffleSourceLanguagePositionProvider(inliningDecision);
-        PEGraphDecoder decoder = createGraphDecoder(graph, tierContext, loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins, callInlinedMethod,
-                        sourceLanguagePosition);
+        PEGraphDecoder decoder = createGraphDecoder(graph, tierContext, loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins, callInlinedMethod);
         decoder.decode(graph.method(), graph.trackNodeSourcePosition());
 
         if (TruffleCompilerOptions.getValue(PrintTruffleExpansionHistogram)) {
@@ -537,7 +518,7 @@ public abstract class PartialEvaluator {
         if (!TruffleCompilerOptions.getValue(TruffleInlineAcrossTruffleBoundary)) {
             // Do not inline across Truffle boundaries.
             for (MethodCallTargetNode mct : graph.getNodes(MethodCallTargetNode.TYPE)) {
-                InlineInfo inlineInfo = rt.getInlineInfo(mct.targetMethod(), false);
+                InlineInfo inlineInfo = rt.getInlineInfo(mct.targetMethod());
                 if (!inlineInfo.allowsInlining()) {
                     mct.invoke().setUseForInlining(false);
                 }
@@ -637,7 +618,7 @@ public abstract class PartialEvaluator {
                     continue; // native methods cannot be inlined
                 }
                 TruffleCompilerRuntime runtime = TruffleCompilerRuntime.getRuntime();
-                if (runtime.getInlineInfo(call.targetMethod(), true).getMethodToInline() != null) {
+                if (runtime.getInlineInfo(call.targetMethod()).getMethodToInline() != null) {
                     logPerformanceWarning(target.getName(), Arrays.asList(call), String.format("not inlined %s call to %s (%s)", call.invokeKind(), call.targetMethod(), call), null);
                     warnings.add(call);
                 }

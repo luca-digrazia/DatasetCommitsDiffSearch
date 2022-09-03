@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -429,16 +427,10 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         @SuppressWarnings("try")
         protected StructuredGraph buildInitialGraph(DebugContext debug, BytecodeProvider bytecodeProvider, final ResolvedJavaMethod methodToParse, Object[] args, boolean trackNodeSourcePosition,
                         NodeSourcePosition replaceePosition) {
-            // @formatter:off
             // Replacements cannot have optimistic assumptions since they have
             // to be valid for the entire run of the VM.
-            final StructuredGraph graph = new StructuredGraph.Builder(replacements.options, debug).
-                            method(methodToParse).
-                            trackNodeSourcePosition(trackNodeSourcePosition).
-                            callerContext(replaceePosition).
-                            setIsSubstitution(true).
-                            build();
-            // @formatter:on
+            final StructuredGraph graph = new StructuredGraph.Builder(replacements.options, debug).method(methodToParse).trackNodeSourcePosition(trackNodeSourcePosition).callerContext(
+                            replaceePosition).build();
 
             // Replacements are not user code so they do not participate in unsafe access
             // tracking
