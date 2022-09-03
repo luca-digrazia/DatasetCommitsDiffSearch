@@ -25,10 +25,8 @@
 package com.oracle.truffle.regex.runtime.nodes;
 
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -37,33 +35,38 @@ import com.oracle.truffle.regex.RegexObject;
 import com.oracle.truffle.regex.result.RegexResult;
 
 @ReportPolymorphism
-@GenerateUncached
 public abstract class ExecuteRegexDispatchNode extends Node {
 
-    public abstract RegexResult execute(CompiledRegex receiver, RegexObject regexObject, Object input, Object fromIndex) throws UnsupportedTypeException;
+    public abstract RegexResult execute(CompiledRegex receiver, RegexObject regexObject, Object input, Object fromIndex);
 
     @Specialization(guards = "receiver == cachedReceiver", limit = "4")
-    public static RegexResult doCached(@SuppressWarnings("unused") CompiledRegex receiver, RegexObject regexObject, Object input, Object fromIndex,
+    public RegexResult doCached(@SuppressWarnings("unused") CompiledRegex receiver, RegexObject regexObject, Object input, Object fromIndex,
                     @Cached("create()") ExpectStringOrTruffleObjectNode expectStringOrTruffleObjectNode,
-                    @Cached ToLongNode toLongNode,
+                    @Cached("create()") RegexParamToLongNode expectNumberNode,
                     @SuppressWarnings("unused") @Cached("receiver") CompiledRegex cachedReceiver,
-                    @Cached("create(cachedReceiver.getRegexCallTarget())") DirectCallNode directCallNode) throws UnsupportedTypeException {
-        long fromIndexLong = toLongNode.execute(fromIndex);
+                    @Cached("create(cachedReceiver.getRegexCallTarget())") DirectCallNode directCallNode) {
+        final Object unboxedInput = expectStringOrTruffleObjectNode.execute(input);
+        final long fromIndexLong = expectNumberNode.execute(fromIndex);
         if (fromIndexLong > Integer.MAX_VALUE) {
             return RegexResult.NO_MATCH;
         }
-        return (RegexResult) directCallNode.call(new Object[]{regexObject, expectStringOrTruffleObjectNode.execute(input), (int) fromIndexLong});
+        return (RegexResult) directCallNode.call(new Object[]{regexObject, unboxedInput, (int) fromIndexLong});
     }
 
     @Specialization(replaces = "doCached")
-    public static RegexResult doGeneric(CompiledRegex receiver, RegexObject regexObject, Object input, Object fromIndex,
+    public RegexResult doUnCached(CompiledRegex receiver, RegexObject regexObject, Object input, Object fromIndex,
                     @Cached("create()") ExpectStringOrTruffleObjectNode expectStringOrTruffleObjectNode,
-                    @Cached ToLongNode toLongNode,
-                    @Cached IndirectCallNode indirectCallNode) throws UnsupportedTypeException {
-        long fromIndexLong = toLongNode.execute(fromIndex);
+                    @Cached("create()") RegexParamToLongNode expectNumberNode,
+                    @Cached("create()") IndirectCallNode indirectCallNode) {
+        final Object unboxedInput = expectStringOrTruffleObjectNode.execute(input);
+        final long fromIndexLong = expectNumberNode.execute(fromIndex);
         if (fromIndexLong > Integer.MAX_VALUE) {
             return RegexResult.NO_MATCH;
         }
-        return (RegexResult) indirectCallNode.call(receiver.getRegexCallTarget(), new Object[]{regexObject, expectStringOrTruffleObjectNode.execute(input), (int) fromIndexLong});
+        return (RegexResult) indirectCallNode.call(receiver.getRegexCallTarget(), new Object[]{regexObject, unboxedInput, (int) fromIndexLong});
+    }
+
+    public static ExecuteRegexDispatchNode create() {
+        return ExecuteRegexDispatchNodeGen.create();
     }
 }
