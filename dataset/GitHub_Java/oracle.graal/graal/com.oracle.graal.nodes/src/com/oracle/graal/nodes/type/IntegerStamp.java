@@ -42,7 +42,7 @@ public class IntegerStamp extends Stamp {
     private final long upMask;
 
     public IntegerStamp(Kind kind) {
-        this(kind.getStackKind(), kind.getMinValue(), kind.getMaxValue(), 0, defaultMask(isUnsignedKind(kind) ? kind : kind.getStackKind()));
+        this(kind.getStackKind(), kind.getMinValue(), kind.getMaxValue(), 0, defaultMask(kind == Kind.Char ? kind : kind.getStackKind()));
     }
 
     public IntegerStamp(Kind kind, long lowerBound, long upperBound, long downMask, long upMask) {
@@ -145,6 +145,21 @@ public class IntegerStamp extends Stamp {
         return str.toString();
     }
 
+    @Override
+    public boolean alwaysDistinct(Stamp otherStamp) {
+        IntegerStamp other = (IntegerStamp) otherStamp;
+        if (lowerBound > other.upperBound || upperBound < other.lowerBound) {
+            return true;
+        } else if ((upMask & other.upMask) == 0 && (lowerBound > 0 || upperBound < 0 || other.lowerBound > 0 || other.upperBound < 0)) {
+            /*
+             * Zero is the only common value if the masks don't overlap. If one of the two values is
+             * less than or greater than zero, they are always distinct.
+             */
+            return true;
+        }
+        return false;
+    }
+
     private Stamp createStamp(IntegerStamp other, long newUpperBound, long newLowerBound, long newDownMask, long newUpMask) {
         assert kind() == other.kind();
         if (newLowerBound > newUpperBound || (newDownMask & (~newUpMask)) != 0) {
@@ -185,9 +200,7 @@ public class IntegerStamp extends Stamp {
             return StampFactory.illegal(Kind.Illegal);
         }
         IntegerStamp other = (IntegerStamp) otherStamp;
-        long newDownMask = downMask | other.downMask;
-        long newLowerBound = Math.max(lowerBound, other.lowerBound) | newDownMask;
-        return createStamp(other, Math.min(upperBound, other.upperBound), newLowerBound, newDownMask, upMask & other.upMask);
+        return createStamp(other, Math.min(upperBound, other.upperBound), Math.max(lowerBound, other.lowerBound), downMask | other.downMask, upMask & other.upMask);
     }
 
     @Override
@@ -261,9 +274,5 @@ public class IntegerStamp extends Stamp {
             return Constant.forIntegerKind(kind(), lowerBound, null);
         }
         return null;
-    }
-
-    private static boolean isUnsignedKind(Kind kind) {
-        return kind == Kind.Char;
     }
 }
