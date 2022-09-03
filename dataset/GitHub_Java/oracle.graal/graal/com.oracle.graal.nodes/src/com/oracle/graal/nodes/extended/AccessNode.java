@@ -24,17 +24,15 @@ package com.oracle.graal.nodes.extended;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
  * Accesses a value at an memory address specified by an {@linkplain #object object} and a
- * {@linkplain #nullCheckLocation() location}. The access does not include a null check on the
- * object.
+ * {@linkplain #location() location}. The access does not include a null check on the object.
  */
-public abstract class AccessNode extends DeoptimizingFixedWithNextNode implements Access {
+public abstract class AccessNode extends FixedWithNextNode implements Access {
 
     @Input private ValueNode object;
     @Input private ValueNode location;
@@ -45,10 +43,6 @@ public abstract class AccessNode extends DeoptimizingFixedWithNextNode implement
     }
 
     public LocationNode location() {
-        return (LocationNode) location;
-    }
-
-    public LocationNode nullCheckLocation() {
         return (LocationNode) location;
     }
 
@@ -81,15 +75,5 @@ public abstract class AccessNode extends DeoptimizingFixedWithNextNode implement
     @Override
     public Node node() {
         return this;
-    }
-
-    @Override
-    public boolean canDeoptimize() {
-        return nullCheck;
-    }
-
-    @Override
-    public DeoptimizationReason getDeoptimizationReason() {
-        return DeoptimizationReason.NullCheckException;
     }
 }
