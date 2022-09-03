@@ -128,7 +128,7 @@ public class LLVMBitcodeTypeHelper {
             throw new LLVMUnsupportedException(LLVMUnsupportedException.UnsupportedReason.PARSER_ERROR_VOID_SLOT);
 
         } else if (type instanceof IntegerType) {
-            switch (((IntegerType) type).getBits()) {
+            switch (((IntegerType) type).getBitCount()) {
                 case 1:
                     return FrameSlotKind.Boolean;
                 case Byte.SIZE:
@@ -180,7 +180,7 @@ public class LLVMBitcodeTypeHelper {
             return LLVMFunctionDescriptor.LLVMRuntimeType.VOID;
 
         } else if (type instanceof IntegerType) {
-            switch (((IntegerType) type).getBits()) {
+            switch (((IntegerType) type).getBitCount()) {
                 case 1:
                     return LLVMFunctionDescriptor.LLVMRuntimeType.I1;
                 case Byte.SIZE:
@@ -215,7 +215,7 @@ public class LLVMBitcodeTypeHelper {
                 return LLVMFunctionDescriptor.LLVMRuntimeType.FUNCTION_ADDRESS;
 
             } else if (pointee instanceof IntegerType) {
-                switch (((IntegerType) pointee).getBits()) {
+                switch (((IntegerType) pointee).getBitCount()) {
                     case 1:
                         return LLVMFunctionDescriptor.LLVMRuntimeType.I1_POINTER;
                     case Byte.SIZE:
@@ -312,7 +312,7 @@ public class LLVMBitcodeTypeHelper {
 
     public int getByteSize(Type type) {
         if (type instanceof IntegerType) {
-            return Math.max(1, ((IntegerType) type).getBits() / Byte.SIZE);
+            return Math.max(1, ((IntegerType) type).getBitCount() / Byte.SIZE);
 
         } else if (type instanceof FloatingPointType) {
             return Math.max(1, ((FloatingPointType) type).width() / Byte.SIZE);
@@ -332,10 +332,10 @@ public class LLVMBitcodeTypeHelper {
 
         } else if (type instanceof ArrayType) {
             final ArrayType arrayType = (ArrayType) type;
-            if (arrayType.getLength() == 0) {
+            if (arrayType.getElementCount() == 0) {
                 return 0;
             } else {
-                return arrayType.getLength() * getByteSize(arrayType.getElementType());
+                return arrayType.getElementCount() * getByteSize(arrayType.getElementType());
             }
 
         } else if (type instanceof StructureType) {
@@ -343,11 +343,11 @@ public class LLVMBitcodeTypeHelper {
 
         } else if (type instanceof VectorType) {
             final VectorType vectorType = (VectorType) type;
-            if (vectorType.getLength() == 0) {
+            if (vectorType.getElementCount() == 0) {
                 return 0;
             } else {
                 int sum = 0;
-                for (int i = 0; i < vectorType.getLength(); i++) {
+                for (int i = 0; i < vectorType.getElementCount(); i++) {
                     sum += getByteSize(vectorType.getElementType(i));
                 }
                 return sum;
@@ -366,7 +366,7 @@ public class LLVMBitcodeTypeHelper {
 
     private int getStructByteSize(StructureType structureType) {
         int sumByte = 0;
-        for (int i = 0; i < structureType.getLength(); i++) {
+        for (int i = 0; i < structureType.getElementCount(); i++) {
             final Type elemType = structureType.getElementType(i);
             if (!structureType.isPacked()) {
                 sumByte += getStructPaddingByteSize(sumByte, elemType);
@@ -391,10 +391,6 @@ public class LLVMBitcodeTypeHelper {
         }
     }
 
-    public DataLayoutConverter.DataSpecConverter getTargetDataLayout() {
-        return targetDataLayout;
-    }
-
     public int getAlignment(Type type) {
         if (type instanceof StructureType) {
             return getLargestAlignment((StructureType) type);
@@ -415,7 +411,7 @@ public class LLVMBitcodeTypeHelper {
 
     private int getLargestAlignment(StructureType structureType) {
         int largestAlignment = 0;
-        for (int i = 0; i < structureType.getLength(); i++) {
+        for (int i = 0; i < structureType.getElementCount(); i++) {
             largestAlignment = Math.max(largestAlignment, getAlignment(structureType.getElementType(i)));
         }
         return largestAlignment;

@@ -114,7 +114,7 @@ public final class LLVMConstantGenerator {
             final LLVMFunctionDescriptor.LLVMRuntimeType[] argTypes = LLVMBitcodeTypeHelper.toRuntimeTypes(type.getArgumentTypes());
 
             final String name = ((ValueSymbol) value).getName();
-            return LLVMFunctionLiteralNodeGen.create((LLVMFunctionDescriptor) context.getFunctionRegistry().createFunctionDescriptor(name, returnType, argTypes, type.isVarArg()));
+            return LLVMFunctionLiteralNodeGen.create(context.getFunctionRegistry().createFunctionDescriptor(name, returnType, argTypes, type.isVarArg()));
 
         } else if (value instanceof StringConstant) {
             final StringConstant constant = (StringConstant) value;
@@ -170,7 +170,7 @@ public final class LLVMConstantGenerator {
 
         } else if (value instanceof IntegerConstant) {
             final IntegerConstant constant = (IntegerConstant) value;
-            final int bits = ((IntegerType) (constant).getType()).getBits();
+            final int bits = ((IntegerType) (constant).getType()).getBitCount();
             switch (bits) {
                 case 1:
                     return new LLVMSimpleLiteralNode.LLVMI1LiteralNode(constant.getValue() != 0);
@@ -208,8 +208,7 @@ public final class LLVMConstantGenerator {
             values.add(toConstantNode(constant.getElement(i), align, variables, context, stackSlot, labels, typeHelper));
         }
 
-        final LLVMAddressNode target = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(typeHelper.getByteSize(constant.getType()),
-                        constant.getType().getAlignmentByte(typeHelper.getTargetDataLayout()),
+        final LLVMAddressNode target = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(typeHelper.getByteSize(constant.getType()), typeHelper.getAlignment(constant.getType()),
                         context,
                         stackSlot);
 
@@ -222,7 +221,7 @@ public final class LLVMConstantGenerator {
         final LLVMBaseType llvmElementType = elementType.getLLVMBaseType();
         final int stride = typeHelper.getByteSize(elementType);
         final LLVMAllocInstruction.LLVMAllocaInstruction allocation = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(typeHelper.getByteSize(array.getType()),
-                        array.getType().getAlignmentByte(typeHelper.getTargetDataLayout()), context, stackSlot);
+                        typeHelper.getAlignment(array.getType()), context, stackSlot);
         switch (llvmElementType) {
             case I8: {
                 final LLVMI8Node[] elements = new LLVMI8Node[array.getElementCount()];
@@ -396,7 +395,7 @@ public final class LLVMConstantGenerator {
 
         final StructureType structureType = (StructureType) constant.getType();
         final int structSize = typeHelper.getByteSize(structureType);
-        final int structAlignment = structureType.getAlignmentByte(typeHelper.getTargetDataLayout());
+        final int structAlignment = typeHelper.getAlignment(structureType);
         final LLVMAddressNode allocation = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(structSize, structAlignment, context, stackSlot);
 
         int currentOffset = 0;
@@ -410,7 +409,6 @@ public final class LLVMConstantGenerator {
             final LLVMExpressionNode resolvedConstant = toConstantNode(constant.getElement(i), align, variables, context, stackSlot, labels, typeHelper);
             nodes[i] = createStructWriteNode(resolvedConstant, elementType.getLLVMBaseType(), byteSize);
             currentOffset += byteSize;
-
         }
 
         return new StructLiteralNode(offsets, nodes, allocation);
@@ -422,7 +420,7 @@ public final class LLVMConstantGenerator {
             final LLVMAddress minusOneNode = LLVMAddress.fromLong(-1);
             return new LLVMSimpleLiteralNode.LLVMAddressLiteralNode(minusOneNode);
         } else {
-            final int alignment = structureType.getAlignmentByte(typeHelper.getTargetDataLayout());
+            final int alignment = typeHelper.getAlignment(structureType);
             final LLVMAddressNode addressNode = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(size, alignment, context, stackSlot);
             return new LLVMAddressZeroNode(addressNode, size);
         }
@@ -433,7 +431,7 @@ public final class LLVMConstantGenerator {
         if (size == 0) {
             return null;
         } else {
-            final int alignment = type.getAlignmentByte(typeHelper.getTargetDataLayout());
+            final int alignment = typeHelper.getAlignment(type);
             final LLVMAddressNode allocation = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(size, alignment, context, stack);
             return new LLVMAddressZeroNode(allocation, size);
         }
@@ -441,7 +439,7 @@ public final class LLVMConstantGenerator {
 
     public static LLVMExpressionNode toConstantZeroNode(Type type, LLVMContext context, FrameSlot stack, LLVMBitcodeTypeHelper typeHelper) {
         if (type instanceof IntegerType) {
-            final int vbr = ((IntegerType) type).getBits();
+            final int vbr = ((IntegerType) type).getBitCount();
             switch (vbr) {
                 case 1:
                     return new LLVMSimpleLiteralNode.LLVMI1LiteralNode(false);
@@ -472,7 +470,7 @@ public final class LLVMConstantGenerator {
 
         } else if (type instanceof PointerType) {
             if (((PointerType) type).getPointeeType() instanceof FunctionType) {
-                final LLVMFunctionDescriptor functionDescriptor = (LLVMFunctionDescriptor) context.getFunctionRegistry().createZeroFunctionDescriptor();
+                final LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createZeroFunctionDescriptor();
                 return LLVMFunctionLiteralNodeGen.create(functionDescriptor);
             } else {
                 return new LLVMSimpleLiteralNode.LLVMAddressLiteralNode(LLVMAddress.fromLong(0));
@@ -483,16 +481,14 @@ public final class LLVMConstantGenerator {
 
         } else if (type instanceof VectorType) {
             final VectorType vectorType = (VectorType) type.getType();
-            final LLVMAddressNode target = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(typeHelper.getByteSize(type.getType()),
-                            type.getType().getAlignmentByte(typeHelper.getTargetDataLayout()), context,
+            final LLVMAddressNode target = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(typeHelper.getByteSize(type.getType()), typeHelper.getAlignment(type.getType()), context,
                             stack);
-            final LLVMExpressionNode[] zeroes = new LLVMExpressionNode[vectorType.getLength()];
+            final LLVMExpressionNode[] zeroes = new LLVMExpressionNode[vectorType.getElementCount()];
             Arrays.fill(zeroes, toConstantZeroNode(vectorType.getElementType(), context, stack, typeHelper));
             return LLVMLiteralFactory.createVectorLiteralNode(Arrays.asList(zeroes), target, vectorType.getLLVMBaseType());
 
         } else if (type instanceof FunctionType) {
-            final LLVMFunctionDescriptor functionDescriptor = (LLVMFunctionDescriptor) context.getFunctionRegistry().createFunctionDescriptor("<zero function>",
-                            LLVMFunctionDescriptor.LLVMRuntimeType.ILLEGAL,
+            final LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createFunctionDescriptor("<zero function>", LLVMFunctionDescriptor.LLVMRuntimeType.ILLEGAL,
                             new LLVMFunctionDescriptor.LLVMRuntimeType[0], false);
             return LLVMFunctionLiteralNodeGen.create(functionDescriptor);
 

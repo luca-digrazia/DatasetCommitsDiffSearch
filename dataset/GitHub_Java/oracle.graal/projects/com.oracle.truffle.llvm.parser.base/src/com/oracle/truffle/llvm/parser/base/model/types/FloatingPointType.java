@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.parser.base.model.types;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 
 public enum FloatingPointType implements Type {
 
@@ -64,27 +63,8 @@ public enum FloatingPointType implements Type {
     }
 
     @Override
-    public int getBits() {
-        return width;
-    }
-
-    @Override
     public int sizeof() {
         return width / Byte.SIZE;
-    }
-
-    @Override
-    public int getAlignmentByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        if (targetDataLayout != null) {
-            return targetDataLayout.getBitAlignment(llvmBaseType) / Byte.SIZE;
-        } else {
-            return alignment;
-        }
-    }
-
-    @Override
-    public int getSizeByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        return Math.max(1, width / Byte.SIZE);
     }
 
     public int width() {
@@ -95,5 +75,4 @@ public enum FloatingPointType implements Type {
     public String toString() {
         return name().toLowerCase();
     }
-
 }

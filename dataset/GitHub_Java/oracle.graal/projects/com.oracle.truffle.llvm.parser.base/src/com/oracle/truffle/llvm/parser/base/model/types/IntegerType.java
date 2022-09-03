@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.parser.base.model.types;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 
 public final class IntegerType implements Type {
 
@@ -92,8 +91,7 @@ public final class IntegerType implements Type {
         return obj instanceof IntegerType && bits == ((IntegerType) obj).bits;
     }
 
-    @Override
-    public int getBits() {
+    public int getBitCount() {
         return bits;
     }
 
@@ -113,29 +111,5 @@ public final class IntegerType implements Type {
     @Override
     public String toString() {
         return String.format("i%d", bits);
-    }
-
-    @Override
-    public int getAlignmentByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        if (targetDataLayout != null) {
-            return targetDataLayout.getBitAlignment(getLLVMBaseType()) / Byte.SIZE;
-
-        } else if (bits <= Byte.SIZE) {
-            return Byte.BYTES;
-
-        } else if (bits <= Short.SIZE) {
-            return Short.BYTES;
-
-        } else if (bits <= Integer.SIZE) {
-            return Integer.BYTES;
-
-        } else {
-            return Long.BYTES;
-        }
-    }
-
-    @Override
-    public int getSizeByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        return Math.max(1, bits / Byte.SIZE);
     }
 }

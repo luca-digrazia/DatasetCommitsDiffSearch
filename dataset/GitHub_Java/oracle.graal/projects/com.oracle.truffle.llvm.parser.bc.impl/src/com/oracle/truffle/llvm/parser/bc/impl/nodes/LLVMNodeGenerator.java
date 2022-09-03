@@ -29,9 +29,6 @@
  */
 package com.oracle.truffle.llvm.parser.bc.impl.nodes;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameSlot;
@@ -58,38 +55,8 @@ import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory;
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMUnsupportedInlineAssemblerNode;
 import com.oracle.truffle.llvm.nodes.impl.vars.StructLiteralNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.base.model.enums.AsmDialect;
-import com.oracle.truffle.llvm.parser.base.model.enums.BinaryOperator;
-import com.oracle.truffle.llvm.parser.base.model.enums.CompareOperator;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionParameter;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalValueSymbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.Symbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.BinaryOperationConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.BlockAddressConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.CastConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.CompareConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.GetElementPointerConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.InlineAsmConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.MetadataConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.NullConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.UndefinedConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.ArrayConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.StructureConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.VectorConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.floatingpoint.FloatingPointConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.integer.BigIntegerConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.integer.IntegerConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ValueInstruction;
-import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
-import com.oracle.truffle.llvm.parser.base.model.types.IntegerType;
-import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
-import com.oracle.truffle.llvm.parser.base.model.types.Type;
-import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
-import com.oracle.truffle.llvm.parser.base.util.LLVMTypeHelperImpl;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMBitcodeFunctionVisitor;
+import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.parser.factories.LLVMArithmeticFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMCastsFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMComparisonFactory;
@@ -102,10 +69,43 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
+import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
+import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
+import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
+import com.oracle.truffle.llvm.parser.base.model.functions.FunctionParameter;
+import com.oracle.truffle.llvm.parser.base.model.globals.GlobalValueSymbol;
+import com.oracle.truffle.llvm.parser.base.model.symbols.Symbol;
+import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.ArrayConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.integer.BigIntegerConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.BinaryOperationConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.BlockAddressConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.CastConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.CompareConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.floatingpoint.FloatingPointConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.GetElementPointerConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.InlineAsmConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.integer.IntegerConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.MetadataConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.NullConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.StructureConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.UndefinedConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.VectorConstant;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ValueInstruction;
+import com.oracle.truffle.llvm.parser.base.model.enums.AsmDialect;
+import com.oracle.truffle.llvm.parser.base.model.enums.BinaryOperator;
+import com.oracle.truffle.llvm.parser.base.model.enums.CompareOperator;
+import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
+import com.oracle.truffle.llvm.parser.base.model.types.IntegerType;
+import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
+import com.oracle.truffle.llvm.parser.base.model.types.Type;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public final class LLVMNodeGenerator {
 
@@ -152,12 +152,12 @@ public final class LLVMNodeGenerator {
     }
 
     private static LLVMExpressionNode resolveBigIntegerConstant(BigIntegerConstant constant) {
-        final int bits = ((IntegerType) constant.getType()).getBits();
+        final int bits = ((IntegerType) constant.getType()).getBitCount();
         return new LLVMSimpleLiteralNode.LLVMIVarBitLiteralNode(LLVMIVarBit.create(bits, constant.getValue().toByteArray()));
     }
 
     private static LLVMExpressionNode resolveIntegerConstant(IntegerConstant constant) {
-        final int bits = ((IntegerType) constant.getType()).getBits();
+        final int bits = ((IntegerType) constant.getType()).getBitCount();
         switch (bits) {
             case 1:
                 return new LLVMSimpleLiteralNode.LLVMI1LiteralNode(constant.getValue() != 0);
@@ -303,7 +303,7 @@ public final class LLVMNodeGenerator {
                 throw new RuntimeException("Missed a compare operator");
         }
 
-        if (LLVMTypeHelperImpl.isVectorType(llvmtype)) {
+        if (LLVMTypeHelper.isVectorType(llvmtype)) {
             return LLVMComparisonFactory.createVectorComparison(target, lhs, rhs, llvmtype, comparison);
         } else {
             return LLVMComparisonFactory.createIntegerComparison(lhs, rhs, llvmtype, comparison);
@@ -528,7 +528,7 @@ public final class LLVMNodeGenerator {
     private LLVMExpressionNode resolveFunction(String name, FunctionType type) {
         final LLVMFunctionDescriptor.LLVMRuntimeType returnType = LLVMBitcodeTypeHelper.toRuntimeType(type.getReturnType());
         final LLVMFunctionDescriptor.LLVMRuntimeType[] argTypes = LLVMBitcodeTypeHelper.toRuntimeTypes(type.getArgumentTypes());
-        return LLVMFunctionLiteralNodeGen.create((LLVMFunctionDescriptor) method.getContext().getFunctionRegistry().createFunctionDescriptor(name, returnType, argTypes, type.isVarArg()));
+        return LLVMFunctionLiteralNodeGen.create(method.getContext().getFunctionRegistry().createFunctionDescriptor(name, returnType, argTypes, type.isVarArg()));
     }
 
     private LLVMExpressionNode resolveGetElementPointerConstant(GetElementPointerConstant constant) {

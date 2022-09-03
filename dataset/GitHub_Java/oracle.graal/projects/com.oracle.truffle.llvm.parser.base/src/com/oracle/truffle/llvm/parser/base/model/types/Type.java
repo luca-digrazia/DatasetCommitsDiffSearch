@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.parser.base.model.types;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 
 public interface Type {
 
@@ -46,28 +45,9 @@ public interface Type {
         return this;
     }
 
-    default int getBits() {
-        return sizeof() * Byte.SIZE;
-    }
-
     int sizeof();
 
     default int sizeof(@SuppressWarnings("unused") int alignment) {
         return sizeof();
-    }
-
-    default int getAlignmentByte(@SuppressWarnings("unused") DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        throw new UnsupportedOperationException("Not implemented!");
-    }
-
-    default int getSizeByte(@SuppressWarnings("unused") DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        throw new UnsupportedOperationException("Not implemented!");
-    }
-
-    static int getPadding(int offset, int alignment) {
-        if (alignment == 0) {
-            throw new AssertionError();
-        }
-        return (alignment - (offset % alignment)) % alignment;
     }
 }

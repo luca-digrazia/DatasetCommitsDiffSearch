@@ -30,9 +30,6 @@
 package com.oracle.truffle.llvm.parser.base.model.types;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 
 public final class PointerType implements Type {
 
@@ -84,23 +81,5 @@ public final class PointerType implements Type {
     @Override
     public String toString() {
         return String.format("%s*", type);
-    }
-
-    @Override
-    public int getAlignmentByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        if (targetDataLayout != null) {
-            return targetDataLayout.getBitAlignment(getLLVMBaseType()) / Byte.SIZE;
-        } else {
-            return Long.BYTES;
-        }
-    }
-
-    @Override
-    public int getSizeByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        if (type instanceof FunctionType) {
-            return LLVMHeap.FUNCTION_PTR_SIZE_BYTE;
-        } else {
-            return LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
-        }
     }
 }
