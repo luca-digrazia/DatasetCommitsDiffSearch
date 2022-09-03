@@ -500,15 +500,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
             while (pos != null) {
                 ResolvedJavaMethod method = pos.getMethod();
                 writePoolObject(method);
-                final int bci = pos.getBCI();
-                writeInt(bci);
-                StackTraceElement ste = method.asStackTraceElement(bci);
-                if (ste != null) {
-                    writePoolObject(ste.getFileName());
-                    writeInt(ste.getLineNumber());
-                } else {
-                    writePoolObject(null);
-                }
+                writeInt(pos.getBCI());
                 pos = pos.getCaller();
             }
             writePoolObject(null);
