@@ -22,19 +22,15 @@
  */
 package com.oracle.graal.truffle;
 
-import jdk.vm.ci.common.JVMCIError;
+import jdk.internal.jvmci.common.*;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.frame.Frame;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotTypeException;
-import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.*;
 
 class ReadOnlyFrame implements Frame {
     private final Frame delegate;
 
-    ReadOnlyFrame(Frame delegate) {
+    public ReadOnlyFrame(Frame delegate) {
         this.delegate = delegate;
     }
 
