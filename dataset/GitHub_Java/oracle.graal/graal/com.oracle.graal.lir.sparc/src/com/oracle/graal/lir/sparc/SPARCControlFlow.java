@@ -61,7 +61,7 @@ public class SPARCControlFlow {
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }
-            new Nop().emit(masm);  // delay slot
+            new Nop().emit(masm);
         }
 
         @Override
@@ -138,18 +138,30 @@ public class SPARCControlFlow {
     }
 
     private static void cmove(TargetMethodAssembler tasm, SPARCAssembler masm, Value result, ConditionFlag cond, Value other) {
-        if (!isRegister(other)) {
-            SPARCMove.move(tasm, masm, result, other);
-            throw new InternalError("result should be scratch");
-        }
-        assert !asRegister(other).equals(asRegister(result)) : "other already overwritten by previous move";
-        switch (other.getKind()) {
-            case Int:
-                new Movcc(cond, CC.Icc, asRegister(other), asRegister(result)).emit(masm);
-                throw new InternalError("check instruction");
-            case Long:
-            default:
-                throw GraalInternalError.shouldNotReachHere();
+        if (isRegister(other)) {
+            assert !asRegister(other).equals(asRegister(result)) : "other already overwritten by previous move";
+            switch (other.getKind()) {
+                case Int:
+                    // masm.cmovl(cond, asRegister(result), asRegister(other));
+                    // break;
+                case Long:
+                    // masm.cmovq(cond, asRegister(result), asRegister(other));
+                    // break;
+                default:
+                    throw GraalInternalError.shouldNotReachHere();
+            }
+        } else {
+            SPARCAddress addr = (SPARCAddress) tasm.asAddress(other);
+            switch (other.getKind()) {
+                case Int:
+                    // masm.cmovl(cond, asRegister(result), addr);
+                    // break;
+                case Long:
+                    // masm.cmovq(cond, asRegister(result), addr);
+                    // break;
+                default:
+                    throw GraalInternalError.shouldNotReachHere();
+            }
         }
     }
 
@@ -334,12 +346,11 @@ public class SPARCControlFlow {
                 prevHighKey = highKey;
             }
             if (defaultTarget != null) {
-                new Bpa(defaultTarget.label()).emit(masm);
+                // masm.jmp(defaultTarget.label());
             } else {
-                masm.bind(actualDefaultTarget);
+                // masm.bind(actualDefaultTarget);
                 // masm.hlt();
             }
-            throw new InternalError("NYI");
         }
 
         @Override
@@ -398,7 +409,7 @@ public class SPARCControlFlow {
         int highKey = lowKey + targets.length - 1;
         if (lowKey != 0) {
             // subtract the low value from the switch value
-            new Sub(value, lowKey, value).emit(masm);
+            // masm.sub_s32(value, value, lowKey);
             // masm.setp_gt_s32(value, highKey - lowKey);
         } else {
             // masm.setp_gt_s32(value, highKey);
@@ -406,15 +417,9 @@ public class SPARCControlFlow {
 
         // Jump to default target if index is not within the jump table
         if (defaultTarget != null) {
-            new Bpgu(CC.Icc, defaultTarget.label()).emit(masm);
-            new Nop().emit(masm);  // delay slot
+            // masm.at();
+            // masm.bra(defaultTarget.label().toString());
         }
-
-        // Load jump table entry into scratch and jump to it
-// masm.movslq(value, new AMD64Address(scratch, value, Scale.Times4, 0));
-// masm.addq(scratch, value);
-        new Jmp(new SPARCAddress(scratch, 0)).emit(masm);
-        new Nop().emit(masm);  // delay slot
 
         // address of jump table
         int tablePos = buf.position();
@@ -423,6 +428,6 @@ public class SPARCControlFlow {
         tasm.compilationResult.addAnnotation(jt);
 
         // SPARC: unimp: tableswitch extract
-        throw new InternalError("NYI");
+        throw GraalInternalError.shouldNotReachHere();
     }
 }
