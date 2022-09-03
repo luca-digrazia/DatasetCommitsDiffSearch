@@ -367,8 +367,9 @@ public abstract class Stub extends AbstractTemplates implements Snippets {
      */
     public static Object verifyObject(Object object) {
         if (verifyOops()) {
-            Word verifyOopCounter = Word.unsigned(verifyOopCounterAddress());
-            verifyOopCounter.writeInt(0, verifyOopCounter.readInt(0) + 1);
+            // TODO (ds) The counter read is ok but the write causes a segv - find out why
+            // Word verifyOopCounter = Word.unsigned(verifyOopCounterAddress());
+            // verifyOopCounter.writeInt(0, verifyOopCounter.readInt(0) + 1);
 
             Pointer oop = Word.fromObject(object);
             if (object != null) {
