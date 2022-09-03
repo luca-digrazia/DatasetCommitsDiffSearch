@@ -47,7 +47,6 @@ public final class LoadMethodNode extends FixedWithNextNode implements Lowerable
         this.method = method;
         assert !Modifier.isAbstract(method.getModifiers()) : "Cannot load abstract method from a hub";
         assert !Modifier.isStatic(method.getModifiers()) : "Cannot load a static method from a hub";
-        assert method.isInVirtualMethodTable();
     }
 
     @Override

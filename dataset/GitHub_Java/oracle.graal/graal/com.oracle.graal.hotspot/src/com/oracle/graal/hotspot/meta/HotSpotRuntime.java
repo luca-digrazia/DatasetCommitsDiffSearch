@@ -539,12 +539,13 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                     if (!hsMethod.getDeclaringClass().isInterface()) {
                         int vtableEntryOffset = hsMethod.vtableEntryOffset();
                         if (vtableEntryOffset > 0) {
+                            // We use LocationNode.ANY_LOCATION for the reads that access the vtable
+                            // entry and the compiled code entry
+                            // as HotSpot does not guarantee they are final values.
                             assert vtableEntryOffset > 0;
-                            ReadNode hub = this.createReadHub(tool, graph, wordKind, receiver);
-                            ReadNode metaspaceMethod = createReadVirtualMethod(graph, wordKind, hub, hsMethod);
-                            // We use LocationNode.ANY_LOCATION for the reads that access the
-                            // compiled code entry as HotSpot does not guarantee they are final
-                            // values.
+                            LoadHubNode hub = graph.add(new LoadHubNode(receiver, wordKind));
+                            ReadNode metaspaceMethod = graph.add(new ReadNode(hub, ConstantLocationNode.create(LocationNode.ANY_LOCATION, wordKind, vtableEntryOffset, graph),
+                                            StampFactory.forKind(wordKind())));
                             ReadNode compiledEntry = graph.add(new ReadNode(metaspaceMethod, ConstantLocationNode.create(LocationNode.ANY_LOCATION, wordKind, config.methodCompiledEntryOffset, graph),
                                             StampFactory.forKind(wordKind())));
 
@@ -663,16 +664,27 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             WriteNode write = graph.add(new WriteNode(object, store.value(), location, barrierType));
             write.setStateAfter(store.stateAfter());
             graph.replaceFixedWithFixed(store, write);
+
         } else if (n instanceof LoadHubNode) {
             LoadHubNode loadHub = (LoadHubNode) n;
             assert loadHub.kind() == wordKind;
+            LocationNode location = ConstantLocationNode.create(LocationNode.FINAL_LOCATION, wordKind, config.hubOffset, graph);
             ValueNode object = loadHub.object();
-            ReadNode hub = createReadHub(tool, graph, wordKind, object);
+            assert !object.isConstant() || object.asConstant().isNull();
+            ReadNode hub = graph.add(new ReadNode(object, location, StampFactory.forKind(wordKind())));
+            tool.createNullCheckGuard(hub.dependencies(), object);
             graph.replaceFixed(loadHub, hub);
         } else if (n instanceof LoadMethodNode) {
             LoadMethodNode loadMethodNode = (LoadMethodNode) n;
-            ResolvedJavaMethod method = loadMethodNode.getMethod();
-            ReadNode metaspaceMethod = createReadVirtualMethod(graph, wordKind, loadMethodNode.getHub(), method);
+            HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) loadMethodNode.getMethod();
+            assert !hsMethod.getDeclaringClass().isInterface();
+
+            int vtableEntryOffset = hsMethod.vtableEntryOffset();
+            assert vtableEntryOffset > 0;
+            // We use LocationNode.ANY_LOCATION for the reads that access the vtable
+            // entry as HotSpot does not guarantee that this is a final value.
+            ReadNode metaspaceMethod = graph.add(new ReadNode(loadMethodNode.getHub(), ConstantLocationNode.create(LocationNode.ANY_LOCATION, wordKind, vtableEntryOffset, graph),
+                            StampFactory.forKind(wordKind())));
             graph.replaceFixed(loadMethodNode, metaspaceMethod);
         } else if (n instanceof FixedGuardNode) {
             FixedGuardNode node = (FixedGuardNode) n;
@@ -721,26 +733,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             assert false : "Node implementing Lowerable not handled: " + n;
             throw GraalInternalError.shouldNotReachHere();
         }
-    }
-
-    private static ReadNode createReadVirtualMethod(StructuredGraph graph, Kind wordKind, ValueNode hub, ResolvedJavaMethod method) {
-        HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) method;
-        assert !hsMethod.getDeclaringClass().isInterface();
-
-        int vtableEntryOffset = hsMethod.vtableEntryOffset();
-        assert vtableEntryOffset > 0;
-        // We use LocationNode.ANY_LOCATION for the reads that access the vtable
-        // entry as HotSpot does not guarantee that this is a final value.
-        ReadNode metaspaceMethod = graph.add(new ReadNode(hub, ConstantLocationNode.create(LocationNode.ANY_LOCATION, wordKind, vtableEntryOffset, graph), StampFactory.forKind(wordKind())));
-        return metaspaceMethod;
-    }
-
-    private ReadNode createReadHub(LoweringTool tool, StructuredGraph graph, Kind wordKind, ValueNode object) {
-        LocationNode location = ConstantLocationNode.create(LocationNode.FINAL_LOCATION, wordKind, config.hubOffset, graph);
-        assert !object.isConstant() || object.asConstant().isNull();
-        ReadNode hub = graph.add(new ReadNode(object, location, StampFactory.forKind(wordKind())));
-        tool.createNullCheckGuard(hub.dependencies(), object);
-        return hub;
     }
 
     private static WriteBarrierType getFieldStoreBarrierType(StoreFieldNode storeField) {
