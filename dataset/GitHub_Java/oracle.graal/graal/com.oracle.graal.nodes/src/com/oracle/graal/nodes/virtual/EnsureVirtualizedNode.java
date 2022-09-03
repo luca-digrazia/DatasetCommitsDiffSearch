@@ -22,14 +22,29 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-@NodeInfo
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.VerificationError;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.AbstractEndNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.Invoke;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.java.StoreFieldNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.nodes.util.GraphUtil;
+
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
 public final class EnsureVirtualizedNode extends FixedWithNextNode implements Virtualizable, Lowerable {
 
     public static final NodeClass<EnsureVirtualizedNode> TYPE = NodeClass.create(EnsureVirtualizedNode.class);
@@ -43,26 +58,50 @@ public final class EnsureVirtualizedNode extends FixedWithNextNode implements Vi
         this.localOnly = localOnly;
     }
 
+    @Override
     public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object);
-        if (state != null && state.getState() == EscapeState.Virtual) {
-            if (state.getVirtualObject() instanceof VirtualBoxingNode) {
-                Throwable exception = new VerificationError("ensureVirtual is not valid for boxing objects: %s", state.getVirtualObject().type().getName());
+        ValueNode alias = tool.getAlias(object);
+        if (alias instanceof VirtualObjectNode) {
+            VirtualObjectNode virtual = (VirtualObjectNode) alias;
+            if (virtual instanceof VirtualBoxingNode) {
+                Throwable exception = new VerificationError("ensureVirtual is not valid for boxing objects: %s", virtual.type().getName());
                 throw GraphUtil.approxSourceException(this, exception);
             }
             if (!localOnly) {
-                state.setEnsureVirtualized(true);
+                tool.setEnsureVirtualized(virtual, true);
             }
             tool.delete();
         }
     }
 
+    @Override
     public void lower(LoweringTool tool) {
         ensureVirtualFailure(this, object.stamp());
     }
 
     public static void ensureVirtualFailure(Node location, Stamp stamp) {
-        Throwable exception = new VerificationError("Object should not be materialized (stamp=%s):", stamp);
-        throw GraphUtil.approxSourceException(location, exception);
+        String additionalReason = "";
+        if (location instanceof FixedWithNextNode && !(location instanceof EnsureVirtualizedNode)) {
+            FixedWithNextNode fixedWithNextNode = (FixedWithNextNode) location;
+            FixedNode next = fixedWithNextNode.next();
+            if (next instanceof StoreFieldNode) {
+                additionalReason = " (must not store virtual object into a field)";
+            } else if (next instanceof Invoke) {
+                additionalReason = " (must not pass virtual object into an invoke that cannot be inlined)";
+            } else {
+                additionalReason = " (must not let virtual object escape at node " + next + ")";
+            }
+        }
+        Throwable exception = new VerificationError("Object of type %s should not be materialized%s:", StampTool.typeOrNull(stamp).getName(), additionalReason);
+
+        Node pos;
+        if (location instanceof FixedWithNextNode) {
+            pos = ((FixedWithNextNode) location).next();
+        } else if (location instanceof AbstractEndNode) {
+            pos = ((AbstractEndNode) location).merge();
+        } else {
+            pos = location;
+        }
+        throw GraphUtil.approxSourceException(pos, exception);
     }
 }
