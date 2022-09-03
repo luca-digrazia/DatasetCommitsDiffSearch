@@ -1713,9 +1713,6 @@ public final class LinearScan {
      * @see InstructionValueProcedure#doValue(LIRInstruction, Value, OperandMode, EnumSet)
      */
     private Value debugInfoProcedure(LIRInstruction op, Value operand, OperandMode valueMode, EnumSet<OperandFlag> flags) {
-        if (isVirtualStackSlot(operand)) {
-            return operand;
-        }
         int tempOpId = op.id();
         OperandMode mode = OperandMode.USE;
         AbstractBlock<?> block = blockForId(tempOpId);
@@ -1745,16 +1742,12 @@ public final class LinearScan {
     }
 
     private void computeDebugInfo(IntervalWalker iw, final LIRInstruction op, LIRFrameState info) {
-        if (!LocationMarker.Options.UseLocationMarker.getValue()) {
-            FrameMap frameMap = res.getFrameMap();
-            info.initDebugInfo(frameMap, !op.destroysCallerSavedRegisters() || !callKillsRegisters);
-            markFrameLocations(iw, op, info, frameMap);
-        }
+        FrameMap frameMap = res.getFrameMap();
+        info.initDebugInfo(frameMap, !op.destroysCallerSavedRegisters() || !callKillsRegisters);
+        markFrameLocations(iw, op, info, frameMap);
 
         info.forEachState(op, this::debugInfoProcedure);
-        if (!LocationMarker.Options.UseLocationMarker.getValue()) {
-            info.finish(op, res.getFrameMap());
-        }
+        info.finish(op, frameMap);
     }
 
     private void assignLocations(List<LIRInstruction> instructions, final IntervalWalker iw) {
@@ -1894,11 +1887,8 @@ public final class LinearScan {
 
                 // register interval mapper
                 frameMapBuilder.requireMapping(new Mapper());
-
-                if (!LocationMarker.Options.UseLocationMarker.getValue()) {
-                    // build frame map
-                    res.buildFrameMap();
-                }
+                // build frame map
+                res.buildFrameMap();
 
                 printLir("After FrameMap building", true);
 
