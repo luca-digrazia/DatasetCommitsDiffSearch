@@ -22,16 +22,15 @@
  */
 package com.oracle.graal.compiler.common.cfg;
 
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public abstract class AbstractBlockBase<T extends AbstractBlockBase<T>> {
 
     protected int id;
     protected int domDepth;
 
-    protected T[] predecessors;
-    protected T[] successors;
+    protected List<T> predecessors;
+    protected List<T> successors;
 
     private T dominator;
     private List<T> dominated;
@@ -44,15 +43,10 @@ public abstract class AbstractBlockBase<T extends AbstractBlockBase<T>> {
     protected AbstractBlockBase() {
         this.id = AbstractControlFlowGraph.BLOCK_ID_INITIAL;
         this.linearScanNumber = -1;
-        this.domNumber = -1;
-        this.maxChildDomNumber = -1;
     }
 
-    public void setDominatorNumber(int domNumber) {
+    public void setDominatorNumbers(int domNumber, int maxChildDomNumber) {
         this.domNumber = domNumber;
-    }
-
-    public void setMaxChildDomNumber(int maxChildDomNumber) {
         this.maxChildDomNumber = maxChildDomNumber;
     }
 
@@ -72,19 +66,19 @@ public abstract class AbstractBlockBase<T extends AbstractBlockBase<T>> {
         this.id = id;
     }
 
-    public T[] getPredecessors() {
+    public List<T> getPredecessors() {
         return predecessors;
     }
 
-    public void setPredecessors(T[] predecessors) {
+    public void setPredecessors(List<T> predecessors) {
         this.predecessors = predecessors;
     }
 
-    public T[] getSuccessors() {
+    public List<T> getSuccessors() {
         return successors;
     }
 
-    public void setSuccessors(T[] successors) {
+    public void setSuccessors(List<T> successors) {
         this.successors = successors;
     }
 
@@ -118,11 +112,11 @@ public abstract class AbstractBlockBase<T extends AbstractBlockBase<T>> {
     }
 
     public int getPredecessorCount() {
-        return getPredecessors().length;
+        return getPredecessors().size();
     }
 
     public int getSuccessorCount() {
-        return getSuccessors().length;
+        return getSuccessors().size();
     }
 
     public int getLinearScanNumber() {
@@ -146,8 +140,6 @@ public abstract class AbstractBlockBase<T extends AbstractBlockBase<T>> {
     public abstract Loop<T> getLoop();
 
     public abstract int getLoopDepth();
-
-    public abstract void delete();
 
     public abstract boolean isLoopEnd();
 

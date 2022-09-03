@@ -75,22 +75,6 @@ public class LIRFrameState {
     }
 
     /**
-     * Iterates the frame state and calls the {@link InstructionValueProcedure} for every variable.
-     *
-     * @param proc The procedure called for variables.
-     */
-    public void forEachState(LIRInstruction inst, InstructionValueConsumer proc) {
-        for (BytecodeFrame cur = topFrame; cur != null; cur = cur.caller()) {
-            processValues(inst, cur.values, proc);
-        }
-        if (virtualObjects != null) {
-            for (VirtualObject obj : virtualObjects) {
-                processValues(inst, obj.getValues(), proc);
-            }
-        }
-    }
-
-    /**
      * We filter out constant and illegal values ourself before calling the procedure, so
      * {@link OperandFlag#CONST} and {@link OperandFlag#ILLEGAL} need not be set.
      */
@@ -99,51 +83,29 @@ public class LIRFrameState {
     protected void processValues(LIRInstruction inst, Value[] values, InstructionValueProcedure proc) {
         for (int i = 0; i < values.length; i++) {
             Value value = values[i];
-            if (isIllegal(value)) {
-                continue;
-            }
-            if (value instanceof AllocatableValue) {
-                Value result = proc.doValue(inst, value, OperandMode.ALIVE, STATE_FLAGS);
-                if (!value.identityEquals(result)) {
-                    values[i] = result;
-                }
-            } else if (value instanceof StackLockValue) {
-                StackLockValue monitor = (StackLockValue) value;
-                Value owner = monitor.getOwner();
-                if (owner instanceof AllocatableValue) {
-                    monitor.setOwner(proc.doValue(inst, owner, OperandMode.ALIVE, STATE_FLAGS));
-                }
-                Value slot = monitor.getSlot();
-                if (isVirtualStackSlot(slot)) {
-                    monitor.setSlot(asStackSlotValue(proc.doValue(inst, slot, OperandMode.ALIVE, STATE_FLAGS)));
-                }
-            } else {
-                assert unprocessed(value);
-            }
+            values[i] = processValue(inst, proc, value);
         }
     }
 
-    protected void processValues(LIRInstruction inst, Value[] values, InstructionValueConsumer proc) {
-        for (int i = 0; i < values.length; i++) {
-            Value value = values[i];
-            if (isIllegal(value)) {
-                continue;
-            } else if (value instanceof AllocatableValue) {
-                proc.visitValue(inst, value, OperandMode.ALIVE, STATE_FLAGS);
-            } else if (value instanceof StackLockValue) {
-                StackLockValue monitor = (StackLockValue) value;
-                Value owner = monitor.getOwner();
-                if (owner instanceof AllocatableValue) {
-                    proc.visitValue(inst, owner, OperandMode.ALIVE, STATE_FLAGS);
-                }
-                Value slot = monitor.getSlot();
-                if (isVirtualStackSlot(slot)) {
-                    proc.visitValue(inst, slot, OperandMode.ALIVE, STATE_FLAGS);
-                }
+    protected Value processValue(LIRInstruction inst, InstructionValueProcedure proc, Value value) {
+        if (value instanceof StackLockValue) {
+            StackLockValue monitor = (StackLockValue) value;
+            Value owner = monitor.getOwner();
+            if (owner instanceof AllocatableValue) {
+                monitor.setOwner(proc.doValue(inst, owner, OperandMode.ALIVE, STATE_FLAGS));
+            }
+            Value slot = monitor.getSlot();
+            if (isVirtualStackSlot(slot)) {
+                monitor.setSlot(asStackSlotValue(proc.doValue(inst, slot, OperandMode.ALIVE, STATE_FLAGS)));
+            }
+        } else {
+            if (!isIllegal(value) && value instanceof AllocatableValue) {
+                return proc.doValue(inst, value, OperandMode.ALIVE, STATE_FLAGS);
             } else {
                 assert unprocessed(value);
             }
         }
+        return value;
     }
 
     private boolean unprocessed(Value value) {
@@ -168,7 +130,7 @@ public class LIRFrameState {
      * @param canHaveRegisters True if there can be any register map entries.
      */
     public void initDebugInfo(FrameMap frameMap, boolean canHaveRegisters) {
-        debugInfo = new DebugInfo(topFrame, frameMap.initReferenceMap(canHaveRegisters), virtualObjects);
+        debugInfo = new DebugInfo(topFrame, frameMap.initReferenceMap(canHaveRegisters));
     }
 
     /**
