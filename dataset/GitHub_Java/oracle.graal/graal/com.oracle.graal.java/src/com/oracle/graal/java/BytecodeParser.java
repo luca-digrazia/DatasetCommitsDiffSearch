@@ -28,20 +28,13 @@ import static com.oracle.graal.compiler.common.type.StampFactory.*;
 import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.*;
 import static com.oracle.graal.java.BytecodeParser.Options.*;
 import static com.oracle.graal.nodes.type.StampTool.*;
+import static com.oracle.jvmci.code.TypeCheckHints.*;
+import static com.oracle.jvmci.common.JVMCIError.*;
+import static com.oracle.jvmci.meta.DeoptimizationAction.*;
+import static com.oracle.jvmci.meta.DeoptimizationReason.*;
 import static java.lang.String.*;
-import static jdk.internal.jvmci.common.JVMCIError.*;
-import static jdk.internal.jvmci.meta.DeoptimizationAction.*;
-import static jdk.internal.jvmci.meta.DeoptimizationReason.*;
 
 import java.util.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.compiler.Compiler;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.Scope;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
 
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.common.*;
@@ -66,6 +59,13 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.compiler.Compiler;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.options.*;
 
 /**
  * The {@code GraphBuilder} class parses the bytecode of a method and builds the IR graph.
@@ -1244,16 +1244,8 @@ public class BytecodeParser implements GraphBuilderContext {
         return currentInvokeReturnType;
     }
 
-    private boolean forceInliningEverything;
-
-    public void handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean inlineEverything) {
-        boolean previous = forceInliningEverything;
-        forceInliningEverything = previous || inlineEverything;
-        try {
-            appendInvoke(invokeKind, targetMethod, args);
-        } finally {
-            forceInliningEverything = previous;
-        }
+    public void handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args) {
+        appendInvoke(invokeKind, targetMethod, args);
     }
 
     private void appendInvoke(InvokeKind initialInvokeKind, ResolvedJavaMethod initialTargetMethod, ValueNode[] args) {
@@ -1426,15 +1418,10 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private boolean tryInline(ValueNode[] args, ResolvedJavaMethod targetMethod, JavaType returnType) {
-        boolean canBeInlined = forceInliningEverything || parsingIntrinsic() || targetMethod.canBeInlined();
+        boolean canBeInlined = parsingIntrinsic() || targetMethod.canBeInlined();
         if (!canBeInlined) {
             return false;
         }
-
-        if (forceInliningEverything) {
-            return inline(targetMethod, targetMethod, false, args);
-        }
-
         for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
             InlineInfo inlineInfo = plugin.shouldInlineInvoke(this, targetMethod, args, returnType);
             if (inlineInfo != null) {
@@ -2938,7 +2925,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private JavaTypeProfile getProfileForTypeCheck(ResolvedJavaType type) {
-        if (parsingIntrinsic() || profilingInfo == null || !optimisticOpts.useTypeCheckHints() || type.isLeaf()) {
+        if (parsingIntrinsic() || profilingInfo == null || !optimisticOpts.useTypeCheckHints() || !canHaveSubtype(type)) {
             return null;
         } else {
             return profilingInfo.getTypeProfile(bci());

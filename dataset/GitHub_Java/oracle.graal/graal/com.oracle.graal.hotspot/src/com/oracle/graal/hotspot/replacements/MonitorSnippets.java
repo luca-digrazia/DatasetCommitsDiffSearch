@@ -22,6 +22,18 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
+import com.oracle.jvmci.code.Register;
+import com.oracle.jvmci.code.TargetDescription;
+import com.oracle.jvmci.code.BytecodeFrame;
+import com.oracle.jvmci.meta.NamedLocationIdentity;
+import com.oracle.jvmci.meta.JavaType;
+import com.oracle.jvmci.meta.DeoptimizationReason;
+import com.oracle.jvmci.meta.ResolvedJavaType;
+import com.oracle.jvmci.meta.LocationIdentity;
+import com.oracle.jvmci.meta.ResolvedJavaMethod;
+import com.oracle.jvmci.meta.DeoptimizationAction;
+import com.oracle.jvmci.meta.ForeignCallDescriptor;
+
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.nodes.BeginLockScopeNode.*;
 import static com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode.*;
@@ -33,12 +45,7 @@ import static com.oracle.graal.replacements.SnippetTemplate.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
-
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
@@ -61,6 +68,7 @@ import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 import com.oracle.graal.word.*;
+import com.oracle.jvmci.options.*;
 
 /**
  * Snippets used for implementing the monitorenter and monitorexit instructions.

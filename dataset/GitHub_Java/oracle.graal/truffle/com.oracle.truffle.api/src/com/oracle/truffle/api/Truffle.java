@@ -44,20 +44,16 @@ public class Truffle {
     }
 
     private static TruffleRuntime initRuntime() {
+        if (TruffleOptions.ForceInterpreter) {
+            /*
+             * Force Truffle to run in interpreter mode even if we have a specialized implementation
+             * of TruffleRuntime available.
+             */
+            return new DefaultTruffleRuntime();
+        }
+
         return AccessController.doPrivileged(new PrivilegedAction<TruffleRuntime>() {
             public TruffleRuntime run() {
-                String runtimeClassName = System.getProperty("truffle.TruffleRuntime");
-                if (runtimeClassName != null) {
-                    try {
-                        ClassLoader cl = Thread.currentThread().getContextClassLoader();
-                        Class<?> runtimeClass = Class.forName(runtimeClassName, false, cl);
-                        return (TruffleRuntime) runtimeClass.newInstance();
-                    } catch (Throwable e) {
-                        // Fail fast for other errors
-                        throw (InternalError) new InternalError().initCause(e);
-                    }
-                }
-
                 TruffleRuntimeAccess access = null;
                 Class<?> servicesClass = null;
                 try {
@@ -81,7 +77,6 @@ public class Truffle {
                     }
                 }
                 // TODO: try standard ServiceLoader?
-
                 if (access != null) {
                     return access.getRuntime();
                 }
