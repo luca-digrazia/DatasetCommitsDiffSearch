@@ -24,39 +24,40 @@
  */
 package com.oracle.truffle.api.vm;
 
+import static com.oracle.truffle.api.vm.VMAccessor.JAVAINTEROP;
+import static com.oracle.truffle.api.vm.VMAccessor.LANGUAGE;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.java.JavaInterop;
+import com.oracle.truffle.api.interop.java.*;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.PolyglotEngine.Access;
-import com.oracle.truffle.api.vm.PolyglotEngine.Language;
 
+@SuppressWarnings("deprecation")
 abstract class PolyglotRootNode extends RootNode {
 
-    private static final CallTarget VOID_TARGET = new CallTarget() {
-        @Override
-        public Object call(Object... arguments) {
-            return arguments[0];
-        }
-    };
+    private static RootCallTarget voidCallTarget = Truffle.getRuntime().createCallTarget(new VoidRootNode());
+
+    @SuppressWarnings("unused")
+    private static void resetNativeImageState() {
+        voidCallTarget = null;
+    }
 
     final PolyglotEngine engine;
 
@@ -82,7 +83,7 @@ abstract class PolyglotRootNode extends RootNode {
         RootNode symbolNode;
         if (isPrimitiveType(type)) {
             // no conversion necessary just return value
-            return VOID_TARGET;
+            return voidCallTarget;
         } else {
             symbolNode = new ForeignExecuteRootNode(engine, (Class<? extends TruffleObject>) type);
         }
@@ -94,7 +95,7 @@ abstract class PolyglotRootNode extends RootNode {
         RootNode symbolNode;
         if (isPrimitiveType(type)) {
             // no conversion necessary just return value
-            return VOID_TARGET;
+            return voidCallTarget;
         } else {
             symbolNode = new AsJavaRootNode(engine, (Class<? extends TruffleObject>) type);
         }
@@ -123,7 +124,7 @@ abstract class PolyglotRootNode extends RootNode {
         return Truffle.getRuntime().createCallTarget(new ForeignSendRootNode(engine, message));
     }
 
-    static CallTarget createEval(PolyglotEngine engine, Language language, Source source) {
+    static CallTarget createEval(PolyglotEngine engine, PolyglotEngine.Language language, Source source) {
         return Truffle.getRuntime().createCallTarget(new EvalRootNode(engine, language, source));
     }
 
@@ -136,11 +137,10 @@ abstract class PolyglotRootNode extends RootNode {
             super(engine);
             this.returnConvertNode = new ConvertNode();
             this.messageNode = message.createNode();
-            this.toJavaNode = Access.JAVA_INTEROP.createToJavaNode();
+            this.toJavaNode = JAVAINTEROP.createToJavaNode();
         }
 
         @Override
-        @SuppressWarnings("deprecation")
         protected Object executeImpl(VirtualFrame frame) {
             final TruffleObject receiver = ForeignAccess.getReceiver(frame);
             final Object[] args = ForeignAccess.getArguments(frame).toArray();
@@ -152,15 +152,12 @@ abstract class PolyglotRootNode extends RootNode {
 
     private static final class AsJavaRootNode extends PolyglotRootNode {
         @Child private Node toJavaNode;
-
         private final Class<? extends TruffleObject> receiverType;
-
-        @CompilationFinal private int argumentCount = -1;
 
         AsJavaRootNode(PolyglotEngine engine, Class<? extends TruffleObject> receiverType) {
             super(engine);
             this.receiverType = receiverType;
-            this.toJavaNode = Access.JAVA_INTEROP.createToJavaNode();
+            this.toJavaNode = JAVAINTEROP.createToJavaNode();
         }
 
         @Override
@@ -169,7 +166,7 @@ abstract class PolyglotRootNode extends RootNode {
             final Class<?> targetType = (Class<?>) args[1];
             if (receiverType.isInstance(args[0])) {
                 final TruffleObject value = receiverType.cast(args[0]);
-                return Access.JAVA_INTEROP.toJava(toJavaNode, targetType, value);
+                return JAVAINTEROP.toJava(toJavaNode, targetType, null, value, null);
             } else {
                 throw new ClassCastException();
             }
@@ -177,13 +174,11 @@ abstract class PolyglotRootNode extends RootNode {
 
     }
 
-    private static final class ForeignExecuteRootNode extends PolyglotRootNode {
+    static final class ForeignExecuteRootNode extends PolyglotRootNode {
         @Child private ConvertNode returnConvertNode;
         @Child private Node executeNode;
 
         private final Class<? extends TruffleObject> receiverType;
-
-        @CompilationFinal private int argumentCount = -1;
 
         ForeignExecuteRootNode(PolyglotEngine engine, Class<? extends TruffleObject> receiverType) {
             super(engine);
@@ -198,10 +193,9 @@ abstract class PolyglotRootNode extends RootNode {
             final Object[] args = (Object[]) callArgs[1];
             unwrapArgs(engine, args);
             try {
-                if (executeNode == null || argumentCount != args.length) {
+                if (executeNode == null) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    executeNode = insert(Message.createExecute(args.length).createNode());
-                    argumentCount = args.length;
+                    executeNode = insert(Message.EXECUTE.createNode());
                 }
                 Object tmp = ForeignAccess.sendExecute(executeNode, function, args);
                 if (tmp == null) {
@@ -210,16 +204,11 @@ abstract class PolyglotRootNode extends RootNode {
                 Object result = returnConvertNode.convert(tmp);
                 // TODO we must check here that the language returns a valid value.
                 return result;
-            } catch (ArityException e) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                executeNode = insert(Message.createExecute(args.length).createNode());
-                return executeImpl(frame);
             } catch (InteropException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw e.raise();
             }
         }
-
     }
 
     static final class EvalRootNode extends PolyglotRootNode {
@@ -227,12 +216,12 @@ abstract class PolyglotRootNode extends RootNode {
         private static final Object[] EMPTY_ARRAY = new Object[0];
 
         @Child private DirectCallNode call;
-        private final Language language;
+        private final PolyglotEngine.Language language;
         private final Source source;
 
         private static final Object NULL_VALUE = JavaInterop.asTruffleValue(null);
 
-        private EvalRootNode(PolyglotEngine engine, Language language, Source source) {
+        private EvalRootNode(PolyglotEngine engine, PolyglotEngine.Language language, Source source) {
             super(engine);
             this.source = source;
             this.language = language;
@@ -261,7 +250,7 @@ abstract class PolyglotRootNode extends RootNode {
 
         @TruffleBoundary
         private void printResult(Object result) {
-            String stringResult = Access.LANGS.toStringIfVisible(language.getEnv(false), result, true);
+            String stringResult = LANGUAGE.toStringIfVisible(language.getEnv(false), result, true);
             if (stringResult != null) {
                 try {
                     OutputStream out = language.engine().out;
@@ -275,7 +264,7 @@ abstract class PolyglotRootNode extends RootNode {
         }
 
         private void initialize() {
-            CallTarget target = Access.LANGS.parse(language.getEnv(true), source, null);
+            CallTarget target = LANGUAGE.parse(language.getEnv(true), source, null);
             if (target == null) {
                 throw new NullPointerException("Parsing has not produced a CallTarget for " + source);
             }
@@ -323,6 +312,18 @@ abstract class PolyglotRootNode extends RootNode {
                 }
             }
             return obj;
+        }
+    }
+
+    private static final class VoidRootNode extends RootNode {
+
+        VoidRootNode() {
+            super(null);
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            return frame.getArguments()[0];
         }
     }
 }

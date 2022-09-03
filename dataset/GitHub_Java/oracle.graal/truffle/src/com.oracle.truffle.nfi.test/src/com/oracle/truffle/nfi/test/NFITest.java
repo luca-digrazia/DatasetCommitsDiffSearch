@@ -129,11 +129,11 @@ public class NFITest {
 
         @Child Node execute;
 
-        protected SendExecuteNode(String symbol, String signature) {
-            this(lookupAndBind(symbol, signature));
+        protected SendExecuteNode(String symbol, String signature, int argCount) {
+            this(lookupAndBind(symbol, signature), argCount);
         }
 
-        protected SendExecuteNode(TruffleObject receiver) {
+        protected SendExecuteNode(TruffleObject receiver, int argCount) {
             this.receiver = receiver;
             execute = Message.EXECUTE.createNode();
         }

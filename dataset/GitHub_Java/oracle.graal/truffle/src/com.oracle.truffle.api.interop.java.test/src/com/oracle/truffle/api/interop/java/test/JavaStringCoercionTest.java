@@ -26,7 +26,9 @@ package com.oracle.truffle.api.interop.java.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.graalvm.polyglot.Context;
@@ -34,12 +36,17 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
 public class JavaStringCoercionTest {
@@ -54,6 +61,22 @@ public class JavaStringCoercionTest {
             protected LanguageContext createContext(Env contextEnv) {
                 env = contextEnv;
                 return super.createContext(contextEnv);
+            }
+
+            @Override
+            protected boolean isObjectOfLanguage(Object object) {
+                if (object instanceof UnboxableArrayObject) {
+                    return true;
+                }
+                return super.isObjectOfLanguage(object);
+            }
+
+            @Override
+            protected String toString(LanguageContext c, Object value) {
+                if (value instanceof UnboxableArrayObject) {
+                    return "UnboxableArray";
+                }
+                return super.toString(c, value);
             }
         });
         context.initialize(ProxyLanguage.ID);
@@ -75,7 +98,7 @@ public class JavaStringCoercionTest {
 
     public static class StringConsumer2 {
         public Object call(List<?> arg) {
-            return arg;
+            return arg.toString() + "(" + arg.size() + "):" + new ArrayList<>(arg).toString();
         }
 
         public Object call(String arg) {
@@ -95,6 +118,13 @@ public class JavaStringCoercionTest {
         testStringCoercion(api);
     }
 
+    @Test
+    public void testPreferWrappingToStringCoercion() throws InteropException {
+        TruffleObject api = (TruffleObject) env.asGuestValue(new StringConsumer2());
+        Object list = call(api, new UnboxableArrayObject(4));
+        assertEquals("UnboxableArray(4):[0, 1, 2, 3]", list);
+    }
+
     private static void testStringCoercion(TruffleObject api) throws InteropException {
         assertEquals("ok", call(api, "ok"));
         assertEquals("42", call(api, 42));
@@ -108,13 +138,84 @@ public class JavaStringCoercionTest {
         assertEquals("Infinity", call(api, Double.POSITIVE_INFINITY));
         assertEquals("-Infinity", call(api, Double.NEGATIVE_INFINITY));
         assertEquals("\uffff", call(api, Character.MAX_VALUE));
+
+        assertEquals("42", call(api, new UnboxableToInt(42)));
+
+        try {
+            ForeignAccess.sendInvoke(Message.INVOKE.createNode(), api, "call", new NotCoercibleObject());
+            fail("Expected String coercion to fail");
+        } catch (UnsupportedTypeException e) {
+        }
     }
 
     private static Object call(TruffleObject obj, Object value) throws InteropException {
         try {
-            return ForeignAccess.sendInvoke(Message.createInvoke(1).createNode(), obj, "call", value);
+            return ForeignAccess.sendInvoke(Message.INVOKE.createNode(), obj, "call", value);
         } catch (UnsupportedTypeException e) {
             throw new AssertionError("String coercion failed for: " + value + " (" + (value == null ? null : value.getClass().getName()) + ")", e);
+        }
+    }
+
+    @MessageResolution(receiverType = NotCoercibleObject.class)
+    static final class NotCoercibleObject implements TruffleObject {
+        @Override
+        public ForeignAccess getForeignAccess() {
+            return NotCoercibleObjectForeign.ACCESS;
+        }
+
+        static boolean isInstance(TruffleObject obj) {
+            return obj instanceof NotCoercibleObject;
+        }
+    }
+
+    @MessageResolution(receiverType = UnboxableArrayObject.class)
+    static final class UnboxableArrayObject implements TruffleObject {
+        final int size;
+
+        UnboxableArrayObject(int size) {
+            this.size = size;
+        }
+
+        @Override
+        public ForeignAccess getForeignAccess() {
+            return UnboxableArrayObjectForeign.ACCESS;
+        }
+
+        public static boolean isInstance(TruffleObject obj) {
+            return obj instanceof UnboxableArrayObject;
+        }
+
+        @Resolve(message = "GET_SIZE")
+        abstract static class ArrayGetSizeNode extends Node {
+            Object access(UnboxableArrayObject obj) {
+                return obj.size;
+            }
+        }
+
+        @Resolve(message = "READ")
+        abstract static class ArrayReadSizeNode extends Node {
+            Object access(UnboxableArrayObject obj, int index) {
+                if (index < 0 || index >= obj.size) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw UnknownIdentifierException.raise(String.valueOf(index));
+                }
+                return index;
+            }
+        }
+
+        @Resolve(message = "IS_BOXED")
+        abstract static class IsBoxedINode extends Node {
+            @SuppressWarnings("unused")
+            Object access(UnboxableArrayObject obj) {
+                return true;
+            }
+        }
+
+        @Resolve(message = "UNBOX")
+        abstract static class UnboxINode extends Node {
+            Object access(UnboxableArrayObject obj) {
+                return obj.size;
+            }
         }
     }
 }

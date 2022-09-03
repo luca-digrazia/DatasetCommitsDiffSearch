@@ -92,7 +92,7 @@ public class PointerNFITest extends NFITest {
     public static class FoldVector extends SendExecuteNode {
 
         public FoldVector() {
-            super("foldVector", "(POINTER, UINT32) : DOUBLE");
+            super("foldVector", "(POINTER, UINT32) : DOUBLE", 2);
         }
     }
 
@@ -114,7 +114,7 @@ public class PointerNFITest extends NFITest {
     public static class IncVector extends SendExecuteNode {
 
         public IncVector() {
-            super("incVector", "(POINTER, SINT32, DOUBLE) : VOID");
+            super("incVector", "(POINTER, SINT32, DOUBLE) : VOID", 3);
         }
     }
 

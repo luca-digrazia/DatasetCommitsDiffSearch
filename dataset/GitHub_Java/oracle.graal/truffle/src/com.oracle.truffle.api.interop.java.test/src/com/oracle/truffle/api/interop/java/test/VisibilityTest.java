@@ -32,9 +32,8 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.java.JavaInterop;
 
-public class VisibilityTest {
+public class VisibilityTest extends ProxyLanguageEnvTest {
     private static Class<?> run;
 
     static void setRun(Class<?> cls) {
@@ -252,10 +251,10 @@ public class VisibilityTest {
         invokeRun(new C3(), A8.class, 42);
     }
 
-    private static Object invokeRun(Object obj, Class<?> methodClass, Object... args) throws InteropException {
-        TruffleObject receiver = JavaInterop.asTruffleObject(obj);
+    private Object invokeRun(Object obj, Class<?> methodClass, Object... args) throws InteropException {
+        TruffleObject receiver = asTruffleObject(obj);
         try {
-            Object result = ForeignAccess.sendInvoke(Message.createInvoke(0).createNode(), receiver, "run", args);
+            Object result = ForeignAccess.sendInvoke(Message.INVOKE.createNode(), receiver, "run", args);
             Assert.assertSame(methodClass, run);
             return result;
         } catch (UnknownIdentifierException uie) {
@@ -264,6 +263,62 @@ public class VisibilityTest {
             return null;
         } finally {
             run = null;
+        }
+    }
+
+    public static class F1 {
+        public int a = 10;
+        public int b = 20;
+        public static int s = 30;
+    }
+
+    public static class F2 extends F1 {
+        public static int a = 30;
+        public int b = 40;
+    }
+
+    private static class F3 extends F1 {
+        public int a = 30;
+        public int c = 40;
+    }
+
+    public static class F4 extends F3 {
+    }
+
+    @Test
+    public void testPublicClassPublicField() throws InteropException {
+        Assert.assertEquals(10, read(new F1(), "a"));
+        Assert.assertEquals(40, read(new F2(), "b"));
+
+        // get instance field from superclass instead of static field in subclass
+        Assert.assertEquals(10, read(new F2(), "a"));
+        // static fields can be accessed via class
+        Assert.assertEquals(30, read(F2.class, "a"));
+        // static fields in superclass not visible from subclass
+        Assert.assertNull(read(F2.class, "s"));
+    }
+
+    @Test
+    public void testPrivateClassPublicField() throws InteropException {
+        // public field in private superclass of public class
+        Assert.assertNull(read(new F4(), "c"));
+        // public field in public superclass of private class (not shadowed)
+        Assert.assertEquals(20, read(new F3(), "b"));
+    }
+
+    @Test
+    public void testShadowedField() throws InteropException {
+        // public field in public superclass but shadowed by public field in private class
+        Assert.assertNull(read(new F3(), "a"));
+        Assert.assertNull(read(new F4(), "a"));
+    }
+
+    private Object read(Object obj, String name) throws InteropException {
+        TruffleObject receiver = obj instanceof Class<?> ? asTruffleHostSymbol((Class<?>) obj) : asTruffleObject(obj);
+        try {
+            return ForeignAccess.sendRead(Message.READ.createNode(), receiver, name);
+        } catch (UnknownIdentifierException uie) {
+            return null;
         }
     }
 }
