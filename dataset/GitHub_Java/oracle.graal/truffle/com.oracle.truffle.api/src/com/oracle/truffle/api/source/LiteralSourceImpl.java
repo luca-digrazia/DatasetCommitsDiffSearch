@@ -32,22 +32,22 @@ import java.util.Objects;
 
 final class LiteralSourceImpl extends Content {
 
-    private final String name;
+    private final String description;
     private final String code;
 
-    LiteralSourceImpl(String name, String code) {
-        this.name = name;
+    LiteralSourceImpl(String description, String code) {
+        this.description = description;
         this.code = code;
     }
 
     @Override
     public String getName() {
-        return name;
+        return description;
     }
 
     @Override
     public String getShortName() {
-        return name;
+        return description;
     }
 
     @Override
@@ -76,7 +76,7 @@ final class LiteralSourceImpl extends Content {
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, code);
+        return Objects.hash(description, code);
     }
 
     @Override
@@ -89,7 +89,7 @@ final class LiteralSourceImpl extends Content {
         }
         if (obj instanceof LiteralSourceImpl) {
             LiteralSourceImpl other = (LiteralSourceImpl) obj;
-            return Objects.equals(name, other.name) && code.equals(other.code);
+            return Objects.equals(description, other.description) && code.equals(other.code);
         }
         return false;
     }
