@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,10 @@ import org.junit.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.phases.util.*;
+import com.oracle.graal.runtime.*;
 
 /**
  * Context for type related api.meta tests.
@@ -40,12 +43,20 @@ import com.oracle.graal.api.runtime.*;
 public class TypeUniverse {
 
     public final Unsafe unsafe;
-    public final MetaAccessProvider metaAccess = Graal.getRequiredCapability(MetaAccessProvider.class);
+    public static final double JAVA_VERSION = Double.valueOf(System.getProperty("java.specification.version"));
+
+    public final MetaAccessProvider metaAccess;
+    public final ConstantReflectionProvider constantReflection;
+    public final SnippetReflectionProvider snippetReflection;
     public final Collection<Class<?>> classes = new HashSet<>();
     public final Map<Class<?>, Class<?>> arrayClasses = new HashMap<>();
-    public final List<Constant> constants = new ArrayList<>();
+    public final List<JavaConstant> constants = new ArrayList<>();
 
     public TypeUniverse() {
+        Providers providers = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders();
+        metaAccess = providers.getMetaAccess();
+        constantReflection = providers.getConstantReflection();
+        snippetReflection = Graal.getRequiredCapability(SnippetReflectionProvider.class);
         Unsafe theUnsafe = null;
         try {
             theUnsafe = Unsafe.getUnsafe();
@@ -60,17 +71,17 @@ public class TypeUniverse {
         }
         unsafe = theUnsafe;
 
-        Class[] initialClasses = {void.class, boolean.class, byte.class, short.class, char.class, int.class, float.class, long.class, double.class, Object.class, Class.class, ClassLoader.class,
+        Class<?>[] initialClasses = {void.class, boolean.class, byte.class, short.class, char.class, int.class, float.class, long.class, double.class, Object.class, Class.class, ClassLoader.class,
                         String.class, Serializable.class, Cloneable.class, Test.class, TestMetaAccessProvider.class, List.class, Collection.class, Map.class, Queue.class, HashMap.class,
-                        LinkedHashMap.class, IdentityHashMap.class, AbstractCollection.class, AbstractList.class, ArrayList.class};
-        for (Class c : initialClasses) {
+                        LinkedHashMap.class, IdentityHashMap.class, AbstractCollection.class, AbstractList.class, ArrayList.class, TrustedInterface.class};
+        for (Class<?> c : initialClasses) {
             addClass(c);
         }
-        for (Field f : Constant.class.getDeclaredFields()) {
+        for (Field f : JavaConstant.class.getDeclaredFields()) {
             int mods = f.getModifiers();
-            if (f.getType() == Constant.class && Modifier.isPublic(mods) && Modifier.isStatic(mods) && Modifier.isFinal(mods)) {
+            if (f.getType() == JavaConstant.class && Modifier.isPublic(mods) && Modifier.isStatic(mods) && Modifier.isFinal(mods)) {
                 try {
-                    Constant c = (Constant) f.get(null);
+                    JavaConstant c = (JavaConstant) f.get(null);
                     if (c != null) {
                         constants.add(c);
                     }
@@ -78,22 +89,24 @@ public class TypeUniverse {
                 }
             }
         }
-        for (Class c : classes) {
+        for (Class<?> c : classes) {
             if (c != void.class && !c.isArray()) {
-                constants.add(Constant.forObject(Array.newInstance(c, 42)));
+                constants.add(snippetReflection.forObject(Array.newInstance(c, 42)));
             }
         }
-        constants.add(Constant.forObject(new ArrayList<>()));
-        constants.add(Constant.forObject(new IdentityHashMap<>()));
-        constants.add(Constant.forObject(new LinkedHashMap<>()));
-        constants.add(Constant.forObject(new TreeMap<>()));
-        constants.add(Constant.forObject(new ArrayDeque<>()));
-        constants.add(Constant.forObject(new LinkedList<>()));
-        constants.add(Constant.forObject("a string"));
-        constants.add(Constant.forObject(42));
+        constants.add(snippetReflection.forObject(new ArrayList<>()));
+        constants.add(snippetReflection.forObject(new IdentityHashMap<>()));
+        constants.add(snippetReflection.forObject(new LinkedHashMap<>()));
+        constants.add(snippetReflection.forObject(new TreeMap<>()));
+        constants.add(snippetReflection.forObject(new ArrayDeque<>()));
+        constants.add(snippetReflection.forObject(new LinkedList<>()));
+        constants.add(snippetReflection.forObject("a string"));
+        constants.add(snippetReflection.forObject(42));
+        constants.add(snippetReflection.forObject(String.class));
+        constants.add(snippetReflection.forObject(String[].class));
     }
 
-    public synchronized Class<?> getArrayClass(Class componentType) {
+    public synchronized Class<?> getArrayClass(Class<?> componentType) {
         Class<?> arrayClass = arrayClasses.get(componentType);
         if (arrayClass == null) {
             arrayClass = Array.newInstance(componentType, 0).getClass();
@@ -102,27 +115,27 @@ public class TypeUniverse {
         return arrayClass;
     }
 
-    public static int dimensions(Class c) {
+    public static int dimensions(Class<?> c) {
         if (c.getComponentType() != null) {
             return 1 + dimensions(c.getComponentType());
         }
         return 0;
     }
 
-    private void addClass(Class c) {
+    private void addClass(Class<?> c) {
         if (classes.add(c)) {
             if (c.getSuperclass() != null) {
                 addClass(c.getSuperclass());
             }
-            for (Class sc : c.getInterfaces()) {
+            for (Class<?> sc : c.getInterfaces()) {
                 addClass(sc);
             }
-            for (Class dc : c.getDeclaredClasses()) {
+            for (Class<?> dc : c.getDeclaredClasses()) {
                 addClass(dc);
             }
             for (Method m : c.getDeclaredMethods()) {
                 addClass(m.getReturnType());
-                for (Class p : m.getParameterTypes()) {
+                for (Class<?> p : m.getParameterTypes()) {
                     addClass(p);
                 }
             }
