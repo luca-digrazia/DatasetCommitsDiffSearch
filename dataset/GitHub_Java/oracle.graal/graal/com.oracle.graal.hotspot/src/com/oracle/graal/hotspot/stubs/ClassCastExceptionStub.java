@@ -22,15 +22,17 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import com.oracle.graal.api.replacements.Snippet;
-import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.debug.GraalError;
+import static com.oracle.graal.replacements.nodes.CStringConstant.cstring;
+
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil;
 import com.oracle.graal.hotspot.word.KlassPointer;
+import com.oracle.graal.replacements.Snippet;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
 
 import jdk.vm.ci.code.Register;
+import jdk.vm.ci.common.JVMCIError;
 
 /**
  */
@@ -42,13 +44,13 @@ public class ClassCastExceptionStub extends CreateExceptionStub {
 
     @Override
     protected Object getConstantParameterValue(int index, String name) {
-        GraalError.guarantee(index == 2, "unknown parameter %s at index %d", name, index);
+        JVMCIError.guarantee(index == 2, "unknown parameter %s at index %d", name, index);
         return providers.getRegisters().getThreadRegister();
     }
 
     @Snippet
     private static Object createClassCastException(Object object, KlassPointer targetKlass, @ConstantParameter Register threadRegister) {
         KlassPointer objKlass = HotSpotReplacementsUtil.loadHub(object);
-        return createException(threadRegister, ClassCastException.class, objKlass, targetKlass);
+        return createException(threadRegister, ClassCastException.class, objKlass, cstring(" cannot be cast to "), targetKlass);
     }
 }
