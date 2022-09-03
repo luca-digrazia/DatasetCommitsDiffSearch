@@ -121,10 +121,12 @@ public abstract class Node implements Cloneable, Formattable {
     private NodeUsagesList usages;
     private Node predecessor;
     private int modCount;
+    private final NodeClass nodeClass;
 
     public Node() {
         this.graph = null;
         this.id = INITIAL_ID;
+        nodeClass = NodeClass.get(getClass());
     }
 
     protected int id() {
@@ -239,7 +241,7 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     public final NodeClass getNodeClass() {
-        return NodeClass.get(getClass());
+        return nodeClass;
     }
 
     private boolean checkReplaceWith(Node other) {
@@ -456,7 +458,7 @@ public abstract class Node implements Cloneable, Formattable {
      * Provides a {@link Map} of properties of this node for use in debugging (e.g., to view in the
      * ideal graph visualizer).
      */
-    public final Map<Object, Object> getDebugProperties() {
+    public Map<Object, Object> getDebugProperties() {
         return getDebugProperties(new HashMap<>());
     }
 
