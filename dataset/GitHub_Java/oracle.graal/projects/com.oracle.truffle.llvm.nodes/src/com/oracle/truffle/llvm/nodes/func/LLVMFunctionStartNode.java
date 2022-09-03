@@ -29,21 +29,14 @@
  */
 package com.oracle.truffle.llvm.nodes.func;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.api.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStackFrameNuller;
 
 public class LLVMFunctionStartNode extends RootNode {
 
@@ -54,11 +47,10 @@ public class LLVMFunctionStartNode extends RootNode {
     private final String name;
     private final int explicitArgumentsCount;
     private final SourceSection sourceSection;
-    private final FrameSlot baseStackPointer;
 
     public LLVMFunctionStartNode(SourceSection sourceSection, LLVMLanguage language, LLVMExpressionNode node, LLVMExpressionNode[] beforeFunction, LLVMExpressionNode[] afterFunction,
                     FrameDescriptor frameDescriptor,
-                    String name, LLVMStackFrameNuller[] initNullers, FrameSlot baseStackPointer, int explicitArgumentsCount) {
+                    String name, LLVMStackFrameNuller[] initNullers, int explicitArgumentsCount) {
         super(language, frameDescriptor);
         this.sourceSection = sourceSection;
         this.node = node;
@@ -66,7 +58,6 @@ public class LLVMFunctionStartNode extends RootNode {
         this.afterFunction = afterFunction;
         this.nullers = initNullers;
         this.name = name;
-        this.baseStackPointer = baseStackPointer;
         this.explicitArgumentsCount = explicitArgumentsCount;
     }
 
@@ -75,53 +66,19 @@ public class LLVMFunctionStartNode extends RootNode {
         return sourceSection;
     }
 
-    @CompilationFinal private LLVMStack stack;
-
-    private LLVMStack getStack() {
-        if (stack == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            stack = getLanguage(LLVMLanguage.class).getContextReference().get().getStack();
-        }
-        return stack;
-    }
-
     @Override
     public Object execute(VirtualFrame frame) {
-        try {
-            frame.setObject(baseStackPointer, getStack().getStackPointer());
-
-            nullStack(frame);
-            doBefore(frame);
-            Object result = node.executeGeneric(frame);
-            doAfter(frame);
-
-            assert destroyStack(frame);
-            getStack().setStackPointer((LLVMAddress) frame.getObject(baseStackPointer));
-            return result;
-        } catch (FrameSlotTypeException e) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException(e);
-        }
-    }
-
-    /*
-     * Allows us to find broken stackpointers immediately because old stackregions are destroyed.
-     */
-    @SuppressWarnings("deprecation")
-    private boolean destroyStack(VirtualFrame frame) throws FrameSlotTypeException {
-        LLVMAddress oldSp = (LLVMAddress) frame.getObject(baseStackPointer);
-        LLVMAddress currSp = getStack().getStackPointer();
-        long size = oldSp.getVal() - currSp.getVal();
-        LLVMMemory.memset(currSp, size, (byte) 0xFF);
-        return true;
+        nullStack(frame);
+        doBefore(frame);
+        Object result = node.executeGeneric(frame);
+        doAfter(frame);
+        return result;
     }
 
     @ExplodeLoop
     private void nullStack(VirtualFrame frame) {
         for (LLVMStackFrameNuller nuller : nullers) {
-            if (nuller != null) {
-                nuller.nullifySlot(frame);
-            }
+            nuller.nullifySlot(frame);
         }
     }
 

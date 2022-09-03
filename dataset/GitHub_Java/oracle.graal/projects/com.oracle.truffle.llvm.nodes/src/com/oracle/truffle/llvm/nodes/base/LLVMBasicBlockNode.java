@@ -100,15 +100,15 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
             } catch (ControlFlowException e) {
                 controlFlowExceptionProfile.enter();
                 throw e;
-            } catch (Throwable t) {
+            } catch (RuntimeException e) {
                 CompilerDirectives.transferToInterpreter();
                 SourceSection exceptionSourceSection = statement.getEncapsulatingSourceSection();
                 if (exceptionSourceSection == null) {
-                    throw t;
+                    throw e;
                 } else {
                     String message = String.format("LLVM error in %s in %s - %s", statement.getSourceDescription(),
-                                    exceptionSourceSection.getSource() != null ? exceptionSourceSection.getSource().getName() : "<unknow>", t.getMessage());
-                    throw new RuntimeException(message, t);
+                                    exceptionSourceSection.getSource() != null ? exceptionSourceSection.getSource().getName() : "<unknow>", e.getMessage());
+                    throw new RuntimeException(message, e);
                 }
             }
         }
