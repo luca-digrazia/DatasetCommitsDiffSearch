@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,11 +27,12 @@ import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT_WITH_ORIGINAL_KEY;
 import static com.oracle.graal.hotspot.HotSpotBackend.ENCRYPT;
 import static com.oracle.graal.hotspot.replacements.UnsafeAccess.UNSAFE;
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LocationIdentity;
+import sun.misc.Launcher;
 
-import com.oracle.graal.api.replacements.ClassSubstitution;
 import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
@@ -42,15 +43,11 @@ import com.oracle.graal.nodes.extended.UnsafeLoadNode;
 import com.oracle.graal.word.Pointer;
 import com.oracle.graal.word.Word;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.JavaKind;
-
 // JaCoCo Exclude
 
 /**
  * Substitutions for {@code com.sun.crypto.provider.CipherBlockChaining} methods.
  */
-@ClassSubstitution(className = "com.sun.crypto.provider.CipherBlockChaining", optional = true)
 public class CipherBlockChainingSubstitutions {
 
     private static final long embeddedCipherOffset;
@@ -59,10 +56,9 @@ public class CipherBlockChainingSubstitutions {
     private static final Class<?> feedbackCipherClass;
     static {
         try {
-            // Need to use the system class loader as com.sun.crypto.provider.FeedbackCipher
-            // is normally loaded by the extension class loader which is not delegated
-            // to by the JVMCI class loader.
-            ClassLoader cl = ClassLoader.getSystemClassLoader();
+            // Need to use launcher class path as com.sun.crypto.provider.AESCrypt
+            // is normally not on the boot class path
+            ClassLoader cl = Launcher.getLauncher().getClassLoader();
 
             feedbackCipherClass = Class.forName("com.sun.crypto.provider.FeedbackCipher", true, cl);
             embeddedCipherOffset = UNSAFE.objectFieldOffset(feedbackCipherClass.getDeclaredField("embeddedCipher"));
@@ -75,11 +71,10 @@ public class CipherBlockChainingSubstitutions {
     }
 
     @Fold
-    static Class<?> getAESCryptClass() {
+    private static Class<?> getAESCryptClass() {
         return AESCryptSubstitutions.AESCryptClass;
     }
 
-    @MethodSubstitution(isStatic = false)
     static int encrypt(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
         Object realReceiver = PiNode.piCastNonNull(rcvr, cipherBlockChainingClass);
         Object embeddedCipher = UnsafeLoadNode.load(realReceiver, embeddedCipherOffset, JavaKind.Object, LocationIdentity.any());
@@ -92,7 +87,6 @@ public class CipherBlockChainingSubstitutions {
         }
     }
 
-    @MethodSubstitution(isStatic = false, value = "implEncrypt")
     static int implEncrypt(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
         Object realReceiver = PiNode.piCastNonNull(rcvr, cipherBlockChainingClass);
         Object embeddedCipher = UnsafeLoadNode.load(realReceiver, embeddedCipherOffset, JavaKind.Object, LocationIdentity.any());
@@ -105,7 +99,6 @@ public class CipherBlockChainingSubstitutions {
         }
     }
 
-    @MethodSubstitution(isStatic = false)
     static int decrypt(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
         Object realReceiver = PiNode.piCastNonNull(rcvr, cipherBlockChainingClass);
         Object embeddedCipher = UnsafeLoadNode.load(realReceiver, embeddedCipherOffset, JavaKind.Object, LocationIdentity.any());
@@ -118,7 +111,6 @@ public class CipherBlockChainingSubstitutions {
         }
     }
 
-    @MethodSubstitution(isStatic = false)
     static int implDecrypt(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
         Object realReceiver = PiNode.piCastNonNull(rcvr, cipherBlockChainingClass);
         Object embeddedCipher = UnsafeLoadNode.load(realReceiver, embeddedCipherOffset, JavaKind.Object, LocationIdentity.any());
@@ -135,7 +127,6 @@ public class CipherBlockChainingSubstitutions {
      * Variation for platforms (e.g. SPARC) that need do key expansion in stubs due to compatibility
      * issues between Java key expansion and hardware crypto instructions.
      */
-    @MethodSubstitution(isStatic = false, value = "decrypt")
     static int decryptWithOriginalKey(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
         Object realReceiver = PiNode.piCastNonNull(rcvr, cipherBlockChainingClass);
         Object embeddedCipher = UnsafeLoadNode.load(realReceiver, embeddedCipherOffset, JavaKind.Object, LocationIdentity.any());
@@ -151,7 +142,6 @@ public class CipherBlockChainingSubstitutions {
     /**
      * @see #decryptWithOriginalKey(Object, byte[], int, int, byte[], int)
      */
-    @MethodSubstitution(isStatic = false, value = "implDecrypt")
     static int implDecryptWithOriginalKey(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
         Object realReceiver = PiNode.piCastNonNull(rcvr, cipherBlockChainingClass);
         Object embeddedCipher = UnsafeLoadNode.load(realReceiver, embeddedCipherOffset, JavaKind.Object, LocationIdentity.any());
