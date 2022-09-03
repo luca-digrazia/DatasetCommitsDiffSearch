@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,6 +47,7 @@ import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.LIRKind;
+import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
@@ -137,7 +138,9 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.SnippetLowerableMemoryNode.SnippetLowering;
 import org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode;
+import org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation;
 import org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode;
+import org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.code.CodeUtil;
@@ -183,10 +186,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     public final TargetDescription getTarget() {
         return target;
-    }
-
-    public MetaAccessProvider getMetaAccess() {
-        return metaAccess;
     }
 
     @Override
@@ -318,20 +317,27 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ResolvedJavaMethod method = math.graph().method();
         if (method != null) {
             if (method.getAnnotation(Snippet.class) != null) {
-                // In the context of SnippetStub, i.e., Graal-generated stubs, use the LIR
-                // lowering to emit the stub assembly code instead of the Node lowering.
+                /*
+                 * In the context of the snippet use the LIR lowering instead of the Node lowering.
+                 */
                 return;
             }
             if (method.getName().equalsIgnoreCase(math.getOperation().name()) && tool.getMetaAccess().lookupJavaType(Math.class).equals(method.getDeclaringClass())) {
-                // A root compilation of the intrinsic method should emit the full assembly
-                // implementation.
+                /*
+                 * A root compilation of the intrinsic method should emit the full assembly
+                 * implementation.
+                 */
                 return;
             }
+
         }
-        StructuredGraph graph = math.graph();
-        ForeignCallNode call = graph.add(new ForeignCallNode(foreignCalls, math.getOperation().foreignCallDescriptor, math.getX(), math.getY()));
-        graph.addAfterFixed(tool.lastFixedNode(), call);
-        math.replaceAtUsages(call);
+        ForeignCallDescriptor foreignCall = toForeignCall(math.getOperation());
+        if (foreignCall != null) {
+            StructuredGraph graph = math.graph();
+            ForeignCallNode call = graph.add(new ForeignCallNode(foreignCalls, toForeignCall(math.getOperation()), math.getX(), math.getY()));
+            graph.addAfterFixed(tool.lastFixedNode(), call);
+            math.replaceAtUsages(call);
+        }
     }
 
     private void lowerUnaryMath(UnaryMathIntrinsicNode math, LoweringTool tool) {
@@ -340,16 +346,36 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         }
         ResolvedJavaMethod method = math.graph().method();
         if (method != null) {
-            if (method.getName().equalsIgnoreCase(math.getOperation().name()) && tool.getMetaAccess().lookupJavaType(Math.class).equals(method.getDeclaringClass())) {
-                // A root compilation of the intrinsic method should emit the full assembly
-                // implementation.
+            if (method.getAnnotation(Snippet.class) != null) {
+                /*
+                 * In the context of the snippet use the LIR lowering instead of the Node lowering.
+                 */
                 return;
             }
+            if (method.getName().equalsIgnoreCase(math.getOperation().name()) && tool.getMetaAccess().lookupJavaType(Math.class).equals(method.getDeclaringClass())) {
+                /*
+                 * A root compilation of the intrinsic method should emit the full assembly
+                 * implementation.
+                 */
+                return;
+            }
+
         }
-        StructuredGraph graph = math.graph();
-        ForeignCallNode call = math.graph().add(new ForeignCallNode(foreignCalls, math.getOperation().foreignCallDescriptor, math.getValue()));
-        graph.addAfterFixed(tool.lastFixedNode(), call);
-        math.replaceAtUsages(call);
+        ForeignCallDescriptor foreignCall = toForeignCall(math.getOperation());
+        if (foreignCall != null) {
+            StructuredGraph graph = math.graph();
+            ForeignCallNode call = math.graph().add(new ForeignCallNode(foreignCalls, foreignCall, math.getValue()));
+            graph.addAfterFixed(tool.lastFixedNode(), call);
+            math.replaceAtUsages(call);
+        }
+    }
+
+    protected ForeignCallDescriptor toForeignCall(UnaryOperation operation) {
+        return operation.foreignCallDescriptor;
+    }
+
+    protected ForeignCallDescriptor toForeignCall(BinaryOperation operation) {
+        return operation.foreignCallDescriptor;
     }
 
     protected void lowerVerifyHeap(VerifyHeapNode n) {
@@ -437,10 +463,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             wordIndex = index;
         }
 
-        int shift = CodeUtil.log2(metaAccess.getArrayIndexScale(elementKind));
+        int shift = CodeUtil.log2(arrayScalingFactor(elementKind));
         ValueNode scaledIndex = graph.unique(new LeftShiftNode(wordIndex, ConstantNode.forInt(shift, graph)));
 
-        int base = metaAccess.getArrayBaseOffset(elementKind);
+        int base = arrayBaseOffset(elementKind);
         ValueNode offset = graph.unique(new AddNode(scaledIndex, ConstantNode.forIntegerKind(target.wordJavaKind, base, graph)));
 
         return graph.unique(new OffsetAddressNode(array, offset));
@@ -783,7 +809,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                                     barrierType = fieldInitializationBarrier(entryKind);
                                 }
                             } else {
-                                address = createOffsetAddress(graph, newObject, metaAccess.getArrayBaseOffset(entryKind) + i * metaAccess.getArrayIndexScale(entryKind));
+                                address = createOffsetAddress(graph, newObject, arrayBaseOffset(entryKind) + i * arrayScalingFactor(entryKind));
                                 barrierType = arrayInitializationBarrier(entryKind);
                             }
                             if (address != null) {
@@ -983,6 +1009,11 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     public abstract int arrayLengthOffset();
 
+    @Override
+    public int arrayScalingFactor(JavaKind elementKind) {
+        return target.arch.getPlatformKind(elementKind).getSizeInBytes();
+    }
+
     public Stamp loadStamp(Stamp stamp, JavaKind kind) {
         return loadStamp(stamp, kind, true);
     }
@@ -1140,10 +1171,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         StructuredGraph graph = address.graph();
         ValueNode offset = ((OffsetAddressNode) address).getOffset();
 
-        int base = metaAccess.getArrayBaseOffset(elementKind);
+        int base = arrayBaseOffset(elementKind);
         ValueNode scaledIndex = graph.unique(new SubNode(offset, ConstantNode.forIntegerStamp(offset.stamp(NodeView.DEFAULT), base, graph)));
 
-        int shift = CodeUtil.log2(metaAccess.getArrayIndexScale(elementKind));
+        int shift = CodeUtil.log2(arrayScalingFactor(elementKind));
         ValueNode ret = graph.unique(new RightShiftNode(scaledIndex, ConstantNode.forInt(shift, graph)));
         return IntegerConvertNode.convert(ret, StampFactory.forKind(JavaKind.Int), graph, NodeView.DEFAULT);
     }
