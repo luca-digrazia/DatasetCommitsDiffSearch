@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,7 +24,6 @@
 package com.oracle.svm.hosted.image;
 
 import java.io.ByteArrayOutputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map.Entry;
@@ -115,9 +112,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
 
         // HACK: guess which compiler from the native object file format
         CCLinkerInvocation inv = (ObjectFile.getNativeFormat() == ObjectFile.Format.MACH_O) ? new DarwinCCLinkerInvocation() : new BinutilsCCLinkerInvocation();
-        Path outputFile = outputDirectory.resolve(imageName + getBootImageKind().getFilenameSuffix());
-        UserError.guarantee(!Files.isDirectory(outputFile), "Cannot write image to %s. Path exists as directory. (Use -H:Name=<image name>)", outputFile);
-        inv.setOutputFile(outputFile);
+        inv.setOutputFile(outputDirectory.resolve(imageName + getBootImageKind().getFilenameSuffix()));
         inv.setOutputKind(getOutputKind());
 
         inv.addLibPath(tempDirectory.toString());
