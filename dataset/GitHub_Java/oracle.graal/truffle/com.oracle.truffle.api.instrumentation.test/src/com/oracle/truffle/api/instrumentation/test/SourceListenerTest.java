@@ -72,8 +72,7 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
 
         instrument.setEnabled(true);
         TestLoadSource1 impl = instrument.lookup(TestLoadSource1.class);
-        Source source2 = lines("ROOT(DEFINE(f1, STATEMENT(EXPRESSION)), DEFINE(f2, STATEMENT)," +
-                        "BLOCK(CALL(f1), CALL(f2)))");
+        Source source2 = lines("STATEMENT(EXPRESSION)");
         for (int i = 0; i < runTimes; i++) {
             run(source2);
         }
