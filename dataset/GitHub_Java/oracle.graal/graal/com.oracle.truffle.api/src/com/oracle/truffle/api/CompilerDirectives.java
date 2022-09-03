@@ -76,7 +76,7 @@ public final class CompilerDirectives {
 
     /**
      * Returns a boolean value indicating whether the method is executed in the interpreter.
-     *
+     * 
      * @return {@code true} when executed in the interpreter, {@code false} in compiled code.
      */
     public static boolean inInterpreter() {
@@ -86,7 +86,7 @@ public final class CompilerDirectives {
     /**
      * Directive for the compiler that the given runnable should only be executed in the interpreter
      * and ignored in the compiled code.
-     *
+     * 
      * @param runnable the closure that should only be executed in the interpreter
      */
     public static void interpreterOnly(Runnable runnable) {
@@ -96,7 +96,7 @@ public final class CompilerDirectives {
     /**
      * Directive for the compiler that the given callable should only be executed in the
      * interpreter.
-     *
+     * 
      * @param callable the closure that should only be executed in the interpreter
      * @return the result of executing the closure in the interpreter and null in the compiled code
      * @throws Exception If the closure throws an exception when executed in the interpreter.
@@ -109,30 +109,30 @@ public final class CompilerDirectives {
      * Injects a probability for the given condition into the probability information of the
      * immediately succeeding branch instruction for the condition. The probability must be a value
      * between 0.0 and 1.0 (inclusive). The condition should not be a combined condition.
-     *
+     * 
      * Example usage immediately before an if statement (it specifies that the likelihood for a to
      * be greater than b is 90%):
-     *
+     * 
      * <code>
      * if (injectBranchProbability(0.9, a > b)) {
      *    // ...
      * }
      * </code>
-     *
+     * 
      * Example usage for a combined condition (it specifies that the likelihood for a to be greater
      * than b is 90% and under the assumption that this is true, the likelihood for a being 0 is
      * 10%):
-     *
+     * 
      * <code>
      * if (injectBranchProbability(0.9, a > b) && injectBranchProbability(0.1, a == 0)) {
      *    // ...
      * }
      * </code>
-     *
+     * 
      * There are predefined constants for commonly used probabilities (see
      * {@link #LIKELY_PROBABILITY} , {@link #UNLIKELY_PROBABILITY}, {@link #SLOWPATH_PROBABILITY},
      * {@link #FASTPATH_PROBABILITY} ).
-     *
+     * 
      * @param probability the probability value between 0.0 and 1.0 that should be injected
      */
     public static boolean injectBranchProbability(double probability, boolean condition) {
@@ -142,7 +142,7 @@ public final class CompilerDirectives {
 
     /**
      * Bails out of a compilation (e.g., for guest language features that should never be compiled).
-     *
+     * 
      * @param reason the reason for the bailout
      */
     public static void bailout(String reason) {
@@ -161,37 +161,21 @@ public final class CompilerDirectives {
      * Casts the given value to the value of the given type without any checks. The class must
      * evaluate to a constant. The condition parameter gives a hint to the compiler under which
      * circumstances this cast can be moved to an earlier location in the program.
-     *
+     * 
      * @param value the value that is known to have the specified type
      * @param type the specified new type of the value
      * @param condition the condition that makes this cast safe also at an earlier location of the
      *            program
-     * @return the value to be casted to the new type
-     */
-    public static <T> T unsafeCast(Object value, Class<T> type, boolean condition) {
-        return unsafeCast(value, type, condition, false);
-    }
-
-    /**
-     * Casts the given value to the value of the given type without any checks. The class must
-     * evaluate to a constant. The condition parameter gives a hint to the compiler under which
-     * circumstances this cast can be moved to an earlier location in the program.
-     *
-     * @param value the value that is known to have the specified type
-     * @param type the specified new type of the value
-     * @param condition the condition that makes this cast safe also at an earlier location of the
-     *            program
-     * @param nonNull whether value is known to never be null
      * @return the value to be casted to the new type
      */
     @SuppressWarnings("unchecked")
-    public static <T> T unsafeCast(Object value, Class<T> type, boolean condition, boolean nonNull) {
+    public static <T> T unsafeCast(Object value, Class<T> type, boolean condition) {
         return (T) value;
     }
 
     /**
      * Asserts that this value is not null and retrieved from a call to Frame.materialize.
-     *
+     * 
      * @param value the value that is known to have been obtained via Frame.materialize
      * @return the value to be casted to the new type
      */
@@ -208,7 +192,7 @@ public final class CompilerDirectives {
      * the compiler under which circumstances this access can be moved to an earlier location in the
      * program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -226,7 +210,7 @@ public final class CompilerDirectives {
      * compiler under which circumstances this access can be moved to an earlier location in the
      * program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -244,7 +228,7 @@ public final class CompilerDirectives {
      * compiler under which circumstances this access can be moved to an earlier location in the
      * program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -262,7 +246,7 @@ public final class CompilerDirectives {
      * compiler under which circumstances this access can be moved to an earlier location in the
      * program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -280,7 +264,7 @@ public final class CompilerDirectives {
      * compiler under which circumstances this access can be moved to an earlier location in the
      * program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -298,7 +282,7 @@ public final class CompilerDirectives {
      * compiler under which circumstances this access can be moved to an earlier location in the
      * program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -316,7 +300,7 @@ public final class CompilerDirectives {
      * compiler under which circumstances this access can be moved to an earlier location in the
      * program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -334,7 +318,7 @@ public final class CompilerDirectives {
      * the compiler under which circumstances this access can be moved to an earlier location in the
      * program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -350,7 +334,7 @@ public final class CompilerDirectives {
     /**
      * Write a boolean value within an object. The location identity gives a hint to the compiler
      * for improved global value numbering.
-     *
+     * 
      * @param receiver the object that is written to
      * @param offset the offset at which to write to the object in bytes
      * @param value the value to be written
@@ -364,7 +348,7 @@ public final class CompilerDirectives {
     /**
      * Write a byte value within an object. The location identity gives a hint to the compiler for
      * improved global value numbering.
-     *
+     * 
      * @param receiver the object that is written to
      * @param offset the offset at which to write to the object in bytes
      * @param value the value to be written
@@ -378,7 +362,7 @@ public final class CompilerDirectives {
     /**
      * Write a short value within an object. The location identity gives a hint to the compiler for
      * improved global value numbering.
-     *
+     * 
      * @param receiver the object that is written to
      * @param offset the offset at which to write to the object in bytes
      * @param value the value to be written
@@ -392,7 +376,7 @@ public final class CompilerDirectives {
     /**
      * Write an int value within an object. The location identity gives a hint to the compiler for
      * improved global value numbering.
-     *
+     * 
      * @param receiver the object that is written to
      * @param offset the offset at which to write to the object in bytes
      * @param value the value to be written
@@ -406,7 +390,7 @@ public final class CompilerDirectives {
     /**
      * Write a long value within an object. The location identity gives a hint to the compiler for
      * improved global value numbering.
-     *
+     * 
      * @param receiver the object that is written to
      * @param offset the offset at which to write to the object in bytes
      * @param value the value to be written
@@ -420,7 +404,7 @@ public final class CompilerDirectives {
     /**
      * Write a float value within an object. The location identity gives a hint to the compiler for
      * improved global value numbering.
-     *
+     * 
      * @param receiver the object that is written to
      * @param offset the offset at which to write to the object in bytes
      * @param value the value to be written
@@ -434,7 +418,7 @@ public final class CompilerDirectives {
     /**
      * Write a double value within an object. The location identity gives a hint to the compiler for
      * improved global value numbering.
-     *
+     * 
      * @param receiver the object that is written to
      * @param offset the offset at which to write to the object in bytes
      * @param value the value to be written
@@ -448,7 +432,7 @@ public final class CompilerDirectives {
     /**
      * Write an Object value within an object. The location identity gives a hint to the compiler
      * for improved global value numbering.
-     *
+     * 
      * @param receiver the object that is written to
      * @param offset the offset at which to write to the object in bytes
      * @param value the value to be written
@@ -464,7 +448,7 @@ public final class CompilerDirectives {
      * to the compiler under which circumstances this access can be moved to an earlier location in
      * the program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -482,7 +466,7 @@ public final class CompilerDirectives {
      * the compiler under which circumstances this access can be moved to an earlier location in the
      * program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -500,7 +484,7 @@ public final class CompilerDirectives {
      * to the compiler under which circumstances this access can be moved to an earlier location in
      * the program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -518,7 +502,7 @@ public final class CompilerDirectives {
      * the compiler under which circumstances this access can be moved to an earlier location in the
      * program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -536,7 +520,7 @@ public final class CompilerDirectives {
      * the compiler under which circumstances this access can be moved to an earlier location in the
      * program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -554,7 +538,7 @@ public final class CompilerDirectives {
      * to the compiler under which circumstances this access can be moved to an earlier location in
      * the program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -572,7 +556,7 @@ public final class CompilerDirectives {
      * to the compiler under which circumstances this access can be moved to an earlier location in
      * the program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
@@ -590,7 +574,7 @@ public final class CompilerDirectives {
      * to the compiler under which circumstances this access can be moved to an earlier location in
      * the program. The location identity gives a hint to the compiler for improved global value
      * numbering.
-     *
+     * 
      * @param receiver the object that is accessed
      * @param offset the offset at which to access the object in bytes
      * @param condition the condition that makes this access safe also at an earlier location in the
