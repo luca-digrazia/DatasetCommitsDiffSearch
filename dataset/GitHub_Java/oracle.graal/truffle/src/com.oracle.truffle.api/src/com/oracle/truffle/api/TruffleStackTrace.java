@@ -29,9 +29,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameInstance;
-import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
 import com.oracle.truffle.api.frame.FrameInstanceVisitor;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.Node;
@@ -79,12 +77,8 @@ final class TruffleStackTrace extends Exception {
         return null;
     }
 
-    static void fillIn(Throwable t) {
-        fillIn(t, false);
-    }
-
     @TruffleBoundary
-    static void fillIn(Throwable t, boolean captureFrames) {
+    static void fillIn(Throwable t) {
         TruffleStackTrace stack = findImpl(t);
         if (stack == null) {
             Throwable insertCause = findInsertCause(t);
@@ -120,11 +114,7 @@ final class TruffleStackTrace extends Exception {
                         location = topCallSite;
                         first = false;
                     }
-                    Frame frame = null;
-                    if (captureFrames) {
-                        frame = frameInstance.getFrame(FrameAccess.READ_ONLY);
-                    }
-                    frames.add(new TruffleStackTraceElement(location, target, frame));
+                    frames.add(new TruffleStackTraceElement(location, target));
                     first = false;
                     if (!target.getRootNode().isInternal()) {
                         stackFrameIndex++;
