@@ -22,17 +22,20 @@
  */
 package com.oracle.graal.lir.phases;
 
-import java.util.*;
-import java.util.regex.*;
+import java.util.regex.Pattern;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugMemUseTracker.Closeable;
-import com.oracle.graal.debug.internal.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.debug.DebugCloseable;
+import com.oracle.graal.debug.DebugMemUseTracker;
+import com.oracle.graal.debug.DebugTimer;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionType;
+import com.oracle.graal.options.OptionValue;
+
+import jdk.vm.ci.code.TargetDescription;
 
 /**
  * Base class for all {@link LIR low-level} phases. Subclasses should be stateless. There will be
@@ -40,9 +43,12 @@ import com.oracle.graal.lir.gen.*;
  */
 public abstract class LIRPhase<C> {
 
-    private static final int PHASE_DUMP_LEVEL = 2;
-
-    private CharSequence name;
+    public static class Options {
+        // @formatter:off
+        @Option(help = "Enable LIR level optimiztations.", type = OptionType.Debug)
+        public static final OptionValue<Boolean> LIROptimization = new OptionValue<>(true);
+        // @formatter:on
+    }
 
     /**
      * Records time spent within {@link #apply}.
@@ -54,56 +60,87 @@ public abstract class LIRPhase<C> {
      */
     private final DebugMemUseTracker memUseTracker;
 
-    private static final Pattern NAME_PATTERN = Pattern.compile("[A-Z][A-Za-z0-9]+");
+    public static final class LIRPhaseStatistics {
+        /**
+         * Records time spent within {@link #apply}.
+         */
+        public final DebugTimer timer;
 
-    private static boolean checkName(String name) {
-        assert name == null || NAME_PATTERN.matcher(name).matches() : "illegal phase name: " + name;
+        /**
+         * Records memory usage within {@link #apply}.
+         */
+        public final DebugMemUseTracker memUseTracker;
+
+        private LIRPhaseStatistics(Class<?> clazz) {
+            timer = Debug.timer("LIRPhaseTime_%s", clazz);
+            memUseTracker = Debug.memUseTracker("LIRPhaseMemUse_%s", clazz);
+        }
+    }
+
+    public static final ClassValue<LIRPhaseStatistics> statisticsClassValue = new ClassValue<LIRPhaseStatistics>() {
+        @Override
+        protected LIRPhaseStatistics computeValue(Class<?> c) {
+            return new LIRPhaseStatistics(c);
+        }
+    };
+
+    /** Lazy initialization to create pattern only when assertions are enabled. */
+    static class NamePatternHolder {
+        static final Pattern NAME_PATTERN = Pattern.compile("[A-Z][A-Za-z0-9]+");
+    }
+
+    private static boolean checkName(CharSequence name) {
+        assert name == null || NamePatternHolder.NAME_PATTERN.matcher(name).matches() : "illegal phase name: " + name;
         return true;
     }
 
     public LIRPhase() {
-        timer = Debug.timer("LowLevelPhaseTime_%s", getClass());
-        memUseTracker = Debug.memUseTracker("LowLevelPhaseMemUse_%s", getClass());
+        LIRPhaseStatistics statistics = statisticsClassValue.get(getClass());
+        timer = statistics.timer;
+        memUseTracker = statistics.memUseTracker;
     }
 
-    protected LIRPhase(String name) {
-        assert checkName(name);
-        this.name = name;
-        timer = Debug.timer("LowLevelPhaseTime_%s", getClass());
-        memUseTracker = Debug.memUseTracker("LowLevelPhaseMemUse_%s", getClass());
+    public final void apply(TargetDescription target, LIRGenerationResult lirGenRes, C context) {
+        apply(target, lirGenRes, context, true);
     }
 
-    public final <B extends AbstractBlock<B>> void apply(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, C context) {
-        apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, true);
-    }
-
-    public final <B extends AbstractBlock<B>> void apply(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, C context, boolean dumpLIR) {
-        try (TimerCloseable a = timer.start(); Scope s = Debug.scope(getName(), this); Closeable c = memUseTracker.start()) {
-            run(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
-            if (dumpLIR && Debug.isDumpEnabled(PHASE_DUMP_LEVEL)) {
-                Debug.dump(PHASE_DUMP_LEVEL, lirGenRes.getLIR(), "After phase %s", getName());
+    @SuppressWarnings("try")
+    public final void apply(TargetDescription target, LIRGenerationResult lirGenRes, C context, boolean dumpLIR) {
+        try (Scope s = Debug.scope(getName(), this)) {
+            try (DebugCloseable a = timer.start(); DebugCloseable c = memUseTracker.start()) {
+                run(target, lirGenRes, context);
+                if (dumpLIR && Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL)) {
+                    Debug.dump(Debug.BASIC_LOG_LEVEL, lirGenRes.getLIR(), "%s", getName());
+                }
             }
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
     }
 
-    protected abstract <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, C context);
+    protected abstract void run(TargetDescription target, LIRGenerationResult lirGenRes, C context);
 
-    protected CharSequence createName() {
-        String className = LIRPhase.this.getClass().getName();
+    public static CharSequence createName(Class<?> clazz) {
+        String className = clazz.getName();
         String s = className.substring(className.lastIndexOf(".") + 1); // strip the package name
+        int innerClassPos = s.indexOf('$');
+        if (innerClassPos > 0) {
+            /* Remove inner class name. */
+            s = s.substring(0, innerClassPos);
+        }
         if (s.endsWith("Phase")) {
             s = s.substring(0, s.length() - "Phase".length());
         }
         return s;
     }
 
-    public final CharSequence getName() {
-        if (name == null) {
-            name = createName();
-        }
-        return name;
+    protected CharSequence createName() {
+        return createName(getClass());
     }
 
+    public final CharSequence getName() {
+        CharSequence name = createName();
+        assert checkName(name);
+        return name;
+    }
 }

@@ -22,16 +22,20 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import java.util.stream.*;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.Graph.NodeEvent;
 import com.oracle.graal.graph.Graph.NodeEventScope;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.util.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.LogicConstantNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.phases.BasePhase;
+import com.oracle.graal.phases.PhaseSuite;
+import com.oracle.graal.phases.common.util.HashSetNodeEventListener;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 /**
  * A utility phase for detecting when a phase would change the graph and reporting extra information
@@ -58,13 +62,14 @@ public class GraphChangeMonitoringPhase<C extends PhaseContext> extends PhaseSui
     }
 
     @Override
+    @SuppressWarnings("try")
     protected void run(StructuredGraph graph, C context) {
         /*
          * Phase may add nodes but not end up using them so ignore additions. Nodes going dead and
          * having their inputs change are the main interesting differences.
          */
         HashSetNodeEventListener listener = new HashSetNodeEventListener().exclude(NodeEvent.NODE_ADDED);
-        StructuredGraph graphCopy = graph.copy();
+        StructuredGraph graphCopy = (StructuredGraph) graph.copy();
         try (NodeEventScope s = graphCopy.trackNodeEvents(listener)) {
             try (Scope s2 = Debug.sandbox("WithoutMonitoring", null)) {
                 super.run(graphCopy, context);
@@ -72,19 +77,24 @@ public class GraphChangeMonitoringPhase<C extends PhaseContext> extends PhaseSui
                 Debug.handle(t);
             }
         }
-        if (!listener.getNodes().isEmpty()) {
+        /*
+         * Ignore LogicConstantNode since those are sometimes created and deleted as part of running
+         * a phase.
+         */
+        if (listener.getNodes().stream().filter(e -> !(e instanceof LogicConstantNode)).findFirst().isPresent()) {
             /* rerun it on the real graph in a new Debug scope so Dump and Log can find it. */
             listener = new HashSetNodeEventListener();
             try (NodeEventScope s = graph.trackNodeEvents(listener)) {
-                try (Scope s2 = Debug.scope("WithGraphChangeMonitoring." + getName() + "-" + message)) {
-                    if (Debug.isDumpEnabled(BasePhase.PHASE_DUMP_LEVEL)) {
-                        Debug.dump(BasePhase.PHASE_DUMP_LEVEL, graph, "*** Before phase %s", getName());
+                try (Scope s2 = Debug.scope("WithGraphChangeMonitoring")) {
+                    if (Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL)) {
+                        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "*** Before phase %s", getName());
                     }
                     super.run(graph, context);
-                    if (Debug.isDumpEnabled(BasePhase.PHASE_DUMP_LEVEL)) {
-                        Debug.dump(BasePhase.PHASE_DUMP_LEVEL, graph, "*** After phase %s", getName());
+                    Set<Node> collect = listener.getNodes().stream().filter(e -> !e.isAlive()).filter(e -> !(e instanceof LogicConstantNode)).collect(Collectors.toSet());
+                    if (Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL)) {
+                        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "*** After phase %s %s", getName(), collect);
                     }
-                    Debug.log("*** %s %s %s\n", message, graph, listener.getNodes().stream().filter(e -> !e.isAlive()).collect(Collectors.toSet()));
+                    Debug.log("*** %s %s %s\n", message, graph, collect);
                 }
             }
         } else {

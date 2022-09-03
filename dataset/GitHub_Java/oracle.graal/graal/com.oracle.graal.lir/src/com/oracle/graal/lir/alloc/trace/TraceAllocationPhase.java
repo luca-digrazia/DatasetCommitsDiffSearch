@@ -22,53 +22,103 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import java.util.List;
-
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.alloc.Trace;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugCloseable;
+import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMemUseTracker;
+import com.oracle.graal.debug.DebugTimer;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 import com.oracle.graal.lir.phases.LIRPhase;
+import com.oracle.graal.lir.phases.LIRPhase.LIRPhaseStatistics;
 
 import jdk.vm.ci.code.TargetDescription;
 
-public abstract class TraceAllocationPhase extends LIRPhase<TraceAllocationPhase.TraceAllocationContext> {
+public abstract class TraceAllocationPhase<C extends TraceAllocationPhase.TraceAllocationContext> {
 
-    public static final class TraceAllocationContext {
+    public static class TraceAllocationContext {
         public final MoveFactory spillMoveFactory;
         public final RegisterAllocationConfig registerAllocationConfig;
-        public final TraceBuilderResult<?> resultTraces;
+        public final TraceBuilderResult resultTraces;
 
-        public TraceAllocationContext(MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig, TraceBuilderResult<?> resultTraces) {
+        public TraceAllocationContext(MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig, TraceBuilderResult resultTraces) {
             this.spillMoveFactory = spillMoveFactory;
             this.registerAllocationConfig = registerAllocationConfig;
             this.resultTraces = resultTraces;
         }
     }
 
-    public final <B extends AbstractBlockBase<B>> void apply(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, Trace<B> trace, TraceAllocationContext context,
-                    boolean dumpLIR) {
-        apply(target, lirGenRes, codeEmittingOrder, trace.getBlocks(), context, dumpLIR);
+    /**
+     * Records time spent within {@link #apply}.
+     */
+    private final DebugTimer timer;
+
+    /**
+     * Records memory usage within {@link #apply}.
+     */
+    private final DebugMemUseTracker memUseTracker;
+
+    /**
+     * Records the number of traces allocated with this phase.
+     */
+    private final DebugCounter allocatedTraces;
+
+    private static final class AllocationStatistics {
+        private final DebugCounter allocatedTraces;
+
+        private AllocationStatistics(Class<?> clazz) {
+            allocatedTraces = Debug.counter("TraceRA[%s]", clazz);
+        }
     }
 
-    public final <B extends AbstractBlockBase<B>> void apply(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, Trace<B> trace, TraceAllocationContext context) {
-        apply(target, lirGenRes, codeEmittingOrder, trace.getBlocks(), context);
+    private static final ClassValue<AllocationStatistics> counterClassValue = new ClassValue<AllocationStatistics>() {
+        @Override
+        protected AllocationStatistics computeValue(Class<?> c) {
+            return new AllocationStatistics(c);
+        }
+    };
+
+    public TraceAllocationPhase() {
+        LIRPhaseStatistics statistics = LIRPhase.statisticsClassValue.get(getClass());
+        timer = statistics.timer;
+        memUseTracker = statistics.memUseTracker;
+        allocatedTraces = counterClassValue.get(getClass()).allocatedTraces;
+    }
+
+    public final CharSequence getName() {
+        return LIRPhase.createName(getClass());
     }
 
     @Override
-    protected final <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> sortedBlocks,
-                    TraceAllocationContext context) {
-        TraceBuilderResult<B> resultTraces = getTraceBuilderResult(context);
-        Trace<B> trace = resultTraces.getTraces().get(resultTraces.getTraceForBlock(sortedBlocks.get(0)));
-        run(target, lirGenRes, codeEmittingOrder, trace, context);
+    public final String toString() {
+        return getName().toString();
     }
 
-    @SuppressWarnings("unchecked")
-    private static <B extends AbstractBlockBase<B>> TraceBuilderResult<B> getTraceBuilderResult(TraceAllocationContext context) {
-        return (TraceBuilderResult<B>) context.resultTraces;
+    public final void apply(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, C context) {
+        apply(target, lirGenRes, trace, context, true);
     }
 
-    protected abstract <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, Trace<B> trace, TraceAllocationContext context);
+    @SuppressWarnings("try")
+    public final void apply(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, C context, boolean dumpTrace) {
+        try (Scope s = Debug.scope(getName(), this)) {
+            try (DebugCloseable a = timer.start(); DebugCloseable c = memUseTracker.start()) {
+                if (dumpTrace && Debug.isDumpEnabled(TraceBuilderPhase.TRACE_DUMP_LEVEL + 1)) {
+                    Debug.dump(TraceBuilderPhase.TRACE_DUMP_LEVEL + 1, trace, "%s before (Trace%s: %s)", getName(), trace.getId(), trace);
+                }
+                run(target, lirGenRes, trace, context);
+                allocatedTraces.increment();
+                if (dumpTrace && Debug.isDumpEnabled(TraceBuilderPhase.TRACE_DUMP_LEVEL)) {
+                    Debug.dump(TraceBuilderPhase.TRACE_DUMP_LEVEL, trace, "%s (Trace%s: %s)", getName(), trace.getId(), trace);
+                }
+            }
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
+    }
+
+    protected abstract void run(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, C context);
 }
