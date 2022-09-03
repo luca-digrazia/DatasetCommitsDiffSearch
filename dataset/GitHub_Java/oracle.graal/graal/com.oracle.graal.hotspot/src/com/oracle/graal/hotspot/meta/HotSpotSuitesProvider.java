@@ -31,9 +31,8 @@ import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.java.GraphBuilderConfiguration.DebugInfoMode;
-import com.oracle.graal.java.GraphBuilderPlugin.InlineInvokePlugin;
+import com.oracle.graal.java.GraphBuilderPlugins.InlineInvokePlugin;
 import com.oracle.graal.lir.phases.*;
-import com.oracle.graal.nodes.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.options.DerivedOptionValue.OptionSupplier;
 import com.oracle.graal.phases.*;
@@ -46,7 +45,7 @@ public class HotSpotSuitesProvider implements SuitesProvider {
 
     protected final DerivedOptionValue<Suites> defaultSuites;
     protected final PhaseSuite<HighTierContext> defaultGraphBuilderSuite;
-    private final DerivedOptionValue<LIRSuites> defaultLIRSuites;
+    private final DerivedOptionValue<LowLevelSuites> defaultLowLevelSuites;
     protected final HotSpotGraalRuntimeProvider runtime;
 
     private class SuitesSupplier implements OptionSupplier<Suites> {
@@ -59,12 +58,12 @@ public class HotSpotSuitesProvider implements SuitesProvider {
 
     }
 
-    private class LIRSuitesSupplier implements OptionSupplier<LIRSuites> {
+    private class LowLevelSuitesSupplier implements OptionSupplier<LowLevelSuites> {
 
         private static final long serialVersionUID = -1558586374095874299L;
 
-        public LIRSuites get() {
-            return createLIRSuites();
+        public LowLevelSuites get() {
+            return createLowLevelSuites();
         }
 
     }
@@ -73,7 +72,7 @@ public class HotSpotSuitesProvider implements SuitesProvider {
         this.runtime = runtime;
         this.defaultGraphBuilderSuite = createGraphBuilderSuite();
         this.defaultSuites = new DerivedOptionValue<>(new SuitesSupplier());
-        this.defaultLIRSuites = new DerivedOptionValue<>(new LIRSuitesSupplier());
+        this.defaultLowLevelSuites = new DerivedOptionValue<>(new LowLevelSuitesSupplier());
     }
 
     public Suites getDefaultSuites() {
@@ -107,12 +106,9 @@ public class HotSpotSuitesProvider implements SuitesProvider {
         PhaseSuite<HighTierContext> suite = new PhaseSuite<>();
         GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault();
         config.setInlineInvokePlugin(new InlineInvokePlugin() {
-            public ResolvedJavaMethod getInlinedMethod(GraphBuilderContext builder, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType, int depth) {
-                if (GraalOptions.InlineDuringParsing.getValue() && method.getCode().length <= GraalOptions.TrivialInliningSize.getValue() &&
-                                depth < GraalOptions.InlineDuringParsingMaxDepth.getValue()) {
-                    return method;
-                }
-                return null;
+            public boolean shouldInlineInvoke(ResolvedJavaMethod method, int depth) {
+                return GraalOptions.InlineDuringParsing.getValue() && method.getCode().length <= GraalOptions.TrivialInliningSize.getValue() &&
+                                depth < GraalOptions.InlineDuringParsingMaxDepth.getValue();
             }
         });
         suite.appendPhase(new GraphBuilderPhase(config));
@@ -139,12 +135,12 @@ public class HotSpotSuitesProvider implements SuitesProvider {
         return gbs;
     }
 
-    public LIRSuites getDefaultLIRSuites() {
-        return defaultLIRSuites.getValue();
+    public LowLevelSuites getDefaultLowLevelSuites() {
+        return defaultLowLevelSuites.getValue();
     }
 
-    public LIRSuites createLIRSuites() {
-        return Suites.createDefaultLIRSuites();
+    public LowLevelSuites createLowLevelSuites() {
+        return Suites.createDefaultLowLevelSuites();
     }
 
 }
