@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,8 +42,9 @@ import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
 import org.graalvm.compiler.nodes.calc.ObjectEqualsNode;
 import org.graalvm.compiler.nodes.memory.AbstractMemoryCheckpoint;
-import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
+import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
 import org.graalvm.compiler.nodes.spi.Lowerable;
+import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.spi.Virtualizable;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.virtual.VirtualArrayNode;
@@ -55,7 +56,7 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
 @NodeInfo(allowedUsageTypes = {Value, Memory}, cycles = CYCLES_8, size = SIZE_8)
-public abstract class AbstractUnsafeCompareAndSwapNode extends AbstractMemoryCheckpoint implements Lowerable, SingleMemoryKill, Virtualizable {
+public abstract class AbstractUnsafeCompareAndSwapNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single, Virtualizable {
     public static final NodeClass<AbstractUnsafeCompareAndSwapNode> TYPE = NodeClass.create(AbstractUnsafeCompareAndSwapNode.class);
     @Input ValueNode object;
     @Input ValueNode offset;
@@ -96,8 +97,13 @@ public abstract class AbstractUnsafeCompareAndSwapNode extends AbstractMemoryChe
     }
 
     @Override
-    public LocationIdentity getKilledLocationIdentity() {
+    public LocationIdentity getLocationIdentity() {
         return locationIdentity;
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
     }
 
     @Override
@@ -149,10 +155,11 @@ public abstract class AbstractUnsafeCompareAndSwapNode extends AbstractMemoryChe
         if (equalsNode instanceof LogicConstantNode) {
             fieldValue = ((LogicConstantNode) equalsNode).getValue() ? newValue : currentValue;
         } else {
-            if (currentValue instanceof VirtualObjectNode || newValueAlias instanceof VirtualObjectNode) {
-                tool.getDebug().log(DETAILED_LEVEL, "%s.virtualize() -> Unknown outcome and current or new value is virtual", this);
+            if (newValueAlias instanceof VirtualObjectNode) {
+                tool.getDebug().log(DETAILED_LEVEL, "%s.virtualize() -> Unknown outcome and new value is virtual", this);
                 return;
             }
+            assert !(currentValue instanceof VirtualObjectNode);
             fieldValue = ConditionalNode.create(equalsNode, newValueAlias, currentValue, NodeView.DEFAULT);
         }
         if (!tool.setVirtualEntry(obj, index, fieldValue, valueKind, constantOffset)) {
@@ -163,11 +170,11 @@ public abstract class AbstractUnsafeCompareAndSwapNode extends AbstractMemoryChe
         if (!equalsNode.isAlive()) {
             tool.addNode(equalsNode);
         }
-        if (!fieldValue.isAlive() && !(fieldValue instanceof VirtualObjectNode)) {
+        if (!fieldValue.isAlive()) {
             tool.addNode(fieldValue);
         }
-        finishVirtualize(tool, equalsNode, currentValue);
+        finishVirtualize(tool, equalsNode, fieldValue);
     }
 
-    protected abstract void finishVirtualize(VirtualizerTool tool, LogicNode equalsNode, ValueNode currentValue);
+    protected abstract void finishVirtualize(VirtualizerTool tool, LogicNode equalsNode, ValueNode fieldValue);
 }
