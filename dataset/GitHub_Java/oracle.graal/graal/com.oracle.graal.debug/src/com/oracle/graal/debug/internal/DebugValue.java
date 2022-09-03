@@ -24,7 +24,7 @@ package com.oracle.graal.debug.internal;
 
 public abstract class DebugValue implements Comparable<DebugValue> {
 
-    private final String name;
+    private String name;
     private int index;
 
     protected DebugValue(String name) {
@@ -48,12 +48,11 @@ public abstract class DebugValue implements Comparable<DebugValue> {
         }
     }
 
-    protected void addToCurrentValue(long value) {
-        setCurrentValue(getCurrentValue() + value);
+    protected void addToCurrentValue(long timeSpan) {
+        setCurrentValue(getCurrentValue() + timeSpan);
     }
 
     public int getIndex() {
-        ensureInitialized();
         return index;
     }
 
@@ -63,11 +62,6 @@ public abstract class DebugValue implements Comparable<DebugValue> {
 
     public int compareTo(DebugValue o) {
         return name.compareTo(o.name);
-    }
-
-    @Override
-    public String toString() {
-        return name + "@" + index;
     }
 
     public abstract String toString(long value);
