@@ -24,16 +24,14 @@ package com.oracle.graal.nodes.graphbuilderconf;
 
 import java.lang.reflect.Method;
 
-import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.nodes.ValueNode;
-
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+
+import com.oracle.graal.nodes.ValueNode;
 
 public abstract class GeneratedInvocationPlugin implements InvocationPlugin {
 
-    @Override
     public abstract boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode[] args);
 
     @Override
@@ -44,31 +42,6 @@ public abstract class GeneratedInvocationPlugin implements InvocationPlugin {
                 return metaAccess.lookupJavaMethod(m).asStackTraceElement(0);
             }
         }
-        throw new GraalError("could not find method named \"execute\" in " + c.getName());
-    }
-
-    protected boolean checkInjectedArgument(GraphBuilderContext b, ValueNode arg, ResolvedJavaMethod foldAnnotatedMethod) {
-        if (arg.isNullConstant()) {
-            return true;
-        }
-
-        MetaAccessProvider metaAccess = b.getMetaAccess();
-        ResolvedJavaMethod executeMethod = metaAccess.lookupJavaMethod(getExecuteMethod());
-        ResolvedJavaType thisClass = metaAccess.lookupJavaType(getClass());
-        ResolvedJavaMethod thisExecuteMethod = thisClass.resolveConcreteMethod(executeMethod, thisClass);
-        if (b.getMethod().equals(thisExecuteMethod)) {
-            // The "execute" method of this plugin is itself being compiled. In (only) this context,
-            // the injected argument of the call to the @Fold annotated method will be non-null.
-            return true;
-        }
-        throw new AssertionError("must pass null to injected argument of " + foldAnnotatedMethod.format("%H.%n(%p)"));
-    }
-
-    private static Method getExecuteMethod() {
-        try {
-            return GeneratedInvocationPlugin.class.getMethod("execute", GraphBuilderContext.class, ResolvedJavaMethod.class, InvocationPlugin.Receiver.class, ValueNode[].class);
-        } catch (NoSuchMethodException | SecurityException e) {
-            throw new GraalError(e);
-        }
+        throw new JVMCIError("could not find method named \"execute\" in " + c.getName());
     }
 }
