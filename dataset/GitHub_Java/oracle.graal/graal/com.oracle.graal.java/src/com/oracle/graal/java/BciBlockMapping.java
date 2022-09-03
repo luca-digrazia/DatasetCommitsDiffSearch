@@ -243,7 +243,7 @@ public final class BciBlockMapping {
             return jsrData;
         }
 
-        void setEndsWithRet() {
+        public void setEndsWithRet() {
             getOrCreateJSRData().endsWithRet = true;
         }
 
@@ -263,7 +263,7 @@ public final class BciBlockMapping {
             }
         }
 
-        void setRetSuccessor(BciBlock bciBlock) {
+        public void setRetSuccessor(BciBlock bciBlock) {
             this.getOrCreateJSRData().retSuccessor = bciBlock;
         }
 
@@ -306,15 +306,15 @@ public final class BciBlockMapping {
             }
         }
 
-        void setJsrScope(JsrScope nextScope) {
+        public void setJsrScope(JsrScope nextScope) {
             this.getOrCreateJSRData().jsrScope = nextScope;
         }
 
-        void setJsrSuccessor(BciBlock clone) {
+        public void setJsrSuccessor(BciBlock clone) {
             this.getOrCreateJSRData().jsrSuccessor = clone;
         }
 
-        void setJsrReturnBci(int bci) {
+        public void setJsrReturnBci(int bci) {
             this.getOrCreateJSRData().jsrReturnBci = bci;
         }
 
@@ -326,7 +326,7 @@ public final class BciBlockMapping {
             return successors;
         }
 
-        void setId(int i) {
+        public void setId(int i) {
             this.id = i;
         }
 
