@@ -22,101 +22,172 @@
  */
 package com.oracle.graal.graph;
 
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.Iterator;
 
+import com.oracle.graal.graph.iterators.NodeIterable;
 
+public final class NodeBitMap implements NodeIterable<Node> {
+    private static final int SHIFT = 6;
 
-public final class NodeBitMap implements Iterable<Node>{
-
-    private final BitMap bitMap;
+    private long[] bits;
+    private int nodeCount;
+    private int counter;
     private final Graph graph;
 
     public NodeBitMap(Graph graph) {
+        this.nodeCount = graph.nodeIdCount();
+        this.bits = new long[sizeForNodeCount(nodeCount)];
         this.graph = graph;
-        bitMap = new BitMap(graph.nodeIdCount());
+    }
+
+    private static int sizeForNodeCount(int nodeCount) {
+        return (nodeCount + Long.SIZE - 1) >> SHIFT;
+    }
+
+    public int getCounter() {
+        return counter;
+    }
+
+    private NodeBitMap(NodeBitMap other) {
+        this.bits = other.bits.clone();
+        this.nodeCount = other.nodeCount;
+        this.graph = other.graph;
     }
 
     public Graph graph() {
         return graph;
     }
 
-    public boolean setIntersect(NodeBitMap other) {
-        return bitMap.setIntersect(other.bitMap);
-    }
-
-    public void setUnion(NodeBitMap other) {
-        bitMap.setUnion(other.bitMap);
-    }
-
-    public void negate() {
-        grow();
-        bitMap.negate();
-    }
-
-    public boolean isNotNewMarked(Node node) {
-        return !isNew(node) && isMarked(node);
-    }
-
-    public boolean isNotNewNotMarked(Node node) {
-        return !isNew(node) && !isMarked(node);
+    public boolean isNew(Node node) {
+        return node.id() >= nodeCount;
     }
 
     public boolean isMarked(Node node) {
-        assert check(node);
-        return bitMap.get(node.id());
+        assert check(node, false);
+        return isMarked(node.id());
     }
 
-    public boolean isNew(Node node) {
-        return node.id() >= bitMap.size();
+    public boolean checkAndMarkInc(Node node) {
+        if (!isMarked(node)) {
+            this.counter++;
+            this.mark(node);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public boolean isMarked(int id) {
+        return (bits[id >> SHIFT] & (1L << id)) != 0;
+    }
+
+    public boolean isMarkedAndGrow(Node node) {
+        assert check(node, true);
+        int id = node.id();
+        checkGrow(id);
+        return isMarked(id);
     }
 
     public void mark(Node node) {
-        assert check(node);
-        bitMap.set(node.id());
+        assert check(node, false);
+        int id = node.id();
+        bits[id >> SHIFT] |= (1L << id);
+    }
+
+    public void markAndGrow(Node node) {
+        assert check(node, true);
+        int id = node.id();
+        checkGrow(id);
+        bits[id >> SHIFT] |= (1L << id);
     }
 
     public void clear(Node node) {
-        assert check(node);
-        bitMap.clear(node.id());
+        assert check(node, false);
+        int id = node.id();
+        bits[id >> SHIFT] &= ~(1L << id);
+    }
+
+    public void clearAndGrow(Node node) {
+        assert check(node, true);
+        int id = node.id();
+        checkGrow(id);
+        bits[id >> SHIFT] &= ~(1L << id);
+    }
+
+    private void checkGrow(int id) {
+        if (id >= nodeCount) {
+            if ((id >> SHIFT) >= bits.length) {
+                grow();
+            } else {
+                nodeCount = id + 1;
+            }
+        }
     }
 
     public void clearAll() {
-        bitMap.clearAll();
+        Arrays.fill(bits, 0);
     }
 
-    public void grow(Node node) {
-        bitMap.grow(node.id() + 1);
+    public void intersect(NodeBitMap other) {
+        assert graph() == other.graph();
+        int commonLength = Math.min(bits.length, other.bits.length);
+        for (int i = commonLength; i < bits.length; i++) {
+            bits[i] = 0;
+        }
+        for (int i = 0; i < commonLength; i++) {
+            bits[i] &= other.bits[i];
+        }
+    }
+
+    public void subtract(NodeBitMap other) {
+        assert graph() == other.graph();
+        int commonLength = Math.min(bits.length, other.bits.length);
+        for (int i = 0; i < commonLength; i++) {
+            bits[i] &= ~other.bits[i];
+        }
+    }
+
+    public void union(NodeBitMap other) {
+        assert graph() == other.graph();
+        grow();
+        if (bits.length < other.bits.length) {
+            bits = Arrays.copyOf(bits, other.bits.length);
+        }
+        for (int i = 0; i < bits.length; i++) {
+            bits[i] |= other.bits[i];
+        }
     }
 
     public void grow() {
-        bitMap.grow(graph.nodeIdCount());
+        nodeCount = Math.max(nodeCount, graph().nodeIdCount());
+        int newLength = sizeForNodeCount(nodeCount);
+        if (newLength > bits.length) {
+            newLength = Math.max(newLength, (bits.length * 3 / 2) + 1);
+            bits = Arrays.copyOf(bits, newLength);
+        }
     }
 
-    private boolean check(Node node) {
-        assert node.graph() == graph : "this node is not part of the graph";
-        assert !isNew(node) : "node was added to the graph after creating the node bitmap";
-        assert node.isAlive() : "node is deleted!";
+    private boolean check(Node node, boolean grow) {
+        assert node.graph() == graph() : "this node is not part of the graph";
+        assert grow || !isNew(node) : "node was added to the graph after creating the node bitmap: " + node;
+        assert node.isAlive() : "node is deleted!" + node;
         return true;
     }
 
-    @Override
-    public String toString() {
-        return bitMap.toBinaryString();
-    }
-
-    public <T extends Node> void markAll(Collection<T> nodes) {
+    public <T extends Node> void markAll(Iterable<T> nodes) {
         for (Node node : nodes) {
             mark(node);
         }
     }
 
     private static class MarkedNodeIterator implements Iterator<Node> {
+
         private final NodeBitMap visited;
         private Iterator<Node> nodes;
         private Node nextNode;
 
-        public MarkedNodeIterator(NodeBitMap visited, Iterator<Node> nodes) {
+        MarkedNodeIterator(NodeBitMap visited, Iterator<Node> nodes) {
             this.visited = visited;
             this.nodes = nodes;
             forward();
@@ -162,7 +233,26 @@ public final class NodeBitMap implements Iterable<Node>{
         return new MarkedNodeIterator(NodeBitMap.this, graph().getNodes().iterator());
     }
 
-    public int cardinality() {
-        return bitMap.cardinality();
+    public NodeBitMap copy() {
+        return new NodeBitMap(this);
+    }
+
+    @Override
+    public int count() {
+        int count = 0;
+        for (long l : bits) {
+            count += Long.bitCount(l);
+        }
+        return count;
+    }
+
+    @Override
+    public boolean contains(Node node) {
+        return isMarked(node);
+    }
+
+    @Override
+    public String toString() {
+        return snapshot().toString();
     }
 }

@@ -22,11 +22,12 @@
  */
 package com.oracle.graal.loop.phases;
 
+import java.util.Iterator;
 import java.util.List;
 
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugCounter;
-import com.oracle.graal.graph.NodePosIterator;
+import com.oracle.graal.graph.Node;
 import com.oracle.graal.loop.LoopEx;
 import com.oracle.graal.loop.LoopPolicies;
 import com.oracle.graal.loop.LoopsData;
@@ -60,6 +61,7 @@ public class LoopUnswitchingPhase extends ContextlessLoopPhase<LoopPolicies> {
                                     logUnswitch(loop, controlSplits);
                                 }
                                 LoopTransformations.unswitch(loop, controlSplits);
+                                Debug.dump(Debug.INFO_LOG_LEVEL, graph, "After unswitch %s", controlSplits);
                                 UNSWITCHED.increment();
                                 unswitched = true;
                                 break;
@@ -78,7 +80,7 @@ public class LoopUnswitchingPhase extends ContextlessLoopPhase<LoopPolicies> {
         sb.append(loop).append(" at ");
         for (ControlSplitNode controlSplit : controlSplits) {
             sb.append(controlSplit).append(" [");
-            NodePosIterator it = controlSplit.successors().iterator();
+            Iterator<Node> it = controlSplit.successors().iterator();
             while (it.hasNext()) {
                 sb.append(controlSplit.probability((AbstractBeginNode) it.next()));
                 if (it.hasNext()) {
@@ -88,5 +90,10 @@ public class LoopUnswitchingPhase extends ContextlessLoopPhase<LoopPolicies> {
             sb.append("]");
         }
         Debug.log("%s", sb);
+    }
+
+    @Override
+    public float codeSizeIncrease() {
+        return 10.0f;
     }
 }
