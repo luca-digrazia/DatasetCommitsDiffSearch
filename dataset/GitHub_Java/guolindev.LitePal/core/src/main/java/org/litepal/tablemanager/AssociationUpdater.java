@@ -430,13 +430,11 @@ public abstract class AssociationUpdater extends Creator {
 		LitePalLog.d(TAG, "generateRemoveColumnSQL >> " + dataMigrationSQL);
 		String dropTempTableSQL = generateDropTempTableSQL(tableName);
 		LitePalLog.d(TAG, "generateRemoveColumnSQL >> " + dropTempTableSQL);
-		List<String> createIndexSQLs = generateCreateIndexSQLs(tableModelFromDB);
         List<String> sqls = new ArrayList<>();
         sqls.add(alterToTempTableSQL);
         sqls.add(createNewTableSQL);
         sqls.add(dataMigrationSQL);
         sqls.add(dropTempTableSQL);
-        sqls.addAll(createIndexSQLs);
 		return sqls;
 	}
 
