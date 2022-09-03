@@ -90,11 +90,12 @@ public interface ByteSequence {
         if (l < 0) {
             throw new IndexOutOfBoundsException(String.valueOf(l));
         }
-        if (startIndex < 0) {
+        final int realStartIndex = startIndex + startIndex;
+        if (realStartIndex < 0) {
             throw new IndexOutOfBoundsException(String.valueOf(startIndex));
         }
-        if (startIndex + l > length()) {
-            throw new IndexOutOfBoundsException(String.valueOf(startIndex + l));
+        if (realStartIndex + l >= length()) {
+            throw new IndexOutOfBoundsException(String.valueOf(realStartIndex + l));
         }
         return new ByteSequence() {
             public int length() {
@@ -102,7 +103,7 @@ public interface ByteSequence {
             }
 
             public byte byteAt(int index) {
-                return ByteSequence.this.byteAt(startIndex + index);
+                return ByteSequence.this.byteAt(realStartIndex + index);
             }
         };
     }
@@ -129,7 +130,7 @@ public interface ByteSequence {
      * @since 1.0
      */
     default IntStream bytes() {
-        class ByteIterator implements PrimitiveIterator.OfInt {
+        class CharIterator implements PrimitiveIterator.OfInt {
             int cur = 0;
 
             public boolean hasNext() {
@@ -152,7 +153,7 @@ public interface ByteSequence {
             }
         }
         return StreamSupport.intStream(() -> Spliterators.spliterator(
-                        new ByteIterator(),
+                        new CharIterator(),
                         length(),
                         Spliterator.ORDERED),
                         Spliterator.SUBSIZED | Spliterator.SIZED | Spliterator.ORDERED,
