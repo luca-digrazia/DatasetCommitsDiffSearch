@@ -47,7 +47,7 @@ public class FrameStateBuilder implements FrameStateAccess {
 
     private final RiResolvedMethod method;
 
-    public FrameStateBuilder(RiResolvedMethod method, int maxLocals, int maxStackSize, StructuredGraph graph) {
+    public FrameStateBuilder(RiResolvedMethod method, int maxLocals, int maxStackSize, StructuredGraph graph, boolean eagerResolve) {
         assert graph != null;
         this.method = method;
         this.graph = graph;
@@ -67,9 +67,12 @@ public class FrameStateBuilder implements FrameStateAccess {
         }
         RiSignature sig = method.signature();
         int max = sig.argumentCount(false);
-        RiType accessingClass = method.holder();
+        RiResolvedType accessingClass = method.holder();
         for (int i = 0; i < max; i++) {
             RiType type = sig.argumentTypeAt(i, accessingClass);
+            if (eagerResolve) {
+                type = type.resolve(accessingClass);
+            }
             CiKind kind = type.kind(false).stackKind();
             Stamp stamp;
             if (kind == CiKind.Object && type instanceof RiResolvedType) {
@@ -105,11 +108,11 @@ public class FrameStateBuilder implements FrameStateAccess {
     }
 
     public FrameState create(int bci) {
-        return graph.add(new FrameState(method, bci, locals, stack, stackIndex, rethrowException));
+        return graph.add(new FrameState(method, bci, locals, stack, stackIndex, rethrowException, false));
     }
 
     public FrameState duplicateWithException(int bci, ValueNode exceptionObject) {
-        FrameState frameState = graph.add(new FrameState(method, bci, locals, new ValueNode[]{exceptionObject}, 1, true));
+        FrameState frameState = graph.add(new FrameState(method, bci, locals, new ValueNode[]{exceptionObject}, 1, true, false));
         frameState.setOuterFrameState(outerFrameState());
         return frameState;
     }
@@ -349,7 +352,7 @@ public class FrameStateBuilder implements FrameStateAccess {
      * @param x the instruction which produces the value for the local
      */
     public void storeLocal(int i, ValueNode x) {
-        assert x == null || (x.kind() != CiKind.Void && x.kind() != CiKind.Illegal) : "unexpected value: " + x;
+        assert x.kind() != CiKind.Void && x.kind() != CiKind.Illegal : "unexpected value: " + x;
         locals[i] = x;
         if (isTwoSlot(x.kind())) {
             // (tw) if this was a double word then kill i+1
@@ -461,7 +464,7 @@ public class FrameStateBuilder implements FrameStateAccess {
     }
 
     public FrameState duplicateWithoutStack(int bci) {
-        FrameState frameState = graph.add(new FrameState(method, bci, locals, new ValueNode[0], 0, false));
+        FrameState frameState = graph.add(new FrameState(method, bci, locals, new ValueNode[0], 0, false, false));
         frameState.setOuterFrameState(outerFrameState());
         return frameState;
     }
