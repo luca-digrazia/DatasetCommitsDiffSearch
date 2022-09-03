@@ -549,7 +549,7 @@ public abstract class ShapeImpl extends Shape {
             Property p = iterator.next();
             sb.append(p);
             if (iterator.hasNext()) {
-                sb.append(",");
+                sb.append(", ");
             }
             if (sb.length() >= limit) {
                 sb.append("...");
@@ -943,6 +943,7 @@ public abstract class ShapeImpl extends Shape {
             }
         }
 
+        @SuppressWarnings("deprecation")
         public Location existingLocationForValue(Object value, Location oldLocation, ShapeImpl oldShape) {
             assert oldShape.getLayout() == this.layout;
             Location newLocation;
@@ -956,6 +957,9 @@ public abstract class ShapeImpl extends Shape {
                 return oldShape.allocator().locationForValue(value, EnumSet.of(LocationModifier.Final, LocationModifier.NonNull));
             } else if (oldLocation instanceof ConstantLocation) {
                 return LocationImpl.valueEquals(oldLocation.get(null, false), value) ? oldLocation : new Locations.ConstantLocation(value);
+            } else if (oldLocation instanceof com.oracle.truffle.object.LocationImpl.TypedObjectLocation &&
+                            !((com.oracle.truffle.object.LocationImpl.TypedObjectLocation<?>) oldLocation).getType().isAssignableFrom(value.getClass())) {
+                newLocation = (((com.oracle.truffle.object.LocationImpl.TypedObjectLocation<?>) oldLocation).toUntypedLocation());
             } else if (oldLocation instanceof DualLocation) {
                 if (oldLocation.canStore(value)) {
                     newLocation = oldLocation;
@@ -966,6 +970,9 @@ public abstract class ShapeImpl extends Shape {
                 newLocation = oldLocation;
             } else {
                 return oldShape.allocator().locationForValue(value, EnumSet.of(LocationModifier.NonNull));
+            }
+            if (newLocation instanceof com.oracle.truffle.object.LocationImpl.EffectivelyFinalLocation) {
+                newLocation = ((com.oracle.truffle.object.LocationImpl.EffectivelyFinalLocation<?>) newLocation).toNonFinalLocation();
             }
             return newLocation;
         }

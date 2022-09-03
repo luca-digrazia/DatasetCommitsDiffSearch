@@ -45,8 +45,6 @@ public abstract class LocationImpl extends Location {
 
     public interface InternalLongLocation extends LongLocation {
         void setLongInternal(DynamicObject store, long value);
-
-        String getWhereString();
     }
 
     public interface LocationVisitor {
@@ -73,12 +71,12 @@ public abstract class LocationImpl extends Location {
     protected abstract void setInternal(DynamicObject store, Object value) throws IncompatibleLocationException;
 
     @Override
-    public boolean canSet(DynamicObject store, Object value) {
+    public final boolean canSet(DynamicObject store, Object value) {
         return canStore(value) && canStoreFinal(store, value);
     }
 
     @Override
-    public boolean canSet(Object value) {
+    public final boolean canSet(Object value) {
         return canSet(null, value);
     }
 
