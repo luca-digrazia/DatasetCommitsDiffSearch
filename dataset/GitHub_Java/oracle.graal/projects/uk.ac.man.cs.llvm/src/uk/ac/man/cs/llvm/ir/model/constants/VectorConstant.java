@@ -34,8 +34,17 @@ import uk.ac.man.cs.llvm.ir.types.VectorType;
 
 public final class VectorConstant extends AggregateConstant {
 
-    VectorConstant(VectorType type, int elemCount) {
-        super(type, elemCount);
+    public VectorConstant(VectorType type, Constant[] elements) {
+        super(type, elements);
+    }
+
+    public VectorConstant(VectorType type, int elemCount) {
+        this(type, new Constant[elemCount]);
+    }
+
+    public VectorConstant(VectorType type, Constant element) {
+        super(type, new Constant[type.getElementCount()]);
+        fill(element);
     }
 
     public Type getElementType() {
@@ -48,6 +57,15 @@ public final class VectorConstant extends AggregateConstant {
 
     @Override
     public String toString() {
-        return String.format("<%s>", super.toString());
+        StringBuilder sb = new StringBuilder();
+        sb.append("<");
+        for (int i = 0; i < getLength(); i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            Constant element = getElement(i);
+            sb.append(element.getType()).append(" ").append(element);
+        }
+        return sb.append(">").toString();
     }
 }

@@ -54,8 +54,6 @@ public final class Symbols {
 
     private int size;
 
-    private final Map<ForwardReference, String> forwardReferenceNames = new HashMap<>();
-
     public Symbols() {
         symbols = new Symbol[INITIAL_CAPACITY];
     }
@@ -64,14 +62,6 @@ public final class Symbols {
         ensureCapacity(size + 1);
 
         if (symbols[size] != null) {
-            final ForwardReference ref = (ForwardReference) symbols[size];
-            ref.replace(symbol);
-            if (forwardReferenceNames.containsKey(ref)) {
-                if (symbol instanceof ValueSymbol) {
-                    ((ValueSymbol) symbol).setName(forwardReferenceNames.get(ref));
-                }
-                forwardReferenceNames.remove(ref);
-            }
             ((ForwardReference) symbols[size]).replace(symbol);
         }
         symbols[size++] = symbol;
@@ -171,9 +161,7 @@ public final class Symbols {
 
     public void setSymbolName(int index, String name) {
         Symbol symbol = getSymbol(index);
-        if (symbol instanceof ForwardReference) {
-            forwardReferenceNames.put((ForwardReference) symbol, name);
-        } else if (symbol instanceof ValueSymbol) {
+        if (symbol instanceof ValueSymbol) {
             ((ValueSymbol) symbol).setName(name);
         }
     }
@@ -184,11 +172,6 @@ public final class Symbols {
         }
     }
 
-    @Override
-    public String toString() {
-        return "Symbols [symbols=" + Arrays.toString(Arrays.copyOfRange(symbols, 0, size)) + ", size=" + size + ", forwardReferenceNames=" + forwardReferenceNames + "]";
-    }
-
     private static class ForwardReference implements Constant {
 
         private final List<Symbol> dependents = new ArrayList<>();
@@ -197,11 +180,11 @@ public final class Symbols {
         ForwardReference() {
         }
 
-        void addDependent(Symbol dependent) {
+        public void addDependent(Symbol dependent) {
             dependents.add(dependent);
         }
 
-        void addDependent(AggregateConstant dependent, int index) {
+        public void addDependent(AggregateConstant dependent, int index) {
             aggregateDependents.put(dependent, index);
         }
 
