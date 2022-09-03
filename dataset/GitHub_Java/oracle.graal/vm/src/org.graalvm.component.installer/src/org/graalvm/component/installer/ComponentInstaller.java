@@ -113,8 +113,8 @@ public final class ComponentInstaller {
     private static void printHelp() {
         System.err.println(BUNDLE.getString("INFO_Usage")); // NOI18N
     }
-    
-    static void printErr(String messageKey, Object... args) {
+
+    static RuntimeException err(String messageKey, Object... args) {
         String s;
 
         if (args == null || args.length == 0) {
@@ -123,10 +123,6 @@ public final class ComponentInstaller {
             s = MessageFormat.format(BUNDLE.getString(messageKey), args);
         }
         System.err.println(s);
-    }
-
-    static RuntimeException err(String messageKey, Object... args) {
-        printErr(messageKey, args);
         printHelp();
         System.exit(1);
         throw new RuntimeException("should not reach here");
