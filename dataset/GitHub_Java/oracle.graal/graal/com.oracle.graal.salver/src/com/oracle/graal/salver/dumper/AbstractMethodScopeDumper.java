@@ -27,6 +27,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.Iterator;
 
 import com.oracle.graal.java.BytecodeDisassembler;
 import com.oracle.graal.salver.data.DataDict;
@@ -77,12 +78,14 @@ public abstract class AbstractMethodScopeDumper extends AbstractGraalDumper {
 
     protected void openScope(MethodContext.Item item) throws IOException {
         int debugId = item.getDebugId();
-        pathStack.push(debugId != -1 ? debugId : pathCounter);
+        int id = debugId != -1 ? debugId : pathCounter;
+
+        pathStack.push(id);
         itemIdStack.push(itemIdCounter);
         pathCounter = 0;
         itemIdCounter = 0;
 
-        processMethod(item.getMethod(), item.getName());
+        processMethod(item.getMethod(), id, item.getName());
     }
 
     @SuppressWarnings("unused")
@@ -96,8 +99,9 @@ public abstract class AbstractMethodScopeDumper extends AbstractGraalDumper {
         }
     }
 
-    protected void processMethod(JavaMethod method, String name) throws IOException {
+    protected void processMethod(JavaMethod method, int id, String name) throws IOException {
         DataDict dataDict = new DataDict();
+        dataDict.put("id", id);
         dataDict.put("name", name);
 
         if (method instanceof ResolvedJavaMethod) {
@@ -125,8 +129,9 @@ public abstract class AbstractMethodScopeDumper extends AbstractGraalDumper {
         DataList pathList = new DataList();
         idDict.put("path", pathList);
 
-        for (int i : pathStack) {
-            pathList.add(i);
+        Iterator<Integer> i = pathStack.descendingIterator();
+        while (i.hasNext()) {
+            pathList.add(i.next());
         }
         if (isItem) {
             pathList.add(pathCounter++);
