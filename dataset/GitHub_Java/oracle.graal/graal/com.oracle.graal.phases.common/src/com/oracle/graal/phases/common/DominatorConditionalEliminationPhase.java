@@ -88,7 +88,6 @@ public class DominatorConditionalEliminationPhase extends Phase {
 
     private static final DebugCounter counterStampsRegistered = Debug.counter("StampsRegistered");
     private static final DebugCounter counterStampsFound = Debug.counter("StampsFound");
-    private static final DebugCounter counterIfsKilled = Debug.counter("CE_KilledIfs");
     private final boolean fullSchedule;
 
     public DominatorConditionalEliminationPhase(boolean fullSchedule) {
@@ -216,7 +215,6 @@ public class DominatorConditionalEliminationPhase extends Phase {
                         node.replaceAtPredecessor(deopt);
                         GraphUtil.killCFG(node);
                     }
-                    Debug.log("Kill fixed guard guard");
                     return true;
                 })) {
                     registerNewCondition(node.condition(), node.isNegated(), node);
@@ -237,8 +235,6 @@ public class DominatorConditionalEliminationPhase extends Phase {
                             }
                         });
                     }
-                    Debug.log("Kill if");
-                    counterIfsKilled.increment();
                     return true;
                 });
             }
