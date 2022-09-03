@@ -89,6 +89,8 @@ public final class GraalOptions {
 
     // comilation queue
     @Option(help = "")
+    public static final OptionValue<Boolean> DynamicCompilePriority = new OptionValue<>(false);
+    @Option(help = "")
     public static final OptionValue<String> CompileTheWorld = new OptionValue<>(null);
     @Option(help = "")
     public static final OptionValue<Integer> CompileTheWorldStartAt = new OptionValue<>(1);
