@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,39 @@
  */
 package com.oracle.graal.hotspot.nodes.type;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.spi.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
-import com.oracle.graal.nodes.type.*;
+import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
+import jdk.vm.ci.hotspot.HotSpotConstant;
+import jdk.vm.ci.hotspot.HotSpotMemoryAccessProvider;
+import jdk.vm.ci.hotspot.HotSpotObjectConstant;
+import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.MemoryAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
-public class NarrowOopStamp extends ObjectStamp {
+import com.oracle.graal.compiler.common.spi.LIRKindTool;
+import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
 
-    public static final PlatformKind NarrowOop = new PlatformKind() {
-
-        public String name() {
-            return "NarrowOop";
-        }
-
-        @Override
-        public String toString() {
-            return name();
-        }
-    };
+public class NarrowOopStamp extends AbstractObjectStamp {
 
     private final CompressEncoding encoding;
-
-    public NarrowOopStamp(ObjectStamp stamp, CompressEncoding encoding) {
-        this(stamp.type(), stamp.isExactType(), stamp.nonNull(), stamp.alwaysNull(), encoding);
-    }
 
     public NarrowOopStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, CompressEncoding encoding) {
         super(type, exactType, nonNull, alwaysNull);
         this.encoding = encoding;
+    }
+
+    @Override
+    protected AbstractObjectStamp copyWith(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull) {
+        return new NarrowOopStamp(type, exactType, nonNull, alwaysNull, encoding);
+    }
+
+    public static Stamp compressed(AbstractObjectStamp stamp, CompressEncoding encoding) {
+        return new NarrowOopStamp(stamp.type(), stamp.isExactType(), stamp.nonNull(), stamp.alwaysNull(), encoding);
     }
 
     public Stamp uncompressed() {
@@ -62,53 +66,16 @@ public class NarrowOopStamp extends ObjectStamp {
     }
 
     @Override
-    public Stamp unrestricted() {
-        return new NarrowOopStamp((ObjectStamp) super.unrestricted(), encoding);
-    }
-
-    @Override
-    public Stamp illegal() {
-        return new NarrowOopStamp((ObjectStamp) super.illegal(), encoding);
-    }
-
-    @Override
-    public Kind getStackKind() {
-        return Kind.Object;
-    }
-
-    @Override
-    public PlatformKind getPlatformKind(LIRTypeTool tool) {
-        return NarrowOop;
+    public LIRKind getLIRKind(LIRKindTool tool) {
+        return ((HotSpotLIRKindTool) tool).getNarrowOopKind();
     }
 
     @Override
     public String toString() {
         StringBuilder str = new StringBuilder();
         str.append('n');
-        str.append(super.toString());
+        appendString(str);
         return str.toString();
-    }
-
-    @Override
-    public Stamp meet(Stamp otherStamp) {
-        if (this == otherStamp) {
-            return this;
-        }
-        if (!isCompatible(otherStamp)) {
-            return StampFactory.illegal();
-        }
-        return new NarrowOopStamp((ObjectStamp) super.meet(otherStamp), encoding);
-    }
-
-    @Override
-    public Stamp join(Stamp otherStamp) {
-        if (this == otherStamp) {
-            return this;
-        }
-        if (!isCompatible(otherStamp)) {
-            return StampFactory.illegal(Kind.Illegal);
-        }
-        return new NarrowOopStamp((ObjectStamp) super.join(otherStamp), encoding);
     }
 
     @Override
@@ -121,6 +88,21 @@ public class NarrowOopStamp extends ObjectStamp {
             return encoding.equals(narrow.encoding);
         }
         return false;
+    }
+
+    @Override
+    public Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement) {
+        HotSpotMemoryAccessProvider hsProvider = (HotSpotMemoryAccessProvider) provider;
+        return hsProvider.readNarrowOopConstant(base, displacement, encoding);
+    }
+
+    @Override
+    public Constant readConstantArrayElementForOffset(ConstantReflectionProvider constantReflection, JavaConstant constant, long displacement) {
+        Constant result = super.readConstantArrayElementForOffset(constantReflection, constant, displacement);
+        if (result != null) {
+            result = ((HotSpotConstant) result).compress();
+        }
+        return result;
     }
 
     @Override
@@ -144,5 +126,22 @@ public class NarrowOopStamp extends ObjectStamp {
             return false;
         }
         return super.equals(other);
+    }
+
+    @Override
+    public JavaConstant asConstant() {
+        if (alwaysNull()) {
+            return HotSpotCompressedNullConstant.COMPRESSED_NULL;
+        } else {
+            return null;
+        }
+    }
+
+    @Override
+    public boolean isCompatible(Constant other) {
+        if (other instanceof HotSpotObjectConstant) {
+            return ((HotSpotObjectConstant) other).isCompressed();
+        }
+        return true;
     }
 }

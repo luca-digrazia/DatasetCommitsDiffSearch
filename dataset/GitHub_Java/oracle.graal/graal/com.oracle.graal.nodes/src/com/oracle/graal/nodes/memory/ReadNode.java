@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,12 +26,11 @@ import static com.oracle.graal.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.LocationIdentity;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.DebugCloseable;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
@@ -121,12 +120,9 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
         }
     }
 
-    @SuppressWarnings("try")
     @Override
     public FloatingAccessNode asFloatingNode(MemoryNode lastLocationAccess) {
-        try (DebugCloseable position = withNodeSourcePosition()) {
-            return graph().unique(new FloatingReadNode(getAddress(), getLocationIdentity(), lastLocationAccess, stamp(), getGuard(), getBarrierType()));
-        }
+        return graph().unique(new FloatingReadNode(getAddress(), getLocationIdentity(), lastLocationAccess, stamp(), getGuard(), getBarrierType()));
     }
 
     @Override
@@ -141,13 +137,16 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
             ValueNode object = objAddress.getBase();
             if (metaAccess != null && object.isConstant() && !object.isNullConstant() && objAddress.getOffset().isConstant()) {
                 long displacement = objAddress.getOffset().asJavaConstant().asLong();
-                int stableDimension = ((ConstantNode) object).getStableDimension();
-                if (locationIdentity.isImmutable() || stableDimension > 0) {
+                if (locationIdentity.isImmutable()) {
                     Constant constant = read.stamp().readConstant(tool.getConstantReflection().getMemoryAccessProvider(), object.asConstant(), displacement);
-                    boolean isDefaultStable = locationIdentity.isImmutable() || ((ConstantNode) object).isDefaultStable();
-                    if (constant != null && (isDefaultStable || !constant.isDefaultForKind())) {
-                        return ConstantNode.forConstant(read.stamp(), constant, Math.max(stableDimension - 1, 0), isDefaultStable, metaAccess);
+                    if (constant != null) {
+                        return ConstantNode.forConstant(read.stamp(), constant, metaAccess);
                     }
+                }
+
+                Constant constant = read.stamp().readConstantArrayElementForOffset(tool.getConstantReflection(), object.asJavaConstant(), displacement);
+                if (constant != null) {
+                    return ConstantNode.forConstant(read.stamp(), constant, metaAccess);
                 }
             }
             if (locationIdentity.equals(ARRAY_LENGTH_LOCATION)) {
@@ -173,7 +172,6 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
         throw JVMCIError.shouldNotReachHere("unexpected ReadNode before PEA");
     }
 
-    @Override
     public boolean canNullCheck() {
         return true;
     }

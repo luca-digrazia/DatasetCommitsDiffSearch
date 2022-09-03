@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,15 @@
  */
 package com.oracle.graal.compiler.common.type;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.spi.*;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.MemoryAccessProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+import com.oracle.graal.compiler.common.spi.LIRKindTool;
 
 /**
  * Singleton stamp representing the value of type {@code void}.
@@ -40,13 +46,19 @@ public final class VoidStamp extends Stamp {
     }
 
     @Override
-    public Kind getStackKind() {
-        return Kind.Void;
+    public JavaKind getStackKind() {
+        return JavaKind.Void;
+    }
+
+    @Override
+    public Stamp improveWith(Stamp other) {
+        assert other instanceof VoidStamp;
+        return this;
     }
 
     @Override
     public LIRKind getLIRKind(LIRKindTool tool) {
-        throw GraalInternalError.shouldNotReachHere("void stamp has no value");
+        throw JVMCIError.shouldNotReachHere("void stamp has no value");
     }
 
     @Override
@@ -66,53 +78,48 @@ public final class VoidStamp extends Stamp {
 
     @Override
     public Stamp meet(Stamp other) {
-        if (other instanceof IllegalStamp) {
-            return other.join(this);
-        }
-        if (this == other) {
-            return this;
-        }
-        return StampFactory.illegal(Kind.Illegal);
-    }
-
-    @Override
-    public Stamp join(Stamp other) {
-        if (other instanceof IllegalStamp) {
-            return other.join(this);
-        }
-        if (this == other) {
-            return this;
-        }
-        return StampFactory.illegal(Kind.Illegal);
-    }
-
-    @Override
-    public boolean isCompatible(Stamp stamp) {
-        return this == stamp;
-    }
-
-    @Override
-    public Stamp illegal() {
-        // there is no illegal void stamp
+        assert other instanceof VoidStamp;
         return this;
     }
 
     @Override
-    public boolean isLegal() {
-        return true;
+    public Stamp join(Stamp other) {
+        assert other instanceof VoidStamp;
+        return this;
+    }
+
+    @Override
+    public boolean isCompatible(Stamp stamp) {
+        return stamp instanceof VoidStamp;
+    }
+
+    @Override
+    public boolean isCompatible(Constant constant) {
+        return false;
+    }
+
+    @Override
+    public Stamp empty() {
+        // the void stamp is always empty
+        return this;
+    }
+
+    @Override
+    public boolean hasValues() {
+        return false;
     }
 
     @Override
     public Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement) {
-        throw GraalInternalError.shouldNotReachHere("can't read values of void stamp");
+        throw JVMCIError.shouldNotReachHere("can't read values of void stamp");
     }
 
     @Override
     public Stamp constant(Constant c, MetaAccessProvider meta) {
-        throw GraalInternalError.shouldNotReachHere("void stamp has no value");
+        throw JVMCIError.shouldNotReachHere("void stamp has no value");
     }
 
-    private static VoidStamp instance = new VoidStamp();
+    private static final VoidStamp instance = new VoidStamp();
 
     static VoidStamp getInstance() {
         return instance;
