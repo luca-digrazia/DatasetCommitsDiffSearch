@@ -32,10 +32,10 @@ import com.oracle.graal.nodes.type.*;
  * Implements a type check where the type being checked is loaded at runtime. This is used, for
  * instance, to implement an object array store check.
  */
-public final class CheckCastDynamicNode extends FixedWithNextNode implements Canonicalizable, Lowerable, IterableNodeType {
+public final class CheckCastDynamicNode extends FixedWithNextNode implements Canonicalizable, Lowerable, Node.IterableNodeType {
 
     @Input private ValueNode object;
-    @Input private ValueNode hub;
+    @Input private ValueNode type;
 
     /**
      * Determines the exception thrown by this node if the check fails: {@link ClassCastException}
@@ -44,14 +44,17 @@ public final class CheckCastDynamicNode extends FixedWithNextNode implements Can
     private final boolean forStoreCheck;
 
     /**
-     * @param hub the type being cast to
-     * @param object the object being cast
+     * @param type the type being cast to
+     * @param object the instruction producing the object
      */
-    public CheckCastDynamicNode(ValueNode hub, ValueNode object, boolean forStoreCheck) {
+    public CheckCastDynamicNode(ValueNode type, ValueNode object, boolean forStoreCheck) {
         super(object.stamp());
-        this.hub = hub;
+        this.type = type;
         this.object = object;
         this.forStoreCheck = forStoreCheck;
+        assert type.kind() == Kind.Object;
+        assert type.objectStamp().isExactType();
+        assert type.objectStamp().type().getName().equals("Ljava/lang/Class;");
     }
 
     public boolean isForStoreCheck() {
@@ -59,24 +62,28 @@ public final class CheckCastDynamicNode extends FixedWithNextNode implements Can
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         tool.getRuntime().lower(this, tool);
     }
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(object().stamp());
+        if (object().stamp().nonNull() && !stamp().nonNull()) {
+            setStamp(StampFactory.objectNonNull());
+            return true;
+        }
+        return super.inferStamp();
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         assert object() != null : this;
 
-        if (ObjectStamp.isObjectAlwaysNull(object())) {
+        if (object().objectStamp().alwaysNull()) {
             return object();
         }
-        if (hub.isConstant() && hub.kind() == Kind.Object && hub.asConstant().asObject() instanceof Class) {
-            Class clazz = (Class) hub.asConstant().asObject();
+        if (type().isConstant()) {
+            Class clazz = (Class) type().asConstant().asObject();
             ResolvedJavaType t = tool.runtime().lookupJavaType(clazz);
             return graph().add(new CheckCastNode(t, object(), null, forStoreCheck));
         }
@@ -90,8 +97,8 @@ public final class CheckCastDynamicNode extends FixedWithNextNode implements Can
     /**
      * Gets the runtime-loaded type being cast to.
      */
-    public ValueNode hub() {
-        return hub;
+    public ValueNode type() {
+        return type;
     }
 
     @NodeIntrinsic

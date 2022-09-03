@@ -34,7 +34,7 @@ public class CheckCastTest extends TypeCheckTest {
 
     @Override
     protected void replaceProfile(StructuredGraph graph, JavaTypeProfile profile) {
-        CheckCastNode ccn = graph.getNodes().filter(CheckCastNode.class).first();
+        CheckCastNode ccn = graph.getNodes(CheckCastNode.class).first();
         if (ccn != null) {
             CheckCastNode ccnNew = graph.add(new CheckCastNode(ccn.type(), ccn.object(), profile, false));
             graph.replaceFixedWithFixed(ccn, ccnNew);
@@ -101,7 +101,7 @@ public class CheckCastTest extends TypeCheckTest {
     }
 
     @LongTest
-    public void test801() {
+    public void test8_1() {
         test("arrayFill", new Object[100], "111");
     }
 

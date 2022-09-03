@@ -679,7 +679,7 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void genGoto() {
-        appendGoto(createTarget(currentBlock.successors.get(0), frameState));
+        appendGoto(createTarget(1, currentBlock.successors.get(0), frameState));
         assert currentBlock.numNormalSuccessors() == 1;
     }
 
@@ -828,7 +828,7 @@ public class GraphBuilderPhase extends Phase {
     void genNewInstance(int cpi) {
         JavaType type = lookupType(cpi, NEW);
         if (type instanceof ResolvedJavaType && ((ResolvedJavaType) type).isInitialized()) {
-            NewInstanceNode n = currentGraph.add(new NewInstanceNode((ResolvedJavaType) type, true));
+            NewInstanceNode n = currentGraph.add(new NewInstanceNode((ResolvedJavaType) type, true, false));
             frameState.apush(append(n));
         } else {
             handleUnresolvedNewInstance(type);
@@ -870,7 +870,7 @@ public class GraphBuilderPhase extends Phase {
     private void genNewPrimitiveArray(int typeCode) {
         Class<?> clazz = arrayTypeCodeToClass(typeCode);
         ResolvedJavaType elementType = runtime.lookupJavaType(clazz);
-        NewArrayNode nta = currentGraph.add(new NewArrayNode(elementType, frameState.ipop(), true));
+        NewArrayNode nta = currentGraph.add(new NewArrayNode(elementType, frameState.ipop(), true, false));
         frameState.apush(append(nta));
     }
 
@@ -878,7 +878,7 @@ public class GraphBuilderPhase extends Phase {
         JavaType type = lookupType(cpi, ANEWARRAY);
         ValueNode length = frameState.ipop();
         if (type instanceof ResolvedJavaType) {
-            NewArrayNode n = currentGraph.add(new NewArrayNode((ResolvedJavaType) type, length, true));
+            NewArrayNode n = currentGraph.add(new NewArrayNode((ResolvedJavaType) type, length, true, false));
             frameState.apush(append(n));
         } else {
             handleUnresolvedNewObjectArray(type, length);
