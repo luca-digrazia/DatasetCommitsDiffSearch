@@ -22,14 +22,12 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
 
 /**
  * A proxy is inserted at loop exits for any value that is created inside the loop (i.e. was not
@@ -59,11 +57,11 @@ public abstract class ProxyNode extends FloatingNode implements IterableNodeType
         return super.verify();
     }
 
-    public static ValueProxyNode forValue(ValueNode value, LoopExitNode exit, StructuredGraph graph) {
+    public static ValueProxyNode forValue(ValueNode value, AbstractBeginNode exit, StructuredGraph graph) {
         return graph.unique(new ValueProxyNode(value, exit));
     }
 
-    public static GuardProxyNode forGuard(GuardingNode value, LoopExitNode exit, StructuredGraph graph) {
+    public static GuardProxyNode forGuard(GuardingNode value, AbstractBeginNode exit, StructuredGraph graph) {
         return graph.unique(new GuardProxyNode(value, exit));
     }
 }
