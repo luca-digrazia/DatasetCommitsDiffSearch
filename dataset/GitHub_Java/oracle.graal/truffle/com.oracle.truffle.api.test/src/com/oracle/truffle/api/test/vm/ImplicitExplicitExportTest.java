@@ -198,7 +198,7 @@ public class ImplicitExplicitExportTest {
 
         @Override
         public ForeignAccess getForeignAccess() {
-            return null;
+            throw new UnsupportedOperationException();
         }
     }
 
