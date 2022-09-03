@@ -82,8 +82,6 @@ public class InliningUtil {
             this.level = level;
         }
 
-        public abstract int compiledCodeSize();
-
         @Override
         public int compareTo(InlineInfo o) {
             return (weight < o.weight) ? -1 : (weight > o.weight) ? 1 : 0;
@@ -130,11 +128,6 @@ public class InliningUtil {
         }
 
         @Override
-        public int compiledCodeSize() {
-            return concrete.compiledCodeSize();
-        }
-
-        @Override
         public String toString() {
             return "exact inlining " + CiUtil.format("%H.%n(%p):%r", concrete);
         }
@@ -157,11 +150,6 @@ public class InliningUtil {
             super(invoke, weight, level);
             this.concrete = concrete;
             this.type = type;
-        }
-
-        @Override
-        public int compiledCodeSize() {
-            return concrete.compiledCodeSize();
         }
 
         @Override
@@ -215,15 +203,6 @@ public class InliningUtil {
             this.typesToConcretes = typesToConcretes;
             this.branchProbabilities = branchProbabilities;
             this.notRecordedTypeProbability = notRecordedTypeProbability;
-        }
-
-        @Override
-        public int compiledCodeSize() {
-            int result = 0;
-            for (RiResolvedMethod m: concretes) {
-                result += m.compiledCodeSize();
-            }
-            return result;
         }
 
         @Override
@@ -405,12 +384,9 @@ public class InliningUtil {
                 InvokeWithExceptionNode invokeWithException = (InvokeWithExceptionNode) invoke;
                 BeginNode exceptionEdge = invokeWithException.exceptionEdge();
                 ExceptionObjectNode exceptionObject = (ExceptionObjectNode) exceptionEdge.next();
-                FrameState stateAfter = exceptionObject.stateAfter();
 
                 BeginNode newExceptionEdge = (BeginNode) exceptionEdge.copyWithInputs();
                 ExceptionObjectNode newExceptionObject = (ExceptionObjectNode) exceptionObject.copyWithInputs();
-                // set new state (pop old exception object, push new one)
-                newExceptionObject.setStateAfter(stateAfter.duplicateModified(stateAfter.bci, stateAfter.rethrowException(), CiKind.Object, newExceptionObject));
                 newExceptionEdge.setNext(newExceptionObject);
 
                 EndNode endNode = graph.add(new EndNode());
@@ -425,7 +401,7 @@ public class InliningUtil {
 
         @Override
         public String toString() {
-            StringBuilder builder = new StringBuilder(String.format("inlining %d methods with %d type checks: ", concretes.size(), types.length));
+            StringBuilder builder = new StringBuilder(String.format("type-checked inlining of %d methods with %d type checks: ", concretes.size(), types.length));
             for (int i = 0; i < concretes.size(); i++) {
                 builder.append(CiUtil.format("  %H.%n(%p):%r", concretes.get(i)));
             }
@@ -554,7 +530,7 @@ public class InliningUtil {
                         return null;
                     }
                 } else {
-                    if (GraalOptions.InlinePolymorphicCalls && notRecordedTypeProbability == 0 || GraalOptions.InlineMegamorphicCalls && notRecordedTypeProbability > 0) {
+                    if (GraalOptions.InlinePolymorphicCalls) {
                         // TODO (ch) inlining of multiple methods should work differently
                         // 1. check which methods can be inlined
                         // 2. for those methods, use weight and probability to compute which of them should be inlined
@@ -762,7 +738,6 @@ public class InliningUtil {
                     frameState.replaceAndDelete(stateAfter);
                 } else if (frameState.bci == FrameState.AFTER_EXCEPTION_BCI) {
                     if (frameState.isAlive()) {
-                        // TODO (ch) it happens sometimes that we have a FrameState.AFTER_EXCEPTION_BCI but no stateAtExceptionEdge
                         assert stateAtExceptionEdge != null;
                         frameState.replaceAndDelete(stateAtExceptionEdge);
                     } else {
