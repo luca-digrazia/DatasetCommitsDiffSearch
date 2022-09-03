@@ -30,20 +30,8 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 
-/**
- * For AOT compilation we aren't allowed to use a {@link Class} reference ({@code javaMirror})
- * directly. Instead the {@link Class} reference should be obtained from the {@code Klass} object.
- * The reason for this is, that in Class Data Sharing (CDS) a {@code Klass} object is mapped to a
- * fixed address in memory, but the {@code javaMirror} is not (which lives in the Java heap).
- * 
- * Lowering can introduce new {@link ConstantNode}s containing a {@link Class} reference, thus this
- * phase must be applied after {@link LoweringPhase}.
- * 
- * @see AheadOfTimeVerificationPhase
- */
 public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
 
     @Override
