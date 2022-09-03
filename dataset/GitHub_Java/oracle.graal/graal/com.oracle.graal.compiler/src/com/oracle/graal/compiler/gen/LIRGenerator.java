@@ -25,7 +25,6 @@ package com.oracle.graal.compiler.gen;
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.api.meta.Value.*;
-import static com.oracle.graal.lir.LIR.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
 import static com.oracle.graal.phases.GraalOptions.*;
@@ -40,7 +39,7 @@ import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.BlockEndOp;
+import com.oracle.graal.lir.StandardOp.FallThroughOp;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.nodes.*;
@@ -396,13 +395,12 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
                 }
             }
         }
-        if (block.getSuccessorCount() >= 1 && !hasBlockEnd(block)) {
+        if (block.getSuccessorCount() >= 1 && !endsWithJump(block)) {
             NodeClassIterable successors = block.getEndNode().successors();
             assert successors.isNotEmpty() : "should have at least one successor : " + block.getEndNode();
+
             emitJump(getLIRBlock((FixedNode) successors.first()));
         }
-
-        assert verifyBlock(lir, block);
 
         if (traceLevel >= 1) {
             TTY.println("END Generating LIR for block B" + block.getId());
@@ -423,12 +421,18 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     protected abstract boolean peephole(ValueNode valueNode);
 
-    private boolean hasBlockEnd(Block block) {
-        List<LIRInstruction> ops = lir.lir(block);
-        if (ops.size() == 0) {
+    private boolean endsWithJump(Block block) {
+        List<LIRInstruction> instructions = lir.lir(block);
+        if (instructions.size() == 0) {
             return false;
         }
-        return ops.get(ops.size() - 1) instanceof BlockEndOp;
+        LIRInstruction lirInstruction = instructions.get(instructions.size() - 1);
+        if (lirInstruction instanceof StandardOp.JumpOp) {
+            return true;
+        } else if (lirInstruction instanceof FallThroughOp) {
+            return ((FallThroughOp) lirInstruction).fallThroughTarget() != null;
+        }
+        return false;
     }
 
     private void doRoot(ValueNode instr) {
@@ -565,19 +569,23 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     }
 
     private void emitNullCheckBranch(IsNullNode node, LabelRef trueSuccessor, LabelRef falseSuccessor) {
-        emitCompareBranch(operand(node.object()), Constant.NULL_OBJECT, Condition.EQ, false, trueSuccessor, falseSuccessor);
+        emitCompareBranch(operand(node.object()), Constant.NULL_OBJECT, Condition.NE, false, falseSuccessor);
+        emitJump(trueSuccessor);
     }
 
-    public void emitCompareBranch(CompareNode compare, LabelRef trueSuccessor, LabelRef falseSuccessor) {
-        emitCompareBranch(operand(compare.x()), operand(compare.y()), compare.condition(), compare.unorderedIsTrue(), trueSuccessor, falseSuccessor);
+    public void emitCompareBranch(CompareNode compare, LabelRef trueSuccessorBlock, LabelRef falseSuccessorBlock) {
+        emitCompareBranch(operand(compare.x()), operand(compare.y()), compare.condition().negate(), !compare.unorderedIsTrue(), falseSuccessorBlock);
+        emitJump(trueSuccessorBlock);
     }
 
     public void emitOverflowCheckBranch(LabelRef noOverflowBlock, LabelRef overflowBlock) {
-        emitOverflowCheckBranch(overflowBlock, noOverflowBlock, false);
+        emitOverflowCheckBranch(overflowBlock, false);
+        emitJump(noOverflowBlock);
     }
 
-    public void emitIntegerTestBranch(IntegerTestNode test, LabelRef trueSuccessor, LabelRef falseSuccessor) {
-        emitIntegerTestBranch(operand(test.x()), operand(test.y()), false, trueSuccessor, falseSuccessor);
+    public void emitIntegerTestBranch(IntegerTestNode test, LabelRef trueSuccessorBlock, LabelRef falseSuccessorBlock) {
+        emitIntegerTestBranch(operand(test.x()), operand(test.y()), true, falseSuccessorBlock);
+        emitJump(trueSuccessorBlock);
     }
 
     public void emitConstantBranch(boolean value, LabelRef trueSuccessorBlock, LabelRef falseSuccessorBlock) {
@@ -611,11 +619,11 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     public abstract void emitJump(LabelRef label);
 
-    public abstract void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination);
+    public abstract void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label);
 
-    public abstract void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, boolean negated);
+    public abstract void emitOverflowCheckBranch(LabelRef label, boolean negated);
 
-    public abstract void emitIntegerTestBranch(Value left, Value right, boolean negated, LabelRef trueDestination, LabelRef falseDestination);
+    public abstract void emitIntegerTestBranch(Value left, Value right, boolean negated, LabelRef label);
 
     public abstract Variable emitConditionalMove(Value leftVal, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue);
 
