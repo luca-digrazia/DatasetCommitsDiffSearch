@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.replacements.test;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.junit.Test;
 
@@ -33,113 +32,24 @@ import jdk.vm.ci.code.InvalidInstalledCodeException;
 
 public class IntegerExactExceptionTest extends GraalCompilerTest {
 
-    static int intCounter = 32;
+    static int counter = 10;
 
-    public void testIntegerExactOverflowSnippet(int input) {
+    public void testIntegerExact(int input) {
         try {
-            intCounter = Math.addExact(intCounter, input);
+            counter = Math.addExact(counter, input);
         } catch (ArithmeticException e) {
-            intCounter = intCounter / 2;
+            counter = counter / 2;
         }
     }
 
     @Test
-    public void testIntegerExact() throws InvalidInstalledCodeException {
-        ResolvedJavaMethod method = getResolvedJavaMethod("testIntegerExactOverflowSnippet");
-        InstalledCode code = getCode(method);
+    public void testArrayStoreException() throws InvalidInstalledCodeException {
+        InstalledCode code = getCode(getResolvedJavaMethod("testIntegerExact"));
         code.executeVarargs(this, Integer.MAX_VALUE);
 
         if (!code.isValid()) {
-            code = getCode(method);
+            code = getCode(getResolvedJavaMethod("testIntegerExact"));
             code.executeVarargs(this, Integer.MAX_VALUE);
-            assertTrue(code.isValid());
-        }
-    }
-
-    public void testIntegerExactOverflowWithoutHandlerSnippetW(int input) {
-        try {
-            intCounter = Math.addExact(intCounter, input);
-        } finally {
-            intCounter = intCounter / 2;
-        }
-    }
-
-    @Test
-    public void testIntegerExactWithoutHandler() throws InvalidInstalledCodeException {
-        ResolvedJavaMethod method = getResolvedJavaMethod("testIntegerExactOverflowWithoutHandlerSnippetW");
-        InstalledCode code = getCode(method);
-
-        try {
-            code.executeVarargs(this, Integer.MAX_VALUE);
-        } catch (ArithmeticException e) {
-            // An ArithmeticException is expected to be thrown.
-            e.printStackTrace(System.out);
-        }
-
-        if (!code.isValid()) {
-            code = getCode(method);
-            try {
-                code.executeVarargs(this, Integer.MAX_VALUE);
-            } catch (ArithmeticException e) {
-                // An ArithmeticException is expected to be thrown.
-                e.printStackTrace(System.out);
-            }
-            assertTrue(code.isValid());
-        }
-    }
-
-
-    static long longCounter = 10;
-
-    public void testLongExactOverflowSnippet(long input) {
-        try {
-            longCounter = Math.addExact(longCounter, input);
-        } catch (ArithmeticException e) {
-            longCounter = longCounter / 2;
-        }
-    }
-
-    @Test
-    public void testLongExact() throws InvalidInstalledCodeException {
-        ResolvedJavaMethod method = getResolvedJavaMethod("testLongExactOverflowSnippet");
-        InstalledCode code = getCode(method);
-        code.executeVarargs(this, Long.MAX_VALUE);
-
-        if (!code.isValid()) {
-            code = getCode(method);
-            code.executeVarargs(this, Long.MAX_VALUE);
-            assertTrue(code.isValid());
-        }
-    }
-
-    public void testLongExactWithoutHandlerSnippet(long input) {
-        try {
-            longCounter = Math.addExact(longCounter, input);
-        } finally {
-            longCounter = longCounter / 2;
-        }
-    }
-
-    @Test
-    public void testLongExactWithoutHandler() throws InvalidInstalledCodeException {
-        ResolvedJavaMethod method = getResolvedJavaMethod("testLongExactWithoutHandlerSnippet");
-        InstalledCode code = getCode(method);
-
-        try {
-            code.executeVarargs(this, Long.MAX_VALUE);
-        } catch (ArithmeticException e) {
-            // An ArithmeticException is expected to be thrown.
-            e.printStackTrace(System.out);
-        }
-
-        if (!code.isValid()) {
-            code = getCode(method);
-            try {
-                code.executeVarargs(this, Long.MAX_VALUE);
-            } catch (ArithmeticException e) {
-                // An ArithmeticException is expected to be thrown.
-                e.printStackTrace(System.out);
-            }
             assertTrue(code.isValid());
         }
     }
