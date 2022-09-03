@@ -543,9 +543,6 @@ public abstract class TruffleLanguage<C> {
             try {
                 return lang.evalInContext(source, node, frame);
             } catch (Exception ex) {
-                if (ex instanceof RuntimeException) {
-                    throw (RuntimeException) ex;
-                }
                 throw new RuntimeException(ex);
             }
         }
