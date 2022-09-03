@@ -32,7 +32,9 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Phaser;
@@ -41,6 +43,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -592,9 +595,10 @@ public final class TruffleDebugger extends DebuggerDomain {
 
     private class SuspendedCallbackImpl implements SuspendedCallback {
 
+        private final AtomicReference<Thread> locked = new AtomicReference<>();
+        private final Queue<Thread> waiters = new ConcurrentLinkedQueue<>();
         private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
         private final AtomicReference<ScheduledFuture<?>> future = new AtomicReference<>();
-        private Thread locked = null;
 
         @Override
         public void onSuspend(SuspendedEvent se) {
@@ -687,27 +691,33 @@ public final class TruffleDebugger extends DebuggerDomain {
             return array;
         }
 
-        private synchronized void lock() {
+        private void lock() {
             Thread current = Thread.currentThread();
-            if (locked != current) {
-                while (locked != null) {
-                    try {
-                        wait();
-                    } catch (InterruptedException ex) {
+            if (locked.get() != current) {
+                boolean wasInterrupted = false;
+                waiters.add(current);
+                while (waiters.peek() != current || !locked.compareAndSet(null, current)) {
+                    LockSupport.park(this);
+                    if (Thread.interrupted()) {
+                        wasInterrupted = true;
                     }
                 }
-                locked = current;
+
+                waiters.remove();
+                if (wasInterrupted) {
+                    current.interrupt();
+                }
             } else {
                 ScheduledFuture<?> sf = future.getAndSet(null);
                 if (sf != null) {
-                    sf.cancel(true);
+                    sf.cancel(false);
                 }
             }
         }
 
-        private synchronized void unlock() {
-            locked = null;
-            notify();
+        private void unlock() {
+            locked.set(null);
+            LockSupport.unpark(waiters.peek());
         }
     }
 }
