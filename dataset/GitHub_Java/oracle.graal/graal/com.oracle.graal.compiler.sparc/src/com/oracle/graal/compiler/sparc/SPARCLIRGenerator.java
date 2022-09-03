@@ -214,13 +214,13 @@ public class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Value emitLoad(Kind kind, Value base, int displacement, Value index, int scale, DeoptimizingNode canTrap) {
+    public Value emitLoad(Kind kind, Value base, int displacement, Value index, int scale, boolean canTrap) {
         // SPARC: Auto-generated method stub
         return null;
     }
 
     @Override
-    public void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value input, DeoptimizingNode canTrap) {
+    public void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value input, boolean canTrap) {
         // SPARC: Auto-generated method stub
 
     }
@@ -262,25 +262,25 @@ public class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Value emitDiv(Value a, Value b, DeoptimizingNode deopting) {
+    public Value emitDiv(Value a, Value b) {
         // SPARC: Auto-generated method stub
         return null;
     }
 
     @Override
-    public Value emitRem(Value a, Value b, DeoptimizingNode deopting) {
+    public Value emitRem(Value a, Value b) {
         // SPARC: Auto-generated method stub
         return null;
     }
 
     @Override
-    public Value emitUDiv(Value a, Value b, DeoptimizingNode deopting) {
+    public Value emitUDiv(Value a, Value b) {
         // SPARC: Auto-generated method stub
         return null;
     }
 
     @Override
-    public Value emitURem(Value a, Value b, DeoptimizingNode deopting) {
+    public Value emitURem(Value a, Value b) {
         // SPARC: Auto-generated method stub
         return null;
     }
@@ -334,13 +334,19 @@ public class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizingNode deopting) {
+    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason) {
         // SPARC: Auto-generated method stub
 
     }
 
     @Override
     public void visitCompareAndSwap(CompareAndSwapNode i) {
+        // SPARC: Auto-generated method stub
+
+    }
+
+    @Override
+    public void visitExceptionObject(ExceptionObjectNode i) {
         // SPARC: Auto-generated method stub
 
     }
@@ -364,7 +370,7 @@ public class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitNullCheck(ValueNode v, DeoptimizingNode deopting) {
+    public void emitNullCheck(ValueNode v) {
         // SPARC: Auto-generated method stub
 
     }
