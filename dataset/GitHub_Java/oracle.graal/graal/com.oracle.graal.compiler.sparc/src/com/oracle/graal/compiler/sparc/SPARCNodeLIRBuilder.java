@@ -23,33 +23,19 @@
 
 package com.oracle.graal.compiler.sparc;
 
-import static jdk.internal.jvmci.sparc.SPARCKind.BYTE;
-import static jdk.internal.jvmci.sparc.SPARCKind.DWORD;
-import static jdk.internal.jvmci.sparc.SPARCKind.HWORD;
-import static jdk.internal.jvmci.sparc.SPARCKind.WORD;
-import jdk.internal.jvmci.code.CallingConvention;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.meta.JavaType;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.Value;
-import jdk.internal.jvmci.sparc.SPARCKind;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.gen.NodeLIRBuilder;
-import com.oracle.graal.compiler.match.ComplexMatchResult;
-import com.oracle.graal.compiler.match.MatchRule;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LabelRef;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.match.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-import com.oracle.graal.lir.sparc.SPARCBreakpointOp;
-import com.oracle.graal.lir.sparc.SPARCJumpOp;
-import com.oracle.graal.nodes.BreakpointNode;
-import com.oracle.graal.nodes.DeoptimizingNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.SignExtendNode;
-import com.oracle.graal.nodes.calc.ZeroExtendNode;
-import com.oracle.graal.nodes.memory.Access;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.sparc.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.memory.*;
 
 /**
  * This class implements the SPARC specific portion of the LIR generator.
@@ -92,32 +78,33 @@ public abstract class SPARCNodeLIRBuilder extends NodeLIRBuilder {
 
     private ComplexMatchResult emitSignExtendMemory(Access access, int fromBits, int toBits) {
         assert fromBits <= toBits && toBits <= 64;
-        SPARCKind toKind = null;
-        SPARCKind fromKind = null;
+        Kind toKind = null;
+        Kind fromKind = null;
         if (fromBits == toBits) {
             return null;
-        } else if (toBits > WORD.getSizeInBits()) {
-            toKind = DWORD;
-        } else if (toBits > HWORD.getSizeInBits()) {
-            toKind = WORD;
-        } else if (toBits > BYTE.getSizeInBits()) {
-            toKind = HWORD;
+        } else if (toBits > 32) {
+            toKind = Kind.Long;
+        } else if (toBits > 16) {
+            toKind = Kind.Int;
+        } else {
+            toKind = Kind.Short;
         }
         switch (fromBits) {
             case 8:
-                fromKind = BYTE;
+                fromKind = Kind.Byte;
                 break;
             case 16:
-                fromKind = HWORD;
+                fromKind = Kind.Short;
                 break;
             case 32:
-                fromKind = WORD;
+                fromKind = Kind.Int;
                 break;
             default:
                 throw JVMCIError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
         }
-        SPARCKind localFromKind = fromKind;
-        SPARCKind localToKind = toKind;
+
+        Kind localFromKind = fromKind;
+        Kind localToKind = toKind;
         return builder -> {
             Value v = getLIRGeneratorTool().emitSignExtendLoad(LIRKind.value(localFromKind), operand(access.getAddress()), getState(access));
             return getLIRGeneratorTool().emitReinterpret(LIRKind.value(localToKind), v);
@@ -126,32 +113,33 @@ public abstract class SPARCNodeLIRBuilder extends NodeLIRBuilder {
 
     private ComplexMatchResult emitZeroExtendMemory(Access access, int fromBits, int toBits) {
         assert fromBits <= toBits && toBits <= 64;
-        SPARCKind toKind = null;
-        SPARCKind fromKind = null;
+        Kind toKind = null;
+        Kind fromKind = null;
         if (fromBits == toBits) {
             return null;
-        } else if (toBits > WORD.getSizeInBits()) {
-            toKind = DWORD;
-        } else if (toBits > HWORD.getSizeInBits()) {
-            toKind = WORD;
-        } else if (toBits > BYTE.getSizeInBits()) {
-            toKind = HWORD;
+        } else if (toBits > 32) {
+            toKind = Kind.Long;
+        } else if (toBits > 16) {
+            toKind = Kind.Int;
+        } else {
+            toKind = Kind.Short;
         }
         switch (fromBits) {
             case 8:
-                fromKind = BYTE;
+                fromKind = Kind.Byte;
                 break;
             case 16:
-                fromKind = HWORD;
+                fromKind = Kind.Short;
                 break;
             case 32:
-                fromKind = WORD;
+                fromKind = Kind.Int;
                 break;
             default:
                 throw JVMCIError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
         }
-        SPARCKind localFromKind = fromKind;
-        SPARCKind localToKind = toKind;
+
+        Kind localFromKind = fromKind;
+        Kind localToKind = toKind;
         return builder -> {
             // Loads are always zero extending load
             Value v = getLIRGeneratorTool().emitLoad(LIRKind.value(localFromKind), operand(access.getAddress()), getState(access));

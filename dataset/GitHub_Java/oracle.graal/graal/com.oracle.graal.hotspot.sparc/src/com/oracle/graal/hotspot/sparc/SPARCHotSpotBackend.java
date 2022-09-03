@@ -283,7 +283,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         // TODO: (sa) Fold the two traversals into one
         stuffDelayedControlTransfers(lir);
         int constantSize = calculateConstantSize(lir);
-        boolean canUseImmediateConstantLoad = constantSize < (1 << 13);
+        boolean canUseImmediateConstantLoad = constantSize < (1 << 12) - 1;
         masm.setImmediateConstantLoad(canUseImmediateConstantLoad);
         FrameMap frameMap = crb.frameMap;
         RegisterConfig regConfig = frameMap.getRegisterConfig();
@@ -332,9 +332,9 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         HotSpotForeignCallsProvider foreignCalls = getProviders().getForeignCalls();
         if (!frameContext.isStub) {
             crb.recordMark(config.MARKID_EXCEPTION_HANDLER_ENTRY);
-            SPARCCall.directCall(crb, masm, foreignCalls.lookupForeignCall(EXCEPTION_HANDLER), null, null);
+            SPARCCall.directCall(crb, masm, foreignCalls.lookupForeignCall(EXCEPTION_HANDLER), null, false, null);
             crb.recordMark(config.MARKID_DEOPT_HANDLER_ENTRY);
-            SPARCCall.directCall(crb, masm, foreignCalls.lookupForeignCall(DEOPTIMIZATION_HANDLER), null, null);
+            SPARCCall.directCall(crb, masm, foreignCalls.lookupForeignCall(DEOPTIMIZATION_HANDLER), null, false, null);
         } else {
             // No need to emit the stubs for entries back into the method since
             // it has no calls that can cause such "return" entries
