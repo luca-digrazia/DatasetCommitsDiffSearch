@@ -58,6 +58,7 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 
+import com.oracle.svm.core.HostedIdentityHashCodeProvider;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Hybrid;
 import com.oracle.svm.core.annotate.KeepOriginal;
@@ -84,7 +85,7 @@ import sun.security.util.SecurityConstants;
 @TargetClass(java.lang.Class.class)
 @SuppressWarnings({"static-method", "serial"})
 @SuppressFBWarnings(value = "Se", justification = "DynamicHub must implement Serializable for compatibility with java.lang.Class, not because of actual serialization")
-public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedElement, java.lang.reflect.Type, GenericDeclaration, Serializable {
+public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedElement, HostedIdentityHashCodeProvider, java.lang.reflect.Type, GenericDeclaration, Serializable {
 
     /* Value copied from java.lang.Class. */
     private static final int SYNTHETIC = 0x00001000;
@@ -137,9 +138,14 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private boolean isInstantiated;
 
     /**
-     * The {@link Modifier modifiers} of this class.
+     * Does this represent a static class?
      */
-    private final int modifiers;
+    private final boolean isStatic;
+
+    /**
+     * Does this represent a synthetic class?
+     */
+    private final boolean isSynthetic;
 
     /**
      * The hub for the superclass, or null if an interface or primitive type.
@@ -249,20 +255,23 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Hybrid.Array private CFunctionPointer[] vtable;
 
+    @Platforms(Platform.HOSTED_ONLY.class) private int hostedIdentityHashCode;
+
     private GenericInfo genericInfo;
     private AnnotatedSuperInfo annotatedSuperInfo;
 
     private static java.security.ProtectionDomain allPermDomain;
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public DynamicHub(String name, boolean isLocalClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName, int modifiers,
+    public DynamicHub(String name, boolean isLocalClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName, boolean isStatic, boolean isSynthetic,
                     Target_java_lang_ClassLoader classLoader) {
         this.name = name;
         this.isLocalClass = isLocalClass;
         this.superHub = superType;
         this.componentHub = componentHub;
         this.sourceFileName = sourceFileName;
-        this.modifiers = modifiers;
+        this.isStatic = isStatic;
+        this.isSynthetic = isSynthetic;
         this.classloader = classLoader;
     }
 
@@ -352,6 +361,18 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Platforms(Platform.HOSTED_ONLY.class)
     public void setMetaType(SharedType metaType) {
         this.metaType = metaType;
+    }
+
+    @Override
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public int hostedIdentityHashCode() {
+        return hostedIdentityHashCode;
+    }
+
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public void setHostedIdentityHashCode(int newHostedIdentityHashCode) {
+        assert this.hostedIdentityHashCode == 0 || this.hostedIdentityHashCode == newHostedIdentityHashCode;
+        this.hostedIdentityHashCode = newHostedIdentityHashCode;
     }
 
     public boolean hasDefaultMethods() {
@@ -467,7 +488,12 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     public int getModifiers() {
-        return modifiers;
+        /* We do not have detailed access level information, so we make every class public. */
+        return Modifier.PUBLIC |
+                        (LayoutEncoding.isAbstract(getLayoutEncoding()) ? Modifier.ABSTRACT : 0) |
+                        (isStatic ? Modifier.STATIC : 0) |
+                        (isSynthetic ? SYNTHETIC : 0) |
+                        (isInterface() ? Modifier.INTERFACE : 0);
     }
 
     @Substitute
@@ -1050,8 +1076,10 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @KeepOriginal
     public native String toGenericString();
 
-    @KeepOriginal
-    public native boolean isSynthetic();
+    @Substitute
+    public boolean isSynthetic() {
+        return isSynthetic;
+    }
 
     @Substitute
     public Object[] getSigners() {
