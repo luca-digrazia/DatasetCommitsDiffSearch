@@ -738,7 +738,7 @@ public enum SPARCArithmetic {
                     new Sra(asIntReg(dst), 16, asIntReg(dst)).emit(masm);
                     break;
                 case I2F:
-                    if (src.getPlatformKind() == Kind.Int || src.getPlatformKind() == Kind.Char || src.getPlatformKind() == Kind.Short || src.getPlatformKind() == Kind.Byte) {
+                    if (src.getPlatformKind() == Kind.Int) {
                         new Movwtos(asIntReg(src), asFloatReg(dst)).emit(masm);
                         new Fitos(asFloatReg(dst), asFloatReg(dst)).emit(masm);
                     } else if (src.getPlatformKind() == Kind.Float) {
