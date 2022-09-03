@@ -27,11 +27,11 @@ import java.lang.reflect.Method;
 import org.graalvm.compiler.core.common.type.AbstractPointerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampPair;
-import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -63,14 +63,14 @@ public final class ObjectCloneNode extends BasicObjectCloneNode implements Virtu
 
     @Override
     protected Stamp computeStamp(ValueNode object) {
-        if (getConcreteType(object.stamp(NodeView.DEFAULT)) != null) {
-            return AbstractPointerStamp.pointerNonNull(object.stamp(NodeView.DEFAULT));
+        if (getConcreteType(object.stamp()) != null) {
+            return AbstractPointerStamp.pointerNonNull(object.stamp());
         }
         /*
          * If this call can't be intrinsified don't report a non-null stamp, otherwise the stamp
          * would change when this is lowered back to an invoke and we might lose a null check.
          */
-        return AbstractPointerStamp.pointerMaybeNull(object.stamp(NodeView.DEFAULT));
+        return AbstractPointerStamp.pointerMaybeNull(object.stamp());
     }
 
     @Override
@@ -84,24 +84,23 @@ public final class ObjectCloneNode extends BasicObjectCloneNode implements Virtu
                     final ResolvedJavaMethod snippetMethod = tool.getMetaAccess().lookupJavaMethod(method);
                     final Replacements replacements = tool.getReplacements();
                     StructuredGraph snippetGraph = null;
-                    DebugContext debug = getDebug();
-                    try (DebugContext.Scope s = debug.scope("ArrayCloneSnippet", snippetMethod)) {
+                    try (Scope s = Debug.scope("ArrayCloneSnippet", snippetMethod)) {
                         snippetGraph = replacements.getSnippet(snippetMethod, null);
                     } catch (Throwable e) {
-                        throw debug.handle(e);
+                        throw Debug.handle(e);
                     }
 
                     assert snippetGraph != null : "ObjectCloneSnippets should be installed";
-                    assert getConcreteType(stamp(NodeView.DEFAULT)) != null;
-                    return lowerReplacement((StructuredGraph) snippetGraph.copy(getDebug()), tool);
+                    assert getConcreteType(stamp()) != null;
+                    return lowerReplacement((StructuredGraph) snippetGraph.copy(), tool);
                 }
                 assert false : "unhandled array type " + type.getComponentType().getJavaKind();
             } else {
                 Assumptions assumptions = graph().getAssumptions();
-                type = getConcreteType(getObject().stamp(NodeView.DEFAULT));
+                type = getConcreteType(getObject().stamp());
                 if (type != null) {
-                    StructuredGraph newGraph = new StructuredGraph.Builder(graph().getOptions(), graph().getDebug(), AllowAssumptions.ifNonNull(assumptions)).build();
-                    ParameterNode param = newGraph.addWithoutUnique(new ParameterNode(0, StampPair.createSingle(getObject().stamp(NodeView.DEFAULT))));
+                    StructuredGraph newGraph = new StructuredGraph.Builder(graph().getOptions(), AllowAssumptions.ifNonNull(assumptions)).build();
+                    ParameterNode param = newGraph.addWithoutUnique(new ParameterNode(0, StampPair.createSingle(getObject().stamp())));
                     NewInstanceNode newInstance = newGraph.add(new NewInstanceNode(type, true));
                     newGraph.addAfterFixed(newGraph.start(), newInstance);
                     ReturnNode returnNode = newGraph.add(new ReturnNode(newInstance));
@@ -112,12 +111,12 @@ public final class ObjectCloneNode extends BasicObjectCloneNode implements Virtu
                         newGraph.addBeforeFixed(returnNode, load);
                         newGraph.addBeforeFixed(returnNode, newGraph.add(new StoreFieldNode(newInstance, field, load)));
                     }
-                    assert getConcreteType(stamp(NodeView.DEFAULT)) != null;
+                    assert getConcreteType(stamp()) != null;
                     return lowerReplacement(newGraph, tool);
                 }
             }
         }
-        assert getConcreteType(stamp(NodeView.DEFAULT)) == null;
+        assert getConcreteType(stamp()) == null;
         return null;
     }
 }
