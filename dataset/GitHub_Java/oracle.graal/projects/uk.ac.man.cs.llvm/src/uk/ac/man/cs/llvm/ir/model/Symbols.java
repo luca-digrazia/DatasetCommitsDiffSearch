@@ -36,9 +36,15 @@ import java.util.List;
 import java.util.Map;
 
 import uk.ac.man.cs.llvm.ir.model.constants.AggregateConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.ArrayConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.Constant;
+import uk.ac.man.cs.llvm.ir.model.constants.StructureConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.VectorConstant;
 import uk.ac.man.cs.llvm.ir.types.MetaType;
+import uk.ac.man.cs.llvm.ir.types.ArrayType;
+import uk.ac.man.cs.llvm.ir.types.StructureType;
 import uk.ac.man.cs.llvm.ir.types.Type;
+import uk.ac.man.cs.llvm.ir.types.VectorType;
 
 public final class Symbols {
 
@@ -48,28 +54,81 @@ public final class Symbols {
 
     private int size;
 
+    private final Map<ForwardReference, String> forwardReferenceNames = new HashMap<>();
+
     public Symbols() {
         symbols = new Symbol[INITIAL_CAPACITY];
     }
 
-    void addSymbol(Symbol symbol) {
+    public void addSymbol(Symbol symbol) {
         ensureCapacity(size + 1);
 
         if (symbols[size] != null) {
             final ForwardReference ref = (ForwardReference) symbols[size];
             ref.replace(symbol);
-            if (ref.getName() != null && symbol instanceof ValueSymbol) {
-                ((ValueSymbol) symbol).setName(ref.getName());
+            if (forwardReferenceNames.containsKey(ref)) {
+                if (symbol instanceof ValueSymbol) {
+                    ((ValueSymbol) symbol).setName(forwardReferenceNames.get(ref));
+                }
+                forwardReferenceNames.remove(ref);
             }
             ((ForwardReference) symbols[size]).replace(symbol);
         }
         symbols[size++] = symbol;
     }
 
-    void addSymbols(Symbols argSymbols) {
+    public void addSymbols(Symbols argSymbols) {
         for (int i = 0; i < argSymbols.size; i++) {
             addSymbol(argSymbols.symbols[i]);
         }
+    }
+
+    public Constant getConstant(int index) {
+        return (Constant) getSymbol(index);
+    }
+
+    public Constant[] getConstants(int[] indices) {
+        Constant[] consts = new Constant[indices.length];
+
+        for (int i = 0; i < indices.length; i++) {
+            consts[i] = getConstant(indices[i]);
+        }
+
+        return consts;
+    }
+
+    public AggregateConstant createAggregate(Type type, int[] valueIndices) {
+        final AggregateConstant aggregateConstant;
+        if (type instanceof ArrayType) {
+            aggregateConstant = new ArrayConstant((ArrayType) type, valueIndices.length);
+        } else if (type instanceof StructureType) {
+            aggregateConstant = new StructureConstant((StructureType) type, valueIndices.length);
+        } else if (type instanceof VectorType) {
+            aggregateConstant = new VectorConstant((VectorType) type, valueIndices.length);
+        } else {
+            throw new RuntimeException("No value constant implementation for " + type);
+        }
+
+        for (int i = 0; i < valueIndices.length; i++) {
+            int index = valueIndices[i];
+            final Constant value;
+            if (index < size) {
+                value = (Constant) symbols[index];
+            } else {
+                ensureCapacity(index + 1);
+                if (symbols[index] == null) {
+                    symbols[index] = new ForwardReference();
+                }
+
+                final ForwardReference ref = (ForwardReference) symbols[index];
+                ref.addDependent(aggregateConstant, i);
+                value = ref;
+            }
+
+            aggregateConstant.replaceElement(i, value);
+        }
+
+        return aggregateConstant;
     }
 
     public int getSize() {
@@ -100,40 +159,22 @@ public final class Symbols {
         }
     }
 
-    public Symbol getSymbol(int index, AggregateConstant dependent, int elementIndex) {
-        if (index < size) {
-            return symbols[index];
-        } else {
-            ensureCapacity(index + 1);
+    public Symbol[] getSymbols(int[] indices) {
+        Symbol[] syms = new Symbol[indices.length];
 
-            ForwardReference ref = (ForwardReference) symbols[index];
-            if (ref == null) {
-                symbols[index] = ref = new ForwardReference();
-            }
-            ref.addDependent(dependent, elementIndex);
-
-            return ref;
+        for (int i = 0; i < indices.length; i++) {
+            syms[i] = getSymbol(indices[i]);
         }
+
+        return syms;
     }
 
-    void setSymbolName(int index, String name) {
+    public void setSymbolName(int index, String name) {
         Symbol symbol = getSymbol(index);
-        if (symbol instanceof ValueSymbol) {
+        if (symbol instanceof ForwardReference) {
+            forwardReferenceNames.put((ForwardReference) symbol, name);
+        } else if (symbol instanceof ValueSymbol) {
             ((ValueSymbol) symbol).setName(name);
-        }
-
-        if (index < size) {
-            if (symbols[index] instanceof ValueSymbol) {
-                ((ValueSymbol) symbols[index]).setName(name);
-            }
-        } else {
-            ensureCapacity(index + 1);
-
-            ForwardReference ref = (ForwardReference) symbols[index];
-            if (ref == null) {
-                symbols[index] = ref = new ForwardReference();
-            }
-            ref.setName(name);
         }
     }
 
@@ -145,18 +186,15 @@ public final class Symbols {
 
     @Override
     public String toString() {
-        return "Symbols [symbols=" + Arrays.toString(Arrays.copyOfRange(symbols, 0, size)) + ", size=" + size + "]";
+        return "Symbols [symbols=" + Arrays.toString(Arrays.copyOfRange(symbols, 0, size)) + ", size=" + size + ", forwardReferenceNames=" + forwardReferenceNames + "]";
     }
 
-    private static final class ForwardReference implements Constant, ValueSymbol {
+    private static class ForwardReference implements Constant {
 
         private final List<Symbol> dependents = new ArrayList<>();
         private final Map<AggregateConstant, List<Integer>> aggregateDependents = new HashMap<>();
 
-        private String name;
-
         ForwardReference() {
-            this.name = null;
         }
 
         void addDependent(Symbol dependent) {
@@ -164,7 +202,7 @@ public final class Symbols {
         }
 
         void addDependent(AggregateConstant dependent, int index) {
-            final List<Integer> indices = aggregateDependents.getOrDefault(dependent, new ArrayList<>());
+            final List<Integer> indices = aggregateDependents.getOrDefault(dependent, new ArrayList<Integer>());
             indices.add(index);
             aggregateDependents.put(dependent, indices);
         }
@@ -177,21 +215,6 @@ public final class Symbols {
         @Override
         public Type getType() {
             return MetaType.UNKNOWN;
-        }
-
-        @Override
-        public String getName() {
-            return name;
-        }
-
-        @Override
-        public void setName(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("ForwardReference[name=%s]", name == null ? ValueSymbol.UNKNOWN : name);
         }
     }
 }
