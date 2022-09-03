@@ -77,6 +77,7 @@ public final class CPUTracer implements Closeable {
 
     private final Map<SourceSection, Payload> payloadMap = new ConcurrentHashMap<>();
 
+
     /**
      * Finds {@link CPUTracer} associated with given engine.
      *
