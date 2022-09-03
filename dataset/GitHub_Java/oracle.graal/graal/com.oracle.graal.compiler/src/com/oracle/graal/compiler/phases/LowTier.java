@@ -30,8 +30,7 @@ import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionalit
 import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValues;
-import com.oracle.graal.options.OptionKey;
+import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
@@ -51,23 +50,23 @@ public class LowTier extends PhaseSuite<LowTierContext> {
 
         // @formatter:off
         @Option(help = "", type = OptionType.Debug)
-        public static final OptionKey<Boolean> ProfileCompiledMethods = new OptionKey<>(false);
+        public static final OptionValue<Boolean> ProfileCompiledMethods = new OptionValue<>(false);
         // @formatter:on
 
     }
 
-    public LowTier(OptionValues options) {
+    public LowTier() {
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        if (ImmutableCode.getValue(options)) {
+        if (ImmutableCode.getValue()) {
             canonicalizer.disableReadCanonicalization();
         }
 
-        if (Options.ProfileCompiledMethods.getValue(options)) {
+        if (Options.ProfileCompiledMethods.getValue()) {
             appendPhase(new ProfileCompiledMethodsPhase());
         }
 
         appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.LOW_TIER));
-        if (UseGraalInstrumentation.getValue(options)) {
+        if (UseGraalInstrumentation.getValue()) {
             appendPhase(new InlineInstrumentationPhase());
         }
 
@@ -76,7 +75,7 @@ public class LowTier extends PhaseSuite<LowTierContext> {
         appendPhase(new ExpandLogicPhase());
 
         /* Cleanup IsNull checks resulting from MID_TIER/LOW_TIER lowering and ExpandLogic phase. */
-        if (ConditionalElimination.getValue(options)) {
+        if (ConditionalElimination.getValue()) {
             appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, false));
             /* Canonicalizer may create some new ShortCircuitOrNodes so clean them up. */
             appendPhase(new ExpandLogicPhase());

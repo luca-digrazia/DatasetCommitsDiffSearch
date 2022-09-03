@@ -40,9 +40,8 @@ import com.oracle.graal.loop.phases.LoopPeelingPhase;
 import com.oracle.graal.loop.phases.LoopUnswitchingPhase;
 import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionKey;
 import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValues;
+import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.ConvertDeoptimizeToGuardPhase;
@@ -62,55 +61,55 @@ public class HighTier extends PhaseSuite<HighTierContext> {
 
         // @formatter:off
         @Option(help = "Enable inlining", type = OptionType.Expert)
-        public static final OptionKey<Boolean> Inline = new OptionKey<>(true);
+        public static final OptionValue<Boolean> Inline = new OptionValue<>(true);
         // @formatter:on
     }
 
-    public HighTier(OptionValues options) {
+    public HighTier() {
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        if (ImmutableCode.getValue(options)) {
+        if (ImmutableCode.getValue()) {
             canonicalizer.disableReadCanonicalization();
         }
 
         appendPhase(canonicalizer);
 
-        if (Options.Inline.getValue(options)) {
+        if (Options.Inline.getValue()) {
             appendPhase(new InliningPhase(canonicalizer));
             appendPhase(new DeadCodeEliminationPhase(Optional));
 
-            if (ConditionalElimination.getValue(options)) {
+            if (ConditionalElimination.getValue()) {
                 appendPhase(canonicalizer);
                 appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, false));
             }
         }
 
-        if (OptConvertDeoptsToGuards.getValue(options)) {
+        if (OptConvertDeoptsToGuards.getValue()) {
             appendPhase(new IncrementalCanonicalizerPhase<>(canonicalizer, new ConvertDeoptimizeToGuardPhase()));
         }
 
         LoopPolicies loopPolicies = createLoopPolicies();
-        if (FullUnroll.getValue(options)) {
+        if (FullUnroll.getValue()) {
             appendPhase(new LoopFullUnrollPhase(canonicalizer, loopPolicies));
         }
 
-        if (OptLoopTransform.getValue(options)) {
-            if (LoopPeeling.getValue(options)) {
+        if (OptLoopTransform.getValue()) {
+            if (LoopPeeling.getValue()) {
                 appendPhase(new LoopPeelingPhase(loopPolicies));
             }
-            if (LoopUnswitch.getValue(options)) {
+            if (LoopUnswitch.getValue()) {
                 appendPhase(new LoopUnswitchingPhase(loopPolicies));
             }
         }
 
         appendPhase(canonicalizer);
 
-        if (PartialEscapeAnalysis.getValue(options)) {
+        if (PartialEscapeAnalysis.getValue()) {
             appendPhase(new PartialEscapePhase(true, canonicalizer));
         }
         appendPhase(new RemoveValueProxyPhase());
 
         appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER));
-        if (UseGraalInstrumentation.getValue(options)) {
+        if (UseGraalInstrumentation.getValue()) {
             appendPhase(new HighTierReconcileInstrumentationPhase());
         }
     }
