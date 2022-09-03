@@ -22,13 +22,13 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
 import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.*;
 import com.oracle.graal.word.*;
 
 /**
@@ -37,11 +37,10 @@ import com.oracle.graal.word.*;
 @ClassSubstitution(java.lang.Object.class)
 public class ObjectSubstitutions {
 
-    @MacroSubstitution(macro = ObjectGetClassNode.class, isStatic = false, forced = true)
-    @MethodSubstitution(isStatic = false, forced = true)
+    @MethodSubstitution(isStatic = false)
     public static Class<?> getClass(final Object thisObj) {
         Word hub = loadHub(thisObj);
-        return unsafeCast(hub.readObject(Word.signed(classMirrorOffset()), LocationIdentity.FINAL_LOCATION), Class.class, true, true);
+        return unsafeCast(hub.readObject(Word.signed(classMirrorOffset()), LocationNode.FINAL_LOCATION), Class.class, true, true);
     }
 
     @MethodSubstitution(isStatic = false)
@@ -49,11 +48,11 @@ public class ObjectSubstitutions {
         return computeHashCode(thisObj);
     }
 
-    @MethodSubstitution(value = "<init>", isStatic = false, forced = true)
+    @MethodSubstitution(value = "<init>", isStatic = false)
     public static void init(Object thisObj) {
         RegisterFinalizerNode.register(thisObj);
     }
 
-    @MacroSubstitution(macro = ObjectCloneNode.class, isStatic = false, forced = true)
+    @MacroSubstitution(macro = ObjectCloneNode.class, isStatic = false)
     public static native Object clone(Object obj);
 }

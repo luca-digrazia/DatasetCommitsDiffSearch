@@ -34,7 +34,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
-import com.oracle.graal.api.meta.ProfilingInfo.TriState;
+import com.oracle.graal.api.meta.ProfilingInfo.ExceptionSeen;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.debug.*;
@@ -959,7 +959,7 @@ public class GraphBuilderPhase extends Phase {
 
     protected void emitExplicitExceptions(ValueNode receiver, ValueNode outOfBoundsIndex) {
         assert receiver != null;
-        if (optimisticOpts.useExceptionProbabilityForOperations() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE) {
+        if (optimisticOpts.useExceptionProbabilityForOperations() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE) {
             return;
         }
 
@@ -1122,7 +1122,7 @@ public class GraphBuilderPhase extends Phase {
     protected Invoke createInvokeNode(MethodCallTargetNode callTarget, Kind resultType) {
         // be conservative if information was not recorded (could result in endless recompiles
         // otherwise)
-        if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
+        if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE)) {
             InvokeNode invoke = new InvokeNode(callTarget, bci());
             ValueNode result = appendWithBCI(currentGraph.add(invoke));
             frameState.pushReturn(resultType, result);
@@ -1141,11 +1141,6 @@ public class GraphBuilderPhase extends Phase {
             invoke.setStateAfter(frameState.create(nextBlock.startBci));
             return invoke;
         }
-    }
-
-    private void callRegisterFinalizer() {
-        // append a call to the finalizer registration
-        append(currentGraph.add(new RegisterFinalizerNode(frameState.loadLocal(0))));
     }
 
     private void genReturn(ValueNode x) {
@@ -1562,9 +1557,6 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void createReturn() {
-        if (method.isConstructor() && MetaUtil.isJavaLangObject(method.getDeclaringClass())) {
-            callRegisterFinalizer();
-        }
         Kind returnKind = method.getSignature().getReturnKind().getStackKind();
         ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
         assert frameState.stackSize() == 0;
