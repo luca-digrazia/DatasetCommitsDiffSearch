@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -40,14 +38,13 @@ public interface DebugDumpHandler extends Closeable, DebugHandler {
      * If the type of {@code object} is supported by this dumper, then a representation of
      * {@code object} is sent to some consumer in a format determined by this object.
      *
-     * @param object the object to be dumped
      * @param debug the debug context requesting the dump
-     * @param forced true if called from {@link DebugContext#forceDump(Object, String, Object...)}
+     * @param object the object to be dumped
      * @param format a format string specifying a title that describes the context of the dump
      *            (e.g., the compiler phase in which request is made)
      * @param arguments arguments referenced by the format specifiers in {@code format}
      */
-    void dump(Object object, DebugContext debug, boolean forced, String format, Object... arguments);
+    void dump(DebugContext debug, Object object, String format, Object... arguments);
 
     /**
      * Flushes and releases resources managed by this dump handler. A subsequent call to
