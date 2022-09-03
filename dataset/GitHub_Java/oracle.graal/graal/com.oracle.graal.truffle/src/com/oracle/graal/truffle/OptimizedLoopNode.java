@@ -22,11 +22,14 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.LoopNode;
-import com.oracle.truffle.api.nodes.RepeatingNode;
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.nodes.*;
 
+/**
+ * Temporary node for legacy loop count reporting support as it was most likely done in other
+ * implementations.
+ */
 public final class OptimizedLoopNode extends LoopNode {
 
     @Child private RepeatingNode repeatingNode;
@@ -51,13 +54,9 @@ public final class OptimizedLoopNode extends LoopNode {
             }
         } finally {
             if (CompilerDirectives.inInterpreter()) {
-                reportLoopCount(this, loopCount);
+                getRootNode().reportLoopCount(loopCount);
             }
         }
-    }
-
-    static LoopNode create(RepeatingNode repeatingNode) {
-        return new OptimizedLoopNode(repeatingNode);
     }
 
 }
