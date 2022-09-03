@@ -149,11 +149,7 @@ public class StrengthenStampsPhase extends Phase {
                 /* We must be in dead code. */
                 newStamp = StampFactory.empty(JavaKind.Object);
             } else {
-                ResolvedJavaType targetType = toTarget(strengthenType);
-                if (targetType == null) {
-                    return null;
-                }
-                TypeReference typeRef = TypeReference.createTrustedWithoutAssumptions(targetType);
+                TypeReference typeRef = TypeReference.createTrustedWithoutAssumptions(toTarget(strengthenType));
                 newStamp = StampFactory.object(typeRef, stamp.nonNull());
             }
         }
@@ -204,11 +200,7 @@ public class StrengthenStampsPhase extends Phase {
 
             assert oldType == null || oldType.isAssignableFrom(exactType);
             if (!oldStamp.isExactType() || !exactType.equals(oldType) || nonNull != oldStamp.nonNull()) {
-                ResolvedJavaType targetType = toTarget(exactType);
-                if (targetType == null) {
-                    return oldStamp;
-                }
-                TypeReference typeRef = TypeReference.createExactTrusted(targetType);
+                TypeReference typeRef = TypeReference.createExactTrusted(toTarget(exactType));
                 return nonNull ? StampFactory.objectNonNull(typeRef) : StampFactory.object(typeRef);
             } else {
                 return oldStamp;
@@ -264,11 +256,7 @@ public class StrengthenStampsPhase extends Phase {
         }
 
         if (!baseType.equals(oldType) || nonNull != oldStamp.nonNull()) {
-            ResolvedJavaType targetType = toTarget(baseType);
-            if (targetType == null) {
-                return oldStamp;
-            }
-            TypeReference typeRef = TypeReference.createTrustedWithoutAssumptions(targetType);
+            TypeReference typeRef = TypeReference.createTrustedWithoutAssumptions(toTarget(baseType));
             return nonNull ? StampFactory.objectNonNull(typeRef) : StampFactory.object(typeRef);
         }
         return oldStamp;
