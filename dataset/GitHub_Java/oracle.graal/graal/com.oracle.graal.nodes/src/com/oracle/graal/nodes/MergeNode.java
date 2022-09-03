@@ -28,14 +28,19 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.util.*;
 
 /**
  * Denotes the merging of multiple control-flow paths.
  */
-public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeType, LIRLowerable {
+public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLowerable {
 
     @Input(notDataflow = true) private final NodeInputList<EndNode> ends = new NodeInputList<>(this);
+
+    @Override
+    public boolean needsStateAfter() {
+        return false;
+    }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
@@ -82,11 +87,7 @@ public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeT
         assert predIndex != -1;
         deleteEnd(pred);
         for (PhiNode phi : phis()) {
-            ValueNode removedValue = phi.valueAt(predIndex);
             phi.removeInput(predIndex);
-            if (removedValue != null && removedValue.isAlive() && removedValue.usages().isEmpty() && GraphUtil.isFloatingNode().apply(removedValue)) {
-                GraphUtil.killWithUnusedFloatingInputs(removedValue);
-            }
         }
     }
 
@@ -142,10 +143,6 @@ public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeT
             if (merge instanceof LoopBeginNode && !(origLoopEnd instanceof LoopEndNode)) {
                 return;
             }
-            // in order to move anchored values to the other merge we would need to check if the anchors are used by phis of the other merge
-            if (this.anchored().isNotEmpty()) {
-                return;
-            }
             for (PhiNode phi : phis()) {
                 for (Node usage : phi.usages().filter(isNotA(FrameState.class))) {
                     if (!merge.isPhiAtMerge(usage)) {
@@ -153,7 +150,9 @@ public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeT
                     }
                 }
             }
-            Debug.log("Split %s into ends for %s.", this, merge);
+            FixedNode evacuateAnchoredTo = new ComputeImmediateDominator(this).compute();
+            Debug.log("Split %s into ends for %s. Evacuate to %s", this, merge, evacuateAnchoredTo);
+            this.prepareDelete(evacuateAnchoredTo);
             int numEnds = this.forwardEndCount();
             StructuredGraph graph = (StructuredGraph) graph();
             for (int i = 0; i < numEnds - 1; i++) {
