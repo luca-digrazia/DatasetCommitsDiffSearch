@@ -24,74 +24,139 @@ package com.oracle.graal.jtt.jdk;
 
 import org.junit.*;
 
+import com.oracle.graal.jtt.*;
 
-public class IntegerBits {
-    @SuppressWarnings("unused")
-    private static int init = Integer.reverseBytes(42);
-    private int original = 0x01020304;
-    private int reversed = 0x04030201;
-    private int v = 0b1000;
-    private int zero = 0;
+public class IntegerBits extends JTTTest {
 
-    public int test(int o) {
+    @SuppressWarnings("unused") private static int init = Integer.reverseBytes(42);
+    private static int original = 0x01020304;
+    private static int v = 0b1000;
+    private static int zero = 0;
+
+    public static int test(int o) {
         return Integer.reverseBytes(o);
     }
 
-    public int test2(int o) {
+    public static int test2(int o) {
         return Integer.numberOfLeadingZeros(o);
     }
 
-    public int test3(int o) {
+    public static int test3(int o) {
         return Integer.numberOfTrailingZeros(o);
+    }
+
+    public static int test4(int o) {
+        return Integer.bitCount(o);
     }
 
     @Test
     public void run0() {
-        Assert.assertEquals(reversed, test(original));
+        runTest("test", original);
     }
 
     @Test
     public void run1() {
-        Assert.assertEquals(3, test3(v));
+        runTest("test3", v);
     }
 
     @Test
     public void run2() {
-        Assert.assertEquals(28, test2(v));
+        runTest("test2", v);
     }
 
     @Test
     public void run3() {
-        Assert.assertEquals(32, test3(zero));
+        runTest("test3", zero);
     }
 
     @Test
     public void run4() {
-        Assert.assertEquals(32, test2(zero));
+        runTest("test2", zero);
     }
 
     @Test
     public void run5() {
-        Assert.assertEquals(reversed, test(0x01020304));
+        runTest("test", 0x01020304);
     }
 
     @Test
     public void run6() {
-        Assert.assertEquals(3, test3(0b1000));
+        runTest("test3", 0b1000);
     }
 
     @Test
     public void run7() {
-        Assert.assertEquals(28, test2(0b1000));
+        runTest("test2", 0b1000);
     }
 
     @Test
     public void run8() {
-        Assert.assertEquals(32, test3(0));
+        runTest("test3", 0);
     }
 
     @Test
     public void run9() {
-        Assert.assertEquals(32, test2(0));
+        runTest("test2", 0);
     }
+
+    @Test
+    public void run10() {
+        runTest("test4", 0xffffffff);
+    }
+
+    @Test
+    public void run11() {
+        runTest("test2", 0xFFFFFFFF);
+    }
+
+    @Test
+    public void run12() {
+        runTest("test2", 0x7FFFFFFF);
+    }
+
+    @Test
+    public void run17() {
+        runTest("test2", 0x80000000);
+    }
+
+    @Test
+    public void run18() {
+        runTest("test2", 0x40000000);
+    }
+
+    @Test
+    public void run13() {
+        runTest("test3", 0x7FFFFFFF);
+    }
+
+    @Test
+    public void run14() {
+        runTest("test3", 0xFFFFFFFF);
+    }
+
+    @Test
+    public void run15() {
+        runTest("test3", 0x80000000);
+    }
+
+    @Test
+    public void run16() {
+        runTest("test3", 0x40000000);
+    }
+
+    @Test
+    public void run19() {
+        runTest("test4", 0x80000000);
+    }
+
+    @Test
+    public void run20() {
+        runTest("test4", 0x40000000);
+    }
+
+    @Test
+    public void run21() {
+        runTest("test4", 0x00000001);
+    }
+
 }
