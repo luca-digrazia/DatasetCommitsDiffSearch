@@ -138,10 +138,6 @@ public final class LanguageCheckGenerator {
         if (params.size() != expectedNumberOfArguments) {
             return "Wrong number of arguments.";
         }
-
-        if (method.getThrownTypes().size() > 0) {
-            return "Method test must not throw a checked exception.";
-        }
         return null;
     }
 

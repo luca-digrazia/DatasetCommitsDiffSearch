@@ -116,12 +116,7 @@ public abstract class MessageGenerator {
 
     abstract int getParameterCount();
 
-    public String checkSignature(ExecutableElement method) {
-        if (method.getThrownTypes().size() > 0) {
-            return "Method access must not throw a checked exception. Use an InteropException (e.g. UnknownIdentifierException.raise() ) to report an error to the host language.";
-        }
-        return null;
-    }
+    public abstract String checkSignature(ExecutableElement method);
 
     abstract String getTargetableNodeName();
 

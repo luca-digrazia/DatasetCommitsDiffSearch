@@ -47,7 +47,7 @@ import com.oracle.truffle.api.TruffleLanguage;
  *
  * {@link com.oracle.truffle.api.dsl.test.interop.Snippets.ExampleTruffleObject#isInstanceCheck}
  *
- * Alternatively, one can also define a language check node (see {@link LanguageCheck}.
+ * Alternatively, one can also define a language check node (see {@link CanResolve}.
  *
  * From this class a {@link ForeignAccess} will be generated. The receiver object can then return a
  * singleton instance of this access. For example: <br>
@@ -67,6 +67,8 @@ public @interface MessageResolution {
      * {@link TruffleObject} can use to implement {@link TruffleObject#getForeignAccess()}.
      *
      * @return class of the receiver object
+     *
+     * @since 0.13
      */
     Class<?> receiverType();
 
@@ -74,6 +76,9 @@ public @interface MessageResolution {
      * The language the message implementation belongs to.
      *
      * @return class of the language object
+     *
+     * @since 0.13
      */
     Class<? extends TruffleLanguage<?>> language();
+
 }

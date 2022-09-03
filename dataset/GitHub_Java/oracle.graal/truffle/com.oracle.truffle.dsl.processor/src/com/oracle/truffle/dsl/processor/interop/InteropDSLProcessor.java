@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.FilerException;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
@@ -44,13 +45,12 @@ import javax.lang.model.type.MirroredTypeException;
 import javax.tools.Diagnostic.Kind;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.LanguageCheck;
+import com.oracle.truffle.api.interop.CanResolve;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.dsl.processor.ExpectError;
-import com.oracle.truffle.dsl.processor.ProcessorContext;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 
 /**
@@ -59,7 +59,7 @@ import com.oracle.truffle.dsl.processor.java.ElementUtils;
 public final class InteropDSLProcessor extends AbstractProcessor {
 
     static final List<Message> KNOWN_MESSAGES = Arrays.asList(new Message[]{Message.READ, Message.WRITE, Message.IS_NULL, Message.IS_EXECUTABLE, Message.IS_BOXED, Message.HAS_SIZE,
-                    Message.GET_SIZE, Message.UNBOX, Message.createExecute(0), Message.createInvoke(0), Message.createNew(0)});
+                    Message.GET_SIZE, Message.KEYS, Message.UNBOX, Message.createExecute(0), Message.createInvoke(0), Message.createNew(0)});
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
@@ -89,7 +89,7 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             } catch (Throwable ex) {
                 ex.printStackTrace();
                 String message = "Uncaught error in " + this.getClass();
-                ProcessorContext.getInstance().getEnvironment().getMessager().printMessage(Kind.ERROR, message + ": " + ElementUtils.printException(ex));
+                processingEnv.getMessager().printMessage(Kind.ERROR, message + ": " + ElementUtils.printException(ex), e);
             }
         }
     }
@@ -110,6 +110,11 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             return;
         }
 
+        if (e.getModifiers().contains(Modifier.PRIVATE) || e.getModifiers().contains(Modifier.PROTECTED)) {
+            emitError("Class must be public or package protected", e);
+            return;
+        }
+
         // check if there is a @LanguageCheck class
 
         Element curr = e;
@@ -118,13 +123,18 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             if (innerClass.getKind() != ElementKind.CLASS) {
                 continue;
             }
-            if (innerClass.getAnnotation(LanguageCheck.class) != null) {
+            if (innerClass.getAnnotation(CanResolve.class) != null) {
                 receiverChecks.add((TypeElement) innerClass);
             }
         }
 
         if (receiverChecks.size() == 0 && isInstanceMissing(receiverTypeFullClassName)) {
             emitError("Missing isInstance method in class " + receiverTypeFullClassName, e);
+            return;
+        }
+
+        if (receiverChecks.size() == 0 && isInstanceHasWrongSignature(receiverTypeFullClassName)) {
+            emitError("Method isInstance in class " + receiverTypeFullClassName + " has an invalid signature: expected signature (object: TruffleObject).", e);
             return;
         }
 
@@ -144,6 +154,7 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             if (innerClass.getAnnotation(Resolve.class) != null) {
                 elements.add((TypeElement) innerClass);
             }
+
         }
 
         ForeignAccessFactoryGenerator factoryGenerator = new ForeignAccessFactoryGenerator(processingEnv, messageImplementations, (TypeElement) e);
@@ -164,12 +175,17 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             return;
         }
 
-        factoryGenerator.generate();
+        try {
+            factoryGenerator.generate();
+        } catch (FilerException ex) {
+            emitError("Foreign factory class with same name already exists", e);
+            return;
+        }
     }
 
     private boolean processLanguageCheck(MessageResolution messageResolutionAnnotation, TypeElement element, ForeignAccessFactoryGenerator factoryGenerator)
                     throws IOException {
-        LanguageCheckGenerator generator = new LanguageCheckGenerator(processingEnv, messageResolutionAnnotation, element);
+        LanguageCheckGenerator generator = new LanguageCheckGenerator(processingEnv, messageResolutionAnnotation, element, factoryGenerator);
 
         if (!ElementUtils.typeEquals(element.getSuperclass(), Utils.getTypeMirror(processingEnv, com.oracle.truffle.api.nodes.Node.class))) {
             emitError(ElementUtils.getQualifiedName(element) + " must extend com.oracle.truffle.api.nodes.Node.", element);
@@ -186,6 +202,11 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             return false;
         }
 
+        if (element.getModifiers().contains(Modifier.PRIVATE) || element.getModifiers().contains(Modifier.PROTECTED)) {
+            emitError("Class must be public or package protected", element);
+            return false;
+        }
+
         List<ExecutableElement> methods = generator.getTestMethods();
         if (methods.isEmpty() || methods.size() > 1) {
             emitError("There needs to be exactly one test method.", element);
@@ -199,14 +220,19 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             return false;
         }
 
-        generator.generate();
+        try {
+            generator.generate();
+        } catch (FilerException ex) {
+            emitError("Language check class with same name already exists", element);
+            return false;
+        }
         factoryGenerator.addLanguageCheckHandler(generator.getRootNodeFactoryInvokation());
         return true;
     }
 
     private boolean processResolveClass(Resolve resolveAnnotation, MessageResolution messageResolutionAnnotation, TypeElement element, ForeignAccessFactoryGenerator factoryGenerator)
                     throws IOException {
-        MessageGenerator currentGenerator = MessageGenerator.getGenerator(processingEnv, resolveAnnotation, messageResolutionAnnotation, element);
+        MessageGenerator currentGenerator = MessageGenerator.getGenerator(processingEnv, resolveAnnotation, messageResolutionAnnotation, element, factoryGenerator);
 
         if (currentGenerator == null) {
             emitError("Unknown message type: " + resolveAnnotation.message(), element);
@@ -225,6 +251,11 @@ public final class InteropDSLProcessor extends AbstractProcessor {
 
         if (!element.getModifiers().contains(Modifier.STATIC)) {
             emitError("Class must be static", element);
+            return false;
+        }
+
+        if (element.getModifiers().contains(Modifier.PRIVATE) || element.getModifiers().contains(Modifier.PROTECTED)) {
+            emitError("Class must be public or package protected", element);
             return false;
         }
 
@@ -262,7 +293,12 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             }
         }
 
-        currentGenerator.generate();
+        try {
+            currentGenerator.generate();
+        } catch (FilerException ex) {
+            emitError("Message resolution class with same name already exists", element);
+            return false;
+        }
         Object currentMessage = Utils.getMessage(processingEnv, resolveAnnotation.message());
         factoryGenerator.addMessageHandler(currentMessage, currentGenerator.getRootNodeFactoryInvokation());
         return true;
@@ -290,6 +326,18 @@ public final class InteropDSLProcessor extends AbstractProcessor {
     }
 
     private boolean isInstanceMissing(String receiverTypeFullClassName) {
+        for (Element elem : this.processingEnv.getElementUtils().getTypeElement(receiverTypeFullClassName).getEnclosedElements()) {
+            if (elem.getKind().equals(ElementKind.METHOD)) {
+                ExecutableElement method = (ExecutableElement) elem;
+                if (method.getSimpleName().toString().equals("isInstance")) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean isInstanceHasWrongSignature(String receiverTypeFullClassName) {
         for (Element elem : this.processingEnv.getElementUtils().getTypeElement(receiverTypeFullClassName).getEnclosedElements()) {
             if (elem.getKind().equals(ElementKind.METHOD)) {
                 ExecutableElement method = (ExecutableElement) elem;
