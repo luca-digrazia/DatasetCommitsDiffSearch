@@ -41,6 +41,7 @@ import com.oracle.truffle.api.utilities.*;
 public abstract class Node implements NodeInterface, Cloneable {
 
     @CompilationFinal private Node parent;
+
     @CompilationFinal private SourceSection sourceSection;
 
     /**
@@ -289,10 +290,26 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     /**
-     * Checks if this node can be replaced by another node: tree structure & type.
+     * Checks if this node is properly adopted by its parent.
+     *
+     * @return {@code true} if it is structurally safe to replace this node.
+     */
+    public final boolean isReplaceable() {
+        if (getParent() != null) {
+            for (Node sibling : getParent().getChildren()) {
+                if (sibling == this) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks if this node can be replaced by another node, both structurally and with type safety.
      */
     public final boolean isSafelyReplaceableBy(Node newNode) {
-        return NodeUtil.isReplacementSafe(getParent(), this, newNode);
+        return isReplaceable() && NodeUtil.isReplacementSafe(getParent(), this, newNode);
     }
 
     private void reportReplace(Node oldNode, Node newNode, CharSequence reason) {
@@ -503,16 +520,16 @@ public abstract class Node implements NodeInterface, Cloneable {
      * its parent; the wrapper node must be provided by implementations of
      * {@link #createWrapperNode()}.
      * <p>
-     * Unlike {@link #probe()}, once {@link #probeLite(TruffleEventListener)} is called at a node,
+     * Unlike {@link #probe()}, once {@link #probeLite(TruffleEventReceiver)} is called at a node,
      * no additional probing can be added and no additional instrumentation can be attached.
      * <p>
      * This restricted form of instrumentation is intended for special cases where only one kind of
      * instrumentation is desired, and for which performance is a concern
      *
-     * @param eventListener
+     * @param eventReceiver
      * @throws ProbeException (unchecked) when a probe cannot be created, leaving the AST unchanged
      */
-    public final void probeLite(TruffleEventListener eventListener) {
+    public final void probeLite(TruffleEventReceiver eventReceiver) {
 
         if (this instanceof WrapperNode) {
             throw new ProbeException(ProbeFailure.Reason.WRAPPER_NODE, null, this, null);
@@ -544,7 +561,7 @@ public abstract class Node implements NodeInterface, Cloneable {
         }
 
         // Connect it to a Probe
-        ProbeNode.insertProbeLite(wrapper, eventListener);
+        ProbeNode.insertProbeLite(wrapper, eventReceiver);
 
         // Replace this node in the AST with the wrapper
         this.replace(wrapperNode);
@@ -572,7 +589,11 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     public final void atomic(Runnable closure) {
         RootNode rootNode = getRootNode();
-        synchronized (rootNode != null ? rootNode : GIL) {
+        if (rootNode != null) {
+            synchronized (rootNode) {
+                closure.run();
+            }
+        } else {
             closure.run();
         }
     }
@@ -580,10 +601,14 @@ public abstract class Node implements NodeInterface, Cloneable {
     public final <T> T atomic(Callable<T> closure) {
         try {
             RootNode rootNode = getRootNode();
-            synchronized (rootNode != null ? rootNode : GIL) {
+            if (rootNode != null) {
+                synchronized (rootNode) {
+                    return closure.call();
+                }
+            } else {
                 return closure.call();
             }
-        } catch (RuntimeException | Error e) {
+        } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -616,6 +641,4 @@ public abstract class Node implements NodeInterface, Cloneable {
         }
         return "";
     }
-
-    private static final Object GIL = new Object();
 }

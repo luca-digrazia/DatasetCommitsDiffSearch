@@ -36,20 +36,19 @@ import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.Node.Child;
 
 /**
- * An {@link InstrumentationTool} that counts interpreter <em>execution calls</em> to AST nodes,
- * tabulated by the type of called nodes; counting can be enabled <em>all</em> nodes or restricted
- * to nodes with a specified {@linkplain SyntaxTag tag} that is presumed to be applied external to
- * the tool.
+ * A {@link TruffleTool} that counts interpreter <em>execution calls</em> to AST nodes, tabulated by
+ * the type of called nodes; counting can be enabled <em>all</em> nodes or restricted to nodes with
+ * a specified {@linkplain SyntaxTag tag} that is presumed to be applied external to the tool.
  * <p>
  * <b>Tool Life Cycle</b>
  * <p>
- * See {@link InstrumentationTool} for the life cycle common to all such tools.
+ * See {@link TruffleTool} for the life cycle common to all such tools.
  * </p>
  * <b>Execution Counts</b>
  * <p>
  * <ul>
  * <li>"Execution call" on a node is is defined as invocation of a node method that is instrumented
- * to produce the event {@link TruffleEventListener#enter(Node, VirtualFrame)};</li>
+ * to produce the event {@link TruffleEventReceiver#enter(Node, VirtualFrame)};</li>
  * <li>Execution calls are tabulated only at <em>instrumented</em> nodes, i.e. those for which
  * {@linkplain Node#isInstrumentable() isInstrumentable() == true};</li>
  * <li>Execution calls are tabulated only at nodes present in the AST when originally created;
@@ -80,7 +79,7 @@ import com.oracle.truffle.api.nodes.Node.Child;
  * @see SyntaxTag
  * @see ProbeFailure
  */
-public final class NodeExecCounter extends InstrumentationTool {
+public final class NodeExecCounter extends TruffleTool {
 
     /**
      * Execution count for AST nodes of a particular type.
@@ -92,38 +91,26 @@ public final class NodeExecCounter extends InstrumentationTool {
     }
 
     /**
-     * Listener for events at instrumented nodes. Counts are maintained in a shared table, so the
-     * listener is stateless and can be shared by every {@link Instrument}.
+     * Receiver for events at instrumented nodes. Counts are maintained in a shared table, so the
+     * receiver is stateless and can be shared by every {@link Instrument}.
      */
-    private final TruffleEventListener eventListener = new DefaultEventListener() {
+    private final TruffleEventReceiver eventReceiver = new DefaultEventReceiver() {
         @Override
         public void enter(Node node, VirtualFrame frame) {
-            if (isEnabled()) {
-                final Class<?> nodeClass = node.getClass();
-                /*
-                 * Everything up to here is inlined by Truffle compilation. Delegate the next part
-                 * to a method behind an inlining boundary.
-                 *
-                 * Note that it is not permitted to pass a {@link VirtualFrame} across an inlining
-                 * boundary; they are truly virtual in inlined code.
-                 */
-                AtomicLong nodeCounter = getCounter(nodeClass);
-                nodeCounter.getAndIncrement();
-            }
+            internalReceive(node);
         }
 
-        /**
-         * Mark this method as a boundary that will stop Truffle inlining, which should not be
-         * allowed to inline the hash table method or any other complex library code.
-         */
         @TruffleBoundary
-        private AtomicLong getCounter(Class<?> nodeClass) {
-            AtomicLong nodeCounter = counters.get(nodeClass);
-            if (nodeCounter == null) {
-                nodeCounter = new AtomicLong();
-                counters.put(nodeClass, nodeCounter);
+        private void internalReceive(Node node) {
+            if (isEnabled()) {
+                final Class<?> nodeClass = node.getClass();
+                AtomicLong nodeCounter = counters.get(nodeClass);
+                if (nodeCounter == null) {
+                    nodeCounter = new AtomicLong();
+                    counters.put(nodeClass, nodeCounter);
+                }
+                nodeCounter.getAndIncrement();
             }
-            return nodeCounter;
         }
     };
 
@@ -280,7 +267,7 @@ public final class NodeExecCounter extends InstrumentationTool {
 
             if (node.isInstrumentable()) {
                 try {
-                    final Instrument instrument = Instrument.create(eventListener, "NodeExecCounter");
+                    final Instrument instrument = Instrument.create(eventReceiver, "NodeExecCounter");
                     instruments.add(instrument);
                     node.probe().attach(instrument);
                 } catch (ProbeException ex) {
@@ -304,7 +291,7 @@ public final class NodeExecCounter extends InstrumentationTool {
         @Override
         public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
             if (countingTag == tag) {
-                final Instrument instrument = Instrument.create(eventListener, NodeExecCounter.class.getSimpleName());
+                final Instrument instrument = Instrument.create(eventReceiver, NodeExecCounter.class.getSimpleName());
                 instruments.add(instrument);
                 probe.attach(instrument);
             }
