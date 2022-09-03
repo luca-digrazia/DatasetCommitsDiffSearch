@@ -51,5 +51,6 @@ public class StaticFieldAccessTest extends GraalCompilerTest {
     @Test
     public void test() {
         tester = this;
+        System.out.println(Inner.o);
     }
 }

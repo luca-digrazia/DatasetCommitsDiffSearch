@@ -26,12 +26,12 @@ import java.lang.reflect.InvocationTargetException;
 
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
-import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
-import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
@@ -51,19 +51,14 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  */
 public abstract class MethodSubstitutionTest extends GraalCompilerTest {
 
-    protected StructuredGraph testGraph(final String snippet) {
-        return testGraph(snippet, null);
-    }
-
     @SuppressWarnings("try")
-    protected StructuredGraph testGraph(final String snippet, String name) {
-        DebugContext debug = getDebugContext();
-        try (DebugContext.Scope s = debug.scope("MethodSubstitutionTest", getResolvedJavaMethod(snippet))) {
-            StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES, debug);
+    protected StructuredGraph testGraph(final String snippet) {
+        try (Scope s = Debug.scope("MethodSubstitutionTest", getResolvedJavaMethod(snippet))) {
+            StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
             HighTierContext context = getDefaultHighTierContext();
-            debug.dump(DebugContext.BASIC_LEVEL, graph, "Graph");
+            Debug.dump(Debug.BASIC_LEVEL, graph, "Graph");
             new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
-            debug.dump(DebugContext.BASIC_LEVEL, graph, "Graph");
+            Debug.dump(Debug.BASIC_LEVEL, graph, "Graph");
             new CanonicalizerPhase().apply(graph, context);
             new DeadCodeEliminationPhase().apply(graph);
             // Try to ensure any macro nodes are lowered to expose any resulting invokes
@@ -74,23 +69,10 @@ public abstract class MethodSubstitutionTest extends GraalCompilerTest {
                 new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, context);
             }
             assertNotInGraph(graph, MacroNode.class);
-            if (name != null) {
-                for (Node node : graph.getNodes()) {
-                    if (node instanceof Invoke) {
-                        Invoke invoke = (Invoke) node;
-                        if (invoke.callTarget() instanceof MethodCallTargetNode) {
-                            MethodCallTargetNode call = (MethodCallTargetNode) invoke.callTarget();
-                            assertTrue(!call.targetMethod().getName().equals(name), "Unexpected invoke of intrinsic %s", call.targetMethod());
-                        }
-                    }
-
-                }
-            } else {
-                assertNotInGraph(graph, Invoke.class);
-            }
+            assertNotInGraph(graph, Invoke.class);
             return graph;
         } catch (Throwable e) {
-            throw debug.handle(e);
+            throw Debug.handle(e);
         }
     }
 
