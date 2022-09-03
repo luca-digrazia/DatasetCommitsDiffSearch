@@ -41,6 +41,7 @@
 package com.oracle.truffle.sl;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.util.Map;
@@ -134,7 +135,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
     }
 
     @Override
-    protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) {
+    protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
         throw new IllegalStateException("evalInContext not supported in SL");
     }
 
