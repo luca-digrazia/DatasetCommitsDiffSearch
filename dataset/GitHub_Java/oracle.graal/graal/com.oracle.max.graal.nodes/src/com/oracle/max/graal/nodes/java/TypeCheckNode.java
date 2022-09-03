@@ -37,6 +37,7 @@ public abstract class TypeCheckNode extends BooleanNode {
     protected static final RiResolvedType[] EMPTY_HINTS = new RiResolvedType[0];
     @Input private ValueNode object;
     @Input private ValueNode targetClassInstruction;
+    @Input private final NodeInputList<ValueNode> hintInstructions;
     @Data private final RiResolvedType targetClass;
     @Data private final RiResolvedType[] hints;
     @Data private final boolean hintsExact;
@@ -48,11 +49,12 @@ public abstract class TypeCheckNode extends BooleanNode {
      * @param object the node which produces the object
      * @param kind the result type of this node
      */
-    public TypeCheckNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact, Stamp stamp) {
+    public TypeCheckNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, List<? extends ValueNode> hintInstructions, RiResolvedType[] hints, boolean hintsExact, Stamp stamp) {
         super(stamp);
         this.targetClassInstruction = targetClassInstruction;
         this.targetClass = targetClass;
         this.object = object;
+        this.hintInstructions = new NodeInputList<>(this, hintInstructions);
         this.hints = hints;
         this.hintsExact = hintsExact;
     }
@@ -71,6 +73,10 @@ public abstract class TypeCheckNode extends BooleanNode {
      */
     public RiResolvedType targetClass() {
         return targetClass;
+    }
+
+    public NodeInputList<ValueNode> hintInstructions() {
+        return hintInstructions;
     }
 
     public RiResolvedType[] hints() {
