@@ -469,9 +469,6 @@ class TruffleMap<K, V> extends AbstractMap<K, V> {
                 if (isValidKey(receiver, key) && KeyInfo.isReadable(sendKeyInfo(keyInfo, receiver, key))) {
                     try {
                         result = toHost.execute(sendRead(read, receiver, key), cache.valueClass, cache.valueType, languageContext);
-                    } catch (ClassCastException | NullPointerException e) {
-                        // expected exceptions from casting to the host value.
-                        throw e;
                     } catch (UnknownIdentifierException e) {
                         return null;
                     } catch (UnsupportedMessageException e) {
@@ -518,28 +515,23 @@ class TruffleMap<K, V> extends AbstractMap<K, V> {
                             } catch (UnsupportedMessageException e) {
                             }
                         }
-                        Object guestValue = toGuest.apply(languageContext, value);
+                        if (value != null && !cache.valueClass.isInstance(value)) {
+                            CompilerDirectives.transferToInterpreter();
+                            throw newClassCastException("Expected value " + cache.valueClass + " but was " + value.getClass().getName());
+                        }
                         try {
-                            sendWrite(write, receiver, key, guestValue);
+                            sendWrite(write, receiver, key, toGuest.apply(languageContext, value));
                         } catch (UnknownIdentifierException e) {
-                            CompilerDirectives.transferToInterpreter();
-                            throw JavaInteropErrors.invalidMapIdentifier(languageContext, receiver, cache.keyClass, cache.valueType, key);
+                            throw newUnsupportedOperationException("Unsupported operation");
                         } catch (UnsupportedMessageException e) {
-                            CompilerDirectives.transferToInterpreter();
-                            throw JavaInteropErrors.mapUnsupported(languageContext, receiver, cache.keyClass, cache.valueType, "put");
+                            throw newUnsupportedOperationException("Unsupported operation");
                         } catch (UnsupportedTypeException e) {
-                            CompilerDirectives.transferToInterpreter();
-                            throw JavaInteropErrors.invalidMapValue(languageContext, receiver, cache.keyClass, cache.valueType, key, guestValue);
+                            throw newIllegalArgumentException("Unsupported type");
                         }
                         return cache.valueClass.cast(result);
                     }
                 }
-                CompilerDirectives.transferToInterpreter();
-                if (cache.keyClass.isInstance(key)) {
-                    throw JavaInteropErrors.mapUnsupported(languageContext, receiver, cache.keyClass, cache.valueType, "put");
-                } else {
-                    throw JavaInteropErrors.invalidMapIdentifier(languageContext, receiver, cache.keyClass, cache.valueType, key);
-                }
+                throw newUnsupportedOperationException("Unsupported operation");
             }
 
         }
