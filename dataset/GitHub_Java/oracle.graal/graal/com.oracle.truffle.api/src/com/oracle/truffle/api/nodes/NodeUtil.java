@@ -561,10 +561,6 @@ public final class NodeUtil {
         printSourceAttributionTree(new PrintWriter(out), null, node, 1);
     }
 
-    public static void printSourceAttributionTree(PrintWriter out, Node node) {
-        printSourceAttributionTree(out, null, node, 1);
-    }
-
     private static void printSourceAttributionTree(PrintWriter p, Node parent, Node node, int level) {
         if (node == null) {
             return;
