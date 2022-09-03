@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -140,8 +138,7 @@ public abstract class LocalLiveness {
 
     private boolean traceEnd(DebugContext debug, BciBlock block, int blockID) {
         if (debug.isLogEnabled()) {
-            debug.logv("  end   B%d  [%d, %d]  in: %s  out: %s  gen: %s  kill: %s", block.getId(), block.startBci, block.getEndBci(), debugLiveIn(blockID), debugLiveOut(blockID),
-                            debugLiveGen(blockID),
+            debug.logv("  end   B%d  [%d, %d]  in: %s  out: %s  gen: %s  kill: %s", block.getId(), block.startBci, block.endBci, debugLiveIn(blockID), debugLiveOut(blockID), debugLiveGen(blockID),
                             debugLiveKill(blockID));
         }
         return true;
@@ -156,8 +153,7 @@ public abstract class LocalLiveness {
 
     private boolean traceStart(DebugContext debug, BciBlock block, int blockID) {
         if (debug.isLogEnabled()) {
-            debug.logv("  start B%d  [%d, %d]  in: %s  out: %s  gen: %s  kill: %s", block.getId(), block.startBci, block.getEndBci(), debugLiveIn(blockID), debugLiveOut(blockID),
-                            debugLiveGen(blockID),
+            debug.logv("  start B%d  [%d, %d]  in: %s  out: %s  gen: %s  kill: %s", block.getId(), block.startBci, block.endBci, debugLiveIn(blockID), debugLiveOut(blockID), debugLiveGen(blockID),
                             debugLiveKill(blockID));
         }
         return true;
@@ -224,13 +220,13 @@ public abstract class LocalLiveness {
     protected abstract void storeOne(int blockID, int local);
 
     private void computeLocalLiveness(BytecodeStream stream, BciBlock block) {
-        if (!block.isInstructionBlock()) {
+        if (block.isExceptionDispatch()) {
             return;
         }
         int blockID = block.getId();
         int localIndex;
         stream.setBCI(block.startBci);
-        while (stream.currentBCI() <= block.getEndBci()) {
+        while (stream.currentBCI() <= block.endBci) {
             switch (stream.currentBC()) {
                 case LLOAD:
                 case DLOAD:
