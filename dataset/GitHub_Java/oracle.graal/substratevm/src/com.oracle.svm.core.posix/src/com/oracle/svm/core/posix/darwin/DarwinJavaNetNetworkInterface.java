@@ -46,9 +46,7 @@ import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.Ifaddrs;
 import com.oracle.svm.core.posix.headers.Ioctl;
 import com.oracle.svm.core.posix.headers.LibC;
-import com.oracle.svm.core.posix.headers.NetEthernet;
 import com.oracle.svm.core.posix.headers.NetIf;
-import com.oracle.svm.core.posix.headers.NetIfDl;
 import com.oracle.svm.core.posix.headers.NetinetIn;
 import com.oracle.svm.core.posix.headers.Socket;
 import com.oracle.svm.core.posix.headers.darwin.DarwinNetinet6In6_var;
@@ -87,7 +85,7 @@ public class DarwinJavaNetNetworkInterface {
             JavaNetNetworkInterface.netif ifs = ifsParameter;
             // 1930 struct ifaddrs *ifa, *origifa;
             Ifaddrs.ifaddrs ifa;
-            Ifaddrs.ifaddrsPointer origifa_Pointer = StackValue.get(Ifaddrs.ifaddrsPointer.class);
+            Ifaddrs.ifaddrsPointer origifa_Pointer = StackValue.get(SizeOf.get(Ifaddrs.ifaddrsPointer.class));
             // 1931
             // 1932 if (getifaddrs(&origifa) != 0) {
             if (Ifaddrs.getifaddrs(origifa_Pointer) != 0) {
@@ -153,11 +151,11 @@ public class DarwinJavaNetNetworkInterface {
             netif ifs = ifsParameter;
             // 2004     struct ifaddrs *ifa, *origifa;
             Ifaddrs.ifaddrs ifa;
-            Ifaddrs.ifaddrsPointer origifa_Pointer = StackValue.get(Ifaddrs.ifaddrsPointer.class);
+            Ifaddrs.ifaddrsPointer origifa_Pointer = StackValue.get(SizeOf.get(Ifaddrs.ifaddrsPointer.class));
             // 2005     struct sockaddr_in6 *sin6;
             NetinetIn.sockaddr_in6 sin6;
             // 2006     struct in6_ifreq ifr6;
-            DarwinNetinet6In6_var.in6_ifreq ifr6 = StackValue.get(DarwinNetinet6In6_var.in6_ifreq.class);
+            DarwinNetinet6In6_var.in6_ifreq ifr6 = StackValue.get(SizeOf.get(DarwinNetinet6In6_var.in6_ifreq.class));
             // 2007
             // 2008     if (getifaddrs(&origifa) != 0) {
             if (Ifaddrs.getifaddrs(origifa_Pointer) != 0) {
@@ -297,7 +295,7 @@ public class DarwinJavaNetNetworkInterface {
             // 2083   struct sockaddr *ret = NULL;
             Socket.sockaddr ret = WordFactory.nullPointer();
             // 2084   struct ifreq if2;
-            NetIf.ifreq if2 = StackValue.get(NetIf.ifreq.class);
+            NetIf.ifreq if2 = StackValue.get(SizeOf.get(NetIf.ifreq.class));
             // 2085
             // 2086   memset((char *) &if2, 0, sizeof(if2));
             LibC.memset(if2, WordFactory.signed(0), WordFactory.unsigned(SizeOf.get(NetIf.ifreq.class)));
@@ -346,7 +344,7 @@ public class DarwinJavaNetNetworkInterface {
             // 2115     short ret;
             short ret;
             // 2116     struct ifreq if2;
-            NetIf.ifreq if2 = StackValue.get(NetIf.ifreq.class);
+            NetIf.ifreq if2 = StackValue.get(SizeOf.get(NetIf.ifreq.class));
             // 2117
             // 2118     memset((char *) &if2, 0, sizeof(if2));
             LibC.memset(if2, WordFactory.signed(0), WordFactory.unsigned(SizeOf.get(NetIf.ifreq.class)));
@@ -381,7 +379,7 @@ public class DarwinJavaNetNetworkInterface {
         // 2182 static int getFlags(int sock, const char *ifname, int *flags) {
         public int getFlags(int sock, CCharPointer ifname, CIntPointer flags) {
             // 2183   struct ifreq if2;
-            NetIf.ifreq if2 = StackValue.get(NetIf.ifreq.class);
+            NetIf.ifreq if2 = StackValue.get(SizeOf.get(NetIf.ifreq.class));
             // 2184   int ret = -1;
             /* `ret` is unused. */
             // 2185
@@ -432,60 +430,6 @@ public class DarwinJavaNetNetworkInterface {
             // 2074     return (index == 0) ? -1 : index;
             return (index == 0) ? -1 : index;
             // 2075 #endif
-        }
-
-        @Override
-        // 2120 /*
-        // 2121  * Gets the Hardware address (usually MAC address) for the named interface.
-        // 2122  * On return puts the data in buf, and returns the length, in byte, of the
-        // 2123  * MAC address. Returns -1 if there is no hardware address on that interface.
-        // 2124  */
-        // 2125 static int getMacAddress
-        // 2126   (JNIEnv *env, const char *ifname, const struct in_addr *addr,
-        // 2127    unsigned char *buf)
-        // 2128 {
-        public int getMacAddress(CCharPointer ifname, NetinetIn.in_addr addr, CCharPointer buf) throws SocketException {
-            // 2129     struct ifaddrs *ifa0, *ifa;
-            /* ifa0 is actually a `struct ifaddrs**`. See the call to `getifaddrs`. */
-            Ifaddrs.ifaddrsPointer ifa0 = StackValue.get(Ifaddrs.ifaddrsPointer.class);
-            Ifaddrs.ifaddrs ifa;
-            // 2130     struct sockaddr *saddr;
-            Socket.sockaddr saddr;
-            // 2131     int i;
-            /* `i` is unused. */
-            // 2132
-            // 2133     // grab the interface list
-            // 2134     if (!getifaddrs(&ifa0)) {
-            /* getifaddrs(struct ifaddrs **ifap) return 0 on success, -1 on failure, with errno set. */
-            if (Ifaddrs.getifaddrs(ifa0) == 0) {
-                // 2135         // cycle through the interfaces
-                // 2136         for (i = 0, ifa = ifa0; ifa != NULL; ifa = ifa->ifa_next, i++) {
-                for (ifa = ifa0.read(); ifa.isNonNull(); ifa = ifa.ifa_next()) {
-                    // 2137             saddr = ifa->ifa_addr;
-                    saddr = ifa.ifa_addr();
-                    // 2138             // link layer contains the MAC address
-                    // 2139             if (saddr->sa_family == AF_LINK && !strcmp(ifname, ifa->ifa_name)) {
-                    if ((saddr.sa_family() == Socket.AF_LINK()) && (LibC.strcmp(ifname, ifa.ifa_name()) == 0)) {
-                        // 2140                 struct sockaddr_dl *sadl = (struct sockaddr_dl *) saddr;
-                        NetIfDl.sockaddr_dl sadl = (NetIfDl.sockaddr_dl) saddr;
-                        // 2141                 // check the address has the correct length
-                        // 2142                 if (sadl->sdl_alen == ETHER_ADDR_LEN) {
-                        if (sadl.sdl_alen() == NetEthernet.ETHER_ADDR_LEN()) {
-                            // 2143                     memcpy(buf, (sadl->sdl_data + sadl->sdl_nlen), ETHER_ADDR_LEN);
-                            LibC.memcpy(buf, (sadl.sdl_data().addressOf(sadl.sdl_nlen())), WordFactory.unsigned(NetEthernet.ETHER_ADDR_LEN()));
-                            // 2144                     freeifaddrs(ifa0);
-                            Ifaddrs.freeifaddrs(ifa0.read());
-                            // 2145                     return ETHER_ADDR_LEN;
-                            return NetEthernet.ETHER_ADDR_LEN();
-                        }
-                    }
-                }
-                // 2149         freeifaddrs(ifa0);
-                Ifaddrs.freeifaddrs(ifa0.read());
-            }
-            // 2151
-            // 2152     return -1;
-            return -1;
         }
     }
 }

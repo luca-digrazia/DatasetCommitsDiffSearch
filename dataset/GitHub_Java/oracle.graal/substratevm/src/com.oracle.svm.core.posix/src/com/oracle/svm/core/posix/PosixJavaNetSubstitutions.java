@@ -48,7 +48,6 @@ import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 
-import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -66,9 +65,6 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.jdk.JDK8OrEarlier;
-import com.oracle.svm.core.jdk.JDK9OrLater;
 import com.oracle.svm.core.os.IsDefined;
 import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.Fcntl;
@@ -225,31 +221,13 @@ final class Target_java_net_InetAddress {
 
     @Alias static int IPv6;
 
-    @Alias //
-    @TargetElement(name = "preferIPv6Address", onlyWith = JDK8OrEarlier.class) //
-    static boolean preferIPv6AddressJDK8OrEarlier;
-
-    @Alias //
-    @TargetElement(name = "preferIPv6Address", onlyWith = JDK9OrLater.class) //
-    static int preferIPv6AddressJDK9OrLater;
-
-    @Alias //
-    @TargetElement(onlyWith = JDK9OrLater.class) //
-    static /* final */ int PREFER_IPV4_VALUE;
-
-    @Alias //
-    @TargetElement(onlyWith = JDK9OrLater.class) //
-    static /* final */ int PREFER_IPV6_VALUE;
-
-    @Alias //
-    @TargetElement(onlyWith = JDK9OrLater.class) //
-    static /* final */ int PREFER_SYSTEM_VALUE;
+    // TODO: I am re-using the static field rather than caching it locally in a translation of
+    // Inet6AddressImpl::initializeInetClasses().
+    @Alias static boolean preferIPv6Address;
 
     @Alias Target_java_net_InetAddress_InetAddressHolder holder;
 
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    @RecomputeFieldValue(kind = Kind.FromAlias) //
+    @Alias @RecomputeFieldValue(kind = Kind.FromAlias)//
     static HashMap<String, Void> lookupTable = new HashMap<>();
 
     /**
@@ -260,42 +238,23 @@ final class Target_java_net_InetAddress {
      * {@link Target_java_net_InetAddress_Cache#cache} - that is easier since it does not require us
      * to instantiate a non-public JDK class during image generation.
      */
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    @RecomputeFieldValue(kind = Kind.Reset) //
+    @Alias @RecomputeFieldValue(kind = Kind.Reset)//
     static boolean addressCacheInit = false;
-
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    @RecomputeFieldValue(kind = Kind.Reset) //
+    @Alias @RecomputeFieldValue(kind = Kind.Reset)//
     static InetAddress[] unknown_array;
 
-    @Alias //
-    @TargetElement(name = "cachedLocalHost", onlyWith = JDK8OrEarlier.class) //
-    @RecomputeFieldValue(kind = Kind.Reset) //
-    static InetAddress cachedLocalHostJDK8OrEarlier;
-
-    @Alias //
-    @TargetElement(name = "cachedLocalHost", onlyWith = JDK9OrLater.class) //
-    @RecomputeFieldValue(kind = Kind.Reset) //
-    static Target_java_net_InetAddress_CachedLocalHost cachedLocalHostJDK9OrLater;
-
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    @RecomputeFieldValue(kind = Kind.Reset) //
+    @Alias @RecomputeFieldValue(kind = Kind.Reset)//
+    static InetAddress cachedLocalHost;
+    @Alias @RecomputeFieldValue(kind = Kind.Reset)//
     static long cacheTime;
 }
 
-@TargetClass(className = "java.net.InetAddress", innerClass = "Cache", onlyWith = JDK8OrEarlier.class)
+@TargetClass(className = "java.net.InetAddress", innerClass = "Cache")
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_net_InetAddress_Cache {
 
     @Alias @RecomputeFieldValue(kind = Kind.NewInstance, declClass = LinkedHashMap.class)//
     LinkedHashMap<String, Object> cache;
-}
-
-@TargetClass(className = "java.net.InetAddress", innerClass = "CachedLocalHost", onlyWith = JDK9OrLater.class)
-final class Target_java_net_InetAddress_CachedLocalHost {
 }
 
 /** Methods to operate on java.net.InetAddress instances. */
@@ -486,7 +445,7 @@ final class Target_java_net_Inet4AddressImpl {
     @SuppressWarnings({"static-method"})
     public String getLocalHostName() {
         // 355     char hostname[NI_MAXHOST+1];
-        CCharPointer hostname = StackValue.get(Netdb.NI_MAXHOST() + 1, CCharPointer.class);
+        CCharPointer hostname = StackValue.get(Netdb.NI_MAXHOST() + 1, SizeOf.get(CCharPointer.class));
         // 357     hostname[0] = '\0';
         hostname.write(0, (byte) '\0');
         // 358     if (JVM_GetHostName(hostname, sizeof(hostname))) {
@@ -498,8 +457,8 @@ final class Target_java_net_Inet4AddressImpl {
             }
         } else {
             // 362         struct addrinfo hints, *res;
-            Netdb.addrinfo hints = StackValue.get(Netdb.addrinfo.class);
-            Netdb.addrinfoPointer res = StackValue.get(Netdb.addrinfoPointer.class);
+            Netdb.addrinfo hints = StackValue.get(SizeOf.get(Netdb.addrinfo.class));
+            Netdb.addrinfoPointer res = StackValue.get(SizeOf.get(Netdb.addrinfoPointer.class));
             // 363         int error;
             int error;
             // 365         hostname[NI_MAXHOST] = '\0';
@@ -557,8 +516,8 @@ final class Target_java_net_Inet4AddressImpl {
         // 407     int error = 0;
         int error = 0;
         // 408     struct addrinfo hints, *res, *resNew = NULL;
-        Netdb.addrinfo hints = StackValue.get(Netdb.addrinfo.class);
-        Netdb.addrinfoPointer res_Pointer = StackValue.get(Netdb.addrinfoPointer.class);
+        Netdb.addrinfo hints = StackValue.get(SizeOf.get(Netdb.addrinfo.class));
+        Netdb.addrinfoPointer res_Pointer = StackValue.get(SizeOf.get(Netdb.addrinfoPointer.class));
         Netdb.addrinfo resNew = WordFactory.nullPointer();
         // 410     if (!initializeInetClasses(env))
         if (!Util_java_net_Inet4AddressImpl.initializeInetClasses()) {
@@ -751,15 +710,15 @@ final class Target_java_net_Inet4AddressImpl {
         // 535     jstring ret = NULL;
         String ret = null;
         // 537     char host[NI_MAXHOST+1];
-        CCharPointer host = StackValue.get(Netdb.NI_MAXHOST() + 1, CCharPointer.class);
+        CCharPointer host = StackValue.get(Netdb.NI_MAXHOST() + 1, SizeOf.get(CCharPointer.class));
         // 538     int error = 0;
         int error = 0;
         // 539     int len = 0;
         int len = 0;
         // 540     jbyte caddr[4];
-        CCharPointer caddr = StackValue.get(4, CCharPointer.class);
+        CCharPointer caddr = StackValue.get(4, SizeOf.get(CCharPointer.class));
         // 542     struct sockaddr_in him4;
-        NetinetIn.sockaddr_in him4 = StackValue.get(NetinetIn.sockaddr_in.class);
+        NetinetIn.sockaddr_in him4 = StackValue.get(SizeOf.get(NetinetIn.sockaddr_in.class));
         // 543     struct sockaddr *sa;
         Socket.sockaddr sa;
         // 545     jint addr;
@@ -945,8 +904,8 @@ final class Target_java_net_Inet6AddressImpl {
         int len = 0;
         CCharPointer caddr = StackValue.get(16);
 
-        NetinetIn.sockaddr_in him4 = StackValue.get(NetinetIn.sockaddr_in.class);
-        NetinetIn.sockaddr_in6 him6 = StackValue.get(NetinetIn.sockaddr_in6.class);
+        NetinetIn.sockaddr_in him4 = StackValue.get(SizeOf.get(NetinetIn.sockaddr_in.class));
+        NetinetIn.sockaddr_in6 him6 = StackValue.get(SizeOf.get(NetinetIn.sockaddr_in6.class));
         Socket.sockaddr sa;
 
         if (addrArray.length == 4) {
@@ -995,7 +954,7 @@ final class Target_java_net_Inet6AddressImpl {
     @Substitute
     @SuppressWarnings({"static-method", "unused"})
     public String getLocalHostName() throws UnknownHostException {
-        CCharPointer hostname = StackValue.get(Netdb.NI_MAXHOST() + 1, CCharPointer.class);
+        CCharPointer hostname = StackValue.get(Netdb.NI_MAXHOST() + 1, SizeOf.get(CCharPointer.class));
         hostname.write(0, (byte) '\0');
         if (Unistd.gethostname(hostname, WordFactory.unsigned(Netdb.NI_MAXHOST() + 1)) != 0) {
             /* Something went wrong, maybe networking is not setup? */
@@ -1061,9 +1020,9 @@ final class Target_java_net_Inet6AddressImpl {
         int retLen = 0;
 
         int error = 0;
-        Netdb.addrinfo hints = StackValue.get(Netdb.addrinfo.class);
+        Netdb.addrinfo hints = StackValue.get(SizeOf.get(Netdb.addrinfo.class));
         Netdb.addrinfo res = WordFactory.nullPointer();
-        Netdb.addrinfoPointer resPtr = StackValue.get(Netdb.addrinfoPointer.class);
+        Netdb.addrinfoPointer resPtr = StackValue.get(SizeOf.get(Netdb.addrinfoPointer.class));
         Netdb.addrinfo resNew = WordFactory.nullPointer();
 
         if (host == null) {
@@ -1110,9 +1069,8 @@ final class Target_java_net_Inet6AddressImpl {
                     int i = 0;
                     int inetCount = 0;
                     int inet6Count = 0;
-                    int inetIndex = 0;
-                    int inet6Index = 0;
-                    int originalIndex = 0;
+                    int inetIndex;
+                    int inet6Index;
                     Netdb.addrinfo itr;
                     Netdb.addrinfo last = WordFactory.nullPointer();
                     Netdb.addrinfo iterator = res;
@@ -1183,28 +1141,14 @@ final class Target_java_net_Inet6AddressImpl {
 
                     ret = new InetAddress[retLen];
 
-                    if (GraalServices.Java8OrEarlier) {
-                        if (Target_java_net_InetAddress.preferIPv6AddressJDK8OrEarlier) {
-                            /* AF_INET addresses will be offset by inet6Count */
-                            inetIndex = inet6Count;
-                            inet6Index = 0;
-                        } else {
-                            /* AF_INET6 addresses will be offset by inetCount */
-                            inetIndex = 0;
-                            inet6Index = inetCount;
-                        }
+                    if (Target_java_net_InetAddress.preferIPv6Address) {
+                        /* AF_INET addresses will be offset by inet6Count */
+                        inetIndex = inet6Count;
+                        inet6Index = 0;
                     } else {
-                        if (Target_java_net_InetAddress.preferIPv6AddressJDK9OrLater == Target_java_net_InetAddress.PREFER_IPV6_VALUE) {
-                            inetIndex = inet6Count;
-                            inet6Index = 0;
-                        } else if (Target_java_net_InetAddress.preferIPv6AddressJDK9OrLater == Target_java_net_InetAddress.PREFER_IPV4_VALUE) {
-                            inetIndex = 0;
-                            inet6Index = inetCount;
-                        } else if (Target_java_net_InetAddress.preferIPv6AddressJDK9OrLater == Target_java_net_InetAddress.PREFER_SYSTEM_VALUE) {
-                            inetIndex = 0;
-                            inet6Index = 0;
-                            originalIndex = 0;
-                        }
+                        /* AF_INET6 addresses will be offset by inetCount */
+                        inetIndex = 0;
+                        inet6Index = inetCount;
                     }
 
                     while (iterator.isNonNull()) {
@@ -1213,7 +1157,7 @@ final class Target_java_net_Inet6AddressImpl {
                             Inet4Address iaObj = Util_java_net_Inet4Address.new_Inet4Address();
                             JavaNetNetUtil.setInetAddress_addr(iaObj, NetinetIn.ntohl(((NetinetIn.sockaddr_in) iterator.ai_addr()).sin_addr().s_addr()));
                             JavaNetNetUtil.setInetAddress_hostName(iaObj, host);
-                            ret[inetIndex | originalIndex] = iaObj;
+                            ret[inetIndex] = iaObj;
                             inetIndex++;
                         } else if (iterator.ai_family() == Socket.AF_INET6()) {
                             // 455 jint scope = 0;
@@ -1246,16 +1190,9 @@ final class Target_java_net_Inet6AddressImpl {
                             // 472 setInetAddress_hostName(env, iaObj, host);
                             JavaNetNetUtil.setInetAddress_hostName(iaObj, host);
                             // 473 (*env)->SetObjectArrayElement(env, ret, inet6Index, iaObj);
-                            ret[inet6Index | originalIndex] = iaObj;
+                            ret[inet6Index] = iaObj;
                             // 474 inet6Index++;
                             inet6Index++;
-                        }
-                        if (!GraalServices.Java8OrEarlier) {
-                            if (Target_java_net_InetAddress.preferIPv6AddressJDK9OrLater == Target_java_net_InetAddress.PREFER_SYSTEM_VALUE) {
-                                originalIndex++;
-                                inetIndex = 0;
-                                inet6Index = 0;
-                            }
                         }
                         iterator = iterator.ai_next();
                     }
@@ -1288,9 +1225,9 @@ final class Util_java_net_Inet6AddressImpl {
         if (IsDefined.MACOSX()) {
             /* also called from Inet4AddressImpl.c */
             InetAddress[] result = null;
-            CCharPointer myhostname = StackValue.get(Netdb.NI_MAXHOST() + 1, CCharPointer.class);
+            CCharPointer myhostname = StackValue.get(Netdb.NI_MAXHOST() + 1, SizeOf.get(CCharPointer.class));
             Ifaddrs.ifaddrs ifa = WordFactory.nullPointer();
-            Ifaddrs.ifaddrsPointer ifaPointer = StackValue.get(Ifaddrs.ifaddrsPointer.class);
+            Ifaddrs.ifaddrsPointer ifaPointer = StackValue.get(SizeOf.get(Ifaddrs.ifaddrsPointer.class));
             int i;
             int j;
             int addrs4 = 0;
@@ -1356,19 +1293,12 @@ final class Util_java_net_Inet6AddressImpl {
                 /* Create and fill the Java array. */
                 int arraySize = addrs4 + addrs6 - (includeLoopback ? 0 : (numV4Loopbacks + numV6Loopbacks));
                 result = new InetAddress[arraySize];
-                if (GraalServices.Java8OrEarlier) {
-                    if (Target_java_net_InetAddress.preferIPv6AddressJDK8OrEarlier) {
-                        i = includeLoopback ? addrs6 : (addrs6 - numV6Loopbacks);
-                        j = 0;
-                    } else {
-                        i = 0;
-                        j = includeLoopback ? addrs4 : (addrs4 - numV4Loopbacks);
-                    }
-                } else {
-                    /* TODO: `i` and `j` need to be initialized. But to what values? */
-                    i = 0;
+                if (Target_java_net_InetAddress.preferIPv6Address) {
+                    i = includeLoopback ? addrs6 : (addrs6 - numV6Loopbacks);
                     j = 0;
-                    throw VMError.unsupportedFeature("JDK9OrLater: PosixJavaNetSubstitutions.Util_java_net_Inet6AddressImpl.lookupIfLocalhost: https://bugs.openjdk.java.net/browse/JDK-8205076");
+                } else {
+                    i = 0;
+                    j = includeLoopback ? addrs4 : (addrs4 - numV4Loopbacks);
                 }
                 // Now loop around the ifaddrs
                 iter = ifa;
@@ -1380,7 +1310,7 @@ final class Util_java_net_Inet6AddressImpl {
                         int index = (family == Socket.AF_INET()) ? i++ : j++;
                         // The space pointed to by portPointer is unused here,
                         // but I have to allocate it because it gets written by the call.
-                        CIntPointer portPointer = StackValue.get(CIntPointer.class);
+                        CIntPointer portPointer = StackValue.get(SizeOf.get(CIntPointer.class));
                         InetAddress o = JavaNetNetUtil.NET_SockaddrToInetAddress(iter.ifa_addr(), portPointer);
                         if (o != null) {
                             throw new OutOfMemoryError("Object allocation failed");
@@ -1584,7 +1514,7 @@ final class Target_java_net_SocketInputStream {
     private int socketRead0(FileDescriptor fdObj, byte[] data, int off, int lenArg, int timeout) throws IOException, OutOfMemoryError, sun.net.ConnectionResetException {
         int len = lenArg;
         // 065     char BUF[MAX_BUFFER_LEN];
-        CCharPointer BUF = StackValue.get(JavaNetNetUtilMD.MAX_BUFFER_LEN(), CCharPointer.class);
+        CCharPointer BUF = StackValue.get(JavaNetNetUtilMD.MAX_BUFFER_LEN(), SizeOf.get(CCharPointer.class));
         // 066     char *bufP;
         CCharPointer bufP = WordFactory.nullPointer();
         // 067     jint fd, nread;
@@ -1755,7 +1685,7 @@ final class Target_java_net_SocketOutputStream {
         // 066     char *bufP;
         CCharPointer bufP = WordFactory.nullPointer();
         // 067     char BUF[MAX_BUFFER_LEN];
-        CCharPointer BUF = StackValue.get(JavaNetNetUtilMD.MAX_BUFFER_LEN(), CCharPointer.class);
+        CCharPointer BUF = StackValue.get(JavaNetNetUtilMD.MAX_BUFFER_LEN(), SizeOf.get(CCharPointer.class));
         // 068     int buflen;
         int buflen;
         // 069     int fd;
@@ -1985,7 +1915,7 @@ final class Target_java_net_PlainSocketImpl {
             // 216 if (domain == AF_INET6) {
             if (domain == Socket.AF_INET6()) {
                 // 217 int arg = 0;
-                CIntPointer argPointer = StackValue.get(CIntPointer.class);
+                CIntPointer argPointer = StackValue.get(SizeOf.get(CIntPointer.class));
                 argPointer.write(0);
                 // 218 if (setsockopt(fd, IPPROTO_IPV6(), IPV6_V6ONLY, (char*)&arg,
                 // 219 sizeof(int)) < 0) {
@@ -2013,7 +1943,7 @@ final class Target_java_net_PlainSocketImpl {
         // 232 if (ssObj != NULL) {
         if (ssObj != null) {
             // 233 int arg = 1;
-            CIntPointer argPointer = StackValue.get(CIntPointer.class);
+            CIntPointer argPointer = StackValue.get(SizeOf.get(CIntPointer.class));
             argPointer.write(1);
             // 234 SET_NONBLOCKING(fd);
             Util_java_net_PlainSocketImpl.SET_NONBLOCKING(fd);
@@ -2046,7 +1976,7 @@ final class Target_java_net_PlainSocketImpl {
     @Substitute
     int socketAvailable() throws IOException {
         // 806     jint ret = -1;
-        CIntPointer ret_Pointer = StackValue.get(CIntPointer.class);
+        CIntPointer ret_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
         ret_Pointer.write(-1);
         // 807     jobject fdObj = (*env)->GetObjectField(env, this, psi_fdID);
         FileDescriptor fdObj = Util_java_net_PlainSocketImpl.as_Target_java_net_SocketImpl(this).fd;
@@ -2099,7 +2029,7 @@ final class Target_java_net_PlainSocketImpl {
         // 555     int fd;
         int fd;
         // 556     int len;
-        CIntPointer len_Pointer = StackValue.get(CIntPointer.class);
+        CIntPointer len_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
         len_Pointer.write(0);
         // 557     SOCKADDR him;
         Socket.sockaddr him = StackValue.get(JavaNetNetUtilMD.SOCKADDR_LEN());
@@ -2220,7 +2150,7 @@ final class Target_java_net_PlainSocketImpl {
         // 259    jint localport = (*env)->GetIntField(env, this, psi_localportID);
         int localport = Util_java_net_PlainSocketImpl.as_Target_java_net_SocketImpl(this).localport;
         // 260    int len = 0;
-        CIntPointer len_Pointer = StackValue.get(CIntPointer.class);
+        CIntPointer len_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
         len_Pointer.write(0);
         // 262    /* fdObj is the FileDescriptor field on this */
         // 263    jobject fdObj = (*env)->GetObjectField(env, this, psi_fdID);
@@ -2237,7 +2167,7 @@ final class Target_java_net_PlainSocketImpl {
         Socket.sockaddr him = StackValue.get(JavaNetNetUtilMD.SOCKADDR_LEN());
         // 275    /* The result of the connection */
         // 276    int connect_rv = -1;
-        CIntPointer connect_rv_Pointer = StackValue.get(CIntPointer.class);
+        CIntPointer connect_rv_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
         connect_rv_Pointer.write(-1);
         // 278    if (IS_NULL(fdObj)) {
         if (fdObj == null) {
@@ -2343,7 +2273,7 @@ final class Target_java_net_PlainSocketImpl {
             // 368         if (connect_rv != 0) {
             if (connect_rv_Pointer.read() != 0) {
                 // 369             int optlen;
-                CIntPointer optlen_Pointer = StackValue.get(CIntPointer.class);
+                CIntPointer optlen_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
                 // 370             jlong prevTime = JVM_CurrentTimeMillis(env, 0);
                 long prevTime = Target_java_lang_System.currentTimeMillis();
                 // 372             if (errno != EINPROGRESS) {
@@ -2375,7 +2305,7 @@ final class Target_java_net_PlainSocketImpl {
                     // 387 #ifndef USE_SELECT
                     // 388                 {
                     // 389                     struct pollfd pfd;
-                    Poll.pollfd pfd = StackValue.get(Poll.pollfd.class);
+                    Poll.pollfd pfd = StackValue.get(SizeOf.get(Poll.pollfd.class));
                     // 390                     pfd.fd = fd;
                     pfd.set_fd(fd);
                     // 391                     pfd.events = POLLOUT;
@@ -2636,7 +2566,7 @@ final class Target_java_net_PlainSocketImpl {
     void socketAccept(SocketImpl socket) throws IOException {
         // 653     /* fields on this */
         // 654     int port;
-        CIntPointer port_Pointer = StackValue.get(CIntPointer.class);
+        CIntPointer port_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
         // 655     jint timeout = (*env)->GetIntField(env, this, psi_timeoutID);
         int timeout = Util_java_net_PlainSocketImpl.as_Target_java_net_AbstractPlainSocketImpl(this).timeout;
         // 656     jlong prevTime = 0;
@@ -2663,7 +2593,7 @@ final class Target_java_net_PlainSocketImpl {
         // 670     SOCKADDR him;
         Socket.sockaddr him = StackValue.get(JavaNetNetUtilMD.SOCKADDR_LEN());
         // 671     int len;
-        CIntPointer len_Pointer = StackValue.get(CIntPointer.class);
+        CIntPointer len_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
         // 672
         // 673     len = SOCKADDR_LEN;
         len_Pointer.write(JavaNetNetUtilMD.SOCKADDR_LEN());
@@ -2909,8 +2839,8 @@ final class Target_java_net_PlainSocketImpl {
         // 895     int fd;
         int fd;
         // 896     int level, optname, optlen;
-        CIntPointer level_Pointer = StackValue.get(CIntPointer.class);
-        CIntPointer optname_Pointer = StackValue.get(CIntPointer.class);
+        CIntPointer level_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+        CIntPointer optname_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
         int optlen;
         /* Translated as a WordPointer to the larger of the arms. */
         // 897     union {
@@ -3114,20 +3044,10 @@ final class Target_sun_net_spi_DefaultProxySelector {
     }
 
     @Substitute
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
     @SuppressWarnings({"static-method", "unused"})
     /* FIXME: No proxies, yet. */
-    private synchronized /* native */ Proxy getSystemProxy(String protocol, String host) {
-        VMError.unsupportedFeature("Target_sun_net_spi_DefaultProxySelector.getSystemProxy");
-        return null;
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    @SuppressWarnings({"static-method", "unused"})
-    /* FIXME: No proxies, yet. */
-    private synchronized /* native */ Proxy[] getSystemProxies(String protocol, String host) {
-        VMError.unsupportedFeature("Target_sun_net_spi_DefaultProxySelector.getSystemProxies");
+    private synchronized Proxy getSystemProxy(String protocol, String host) {
+        VMError.unimplemented();
         return null;
     }
 }
@@ -3157,12 +3077,12 @@ final class Target_sun_net_sdp_SdpSupport {
         // 102     if (s >= 0) {
         if (s >= 0) {
             // 103         socklen_t len;
-            CIntPointer len_Pointer = StackValue.get(CIntPointer.class);
+            CIntPointer len_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
             // 104         int arg, res;
-            CIntPointer arg_Pointer = StackValue.get(CIntPointer.class);
+            CIntPointer arg_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
             int res;
             // 105         struct linger linger;
-            Socket.linger linger = StackValue.get(Socket.linger.class);
+            Socket.linger linger = StackValue.get(SizeOf.get(Socket.linger.class));
             // 107         /* copy socket options that are relevant to SDP */
             // 108         len = sizeof(arg);
             len_Pointer.write(SizeOf.get(CIntPointer.class));
