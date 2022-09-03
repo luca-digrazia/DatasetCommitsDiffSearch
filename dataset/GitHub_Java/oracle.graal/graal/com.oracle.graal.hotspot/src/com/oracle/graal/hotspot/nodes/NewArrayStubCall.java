@@ -30,14 +30,13 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.snippets.*;
 
 /**
- * A call to the {@link NewArrayStub}.
+ * Node implementing a call to the {@code new_array} stub.
  */
 public class NewArrayStubCall extends FixedWithNextNode implements LIRGenLowerable {
 
