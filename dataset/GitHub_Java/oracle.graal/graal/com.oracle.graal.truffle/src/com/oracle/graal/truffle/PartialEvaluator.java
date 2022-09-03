@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -49,7 +49,6 @@ import com.oracle.graal.nodes.calc.FloatingNode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderTool;
 import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
 import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
@@ -72,7 +71,6 @@ import com.oracle.graal.replacements.CachingPEGraphDecoder;
 import com.oracle.graal.replacements.InlineDuringParsingPlugin;
 import com.oracle.graal.replacements.PEGraphDecoder;
 import com.oracle.graal.replacements.ReplacementsImpl;
-import com.oracle.graal.serviceprovider.GraalServices;
 import com.oracle.graal.truffle.debug.AbstractDebugCompilationListener;
 import com.oracle.graal.truffle.debug.HistogramInlineInvokePlugin;
 import com.oracle.graal.truffle.nodes.AssumptionValidAssumption;
@@ -94,6 +92,7 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.services.Services;
 
 /**
  * Class performing the partial evaluation starting from the root node of an AST.
@@ -191,7 +190,7 @@ public class PartialEvaluator {
         }
 
         @Override
-        public FloatingNode interceptParameter(GraphBuilderTool b, int index, StampPair stamp) {
+        public FloatingNode interceptParameter(GraphBuilderContext b, int index, StampPair stamp) {
             if (index == 0) {
                 return ConstantNode.forConstant(snippetReflection.forObject(receiver), providers.getMetaAccess());
             }
@@ -391,7 +390,7 @@ public class PartialEvaluator {
     protected void registerTruffleInvocationPlugins(InvocationPlugins invocationPlugins, boolean canDelayIntrinsification) {
         TruffleGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), invocationPlugins, canDelayIntrinsification, snippetReflection);
 
-        for (TruffleInvocationPluginProvider p : GraalServices.load(TruffleInvocationPluginProvider.class)) {
+        for (TruffleInvocationPluginProvider p : Services.load(TruffleInvocationPluginProvider.class)) {
             p.registerInvocationPlugins(providers.getMetaAccess(), invocationPlugins, canDelayIntrinsification, snippetReflection);
         }
     }

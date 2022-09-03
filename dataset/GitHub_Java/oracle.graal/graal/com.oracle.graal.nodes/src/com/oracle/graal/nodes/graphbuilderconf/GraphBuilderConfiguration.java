@@ -24,11 +24,9 @@ package com.oracle.graal.nodes.graphbuilderconf;
 
 import java.util.Arrays;
 
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.compiler.common.type.StampPair;
-
-import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaType;
+
+import com.oracle.graal.compiler.common.GraalOptions;
 
 public class GraphBuilderConfiguration {
 
@@ -154,16 +152,6 @@ public class GraphBuilderConfiguration {
 
         public void setLoopExplosionPlugin(LoopExplosionPlugin plugin) {
             this.loopExplosionPlugin = plugin;
-        }
-
-        public StampPair getOverridingStamp(GraphBuilderContext b, JavaType type, boolean nonNull) {
-            for (TypePlugin plugin : getTypePlugins()) {
-                StampPair stamp = plugin.interceptType(b, type, nonNull);
-                if (stamp != null) {
-                    return stamp;
-                }
-            }
-            return null;
         }
     }
 
