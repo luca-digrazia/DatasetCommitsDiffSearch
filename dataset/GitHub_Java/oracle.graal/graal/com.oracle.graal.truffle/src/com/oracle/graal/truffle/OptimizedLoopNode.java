@@ -22,34 +22,42 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.truffle.api.nodes.RepeatingNode;
 
-/**
- * Temporary node for legacy loop count reporting support as it was most likely done in other
- * implementations.
- */
 public final class OptimizedLoopNode extends LoopNode {
 
-    public OptimizedLoopNode(RepeatingNode body) {
-        super(body);
+    @Child private RepeatingNode repeatingNode;
+
+    public OptimizedLoopNode(RepeatingNode repeatingNode) {
+        this.repeatingNode = repeatingNode;
+    }
+
+    @Override
+    public RepeatingNode getRepeatingNode() {
+        return repeatingNode;
     }
 
     @Override
     public void executeLoop(VirtualFrame frame) {
         int loopCount = 0;
         try {
-            while (executeRepeatingNode(frame)) {
+            while (repeatingNode.executeRepeating(frame)) {
                 if (CompilerDirectives.inInterpreter()) {
                     loopCount++;
                 }
             }
         } finally {
             if (CompilerDirectives.inInterpreter()) {
-                getRootNode().reportLoopCount(loopCount);
+                reportLoopCount(this, loopCount);
             }
         }
+    }
+
+    static LoopNode create(RepeatingNode repeatingNode) {
+        return new OptimizedLoopNode(repeatingNode);
     }
 
 }

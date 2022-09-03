@@ -22,106 +22,141 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilationThreshold;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInvalidationReprofileCount;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleMinInvokeThreshold;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleReplaceReprofileCount;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class CompilationProfile {
 
-    private static final int MIN_INVOKES_AFTER_INLINING = 2;
-
-    private int invokeCounter;
-    private int originalInvokeCounter;
-    private int loopAndInvokeCounter;
     /**
      * Number of times an installed code for this tree was invalidated.
      */
     private int invalidationCount;
+    private int deferedCount;
 
-    /**
-     * Number of times a node was replaced in this tree.
-     */
-    private int nodeReplaceCount;
+    private int interpreterCallCount;
+    private int interpreterCallAndLoopCount;
+    private int compilationCallThreshold;
+    private int compilationCallAndLoopThreshold;
 
-    private long previousTimestamp;
+    private long timestamp;
 
-    private final int compilationThreshold;
-    private final String name;
-
-    public CompilationProfile(final int compilationThreshold, final int initialInvokeCounter, final String name) {
-        this.invokeCounter = initialInvokeCounter;
-        this.loopAndInvokeCounter = compilationThreshold;
-        this.originalInvokeCounter = compilationThreshold;
-        this.previousTimestamp = System.nanoTime();
-
-        this.compilationThreshold = compilationThreshold;
-        this.name = name;
+    public CompilationProfile() {
+        compilationCallThreshold = TruffleMinInvokeThreshold.getValue();
+        compilationCallAndLoopThreshold = TruffleCompilationThreshold.getValue();
     }
 
-    public long getPreviousTimestamp() {
-        return previousTimestamp;
+    @Override
+    public String toString() {
+        return String.format("CompilationProfile(callCount=%d/%d, callAndLoopCount=%d/%d)", interpreterCallCount, compilationCallThreshold, interpreterCallAndLoopCount,
+                        compilationCallAndLoopThreshold);
     }
 
-    public String getName() {
-        return this.name;
+    public Map<String, Object> getDebugProperties() {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        String callsThreshold = String.format("%7d/%5d", getInterpreterCallCount(), getCompilationCallThreshold());
+        String loopsThreshold = String.format("%7d/%5d", getInterpreterCallAndLoopCount(), getCompilationCallAndLoopThreshold());
+        String invalidations = String.format("%5d", invalidationCount);
+        properties.put("Calls/Thres", callsThreshold);
+        properties.put("CallsAndLoop/Thres", loopsThreshold);
+        properties.put("Inval#", invalidations);
+        return properties;
     }
 
     public int getInvalidationCount() {
         return invalidationCount;
     }
 
-    public int getNodeReplaceCount() {
-        return nodeReplaceCount;
+    public int getInterpreterCallAndLoopCount() {
+        return interpreterCallAndLoopCount;
     }
 
-    public int getInvokeCounter() {
-        return invokeCounter;
+    public int getInterpreterCallCount() {
+        return interpreterCallCount;
     }
 
-    public int getOriginalInvokeCounter() {
-        return originalInvokeCounter;
+    public int getDeferedCount() {
+        return deferedCount;
     }
 
-    public int getLoopAndInvokeCounter() {
-        return loopAndInvokeCounter;
+    public int getCompilationCallAndLoopThreshold() {
+        return compilationCallAndLoopThreshold;
     }
 
-    void reportTiminingFailed(long timestamp) {
-        this.loopAndInvokeCounter = compilationThreshold;
-        this.originalInvokeCounter = compilationThreshold;
-        this.previousTimestamp = timestamp;
+    public int getCompilationCallThreshold() {
+        return compilationCallThreshold;
     }
 
-    void reportInvalidated() {
-        invalidationCount++;
-        int invalidationReprofileCount = TruffleInvalidationReprofileCount.getValue();
-        invokeCounter = invalidationReprofileCount;
-        if (TruffleFunctionInlining.getValue()) {
-            originalInvokeCounter += invalidationReprofileCount;
+    void ensureProfiling(int calls, int callsAndLoop) {
+        int increaseCallAndLoopThreshold = callsAndLoop - (this.compilationCallAndLoopThreshold - this.interpreterCallAndLoopCount);
+        if (increaseCallAndLoopThreshold > 0) {
+            this.compilationCallAndLoopThreshold += increaseCallAndLoopThreshold;
+        }
+
+        int increaseCallsThreshold = calls - (this.compilationCallThreshold - this.interpreterCallCount);
+        if (increaseCallsThreshold > 0) {
+            this.compilationCallThreshold += increaseCallsThreshold;
         }
     }
 
-    void reportInterpreterCall() {
-        invokeCounter--;
-        loopAndInvokeCounter--;
+    public void reportInvalidated() {
+        invalidationCount++;
+        int reprofile = TruffleInvalidationReprofileCount.getValue();
+        ensureProfiling(reprofile, reprofile);
     }
 
-    void reportInliningPerformed() {
-        invokeCounter = MIN_INVOKES_AFTER_INLINING;
-        int inliningReprofileCount = TruffleInliningReprofileCount.getValue();
-        loopAndInvokeCounter = inliningReprofileCount;
-        originalInvokeCounter = inliningReprofileCount;
+    public final void reportInterpreterCall() {
+        interpreterCallCount++;
+        interpreterCallAndLoopCount++;
+
+        int callsMissing = compilationCallAndLoopThreshold - interpreterCallAndLoopCount;
+        if (callsMissing == getTimestampThreshold()) {
+            timestamp = System.nanoTime();
+        }
+    }
+
+    public void reportDirectCall() {
+
+    }
+
+    public void reportIndirectCall() {
+
+    }
+
+    public void reportInlinedCall() {
+
+    }
+
+    public void deferCompilation() {
+        ensureProfiling(0, getTimestampThreshold() + 1);
+        timestamp = 0;
+        deferedCount++;
     }
 
     void reportLoopCount(int count) {
-        loopAndInvokeCounter = Math.max(0, loopAndInvokeCounter - count);
-    }
+        interpreterCallAndLoopCount += count;
 
-    void reportNodeReplaced() {
-        nodeReplaceCount++;
-        // delay compilation until tree is deemed stable enough
-        int replaceBackoff = TruffleReplaceReprofileCount.getValue();
-        if (loopAndInvokeCounter < replaceBackoff) {
-            loopAndInvokeCounter = replaceBackoff;
+        int callsMissing = compilationCallAndLoopThreshold - interpreterCallAndLoopCount;
+        if (callsMissing <= getTimestampThreshold() && callsMissing + count > getTimestampThreshold()) {
+            timestamp = System.nanoTime();
         }
     }
 
+    void reportNodeReplaced() {
+        // delay compilation until tree is deemed stable enough
+        int replaceBackoff = TruffleReplaceReprofileCount.getValue();
+        ensureProfiling(1, replaceBackoff);
+    }
+
+    public long getTimestamp() {
+        return timestamp;
+    }
+
+    private static int getTimestampThreshold() {
+        return Math.max(TruffleCompilationThreshold.getValue() / 2, 1);
+    }
 }

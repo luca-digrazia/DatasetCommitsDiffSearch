@@ -312,13 +312,13 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
     /**
      * <p>
      * Creates a configurable instance of the OSR loop node. If readFrameSlots and writtenFrameSlots
-     * are set then the involved frame must never escape, ie {@link VirtualFrame#materialize()} is
+     * is set then the involved frame must never escape, ie {@link VirtualFrame#materialize()} is
      * never invoked.
      * </p>
      *
      * <p>
-     * <b>Important note:</b> All readFrameSlots that are given must be initialized before entering
-     * the loop. Also all writtenFrameSlots must be initialized inside of the loop if they were not
+     * <b>Important note:</b> All readFrameSlots that are give must be initialized before entering
+     * the loop. Also all writtenFrameSlots must be initialized inside of the loop if it was not
      * initialized outside the loop.
      * </p>
      *
@@ -326,17 +326,17 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      * @param osrThreshold the threshold after how many loop iterations an OSR compilation is
      *            triggered. If the repeating node uses child loops or
      *            {@link LoopNode#reportLoopCount(Node, int)} then these iterations also contribute
-     *            to this loop's iterations.
+     *            to this loop iterations.
      * @param invalidationBackoff how many iterations the loop should get reprofiled until the next
      *            compile is scheduled.
      * @param readFrameSlots a set of all frame slots which are read inside the loop.
      *            <code>null</code> for unknown. All given frame slots must not have the
      *            {@link FrameSlotKind#Illegal illegal frame slot kind} set. If readFrameSlot is
-     *            kept <code>null</code> writtenFrameSlots must be <code>null</code> as well.
+     *            kept <code>null</code> writtenFRameSlots must be <code>null</code> as well.
      * @param writtenFrameSlots a set of all frame slots which are written inside the loop.
      *            <code>null</code> for unknown. All given frame slots must not have the
-     *            {@link FrameSlotKind#Illegal illegal frame slot kind} set. If readFrameSlot is
-     *            kept <code>null</code> writtenFRameSlots must be <code>null</code> as well.
+     *            {@link FrameSlotKind#Illegal illegal frame slot kind} set.If readFrameSlot is kept
+     *            <code>null</code> writtenFRameSlots must be <code>null</code> as well.
      *
      * @see LoopNode LoopNode on how to use loop nodes.
      */
@@ -352,7 +352,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      */
     private static final class OptimizedDefaultOSRLoopNode extends OptimizedOSRLoopNode {
 
-        OptimizedDefaultOSRLoopNode(RepeatingNode repeatableNode, int osrThreshold) {
+        public OptimizedDefaultOSRLoopNode(RepeatingNode repeatableNode, int osrThreshold) {
             super(repeatableNode, osrThreshold);
         }
 
@@ -367,7 +367,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      * Used in guest languages with Graal runtime access that require more revirtualization of local
      * variables and more configuration options.
      */
-    private static final class OptimizedVirtualizingOSRLoopNode extends OptimizedOSRLoopNode {
+    private static class OptimizedVirtualizingOSRLoopNode extends OptimizedOSRLoopNode {
 
         private final int invalidationBackoff;
         @CompilationFinal private final FrameSlot[] readFrameSlots;
@@ -452,14 +452,21 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
         @CompilationFinal private final FrameSlot[] readFrameSlots;
         @CompilationFinal private final FrameSlot[] writtenFrameSlots;
 
+        private final Class<? extends FrameWithoutBoxing> frameClass;
+        /* STores the */
         @CompilationFinal private final byte[] readFrameSlotsTags;
         @CompilationFinal private final byte[] writtenFrameSlotsTags;
         private final int maxTagsLength;
 
+        @SuppressWarnings("unchecked")
         VirtualizingOSRRootNode(VirtualizingOSRRootNode previousRoot, OptimizedOSRLoopNode loop, @SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> truffleLanguage,
                         FrameDescriptor frameDescriptor,
                         Class<? extends VirtualFrame> clazz) {
             super(loop, truffleLanguage, frameDescriptor, clazz);
+            if (!clazz.isAssignableFrom(FrameWithoutBoxing.class)) {
+                throw new IllegalArgumentException("Unsupported frame type " + clazz.getName());
+            }
+            this.frameClass = (Class<? extends FrameWithoutBoxing>) clazz;
             this.readFrameSlots = previousRoot.readFrameSlots;
             this.writtenFrameSlots = previousRoot.writtenFrameSlots;
             this.readFrameSlotsTags = previousRoot.readFrameSlotsTags;
@@ -467,10 +474,15 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             this.maxTagsLength = previousRoot.maxTagsLength;
         }
 
+        @SuppressWarnings("unchecked")
         VirtualizingOSRRootNode(OptimizedOSRLoopNode loop, @SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> truffleLanguage, FrameDescriptor frameDescriptor,
                         Class<? extends VirtualFrame> clazz,
                         FrameSlot[] readFrameSlots, FrameSlot[] writtenFrameSlots) {
             super(loop, truffleLanguage, frameDescriptor, clazz);
+            if (!clazz.isAssignableFrom(FrameWithoutBoxing.class)) {
+                throw new IllegalArgumentException("Unsupported frame type " + clazz.getName());
+            }
+            this.frameClass = (Class<? extends FrameWithoutBoxing>) clazz;
             this.readFrameSlots = readFrameSlots;
             this.writtenFrameSlots = writtenFrameSlots;
             this.readFrameSlotsTags = new byte[readFrameSlots.length];
@@ -495,8 +507,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
         @Override
         protected Object executeImpl(VirtualFrame originalFrame) {
-            FrameWithoutBoxing loopFrame = (FrameWithoutBoxing) (originalFrame);
-            FrameWithoutBoxing parentFrame = (FrameWithoutBoxing) (loopFrame.getArguments()[0]);
+            FrameWithoutBoxing loopFrame = frameClass.cast(originalFrame);
+            FrameWithoutBoxing parentFrame = frameClass.cast(loopFrame.getArguments()[0]);
             executeTransfer(parentFrame, loopFrame, readFrameSlots, readFrameSlotsTags);
             try {
                 while (loopNode.getRepeatingNode().executeRepeating(loopFrame)) {
@@ -534,7 +546,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
                 byte speculatedTag = speculatedTags[i];
                 byte currentSourceTag = currentSourceTags[index];
                 if (CompilerDirectives.inInterpreter()) {
-                    if (currentSourceTag == 0 && speculatedTag != 0) {
+                    if (currentSourceTag == 0) {
                         if (frameSlots == readFrameSlots) {
                             throw new AssertionError("Frame slot " + slot + " was never writte outside the loop but virtualized as read frame slot.");
                         } else {

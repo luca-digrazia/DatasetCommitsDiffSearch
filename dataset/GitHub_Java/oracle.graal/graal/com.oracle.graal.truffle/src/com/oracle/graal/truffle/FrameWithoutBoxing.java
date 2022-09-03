@@ -24,17 +24,17 @@ package com.oracle.graal.truffle;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.List;
+
+import sun.misc.Unsafe;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
-
-import sun.misc.Unsafe;
 
 /**
  * More efficient implementation of the Truffle frame that has no safety checks for frame accesses
@@ -87,7 +87,6 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     @Override
     public MaterializedFrame materialize() {
-        ((GraalTruffleRuntime) Truffle.getRuntime()).markFrameMaterializeCalled(descriptor);
         return this;
     }
 
@@ -121,7 +120,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         setObjectUnsafe(slotIndex, slot, value);
     }
 
-    private void setObjectUnsafe(int slotIndex, FrameSlot slot, Object value) {
+    void setObjectUnsafe(int slotIndex, FrameSlot slot, Object value) {
         unsafePutObject(getLocals(), Unsafe.ARRAY_OBJECT_BASE_OFFSET + slotIndex * (long) Unsafe.ARRAY_OBJECT_INDEX_SCALE, value, slot);
     }
 
@@ -144,7 +143,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         setByteUnsafe(slotIndex, slot, value);
     }
 
-    private void setByteUnsafe(int slotIndex, FrameSlot slot, byte value) {
+    void setByteUnsafe(int slotIndex, FrameSlot slot, byte value) {
         long offset = getPrimitiveOffset(slotIndex);
         unsafePutInt(getPrimitiveLocals(), offset, value, slot);
     }
@@ -168,7 +167,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         setBooleanUnsafe(slotIndex, slot, value);
     }
 
-    private void setBooleanUnsafe(int slotIndex, FrameSlot slot, boolean value) {
+    void setBooleanUnsafe(int slotIndex, FrameSlot slot, boolean value) {
         long offset = getPrimitiveOffset(slotIndex);
         unsafePutInt(getPrimitiveLocals(), offset, value ? 1 : 0, slot);
     }
@@ -192,7 +191,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         setFloatUnsafe(slotIndex, slot, value);
     }
 
-    private void setFloatUnsafe(int slotIndex, FrameSlot slot, float value) {
+    void setFloatUnsafe(int slotIndex, FrameSlot slot, float value) {
         long offset = getPrimitiveOffset(slotIndex);
         unsafePutFloat(getPrimitiveLocals(), offset, value, slot);
     }
@@ -216,7 +215,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         setLongUnsafe(slotIndex, slot, value);
     }
 
-    private void setLongUnsafe(int slotIndex, FrameSlot slot, long value) {
+    void setLongUnsafe(int slotIndex, FrameSlot slot, long value) {
         long offset = getPrimitiveOffset(slotIndex);
         unsafePutLong(getPrimitiveLocals(), offset, value, slot);
     }
@@ -240,7 +239,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         setIntUnsafe(slotIndex, slot, value);
     }
 
-    private void setIntUnsafe(int slotIndex, FrameSlot slot, int value) {
+    void setIntUnsafe(int slotIndex, FrameSlot slot, int value) {
         long offset = getPrimitiveOffset(slotIndex);
         unsafePutInt(getPrimitiveLocals(), offset, value, slot);
     }
@@ -264,7 +263,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         setDoubleUnsafe(slotIndex, slot, value);
     }
 
-    private void setDoubleUnsafe(int slotIndex, FrameSlot slot, double value) {
+    void setDoubleUnsafe(int slotIndex, FrameSlot slot, double value) {
         long offset = getPrimitiveOffset(slotIndex);
         unsafePutDouble(getPrimitiveLocals(), offset, value, slot);
     }
