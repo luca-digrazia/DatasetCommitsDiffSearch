@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code LoadIndexedNode} represents a read from an element of an array.
  */
-public final class LoadIndexedNode extends AccessIndexedNode implements IterableNodeType, Virtualizable {
+public final class LoadIndexedNode extends AccessIndexedNode implements Node.IterableNodeType, Virtualizable {
 
     /**
      * Creates a new LoadIndexedNode.
@@ -45,9 +45,8 @@ public final class LoadIndexedNode extends AccessIndexedNode implements Iterable
     }
 
     private static Stamp createStamp(ValueNode array, Kind kind) {
-        ResolvedJavaType type = ObjectStamp.typeOrNull(array);
-        if (kind == Kind.Object && type != null) {
-            return StampFactory.declared(type.getComponentType());
+        if (kind == Kind.Object && array.objectStamp().type() != null) {
+            return StampFactory.declared(array.objectStamp().type().getComponentType());
         } else {
             return StampFactory.forKind(kind);
         }
