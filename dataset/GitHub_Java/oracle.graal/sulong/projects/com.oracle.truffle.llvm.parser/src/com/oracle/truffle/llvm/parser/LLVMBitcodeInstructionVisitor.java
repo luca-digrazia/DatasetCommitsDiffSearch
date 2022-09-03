@@ -117,6 +117,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
     private final LLVMContext context;
     private final ExternalLibrary library;
     private final ArrayList<LLVMLivenessAnalysis.NullerInformation> nullerInfos;
+    private final List<? extends FrameSlot> frameSlots;
     private final List<FrameSlot> notNullable;
     private final LLVMRuntimeDebugInformation dbgInfoHandler;
     private final UniquesRegion uniquesRegion;
@@ -137,6 +138,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         this.context = context;
         this.library = library;
         this.nullerInfos = nullerInfos;
+        this.frameSlots = frame.getSlots();
         this.notNullable = notNullable;
         this.dbgInfoHandler = dbgInfoHandler;
         this.lastLocation = null;
@@ -868,7 +870,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
                 // the nuller information is sorted descending by instructionIndex
                 break;
             } else if (nuller.getInstructionIndex() == instructionIndex) {
-                FrameSlot frameSlot = nuller.getFrameSlot();
+                FrameSlot frameSlot = frameSlots.get(nuller.getFrameSlotIndex());
                 if (!notNullable.contains(frameSlot)) {
                     LLVMStatementNode nullerNode = nodeFactory.createFrameNuller(frameSlot);
                     blockInstructions.add(nullerNode);

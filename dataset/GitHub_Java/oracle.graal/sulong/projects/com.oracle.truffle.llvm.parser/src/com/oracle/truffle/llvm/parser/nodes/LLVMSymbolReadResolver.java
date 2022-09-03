@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -66,7 +66,6 @@ import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
-import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
@@ -97,7 +96,7 @@ public final class LLVMSymbolReadResolver {
     private LLVMExpressionNode resolvedNode = null;
 
     private static void unsupported(Object obj) {
-        throw new LLVMParserException("Cannot resolve symbol: " + obj);
+        throw new UnsupportedOperationException("Cannot resolve symbol: " + obj);
     }
 
     private final class InternalVisitor extends ValueInstructionVisitor {
@@ -105,7 +104,7 @@ public final class LLVMSymbolReadResolver {
         private final TypeVisitor nullValueVisitor = new TypeVisitor() {
 
             private void unsupportedType(Type type) {
-                throw new LLVMParserException("Unsupported Type for Zero Constant: " + type);
+                throw new UnsupportedOperationException("Unsupported Type for Zero Constant: " + type);
             }
 
             @Override
@@ -303,7 +302,7 @@ public final class LLVMSymbolReadResolver {
 
         @Override
         public void visit(InlineAsmConstant inlineAsmConstant) {
-            throw new LLVMParserException("Cannot resolve Inline ASM");
+            throw new AssertionError("Cannot resolve Inline ASM");
         }
 
         @Override
@@ -328,12 +327,12 @@ public final class LLVMSymbolReadResolver {
                         resolvedNode = nodeFactory.createSimpleConstantNoArray(lVal, type);
                         break;
                     default:
-                        throw new LLVMParserException("Unsupported IntegerConstant: " + type);
+                        throw new UnsupportedOperationException("Unsupported IntegerConstant: " + type);
                 }
             } else if (type instanceof VariableBitWidthType) {
                 resolvedNode = nodeFactory.createSimpleConstantNoArray(lVal, type);
             } else {
-                throw new LLVMParserException("Unsupported IntegerConstant: " + type);
+                throw new UnsupportedOperationException("Unsupported IntegerConstant: " + type);
             }
         }
 
@@ -383,7 +382,7 @@ public final class LLVMSymbolReadResolver {
                 LLVMGlobal value = symbol.asGlobalVariable();
                 resolvedNode = nodeFactory.createLiteral(value, alias.getType());
             } else {
-                throw new LLVMParserException("Unexpected symbol: " + symbol.getClass());
+                throw new IllegalStateException("Unexpected symbol: " + symbol.getClass());
             }
         }
 
@@ -452,7 +451,7 @@ public final class LLVMSymbolReadResolver {
                 // the index is determined at runtime
                 if (currentType instanceof StructureType) {
                     // according to http://llvm.org/docs/LangRef.html#getelementptr-instruction
-                    throw new LLVMParserException("Indices on structs must be constant integers!");
+                    throw new IllegalStateException("Indices on structs must be constant integers!");
                 }
                 AggregateType aggregate = (AggregateType) currentType;
                 final long indexedTypeLength = context.getIndexOffset(1, aggregate);

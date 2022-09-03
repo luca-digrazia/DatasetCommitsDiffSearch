@@ -33,7 +33,6 @@ import java.util.List;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
@@ -53,13 +52,10 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMStack.UniquesRegion.UniquesReg
 import com.oracle.truffle.llvm.runtime.memory.VarargsAreaStackAllocationNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectReadNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectWriteNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType.PrimitiveKind;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
@@ -115,6 +111,8 @@ public interface NodeFactory extends InteropNodeFactory {
 
     LLVMExpressionNode createFunctionArgNode(int argIndex, Type paramType);
 
+    LLVMExpressionNode createFunctionArgNode(int argIndex);
+
     LLVMExpressionNode createFunctionCall(LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, FunctionType type, LLVMSourceLocation sourceSection);
 
     LLVMControlFlowNode createFunctionInvoke(FrameSlot resultLocation, LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, FunctionType type, int normalIndex,
@@ -129,15 +127,9 @@ public interface NodeFactory extends InteropNodeFactory {
 
     LLVMExpressionNode createSignedCast(LLVMExpressionNode fromNode, Type targetType);
 
-    LLVMExpressionNode createSignedCast(LLVMExpressionNode fromNode, PrimitiveKind kind);
-
     LLVMExpressionNode createUnsignedCast(LLVMExpressionNode fromNode, Type targetType);
 
-    LLVMExpressionNode createUnsignedCast(LLVMExpressionNode fromNode, PrimitiveKind kind);
-
     LLVMExpressionNode createBitcast(LLVMExpressionNode fromNode, Type targetType, Type fromType);
-
-    LLVMExpressionNode createBitcast(LLVMExpressionNode fromNode, PrimitiveKind kind);
 
     LLVMExpressionNode createExtractValue(Type type, LLVMExpressionNode targetAddress);
 
@@ -222,8 +214,6 @@ public interface NodeFactory extends InteropNodeFactory {
 
     LLVMStatementNode createDebugTrap(LLVMSourceLocation location);
 
-    TruffleObject toGenericDebuggerValue(Object llvmType, Object value);
-
     LLVMMemMoveNode createMemMove();
 
     LLVMMemSetNode createMemSet();
@@ -236,11 +226,13 @@ public interface NodeFactory extends InteropNodeFactory {
 
     LLVMExpressionNode createStackRestore(LLVMExpressionNode stackPointer, LLVMSourceLocation sourceSection);
 
+    LLVMExpressionNode createSignedCastToI64(LLVMExpressionNode fromNode);
+
+    LLVMExpressionNode createUnsignedCastToI64(LLVMExpressionNode fromNode);
+
+    LLVMExpressionNode createBitcastToI64(LLVMExpressionNode fromNode);
+
     ForeignToLLVM createForeignToLLVM(LLVMInteropType.Value type);
 
     ForeignToLLVM createForeignToLLVM(ForeignToLLVMType type);
-
-    LLVMObjectReadNode createGlobalContainerReadNode();
-
-    LLVMObjectWriteNode createGlobalContainerWriteNode();
 }

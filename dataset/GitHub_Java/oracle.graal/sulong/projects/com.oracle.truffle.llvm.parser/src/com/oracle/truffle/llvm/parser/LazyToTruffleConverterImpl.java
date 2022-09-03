@@ -109,8 +109,8 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
         LLVMBitcodeFunctionVisitor visitor = new LLVMBitcodeFunctionVisitor(runtime.getContext(), runtime.getLibrary(), frame, uniquesRegion, phis, method.getParameters().size(), symbols, method,
                         liveness, notNullable, dbgInfoHandler);
         method.accept(visitor);
-        FrameSlot[][] nullableBeforeBlock = getNullableFrameSlots(liveness.getFrameSlots(), liveness.getNullableBeforeBlock(), notNullable);
-        FrameSlot[][] nullableAfterBlock = getNullableFrameSlots(liveness.getFrameSlots(), liveness.getNullableAfterBlock(), notNullable);
+        FrameSlot[][] nullableBeforeBlock = getNullableFrameSlots(frame, liveness.getNullableBeforeBlock(), notNullable);
+        FrameSlot[][] nullableAfterBlock = getNullableFrameSlots(frame, liveness.getNullableAfterBlock(), notNullable);
         LLVMSourceLocation location = method.getLexicalScope();
 
         List<LLVMStatementNode> copyArgumentsToFrame = copyArgumentsToFrame(frame);
@@ -130,7 +130,8 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
         return method.getSourceFunction().getSourceType();
     }
 
-    private static FrameSlot[][] getNullableFrameSlots(FrameSlot[] frameSlots, BitSet[] nullablePerBlock, List<FrameSlot> notNullable) {
+    private static FrameSlot[][] getNullableFrameSlots(FrameDescriptor frame, BitSet[] nullablePerBlock, List<FrameSlot> notNullable) {
+        List<? extends FrameSlot> frameSlots = frame.getSlots();
         FrameSlot[][] result = new FrameSlot[nullablePerBlock.length][];
 
         for (int i = 0; i < nullablePerBlock.length; i++) {
@@ -139,7 +140,7 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
 
             ArrayList<FrameSlot> nullableSlots = new ArrayList<>();
             while ((bitIndex = nullable.nextSetBit(bitIndex + 1)) >= 0) {
-                FrameSlot frameSlot = frameSlots[bitIndex];
+                FrameSlot frameSlot = frameSlots.get(bitIndex);
                 if (!notNullable.contains(frameSlot)) {
                     nullableSlots.add(frameSlot);
                 }
