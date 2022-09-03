@@ -70,7 +70,7 @@ public final class GenericGenerator extends MessageGenerator {
 
     @Override
     void appendRootNode(Writer w) throws IOException {
-        w.append("    private static final class ").append(executeRootNode).append(" extends RootNode {\n");
+        w.append("    private final static class ").append(executeRootNode).append(" extends RootNode {\n");
         w.append("        protected ").append(executeRootNode).append("(Class<? extends TruffleLanguage<?>> language) {\n");
         w.append("            super(language, null, null);\n");
         w.append("        }\n");
@@ -86,15 +86,17 @@ public final class GenericGenerator extends MessageGenerator {
             String index = String.valueOf(i);
             w.append("              Object arg").append(index).append(" = arguments.get(").append(index).append(");\n");
         }
-        w.append("              return node.executeWithTarget(frame, receiver");
+        w.append("              return node.executeWithTarget(frame, receiver, ");
+        String sep = "";
         for (int i = 0; i < getParameterCount() - 1; i++) {
             String index = String.valueOf(i);
-            w.append(", ").append("arg").append(index);
+            w.append(sep).append("arg").append(index);
+            sep = ", ";
         }
         w.append(");\n");
 
         w.append("            } catch (UnsupportedSpecializationException e) {\n");
-        appendHandleUnsupportedTypeException(w);
+        w.append("                throw UnsupportedTypeException.raise(e.getSuppliedValues());\n");
         w.append("            }\n");
         w.append("        }\n");
         w.append("\n");

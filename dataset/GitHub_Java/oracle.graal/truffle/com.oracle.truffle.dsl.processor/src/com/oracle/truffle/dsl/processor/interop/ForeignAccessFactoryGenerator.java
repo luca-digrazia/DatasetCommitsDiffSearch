@@ -76,7 +76,7 @@ public final class ForeignAccessFactoryGenerator {
         appendImports(w);
         Utils.appendFactoryGeneratedFor(w, "", receiverTypeClass, ElementUtils.getQualifiedName(element));
         w.append("final class ").append(simpleClassName);
-        w.append(" implements Factory18, Factory {\n");
+        w.append(" implements Factory10, Factory {\n");
 
         appendSingletonAndGetter(w);
         appendPrivateConstructor(w);
@@ -93,7 +93,6 @@ public final class ForeignAccessFactoryGenerator {
         appendFactoryAccessExecute(w);
         appendFactoryAccessInvoke(w);
         appendFactoryAccessNew(w);
-        appendFactoryAccessKeys(w);
         appendFactoryAccessMessage(w);
 
         w.append("}\n");
@@ -105,7 +104,8 @@ public final class ForeignAccessFactoryGenerator {
     }
 
     private void appendImports(Writer w) throws IOException {
-        w.append("import com.oracle.truffle.api.interop.ForeignAccess.Factory18;").append("\n");
+        w.append("import com.oracle.truffle.api.interop.UnsupportedMessageException;").append("\n");
+        w.append("import com.oracle.truffle.api.interop.ForeignAccess.Factory10;").append("\n");
         w.append("import com.oracle.truffle.api.interop.ForeignAccess.Factory;").append("\n");
         w.append("import com.oracle.truffle.api.interop.Message;").append("\n");
         w.append("import com.oracle.truffle.api.interop.ForeignAccess;").append("\n");
@@ -125,15 +125,15 @@ public final class ForeignAccessFactoryGenerator {
         if (hasLanguageCheckNode()) {
             allocation = "ForeignAccess.create(new " + simpleClassName + "(), " + languageCheckFactoryInvokation + ");";
         } else {
-            allocation = "ForeignAccess.create(new " + simpleClassName + "(), null);";
+            allocation = "ForeignAccess.create(null, new " + simpleClassName + "());";
         }
         w.append("  public static final ForeignAccess ACCESS = ").append(allocation).append("\n");
-        w.append("  public static ForeignAccess createAccess() { return ").append(allocation).append(" }\n");
+        w.append("  public static ForeignAccess createAccess() { return ").append(allocation).append("}\n");
         w.append("\n");
     }
 
     private void appendPrivateConstructor(Writer w) throws IOException {
-        w.append("  private ").append(simpleClassName).append("() { }").append("\n");
+        w.append("  private ").append(simpleClassName).append("(){}").append("\n");
         w.append("\n");
     }
 
@@ -192,13 +192,6 @@ public final class ForeignAccessFactoryGenerator {
         w.append("    }").append("\n");
     }
 
-    private void appendFactoryAccessKeys(Writer w) throws IOException {
-        w.append("    @Override").append("\n");
-        w.append("    public CallTarget accessKeys() {").append("\n");
-        appendOptionalHandlerBody(w, Message.KEYS, "Message.KEYS");
-        w.append("    }").append("\n");
-    }
-
     private void appendFactoryAccessUnbox(Writer w) throws IOException {
         w.append("    @Override").append("\n");
         w.append("    public CallTarget accessUnbox() {").append("\n");
@@ -243,7 +236,7 @@ public final class ForeignAccessFactoryGenerator {
 
     private void appendOptionalHandlerBody(Writer w, Message message, String messageObjectAsString) throws IOException {
         if (!messageHandlers.containsKey(message)) {
-            w.append("      return null;\n");
+            w.append("      throw UnsupportedMessageException.raise(").append(messageObjectAsString).append(");").append("\n");
         } else {
             w.append("      return com.oracle.truffle.api.Truffle.getRuntime().createCallTarget(").append(messageHandlers.get(message)).append(");").append("\n");
         }
@@ -260,7 +253,7 @@ public final class ForeignAccessFactoryGenerator {
                 w.append("      }").append("\n");
             }
         }
-        w.append("      return null;\n");
+        w.append("      throw UnsupportedMessageException.raise(unknown);").append("\n");
         w.append("    }").append("\n");
     }
 

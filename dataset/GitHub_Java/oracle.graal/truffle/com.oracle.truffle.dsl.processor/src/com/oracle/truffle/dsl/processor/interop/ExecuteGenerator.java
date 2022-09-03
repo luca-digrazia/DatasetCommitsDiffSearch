@@ -80,7 +80,7 @@ public final class ExecuteGenerator extends MessageGenerator {
 
     @Override
     void appendRootNode(Writer w) throws IOException {
-        w.append("    private static final class ").append(executeRootNode).append(" extends RootNode {\n");
+        w.append("    private final static class ").append(executeRootNode).append(" extends RootNode {\n");
         w.append("        protected ").append(executeRootNode).append("(Class<? extends TruffleLanguage<?>> language) {\n");
         w.append("            super(language, null, null);\n");
         w.append("        }\n");
@@ -106,9 +106,10 @@ public final class ExecuteGenerator extends MessageGenerator {
             w.append("                args[i] = arguments.get(i);\n");
             w.append("              }\n");
             w.append("              return node.executeWithTarget(frame, receiver, args);\n");
+
         }
         w.append("            } catch (UnsupportedSpecializationException e) {\n");
-        appendHandleUnsupportedTypeException(w);
+        w.append("                throw UnsupportedTypeException.raise(e, e.getSuppliedValues());\n");
         w.append("            }\n");
         w.append("        }\n");
         w.append("\n");

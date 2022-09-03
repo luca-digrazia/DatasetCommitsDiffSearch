@@ -51,6 +51,7 @@ import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.dsl.processor.ExpectError;
+import com.oracle.truffle.dsl.processor.ProcessorContext;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 
 /**
@@ -59,7 +60,7 @@ import com.oracle.truffle.dsl.processor.java.ElementUtils;
 public final class InteropDSLProcessor extends AbstractProcessor {
 
     static final List<Message> KNOWN_MESSAGES = Arrays.asList(new Message[]{Message.READ, Message.WRITE, Message.IS_NULL, Message.IS_EXECUTABLE, Message.IS_BOXED, Message.HAS_SIZE,
-                    Message.GET_SIZE, Message.KEYS, Message.UNBOX, Message.createExecute(0), Message.createInvoke(0), Message.createNew(0)});
+                    Message.GET_SIZE, Message.UNBOX, Message.createExecute(0), Message.createInvoke(0), Message.createNew(0)});
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
@@ -89,7 +90,7 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             } catch (Throwable ex) {
                 ex.printStackTrace();
                 String message = "Uncaught error in " + this.getClass();
-                processingEnv.getMessager().printMessage(Kind.ERROR, message + ": " + ElementUtils.printException(ex), e);
+                ProcessorContext.getInstance().getEnvironment().getMessager().printMessage(Kind.ERROR, message + ": " + ElementUtils.printException(ex));
             }
         }
     }
@@ -107,11 +108,6 @@ public final class InteropDSLProcessor extends AbstractProcessor {
         final String receiverTypeFullClassName = Utils.getReceiverTypeFullClassName(messageImplementations);
         if (isReceiverNonStaticInner(messageImplementations)) {
             emitError(receiverTypeFullClassName + " cannot be used as a receiver as it is not a static inner class.", e);
-            return;
-        }
-
-        if (e.getModifiers().contains(Modifier.PRIVATE) || e.getModifiers().contains(Modifier.PROTECTED)) {
-            emitError("Class must be public or package protected", e);
             return;
         }
 
@@ -202,11 +198,6 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             return false;
         }
 
-        if (element.getModifiers().contains(Modifier.PRIVATE) || element.getModifiers().contains(Modifier.PROTECTED)) {
-            emitError("Class must be public or package protected", element);
-            return false;
-        }
-
         List<ExecutableElement> methods = generator.getTestMethods();
         if (methods.isEmpty() || methods.size() > 1) {
             emitError("There needs to be exactly one test method.", element);
@@ -251,11 +242,6 @@ public final class InteropDSLProcessor extends AbstractProcessor {
 
         if (!element.getModifiers().contains(Modifier.STATIC)) {
             emitError("Class must be static", element);
-            return false;
-        }
-
-        if (element.getModifiers().contains(Modifier.PRIVATE) || element.getModifiers().contains(Modifier.PROTECTED)) {
-            emitError("Class must be public or package protected", element);
             return false;
         }
 

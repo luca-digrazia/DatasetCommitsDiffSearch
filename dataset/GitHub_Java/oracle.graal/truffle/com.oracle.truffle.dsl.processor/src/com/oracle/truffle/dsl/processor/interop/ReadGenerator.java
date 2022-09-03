@@ -50,7 +50,7 @@ public final class ReadGenerator extends MessageGenerator {
 
     @Override
     void appendRootNode(Writer w) throws IOException {
-        w.append("    private static final class ").append(READ_ROOT_NODE).append(" extends RootNode {\n");
+        w.append("    private final static class ").append(READ_ROOT_NODE).append(" extends RootNode {\n");
         w.append("        protected ").append(READ_ROOT_NODE).append("(Class<? extends TruffleLanguage<?>> language) {\n");
         w.append("            super(language, null, null);\n");
         w.append("        }\n");
@@ -64,7 +64,7 @@ public final class ReadGenerator extends MessageGenerator {
         w.append("            try {\n");
         w.append("                return node.executeWithTarget(frame, receiver, identifier);\n");
         w.append("            } catch (UnsupportedSpecializationException e) {\n");
-        appendHandleUnsupportedTypeException(w);
+        w.append("                throw UnsupportedTypeException.raise(e.getSuppliedValues());\n");
         w.append("            }\n");
         w.append("        }\n");
         w.append("\n");
