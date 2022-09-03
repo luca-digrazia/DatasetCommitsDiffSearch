@@ -356,22 +356,6 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     @Override
     public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
-        ResolvedJavaMethod resolvedMethod = resolveMethodInternal(method, callerType);
-        if (resolvedMethod == null || resolvedMethod.isAbstract()) {
-            return null;
-        }
-        return resolvedMethod;
-    }
-
-    /**
-     * Resolve the method against the current type and return the method found, including any
-     * abstract methods.
-     *
-     * @param method
-     * @param callerType
-     * @return the method found
-     */
-    private ResolvedJavaMethod resolveMethodInternal(ResolvedJavaMethod method, ResolvedJavaType callerType) {
         assert !callerType.isArray();
         if (!method.isAbstract() && method.getDeclaringClass().equals(this) && method.isPublic()) {
             return method;
@@ -385,7 +369,11 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         if (resolvedMetaspaceMethod == 0) {
             return null;
         }
-        return HotSpotResolvedJavaMethod.fromMetaspace(resolvedMetaspaceMethod);
+        HotSpotResolvedJavaMethod resolvedMethod = HotSpotResolvedJavaMethod.fromMetaspace(resolvedMetaspaceMethod);
+        if (resolvedMethod.isAbstract()) {
+            return null;
+        }
+        return resolvedMethod;
     }
 
     public ConstantPool constantPool() {
@@ -476,24 +464,21 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         /*
          * Sometimes the receiver type in the graph hasn't stabilized to a subtype of declared
          * holder, usually because of phis, so make sure that the type is related to the declared
-         * type before using it for lookup. Unlinked types should also be ignored because we can't
-         * resolve the proper method to invoke. Generally unlinked types in invokes should result in
-         * a deopt instead since they can't really be used if they aren't linked yet.
+         * type before using it for lookup.
          */
-        if (!declaredHolder.isAssignableFrom(this) || this.isArray() || this.equals(declaredHolder) || !isLinked() || isInterface()) {
+        if (!declaredHolder.isAssignableFrom(this) || this.isArray() || this.equals(declaredHolder)) {
             return hmethod.uniqueConcreteMethod(declaredHolder);
         }
         /*
          * The holder may be a subtype of the decaredHolder so make sure to resolve the method to
          * the correct method for the subtype.
          */
-        HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) resolveMethodInternal(hmethod, this);
-        if (resolvedMethod == null) {
-            // The type isn't known to implement the method.
-            return null;
+        HotSpotResolvedJavaMethod newMethod = (HotSpotResolvedJavaMethod) resolveMethod(hmethod, this);
+        if (newMethod != null && !hmethod.equals(newMethod)) {
+            hmethod = newMethod;
         }
 
-        return resolvedMethod.uniqueConcreteMethod(this);
+        return hmethod.uniqueConcreteMethod(this);
     }
 
     /**
