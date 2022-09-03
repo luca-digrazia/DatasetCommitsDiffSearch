@@ -57,8 +57,6 @@ public final class FixedGuardNode extends DeoptimizingFixedWithNextNode implemen
         this.negated = negated;
         this.condition = condition;
         this.reason = deoptReason;
-
-        assert action != null && reason != null;
     }
 
     public DeoptimizationReason getReason() {
