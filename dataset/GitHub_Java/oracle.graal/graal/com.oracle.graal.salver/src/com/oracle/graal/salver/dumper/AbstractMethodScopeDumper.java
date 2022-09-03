@@ -27,7 +27,6 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.Iterator;
 
 import com.oracle.graal.java.BytecodeDisassembler;
 import com.oracle.graal.salver.data.DataDict;
@@ -129,9 +128,8 @@ public abstract class AbstractMethodScopeDumper extends AbstractGraalDumper {
         DataList pathList = new DataList();
         idDict.put("path", pathList);
 
-        Iterator<Integer> i = pathStack.descendingIterator();
-        while (i.hasNext()) {
-            pathList.add(i.next());
+        for (int i : pathStack) {
+            pathList.add(i);
         }
         if (isItem) {
             pathList.add(pathCounter++);
