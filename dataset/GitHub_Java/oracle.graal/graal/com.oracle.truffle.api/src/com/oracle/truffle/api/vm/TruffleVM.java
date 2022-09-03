@@ -448,24 +448,6 @@ public final class TruffleVM {
             return props.getProperty(prefix + "name");
         }
 
-        /**
-         * Name of the language version.
-         *
-         * @return string specifying the language version
-         */
-        public String getVersion() {
-            return props.getProperty(prefix + "version");
-        }
-
-        /**
-         * Human readable string that identifies the language and version.
-         *
-         * @return string describing the specific language version
-         */
-        public String getShortName() {
-            return getName() + getVersion();
-        }
-
         TruffleLanguage getImpl() {
             if (impl == null) {
                 String n = props.getProperty(prefix + "className");
@@ -474,7 +456,7 @@ public final class TruffleVM {
                     Constructor<?> constructor = langClazz.getConstructor(Env.class);
                     impl = SPI.attachEnv(TruffleVM.this, constructor, out, err, in);
                 } catch (Exception ex) {
-                    throw new IllegalStateException("Cannot initialize " + getShortName() + " language with implementation " + n, ex);
+                    throw new IllegalStateException("Cannot initialize " + getName() + " language with implementation " + n, ex);
                 }
             }
             return impl;
@@ -482,7 +464,7 @@ public final class TruffleVM {
 
         @Override
         public String toString() {
-            return "[" + getShortName() + " for " + getMimeTypes() + "]";
+            return "[" + getName() + " for " + getMimeTypes() + "]";
         }
     } // end of Language
 
