@@ -2134,7 +2134,7 @@ public class AMD64Assembler extends AbstractAssembler {
         if (isByte(value)) {
             emitByte(0x6B);
             emitByte(0xC0 | encode);
-            emitByte(value & 0xFF);
+            emitByte(value);
         } else {
             emitByte(0x69);
             emitByte(0xC0 | encode);
