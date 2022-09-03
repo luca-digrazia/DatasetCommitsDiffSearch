@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import java.util.function.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp;
@@ -35,31 +33,32 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public abstract class UnaryArithmeticNode extends UnaryNode implements ArithmeticLIRLowerable {
 
-    protected final Function<ArithmeticOpTable, UnaryOp> getOp;
+    protected UnaryOp op;
 
-    protected UnaryArithmeticNode(Function<ArithmeticOpTable, UnaryOp> getOp, ValueNode value) {
-        super(getOp.apply(ArithmeticOpTable.forStamp(value.stamp())).foldStamp(value.stamp()), value);
-        this.getOp = getOp;
+    protected UnaryArithmeticNode(UnaryOp op, ValueNode value) {
+        super(op.foldStamp(value.stamp()), value);
+        this.op = op;
     }
 
-    protected final UnaryOp getOp(ValueNode forValue) {
-        return getOp.apply(ArithmeticOpTable.forStamp(forValue.stamp()));
+    public UnaryOp getOp() {
+        return op;
     }
 
     public Constant evalConst(Constant... inputs) {
         assert inputs.length == 1;
-        return getOp(getValue()).foldConstant(inputs[0]);
+        return op.foldConstant(inputs[0]);
     }
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(getOp(getValue()).foldStamp(getValue().stamp()));
+        op = ArithmeticOpTable.forStamp(getValue().stamp()).getUnaryOp(op);
+        return updateStamp(op.foldStamp(getValue().stamp()));
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
-            return ConstantNode.forPrimitive(stamp(), getOp(forValue).foldConstant(forValue.asConstant()));
+            return ConstantNode.forPrimitive(stamp(), op.foldConstant(forValue.asConstant()));
         }
         return this;
     }

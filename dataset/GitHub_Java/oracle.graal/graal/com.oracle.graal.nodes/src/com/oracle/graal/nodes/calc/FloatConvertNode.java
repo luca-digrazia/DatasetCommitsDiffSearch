@@ -39,30 +39,34 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class FloatConvertNode extends UnaryArithmeticNode implements ConvertNode, Lowerable, ArithmeticLIRLowerable {
 
-    protected final FloatConvert op;
+    protected FloatConvertOp reverseOp;
 
     public static FloatConvertNode create(FloatConvert op, ValueNode input) {
         return USE_GENERATED_NODES ? new FloatConvertNodeGen(op, input) : new FloatConvertNode(op, input);
     }
 
+    private FloatConvertNode(ArithmeticOpTable table, FloatConvert op, ValueNode input) {
+        super(table.getFloatConvert(op), input);
+        ArithmeticOpTable revTable = ArithmeticOpTable.forStamp(stamp());
+        reverseOp = revTable.getFloatConvert(op.reverse());
+    }
+
     protected FloatConvertNode(FloatConvert op, ValueNode input) {
-        super(table -> table.getFloatConvert(op), input);
-        this.op = op;
+        this(ArithmeticOpTable.forStamp(input.stamp()), op, input);
     }
 
     public FloatConvert getFloatConvert() {
-        return op;
+        return ((FloatConvertOp) getOp()).getFloatConvert();
     }
 
     @Override
     public Constant convert(Constant c) {
-        return getOp(getValue()).foldConstant(c);
+        return op.foldConstant(c);
     }
 
     @Override
     public Constant reverse(Constant c) {
-        FloatConvertOp reverse = ArithmeticOpTable.forStamp(stamp()).getFloatConvert(op.reverse());
-        return reverse.foldConstant(c);
+        return reverseOp.foldConstant(c);
     }
 
     @Override
@@ -85,11 +89,20 @@ public class FloatConvertNode extends UnaryArithmeticNode implements ConvertNode
 
         if (forValue instanceof FloatConvertNode) {
             FloatConvertNode other = (FloatConvertNode) forValue;
-            if (other.isLossless() && other.op == this.op.reverse()) {
+            if (other.isLossless() && other.op == this.reverseOp) {
                 return other.getValue();
             }
         }
         return this;
+    }
+
+    @Override
+    public boolean inferStamp() {
+        boolean changed = super.inferStamp();
+        if (changed) {
+            reverseOp = ArithmeticOpTable.forStamp(stamp()).getFloatConvertOp(reverseOp);
+        }
+        return changed;
     }
 
     public void lower(LoweringTool tool) {
