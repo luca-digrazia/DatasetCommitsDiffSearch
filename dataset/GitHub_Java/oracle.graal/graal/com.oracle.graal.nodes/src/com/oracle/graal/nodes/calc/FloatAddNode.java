@@ -67,7 +67,7 @@ public final class FloatAddNode extends FloatArithmeticNode {
                     }
                     break;
                 case Double:
-                    // use Double.compare because -0.0 == 0.0
+                    // use Double.compare because -0.0f == 0.0f
                     if (Double.compare(y.asDouble(), -0.0) == 0) {
                         return forX;
                     }
