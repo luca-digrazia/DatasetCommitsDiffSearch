@@ -37,7 +37,6 @@ import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.amd64.*;
@@ -88,8 +87,8 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
-    public AMD64LIRGenerator(LIRKindTool lirKindTool, Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        super(lirKindTool, providers, cc, lirGenRes);
+    public AMD64LIRGenerator(Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
+        super(providers, cc, lirGenRes);
         lirGenRes.getLIR().setSpillMoveFactory(new AMD64SpillMoveFactory());
     }
 
@@ -108,7 +107,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     protected AMD64LIRInstruction createMove(AllocatableValue dst, Value src) {
         if (src instanceof AMD64AddressValue) {
             return new LeaOp(dst, (AMD64AddressValue) src);
-        } else if (isRegister(src) || isStackSlotValue(dst)) {
+        } else if (isRegister(src) || isStackSlot(dst)) {
             return new MoveFromRegOp(dst.getKind(), dst, src);
         } else {
             return new MoveToRegOp(dst.getKind(), dst, src);
@@ -196,7 +195,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitAddress(StackSlotValue address) {
+    public Variable emitAddress(StackSlot address) {
         Variable result = newVariable(LIRKind.value(target().wordKind));
         append(new StackLeaOp(result, address));
         return result;
@@ -1000,26 +999,6 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             append(new AMD64BitManipulationOp(IBSR, result, asAllocatable(value)));
         } else {
             append(new AMD64BitManipulationOp(LBSR, result, asAllocatable(value)));
-        }
-        return result;
-    }
-
-    public Value emitCountLeadingZeros(Value value) {
-        Variable result = newVariable(LIRKind.derive(value).changeType(Kind.Int));
-        if (value.getKind().getStackKind() == Kind.Int) {
-            append(new AMD64BitManipulationOp(ILZCNT, result, asAllocatable(value)));
-        } else {
-            append(new AMD64BitManipulationOp(LLZCNT, result, asAllocatable(value)));
-        }
-        return result;
-    }
-
-    public Value emitCountTrailingZeros(Value value) {
-        Variable result = newVariable(LIRKind.derive(value).changeType(Kind.Int));
-        if (value.getKind().getStackKind() == Kind.Int) {
-            append(new AMD64BitManipulationOp(ITZCNT, result, asAllocatable(value)));
-        } else {
-            append(new AMD64BitManipulationOp(LTZCNT, result, asAllocatable(value)));
         }
         return result;
     }
