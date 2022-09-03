@@ -260,8 +260,6 @@ public final class ProbeNode extends Node {
         final void onDispose(EventContext context, VirtualFrame frame) {
             try {
                 innerOnDispose(context, frame);
-            } catch (KillException | QuitException ex) {
-                throw ex;
             } catch (Throwable t) {
                 if (!seenException) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
