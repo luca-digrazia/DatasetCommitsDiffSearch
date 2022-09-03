@@ -760,12 +760,8 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 builder.end();
 
                 emitSpecializationListeners(builder, node);
-                builder.defaultDeclaration(node.getGenericSpecialization().getReturnSignature().getPrimitiveType(), "result");
-                if (node.getGenericSpecialization().isUseSpecializationsForGeneric()) {
-                    builder.defaultDeclaration(getContext().getType(boolean.class), "resultIsSet");
-                }
                 builder.startStatement().string("boolean allowed = (minimumState == ").string(nodeSpecializationClassName(node.getSpecializations().get(0))).string(".class)").end();
-                prefix = null;
+                prefix = "allowed";
             }
 
             addInternalValueParameters(method, node.getGenericSpecialization(), true);
@@ -805,15 +801,18 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
                 execute.tree(createGenericInvoke(builder, current, specialize));
 
-                if (specialize && !current.isGeneric()) {
+                if (specialize) {
                     builder.startStatement().string("allowed = allowed || (minimumState == ").string(nodeSpecializationClassName(current)).string(".class)").end();
                 }
-
                 builder.tree(createGuardAndCast(builder, prefix, current.getNode().getGenericSpecialization(), current, true, execute.getRoot(), null, true));
             }
 
             for (SpecializationData specializationData : unreachableSpecializations) {
                 builder.string("// unreachable ").string(specializationData.getId()).newLine();
+            }
+
+            if (specialize) {
+                builder.startThrow().startNew(getContext().getType(AssertionError.class)).end().end();
             }
 
             return method;
@@ -826,57 +825,21 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 builder.startTryBlock();
             }
 
-            CodeTree executeCall = null;
-            if (current.getMethod() != null) {
-                executeCall = createTemplateMethodCall(builder, null, current.getNode().getGenericSpecialization(), current, null);
-            }
-
-            if (specialize && executeCall == null && !current.getNode().getGenericSpecialization().isUseSpecializationsForGeneric()) {
+            if (current.getMethod() == null) {
                 emitEncounteredSynthetic(builder);
-            } else if (specialize) {
-
-                if (current.getNode().getGenericSpecialization().isUseSpecializationsForGeneric()) {
-                    builder.startIf().string("!resultIsSet").end().startBlock();
-                    if (executeCall != null) {
-                        if (current.getReturnSignature().isVoid()) {
-                            builder.statement(executeCall);
-                        } else {
-                            builder.startStatement().string("result = ").tree(executeCall).end();
-                        }
-                        builder.statement("resultIsSet = true");
-                    } else {
-                        emitEncounteredSynthetic(builder);
-                    }
-                    builder.end();
-                }
-
-                if (!current.isGeneric()) {
-                    builder.startIf().string("allowed").end().startBlock();
-                }
-
-                if (!current.getNode().getGenericSpecialization().isUseSpecializationsForGeneric()) {
-                    if (current.getReturnSignature().isVoid()) {
-                        builder.statement(executeCall);
-                    } else {
-                        builder.startStatement().string("result = ").tree(executeCall).end();
-                    }
-                }
-
-                builder.startStatement().startCall("super", "replace");
-                builder.startGroup().startNew(nodeSpecializationClassName(current)).string("this").end().end();
-                builder.end().end();
-
-                if (current.getReturnSignature().isVoid()) {
-                    builder.returnStatement();
-                } else {
-                    builder.startReturn().string("result").end();
-                }
-                if (!current.isGeneric()) {
-                    builder.end();
-                }
             } else {
-                if (executeCall == null) {
-                    emitEncounteredSynthetic(builder);
+                CodeTree executeCall = createTemplateMethodCall(builder, null, current.getNode().getGenericSpecialization(), current, null);
+
+                if (specialize) {
+                    builder.declaration(current.getReturnSignature().getPrimitiveType(), "result", executeCall);
+                    builder.startStatement().startCall("super", "replace");
+                    builder.startGroup().startNew(nodeSpecializationClassName(current)).string("this").end().end();
+                    builder.end().end();
+                    if (current.getReturnSignature().isVoid()) {
+                        builder.returnStatement();
+                    } else {
+                        builder.startReturn().string("result").end();
+                    }
                 } else {
                     builder.startReturn().tree(executeCall).end();
                 }
