@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,16 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.nodes.NamedLocationIdentity.*;
+import static com.oracle.graal.api.meta.LocationIdentity.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
@@ -215,23 +212,6 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
     }
 
     @Override
-    protected void processInitialLoopState(Loop<Block> loop, PEReadEliminationBlockState initialState) {
-        super.processInitialLoopState(loop, initialState);
-
-        for (PhiNode phi : ((LoopBeginNode) loop.getHeader().getBeginNode()).phis()) {
-            ValueNode firstValue = phi.valueAt(0);
-            if (firstValue != null) {
-                firstValue = GraphUtil.unproxify(firstValue);
-                for (Map.Entry<ReadCacheEntry, ValueNode> entry : new ArrayList<>(initialState.getReadCache().entrySet())) {
-                    if (entry.getKey().object == firstValue) {
-                        initialState.addReadCache(phi, entry.getKey().identity, entry.getKey().index, entry.getValue(), this);
-                    }
-                }
-            }
-        }
-    }
-
-    @Override
     protected void processLoopExit(LoopExitNode exitNode, PEReadEliminationBlockState initialState, PEReadEliminationBlockState exitState, GraphEffectList effects) {
         super.processLoopExit(exitNode, initialState, exitState, effects);
 
@@ -301,7 +281,7 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
                 }
             }
             for (PhiNode phi : getPhis()) {
-                if (phi.getStackKind() == Kind.Object) {
+                if (phi.getKind() == Kind.Object) {
                     for (Map.Entry<ReadCacheEntry, ValueNode> entry : states.get(0).readCache.entrySet()) {
                         if (entry.getKey().object == getPhiValueAt(phi, 0)) {
                             mergeReadCachePhi(phi, entry.getKey().identity, entry.getKey().index, states);
