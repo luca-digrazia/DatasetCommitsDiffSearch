@@ -34,7 +34,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ProfilingInfo.ExceptionSeen;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.debug.*;
 import com.oracle.graal.phases.*;
 
 /**
@@ -291,21 +290,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         return HotSpotGraalRuntime.getInstance().getCompilerToVM().isMethodCompilable(metaspaceMethod);
     }
 
-    @Override
-    public LineNumberTable getLineNumberTable() {
-        long[] values = HotSpotGraalRuntime.getInstance().getCompilerToVM().getLineNumberTable(this);
-        assert values.length % 2 == 0;
-        int[] bci = new int[values.length / 2];
-        int[] line = new int[values.length / 2];
-
-        for (int i = 0; i < values.length / 2; i++) {
-            bci[i] = (int) values[i * 2];
-            line[i] = (int) values[i * 2 + 1];
-        }
-
-        return new LineNumberTableImpl(line, bci);
-    }
-
     /**
      * Returns the offset of this method into the v-table.
      * If the holder is not initialized, returns -1
@@ -325,5 +309,4 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     public CompilationTask currentTask() {
         return currentTask;
     }
-
 }
