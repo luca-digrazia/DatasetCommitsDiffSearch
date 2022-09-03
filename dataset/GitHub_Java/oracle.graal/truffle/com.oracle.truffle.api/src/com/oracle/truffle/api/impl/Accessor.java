@@ -38,7 +38,6 @@ import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
@@ -55,7 +54,7 @@ import com.oracle.truffle.api.source.Source;
  */
 public abstract class Accessor {
     private static Accessor API;
-    static Accessor SPI;
+    private static Accessor SPI;
     static Accessor NODES;
     private static Accessor INSTRUMENT;
     static Accessor INSTRUMENTHANDLER;
@@ -364,10 +363,10 @@ public abstract class Accessor {
         return NODES.isInstrumentable(rootNode);
     }
 
-    protected void onFirstExecution(RootNode node) {
+    protected void installRootNode(RootNode node) {
         Accessor accessor = INSTRUMENTHANDLER;
         if (accessor != null) {
-            accessor.onFirstExecution(node);
+            accessor.installRootNode(node);
         }
     }
 
@@ -403,25 +402,6 @@ public abstract class Accessor {
 
     protected String toString(TruffleLanguage<?> language, Env env, Object obj) {
         return API.toString(language, env, obj);
-    }
-
-    private static final TVMCI SUPPORT = Truffle.getRuntime().getCapability(TVMCI.class);
-
-    @SuppressWarnings("deprecation")
-    protected void onLoopCount(Node source, int iterations) {
-        if (SUPPORT != null) {
-            SUPPORT.onLoopCount(source, iterations);
-        } else {
-            // needs an additional compatibility check so older graal runtimes
-            // still run with newer truffle versions
-            RootNode root = source.getRootNode();
-            if (root != null) {
-                RootCallTarget target = root.getCallTarget();
-                if (target instanceof com.oracle.truffle.api.LoopCountReceiver) {
-                    ((com.oracle.truffle.api.LoopCountReceiver) target).reportLoopCount(iterations);
-                }
-            }
-        }
     }
 
     static <T extends TruffleLanguage<?>> T findLanguageByClass(Object vm, Class<T> languageClass) {

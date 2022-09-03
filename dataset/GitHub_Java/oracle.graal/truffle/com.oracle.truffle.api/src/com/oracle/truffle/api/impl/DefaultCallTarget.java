@@ -88,7 +88,10 @@ public final class DefaultCallTarget implements RootCallTarget {
     private void initialize() {
         synchronized (this) {
             if (!this.initialized) {
-                ((DefaultTruffleRuntime) Truffle.getRuntime()).getTvmci().initCallTarget(this);
+                Accessor accessor = Accessor.INSTRUMENTHANDLER;
+                if (accessor != null) {
+                    accessor.installRootNode(rootNode);
+                }
                 this.initialized = true;
             }
         }
