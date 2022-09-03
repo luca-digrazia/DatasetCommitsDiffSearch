@@ -53,14 +53,11 @@ import org.graalvm.compiler.lir.LIRInstruction.OperandMode;
 import org.graalvm.compiler.lir.LIRValueUtil;
 import org.graalvm.compiler.lir.RedundantMoveElimination;
 import org.graalvm.compiler.lir.StandardOp;
-import org.graalvm.compiler.lir.StandardOp.AbstractBlockEndOp;
 import org.graalvm.compiler.lir.StandardOp.BlockEndOp;
-import org.graalvm.compiler.lir.StandardOp.JumpOp;
 import org.graalvm.compiler.lir.StandardOp.LabelOp;
 import org.graalvm.compiler.lir.Variable;
 import org.graalvm.compiler.lir.VirtualStackSlot;
 import org.graalvm.compiler.lir.alloc.OutOfRegistersException;
-import org.graalvm.compiler.lir.alloc.trace.GlobalLivenessInfo;
 import org.graalvm.compiler.lir.alloc.trace.TraceAllocationPhase;
 import org.graalvm.compiler.lir.alloc.trace.TraceAllocationPhase.TraceAllocationContext;
 import org.graalvm.compiler.lir.alloc.trace.TraceGlobalMoveResolutionPhase;
@@ -70,6 +67,7 @@ import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool.MoveFactory;
 import org.graalvm.compiler.lir.ssa.SSAUtil;
 import org.graalvm.compiler.lir.ssa.SSAUtil.PhiValueVisitor;
+import org.graalvm.compiler.lir.ssi.SSIUtil;
 
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterArray;
@@ -116,10 +114,8 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
     private final ArrayList<LIRInstruction> insertInstructionsAfter;
     private final boolean neverSpillConstants;
 
-    private final GlobalLivenessInfo livenessInfo;
-
     public BottomUpAllocator(TargetDescription target, LIRGenerationResult lirGenRes, MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig,
-                    AllocatableValue[] cachedStackSlots, TraceBuilderResult resultTraces, boolean neverSpillConstant, GlobalLivenessInfo livenessInfo) {
+                    AllocatableValue[] cachedStackSlots, TraceBuilderResult resultTraces, boolean neverSpillConstant) {
         this.target = target;
         this.lirGenRes = lirGenRes;
         this.spillMoveFactory = spillMoveFactory;
@@ -130,7 +126,6 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
         this.resultTraces = resultTraces;
         this.moveResolver = new TraceGlobalMoveResolver(lirGenRes, spillMoveFactory, target.arch);
         this.neverSpillConstants = neverSpillConstant;
-        this.livenessInfo = livenessInfo;
 
         this.insertInstructionsBefore = new ArrayList<>(4);
         this.insertInstructionsAfter = new ArrayList<>(4);
@@ -377,6 +372,7 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
          * successor (which is already allocated). For constant inputs we insert moves.
          */
         private void resolvePhis(AbstractBlockBase<?> successorBlock, AbstractBlockBase<?> block) {
+            // Note that we are only visiting PHI values, not transient SSI values.
             phiVisitor.loads.clear();
             SSAUtil.forEachPhiValuePair(getLIR(), successorBlock, block, phiVisitor);
             if (phiVisitor.loads.size() > 0) {
@@ -417,8 +413,8 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
          * Intra-trace edges, i.e., edge where both, the source and the target block are in the same
          * trace, are either
          * <ul>
-         * <li><em>immediate forward edges</em>, i.e., an edge from {@code i}th block of the trace
-         * to the {@code (i+1)}th block, or
+         * <li><em>immediate forward edges</em>, i.e., an edge from <code>i</code>th block of the
+         * trace to the <code>(i+1)</code>th block, or
          * <li>a <em>loop back-edge</em> from the last block of the trace to the loop header.
          * </ul>
          * This property is guaranteed due to splitting of <em>critical edge</em>.
@@ -444,38 +440,34 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
             resolveFindInsertPos(from, to);
             LIR lir = getLIR();
 
-            if (SSAUtil.isMerge(to)) {
-                JumpOp blockEnd = SSAUtil.phiOut(lir, from);
-                LabelOp label = SSAUtil.phiIn(lir, to);
+            BlockEndOp blockEnd = SSIUtil.outgoing(lir, from);
+            LabelOp label = SSIUtil.incoming(lir, to);
 
-                for (int i = 0; i < label.getPhiSize(); i++) {
-                    Value incomingValue = label.getIncomingValue(i);
-                    Value outgoingValue = blockEnd.getOutgoingValue(i);
-                    resolveValuePair(incomingValue, outgoingValue);
-                }
+            for (int i = 0; i < label.getPhiSize(); i++) {
+                Value incomingValue = label.getIncomingValue(i);
+                Value outgoingValue = blockEnd.getOutgoingValue(i);
+                resolveValuePair(incomingValue, outgoingValue);
             }
-            resolveTraceEdge(from, to);
+            resolveTraceEdge(blockEnd, label);
             moveResolver.resolveAndAppendMoves();
         }
 
         private void resolveIntraTraceEdge(AbstractBlockBase<?> from, AbstractBlockBase<?> to) {
             assert resultTraces.getTraceForBlock(from).equals(resultTraces.getTraceForBlock(to)) : "Not on the same trace? " + from + " -> " + to;
             resolveFindInsertPos(from, to);
-            resolveTraceEdge(from, to);
+            LIR lir = getLIR();
+
+            BlockEndOp blockEnd = SSIUtil.outgoing(lir, from);
+            LabelOp label = SSIUtil.incoming(lir, to);
+
+            resolveTraceEdge(blockEnd, label);
             moveResolver.resolveAndAppendMoves();
         }
 
-        private void resolveTraceEdge(AbstractBlockBase<?> from, AbstractBlockBase<?> to) {
-            Value[] out = livenessInfo.getOutLocation(from);
-            Value[] in = livenessInfo.getInLocation(to);
-
-            assert out != null;
-            assert in != null;
-            assert out.length == in.length;
-
-            for (int i = 0; i < out.length; i++) {
-                Value incomingValue = in[i];
-                Value outgoingValue = out[i];
+        private void resolveTraceEdge(BlockEndOp blockEnd, LabelOp label) {
+            for (int i = label.getPhiSize(); i < label.getIncomingSize(); i++) {
+                Value incomingValue = label.getIncomingValue(i);
+                Value outgoingValue = blockEnd.getOutgoingValue(i);
                 resolveValuePair(incomingValue, outgoingValue);
             }
         }
@@ -487,7 +479,7 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
         }
 
         /**
-         * @return {@code true} if the block requires data-flow resolution.
+         * @return <code>true</code> if the block requires data-flow resolution.
          */
         @SuppressWarnings("try")
         private boolean allocateBlock(AbstractBlockBase<?> block) {
@@ -500,7 +492,7 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
                     LIRInstruction inst = currentInstructions.get(currentInstructionIndex);
                     if (inst != null) {
                         inst.setId(currentOpId);
-                        allocateInstruction(inst, block);
+                        allocateInstruction(inst);
                     }
                 }
                 allocatedBlocks.set(block.getId());
@@ -509,7 +501,7 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
         }
 
         @SuppressWarnings("try")
-        private void allocateInstruction(LIRInstruction op, AbstractBlockBase<?> block) {
+        private void allocateInstruction(LIRInstruction op) {
             assert op != null && op.id() == currentOpId;
             try (Indent indent = Debug.logAndIndent("handle inst: %d: %s", op.id(), op)) {
                 try (Indent indent1 = Debug.logAndIndent("output pos")) {
@@ -532,9 +524,6 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
                     // should have
                     op.forEachTemp(allocStackOrRegisterProcedure);
                     op.forEachOutput(allocStackOrRegisterProcedure);
-                    if (op instanceof LabelOp) {
-                        processIncoming(block, op);
-                    }
                 }
                 try (Indent indent1 = Debug.logAndIndent("input pos")) {
 
@@ -546,9 +535,6 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
                     op.forEachInput(allocRegisterProcedure);
 
                     op.forEachAlive(allocStackOrRegisterProcedure);
-                    if (op instanceof BlockEndOp) {
-                        processOutgoing(block, op);
-                    }
                     op.forEachState(allocStackOrRegisterProcedure);
                     op.forEachInput(allocStackOrRegisterProcedure);
                 }
@@ -557,27 +543,6 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
                 insertInstructions();
                 currentOpId++;
             }
-        }
-
-        private void processIncoming(AbstractBlockBase<?> block, LIRInstruction instruction) {
-            int[] vars = livenessInfo.getBlockIn(block);
-            Value[] locs = new Value[vars.length];
-            for (int i = 0; i < vars.length; i++) {
-                int varNum = vars[i];
-                if (varNum >= 0) {
-                    locs[i] = allocStackOrRegister(instruction, livenessInfo.getVariable(varNum), OperandMode.DEF, LabelOp.incomingFlags);
-                }
-            }
-            livenessInfo.setInLocations(block, locs);
-        }
-
-        private void processOutgoing(AbstractBlockBase<?> block, LIRInstruction instruction) {
-            int[] vars = livenessInfo.getBlockOut(block);
-            Value[] locs = new Value[vars.length];
-            for (int i = 0; i < vars.length; i++) {
-                locs[i] = allocStackOrRegister(instruction, livenessInfo.getVariable(vars[i]), OperandMode.ALIVE, AbstractBlockEndOp.outgoingFlags);
-            }
-            livenessInfo.setOutLocations(block, locs);
         }
 
         private void spillCallerSavedRegisters() {
