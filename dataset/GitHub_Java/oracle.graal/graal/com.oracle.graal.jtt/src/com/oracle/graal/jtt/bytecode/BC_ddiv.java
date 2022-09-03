@@ -32,8 +32,9 @@ public class BC_ddiv extends BC_ddiv_drem_base {
     }
 
     @Test
-    public void ddiv() {
-        runTest("test", x, y);
+    @Override
+    public void run() {
+        super.run();
     }
 
 }
