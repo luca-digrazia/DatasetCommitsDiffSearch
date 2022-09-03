@@ -28,19 +28,19 @@ package com.oracle.graal.nodes;
 public interface HeapAccess {
 
     /**
-     * The types of (write/read) barriers attached to stores.
+     * The types of write barriers attached to stores.
      */
-    public enum BarrierType {
+    public enum WriteBarrierType {
         /**
-         * Primitive stores which do not necessitate barriers.
+         * Primitive stores which do not necessitate write barriers.
          */
         NONE,
         /**
-         * Array object stores which necessitate precise barriers.
+         * Array object stores which necessitate precise write barriers.
          */
         PRECISE,
         /**
-         * Field object stores which necessitate imprecise barriers.
+         * Field object stores which necessitate imprecise write barriers.
          */
         IMPRECISE
     }
@@ -48,7 +48,7 @@ public interface HeapAccess {
     /**
      * Gets the write barrier type for that particular access.
      */
-    BarrierType getBarrierType();
+    WriteBarrierType getWriteBarrierType();
 
     /**
      * Returns whether or not the heap access is a compressed pointer candidate.
