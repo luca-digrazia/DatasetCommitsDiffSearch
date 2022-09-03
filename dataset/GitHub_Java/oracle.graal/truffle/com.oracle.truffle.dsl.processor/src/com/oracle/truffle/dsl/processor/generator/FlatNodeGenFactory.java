@@ -47,7 +47,6 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.locks.Lock;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -771,10 +770,7 @@ public class FlatNodeGenFactory {
 
         final CodeTreeBuilder builder = method.createBuilder();
 
-        builder.declaration(context.getType(Lock.class), "lock", "getLock()");
-        builder.declaration(context.getType(boolean.class), "hasLock", "true");
-        builder.statement("lock.lock()");
-        builder.startTryBlock();
+        builder.startSynchronized("getAtomicLock()");
 
         builder.tree(state.createLoad(frameState, node.getUninitializedSpecialization()));
         if (requiresExclude()) {
@@ -791,12 +787,8 @@ public class FlatNodeGenFactory {
             builder.tree(createTransferToInterpreterAndInvalidate());
             builder.tree(createThrowUnsupported(builder, originalFrameState));
         }
-        builder.end().startFinallyBlock();
-        builder.startIf().string("hasLock").end().startBlock();
-        builder.statement("lock.unlock()");
-        builder.end();
-        builder.end();
 
+        builder.end();
         return method;
     }
 
@@ -1694,18 +1686,13 @@ public class FlatNodeGenFactory {
             builder.startBlock();
             ifCount++;
         }
-        builder.tree(createExecute(builder, frameState, forType, specialization, NodeExecutionMode.FAST_PATH));
+        builder.tree(createExecute(builder, frameState, forType, specialization));
         builder.end(ifCount);
         return builder.build();
     }
 
-    private CodeTree createExecute(CodeTreeBuilder parent, FrameState frameState, final ExecutableTypeData forType, SpecializationData specialization, NodeExecutionMode mode) {
+    private CodeTree createExecute(CodeTreeBuilder parent, FrameState frameState, final ExecutableTypeData forType, SpecializationData specialization) {
         CodeTreeBuilder builder = parent.create();
-
-        if (mode.isSlowPath()) {
-            builder.statement("hasLock = false");
-            builder.statement("lock.unlock()");
-        }
 
         if (specialization.getMethod() == null) {
             builder.tree(createThrowUnsupported(builder, frameState));
@@ -1724,7 +1711,7 @@ public class FlatNodeGenFactory {
             }
         }
 
-        return createCatchRewriteException(builder, specialization, forType, frameState, builder.build(), mode);
+        return createFastPathTryCatchRewriteException(builder, specialization, forType, frameState, builder.build());
     }
 
     private CodeTree visitSpecializationGroup(CodeTreeBuilder parent, SpecializationGroup group, ExecutableTypeData forType, FrameState frameState, List<SpecializationData> allowedSpecializations,
@@ -2175,10 +2162,10 @@ public class FlatNodeGenFactory {
                         builder.string(duplicateFoundName);
                     }
                     builder.end().startBlock();
-                    builder.tree(createExecute(builder, frameState, executeAndSpecializeType, specialization, execution));
+                    builder.tree(createExecute(builder, frameState, executeAndSpecializeType, specialization));
                     builder.end();
                 } else {
-                    builder.tree(createExecute(builder, frameState, executeAndSpecializeType, specialization, execution));
+                    builder.tree(createExecute(builder, frameState, executeAndSpecializeType, specialization));
                     if (!guards.isEmpty()) {
                         builder.end();
                     }
@@ -2196,12 +2183,7 @@ public class FlatNodeGenFactory {
             int ifCount = 0;
             if (!typeChecks.isEmpty()) {
                 builder.startIf();
-                // TODO we can only conditionally execute type checks if the cast value is not used
-                // later on. if there is a cast then the cast value is going to be used in a method
-                // guard. we should still make this conditional, by making the cast conditional or
-                // inline the cast into method guards that use the cast value.
-                // ideally we could make guards for the fallback one liner.
-                if (specialization != null && typeCasts.isEmpty()) {
+                if (specialization != null) {
                     builder.tree(stateCheck).string(" || ");
                 }
                 builder.tree(typeChecks).end();
@@ -2324,7 +2306,7 @@ public class FlatNodeGenFactory {
         }
         builder.end().startBlock();
         builder.tree(createTransferToInterpreterAndInvalidate());
-        builder.tree(createRemoveThis(builder, frameState, forType, specialization, false, NodeExecutionMode.FAST_PATH));
+        builder.tree(createRemoveThis(builder, frameState, forType, specialization, false));
         builder.end();
         return builder.build();
     }
@@ -2447,8 +2429,7 @@ public class FlatNodeGenFactory {
         return targetExecutable;
     }
 
-    private CodeTree createCatchRewriteException(CodeTreeBuilder parent, SpecializationData specialization, ExecutableTypeData forType, FrameState frameState, CodeTree execution,
-                    NodeExecutionMode mode) {
+    private CodeTree createFastPathTryCatchRewriteException(CodeTreeBuilder parent, SpecializationData specialization, ExecutableTypeData forType, FrameState frameState, CodeTree execution) {
         if (specialization.getExceptions().isEmpty()) {
             return execution;
         }
@@ -2471,39 +2452,32 @@ public class FlatNodeGenFactory {
             builder.lineComment("implicit transferToInterpreterAndInvalidate()");
         }
 
-        builder.tree(createRemoveThis(builder, frameState, forType, specialization, true, mode));
+        builder.tree(createRemoveThis(builder, frameState, forType, specialization, true));
 
         builder.end();
         return builder.build();
     }
 
-    private CodeTree createRemoveThis(CodeTreeBuilder parent, FrameState frameState, ExecutableTypeData forType, SpecializationData specialization, boolean excludeSpecialization,
-                    NodeExecutionMode mode) {
+    private CodeTree createRemoveThis(CodeTreeBuilder parent, FrameState frameState, ExecutableTypeData forType, SpecializationData specialization, boolean excludeSpecialization) {
         CodeTreeBuilder builder = parent.create();
-        if (!mode.isSlowPath()) {
-            // slow path is already locked
-            builder.declaration(context.getType(Lock.class), "lock", "getLock()");
-            builder.statement("lock.lock()");
-            builder.startTryBlock();
+        boolean isSynchronized = builder.findMethod().getModifiers().contains(Modifier.SYNCHRONIZED);
+        if (!isSynchronized) {
+            builder.startSynchronized("getAtomicLock()");
         }
         if (excludeSpecialization) {
             builder.tree(this.exclude.createSet(frameState, Arrays.asList(specialization).toArray(new SpecializationData[0]), true, true));
         }
 
         builder.tree((state.createSet(frameState, Arrays.asList(specialization).toArray(new SpecializationData[0]), false, true)));
-        if (
-
-        useSpecializationClass(specialization)) {
+        if (useSpecializationClass(specialization)) {
             builder.statement("this." + createSpecializationFieldName(specialization) + " = null");
         }
 
-        if (!mode.isSlowPath()) {
-            builder.end().startFinallyBlock();
-            builder.statement("lock.unlock()");
-            builder.end();
-        }
         builder.tree(createCallExecuteAndSpecialize(forType, frameState));
         builder.end();
+        if (!isSynchronized) {
+            builder.end();
+        }
         return builder.build();
     }
 
@@ -2725,7 +2699,7 @@ public class FlatNodeGenFactory {
             List<ImplicitCastData> sourceTypes = typeSystem.lookupByTargetType(targetType);
             CodeTree valueReference = value.createReference();
             if (sourceTypes.isEmpty()) {
-                checkBuilder.tree(TypeSystemCodeGenerator.check(typeSystem, targetType, valueReference));
+                checkBuilder.tree(TypeSystemCodeGenerator.check(typeSystem, targetType, value.createReference()));
                 castBuilder.tree(TypeSystemCodeGenerator.cast(typeSystem, targetType, valueReference));
             } else {
                 List<SpecializationData> specializations = group.collectSpecializations();
