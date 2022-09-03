@@ -24,6 +24,7 @@ package com.oracle.truffle.api.dsl.test;
 
 import static org.junit.Assert.*;
 
+import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.truffle.api.*;
@@ -46,32 +47,41 @@ class TestHelper {
         return nodes;
     }
 
-    static <E extends ValueNode> E createNode(NodeFactory<E> factory, boolean prefixConstants, Object... constants) {
+    static <E extends ValueNode> E createNode(NodeFactory<E> factory, Object... constants) {
         ArgumentNode[] argumentNodes = arguments(factory.getExecutionSignature().size());
 
         List<Object> argumentList = new ArrayList<>();
-        if (prefixConstants) {
-            argumentList.addAll(Arrays.asList(constants));
-        }
         if (ChildrenNode.class.isAssignableFrom(factory.getNodeClass())) {
             argumentList.add(argumentNodes);
         } else {
             argumentList.addAll(Arrays.asList(argumentNodes));
         }
-        if (!prefixConstants) {
-            argumentList.addAll(Arrays.asList(constants));
-        }
+        argumentList.addAll(Arrays.asList(constants));
         return factory.createNode(argumentList.toArray(new Object[argumentList.size()]));
     }
 
+    static <E extends ValueNode> E createGenericNode(NodeFactory<E> factory, Object... constants) {
+        Method createGenericMethod;
+        try {
+            createGenericMethod = factory.getClass().getMethod("createGeneric", factory.getNodeClass());
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        }
+        try {
+            return factory.getNodeClass().cast(createGenericMethod.invoke(null, createNode(factory, constants)));
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     static <E extends ValueNode> TestRootNode<E> createRoot(NodeFactory<E> factory, Object... constants) {
-        TestRootNode<E> rootNode = new TestRootNode<>(createNode(factory, false, constants));
+        TestRootNode<E> rootNode = new TestRootNode<>(createNode(factory, constants));
         rootNode.adoptChildren();
         return rootNode;
     }
 
-    static <E extends ValueNode> TestRootNode<E> createRootPrefix(NodeFactory<E> factory, boolean prefixConstants, Object... constants) {
-        TestRootNode<E> rootNode = new TestRootNode<>(createNode(factory, prefixConstants, constants));
+    static <E extends ValueNode> TestRootNode<E> createGenericRoot(NodeFactory<E> factory, Object... constants) {
+        TestRootNode<E> rootNode = new TestRootNode<>(createGenericNode(factory, constants));
         rootNode.adoptChildren();
         return rootNode;
     }
@@ -88,7 +98,7 @@ class TestHelper {
         return createCallTarget(node).call(values);
     }
 
-    static Object[] array(Object... val) {
+    static Object array(Object... val) {
         return val;
     }
 
@@ -128,71 +138,29 @@ class TestHelper {
         return output;
     }
 
-    static void assertRuns(NodeFactory<? extends ValueNode> factory, Object[] testValues, Object[] result) {
-        assertRuns(factory, testValues, result, null);
-    }
-
     /* Methods tests all test values in combinational order. */
-    static void assertRuns(NodeFactory<? extends ValueNode> factory, Object[] testValues, Object[] result, ExecutionListener listener) {
+    static void assertRuns(NodeFactory<? extends ValueNode> factory, Object result, Object... testValues) {
         // test each run by its own.
         for (int i = 0; i < testValues.length; i++) {
-            assertValue(createRoot(factory), 0, testValues[i], result[i], listener, true);
+            assertValue(createRoot(factory), result, testValues);
         }
 
         // test all combinations of the test values
-        List<Object> testValuesList = Arrays.asList(testValues);
-        List<List<Object>> permuts = permutations(testValuesList);
+        List<List<Object>> permuts = permutations(Arrays.asList(testValues));
         for (List<Object> list : permuts) {
             TestRootNode<?> root = createRoot(factory);
-            int index = 0;
             for (Object object : list) {
-                assertValue(root, index, object, result[testValuesList.indexOf(object)], listener, index == list.size() - 1);
-                index++;
+                assertValue(root, result, object);
             }
         }
     }
 
-    static void assertValue(TestRootNode<? extends ValueNode> root, int index, Object value, Object result, ExecutionListener listener, boolean last) {
-        Object actualResult = null;
-        if (result instanceof Class && Throwable.class.isAssignableFrom((Class<?>) result)) {
-            try {
-                if (value instanceof Object[]) {
-                    actualResult = executeWith(root, (Object[]) value);
-                } else {
-                    actualResult = executeWith(root, value);
-                }
-                fail(String.format("Exception %s  expected but not occured.", result.getClass()));
-            } catch (Throwable e) {
-                actualResult = e;
-                if (!e.getClass().isAssignableFrom(((Class<?>) result))) {
-                    e.printStackTrace();
-                    fail(String.format("Incompatible exception class thrown. Expected %s but was %s.", result.toString(), e.getClass()));
-                }
-            }
-        } else if (value instanceof Object[]) {
-            actualResult = executeWith(root, (Object[]) value);
-            assertEquals(result, actualResult);
+    static void assertValue(TestRootNode<? extends ValueNode> root, Object result, Object testValues) {
+        if (testValues instanceof Object[]) {
+            assertEquals(result, executeWith(root, (Object[]) testValues));
         } else {
-            actualResult = executeWith(root, value);
-            assertEquals(result, actualResult);
+            assertEquals(result, executeWith(root, testValues));
         }
-        if (listener != null) {
-            listener.afterExecution(root, index, value, result, actualResult, last);
-        }
-    }
-
-    public static final class LogListener implements ExecutionListener {
-
-        public void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last) {
-            System.out.printf("Run %3d Node:%-20s Parameters: %10s Expected: %10s Result %10s%n", index, node.getNode().getClass().getSimpleName(), value, expectedResult, actualResult);
-        }
-
-    }
-
-    interface ExecutionListener {
-
-        void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last);
-
     }
 
 }

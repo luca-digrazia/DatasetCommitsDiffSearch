@@ -22,14 +22,14 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Value, InputType.Anchor, InputType.Guard})
-public class SnippetAnchorNode extends FixedWithNextNode implements Simplifiable, GuardingNode {
+public final class SnippetAnchorNode extends FixedWithNextNode implements Simplifiable, GuardingNode {
 
     public SnippetAnchorNode() {
         super(StampFactory.object());
@@ -37,7 +37,7 @@ public class SnippetAnchorNode extends FixedWithNextNode implements Simplifiable
 
     @Override
     public void simplify(SimplifierTool tool) {
-        BeginNode prevBegin = BeginNode.prevBegin(this);
+        AbstractBeginNode prevBegin = BeginNode.prevBegin(this);
         replaceAtUsages(InputType.Anchor, prevBegin);
         replaceAtUsages(InputType.Guard, prevBegin);
         if (usages().isEmpty()) {

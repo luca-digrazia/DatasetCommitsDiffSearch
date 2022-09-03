@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,18 +35,22 @@ import com.oracle.truffle.api.nodes.Node.Child;
  * <h3>Creating a Child Node</h3>
  *
  * <p>
- * Child nodes are stored in the class of the parent node in fields that are marked with the {@link Child} annotation.
- * Before such a field is assigned, {@link Node#adoptChild} must be called. This method automatically establishes a link
- * from the child to the parent. The {@link Node#getParent()} method allows access to this field. Every node also
- * provides the ability to iterate over its children using {@link Node#getChildren()}.</p>
- *
- * <p>A child node field must be declared private and non-final. It may only be assigned in the constructor of the parent
- * node. For changing the structure of the tree at run time, the method {@link Node#replace(Node)} must be used (see
- * {@link ReplaceTest}).
+ * Child nodes are stored in the class of the parent node in fields that are marked with the
+ * {@link Child} annotation. Before such a field is assigned, {@link Node#adoptChild} must be
+ * called. This method automatically establishes a link from the child to the parent. The
+ * {@link Node#getParent()} method allows access to this field. Every node also provides the ability
+ * to iterate over its children using {@link Node#getChildren()}.
  * </p>
  *
  * <p>
- * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.test.ChildrenNodesTest}.
+ * A child node field must be declared private and non-final. It may only be assigned in the
+ * constructor of the parent node. For changing the structure of the tree at run time, the method
+ * {@link Node#replace(Node)} must be used (see {@link ReplaceTest}).
+ * </p>
+ *
+ * <p>
+ * The next part of the Truffle API introduction is at
+ * {@link com.oracle.truffle.api.test.ChildrenNodesTest}.
  * </p>
  */
 public class ChildNodeTest {
@@ -57,13 +61,13 @@ public class ChildNodeTest {
         TestChildNode leftChild = new TestChildNode();
         TestChildNode rightChild = new TestChildNode();
         TestRootNode rootNode = new TestRootNode(leftChild, rightChild);
+        CallTarget target = runtime.createCallTarget(rootNode);
         Assert.assertEquals(rootNode, leftChild.getParent());
         Assert.assertEquals(rootNode, rightChild.getParent());
         Iterator<Node> iterator = rootNode.getChildren().iterator();
         Assert.assertEquals(leftChild, iterator.next());
         Assert.assertEquals(rightChild, iterator.next());
         Assert.assertFalse(iterator.hasNext());
-        CallTarget target = runtime.createCallTarget(rootNode);
         Object result = target.call();
         Assert.assertEquals(42, result);
     }
@@ -74,8 +78,9 @@ public class ChildNodeTest {
         @Child private TestChildNode right;
 
         public TestRootNode(TestChildNode left, TestChildNode right) {
-            this.left = adoptChild(left);
-            this.right = adoptChild(right);
+            super(null);
+            this.left = left;
+            this.right = right;
         }
 
         @Override
@@ -85,6 +90,10 @@ public class ChildNodeTest {
     }
 
     class TestChildNode extends Node {
+
+        public TestChildNode() {
+            super(null);
+        }
 
         public int execute() {
             return 21;

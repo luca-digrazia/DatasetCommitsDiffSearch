@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,20 +32,21 @@ import com.oracle.truffle.api.nodes.*;
  * <h3>Using Final Fields in Node Classes</h3>
  *
  * <p>
- * The usage of final fields in node classes is highly encouraged. It is beneficial for performance to declare every
- * field that is not pointing to a child node as final. This gives the Truffle runtime an increased opportunity to
- * optimize this node.
+ * The usage of final fields in node classes is highly encouraged. It is beneficial for performance
+ * to declare every field that is not pointing to a child node as final. This gives the Truffle
+ * runtime an increased opportunity to optimize this node.
  * </p>
  *
  * <p>
- * If a node has a value which may change at run time, but will rarely do so, it is recommended to speculate on the
- * field being final. This involves starting executing with a node where this field is final and only if this
- * turns out to be no longer the case, the node is replaced with an alternative implementation of the operation (see
- * {@link ReplaceTest}).
+ * If a node has a value which may change at run time, but will rarely do so, it is recommended to
+ * speculate on the field being final. This involves starting executing with a node where this field
+ * is final and only if this turns out to be no longer the case, the node is replaced with an
+ * alternative implementation of the operation (see {@link ReplaceTest}).
  * </p>
  *
  * <p>
- * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.test.ReplaceTest}.
+ * The next part of the Truffle API introduction is at
+ * {@link com.oracle.truffle.api.test.ReplaceTest}.
  * </p>
  */
 public class FinalFieldTest {
@@ -59,12 +60,13 @@ public class FinalFieldTest {
         Assert.assertEquals(42, result);
     }
 
-    class TestRootNode extends RootNode {
+    private static class TestRootNode extends RootNode {
 
-        @Children TestChildNode[] children;
+        @Children private final TestChildNode[] children;
 
         public TestRootNode(TestChildNode[] children) {
-            this.children = adoptChildren(children);
+            super(null);
+            this.children = children;
         }
 
         @Override
@@ -77,10 +79,12 @@ public class FinalFieldTest {
         }
     }
 
-    class TestChildNode extends Node {
+    private static class TestChildNode extends Node {
+
         private final int value;
 
         public TestChildNode(int value) {
+            super(null);
             this.value = value;
         }
 
@@ -89,4 +93,3 @@ public class FinalFieldTest {
         }
     }
 }
-

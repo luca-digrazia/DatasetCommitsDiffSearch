@@ -31,18 +31,19 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public class MemoryProxyNode extends ProxyNode implements MemoryProxy, LIRLowerable {
 
-    @Input(InputType.Memory) private MemoryNode value;
+    @Input(InputType.Memory) private ValueNode value;
     private final LocationIdentity identity;
 
-    public MemoryProxyNode(MemoryNode value, AbstractBeginNode exit, LocationIdentity identity) {
+    public MemoryProxyNode(ValueNode value, AbstractBeginNode exit, LocationIdentity identity) {
         super(StampFactory.forVoid(), exit);
         this.value = value;
+        assert value instanceof MemoryNode;
         this.identity = identity;
     }
 
     @Override
     public ValueNode value() {
-        return value.asNode();
+        return value;
     }
 
     public LocationIdentity getLocationIdentity() {
@@ -69,9 +70,5 @@ public class MemoryProxyNode extends ProxyNode implements MemoryProxy, LIRLowera
 
     public MemoryPhiNode asMemoryPhi() {
         return getOriginalMemoryNode().asMemoryPhi();
-    }
-
-    public Node getOriginalNode() {
-        return value.asNode();
     }
 }

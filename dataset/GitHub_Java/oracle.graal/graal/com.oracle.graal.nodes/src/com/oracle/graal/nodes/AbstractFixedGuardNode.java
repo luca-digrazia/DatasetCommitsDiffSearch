@@ -23,10 +23,10 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNode implements Simplifiable, GuardingNode {
@@ -78,7 +78,7 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
     public void simplify(SimplifierTool tool) {
         while (condition instanceof LogicNegationNode) {
             LogicNegationNode negation = (LogicNegationNode) condition;
-            setCondition(negation.getValue());
+            setCondition(negation.getInput());
             negated = !negated;
         }
     }
@@ -89,7 +89,7 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
         DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason));
         deopt.setStateBefore(stateBefore());
         IfNode ifNode;
-        BeginNode noDeoptSuccessor;
+        AbstractBeginNode noDeoptSuccessor;
         if (negated) {
             ifNode = graph().add(new IfNode(condition, deopt, next, 0));
             noDeoptSuccessor = ifNode.falseSuccessor();

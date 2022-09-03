@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -36,21 +38,12 @@ public interface NodeFactory<T> {
      * Instantiates the node using the arguments array. The arguments length and types must suffice
      * one of the returned signatures in {@link #getNodeSignatures()}. If the arguments array does
      * not suffice one of the node signatures an {@link IllegalArgumentException} is thrown.
-     * 
+     *
      * @param arguments the argument values
      * @return the instantiated node
      * @throws IllegalArgumentException
      */
     T createNode(Object... arguments);
-
-    /**
-     * Instantiates a new generic variant of the node. This is an optional method and throws an
-     * {@link UnsupportedOperationException} if not supported.
-     * 
-     * @param thisNode the current node
-     * @return the specialized node
-     */
-    T createNodeGeneric(T thisNode);
 
     /**
      * Returns the node class that will get created by {@link #createNode(Object...)}. The node

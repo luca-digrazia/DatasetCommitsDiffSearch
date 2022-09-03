@@ -24,6 +24,7 @@ package com.oracle.truffle.api.test;
 
 import static org.junit.Assert.*;
 
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
@@ -40,7 +41,6 @@ import com.oracle.truffle.api.nodes.*;
 public class ThreadSafetyTest {
 
     @Test
-    @Ignore("sporadic failures with \"expected:<1000000> but was:<999999>\"")
     public void test() throws InterruptedException {
         TruffleRuntime runtime = Truffle.getRuntime();
         TestRootNode rootNode1 = new TestRootNode(new RewritingNode(new RewritingNode(new RewritingNode(new RewritingNode(new RewritingNode(new ConstNode(42)))))));
@@ -50,7 +50,7 @@ public class ThreadSafetyTest {
         RecursiveCallNode callNode = new RecursiveCallNode(new ConstNode(42));
         TestRootNode rootNode2 = new TestRootNode(new RewritingNode(new RewritingNode(new RewritingNode(new RewritingNode(new RewritingNode(callNode))))));
         final CallTarget target2 = runtime.createCallTarget(rootNode2);
-        callNode.setCallNode(runtime.createDirectCallNode(target2));
+        callNode.setCallNode(runtime.createCallNode(target2));
         NodeUtil.verify(rootNode2);
 
         testTarget(target1, 47, 1_000_000);
@@ -68,7 +68,8 @@ public class ThreadSafetyTest {
                         assertEquals(expectedResult, result);
                         ai.incrementAndGet();
                     } catch (Throwable t) {
-                        t.printStackTrace(System.out);
+                        PrintStream out = System.out;
+                        out.println(t);
                     }
                 }
             });
@@ -164,7 +165,7 @@ public class ThreadSafetyTest {
     }
 
     static class RecursiveCallNode extends ValueNode {
-        @Child DirectCallNode callNode;
+        @Child CallNode callNode;
         @Child private ValueNode valueNode;
 
         RecursiveCallNode(ValueNode value) {
@@ -175,13 +176,13 @@ public class ThreadSafetyTest {
         int execute(VirtualFrame frame) {
             int arg = (Integer) frame.getArguments()[0];
             if (arg > 0) {
-                return (int) callNode.call(frame, new Object[]{(arg - 1)});
+                return (int) callNode.call(new Object[]{(arg - 1)});
             } else {
                 return valueNode.execute(frame);
             }
         }
 
-        void setCallNode(DirectCallNode callNode) {
+        void setCallNode(CallNode callNode) {
             this.callNode = insert(callNode);
         }
     }

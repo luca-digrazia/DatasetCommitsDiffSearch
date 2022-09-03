@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,17 +28,18 @@ import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
-
 /**
  * <h3>Calling Another Tree</h3>
  *
  * <p>
- * A guest language implementation can create multiple call targets using the {@link TruffleRuntime#createCallTarget(RootNode)} method.
- * Those call targets can be passed around as normal Java objects and used for calling guest language methods.
+ * A guest language implementation can create multiple call targets using the
+ * {@link TruffleRuntime#createCallTarget(RootNode)} method. Those call targets can be passed around
+ * as normal Java objects and used for calling guest language methods.
  * </p>
  *
  * <p>
- * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.test.ArgumentsTest}.
+ * The next part of the Truffle API introduction is at
+ * {@link com.oracle.truffle.api.test.ArgumentsTest}.
  * </p>
  */
 public class CallTest {
@@ -59,6 +60,7 @@ public class CallTest {
         private final CallTarget secondTarget;
 
         DualCallNode(CallTarget firstTarget, CallTarget secondTarget) {
+            super(null);
             this.firstTarget = firstTarget;
             this.secondTarget = secondTarget;
         }
@@ -70,9 +72,11 @@ public class CallTest {
     }
 
     class ConstantRootNode extends RootNode {
+
         private final int value;
 
         public ConstantRootNode(int value) {
+            super(null);
             this.value = value;
         }
 
@@ -82,4 +86,3 @@ public class CallTest {
         }
     }
 }
-
