@@ -35,7 +35,7 @@ import java.util.function.Predicate;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
 
 /**
- * A polyglot execution context for Graal {@linkplain Language guest languages} that supports
+ * A polyglot execution context for Graal {@linkplain Language guest languages} that support
  * <em>interoperability</em> among the languages and with Java.
  *
  * <h4>Sample Usage</h4>

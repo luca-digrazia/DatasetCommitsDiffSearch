@@ -38,7 +38,7 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractSourceImpl;
 
 /**
  * Representation of a source code unit and its contents that can be evaluated in an execution
- * {@link Context context}. Each source is assocated with the the ID of the language.
+ * {@link Context context}. Each source is assocated with the the id of the language.
  *
  * <h3>From a file on disk</h3>
  *
@@ -117,7 +117,7 @@ public final class Source {
     }
 
     // non final to support legacy code
-    final String language;
+    String language;
     final Object impl;
 
     Source(String language, Object impl) {
@@ -369,6 +369,35 @@ public final class Source {
         return new Builder(language, source).name(name);
     }
 
+    /**
+     * @deprecated use {@link #newBuilder(String, CharSequence)}
+     */
+    @Deprecated
+    public static Builder newBuilder(CharSequence source) {
+        return new Builder(source);
+    }
+
+    /**
+     * @deprecated use {@link #newBuilder(String, File)}
+     */
+    @Deprecated
+    public static Builder newBuilder(File source) {
+        return new Builder(source);
+    }
+
+    /**
+     * @deprecated use {@link #newBuilder(String, File)}
+     */
+    @Deprecated
+    public static Source create(CharSequence source) {
+        try {
+            return newBuilder(source).build();
+        } catch (IOException e) {
+            throw new AssertionError("Should not reach here");
+        }
+
+    }
+
     public static Source create(String language, CharSequence source) {
         return newBuilder(language, source, "Unnamed").buildLiteral();
     }
@@ -461,6 +490,14 @@ public final class Source {
         }
 
         /**
+         * @deprecated use {@link #interactive(boolean)}
+         */
+        @Deprecated
+        public Builder interactive() {
+            return interactive(true);
+        }
+
+        /**
          * Marks the source as internal. Internal sources are those that aren't created by user, but
          * rather inherently present by the language system. Calling this method influences result
          * of create {@link Source#isInternal()}
@@ -471,6 +508,14 @@ public final class Source {
         public Builder internal(@SuppressWarnings("hiding") boolean internal) {
             this.internal = internal;
             return this;
+        }
+
+        /**
+         * @deprecated use {@link #internal(boolean)}
+         */
+        @Deprecated
+        public Builder internal() {
+            return internal(true);
         }
 
         /**
