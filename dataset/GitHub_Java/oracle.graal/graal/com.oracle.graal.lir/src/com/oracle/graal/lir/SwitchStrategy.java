@@ -22,16 +22,13 @@
  */
 package com.oracle.graal.lir;
 
-import java.util.Arrays;
-import java.util.Comparator;
+import java.util.*;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.Assembler;
-import com.oracle.graal.asm.Label;
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * This class encapsulates different strategies on how to generate code for switch instructions.
@@ -158,7 +155,7 @@ public abstract class SwitchStrategy {
         private final int[] keyCounts = new int[keyProbabilities.length];
         private final LabelRef[] keyTargets;
 
-        EffortClosure(LabelRef[] keyTargets) {
+        public EffortClosure(LabelRef[] keyTargets) {
             this.keyTargets = keyTargets;
         }
 

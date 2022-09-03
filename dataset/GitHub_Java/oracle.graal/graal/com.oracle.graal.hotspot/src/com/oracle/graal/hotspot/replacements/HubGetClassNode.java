@@ -22,41 +22,29 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_4;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.hotspot.word.KlassPointer;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FloatingGuardedNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.ConvertNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Read {@code Klass::_java_mirror} and incorporate non-null type information into stamp. This is
  * also used by {@link ClassGetHubNode} to eliminate chains of {@code klass._java_mirror._klass}.
  */
-@NodeInfo(cycles = CYCLES_4, size = SIZE_1)
+@NodeInfo
 public final class HubGetClassNode extends FloatingGuardedNode implements Lowerable, Canonicalizable, ConvertNode {
     public static final NodeClass<HubGetClassNode> TYPE = NodeClass.create(HubGetClassNode.class);
     @Input protected ValueNode hub;
 
     public HubGetClassNode(@InjectedNodeParameter MetaAccessProvider metaAccess, ValueNode hub) {
-        super(TYPE, StampFactory.objectNonNull(TypeReference.createWithoutAssumptions(metaAccess.lookupJavaType(Class.class))), null);
+        super(TYPE, StampFactory.declaredNonNull(metaAccess.lookupJavaType(Class.class)), null);
         this.hub = hub;
     }
 
@@ -73,7 +61,7 @@ public final class HubGetClassNode extends FloatingGuardedNode implements Lowera
             if (metaAccess != null && hub.isConstant()) {
                 ResolvedJavaType exactType = tool.getConstantReflection().asJavaType(hub.asConstant());
                 if (exactType != null) {
-                    return ConstantNode.forConstant(tool.getConstantReflection().asJavaClass(exactType), metaAccess);
+                    return ConstantNode.forConstant(exactType.getJavaClass(), metaAccess);
                 }
             }
             return this;
@@ -98,7 +86,7 @@ public final class HubGetClassNode extends FloatingGuardedNode implements Lowera
         if (JavaConstant.NULL_POINTER.equals(c)) {
             return c;
         }
-        return constantReflection.asJavaClass(constantReflection.asJavaType(c));
+        return constantReflection.asJavaType(c).getJavaClass();
     }
 
     @Override
@@ -107,10 +95,11 @@ public final class HubGetClassNode extends FloatingGuardedNode implements Lowera
             return c;
         }
         ResolvedJavaType type = constantReflection.asJavaType(c);
-        if (type.isPrimitive()) {
-            return JavaConstant.NULL_POINTER;
+        if (type instanceof HotSpotResolvedObjectType) {
+            return ((HotSpotResolvedObjectType) type).getObjectHub();
         } else {
-            return constantReflection.asObjectHub(type);
+            assert type instanceof HotSpotResolvedPrimitiveType;
+            return JavaConstant.NULL_POINTER;
         }
     }
 

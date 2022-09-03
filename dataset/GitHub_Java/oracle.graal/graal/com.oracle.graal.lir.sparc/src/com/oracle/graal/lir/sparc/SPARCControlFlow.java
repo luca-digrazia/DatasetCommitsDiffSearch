@@ -403,7 +403,7 @@ public class SPARCControlFlow {
         @Alive({REG}) protected Value key;
         @Alive({REG, ILLEGAL}) protected Value constantTableBase;
         @Temp({REG}) protected Value scratch;
-        protected final SwitchStrategy strategy;
+        private final SwitchStrategy strategy;
         private final Map<Label, LabelHint> labelHints;
         private final List<Label> conditionalLabels = new ArrayList<>();
 

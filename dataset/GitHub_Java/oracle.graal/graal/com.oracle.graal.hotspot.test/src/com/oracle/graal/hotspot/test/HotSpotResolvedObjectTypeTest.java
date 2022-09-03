@@ -22,18 +22,12 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import org.junit.Assert;
-import org.junit.Test;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import org.junit.*;
 
-import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MemoryAccessProvider;
-import jdk.vm.ci.meta.PrimitiveConstant;
+import com.oracle.graal.compiler.common.type.*;
 
 /**
  * Tests {@link HotSpotResolvedJavaMethod} functionality.
@@ -42,15 +36,15 @@ public class HotSpotResolvedObjectTypeTest extends HotSpotGraalCompilerTest {
 
     @Test
     public void testGetSourceFileName() throws Throwable {
-        Assert.assertEquals("Object.java", HotSpotResolvedObjectType.fromObjectClass(Object.class).getSourceFileName());
-        Assert.assertEquals("HotSpotResolvedObjectTypeTest.java", HotSpotResolvedObjectType.fromObjectClass(this.getClass()).getSourceFileName());
+        Assert.assertEquals("Object.java", HotSpotResolvedObjectTypeImpl.fromObjectClass(Object.class).getSourceFileName());
+        Assert.assertEquals("HotSpotResolvedObjectTypeTest.java", HotSpotResolvedObjectTypeImpl.fromObjectClass(this.getClass()).getSourceFileName());
     }
 
     @Test
     public void testKlassLayoutHelper() {
-        Constant klass = HotSpotResolvedObjectType.fromObjectClass(this.getClass()).klass();
+        Constant klass = HotSpotResolvedObjectTypeImpl.fromObjectClass(this.getClass()).klass();
         MemoryAccessProvider memoryAccess = getProviders().getConstantReflection().getMemoryAccessProvider();
-        GraalHotSpotVMConfig config = runtime().getVMConfig();
+        HotSpotVMConfig config = runtime().getConfig();
         Constant c = StampFactory.forKind(JavaKind.Int).readConstant(memoryAccess, klass, config.klassLayoutHelperOffset);
         assertTrue(c.toString(), c.getClass() == PrimitiveConstant.class);
         PrimitiveConstant pc = (PrimitiveConstant) c;

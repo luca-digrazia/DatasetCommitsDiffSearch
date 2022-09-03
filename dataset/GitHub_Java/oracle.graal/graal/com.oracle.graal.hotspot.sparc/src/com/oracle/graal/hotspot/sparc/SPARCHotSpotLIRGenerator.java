@@ -208,7 +208,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     @Override
     public Variable emitLoad(LIRKind kind, Value address, LIRFrameState state) {
         SPARCAddressValue loadAddress = asAddressValue(address);
-        Variable result = newVariable(toStackKind(kind));
+        Variable result = newVariable(kind);
         append(new LoadOp(kind.getPlatformKind(), result, loadAddress, state));
         return result;
     }
@@ -331,7 +331,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         assert inputKind.getPlatformKind() == JavaKind.Int;
         if (inputKind.isReference(0)) {
             // oop
-            Variable result = newVariable(LIRKind.reference(JavaKind.Long));
+            Variable result = newVariable(LIRKind.reference(JavaKind.Object));
             append(new SPARCHotSpotMove.UncompressPointer(result, asAllocatable(pointer), getProviders().getRegisters().getHeapBaseRegister().asValue(), encoding, nonNull));
             return result;
         } else {

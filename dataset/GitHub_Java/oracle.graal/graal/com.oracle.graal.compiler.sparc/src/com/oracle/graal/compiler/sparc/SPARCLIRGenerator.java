@@ -204,10 +204,10 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitReturn(JavaKind javaKind, Value input) {
+    public void emitReturn(Value input) {
         AllocatableValue operand = Value.ILLEGAL;
         if (input != null) {
-            operand = resultOperandFor(javaKind, input.getLIRKind());
+            operand = resultOperandFor(input.getLIRKind());
             emitMove(operand, input);
         }
         append(new ReturnOp(operand));

@@ -22,12 +22,13 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.ValueUtil;
-import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.ValueUtil;
+import jdk.internal.jvmci.hotspot.HotSpotMetaspaceConstant;
+import jdk.internal.jvmci.meta.Constant;
+import jdk.internal.jvmci.meta.Value;
 
+import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.asm.amd64.AMD64Address;
 import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
 import com.oracle.graal.lir.LIRInstructionClass;
@@ -39,7 +40,7 @@ import com.oracle.graal.lir.asm.CompilationResultBuilder;
 final class AMD64HotSpotStrategySwitchOp extends AMD64ControlFlow.StrategySwitchOp {
     public static final LIRInstructionClass<AMD64HotSpotStrategySwitchOp> TYPE = LIRInstructionClass.create(AMD64HotSpotStrategySwitchOp.class);
 
-    AMD64HotSpotStrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch) {
+    public AMD64HotSpotStrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch) {
         super(TYPE, strategy, keyTargets, defaultTarget, key, scratch);
     }
 
@@ -60,7 +61,9 @@ final class AMD64HotSpotStrategySwitchOp extends AMD64ControlFlow.StrategySwitch
                 HotSpotMetaspaceConstant meta = (HotSpotMetaspaceConstant) c;
                 if (meta.isCompressed()) {
                     crb.recordInlineDataInCode(meta);
-                    masm.cmpl(keyRegister, 0xDEADDEAD);
+
+                    assert NumUtil.isInt(meta.rawValue());
+                    masm.cmpl(keyRegister, (int) meta.rawValue());
                 } else {
                     AMD64Address addr = (AMD64Address) crb.recordDataReferenceInCode(meta, 8);
                     masm.cmpq(keyRegister, addr);

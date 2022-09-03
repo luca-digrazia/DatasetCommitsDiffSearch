@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,19 +23,24 @@
 
 package com.oracle.graal.compiler.amd64;
 
-import jdk.vm.ci.meta.JavaConstant;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.AMD64Address.Scale;
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.AddNode;
-import com.oracle.graal.nodes.calc.LeftShiftNode;
-import com.oracle.graal.nodes.calc.ZeroExtendNode;
-import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.phases.common.AddressLoweringPhase.AddressLowering;
 
 public class AMD64AddressLowering extends AddressLowering {
+
+    private final CodeCacheProvider codeCache;
+
+    public AMD64AddressLowering(CodeCacheProvider codeCache) {
+        this.codeCache = codeCache;
+    }
 
     @Override
     public AddressNode lower(ValueNode address) {
@@ -104,7 +109,7 @@ public class AMD64AddressLowering extends AddressLowering {
         return false;
     }
 
-    private static ValueNode improveInput(AMD64AddressNode address, ValueNode node, int shift) {
+    private ValueNode improveInput(AMD64AddressNode address, ValueNode node, int shift) {
         if (node == null) {
             return null;
         }
@@ -136,8 +141,8 @@ public class AMD64AddressLowering extends AddressLowering {
         return node;
     }
 
-    private static ValueNode improveConstDisp(AMD64AddressNode address, ValueNode original, JavaConstant c, ValueNode other, int shift) {
-        if (c.getJavaKind().isNumericInteger()) {
+    private ValueNode improveConstDisp(AMD64AddressNode address, ValueNode original, JavaConstant c, ValueNode other, int shift) {
+        if (c.getJavaKind().isNumericInteger() && !codeCache.needsDataPatch(c)) {
             long disp = address.getDisplacement();
             disp += c.asLong() << shift;
             if (NumUtil.isInt(disp)) {

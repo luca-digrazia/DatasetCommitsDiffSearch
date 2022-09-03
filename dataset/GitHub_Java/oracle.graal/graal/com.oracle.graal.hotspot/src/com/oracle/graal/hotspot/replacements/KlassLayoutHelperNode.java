@@ -22,47 +22,33 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_4;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FloatingGuardedNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.extended.LoadHubNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Read {@code Klass::_layout_helper} and incorporate any useful stamp information based on any type
  * information in {@code klass}.
  */
-@NodeInfo(cycles = CYCLES_4, size = SIZE_1)
+@NodeInfo
 public final class KlassLayoutHelperNode extends FloatingGuardedNode implements Canonicalizable, Lowerable {
 
     public static final NodeClass<KlassLayoutHelperNode> TYPE = NodeClass.create(KlassLayoutHelperNode.class);
     @Input protected ValueNode klass;
-    protected final GraalHotSpotVMConfig config;
+    protected final HotSpotVMConfig config;
 
-    public KlassLayoutHelperNode(@InjectedNodeParameter GraalHotSpotVMConfig config, ValueNode klass) {
+    public KlassLayoutHelperNode(@InjectedNodeParameter HotSpotVMConfig config, ValueNode klass) {
         this(config, klass, null);
     }
 
-    public KlassLayoutHelperNode(@InjectedNodeParameter GraalHotSpotVMConfig config, ValueNode klass, ValueNode guard) {
+    public KlassLayoutHelperNode(@InjectedNodeParameter HotSpotVMConfig config, ValueNode klass, ValueNode guard) {
         super(TYPE, StampFactory.forKind(JavaKind.Int), (GuardingNode) guard);
         this.klass = klass;
         this.config = config;

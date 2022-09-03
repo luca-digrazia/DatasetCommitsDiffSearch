@@ -22,39 +22,23 @@
  */
 package com.oracle.graal.lir.amd64;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.CONST;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.amd64.AMD64Kind;
-import jdk.vm.ci.code.CompilationResult.JumpTable;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.amd64.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.CompilationResult.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import com.oracle.graal.asm.Label;
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.asm.amd64.AMD64Address;
-import com.oracle.graal.asm.amd64.AMD64Address.Scale;
-import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
-import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.LabelRef;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.StandardOp;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.asm.amd64.AMD64Address.*;
+import com.oracle.graal.asm.amd64.AMD64Assembler.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
-import com.oracle.graal.lir.SwitchStrategy;
 import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
-import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.asm.*;
 
 public class AMD64ControlFlow {
 
@@ -164,6 +148,7 @@ public class AMD64ControlFlow {
             this.scratch = scratch;
             assert keyConstants.length == keyTargets.length;
             assert keyConstants.length == strategy.keyProbabilities.length;
+            assert (scratch.getPlatformKind() == JavaKind.Illegal) == (key.getPlatformKind() == JavaKind.Int || key.getPlatformKind() == JavaKind.Long);
         }
 
         @Override
@@ -199,7 +184,7 @@ public class AMD64ControlFlow {
                         masm.cmpq(keyRegister, (AMD64Address) crb.asLongConstRef(jc));
                         break;
                     case Object:
-                        AMD64Move.const2reg(crb, masm, asRegister(scratch), jc);
+                        AMD64Move.const2reg(crb, masm, scratch, jc);
                         masm.cmpptr(keyRegister, asRegister(scratch));
                         break;
                     default:
@@ -236,9 +221,9 @@ public class AMD64ControlFlow {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            Register indexReg = asRegister(index, AMD64Kind.DWORD);
-            Register idxScratchReg = asRegister(idxScratch, AMD64Kind.DWORD);
-            Register scratchReg = asRegister(scratch, AMD64Kind.QWORD);
+            Register indexReg = asRegister(index, JavaKind.Int);
+            Register idxScratchReg = asRegister(idxScratch, JavaKind.Int);
+            Register scratchReg = asRegister(scratch, JavaKind.Long);
 
             if (!indexReg.equals(idxScratchReg)) {
                 masm.movl(idxScratchReg, indexReg);
@@ -376,13 +361,15 @@ public class AMD64ControlFlow {
     private static void cmove(CompilationResultBuilder crb, AMD64MacroAssembler masm, Value result, ConditionFlag cond, Value other) {
         if (isRegister(other)) {
             assert !asRegister(other).equals(asRegister(result)) : "other already overwritten by previous move";
-            switch ((AMD64Kind) other.getPlatformKind()) {
-                case BYTE:
-                case WORD:
-                case DWORD:
+            switch ((JavaKind) other.getPlatformKind()) {
+                case Boolean:
+                case Byte:
+                case Short:
+                case Char:
+                case Int:
                     masm.cmovl(cond, asRegister(result), asRegister(other));
                     break;
-                case QWORD:
+                case Long:
                     masm.cmovq(cond, asRegister(result), asRegister(other));
                     break;
                 default:
@@ -390,13 +377,15 @@ public class AMD64ControlFlow {
             }
         } else {
             AMD64Address addr = (AMD64Address) crb.asAddress(other);
-            switch ((AMD64Kind) other.getPlatformKind()) {
-                case BYTE:
-                case WORD:
-                case DWORD:
+            switch ((JavaKind) other.getPlatformKind()) {
+                case Boolean:
+                case Byte:
+                case Short:
+                case Char:
+                case Int:
                     masm.cmovl(cond, asRegister(result), addr);
                     break;
-                case QWORD:
+                case Long:
                     masm.cmovq(cond, asRegister(result), addr);
                     break;
                 default:

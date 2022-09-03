@@ -22,28 +22,21 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import java.util.Arrays;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeSuccessorList;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.NodeCycles;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.NodeSize;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.ControlSplitNode;
-import com.oracle.graal.nodes.ValueNode;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import jdk.vm.ci.meta.Constant;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * The {@code SwitchNode} class is the base of both lookup and table switches.
  */
-@NodeInfo(cycles = NodeCycles.CYCLES_UNKNOWN, size = NodeSize.SIZE_UNKNOWN)
+@NodeInfo
 public abstract class SwitchNode extends ControlSplitNode {
 
     public static final NodeClass<SwitchNode> TYPE = NodeClass.create(SwitchNode.class);
@@ -164,7 +157,7 @@ public abstract class SwitchNode extends ControlSplitNode {
      */
     public AbstractBeginNode defaultSuccessor() {
         if (defaultSuccessorIndex() == -1) {
-            throw new GraalError("unexpected");
+            throw new JVMCIError("unexpected");
         }
         return successors.get(defaultSuccessorIndex());
     }
