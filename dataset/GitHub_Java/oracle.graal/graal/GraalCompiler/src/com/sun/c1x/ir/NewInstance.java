@@ -51,7 +51,7 @@ public final class NewInstance extends Value {
         this.instanceClass = type;
         this.cpi = cpi;
         this.constantPool = constantPool;
-        setNonNull(true);
+        setFlag(Flag.NonNull);
     }
 
     /**
