@@ -251,8 +251,6 @@ import static org.graalvm.compiler.java.BytecodeParserOptions.TraceBytecodeParse
 import static org.graalvm.compiler.java.BytecodeParserOptions.TraceInlineDuringParsing;
 import static org.graalvm.compiler.java.BytecodeParserOptions.TraceParserPlugins;
 import static org.graalvm.compiler.java.BytecodeParserOptions.UseGuardedIntrinsics;
-import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.FAST_PATH_PROBABILITY;
-import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.SLOW_PATH_PROBABILITY;
 import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_DURING_PARSING;
 import static org.graalvm.compiler.nodes.type.StampTool.isPointerNonNull;
 
@@ -1204,7 +1202,7 @@ public class BytecodeParser implements GraphBuilderContext {
         BytecodeExceptionNode exception = graph.add(new BytecodeExceptionNode(metaAccess, NullPointerException.class));
         AbstractBeginNode falseSucc = graph.add(new BeginNode());
         ValueNode nonNullReceiver = graph.addOrUnique(PiNode.create(receiver, objectNonNull(), falseSucc));
-        append(new IfNode(graph.addOrUniqueWithInputs(IsNullNode.create(receiver)), exception, falseSucc, SLOW_PATH_PROBABILITY));
+        append(new IfNode(graph.addOrUniqueWithInputs(IsNullNode.create(receiver)), exception, falseSucc, 0.01));
         lastInstr = falseSucc;
 
         exception.setStateAfter(createFrameState(bci(), exception));
@@ -1216,7 +1214,7 @@ public class BytecodeParser implements GraphBuilderContext {
     protected void emitExplicitBoundsCheck(ValueNode index, ValueNode length) {
         AbstractBeginNode trueSucc = graph.add(new BeginNode());
         BytecodeExceptionNode exception = graph.add(new BytecodeExceptionNode(metaAccess, ArrayIndexOutOfBoundsException.class, index));
-        append(new IfNode(genUnique(IntegerBelowNode.create(constantReflection, metaAccess, options, null, index, length)), trueSucc, exception, FAST_PATH_PROBABILITY));
+        append(new IfNode(genUnique(IntegerBelowNode.create(constantReflection, metaAccess, options, null, index, length)), trueSucc, exception, 0.99));
         lastInstr = trueSucc;
 
         exception.setStateAfter(createFrameState(bci(), exception));
@@ -1636,7 +1634,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
             AbstractBeginNode intrinsicBranch = graph.add(new BeginNode());
             AbstractBeginNode nonIntrinsicBranch = graph.add(new BeginNode());
-            append(new IfNode(compare, intrinsicBranch, nonIntrinsicBranch, FAST_PATH_PROBABILITY));
+            append(new IfNode(compare, intrinsicBranch, nonIntrinsicBranch, 0.01));
             lastInstr = intrinsicBranch;
             return new IntrinsicGuard(currentLastInstr, intrinsicReceiver, mark, nonIntrinsicBranch, profile);
         } else {
