@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,22 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.api.meta.MetaUtil.*;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaMethod;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Signature;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.debug.*;
-import com.oracle.truffle.api.impl.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.JavaMethodContext;
+import com.oracle.truffle.api.RootCallTarget;
 
 /**
  * Enables a Truffle compilable to masquerade as a {@link JavaMethod} for use as a context value in
- * {@linkplain Debug#scope(String, Object...) debug scopes}.
+ * {@linkplain Debug#scope(Object) debug scopes}.
  */
-public class TruffleDebugJavaMethod implements JavaMethod {
-    private final DefaultCallTarget compilable;
+public class TruffleDebugJavaMethod implements JavaMethod, JavaMethodContext {
+    private final RootCallTarget compilable;
 
     private static final JavaType declaringClass = new JavaType() {
 
@@ -49,8 +53,8 @@ public class TruffleDebugJavaMethod implements JavaMethod {
             throw new UnsupportedOperationException();
         }
 
-        public Kind getKind() {
-            return Kind.Object;
+        public JavaKind getJavaKind() {
+            return JavaKind.Object;
         }
 
         public ResolvedJavaType resolve(ResolvedJavaType accessingClass) {
@@ -59,7 +63,7 @@ public class TruffleDebugJavaMethod implements JavaMethod {
 
         @Override
         public boolean equals(Object obj) {
-            return obj.getClass() == getClass();
+            return obj instanceof TruffleDebugJavaMethod;
         }
 
         @Override
@@ -70,32 +74,23 @@ public class TruffleDebugJavaMethod implements JavaMethod {
 
     private static final Signature signature = new Signature() {
 
+        @Override
         public JavaType getReturnType(ResolvedJavaType accessingClass) {
             return declaringClass;
         }
 
-        public Kind getReturnKind() {
-            return declaringClass.getKind();
-        }
-
-        public JavaType getParameterType(int index, ResolvedJavaType accessingClass) {
-            throw new IndexOutOfBoundsException();
-        }
-
-        public int getParameterSlots(boolean withReceiver) {
-            return 0;
-        }
-
-        public Kind getParameterKind(int index) {
-            throw new IndexOutOfBoundsException();
-        }
-
+        @Override
         public int getParameterCount(boolean receiver) {
             return 0;
         }
+
+        @Override
+        public JavaType getParameterType(int index, ResolvedJavaType accessingClass) {
+            throw new IndexOutOfBoundsException();
+        }
     };
 
-    public TruffleDebugJavaMethod(DefaultCallTarget compilable) {
+    public TruffleDebugJavaMethod(RootCallTarget compilable) {
         this.compilable = compilable;
     }
 
@@ -118,7 +113,7 @@ public class TruffleDebugJavaMethod implements JavaMethod {
     }
 
     public String getName() {
-        return compilable.toString().replace('.', '_').replace(' ', '_');
+        return (compilable.toString() + "").replace('.', '_').replace(' ', '_');
     }
 
     public JavaType getDeclaringClass() {
@@ -127,6 +122,10 @@ public class TruffleDebugJavaMethod implements JavaMethod {
 
     @Override
     public String toString() {
-        return format("Truffle<%n(%p)>", this);
+        return format("Truffle<%n(%p)>");
+    }
+
+    public JavaMethod asJavaMethod() {
+        return this;
     }
 }

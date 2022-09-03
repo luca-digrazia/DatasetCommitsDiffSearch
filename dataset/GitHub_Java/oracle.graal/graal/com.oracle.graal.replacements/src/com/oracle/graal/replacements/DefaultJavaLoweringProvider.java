@@ -58,6 +58,7 @@ import com.oracle.graal.graph.Node;
 import com.oracle.graal.nodes.ConditionAnchorNode;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
 import com.oracle.graal.nodes.LogicNode;
 import com.oracle.graal.nodes.NamedLocationIdentity;
 import com.oracle.graal.nodes.PiNode;
@@ -413,10 +414,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         graph.replaceFixedWithFixed(n, memoryRead);
     }
 
-    /**
-     * @param tool utility for performing the lowering
-     */
-    protected void lowerUnsafeLoadNode(UnsafeLoadNode load, LoweringTool tool) {
+    protected void lowerUnsafeLoadNode(UnsafeLoadNode load, @SuppressWarnings("unused") LoweringTool tool) {
         StructuredGraph graph = load.graph();
         if (load.getGuardingCondition() != null) {
             ConditionAnchorNode valueAnchorNode = graph.add(new ConditionAnchorNode(load.getGuardingCondition()));
@@ -622,10 +620,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         }
     }
 
-    /**
-     * @param field the field whose barrier type should be returned
-     */
-    protected BarrierType fieldLoadBarrierType(ResolvedJavaField field) {
+    protected BarrierType fieldLoadBarrierType(@SuppressWarnings("unused") ResolvedJavaField field) {
         return BarrierType.NONE;
     }
 
@@ -693,10 +688,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         return loadStamp(stamp, kind, true);
     }
 
-    /**
-     * @param compressible whether the stamp should be compressible
-     */
-    protected Stamp loadStamp(Stamp stamp, JavaKind kind, boolean compressible) {
+    protected Stamp loadStamp(Stamp stamp, JavaKind kind, @SuppressWarnings("unused") boolean compressible) {
         switch (kind) {
             case Boolean:
             case Byte:
@@ -724,10 +716,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         return ret;
     }
 
-    /**
-     * @param compressible whether the covert should be compressible
-     */
-    protected ValueNode implicitLoadConvert(JavaKind kind, ValueNode value, boolean compressible) {
+    protected ValueNode implicitLoadConvert(JavaKind kind, ValueNode value, @SuppressWarnings("unused") boolean compressible) {
         switch (kind) {
             case Byte:
             case Short:
@@ -755,10 +744,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         return ret;
     }
 
-    /**
-     * @param compressible whether the covert should be compressible
-     */
-    protected ValueNode implicitStoreConvert(JavaKind kind, ValueNode value, boolean compressible) {
+    protected ValueNode implicitStoreConvert(JavaKind kind, ValueNode value, @SuppressWarnings("unused") boolean compressible) {
         switch (kind) {
             case Boolean:
             case Byte:

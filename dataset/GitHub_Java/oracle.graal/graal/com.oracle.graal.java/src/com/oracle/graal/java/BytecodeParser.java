@@ -403,7 +403,6 @@ import com.oracle.graal.nodes.java.NewMultiArrayNode;
 import com.oracle.graal.nodes.java.RegisterFinalizerNode;
 import com.oracle.graal.nodes.java.StoreFieldNode;
 import com.oracle.graal.nodes.java.StoreIndexedNode;
-import com.oracle.graal.nodes.java.TypeProfileNode;
 import com.oracle.graal.nodes.spi.StampProvider;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.nodes.util.GraphUtil;
@@ -1131,8 +1130,8 @@ public class BytecodeParser implements GraphBuilderContext {
         lastInstr.setNext(handleException(nonNullException, bci()));
     }
 
-    protected ValueNode createInstanceOf(TypeReference type, ValueNode object, TypeProfileNode anchor) {
-        return InstanceOfNode.create(type, object, anchor);
+    protected ValueNode createInstanceOf(TypeReference type, ValueNode object, JavaTypeProfile profileForTypeCheck) {
+        return InstanceOfNode.create(type, object, profileForTypeCheck);
     }
 
     protected ValueNode genConditional(ValueNode x) {
@@ -2984,9 +2983,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
         if (checkCastNode == null) {
-            TypeProfileNode anchor = TypeProfileNode.create(profile);
-            append(anchor);
-            LogicNode condition = genUnique(InstanceOfNode.createAllowNull(checkedType, object, anchor));
+            LogicNode condition = genUnique(InstanceOfNode.createAllowNull(checkedType, object, profile));
             if (condition.isTautology()) {
                 checkCastNode = object;
             } else {
@@ -3043,9 +3040,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
         if (instanceOfNode == null) {
-            TypeProfileNode anchor = TypeProfileNode.create(profile);
-            append(anchor);
-            instanceOfNode = createInstanceOf(resolvedType, object, anchor);
+            instanceOfNode = createInstanceOf(resolvedType, object, profile);
         }
         frameState.push(JavaKind.Int, append(genConditional(genUnique(instanceOfNode))));
     }
