@@ -20,145 +20,271 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-
 package com.oracle.graal.hotspot.bridge;
 
+import static com.oracle.graal.compiler.GraalDebugConfig.*;
+import static com.oracle.graal.hotspot.CompileTheWorld.Options.*;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.InitTimer.*;
+
+import java.io.*;
 import java.lang.reflect.*;
+import java.security.*;
 import java.util.*;
 import java.util.concurrent.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
+import com.oracle.graal.compiler.CompilerThreadFactory.DebugConfigAccess;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.Compiler;
-import com.oracle.graal.hotspot.ri.*;
-import com.oracle.graal.hotspot.server.*;
-import com.oracle.graal.hotspot.snippets.*;
+import com.oracle.graal.hotspot.CompilationTask.Enqueueing;
+import com.oracle.graal.hotspot.CompileTheWorld.Config;
+import com.oracle.graal.hotspot.HotSpotGraalRuntime.InitTimer;
+import com.oracle.graal.hotspot.debug.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.snippets.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.criutils.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.printer.*;
+import com.oracle.graal.replacements.*;
 
 /**
  * Exits from the HotSpot VM into Java code.
  */
-public class VMToCompilerImpl implements VMToCompiler, Remote {
+public class VMToCompilerImpl implements VMToCompiler {
 
-    private final Compiler compiler;
-    private int compiledMethodCount;
-    private long totalCompilationTime;
-    private IntrinsifyArrayCopyPhase intrinsifyArrayCopy;
+    //@formatter:off
+    @Option(help = "File to which compiler logging is sent")
+    private static final OptionValue<String> LogFile = new OptionValue<>(null);
 
-    public final HotSpotTypePrimitive typeBoolean;
-    public final HotSpotTypePrimitive typeChar;
-    public final HotSpotTypePrimitive typeFloat;
-    public final HotSpotTypePrimitive typeDouble;
-    public final HotSpotTypePrimitive typeByte;
-    public final HotSpotTypePrimitive typeShort;
-    public final HotSpotTypePrimitive typeInt;
-    public final HotSpotTypePrimitive typeLong;
-    public final HotSpotTypePrimitive typeVoid;
+    @Option(help = "Print compilation queue activity periodically")
+    private static final OptionValue<Boolean> PrintQueue = new OptionValue<>(false);
 
-    ThreadFactory compilerThreadFactory = new ThreadFactory() {
+    @Option(help = "Interval in milliseconds at which to print compilation rate periodically. " +
+                   "The compilation statistics are reset after each print out so this option " +
+                   "is incompatible with -XX:+CITime and -XX:+CITimeEach.")
+    public static final OptionValue<Integer> PrintCompRate = new OptionValue<>(0);
+
+    @Option(help = "Print bootstrap progress and summary")
+    private static final OptionValue<Boolean> PrintBootstrap = new OptionValue<>(true);
+
+    @Option(help = "Time limit in milliseconds for bootstrap (-1 for no limit)")
+    private static final OptionValue<Integer> TimedBootstrap = new OptionValue<>(-1);
+
+    @Option(help = "Number of compilation threads to use")
+    private static final StableOptionValue<Integer> Threads = new StableOptionValue<Integer>() {
 
         @Override
-        public Thread newThread(Runnable r) {
-            return new CompilerThread(r);
+        public Integer initialValue() {
+            return Runtime.getRuntime().availableProcessors();
         }
     };
 
-    private final class CompilerThread extends Thread {
+    //@formatter:on
 
-        public CompilerThread(Runnable r) {
-            super(r);
-            this.setName("GraalCompilerThread-" + this.getId());
-            this.setDaemon(true);
+    private final HotSpotGraalRuntime runtime;
+
+    private Queue compileQueue;
+
+    /**
+     * Wrap access to the thread pool to ensure that {@link CompilationTask#isWithinEnqueue} state
+     * is in the proper state.
+     */
+    static class Queue {
+        private final ThreadPoolExecutor executor;
+
+        Queue(CompilerThreadFactory factory) {
+            executor = new ThreadPoolExecutor(Threads.getValue(), Threads.getValue(), 0L, TimeUnit.MILLISECONDS, new PriorityBlockingQueue<Runnable>(), factory);
+        }
+
+        public long getCompletedTaskCount() {
+            try (Enqueueing enqueueing = new Enqueueing()) {
+                // Don't allow new enqueues while reading the state of queue.
+                return executor.getCompletedTaskCount();
+            }
+        }
+
+        public long getTaskCount() {
+            try (Enqueueing enqueueing = new Enqueueing()) {
+                // Don't allow new enqueues while reading the state of queue.
+                return executor.getTaskCount();
+            }
+        }
+
+        public void execute(CompilationTask task) {
+            // The caller is expected to have set the within enqueue state.
+            assert CompilationTask.isWithinEnqueue();
+            executor.execute(task);
+        }
+
+        /**
+         * @see ExecutorService#isShutdown()
+         */
+        public boolean isShutdown() {
+            return executor.isShutdown();
+        }
+
+        public void shutdown() throws InterruptedException {
+            assert CompilationTask.isWithinEnqueue();
+            executor.shutdownNow();
+            if (Debug.isEnabled() && (Dump.getValue() != null || areMetricsOrTimersEnabled())) {
+                // Wait up to 2 seconds to flush out all graph dumps and stop metrics/timers
+                // being updated.
+                executor.awaitTermination(2, TimeUnit.SECONDS);
+            }
         }
 
         @Override
-        public void run() {
-            if (GraalOptions.Debug) {
-                Debug.enable();
-                HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter);
-                Debug.setConfig(hotspotDebugConfig);
+        public String toString() {
+            return executor.toString();
+        }
+    }
+
+    private volatile boolean bootstrapRunning;
+
+    private PrintStream log = System.out;
+
+    private long runtimeStartTime;
+
+    public VMToCompilerImpl(HotSpotGraalRuntime runtime) {
+        this.runtime = runtime;
+    }
+
+    public void startRuntime() {
+
+        if (LogFile.getValue() != null) {
+            try {
+                final boolean enableAutoflush = true;
+                log = new PrintStream(new FileOutputStream(LogFile.getValue()), enableAutoflush);
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException("couldn't open log file: " + LogFile.getValue(), e);
             }
-            super.run();
+        }
+
+        TTY.initialize(log);
+
+        if (Log.getValue() == null && Meter.getValue() == null && Time.getValue() == null && Dump.getValue() == null) {
+            if (MethodFilter.getValue() != null) {
+                TTY.println("WARNING: Ignoring MethodFilter option since Log, Meter, Time and Dump options are all null");
+            }
+        }
+
+        if (Debug.isEnabled()) {
+            DebugEnvironment.initialize(log);
+
+            String summary = DebugValueSummary.getValue();
+            if (summary != null) {
+                switch (summary) {
+                    case "Name":
+                    case "Partial":
+                    case "Complete":
+                    case "Thread":
+                        break;
+                    default:
+                        throw new GraalInternalError("Unsupported value for DebugSummaryValue: %s", summary);
+                }
+            }
+        }
+
+        HotSpotBackend hostBackend = runtime.getHostBackend();
+        final HotSpotProviders hostProviders = hostBackend.getProviders();
+        assert VerifyOptionsPhase.checkOptions(hostProviders.getMetaAccess());
+
+        // Complete initialization of backends
+        try (InitTimer st = timer(hostBackend.getTarget().arch.getName(), ".completeInitialization")) {
+            hostBackend.completeInitialization();
+        }
+        for (HotSpotBackend backend : runtime.getBackends().values()) {
+            if (backend != hostBackend) {
+                try (InitTimer st = timer(backend.getTarget().arch.getName(), ".completeInitialization")) {
+                    backend.completeInitialization();
+                }
+            }
+        }
+
+        BenchmarkCounters.initialize(runtime.getCompilerToVM());
+
+        runtimeStartTime = System.nanoTime();
+    }
+
+    public void startCompiler(boolean bootstrapEnabled) throws Throwable {
+        try (InitTimer timer = timer("startCompiler")) {
+            startCompiler0(bootstrapEnabled);
         }
     }
 
-    private ThreadPoolExecutor compileQueue;
+    private void startCompiler0(boolean bootstrapEnabled) throws Throwable {
 
-    public VMToCompilerImpl(Compiler compiler) {
-        this.compiler = compiler;
+        bootstrapRunning = bootstrapEnabled;
 
-        typeBoolean = new HotSpotTypePrimitive(compiler, CiKind.Boolean);
-        typeChar = new HotSpotTypePrimitive(compiler, CiKind.Char);
-        typeFloat = new HotSpotTypePrimitive(compiler, CiKind.Float);
-        typeDouble = new HotSpotTypePrimitive(compiler, CiKind.Double);
-        typeByte = new HotSpotTypePrimitive(compiler, CiKind.Byte);
-        typeShort = new HotSpotTypePrimitive(compiler, CiKind.Short);
-        typeInt = new HotSpotTypePrimitive(compiler, CiKind.Int);
-        typeLong = new HotSpotTypePrimitive(compiler, CiKind.Long);
-        typeVoid = new HotSpotTypePrimitive(compiler, CiKind.Void);
-    }
+        if (runtime.getConfig().useGraalCompilationQueue) {
 
-    public void startCompiler() throws Throwable {
-        // Make sure TTY is initialized here such that the correct System.out is used for TTY.
-        TTY.initialize();
-        if (GraalOptions.Debug) {
-            Debug.enable();
-            HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter);
-            Debug.setConfig(hotspotDebugConfig);
-        }
-
-        // Install intrinsics.
-        final HotSpotRuntime runtime = (HotSpotRuntime) compiler.getCompiler().runtime;
-        if (GraalOptions.Intrinsify) {
-            Debug.scope("InstallSnippets", new DebugDumpScope("InstallSnippets"), new Runnable() {
-                @Override
-                public void run() {
-                    VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime);
-                    GraalIntrinsics.installIntrinsics(runtime, runtime.getCompiler().getTarget());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new SystemSnippets());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new UnsafeSnippets());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new ArrayCopySnippets());
+            // Create compilation queue.
+            CompilerThreadFactory factory = new CompilerThreadFactory("GraalCompilerThread", new DebugConfigAccess() {
+                public GraalDebugConfig getDebugConfig() {
+                    return Debug.isEnabled() ? DebugEnvironment.initialize(log) : null;
                 }
             });
+            compileQueue = new Queue(factory);
 
-        }
+            // Create queue status printing thread.
+            if (PrintQueue.getValue()) {
+                Thread t = new Thread() {
 
-        // Create compilation queue.
-        compileQueue = new ThreadPoolExecutor(GraalOptions.Threads, GraalOptions.Threads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), compilerThreadFactory);
-
-        // Create queue status printing thread.
-        if (GraalOptions.PrintQueue) {
-            Thread t = new Thread() {
-
-                @Override
-                public void run() {
-                    while (true) {
-                        TTY.println(compileQueue.toString());
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
+                    @Override
+                    public void run() {
+                        while (true) {
+                            TTY.println(compileQueue.toString());
+                            try {
+                                Thread.sleep(1000);
+                            } catch (InterruptedException e) {
+                            }
                         }
                     }
+                };
+                t.setDaemon(true);
+                t.start();
+            }
+
+            if (PrintCompRate.getValue() != 0) {
+                if (runtime.getConfig().ciTime || runtime.getConfig().ciTimeEach) {
+                    throw new GraalInternalError("PrintCompRate is incompatible with CITime and CITimeEach");
                 }
-            };
-            t.setDaemon(true);
-            t.start();
+                Thread t = new Thread() {
+
+                    @Override
+                    public void run() {
+                        while (true) {
+                            runtime.getCompilerToVM().printCompilationStatistics(true, false);
+                            runtime.getCompilerToVM().resetCompilationStatistics();
+                            try {
+                                Thread.sleep(PrintCompRate.getValue());
+                            } catch (InterruptedException e) {
+                            }
+                        }
+                    }
+                };
+                t.setDaemon(true);
+                t.start();
+            }
         }
     }
 
     /**
-     * This method is the first method compiled during bootstrapping. Put any code in there that warms up compiler paths
-     * that are otherwise no exercised during bootstrapping and lead to later deoptimization when application code is
-     * compiled.
+     * Take action related to entering a new execution phase.
+     *
+     * @param phase the execution phase being entered
+     */
+    protected void phaseTransition(String phase) {
+        CompilationStatistics.clear(phase);
+    }
+
+    /**
+     * This method is the first method compiled during bootstrapping. Put any code in there that
+     * warms up compiler paths that are otherwise not exercised during bootstrapping and lead to
+     * later deoptimization when application code is compiled.
      */
     @SuppressWarnings("unused")
     @Deprecated
@@ -167,68 +293,192 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     }
 
     public void bootstrap() throws Throwable {
-        TTY.print("Bootstrapping Graal");
-        TTY.flush();
-        long startTime = System.currentTimeMillis();
-
-        // Initialize compile queue with a selected set of methods.
-        Class<Object> objectKlass = Object.class;
-        enqueue(getClass().getDeclaredMethod("compileWarmup"));
-        enqueue(objectKlass.getDeclaredMethod("equals", Object.class));
-        enqueue(objectKlass.getDeclaredMethod("toString"));
-
-        // Compile until the queue is empty.
-        int z = 0;
-        while (compileQueue.getCompletedTaskCount() < Math.max(3, compileQueue.getTaskCount())) {
-            Thread.sleep(100);
-            while (z < compileQueue.getCompletedTaskCount() / 100) {
-                ++z;
-                TTY.print(".");
-                TTY.flush();
-            }
+        if (PrintBootstrap.getValue()) {
+            TTY.print("Bootstrapping Graal");
+            TTY.flush();
         }
 
-        TTY.println(" in %d ms", System.currentTimeMillis() - startTime);
-        System.gc();
-    }
+        long boostrapStartTime = System.currentTimeMillis();
 
-    private void enqueue(Method m) throws Throwable {
-        RiMethod riMethod = compiler.getRuntime().getRiMethod(m);
-        assert !Modifier.isAbstract(((HotSpotMethodResolved) riMethod).accessFlags()) && !Modifier.isNative(((HotSpotMethodResolved) riMethod).accessFlags()) : riMethod;
-        compileMethod((HotSpotMethodResolved) riMethod, 0, false);
-    }
+        boolean firstRun = true;
+        do {
+            // Initialize compile queue with a selected set of methods.
+            Class<Object> objectKlass = Object.class;
+            if (firstRun) {
+                enqueue(getClass().getDeclaredMethod("compileWarmup"));
+                enqueue(objectKlass.getDeclaredMethod("equals", Object.class));
+                enqueue(objectKlass.getDeclaredMethod("toString"));
+                firstRun = false;
+            } else {
+                for (int i = 0; i < 100; i++) {
+                    enqueue(getClass().getDeclaredMethod("bootstrap"));
+                }
+            }
 
-    public void shutdownCompiler() throws Throwable {
-        // compiler.getCompiler().context.print();
-        // TODO (thomaswue): Print context results.
-        compileQueue.shutdown();
+            // Compile until the queue is empty.
+            int z = 0;
+            while (true) {
+                if (compileQueue.getCompletedTaskCount() >= Math.max(3, compileQueue.getTaskCount())) {
+                    break;
+                }
 
-        if (Debug.isEnabled()) {
-            List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
-            List<DebugValue> debugValues = KeyRegistry.getDebugValues();
-            if (debugValues.size() > 0) {
-                if (GraalOptions.SummarizeDebugValues) {
-                    printSummary(topLevelMaps, debugValues);
-                } else {
-                    for (DebugValueMap map : topLevelMaps) {
-                        TTY.println("Showing the results for thread: " + map.getName());
-                        map.group();
-                        map.normalize();
-                        printMap(map, debugValues, 0);
+                Thread.sleep(100);
+                while (z < compileQueue.getCompletedTaskCount() / 100) {
+                    ++z;
+                    if (PrintBootstrap.getValue()) {
+                        TTY.print(".");
+                        TTY.flush();
+                    }
+                }
+
+                // Are we out of time?
+                final int timedBootstrap = TimedBootstrap.getValue();
+                if (timedBootstrap != -1) {
+                    if ((System.currentTimeMillis() - boostrapStartTime) > timedBootstrap) {
+                        break;
                     }
                 }
             }
+        } while ((System.currentTimeMillis() - boostrapStartTime) <= TimedBootstrap.getValue());
+
+        if (ResetDebugValuesAfterBootstrap.getValue()) {
+            printDebugValues("bootstrap", true);
+            runtime.getCompilerToVM().resetCompilationStatistics();
+        }
+        phaseTransition("bootstrap");
+
+        bootstrapRunning = false;
+
+        if (PrintBootstrap.getValue()) {
+            TTY.println(" in %d ms (compiled %d methods)", System.currentTimeMillis() - boostrapStartTime, compileQueue.getCompletedTaskCount());
         }
 
-        if (GraalOptions.PrintCompilationStatistics) {
-            printCompilationStatistics();
+        System.gc();
+        phaseTransition("bootstrap2");
+    }
+
+    public void compileTheWorld() throws Throwable {
+        int iterations = CompileTheWorld.Options.CompileTheWorldIterations.getValue();
+        for (int i = 0; i < iterations; i++) {
+            runtime.getCompilerToVM().resetCompilationStatistics();
+            TTY.println("CompileTheWorld : iteration " + i);
+            CompileTheWorld ctw = new CompileTheWorld(CompileTheWorldClasspath.getValue(), new Config(CompileTheWorldConfig.getValue()), CompileTheWorldStartAt.getValue(),
+                            CompileTheWorldStopAt.getValue(), CompileTheWorldVerbose.getValue());
+            ctw.compile();
+        }
+        System.exit(0);
+    }
+
+    private void enqueue(Method m) throws Throwable {
+        JavaMethod javaMethod = runtime.getHostProviders().getMetaAccess().lookupJavaMethod(m);
+        assert !((HotSpotResolvedJavaMethod) javaMethod).isAbstract() && !((HotSpotResolvedJavaMethod) javaMethod).isNative() : javaMethod;
+        compileMethod((HotSpotResolvedJavaMethod) javaMethod, StructuredGraph.INVOCATION_ENTRY_BCI, 0L, false);
+    }
+
+    public void shutdownCompiler() throws Exception {
+        if (runtime.getConfig().useGraalCompilationQueue) {
+            try (Enqueueing enqueueing = new Enqueueing()) {
+                // We have to use a privileged action here because shutting down the compiler might
+                // be called from user code which very likely contains unprivileged frames.
+                AccessController.doPrivileged(new PrivilegedExceptionAction<Void>() {
+                    public Void run() throws Exception {
+                        if (compileQueue != null) {
+                            compileQueue.shutdown();
+                        }
+                        return null;
+                    }
+                });
+            }
         }
     }
 
-    private void printCompilationStatistics() {
-        TTY.println("Accumulated compilation statistics");
-        TTY.println("  Compiled methods         : %d", compiledMethodCount);
-        TTY.println("  Total compilation time   : %6.3f s", totalCompilationTime / Math.pow(10, 9));
+    public void shutdownRuntime() throws Exception {
+        printDebugValues(ResetDebugValuesAfterBootstrap.getValue() ? "application" : null, false);
+        phaseTransition("final");
+
+        SnippetCounter.printGroups(TTY.out().out());
+        BenchmarkCounters.shutdown(runtime.getCompilerToVM(), runtimeStartTime);
+    }
+
+    private void printDebugValues(String phase, boolean reset) throws GraalInternalError {
+        if (Debug.isEnabled() && areMetricsOrTimersEnabled()) {
+            TTY.println();
+            if (phase != null) {
+                TTY.println("<DebugValues:" + phase + ">");
+            } else {
+                TTY.println("<DebugValues>");
+            }
+            List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
+            List<DebugValue> debugValues = KeyRegistry.getDebugValues();
+            if (debugValues.size() > 0) {
+                try {
+                    ArrayList<DebugValue> sortedValues = new ArrayList<>(debugValues);
+                    Collections.sort(sortedValues);
+
+                    String summary = DebugValueSummary.getValue();
+                    if (summary == null) {
+                        summary = "Complete";
+                    }
+                    switch (summary) {
+                        case "Name":
+                            printSummary(topLevelMaps, sortedValues);
+                            break;
+                        case "Partial": {
+                            DebugValueMap globalMap = new DebugValueMap("Global");
+                            for (DebugValueMap map : topLevelMaps) {
+                                flattenChildren(map, globalMap);
+                            }
+                            globalMap.normalize();
+                            printMap(new DebugValueScope(null, globalMap), sortedValues);
+                            break;
+                        }
+                        case "Complete": {
+                            DebugValueMap globalMap = new DebugValueMap("Global");
+                            for (DebugValueMap map : topLevelMaps) {
+                                globalMap.addChild(map);
+                            }
+                            globalMap.group();
+                            globalMap.normalize();
+                            printMap(new DebugValueScope(null, globalMap), sortedValues);
+                            break;
+                        }
+                        case "Thread":
+                            for (DebugValueMap map : topLevelMaps) {
+                                TTY.println("Showing the results for thread: " + map.getName());
+                                map.group();
+                                map.normalize();
+                                printMap(new DebugValueScope(null, map), sortedValues);
+                            }
+                            break;
+                        default:
+                            throw new GraalInternalError("Unknown summary type: %s", summary);
+                    }
+                    if (reset) {
+                        for (DebugValueMap topLevelMap : topLevelMaps) {
+                            topLevelMap.reset();
+                        }
+                    }
+                } catch (Throwable e) {
+                    // Don't want this to change the exit status of the VM
+                    PrintStream err = System.err;
+                    err.println("Error while printing debug values:");
+                    e.printStackTrace();
+                }
+            }
+            if (phase != null) {
+                TTY.println("</DebugValues:" + phase + ">");
+            } else {
+                TTY.println("</DebugValues>");
+            }
+        }
+    }
+
+    private void flattenChildren(DebugValueMap map, DebugValueMap globalMap) {
+        globalMap.addChild(map);
+        for (DebugValueMap child : map.getChildren()) {
+            flattenChildren(child, globalMap);
+        }
+        map.clearChildren();
     }
 
     private static void printSummary(List<DebugValueMap> topLevelMaps, List<DebugValue> debugValues) {
@@ -239,39 +489,61 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
             long total = collectTotal(topLevelMaps, index);
             result.setCurrentValue(index, total);
         }
-        printMap(result, debugValues, 0);
+        printMap(new DebugValueScope(null, result), debugValues);
     }
 
     private static long collectTotal(List<DebugValueMap> maps, int index) {
         long total = 0;
         for (int i = 0; i < maps.size(); i++) {
             DebugValueMap map = maps.get(i);
-            // the top level accumulates some counters -> do not process the children if we find a value
-            long value = map.getCurrentValue(index);
-            if (value == 0) {
-                total += collectTotal(map.getChildren(), index);
-            } else {
-                total += value;
-            }
+            total += map.getCurrentValue(index);
+            total += collectTotal(map.getChildren(), index);
         }
         return total;
     }
 
+    /**
+     * Tracks the scope when printing a {@link DebugValueMap}, allowing "empty" scopes to be
+     * omitted. An empty scope is one in which there are no (nested) non-zero debug values.
+     */
+    static class DebugValueScope {
 
-    private static void printMap(DebugValueMap map, List<DebugValue> debugValues, int level) {
+        final DebugValueScope parent;
+        final int level;
+        final DebugValueMap map;
+        private boolean printed;
 
-        printIndent(level);
-        TTY.println(map.getName());
+        public DebugValueScope(DebugValueScope parent, DebugValueMap map) {
+            this.parent = parent;
+            this.map = map;
+            this.level = parent == null ? 0 : parent.level + 1;
+        }
+
+        public void print() {
+            if (!printed) {
+                printed = true;
+                if (parent != null) {
+                    parent.print();
+                }
+                printIndent(level);
+                TTY.println("%s", map.getName());
+            }
+        }
+    }
+
+    private static void printMap(DebugValueScope scope, List<DebugValue> debugValues) {
+
         for (DebugValue value : debugValues) {
-            long l = map.getCurrentValue(value.getIndex());
-            if (l != 0) {
-                printIndent(level + 1);
-                TTY.println(value.getName() + "=" + l);
+            long l = scope.map.getCurrentValue(value.getIndex());
+            if (l != 0 || !SuppressZeroDebugValues.getValue()) {
+                scope.print();
+                printIndent(scope.level + 1);
+                TTY.println(value.getName() + "=" + value.toString(l));
             }
         }
 
-        for (DebugValueMap child : map.getChildren()) {
-            printMap(child, debugValues, level + 1);
+        for (DebugValueMap child : scope.map.getChildren()) {
+            printMap(new DebugValueScope(scope, child), debugValues);
         }
     }
 
@@ -283,179 +555,73 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     }
 
     @Override
-    public boolean compileMethod(final HotSpotMethodResolved method, final int entryBCI, boolean blocking) throws Throwable {
-        try {
-            if (Thread.currentThread() instanceof CompilerThread) {
-                if (method.holder().name().contains("java/util/concurrent")) {
-                    // This is required to avoid deadlocking a compiler thread. The issue is that a
-                    // java.util.concurrent.BlockingQueue is used to implement the compilation worker
-                    // queues. If a compiler thread triggers a compilation, then it may be blocked trying
-                    // to add something to its own queue.
-                    return false;
+    public void compileMethod(long metaspaceMethod, final int entryBCI, long ctask, final boolean blocking) {
+        final HotSpotResolvedJavaMethod method = HotSpotResolvedJavaMethod.fromMetaspace(metaspaceMethod);
+        if (ctask != 0L) {
+            // This is on a VM CompilerThread - no user frames exist
+            compileMethod(method, entryBCI, ctask, false);
+        } else {
+            // We have to use a privileged action here because compilations are
+            // enqueued from user code which very likely contains unprivileged frames.
+            AccessController.doPrivileged(new PrivilegedAction<Void>() {
+                public Void run() {
+                    compileMethod(method, entryBCI, 0L, blocking);
+                    return null;
                 }
-            }
+            });
+        }
+    }
 
-            Runnable runnable = new Runnable() {
+    /**
+     * Compiles a method to machine code.
+     */
+    void compileMethod(final HotSpotResolvedJavaMethod method, final int entryBCI, long ctask, final boolean blocking) {
+        if (ctask != 0L) {
+            HotSpotBackend backend = runtime.getHostBackend();
+            CompilationTask task = new CompilationTask(null, backend, method, entryBCI, ctask, false);
+            task.runCompilation();
+            return;
+        }
 
-                public void run() {
-                    try {
-                        final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
-                        final PhasePlan plan = createHotSpotSpecificPhasePlan(optimisticOpts);
-                        long startTime = System.nanoTime();
-                        int index = compiledMethodCount++;
-                        final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
-                        if (printCompilation) {
-                            TTY.println(String.format("Graal %4d %-70s %-45s %-50s ...", index, method.holder().name(), method.name(), method.signature().asString()));
-                        }
+        boolean osrCompilation = entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI;
+        if (osrCompilation && bootstrapRunning) {
+            // no OSR compilations during bootstrap - the compiler is just too slow at this point,
+            // and we know that there are no endless loops
+            return;
+        }
 
-                        CiTargetMethod result = null;
-                        TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
-                        long nanoTime;
-                        try {
-                            result = Debug.scope("Compiling", new Callable<CiTargetMethod>() {
-                                @Override
-                                public CiTargetMethod call() throws Exception {
-                                    StructuredGraph graph = new StructuredGraph(method);
-                                    return compiler.getCompiler().compileMethod(method, graph, -1, plan, optimisticOpts);
-                                }
-                            });
-                        } finally {
-                            filter.remove();
-                            nanoTime = System.nanoTime() - startTime;
-                            totalCompilationTime += nanoTime;
-                            if (printCompilation) {
-                                TTY.println(String.format("Graal %4d %-70s %-45s %-50s | %3d.%dms %4dnodes %5dB", index, "", "", "", nanoTime / 1000000, nanoTime % 1000000, 0, (result != null ? result.targetCodeSize()
-                                                : -1)));
-                            }
-                        }
-                        compiler.getRuntime().installMethod(method, result);
-                    } catch (CiBailout bailout) {
-                        Debug.metric("Bailouts").increment();
-                        if (GraalOptions.PrintBailouts || GraalOptions.ExitVMOnBailout) {
-                            TTY.println("WARN: Compilation bailout");
-                            bailout.printStackTrace(TTY.cachedOut);
+        if (CompilationTask.isWithinEnqueue()) {
+            // This is required to avoid deadlocking a compiler thread. The issue is that a
+            // java.util.concurrent.BlockingQueue is used to implement the compilation worker
+            // queues. If a compiler thread triggers a compilation, then it may be blocked trying
+            // to add something to its own queue.
+            return;
+        }
 
-                            if (GraalOptions.ExitVMOnBailout) {
-                                System.exit(-1);
-                            }
-                        }
-                    } catch (Throwable t) {
-                        if (GraalOptions.ExitVMOnException) {
-                            t.printStackTrace(TTY.cachedOut);
-                            System.exit(-1);
+        // Don't allow blocking compiles from CompilerThreads
+        boolean block = blocking && !(Thread.currentThread() instanceof CompilerThread);
+        try (Enqueueing enqueueing = new Enqueueing()) {
+            if (method.tryToQueueForCompilation()) {
+                assert method.isQueuedForCompilation();
+
+                try {
+                    if (!compileQueue.executor.isShutdown()) {
+                        HotSpotBackend backend = runtime.getHostBackend();
+                        CompilationTask task = new CompilationTask(compileQueue.executor, backend, method, entryBCI, ctask, block);
+                        compileQueue.execute(task);
+                        if (block) {
+                            task.block();
                         }
                     }
+                } catch (RejectedExecutionException e) {
+                    // The compile queue was already shut down.
                 }
-            };
-
-            if (blocking) {
-                runnable.run();
-            } else {
-                compileQueue.execute(runnable);
             }
-        } catch (RejectedExecutionException e) {
-            // The compile queue was already shut down.
-            return false;
-        }
-        return true;
-    }
-
-    @Override
-    public RiMethod createRiMethodUnresolved(String name, String signature, RiType holder) {
-        return new HotSpotMethodUnresolved(compiler, name, signature, holder);
-    }
-
-    @Override
-    public RiSignature createRiSignature(String signature) {
-        return new HotSpotSignature(compiler, signature);
-    }
-
-    @Override
-    public RiField createRiField(RiType holder, String name, RiType type, int offset, int flags) {
-        if (offset != -1) {
-            HotSpotTypeResolved resolved = (HotSpotTypeResolved) holder;
-            return resolved.createRiField(name, type, offset, flags);
-        }
-        return new BaseUnresolvedField(holder, name, type);
-    }
-
-    @Override
-    public RiType createRiType(HotSpotConstantPool pool, String name) {
-        throw new RuntimeException("not implemented");
-    }
-
-    @Override
-    public RiType createRiTypePrimitive(int basicType) {
-        switch (basicType) {
-            case 4:
-                return typeBoolean;
-            case 5:
-                return typeChar;
-            case 6:
-                return typeFloat;
-            case 7:
-                return typeDouble;
-            case 8:
-                return typeByte;
-            case 9:
-                return typeShort;
-            case 10:
-                return typeInt;
-            case 11:
-                return typeLong;
-            case 14:
-                return typeVoid;
-            default:
-                throw new IllegalArgumentException("Unknown basic type: " + basicType);
         }
     }
 
     @Override
-    public RiType createRiTypeUnresolved(String name) {
-        return new HotSpotTypeUnresolved(compiler, name);
-    }
-
-    @Override
-    public CiConstant createCiConstant(CiKind kind, long value) {
-        if (kind == CiKind.Long) {
-            return CiConstant.forLong(value);
-        } else if (kind == CiKind.Int) {
-            return CiConstant.forInt((int) value);
-        } else if (kind == CiKind.Short) {
-            return CiConstant.forShort((short) value);
-        } else if (kind == CiKind.Char) {
-            return CiConstant.forChar((char) value);
-        } else if (kind == CiKind.Byte) {
-            return CiConstant.forByte((byte) value);
-        } else if (kind == CiKind.Boolean) {
-            return (value == 0) ? CiConstant.FALSE : CiConstant.TRUE;
-        } else {
-            throw new IllegalArgumentException();
-        }
-    }
-
-    @Override
-    public CiConstant createCiConstantFloat(float value) {
-        return CiConstant.forFloat(value);
-    }
-
-    @Override
-    public CiConstant createCiConstantDouble(double value) {
-        return CiConstant.forDouble(value);
-    }
-
-    @Override
-    public CiConstant createCiConstantObject(Object object) {
-        return CiConstant.forObject(object);
-    }
-
-    private PhasePlan createHotSpotSpecificPhasePlan(OptimisticOptimizations optimisticOpts) {
-        PhasePlan phasePlan = new PhasePlan();
-        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(compiler.getRuntime(), GraphBuilderConfiguration.getDefault(), optimisticOpts);
-        phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
-        if (GraalOptions.Intrinsify) {
-            phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
-        }
-        return phasePlan;
+    public PrintStream log() {
+        return log;
     }
 }

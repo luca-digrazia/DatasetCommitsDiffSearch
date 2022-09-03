@@ -189,7 +189,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
         HotSpotBackendFactory nonBasic = null;
         int nonBasicCount = 0;
 
-        for (HotSpotBackendFactory factory : Services.load(HotSpotBackendFactory.class)) {
+        for (HotSpotBackendFactory factory : ServiceLoader.loadInstalled(HotSpotBackendFactory.class)) {
             if (factory.getArchitecture().equalsIgnoreCase(architecture)) {
                 if (factory.getGraalRuntimeName().equals(GraalRuntime.getValue())) {
                     assert selected == null || checkFactoryOverriding(selected, factory);
@@ -452,7 +452,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
 
     private EventProvider createEventProvider() {
         if (config.flightRecorder) {
-            Iterable<EventProvider> sl = Services.load(EventProvider.class);
+            ServiceLoader<EventProvider> sl = ServiceLoader.loadInstalled(EventProvider.class);
             EventProvider singleProvider = null;
             for (EventProvider ep : sl) {
                 assert singleProvider == null : String.format("multiple %s service implementations found: %s and %s", EventProvider.class.getName(), singleProvider.getClass().getName(),
