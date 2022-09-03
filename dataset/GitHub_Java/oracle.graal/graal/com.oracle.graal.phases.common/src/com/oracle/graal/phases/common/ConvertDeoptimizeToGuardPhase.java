@@ -88,9 +88,6 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
                     }
                     for (int i = 0; i < mergePredecessors.size(); ++i) {
                         AbstractEndNode mergePredecessor = mergePredecessors.get(i);
-                        if (!mergePredecessor.isAlive()) {
-                            break;
-                        }
                         if (xs[i] == null) {
                             continue;
                         }
