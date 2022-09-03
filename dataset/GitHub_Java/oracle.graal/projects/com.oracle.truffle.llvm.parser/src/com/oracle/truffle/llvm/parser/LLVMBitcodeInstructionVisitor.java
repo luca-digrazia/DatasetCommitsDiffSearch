@@ -40,8 +40,6 @@ import com.oracle.truffle.llvm.parser.LLVMPhiManager.Phi;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionKind;
-import com.oracle.truffle.llvm.parser.model.attributes.Attribute;
-import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.parser.model.enums.AsmDialect;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.InlineAsmConstant;
@@ -57,7 +55,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareInstruct
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ConditionalBranchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractElementInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractValueInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.FenceInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.GetElementPointerInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.IndirectBranchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.InsertElementInstruction;
@@ -66,7 +63,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.InvokeInstructi
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.LandingpadInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.LoadInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.PhiInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ReadModifyWriteInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ResumeInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ReturnInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.SelectInstruction;
@@ -80,7 +76,7 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstructio
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstruction;
 import com.oracle.truffle.llvm.parser.model.visitors.InstructionVisitor;
-import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
+import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolResolver;
 import com.oracle.truffle.llvm.parser.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.runtime.LLVMException;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
@@ -101,9 +97,9 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
     private final FrameDescriptor frame;
     private final Map<String, Integer> labels;
     private final List<Phi> blockPhis;
-    private final NodeFactory nodeFactory;
+    private final SulongNodeFactory nodeFactory;
     private final int argCount;
-    private final LLVMSymbolReadResolver symbols;
+    private final LLVMSymbolResolver symbols;
     private final LLVMParserRuntime runtime;
     private final ArrayList<LLVMLivenessAnalysis.NullerInformation> nullerInfos;
     private final List<? extends FrameSlot> frameSlots;
@@ -113,7 +109,7 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
     private LLVMControlFlowNode controlFlowNode;
 
     LLVMBitcodeInstructionVisitor(FrameDescriptor frame, Map<String, Integer> labels,
-                    List<Phi> blockPhis, NodeFactory nodeFactory, int argCount, LLVMSymbolReadResolver symbols, LLVMParserRuntime runtime,
+                    List<Phi> blockPhis, SulongNodeFactory nodeFactory, int argCount, LLVMSymbolResolver symbols, LLVMParserRuntime runtime,
                     ArrayList<LLVMLivenessAnalysis.NullerInformation> nullerInfos) {
         this.frame = frame;
         this.labels = labels;
@@ -225,16 +221,12 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         for (int i = 0; argIndex < argumentCount; i++) {
             argNodes[argIndex] = symbols.resolve(call.getArgument(i));
             argTypes[argIndex] = call.getArgument(i).getType();
-            final AttributesGroup paramAttr = call.getParameterAttributesGroup(i);
-            if (isByValue(paramAttr)) {
-                argNodes[argIndex] = capsuleAddressByValue(argNodes[argIndex], argTypes[argIndex], paramAttr);
-            }
             argIndex++;
         }
 
         final SourceSection sourceSection = runtime.getSourceSection(call);
         final Symbol target = call.getCallTarget();
-        LLVMExpressionNode result = nodeFactory.createLLVMBuiltin(runtime, target, argNodes, argCount, sourceSection);
+        LLVMExpressionNode result = nodeFactory.createLLVMBuiltin(target, argNodes, argCount, sourceSection);
         if (result == null) {
             if (target instanceof InlineAsmConstant) {
                 final InlineAsmConstant inlineAsmConstant = (InlineAsmConstant) target;
@@ -307,15 +299,11 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         for (int i = 0; i < call.getArgumentCount(); i++) {
             args[argIndex] = symbols.resolve(call.getArgument(i));
             argsType[argIndex] = call.getArgument(i).getType();
-            final AttributesGroup paramAttr = call.getParameterAttributesGroup(i);
-            if (isByValue(paramAttr)) {
-                args[argIndex] = capsuleAddressByValue(args[argIndex], argsType[argIndex], paramAttr);
-            }
             argIndex++;
         }
 
         final SourceSection sourceSection = runtime.getSourceSection(call);
-        LLVMExpressionNode node = nodeFactory.createLLVMBuiltin(runtime, target, args, argCount, sourceSection);
+        LLVMExpressionNode node = nodeFactory.createLLVMBuiltin(target, args, argCount, sourceSection);
         if (node == null) {
             if (target instanceof InlineAsmConstant) {
                 final InlineAsmConstant inlineAsmConstant = (InlineAsmConstant) target;
@@ -349,10 +337,6 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         for (int i = 0; argIndex < argumentCount; i++, argIndex++) {
             argNodes[argIndex] = symbols.resolve(call.getArgument(i));
             argTypes[argIndex] = call.getArgument(i).getType();
-            final AttributesGroup paramAttr = call.getParameterAttributesGroup(i);
-            if (isByValue(paramAttr)) {
-                argNodes[argIndex] = capsuleAddressByValue(argNodes[argIndex], argTypes[argIndex], paramAttr);
-            }
         }
 
         final Symbol target = call.getCallTarget();
@@ -387,7 +371,7 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
                         unwindType.toArray(new Type[unwindType.size()]));
 
         final SourceSection sourceSection = runtime.getSourceSection(call);
-        LLVMExpressionNode function = nodeFactory.createLLVMBuiltin(runtime, target, argNodes, argCount, null);
+        LLVMExpressionNode function = nodeFactory.createLLVMBuiltin(target, argNodes, argCount, null);
         if (function == null) {
             function = symbols.resolve(target);
         }
@@ -414,10 +398,6 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         for (int i = 0; i < call.getArgumentCount(); i++) {
             args[argIndex] = symbols.resolve(call.getArgument(i));
             argsType[argIndex] = call.getArgument(i).getType();
-            final AttributesGroup paramAttr = call.getParameterAttributesGroup(i);
-            if (isByValue(paramAttr)) {
-                args[argIndex] = capsuleAddressByValue(args[argIndex], argsType[argIndex], paramAttr);
-            }
             argIndex++;
         }
 
@@ -452,7 +432,7 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
                         unwindType.toArray(new Type[unwindType.size()]));
 
         final SourceSection sourceSection = runtime.getSourceSection(call);
-        LLVMExpressionNode function = nodeFactory.createLLVMBuiltin(runtime, target, args, argCount, null);
+        LLVMExpressionNode function = nodeFactory.createLLVMBuiltin(target, args, argCount, null);
         if (function == null) {
             function = symbols.resolve(target);
         }
@@ -675,25 +655,6 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
     }
 
     @Override
-    public void visit(ReadModifyWriteInstruction rmw) {
-        final LLVMExpressionNode pointerNode = symbols.resolve(rmw.getPtr());
-        final LLVMExpressionNode valueNode = symbols.resolve(rmw.getValue());
-
-        final Type type = rmw.getValue().getType();
-
-        final LLVMExpressionNode result = nodeFactory.createReadModifyWrite(runtime, rmw.getOperator(), pointerNode, valueNode, type);
-
-        createFrameWrite(result, rmw);
-    }
-
-    @Override
-    public void visit(FenceInstruction fence) {
-        final LLVMExpressionNode node = nodeFactory.createFence(runtime);
-
-        addInstruction(node);
-    }
-
-    @Override
     public void visit(SwitchInstruction zwitch) {
         LLVMExpressionNode cond = symbols.resolve(zwitch.getCondition());
         int[] successors = new int[zwitch.getCaseCount() + 1];
@@ -832,33 +793,5 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
     private void setControlFlowNode(LLVMControlFlowNode controlFlowNode) {
         assert this.controlFlowNode == null;
         this.controlFlowNode = controlFlowNode;
-    }
-
-    private LLVMExpressionNode capsuleAddressByValue(LLVMExpressionNode child, Type type, AttributesGroup paramAttr) {
-        final Type pointee = ((PointerType) type).getPointeeType();
-
-        final int size = runtime.getByteSize(pointee);
-        int alignment = runtime.getByteAlignment(pointee);
-        for (Attribute attr : paramAttr.getAttributes()) {
-            if (attr instanceof Attribute.KnownIntegerValueAttribute && ((Attribute.KnownIntegerValueAttribute) attr).getAttr() == Attribute.Kind.ALIGN) {
-                alignment = ((Attribute.KnownIntegerValueAttribute) attr).getValue();
-            }
-        }
-
-        return nodeFactory.createVarArgCompoundValue(runtime, size, alignment, child);
-    }
-
-    private static boolean isByValue(AttributesGroup parameter) {
-        if (parameter == null) {
-            return false;
-        }
-
-        for (Attribute a : parameter.getAttributes()) {
-            if (a instanceof Attribute.KnownAttribute && ((Attribute.KnownAttribute) a).getAttr() == Attribute.Kind.BYVAL) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }
