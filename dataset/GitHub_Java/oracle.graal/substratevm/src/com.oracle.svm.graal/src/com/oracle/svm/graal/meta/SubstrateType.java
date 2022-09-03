@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,6 +26,7 @@ import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.Predicate;
 
@@ -64,17 +63,8 @@ public class SubstrateType extends NodeClass implements SharedType, Replaced {
     private final JavaKind kind;
     private final DynamicHub hub;
 
-    /**
-     * All instance fields (including the fields of superclasses) for this type.
-     *
-     * If the type has more than one instance field, it is a {@link SubstrateField}[] array. If the
-     * type has exactly one instance field, it is the {@link SubstrateField} instance to avoid
-     * having an array in the image heap. If the type has no instance field, it is a
-     * {@link SubstrateField}[] array of length 0. If it is not known if the type has an instance
-     * field (because the type metadata was created at image runtime), it is null.
-     */
     @UnknownObjectField(types = {SubstrateField[].class, SubstrateField.class}, canBeNull = true)//
-    Object rawAllInstanceFields;
+    Object instanceFields;
 
     @UnknownPrimitiveField private int instanceOfFromTypeID;
     @UnknownPrimitiveField private int instanceOfNumTypeIDs;
@@ -92,23 +82,23 @@ public class SubstrateType extends NodeClass implements SharedType, Replaced {
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public void setRawAllInstanceFields(SubstrateField[] allInstanceFields) {
-        if (allInstanceFields.length == 0) {
+    public void setInstanceFields(SubstrateField[] instanceFields) {
+        if (instanceFields.length == 0) {
             /*
              * We cannot use null as the marker value, because null means
              * "no field information available" for instances created at run time.
              */
-            this.rawAllInstanceFields = SubstrateField.EMPTY_ARRAY;
-        } else if (allInstanceFields.length == 1) {
-            this.rawAllInstanceFields = allInstanceFields[0];
+            this.instanceFields = SubstrateField.EMPTY_ARRAY;
+        } else if (instanceFields.length == 1) {
+            this.instanceFields = instanceFields[0];
         } else {
-            this.rawAllInstanceFields = allInstanceFields;
+            this.instanceFields = instanceFields;
         }
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public Object getRawAllInstanceFields() {
-        return rawAllInstanceFields;
+    public Object getRawInstanceFields() {
+        return instanceFields;
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -310,7 +300,13 @@ public class SubstrateType extends NodeClass implements SharedType, Replaced {
 
     @Override
     public SubstrateField[] getInstanceFields(boolean includeSuperclasses) {
-        if (rawAllInstanceFields == null) {
+        List<SubstrateField> result = new ArrayList<>();
+        getInstanceFields(includeSuperclasses, result);
+        return result.toArray(new SubstrateField[result.size()]);
+    }
+
+    private void getInstanceFields(boolean includeSuperclasses, List<SubstrateField> result) {
+        if (instanceFields == null) {
             /*
              * The type was created at run time from the Class, so we do not have field information.
              * If we need the fields for a type, the type has to be created during image generation.
@@ -318,39 +314,14 @@ public class SubstrateType extends NodeClass implements SharedType, Replaced {
             throw VMError.shouldNotReachHere("no instance fields for " + hub.getName() + " available");
         }
 
-        SubstrateType superclass = getSuperclass();
-        if (includeSuperclasses || superclass == null) {
-            if (rawAllInstanceFields instanceof SubstrateField) {
-                return new SubstrateField[]{(SubstrateField) rawAllInstanceFields};
-            } else {
-                return (SubstrateField[]) rawAllInstanceFields;
-            }
-
-        } else {
-            int totalCount = getInstanceFieldCount();
-            int superCount = superclass.getInstanceFieldCount();
-            assert totalCount >= superCount;
-
-            if (totalCount == superCount) {
-                return SubstrateField.EMPTY_ARRAY;
-            } else if (rawAllInstanceFields instanceof SubstrateField) {
-                assert superCount == 0 && totalCount == 1;
-                return new SubstrateField[]{(SubstrateField) rawAllInstanceFields};
-            } else if (superCount == 0) {
-                return (SubstrateField[]) rawAllInstanceFields;
-            } else {
-                assert Arrays.equals(superclass.getInstanceFields(true),
-                                Arrays.copyOf((SubstrateField[]) rawAllInstanceFields, superCount)) : "Superclass fields must be the first elements of the fields defined in this class";
-                return Arrays.copyOfRange((SubstrateField[]) rawAllInstanceFields, superCount, totalCount);
-            }
+        if (includeSuperclasses && getSuperclass() != null) {
+            getSuperclass().getInstanceFields(includeSuperclasses, result);
         }
-    }
 
-    public int getInstanceFieldCount() {
-        if (rawAllInstanceFields instanceof SubstrateField) {
-            return 1;
+        if (instanceFields instanceof SubstrateField) {
+            result.add((SubstrateField) instanceFields);
         } else {
-            return ((SubstrateField[]) rawAllInstanceFields).length;
+            result.addAll(Arrays.asList((SubstrateField[]) instanceFields));
         }
     }
 
@@ -376,34 +347,31 @@ public class SubstrateType extends NodeClass implements SharedType, Replaced {
 
     @Override
     public ResolvedJavaField findInstanceFieldWithOffset(long offset, JavaKind expectedKind) {
-        assert offset >= 0;
-
-        if (rawAllInstanceFields == null) {
-            /*
-             * The type was created at run time from the Class, so we do not have field information.
-             * The type's superclass however might not be created at run time thus having fields we
-             * need to look into.
-             */
-            if (getSuperclass() != null) {
-                return getSuperclass().findInstanceFieldWithOffset(offset, expectedKind);
-            }
-
-        } else {
-            if (rawAllInstanceFields instanceof SubstrateField) {
-                SubstrateField field = (SubstrateField) rawAllInstanceFields;
+        if (instanceFields != null) {
+            assert offset >= 0;
+            if (instanceFields instanceof SubstrateField) {
+                SubstrateField field = (SubstrateField) instanceFields;
                 if (fieldMatches(field, offset)) {
                     return field;
                 }
             } else {
-                for (SubstrateField field : (SubstrateField[]) rawAllInstanceFields) {
+                for (SubstrateField field : (SubstrateField[]) instanceFields) {
                     if (fieldMatches(field, offset)) {
                         return field;
                     }
                 }
             }
+        } else {
+            /*
+             * The type was created at run time from the Class, so we do not have field information.
+             * The types superclass however might not be created at run time thus having fields we
+             * need to look into.
+             */
         }
 
-        /* No match found. */
+        if (getSuperclass() != null) {
+            return getSuperclass().findInstanceFieldWithOffset(offset, expectedKind);
+        }
         return null;
     }
 
@@ -683,7 +651,7 @@ class SubstrateNodeFieldAccessor extends com.oracle.truffle.api.nodes.NodeFieldA
 }
 
 class SubstrateNodeFieldIterator implements Iterator<SubstrateField> {
-    private final SubstrateType type;
+    private SubstrateType type;
     private final Predicate<SubstrateField> filter;
     private int nextFieldInType = 0;
     private SubstrateField nextField;
@@ -695,34 +663,43 @@ class SubstrateNodeFieldIterator implements Iterator<SubstrateField> {
     }
 
     private void computeNext() {
-        Object rawAllInstanceFields = type.rawAllInstanceFields;
-        if (rawAllInstanceFields == null) {
-            /*
-             * The type was created at run time from the Class, so we do not have field information.
-             * If we need the fields for a type, the type has to be created during image generation.
-             */
-            throw noFieldsError(type);
+        do {
+            Object rawFields = type.instanceFields;
+            if (rawFields == null) {
+                /*
+                 * The type was created at run time from the Class, so we do not have field
+                 * information. If we need the fields for a type, the type has to be created during
+                 * image generation.
+                 */
+                throw noFieldsError(type);
 
-        } else if (rawAllInstanceFields instanceof SubstrateField) {
-            if (nextFieldInType == 0) {
-                SubstrateField field = (SubstrateField) rawAllInstanceFields;
-                nextFieldInType++;
-                if (filter == null || filter.test(field)) {
-                    nextField = field;
-                    return;
+            } else if (rawFields instanceof SubstrateField) {
+                if (nextFieldInType == 0) {
+                    SubstrateField field = (SubstrateField) rawFields;
+                    nextFieldInType++;
+                    if (filter == null || filter.test(field)) {
+                        nextField = field;
+                        return;
+                    }
+                }
+            } else {
+                SubstrateField[] fields = (SubstrateField[]) rawFields;
+                while (nextFieldInType < fields.length) {
+                    SubstrateField field = fields[nextFieldInType];
+                    nextFieldInType++;
+                    if (filter == null || filter.test(field)) {
+                        nextField = field;
+                        return;
+                    }
                 }
             }
-        } else {
-            SubstrateField[] fields = (SubstrateField[]) rawAllInstanceFields;
-            while (nextFieldInType < fields.length) {
-                SubstrateField field = fields[nextFieldInType];
-                nextFieldInType++;
-                if (filter == null || filter.test(field)) {
-                    nextField = field;
-                    return;
-                }
-            }
-        }
+
+            /*
+             * Out of fields in the current class, continue with first field of superclass.
+             */
+            type = type.getSuperclass();
+            nextFieldInType = 0;
+        } while (type != null);
 
         nextField = null;
     }
@@ -751,7 +728,7 @@ class SubstrateNodeIterator implements Iterator<Node> {
 
     private final Node node;
 
-    private final SubstrateType type;
+    private SubstrateType type;
     private int nextFieldInType;
 
     private Object[] children;
@@ -767,37 +744,44 @@ class SubstrateNodeIterator implements Iterator<Node> {
 
     private void computeNext() {
         if (computeNextFromChildren()) {
-            /* We have another array element from the last @Children field. */
+            /* We have another array element from the las @Children field. */
             return;
         }
 
-        Object rawAllInstanceFields = type.rawAllInstanceFields;
-        if (rawAllInstanceFields == null) {
-            /*
-             * The type was created at run time from the Class, so we do not have field information.
-             * If we need the fields for a type, the type has to be created during image generation.
-             */
-            throw SubstrateNodeFieldIterator.noFieldsError(type);
+        do {
+            Object rawFields = type.instanceFields;
+            if (rawFields == null) {
+                /*
+                 * The type was created at run time from the Class, so we do not have field
+                 * information. If we need the fields for a type, the type has to be created during
+                 * image generation.
+                 */
+                throw SubstrateNodeFieldIterator.noFieldsError(type);
 
-        } else if (rawAllInstanceFields instanceof SubstrateField) {
-            if (nextFieldInType == 0) {
-                SubstrateField field = (SubstrateField) rawAllInstanceFields;
-                nextFieldInType++;
-                if (computeNextFromField(field)) {
-                    return;
+            } else if (rawFields instanceof SubstrateField) {
+                if (nextFieldInType == 0) {
+                    SubstrateField field = (SubstrateField) rawFields;
+                    nextFieldInType++;
+                    if (computeNextFromField(field)) {
+                        return;
+                    }
+                }
+
+            } else {
+                SubstrateField[] fields = (SubstrateField[]) rawFields;
+                while (nextFieldInType < fields.length) {
+                    SubstrateField field = fields[nextFieldInType];
+                    nextFieldInType++;
+                    if (computeNextFromField(field)) {
+                        return;
+                    }
                 }
             }
 
-        } else {
-            SubstrateField[] fields = (SubstrateField[]) rawAllInstanceFields;
-            while (nextFieldInType < fields.length) {
-                SubstrateField field = fields[nextFieldInType];
-                nextFieldInType++;
-                if (computeNextFromField(field)) {
-                    return;
-                }
-            }
-        }
+            /* Out of fields in the current class, continue with first field of superclass. */
+            type = type.getSuperclass();
+            nextFieldInType = 0;
+        } while (type != null);
 
         next = null;
     }
