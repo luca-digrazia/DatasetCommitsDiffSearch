@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2017, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2018, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -68,7 +68,7 @@ import org.graalvm.compiler.hotspot.stubs.Stub;
 import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.LabelRef;
-import org.graalvm.compiler.lir.StandardOp.ZapRegistersOp;
+import org.graalvm.compiler.lir.StandardOp.SaveRegistersOp;
 import org.graalvm.compiler.lir.SwitchStrategy;
 import org.graalvm.compiler.lir.Variable;
 import org.graalvm.compiler.lir.VirtualStackSlot;
@@ -113,7 +113,7 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
     private HotSpotDebugInfoBuilder debugInfoBuilder;
 
     protected AArch64HotSpotLIRGenerator(HotSpotProviders providers, GraalHotSpotVMConfig config, LIRGenerationResult lirGenRes) {
-        this(new AArch64LIRKindTool(), new AArch64ArithmeticLIRGenerator(null), new AArch64HotSpotMoveFactory(), providers, config, lirGenRes);
+        this(new AArch64LIRKindTool(), new AArch64ArithmeticLIRGenerator(), new AArch64HotSpotMoveFactory(), providers, config, lirGenRes);
     }
 
     protected AArch64HotSpotLIRGenerator(LIRKindTool lirKindTool, AArch64ArithmeticLIRGenerator arithmeticLIRGen, MoveFactory moveFactory, HotSpotProviders providers, GraalHotSpotVMConfig config,
@@ -347,9 +347,11 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
 
         AArch64SaveRegistersOp save = null;
         Stub stub = getStub();
-        if (destroysRegisters && stub != null && stub.shouldSaveRegistersAroundCalls()) {
-            Register[] savedRegisters = getRegisterConfig().getAllocatableRegisters().toArray();
-            save = emitSaveAllRegisters(savedRegisters, true);
+        if (destroysRegisters) {
+            if (stub != null && stub.preservesRegisters()) {
+                Register[] savedRegisters = getRegisterConfig().getAllocatableRegisters().toArray();
+                save = emitSaveAllRegisters(savedRegisters, true);
+            }
         }
 
         Variable result;
@@ -377,15 +379,19 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
             result = super.emitForeignCall(hotspotLinkage, debugInfo, args);
         }
 
-        if (save != null) {
-            HotSpotLIRGenerationResult generationResult = getResult();
-            LIRFrameState key = currentRuntimeCallInfo;
-            if (key == null) {
-                key = LIRFrameState.NO_STATE;
+        if (destroysRegisters) {
+            if (stub != null) {
+                if (stub.preservesRegisters()) {
+                    HotSpotLIRGenerationResult generationResult = getResult();
+                    LIRFrameState key = currentRuntimeCallInfo;
+                    if (key == null) {
+                        key = LIRFrameState.NO_STATE;
+                    }
+                    assert !generationResult.getCalleeSaveInfo().containsKey(key);
+                    generationResult.getCalleeSaveInfo().put(key, save);
+                    emitRestoreRegisters(save);
+                }
             }
-            assert !generationResult.getCalleeSaveInfo().containsKey(key);
-            generationResult.getCalleeSaveInfo().put(key, save);
-            emitRestoreRegisters(save);
         }
 
         return result;
@@ -533,7 +539,7 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
     }
 
     @Override
-    public ZapRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues) {
+    public SaveRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues) {
         throw GraalError.unimplemented();
     }
 

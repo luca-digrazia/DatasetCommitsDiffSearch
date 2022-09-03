@@ -195,9 +195,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
             final int frameSize = crb.frameMap.totalFrameSize();
             final int stackpoinerChange = -frameSize;
             SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
-            if (!isStub) {
-                emitStackOverflowCheck(crb);
-            }
+            emitStackOverflowCheck(crb);
 
             if (SPARCAssembler.isSimm13(stackpoinerChange)) {
                 masm.save(sp, stackpoinerChange, sp);

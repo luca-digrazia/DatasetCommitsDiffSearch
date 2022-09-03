@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,18 +32,20 @@ import static org.graalvm.compiler.core.common.GraalOptions.CanOmitFrame;
 import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.core.common.GraalOptions.ZapStackOnMethodEntry;
 
+import jdk.vm.ci.amd64.AMD64.CPUFeature;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.asm.Assembler;
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
+import org.graalvm.compiler.asm.amd64.AMD64VectorAssembler;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.amd64.AMD64NodeMatchRules;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
-import org.graalvm.compiler.core.gen.LIRGenerationProvider;
+import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotDataBuilder;
@@ -85,16 +87,21 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 /**
  * HotSpot AMD64 specific backend.
  */
-public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenerationProvider {
+public class AMD64HotSpotBackend extends HotSpotHostBackend {
 
     public AMD64HotSpotBackend(GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
         super(config, runtime, providers);
     }
 
-    private FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig) {
+    @Override
+    public FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        FrameMap frameMap = new AMD64FrameMap(getCodeCache(), registerConfigNonNull, this);
-        return new AMD64FrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
+        return new AMD64FrameMapBuilder(newFrameMap(registerConfigNonNull), getCodeCache(), registerConfigNonNull);
+    }
+
+    @Override
+    public FrameMap newFrameMap(RegisterConfig registerConfig) {
+        return new AMD64FrameMap(getCodeCache(), registerConfig, this);
     }
 
     @Override
@@ -103,9 +110,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     }
 
     @Override
-    public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, RegisterConfig registerConfig, StructuredGraph graph, Object stub) {
-        return new HotSpotLIRGenerationResult(compilationId, lir, newFrameMapBuilder(registerConfig), makeCallingConvention(graph, (Stub) stub), stub,
-                        config.requiresReservedStackCheck(graph.getMethods()));
+    public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, FrameMapBuilder frameMapBuilder, StructuredGraph graph, Object stub) {
+        return new HotSpotLIRGenerationResult(compilationId, lir, frameMapBuilder, makeCallingConvention(graph, (Stub) stub), stub, config.requiresReservedStackCheck(graph.getMethods()));
     }
 
     @Override
@@ -192,6 +198,15 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     }
 
     @Override
+    protected Assembler createAssembler(FrameMap frameMap) {
+        if (((AMD64) getTarget().arch).getFeatures().contains(CPUFeature.AVX)) {
+            return new AMD64VectorAssembler(getTarget());
+        } else {
+            return new AMD64MacroAssembler(getTarget());
+        }
+    }
+
+    @Override
     public CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGenRen, FrameMap frameMap, CompilationResult compilationResult, CompilationResultBuilderFactory factory) {
         // Omit the frame if the method:
         // - has no spill slots or other slots allocated during register allocation
@@ -207,7 +222,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         boolean omitFrame = CanOmitFrame.getValue(options) && !frameMap.frameNeedsAllocating() && !lir.hasArgInCallerFrame() && !gen.hasForeignCall();
 
         Stub stub = gen.getStub();
-        Assembler masm = new AMD64MacroAssembler(getTarget());
+        Assembler masm = createAssembler(frameMap);
         HotSpotFrameContext frameContext = new HotSpotFrameContext(stub != null, omitFrame);
         DataBuilder dataBuilder = new HotSpotDataBuilder(getCodeCache().getTarget());
         CompilationResultBuilder crb = factory.createBuilder(getCodeCache(), getForeignCalls(), frameMap, masm, dataBuilder, frameContext, options, debug, compilationResult, Register.None);
@@ -249,7 +264,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     /**
      * Emits the code prior to the verified entry point.
      *
-     * @param installedCodeOwner see {@link LIRGenerationProvider#emitCode}
+     * @param installedCodeOwner see {@link Backend#emitCode}
      */
     public void emitCodePrefix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, Label verifiedEntry) {
         HotSpotProviders providers = getProviders();
@@ -300,14 +315,14 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     /**
      * Emits the code which starts at the verified entry point.
      *
-     * @param installedCodeOwner see {@link LIRGenerationProvider#emitCode}
+     * @param installedCodeOwner see {@link Backend#emitCode}
      */
     public void emitCodeBody(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, LIR lir) {
         crb.emit(lir);
     }
 
     /**
-     * @param installedCodeOwner see {@link LIRGenerationProvider#emitCode}
+     * @param installedCodeOwner see {@link Backend#emitCode}
      */
     public void emitCodeSuffix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, FrameMap frameMap) {
         HotSpotProviders providers = getProviders();
