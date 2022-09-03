@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,16 +24,16 @@ package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Changes the value of a specific register.
  */
 @NodeInfo(nameTemplate = "WriteRegister %{p#register}")
-public class WriteRegisterNode extends FixedWithNextNode implements LIRLowerable {
+public final class WriteRegisterNode extends FixedWithNextNode implements LIRLowerable {
 
     /**
      * The fixed register to access.
@@ -52,9 +52,9 @@ public class WriteRegisterNode extends FixedWithNextNode implements LIRLowerable
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool generator) {
+    public void generate(LIRGeneratorTool generator) {
         Value val = generator.operand(value);
-        generator.getLIRGeneratorTool().emitMove(register.asValue(val.getLIRKind()), val);
+        generator.emitMove(register.asValue(val.getKind()), val);
     }
 
     @Override
