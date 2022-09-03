@@ -86,7 +86,7 @@ public class SLParseInContextTest {
         ParsingRequest request = createParsingRequest(aPlusB);
 
         assertNull("No frame", request.getFrame());
-        assertNull("No node", request.getContext());
+        assertNull("No node", request.getNode());
         assertEquals("Right source", aPlusB, request.getSource());
 
         CallTarget executeAPlusB = parse(request);
