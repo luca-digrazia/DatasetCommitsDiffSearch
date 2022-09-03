@@ -29,28 +29,23 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.llvm.context.LLVMLanguage;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMTruffleImportCached extends LLVMIntrinsic {
 
-    @Child protected ToLLVMNode toLLVM = ToLLVMNode.createNode(TruffleObject.class);
-
-    protected Object resolve(String name) {
-        return toLLVM.executeWithTarget(importSymbol(name));
+    protected static Object resolve(String name) {
+        return LLVMLanguage.INSTANCE.getEnvironment().importSymbol(name);
     }
 
-    @TruffleBoundary
-    public Object importSymbol(String id) {
-        return getLLVMLanguage().getEnvironment().importSymbol(id);
+    protected static boolean stringEquals(String s1, String s2) {
+        return s1.equals(s2);
     }
 
     protected static String getString(LLVMAddress value) {
