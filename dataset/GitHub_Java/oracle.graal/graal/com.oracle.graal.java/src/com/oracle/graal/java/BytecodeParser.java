@@ -22,10 +22,218 @@
  */
 package com.oracle.graal.java;
 
-import static com.oracle.graal.bytecode.Bytecodes.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.bytecode.Bytecodes.AALOAD;
+import static com.oracle.graal.bytecode.Bytecodes.AASTORE;
+import static com.oracle.graal.bytecode.Bytecodes.ACONST_NULL;
+import static com.oracle.graal.bytecode.Bytecodes.ALOAD;
+import static com.oracle.graal.bytecode.Bytecodes.ALOAD_0;
+import static com.oracle.graal.bytecode.Bytecodes.ALOAD_1;
+import static com.oracle.graal.bytecode.Bytecodes.ALOAD_2;
+import static com.oracle.graal.bytecode.Bytecodes.ALOAD_3;
+import static com.oracle.graal.bytecode.Bytecodes.ANEWARRAY;
+import static com.oracle.graal.bytecode.Bytecodes.ARETURN;
+import static com.oracle.graal.bytecode.Bytecodes.ARRAYLENGTH;
+import static com.oracle.graal.bytecode.Bytecodes.ASTORE;
+import static com.oracle.graal.bytecode.Bytecodes.ASTORE_0;
+import static com.oracle.graal.bytecode.Bytecodes.ASTORE_1;
+import static com.oracle.graal.bytecode.Bytecodes.ASTORE_2;
+import static com.oracle.graal.bytecode.Bytecodes.ASTORE_3;
+import static com.oracle.graal.bytecode.Bytecodes.ATHROW;
+import static com.oracle.graal.bytecode.Bytecodes.BALOAD;
+import static com.oracle.graal.bytecode.Bytecodes.BASTORE;
+import static com.oracle.graal.bytecode.Bytecodes.BIPUSH;
+import static com.oracle.graal.bytecode.Bytecodes.BREAKPOINT;
+import static com.oracle.graal.bytecode.Bytecodes.CALOAD;
+import static com.oracle.graal.bytecode.Bytecodes.CASTORE;
+import static com.oracle.graal.bytecode.Bytecodes.CHECKCAST;
+import static com.oracle.graal.bytecode.Bytecodes.D2F;
+import static com.oracle.graal.bytecode.Bytecodes.D2I;
+import static com.oracle.graal.bytecode.Bytecodes.D2L;
+import static com.oracle.graal.bytecode.Bytecodes.DADD;
+import static com.oracle.graal.bytecode.Bytecodes.DALOAD;
+import static com.oracle.graal.bytecode.Bytecodes.DASTORE;
+import static com.oracle.graal.bytecode.Bytecodes.DCMPG;
+import static com.oracle.graal.bytecode.Bytecodes.DCMPL;
+import static com.oracle.graal.bytecode.Bytecodes.DCONST_0;
+import static com.oracle.graal.bytecode.Bytecodes.DCONST_1;
+import static com.oracle.graal.bytecode.Bytecodes.DDIV;
+import static com.oracle.graal.bytecode.Bytecodes.DLOAD;
+import static com.oracle.graal.bytecode.Bytecodes.DLOAD_0;
+import static com.oracle.graal.bytecode.Bytecodes.DLOAD_1;
+import static com.oracle.graal.bytecode.Bytecodes.DLOAD_2;
+import static com.oracle.graal.bytecode.Bytecodes.DLOAD_3;
+import static com.oracle.graal.bytecode.Bytecodes.DMUL;
+import static com.oracle.graal.bytecode.Bytecodes.DNEG;
+import static com.oracle.graal.bytecode.Bytecodes.DREM;
+import static com.oracle.graal.bytecode.Bytecodes.DRETURN;
+import static com.oracle.graal.bytecode.Bytecodes.DSTORE;
+import static com.oracle.graal.bytecode.Bytecodes.DSTORE_0;
+import static com.oracle.graal.bytecode.Bytecodes.DSTORE_1;
+import static com.oracle.graal.bytecode.Bytecodes.DSTORE_2;
+import static com.oracle.graal.bytecode.Bytecodes.DSTORE_3;
+import static com.oracle.graal.bytecode.Bytecodes.DSUB;
+import static com.oracle.graal.bytecode.Bytecodes.DUP;
+import static com.oracle.graal.bytecode.Bytecodes.DUP2;
+import static com.oracle.graal.bytecode.Bytecodes.DUP2_X1;
+import static com.oracle.graal.bytecode.Bytecodes.DUP2_X2;
+import static com.oracle.graal.bytecode.Bytecodes.DUP_X1;
+import static com.oracle.graal.bytecode.Bytecodes.DUP_X2;
+import static com.oracle.graal.bytecode.Bytecodes.F2D;
+import static com.oracle.graal.bytecode.Bytecodes.F2I;
+import static com.oracle.graal.bytecode.Bytecodes.F2L;
+import static com.oracle.graal.bytecode.Bytecodes.FADD;
+import static com.oracle.graal.bytecode.Bytecodes.FALOAD;
+import static com.oracle.graal.bytecode.Bytecodes.FASTORE;
+import static com.oracle.graal.bytecode.Bytecodes.FCMPG;
+import static com.oracle.graal.bytecode.Bytecodes.FCMPL;
+import static com.oracle.graal.bytecode.Bytecodes.FCONST_0;
+import static com.oracle.graal.bytecode.Bytecodes.FCONST_1;
+import static com.oracle.graal.bytecode.Bytecodes.FCONST_2;
+import static com.oracle.graal.bytecode.Bytecodes.FDIV;
+import static com.oracle.graal.bytecode.Bytecodes.FLOAD;
+import static com.oracle.graal.bytecode.Bytecodes.FLOAD_0;
+import static com.oracle.graal.bytecode.Bytecodes.FLOAD_1;
+import static com.oracle.graal.bytecode.Bytecodes.FLOAD_2;
+import static com.oracle.graal.bytecode.Bytecodes.FLOAD_3;
+import static com.oracle.graal.bytecode.Bytecodes.FMUL;
+import static com.oracle.graal.bytecode.Bytecodes.FNEG;
+import static com.oracle.graal.bytecode.Bytecodes.FREM;
+import static com.oracle.graal.bytecode.Bytecodes.FRETURN;
+import static com.oracle.graal.bytecode.Bytecodes.FSTORE;
+import static com.oracle.graal.bytecode.Bytecodes.FSTORE_0;
+import static com.oracle.graal.bytecode.Bytecodes.FSTORE_1;
+import static com.oracle.graal.bytecode.Bytecodes.FSTORE_2;
+import static com.oracle.graal.bytecode.Bytecodes.FSTORE_3;
+import static com.oracle.graal.bytecode.Bytecodes.FSUB;
+import static com.oracle.graal.bytecode.Bytecodes.GETFIELD;
+import static com.oracle.graal.bytecode.Bytecodes.GETSTATIC;
+import static com.oracle.graal.bytecode.Bytecodes.GOTO;
+import static com.oracle.graal.bytecode.Bytecodes.GOTO_W;
+import static com.oracle.graal.bytecode.Bytecodes.I2B;
+import static com.oracle.graal.bytecode.Bytecodes.I2C;
+import static com.oracle.graal.bytecode.Bytecodes.I2D;
+import static com.oracle.graal.bytecode.Bytecodes.I2F;
+import static com.oracle.graal.bytecode.Bytecodes.I2L;
+import static com.oracle.graal.bytecode.Bytecodes.I2S;
+import static com.oracle.graal.bytecode.Bytecodes.IADD;
+import static com.oracle.graal.bytecode.Bytecodes.IALOAD;
+import static com.oracle.graal.bytecode.Bytecodes.IAND;
+import static com.oracle.graal.bytecode.Bytecodes.IASTORE;
+import static com.oracle.graal.bytecode.Bytecodes.ICONST_0;
+import static com.oracle.graal.bytecode.Bytecodes.ICONST_1;
+import static com.oracle.graal.bytecode.Bytecodes.ICONST_2;
+import static com.oracle.graal.bytecode.Bytecodes.ICONST_3;
+import static com.oracle.graal.bytecode.Bytecodes.ICONST_4;
+import static com.oracle.graal.bytecode.Bytecodes.ICONST_5;
+import static com.oracle.graal.bytecode.Bytecodes.ICONST_M1;
+import static com.oracle.graal.bytecode.Bytecodes.IDIV;
+import static com.oracle.graal.bytecode.Bytecodes.IFEQ;
+import static com.oracle.graal.bytecode.Bytecodes.IFGE;
+import static com.oracle.graal.bytecode.Bytecodes.IFGT;
+import static com.oracle.graal.bytecode.Bytecodes.IFLE;
+import static com.oracle.graal.bytecode.Bytecodes.IFLT;
+import static com.oracle.graal.bytecode.Bytecodes.IFNE;
+import static com.oracle.graal.bytecode.Bytecodes.IFNONNULL;
+import static com.oracle.graal.bytecode.Bytecodes.IFNULL;
+import static com.oracle.graal.bytecode.Bytecodes.IF_ACMPEQ;
+import static com.oracle.graal.bytecode.Bytecodes.IF_ACMPNE;
+import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPEQ;
+import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPGE;
+import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPGT;
+import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPLE;
+import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPLT;
+import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPNE;
+import static com.oracle.graal.bytecode.Bytecodes.IINC;
+import static com.oracle.graal.bytecode.Bytecodes.ILOAD;
+import static com.oracle.graal.bytecode.Bytecodes.ILOAD_0;
+import static com.oracle.graal.bytecode.Bytecodes.ILOAD_1;
+import static com.oracle.graal.bytecode.Bytecodes.ILOAD_2;
+import static com.oracle.graal.bytecode.Bytecodes.ILOAD_3;
+import static com.oracle.graal.bytecode.Bytecodes.IMUL;
+import static com.oracle.graal.bytecode.Bytecodes.INEG;
+import static com.oracle.graal.bytecode.Bytecodes.INSTANCEOF;
+import static com.oracle.graal.bytecode.Bytecodes.INVOKEDYNAMIC;
+import static com.oracle.graal.bytecode.Bytecodes.INVOKEINTERFACE;
+import static com.oracle.graal.bytecode.Bytecodes.INVOKESPECIAL;
+import static com.oracle.graal.bytecode.Bytecodes.INVOKESTATIC;
+import static com.oracle.graal.bytecode.Bytecodes.INVOKEVIRTUAL;
+import static com.oracle.graal.bytecode.Bytecodes.IOR;
+import static com.oracle.graal.bytecode.Bytecodes.IREM;
+import static com.oracle.graal.bytecode.Bytecodes.IRETURN;
+import static com.oracle.graal.bytecode.Bytecodes.ISHL;
+import static com.oracle.graal.bytecode.Bytecodes.ISHR;
+import static com.oracle.graal.bytecode.Bytecodes.ISTORE;
+import static com.oracle.graal.bytecode.Bytecodes.ISTORE_0;
+import static com.oracle.graal.bytecode.Bytecodes.ISTORE_1;
+import static com.oracle.graal.bytecode.Bytecodes.ISTORE_2;
+import static com.oracle.graal.bytecode.Bytecodes.ISTORE_3;
+import static com.oracle.graal.bytecode.Bytecodes.ISUB;
+import static com.oracle.graal.bytecode.Bytecodes.IUSHR;
+import static com.oracle.graal.bytecode.Bytecodes.IXOR;
+import static com.oracle.graal.bytecode.Bytecodes.JSR;
+import static com.oracle.graal.bytecode.Bytecodes.JSR_W;
+import static com.oracle.graal.bytecode.Bytecodes.L2D;
+import static com.oracle.graal.bytecode.Bytecodes.L2F;
+import static com.oracle.graal.bytecode.Bytecodes.L2I;
+import static com.oracle.graal.bytecode.Bytecodes.LADD;
+import static com.oracle.graal.bytecode.Bytecodes.LALOAD;
+import static com.oracle.graal.bytecode.Bytecodes.LAND;
+import static com.oracle.graal.bytecode.Bytecodes.LASTORE;
+import static com.oracle.graal.bytecode.Bytecodes.LCMP;
+import static com.oracle.graal.bytecode.Bytecodes.LCONST_0;
+import static com.oracle.graal.bytecode.Bytecodes.LCONST_1;
+import static com.oracle.graal.bytecode.Bytecodes.LDC;
+import static com.oracle.graal.bytecode.Bytecodes.LDC2_W;
+import static com.oracle.graal.bytecode.Bytecodes.LDC_W;
+import static com.oracle.graal.bytecode.Bytecodes.LDIV;
+import static com.oracle.graal.bytecode.Bytecodes.LLOAD;
+import static com.oracle.graal.bytecode.Bytecodes.LLOAD_0;
+import static com.oracle.graal.bytecode.Bytecodes.LLOAD_1;
+import static com.oracle.graal.bytecode.Bytecodes.LLOAD_2;
+import static com.oracle.graal.bytecode.Bytecodes.LLOAD_3;
+import static com.oracle.graal.bytecode.Bytecodes.LMUL;
+import static com.oracle.graal.bytecode.Bytecodes.LNEG;
+import static com.oracle.graal.bytecode.Bytecodes.LOOKUPSWITCH;
+import static com.oracle.graal.bytecode.Bytecodes.LOR;
+import static com.oracle.graal.bytecode.Bytecodes.LREM;
+import static com.oracle.graal.bytecode.Bytecodes.LRETURN;
+import static com.oracle.graal.bytecode.Bytecodes.LSHL;
+import static com.oracle.graal.bytecode.Bytecodes.LSHR;
+import static com.oracle.graal.bytecode.Bytecodes.LSTORE;
+import static com.oracle.graal.bytecode.Bytecodes.LSTORE_0;
+import static com.oracle.graal.bytecode.Bytecodes.LSTORE_1;
+import static com.oracle.graal.bytecode.Bytecodes.LSTORE_2;
+import static com.oracle.graal.bytecode.Bytecodes.LSTORE_3;
+import static com.oracle.graal.bytecode.Bytecodes.LSUB;
+import static com.oracle.graal.bytecode.Bytecodes.LUSHR;
+import static com.oracle.graal.bytecode.Bytecodes.LXOR;
+import static com.oracle.graal.bytecode.Bytecodes.MONITORENTER;
+import static com.oracle.graal.bytecode.Bytecodes.MONITOREXIT;
+import static com.oracle.graal.bytecode.Bytecodes.MULTIANEWARRAY;
+import static com.oracle.graal.bytecode.Bytecodes.NEW;
+import static com.oracle.graal.bytecode.Bytecodes.NEWARRAY;
+import static com.oracle.graal.bytecode.Bytecodes.NOP;
+import static com.oracle.graal.bytecode.Bytecodes.POP;
+import static com.oracle.graal.bytecode.Bytecodes.POP2;
+import static com.oracle.graal.bytecode.Bytecodes.PUTFIELD;
+import static com.oracle.graal.bytecode.Bytecodes.PUTSTATIC;
+import static com.oracle.graal.bytecode.Bytecodes.RET;
+import static com.oracle.graal.bytecode.Bytecodes.RETURN;
+import static com.oracle.graal.bytecode.Bytecodes.SALOAD;
+import static com.oracle.graal.bytecode.Bytecodes.SASTORE;
+import static com.oracle.graal.bytecode.Bytecodes.SIPUSH;
+import static com.oracle.graal.bytecode.Bytecodes.SWAP;
+import static com.oracle.graal.bytecode.Bytecodes.TABLESWITCH;
+import static com.oracle.graal.bytecode.Bytecodes.nameOf;
+import static com.oracle.graal.compiler.common.GraalOptions.DeoptALot;
+import static com.oracle.graal.compiler.common.GraalOptions.NewInfopoints;
+import static com.oracle.graal.compiler.common.GraalOptions.PrintProfilingInformation;
+import static com.oracle.graal.compiler.common.GraalOptions.ResolveClassBeforeStaticInvoke;
+import static com.oracle.graal.compiler.common.GraalOptions.StressInvokeWithExceptionNode;
 import static com.oracle.graal.compiler.common.type.StampFactory.objectNonNull;
-import static com.oracle.graal.java.BytecodeParserOptions.*;
+import static com.oracle.graal.java.BytecodeParserOptions.DumpDuringGraphBuilding;
+import static com.oracle.graal.java.BytecodeParserOptions.TraceInlineDuringParsing;
+import static com.oracle.graal.java.BytecodeParserOptions.TraceParserPlugins;
 import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_DURING_PARSING;
 import static com.oracle.graal.nodes.type.StampTool.isPointerNonNull;
 import static java.lang.String.format;
@@ -33,28 +241,67 @@ import static jdk.vm.ci.common.JVMCIError.guarantee;
 import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateRecompile;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.vm.ci.meta.DeoptimizationReason.*;
+import static jdk.vm.ci.meta.DeoptimizationReason.JavaSubroutineMismatch;
+import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
+import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
+import static jdk.vm.ci.meta.DeoptimizationReason.TransferToInterpreter;
+import static jdk.vm.ci.meta.DeoptimizationReason.UnreachedCode;
+import static jdk.vm.ci.meta.DeoptimizationReason.Unresolved;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Formatter;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+import com.oracle.graal.compiler.common.type.CheckedJavaType;
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.site.InfopointReason;
 import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.*;
+import jdk.vm.ci.meta.ConstantPool;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaField;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaMethod;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.JavaTypeProfile;
+import jdk.vm.ci.meta.LineNumberTable;
+import jdk.vm.ci.meta.LocationIdentity;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.MetaUtil;
+import jdk.vm.ci.meta.ProfilingInfo;
+import jdk.vm.ci.meta.RawConstant;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.TriState;
 import jdk.vm.ci.runtime.JVMCICompiler;
 
-import com.oracle.graal.bytecode.*;
+import com.oracle.graal.bytecode.BytecodeLookupSwitch;
+import com.oracle.graal.bytecode.BytecodeStream;
+import com.oracle.graal.bytecode.BytecodeSwitch;
+import com.oracle.graal.bytecode.BytecodeTableSwitch;
+import com.oracle.graal.bytecode.Bytecodes;
 import com.oracle.graal.compiler.common.GraalOptions;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.calc.FloatConvert;
 import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugCloseable;
+import com.oracle.graal.debug.DebugMetric;
+import com.oracle.graal.debug.Indent;
+import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.Node.ValueNumberable;
@@ -62,14 +309,99 @@ import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.ExceptionDispatchBlock;
 import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.BeginNode;
+import com.oracle.graal.nodes.BeginStateSplitNode;
+import com.oracle.graal.nodes.CallTargetNode;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.graphbuilderconf.*;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ControlSplitNode;
+import com.oracle.graal.nodes.DeoptimizeNode;
+import com.oracle.graal.nodes.EndNode;
+import com.oracle.graal.nodes.EntryMarkerNode;
+import com.oracle.graal.nodes.EntryProxyNode;
+import com.oracle.graal.nodes.FixedGuardNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.FullInfopointNode;
+import com.oracle.graal.nodes.IfNode;
+import com.oracle.graal.nodes.Invoke;
+import com.oracle.graal.nodes.InvokeNode;
+import com.oracle.graal.nodes.InvokeWithExceptionNode;
+import com.oracle.graal.nodes.KillingBeginNode;
+import com.oracle.graal.nodes.LogicConstantNode;
+import com.oracle.graal.nodes.LogicNegationNode;
+import com.oracle.graal.nodes.LogicNode;
+import com.oracle.graal.nodes.LoopBeginNode;
+import com.oracle.graal.nodes.LoopEndNode;
+import com.oracle.graal.nodes.LoopExitNode;
+import com.oracle.graal.nodes.MergeNode;
+import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.PiNode;
+import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.SimpleInfopointNode;
+import com.oracle.graal.nodes.StartNode;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.UnwindNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.AddNode;
+import com.oracle.graal.nodes.calc.AndNode;
+import com.oracle.graal.nodes.calc.ConditionalNode;
+import com.oracle.graal.nodes.calc.DivNode;
+import com.oracle.graal.nodes.calc.FloatConvertNode;
+import com.oracle.graal.nodes.calc.IntegerBelowNode;
+import com.oracle.graal.nodes.calc.IntegerDivNode;
+import com.oracle.graal.nodes.calc.IntegerEqualsNode;
+import com.oracle.graal.nodes.calc.IntegerLessThanNode;
+import com.oracle.graal.nodes.calc.IntegerRemNode;
+import com.oracle.graal.nodes.calc.IsNullNode;
+import com.oracle.graal.nodes.calc.LeftShiftNode;
+import com.oracle.graal.nodes.calc.MulNode;
+import com.oracle.graal.nodes.calc.NarrowNode;
+import com.oracle.graal.nodes.calc.NegateNode;
+import com.oracle.graal.nodes.calc.NormalizeCompareNode;
+import com.oracle.graal.nodes.calc.ObjectEqualsNode;
+import com.oracle.graal.nodes.calc.OrNode;
+import com.oracle.graal.nodes.calc.RemNode;
+import com.oracle.graal.nodes.calc.RightShiftNode;
+import com.oracle.graal.nodes.calc.SignExtendNode;
+import com.oracle.graal.nodes.calc.SubNode;
+import com.oracle.graal.nodes.calc.UnsignedRightShiftNode;
+import com.oracle.graal.nodes.calc.XorNode;
+import com.oracle.graal.nodes.calc.ZeroExtendNode;
+import com.oracle.graal.nodes.extended.BranchProbabilityNode;
+import com.oracle.graal.nodes.extended.BytecodeExceptionNode;
+import com.oracle.graal.nodes.extended.GuardedNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.extended.IntegerSwitchNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
 import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo;
+import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.InvocationPluginReceiver;
-import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.graphbuilderconf.NodePlugin;
+import com.oracle.graal.nodes.java.ArrayLengthNode;
+import com.oracle.graal.nodes.java.CheckCastNode;
+import com.oracle.graal.nodes.java.ExceptionObjectNode;
+import com.oracle.graal.nodes.java.InstanceOfNode;
+import com.oracle.graal.nodes.java.LoadFieldNode;
+import com.oracle.graal.nodes.java.LoadIndexedNode;
+import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.nodes.java.MonitorEnterNode;
+import com.oracle.graal.nodes.java.MonitorExitNode;
+import com.oracle.graal.nodes.java.MonitorIdNode;
+import com.oracle.graal.nodes.java.NewArrayNode;
+import com.oracle.graal.nodes.java.NewInstanceNode;
+import com.oracle.graal.nodes.java.NewMultiArrayNode;
+import com.oracle.graal.nodes.java.RegisterFinalizerNode;
+import com.oracle.graal.nodes.java.StoreFieldNode;
+import com.oracle.graal.nodes.java.StoreIndexedNode;
+import com.oracle.graal.nodes.java.TypeCheckNode;
 import com.oracle.graal.nodes.spi.StampProvider;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.nodes.util.GraphUtil;
@@ -794,11 +1126,11 @@ public class BytecodeParser implements GraphBuilderContext {
         lastInstr.setNext(handleException(nonNullException, bci()));
     }
 
-    protected ValueNode createCheckCast(ResolvedJavaType type, ValueNode object, JavaTypeProfile profileForTypeCheck, boolean forStoreCheck) {
-        return CheckCastNode.create(type, object, profileForTypeCheck, forStoreCheck, graph.getAssumptions());
+    protected ValueNode createCheckCast(CheckedJavaType type, ValueNode object, JavaTypeProfile profileForTypeCheck, boolean forStoreCheck) {
+        return CheckCastNode.create(type, object, profileForTypeCheck, forStoreCheck);
     }
 
-    protected ValueNode createInstanceOf(ResolvedJavaType type, ValueNode object, JavaTypeProfile profileForTypeCheck) {
+    protected ValueNode createInstanceOf(CheckedJavaType type, ValueNode object, JavaTypeProfile profileForTypeCheck) {
         return InstanceOfNode.create(type, object, profileForTypeCheck);
     }
 
@@ -1203,10 +1535,9 @@ public class BytecodeParser implements GraphBuilderContext {
         return null;
     }
 
-    public boolean intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, ValueNode[] args) {
+    public void intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, ValueNode[] args) {
         boolean res = inline(targetMethod, substitute, true, args);
         assert res : "failed to inline " + substitute;
-        return res;
     }
 
     private boolean inline(ResolvedJavaMethod targetMethod, ResolvedJavaMethod inlinedMethod, boolean isIntrinsic, ValueNode[] args) {
@@ -1836,25 +2167,25 @@ public class BytecodeParser implements GraphBuilderContext {
         if (graphBuilderConfig.eagerResolving()) {
             catchType = lookupType(block.handler.catchTypeCPI(), INSTANCEOF);
         }
-        boolean initialized = (catchType instanceof ResolvedJavaType);
-        if (initialized && graphBuilderConfig.getSkippedExceptionTypes() != null) {
-            ResolvedJavaType resolvedCatchType = (ResolvedJavaType) catchType;
-            for (ResolvedJavaType skippedType : graphBuilderConfig.getSkippedExceptionTypes()) {
-                if (skippedType.isAssignableFrom(resolvedCatchType)) {
-                    BciBlock nextBlock = block.getSuccessorCount() == 1 ? blockMap.getUnwindBlock() : block.getSuccessor(1);
-                    ValueNode exception = frameState.stack[0];
-                    FixedNode trueSuccessor = graph.add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
-                    FixedNode nextDispatch = createTarget(nextBlock, frameState);
-                    append(new IfNode(graph.unique(InstanceOfNode.create((ResolvedJavaType) catchType, exception, null)), trueSuccessor, nextDispatch, 0));
-                    return;
+        if (catchType instanceof ResolvedJavaType) {
+            CheckedJavaType checkedCatchType = CheckedJavaType.create(graph.getAssumptions(), (ResolvedJavaType) catchType);
+
+            if (graphBuilderConfig.getSkippedExceptionTypes() != null) {
+                for (ResolvedJavaType skippedType : graphBuilderConfig.getSkippedExceptionTypes()) {
+                    if (skippedType.isAssignableFrom(checkedCatchType.getType())) {
+                        BciBlock nextBlock = block.getSuccessorCount() == 1 ? blockMap.getUnwindBlock() : block.getSuccessor(1);
+                        ValueNode exception = frameState.stack[0];
+                        FixedNode trueSuccessor = graph.add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
+                        FixedNode nextDispatch = createTarget(nextBlock, frameState);
+                        append(new IfNode(graph.unique(InstanceOfNode.create(checkedCatchType, exception, null)), trueSuccessor, nextDispatch, 0));
+                        return;
+                    }
                 }
             }
-        }
 
-        if (initialized) {
             BciBlock nextBlock = block.getSuccessorCount() == 1 ? blockMap.getUnwindBlock() : block.getSuccessor(1);
             ValueNode exception = frameState.stack[0];
-            CheckCastNode checkCast = graph.add(new CheckCastNode((ResolvedJavaType) catchType, exception, null, false));
+            CheckCastNode checkCast = graph.add(new CheckCastNode(checkedCatchType, exception, null, false));
             frameState.pop(JavaKind.Object);
             frameState.push(JavaKind.Object, checkCast);
             FixedNode catchSuccessor = createTarget(block.getSuccessor(0), frameState);
@@ -1862,7 +2193,7 @@ public class BytecodeParser implements GraphBuilderContext {
             frameState.push(JavaKind.Object, exception);
             FixedNode nextDispatch = createTarget(nextBlock, frameState);
             checkCast.setNext(catchSuccessor);
-            append(new IfNode(graph.unique(InstanceOfNode.create((ResolvedJavaType) catchType, exception, null)), checkCast, nextDispatch, 0.5));
+            append(new IfNode(graph.unique(InstanceOfNode.create(checkedCatchType, exception, null)), checkCast, nextDispatch, 0.5));
         } else {
             handleUnresolvedExceptionType(catchType);
         }
@@ -2133,7 +2464,6 @@ public class BytecodeParser implements GraphBuilderContext {
             FixedNode trueSuccessor = createTarget(trueBlock, frameState, false, false);
             FixedNode falseSuccessor = createTarget(falseBlock, frameState, false, true);
             ValueNode ifNode = genIfNode(condition, trueSuccessor, falseSuccessor, probability);
-            postProcessIfNode(ifNode);
             append(ifNode);
             if (parsingIntrinsic()) {
                 if (x instanceof BranchProbabilityNode) {
@@ -2143,10 +2473,6 @@ public class BytecodeParser implements GraphBuilderContext {
                 }
             }
         }
-    }
-    /* Hook for subclasses of BytecodeParser to generate custom nodes before an IfNode. */
-
-    protected void postProcessIfNode(ValueNode node) {
     }
 
     private boolean tryGenConditionalForIf(BciBlock trueBlock, BciBlock falseBlock, LogicNode condition, int oldBci, int trueBlockInt, int falseBlockInt) {
@@ -2310,7 +2636,7 @@ public class BytecodeParser implements GraphBuilderContext {
         sideEffect.setStateAfter(stateAfter);
     }
 
-    protected BytecodePosition createBytecodePosition() {
+    private BytecodePosition createBytecodePosition() {
         return frameState.createBytecodePosition(bci());
     }
 
@@ -2601,8 +2927,8 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    private JavaTypeProfile getProfileForTypeCheck(ResolvedJavaType type) {
-        if (parsingIntrinsic() || profilingInfo == null || !optimisticOpts.useTypeCheckHints() || type.isLeaf()) {
+    private JavaTypeProfile getProfileForTypeCheck(CheckedJavaType type) {
+        if (parsingIntrinsic() || profilingInfo == null || !optimisticOpts.useTypeCheckHints() || type.isExactType()) {
             return null;
         } else {
             return profilingInfo.getTypeProfile(bci());
@@ -2618,24 +2944,24 @@ public class BytecodeParser implements GraphBuilderContext {
             handleUnresolvedCheckCast(type, object);
             return;
         }
-        ResolvedJavaType resolvedType = (ResolvedJavaType) type;
-        JavaTypeProfile profile = getProfileForTypeCheck(resolvedType);
+        CheckedJavaType checkedType = CheckedJavaType.create(graph.getAssumptions(), (ResolvedJavaType) type);
+        JavaTypeProfile profile = getProfileForTypeCheck(checkedType);
 
         for (NodePlugin plugin : graphBuilderConfig.getPlugins().getNodePlugins()) {
-            if (plugin.handleCheckCast(this, object, resolvedType, profile)) {
+            if (plugin.handleCheckCast(this, object, checkedType.getType(), profile)) {
                 return;
             }
         }
 
         ValueNode checkCastNode = null;
         if (profile != null) {
-            if (CheckCastNode.findSynonym(resolvedType, object) == object) {
+            if (CheckCastNode.findSynonym(checkedType, object) == object) {
                 // Don't insert a profiled type check if the checkcast would simply go away
                 checkCastNode = object;
             } else if (profile.getNullSeen().isFalse()) {
                 object = appendNullCheck(object);
                 ResolvedJavaType singleType = profile.asSingleType();
-                if (singleType != null && resolvedType.isAssignableFrom(singleType)) {
+                if (singleType != null && checkedType.getType().isAssignableFrom(singleType)) {
                     LogicNode typeCheck = append(TypeCheckNode.create(singleType, object));
                     if (typeCheck.isTautology()) {
                         checkCastNode = object;
@@ -2647,7 +2973,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
         if (checkCastNode == null) {
-            checkCastNode = append(createCheckCast(resolvedType, object, profile, false));
+            checkCastNode = append(createCheckCast(checkedType, object, profile, false));
         }
         frameState.push(JavaKind.Object, checkCastNode);
     }
@@ -2674,11 +3000,11 @@ public class BytecodeParser implements GraphBuilderContext {
             handleUnresolvedInstanceOf(type, object);
             return;
         }
-        ResolvedJavaType resolvedType = (ResolvedJavaType) type;
+        CheckedJavaType resolvedType = CheckedJavaType.create(graph.getAssumptions(), (ResolvedJavaType) type);
         JavaTypeProfile profile = getProfileForTypeCheck(resolvedType);
 
         for (NodePlugin plugin : graphBuilderConfig.getPlugins().getNodePlugins()) {
-            if (plugin.handleInstanceOf(this, object, resolvedType, profile)) {
+            if (plugin.handleInstanceOf(this, object, resolvedType.getType(), profile)) {
                 return;
             }
         }
@@ -2693,7 +3019,7 @@ public class BytecodeParser implements GraphBuilderContext {
                     if (!typeCheck.isTautology()) {
                         append(new FixedGuardNode(typeCheck, DeoptimizationReason.TypeCheckedInliningViolated, DeoptimizationAction.InvalidateReprofile));
                     }
-                    instanceOfNode = LogicConstantNode.forBoolean(resolvedType.isAssignableFrom(singleType));
+                    instanceOfNode = LogicConstantNode.forBoolean(resolvedType.getType().isAssignableFrom(singleType));
                 }
             }
         }

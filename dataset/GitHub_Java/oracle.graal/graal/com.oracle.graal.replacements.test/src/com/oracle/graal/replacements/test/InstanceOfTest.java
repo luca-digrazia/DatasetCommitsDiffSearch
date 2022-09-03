@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import com.oracle.graal.compiler.common.type.CheckedJavaType;
 import jdk.vm.ci.code.site.Call;
 import jdk.vm.ci.code.site.Mark;
 import jdk.vm.ci.code.site.Site;
@@ -38,11 +39,16 @@ import org.junit.Test;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.IfNode;
+import com.oracle.graal.nodes.LogicNode;
 import com.oracle.graal.nodes.ReturnNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.java.TypeProfileNode;
+import com.oracle.graal.nodes.java.InstanceOfNode;
+import com.oracle.graal.nodes.java.TypeCheckNode;
 import com.oracle.graal.phases.common.AbstractInliningPhase;
+import com.oracle.graal.replacements.test.CheckCastTest.Depth12;
+import com.oracle.graal.replacements.test.CheckCastTest.Depth13;
+import com.oracle.graal.replacements.test.CheckCastTest.Depth14;
 
 /**
  * Tests the implementation of instanceof, allowing profiling information to be manually specified.
@@ -55,8 +61,11 @@ public class InstanceOfTest extends TypeCheckTest {
 
     @Override
     protected void replaceProfile(StructuredGraph graph, JavaTypeProfile profile) {
-        TypeProfileNode ion = graph.getNodes().filter(TypeProfileNode.class).first();
-        ion.setProfile(profile);
+        InstanceOfNode ion = graph.getNodes().filter(InstanceOfNode.class).first();
+        if (ion != null) {
+            LogicNode ionNew = graph.unique(InstanceOfNode.create(CheckedJavaType.create(graph.getAssumptions(), ion.type().getType()), ion.getValue(), profile));
+            ion.replaceAtUsagesAndDelete(ionNew);
+        }
     }
 
     @Test
@@ -462,6 +471,10 @@ public class InstanceOfTest extends TypeCheckTest {
         return thread != null && ((Object) thread) instanceof String;
     }
 
+    /**
+     * {@link TypeCheckNode} and {@link InstanceOfNode} should be equivalently powerful when
+     * comparing disjoint types.
+     */
     @Test
     public void testTypeCheck() {
         testConstantReturn("exactlyObject", 0);
@@ -491,47 +504,5 @@ public class InstanceOfTest extends TypeCheckTest {
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
-    }
-
-    static class Depth1 implements Cloneable {
-    }
-
-    static class Depth2 extends Depth1 {
-    }
-
-    static class Depth3 extends Depth2 {
-    }
-
-    static class Depth4 extends Depth3 {
-    }
-
-    static class Depth5 extends Depth4 {
-    }
-
-    static class Depth6 extends Depth5 {
-    }
-
-    static class Depth7 extends Depth6 {
-    }
-
-    static class Depth8 extends Depth7 {
-    }
-
-    static class Depth9 extends Depth8 {
-    }
-
-    static class Depth10 extends Depth9 {
-    }
-
-    static class Depth11 extends Depth10 {
-    }
-
-    static class Depth12 extends Depth11 {
-    }
-
-    static class Depth13 extends Depth12 {
-    }
-
-    static class Depth14 extends Depth12 {
     }
 }

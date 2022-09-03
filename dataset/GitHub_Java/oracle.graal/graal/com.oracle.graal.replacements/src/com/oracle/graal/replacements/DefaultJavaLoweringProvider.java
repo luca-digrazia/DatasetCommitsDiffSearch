@@ -47,9 +47,8 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-import com.oracle.graal.api.directives.GraalDirectives;
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.compiler.common.type.CheckedJavaType;
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.compiler.common.type.ObjectStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -70,6 +69,7 @@ import com.oracle.graal.nodes.calc.IntegerConvertNode;
 import com.oracle.graal.nodes.calc.IsNullNode;
 import com.oracle.graal.nodes.calc.LeftShiftNode;
 import com.oracle.graal.nodes.calc.NarrowNode;
+import com.oracle.graal.nodes.calc.PointerEqualsNode;
 import com.oracle.graal.nodes.calc.RightShiftNode;
 import com.oracle.graal.nodes.calc.SignExtendNode;
 import com.oracle.graal.nodes.calc.SubNode;
@@ -90,9 +90,9 @@ import com.oracle.graal.nodes.java.AbstractNewObjectNode;
 import com.oracle.graal.nodes.java.AccessIndexedNode;
 import com.oracle.graal.nodes.java.ArrayLengthNode;
 import com.oracle.graal.nodes.java.AtomicReadAndWriteNode;
+import com.oracle.graal.nodes.java.CheckCastDynamicNode;
+import com.oracle.graal.nodes.java.CheckCastNode;
 import com.oracle.graal.nodes.java.CompareAndSwapNode;
-import com.oracle.graal.nodes.java.InstanceOfDynamicNode;
-import com.oracle.graal.nodes.java.InstanceOfNode;
 import com.oracle.graal.nodes.java.LoadFieldNode;
 import com.oracle.graal.nodes.java.LoadIndexedNode;
 import com.oracle.graal.nodes.java.LoweredAtomicReadAndWriteNode;
@@ -104,6 +104,7 @@ import com.oracle.graal.nodes.java.NewInstanceNode;
 import com.oracle.graal.nodes.java.RawMonitorEnterNode;
 import com.oracle.graal.nodes.java.StoreFieldNode;
 import com.oracle.graal.nodes.java.StoreIndexedNode;
+import com.oracle.graal.nodes.java.TypeCheckNode;
 import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.memory.ReadNode;
 import com.oracle.graal.nodes.memory.WriteNode;
@@ -183,11 +184,21 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             boxingSnippets.lower((BoxNode) n, tool);
         } else if (n instanceof UnboxNode) {
             boxingSnippets.lower((UnboxNode) n, tool);
+        } else if (n instanceof TypeCheckNode) {
+            lowerTypeCheckNode((TypeCheckNode) n, tool, graph);
         } else if (n instanceof VerifyHeapNode) {
             lowerVerifyHeap((VerifyHeapNode) n);
         } else {
             throw JVMCIError.shouldNotReachHere("Node implementing Lowerable not handled: " + n);
         }
+    }
+
+    private void lowerTypeCheckNode(TypeCheckNode n, LoweringTool tool, StructuredGraph graph) {
+        ValueNode hub = createReadHub(graph, n.getValue(), tool);
+        ValueNode clazz = graph.unique(ConstantNode.forConstant(tool.getStampProvider().createHubStamp((ObjectStamp) n.getValue().stamp()), tool.getConstantReflection().asObjectHub(n.type()),
+                        tool.getMetaAccess()));
+        LogicNode objectEquals = graph.unique(PointerEqualsNode.create(hub, clazz));
+        n.replaceAndDelete(objectEquals);
     }
 
     protected void lowerVerifyHeap(VerifyHeapNode n) {
@@ -314,16 +325,20 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
         ValueNode value = storeIndexed.value();
         ValueNode array = storeIndexed.array();
-        LogicNode condition = null;
+        FixedWithNextNode checkCastNode = null;
         if (elementKind == JavaKind.Object && !StampTool.isPointerAlwaysNull(value)) {
             /* Array store check. */
-            TypeReference arrayType = StampTool.typeReferenceOrNull(array);
-            if (arrayType != null && arrayType.isExact()) {
-                ResolvedJavaType elementType = arrayType.getType().getComponentType();
+            ResolvedJavaType arrayType = StampTool.typeOrNull(array);
+            if (arrayType != null && StampTool.isExactType(array)) {
+                ResolvedJavaType elementType = arrayType.getComponentType();
                 if (!elementType.isJavaLangObject()) {
-                    TypeReference typeReference = TypeReference.createTrusted(storeIndexed.graph().getAssumptions(), elementType);
-                    LogicNode typeTest = graph.addOrUniqueWithInputs(InstanceOfNode.create(typeReference, value, null));
-                    condition = LogicNode.or(graph.unique(new IsNullNode(value)), typeTest, GraalDirectives.UNLIKELY_PROBABILITY);
+                    ValueNode storeCheck = CheckCastNode.create(CheckedJavaType.create(storeIndexed.graph().getAssumptions(), elementType), value, null, true);
+                    if (storeCheck.graph() == null) {
+                        checkCastNode = (CheckCastNode) storeCheck;
+                        checkCastNode = graph.add(checkCastNode);
+                        graph.addBeforeFixed(storeIndexed, checkCastNode);
+                    }
+                    value = storeCheck;
                 }
             } else {
                 /*
@@ -334,7 +349,9 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 assert nullCheckReturn[0] != null || createNullCheck(array, storeIndexed, tool) == null;
                 ValueNode arrayClass = createReadHub(graph, graph.unique(new PiNode(array, (ValueNode) nullCheck)), tool);
                 ValueNode componentHub = createReadArrayComponentHub(graph, arrayClass, storeIndexed);
-                condition = graph.unique(InstanceOfDynamicNode.create(graph.getAssumptions(), tool.getConstantReflection(), componentHub, value, true));
+                checkCastNode = graph.add(new CheckCastDynamicNode(componentHub, value, true));
+                graph.addBeforeFixed(storeIndexed, checkCastNode);
+                value = checkCastNode;
             }
         }
 
@@ -342,12 +359,13 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         WriteNode memoryWrite = graph.add(new WriteNode(address, NamedLocationIdentity.getArrayLocation(elementKind), implicitStoreConvert(graph, elementKind, value),
                         arrayStoreBarrierType(storeIndexed.elementKind())));
         memoryWrite.setGuard(boundsCheck);
-        if (condition != null) {
-            GuardingNode storeCheckGuard = tool.createGuard(storeIndexed, condition, DeoptimizationReason.ArrayStoreException, DeoptimizationAction.InvalidateReprofile);
-            memoryWrite.setStoreCheckGuard(storeCheckGuard);
-        }
         memoryWrite.setStateAfter(storeIndexed.stateAfter());
         graph.replaceFixedWithFixed(storeIndexed, memoryWrite);
+
+        if (checkCastNode instanceof Lowerable) {
+            /* Recursive lowering of the store check node. */
+            ((Lowerable) checkCastNode).lower(tool);
+        }
     }
 
     protected void lowerArrayLengthNode(ArrayLengthNode arrayLengthNode, LoweringTool tool) {

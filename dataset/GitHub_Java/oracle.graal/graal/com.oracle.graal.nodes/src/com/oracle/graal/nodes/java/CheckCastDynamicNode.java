@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,52 +22,41 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+import com.oracle.graal.compiler.common.type.CheckedJavaType;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.type.StampTool;
 
 /**
- * Implements a type check where the type being checked is loaded at runtime.
- * This is used, for instance, to implement an object array store check.
+ * Implements a type check where the type being checked is loaded at runtime. This is used, for
+ * instance, to implement an object array store check.
  */
-public final class CheckCastDynamicNode extends FixedWithNextNode implements Canonicalizable, Lowerable, Node.IterableNodeType {
+@NodeInfo
+public final class CheckCastDynamicNode extends FixedWithNextNode implements Canonicalizable.Binary<ValueNode>, Lowerable {
 
-    @Input private ValueNode object;
-    @Input private ValueNode type;
+    public static final NodeClass<CheckCastDynamicNode> TYPE = NodeClass.create(CheckCastDynamicNode.class);
+    @Input ValueNode object;
+    @Input ValueNode hub;
 
     /**
-     * @param type the type being cast to
-     * @param object the instruction producing the object
+     * Determines the exception thrown by this node if the check fails: {@link ClassCastException}
+     * if false; {@link ArrayStoreException} if true.
      */
-    public CheckCastDynamicNode(ValueNode type, ValueNode object) {
-        super(StampFactory.object());
-        this.type = type;
+    protected final boolean forStoreCheck;
+
+    public CheckCastDynamicNode(ValueNode hub, ValueNode object, boolean forStoreCheck) {
+        super(TYPE, object.stamp());
+        this.hub = hub;
         this.object = object;
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
-    }
-
-    @Override
-    public boolean inferStamp() {
-        if (object().stamp().nonNull() && !stamp().nonNull()) {
-            setStamp(StampFactory.objectNonNull());
-            return true;
-        }
-        return super.inferStamp();
-    }
-
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        assert object() != null : this;
-
-        if (object().objectStamp().alwaysNull()) {
-            return object();
-        }
-        return this;
+        this.forStoreCheck = forStoreCheck;
     }
 
     public ValueNode object() {
@@ -77,7 +66,43 @@ public final class CheckCastDynamicNode extends FixedWithNextNode implements Can
     /**
      * Gets the runtime-loaded type being cast to.
      */
-    public ValueNode type() {
-        return type;
+    public ValueNode hub() {
+        return hub;
+    }
+
+    public ValueNode getX() {
+        return object;
+    }
+
+    public ValueNode getY() {
+        return hub;
+    }
+
+    public boolean isForStoreCheck() {
+        return forStoreCheck;
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(object().stamp());
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forObject, ValueNode forHub) {
+        if (StampTool.isPointerAlwaysNull(forObject)) {
+            return forObject;
+        }
+        if (forHub.isConstant()) {
+            ResolvedJavaType t = tool.getConstantReflection().asJavaType(forHub.asConstant());
+            if (t != null) {
+                return new CheckCastNode(CheckedJavaType.create(graph().getAssumptions(), t), forObject, null, forStoreCheck);
+            }
+        }
+        return this;
     }
 }

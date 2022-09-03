@@ -69,6 +69,7 @@ import com.oracle.graal.nodes.extended.GuardingNode;
 import com.oracle.graal.nodes.java.ClassIsAssignableFromNode;
 import com.oracle.graal.nodes.java.InstanceOfDynamicNode;
 import com.oracle.graal.nodes.java.InstanceOfNode;
+import com.oracle.graal.nodes.java.TypeCheckNode;
 import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.replacements.InstanceOfSnippetsTemplates;
 import com.oracle.graal.replacements.Snippet;
@@ -196,18 +197,14 @@ public class InstanceOfSnippets implements Snippets {
      * Type test used when the type being tested against is not known at compile time.
      */
     @Snippet
-    public static Object instanceofDynamic(KlassPointer hub, Object object, Object trueValue, Object falseValue, boolean allowNull) {
+    public static Object instanceofDynamic(Class<?> mirror, Object object, Object trueValue, Object falseValue) {
         if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
-            if (allowNull) {
-                return trueValue;
-            } else {
-                return falseValue;
-            }
+            return falseValue;
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
+        KlassPointer hub = ClassGetHubNode.readClass(mirror, anchorNode);
         KlassPointer objectHub = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
-        // The hub of a primitive type can be null => always return false in this case.
         if (hub.isNull() || !checkUnknownSubType(hub, objectHub)) {
             return falseValue;
         }
@@ -252,8 +249,7 @@ public class InstanceOfSnippets implements Snippets {
                 InstanceOfNode instanceOf = (InstanceOfNode) replacer.instanceOf;
                 ValueNode object = instanceOf.getValue();
                 Assumptions assumptions = instanceOf.graph().getAssumptions();
-
-                TypeCheckHints hintInfo = new TypeCheckHints(instanceOf.type(), instanceOf.profile(), assumptions, TypeCheckMinProfileHitProbability.getValue(), TypeCheckMaxHints.getValue());
+                TypeCheckHints hintInfo = new TypeCheckHints(instanceOf.type().getType(), instanceOf.profile(), assumptions, TypeCheckMinProfileHitProbability.getValue(), TypeCheckMaxHints.getValue());
                 final HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) instanceOf.type().getType();
                 ConstantNode hub = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), type.klass(), providers.getMetaAccess(), instanceOf.graph());
 
@@ -289,14 +285,23 @@ public class InstanceOfSnippets implements Snippets {
                     args.addConst("nullSeen", hintInfo.profile.getNullSeen() != TriState.FALSE);
                 }
                 return args;
+
+            } else if (replacer.instanceOf instanceof TypeCheckNode) {
+                TypeCheckNode typeCheck = (TypeCheckNode) replacer.instanceOf;
+                ValueNode object = typeCheck.getValue();
+                Arguments args = new Arguments(instanceofExact, typeCheck.graph().getGuardsStage(), tool.getLoweringStage());
+                args.add("object", object);
+                args.add("exactHub", ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), ((HotSpotResolvedObjectType) typeCheck.type()).klass(), providers.getMetaAccess(), typeCheck.graph()));
+                args.add("trueValue", replacer.trueValue);
+                args.add("falseValue", replacer.falseValue);
+                return args;
             } else if (replacer.instanceOf instanceof InstanceOfDynamicNode) {
                 InstanceOfDynamicNode instanceOf = (InstanceOfDynamicNode) replacer.instanceOf;
-                ValueNode object = instanceOf.getObject();
+                ValueNode object = instanceOf.object();
 
                 Arguments args = new Arguments(instanceofDynamic, instanceOf.graph().getGuardsStage(), tool.getLoweringStage());
-                args.add("hub", instanceOf.getMirrorOrHub());
+                args.add("mirror", instanceOf.mirror());
                 args.add("object", object);
-                args.add("allowNull", instanceOf.allowsNull());
                 args.add("trueValue", replacer.trueValue);
                 args.add("falseValue", replacer.falseValue);
                 return args;
