@@ -148,16 +148,13 @@ public final class GraalOptions {
     public static boolean ExitVMOnBailout                    = ____;
     public static boolean ExitVMOnException                  = true;
 
-    // Register allocator debugging
-    public static String  RegisterPressure                   = null;
-
     // Code generator settings
     public static boolean ConditionalElimination             = true;
     public static boolean CullFrameStates                    = ____;
     public static boolean UseProfilingInformation            = true;
            static boolean RemoveNeverExecutedCode            = true;
            static boolean UseExceptionProbability            = true;
-           static boolean UseExceptionProbabilityForOperations = true;
+    public static boolean AllowExplicitExceptionChecks       = true;
     public static boolean OmitHotExceptionStacktrace         = ____;
     public static boolean GenSafepoints                      = true;
     public static boolean GenLoopSafepoints                  = true;
