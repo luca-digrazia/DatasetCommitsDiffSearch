@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,19 @@
  */
 package com.oracle.graal.lir.phases;
 
-import static com.oracle.graal.lir.phases.LIRPhase.Options.*;
+import static com.oracle.graal.lir.phases.LIRPhase.Options.LIROptimization;
 
-import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.ControlFlowOptimizer;
+import com.oracle.graal.lir.EdgeMoveOptimizer;
+import com.oracle.graal.lir.NullCheckOptimizer;
+import com.oracle.graal.lir.RedundantMoveElimination;
 import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
-import com.oracle.graal.lir.profiling.*;
-import com.oracle.graal.options.*;
+import com.oracle.graal.lir.profiling.MethodProfilingPhase;
+import com.oracle.graal.lir.profiling.MoveProfilingPhase;
+import com.oracle.graal.options.NestedBooleanOptionValue;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionType;
+import com.oracle.graal.options.OptionValue;
 
 public class PostAllocationOptimizationStage extends LIRPhaseSuite<PostAllocationOptimizationContext> {
     public static class Options {
@@ -35,13 +42,17 @@ public class PostAllocationOptimizationStage extends LIRPhaseSuite<PostAllocatio
         @Option(help = "", type = OptionType.Debug)
         public static final NestedBooleanOptionValue LIROptEdgeMoveOptimizer = new NestedBooleanOptionValue(LIROptimization, true);
         @Option(help = "", type = OptionType.Debug)
-        public static final NestedBooleanOptionValue LIROptControlFlowOptmizer = new NestedBooleanOptionValue(LIROptimization, true);
+        public static final NestedBooleanOptionValue LIROptControlFlowOptimizer = new NestedBooleanOptionValue(LIROptimization, true);
         @Option(help = "", type = OptionType.Debug)
         public static final NestedBooleanOptionValue LIROptRedundantMoveElimination = new NestedBooleanOptionValue(LIROptimization, true);
         @Option(help = "", type = OptionType.Debug)
         public static final NestedBooleanOptionValue LIROptNullCheckOptimizer = new NestedBooleanOptionValue(LIROptimization, true);
-        @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LIROptMoveProfiling = new OptionValue<>(false);
+        @Option(help = "Enables profiling of move types on LIR level. " +
+                       "Move types are for example stores (register to stack), " +
+                       "constant loads (constant to register) or copies (register to register).", type = OptionType.Debug)
+        public static final OptionValue<Boolean> LIRProfileMoves = new OptionValue<>(false);
+        @Option(help = "Enables profiling of methods.", type = OptionType.Debug)
+        public static final OptionValue<Boolean> LIRProfileMethods = new OptionValue<>(false);
         // @formatter:on
     }
 
@@ -49,7 +60,7 @@ public class PostAllocationOptimizationStage extends LIRPhaseSuite<PostAllocatio
         if (Options.LIROptEdgeMoveOptimizer.getValue()) {
             appendPhase(new EdgeMoveOptimizer());
         }
-        if (Options.LIROptControlFlowOptmizer.getValue()) {
+        if (Options.LIROptControlFlowOptimizer.getValue()) {
             appendPhase(new ControlFlowOptimizer());
         }
         if (Options.LIROptRedundantMoveElimination.getValue()) {
@@ -58,8 +69,11 @@ public class PostAllocationOptimizationStage extends LIRPhaseSuite<PostAllocatio
         if (Options.LIROptNullCheckOptimizer.getValue()) {
             appendPhase(new NullCheckOptimizer());
         }
-        if (Options.LIROptMoveProfiling.getValue()) {
-            appendPhase(new MoveProfiling());
+        if (Options.LIRProfileMoves.getValue()) {
+            appendPhase(new MoveProfilingPhase());
+        }
+        if (Options.LIRProfileMethods.getValue()) {
+            appendPhase(new MethodProfilingPhase());
         }
     }
 }

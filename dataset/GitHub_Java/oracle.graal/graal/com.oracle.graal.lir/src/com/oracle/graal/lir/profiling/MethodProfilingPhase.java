@@ -24,7 +24,10 @@ package com.oracle.graal.lir.profiling;
 
 import java.util.List;
 
-import com.oracle.graal.compiler.common.LIRKind;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.lir.ConstantValue;
 import com.oracle.graal.lir.LIR;
@@ -36,16 +39,12 @@ import com.oracle.graal.lir.gen.BenchmarkCounterFactory;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-
 public class MethodProfilingPhase extends PostAllocationOptimizationPhase {
     public static final String INVOCATION_GROUP = "METHOD_INVOCATION_COUNTER";
     public static final String ITERATION_GROUP = "METHOD_ITERATION_COUNTER";
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
                     PostAllocationOptimizationContext context) {
         BenchmarkCounterFactory counterFactory = context.counterFactory;
         new Analyzer(target, lirGenRes.getCompilationUnitName(), lirGenRes.getLIR(), counterFactory).run();
@@ -63,7 +62,7 @@ public class MethodProfilingPhase extends PostAllocationOptimizationPhase {
             this.compilationUnitName = compilationUnitName;
             this.counterFactory = counterFactory;
             this.buffer = new LIRInsertionBuffer();
-            this.increment = new ConstantValue(LIRKind.fromJavaKind(target.arch, JavaKind.Int), JavaConstant.INT_1);
+            this.increment = new ConstantValue(target.getLIRKind(JavaKind.Int), JavaConstant.INT_1);
         }
 
         public void run() {
