@@ -48,7 +48,6 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.truffle.debug.AbstractDebugCompilationListener;
 import com.oracle.graal.truffle.substitutions.TruffleGraphBuilderPlugins;
 import com.oracle.truffle.api.Assumption;
@@ -72,6 +71,7 @@ import com.oracle.truffle.api.profiles.ValueProfile;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.SpeculationLog;
 
 /**
@@ -88,7 +88,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private final AtomicInteger callSitesKnown = new AtomicInteger(0);
     private final ValueProfile exceptionProfile = ValueProfile.createClassProfile();
 
-    @CompilationFinal(dimensions = 1) private Class<?>[] profiledArgumentTypes;
+    @CompilationFinal private Class<?>[] profiledArgumentTypes;
     @CompilationFinal private Assumption profiledArgumentTypesAssumption;
     @CompilationFinal private Class<?> profiledReturnType;
     @CompilationFinal private Assumption profiledReturnTypeAssumption;
@@ -638,7 +638,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         try {
             return OptimizedCallTarget.class.getDeclaredMethod("callDirect", Object[].class);
         } catch (NoSuchMethodException | SecurityException e) {
-            throw new GraalError(e);
+            throw new JVMCIError(e);
         }
     }
 
@@ -646,7 +646,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         try {
             return OptimizedCallTarget.class.getDeclaredMethod("callInlined", Object[].class);
         } catch (NoSuchMethodException | SecurityException e) {
-            throw new GraalError(e);
+            throw new JVMCIError(e);
         }
     }
 
