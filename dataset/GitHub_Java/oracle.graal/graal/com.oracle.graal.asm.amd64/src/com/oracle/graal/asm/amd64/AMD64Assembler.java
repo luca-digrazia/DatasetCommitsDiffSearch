@@ -524,10 +524,26 @@ public class AMD64Assembler extends AbstractAssembler {
     // and stores reg into adr if so; otherwise, the value at adr is loaded into X86.rax,.
     // The ZF is set if the compared values were equal, and cleared otherwise.
     public final void cmpxchgl(Register reg, AMD64Address adr) { // cmpxchg
-        prefix(adr, reg);
-        emitByte(0x0F);
-        emitByte(0xB1);
-        emitOperandHelper(reg, adr);
+        if ((Atomics & 2) != 0) {
+            // caveat: no instructionmark, so this isn't relocatable.
+            // Emit a synthetic, non-atomic, CAS equivalent.
+            // Beware. The synthetic form sets all ICCs, not just ZF.
+            // cmpxchg r,[m] is equivalent to X86.rax, = CAS (m, X86.rax, r)
+            cmpl(rax, adr);
+            movl(rax, adr);
+            if (reg.equals(rax)) {
+                Label l = new Label();
+                jccb(ConditionFlag.NotEqual, l);
+                movl(adr, reg);
+                bind(l);
+            }
+        } else {
+
+            prefix(adr, reg);
+            emitByte(0x0F);
+            emitByte(0xB1);
+            emitOperandHelper(reg, adr);
+        }
     }
 
     public final void cvtsd2ss(Register dst, AMD64Address src) {
@@ -844,7 +860,12 @@ public class AMD64Assembler extends AbstractAssembler {
     }
 
     public final void lock() {
-        emitByte(0xF0);
+        if ((Atomics & 1) != 0) {
+            // Emit either nothing, a NOP, or a NOP: prefix
+            emitByte(0x90);
+        } else {
+            emitByte(0xF0);
+        }
     }
 
     public final void movapd(Register dst, Register src) {
