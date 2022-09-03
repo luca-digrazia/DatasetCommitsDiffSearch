@@ -23,7 +23,7 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import org.junit.*;
+import org.junit.Test;
 
 /**
  * This test deliberately causes an ArrayIndexOutOfBoundsException to test throwing the exception

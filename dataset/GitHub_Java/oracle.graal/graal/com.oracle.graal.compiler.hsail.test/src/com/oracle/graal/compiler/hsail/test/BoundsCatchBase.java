@@ -23,7 +23,7 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import com.oracle.graal.compiler.hsail.test.infra.*;
+import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
 
 /**
  * Base Class for tests that deopt but then catch the exception in the run routine itself.
@@ -52,11 +52,6 @@ public abstract class BoundsCatchBase extends GraalKernelTester {
         }
         int outval = (outArray[gid] * -1) + adjustment;
         return outval;
-    }
-
-    @Override
-    protected boolean supportsRequiredCapabilities() {
-        return getHSAILBackend().getRuntime().getConfig().useHSAILDeoptimization;
     }
 
     @Override

@@ -62,15 +62,11 @@ public abstract class KernelTester {
     }
 
     public enum DispatchMode {
-        SEQ,
-        JTP,
-        OKRA
+        SEQ, JTP, OKRA
     }
 
     public enum HsailMode {
-        COMPILED,
-        INJECT_HSAIL,
-        INJECT_OCL
+        COMPILED, INJECT_HSAIL, INJECT_OCL
     }
 
     public DispatchMode dispatchMode;

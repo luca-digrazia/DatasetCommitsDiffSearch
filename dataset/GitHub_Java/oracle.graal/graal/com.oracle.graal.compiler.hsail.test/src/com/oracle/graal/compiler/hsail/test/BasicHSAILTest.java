@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler.hsail.test;
 
-import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.*;
-
 import java.lang.reflect.*;
 
 import org.junit.*;
@@ -345,14 +343,12 @@ public class BasicHSAILTest extends GraalCompilerTest {
     }
 
     private void test(final String snippet) {
-        try (DebugConfigScope dcs = Debug.setConfig(new DelegatingDebugConfig().disable(INTERCEPT))) {
-            try (Scope s = Debug.scope("HSAILCodeGen")) {
-                Method method = getMethod(snippet);
-                ExternalCompilationResult hsailCode = getBackend().compileKernel(getMetaAccess().lookupJavaMethod(method), false);
-                Debug.log("HSAIL code generated for %s:%n%s", snippet, hsailCode.getCodeString());
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
+        try (Scope s = Debug.scope("HSAILCodeGen")) {
+            Method method = getMethod(snippet);
+            ExternalCompilationResult hsailCode = getBackend().compileKernel(getMetaAccess().lookupJavaMethod(method), false);
+            Debug.log("HSAIL code generated for %s:%n%s", snippet, hsailCode.getCodeString());
+        } catch (Throwable e) {
+            throw Debug.handle(e);
         }
     }
 

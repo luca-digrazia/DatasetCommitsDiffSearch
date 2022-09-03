@@ -25,13 +25,12 @@ package com.oracle.graal.asm.hsail;
 import static com.oracle.graal.api.code.MemoryBarriers.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 
-import java.lang.reflect.*;
-
-import com.amd.okra.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hsail.*;
+import com.oracle.graal.graph.GraalInternalError;
+import com.amd.okra.OkraUtil;
+import java.lang.reflect.Array;
 
 /**
  * This class contains routines to emit HSAIL assembly code.
@@ -81,11 +80,11 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
 
     /**
      * Moves an Object into a register.
-     *
+     * 
      * Because Object references become stale after Garbage collection (GC) the technique used here
      * is to load a JNI global reference to that Object into the register. These JNI global
      * references get updated by the GC whenever the GC moves an Object.
-     *
+     * 
      * @param a the destination register
      * @param obj the Object being moved
      */
@@ -113,11 +112,11 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
 
     }
 
-    public final void emitMov(Kind kind, Value dst, Value src) {
-        if (isRegister(dst) && isConstant(src) && kind.getStackKind() == Kind.Object) {
+    public final void emitMov(Value dst, Value src) {
+        if (isRegister(dst) && isConstant(src) && src.getKind().getStackKind() == Kind.Object) {
             mov(asRegister(dst), (asConstant(src)).asObject());
         } else {
-            String argtype = getArgTypeFromKind(kind).substring(1);
+            String argtype = getArgType(dst).substring(1);
             emitString("mov_b" + argtype + " " + mapRegOrConstToString(dst) + ", " + mapRegOrConstToString(src) + ";");
         }
     }
@@ -134,7 +133,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
 
     /**
      * Emits a memory barrier instruction.
-     *
+     * 
      * @param barriers the kind of barrier to emit
      */
     public final void emitMembar(int barriers) {
@@ -190,16 +189,16 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
         storeImmediateImpl("f64", Double.toString(src), addr);
     }
 
-    public final void emitSpillLoad(Kind kind, Value dest, Value src) {
-        emitString("ld_spill_" + getArgTypeFromKind(kind) + " " + HSAIL.mapRegister(dest) + ", " + mapStackSlot(src, getArgSizeFromKind(kind)) + ";");
+    public final void emitSpillLoad(Value dest, Value src) {
+        emitString("ld_spill_" + getArgType(dest) + " " + HSAIL.mapRegister(dest) + ", " + mapStackSlot(src, getArgSize(dest)) + ";");
     }
 
     public final void emitStore(Value src, HSAILAddress addr) {
         emitString("st_global_" + getArgType(src) + " " + HSAIL.mapRegister(src) + ", " + mapAddress(addr) + ";");
     }
 
-    public final void emitSpillStore(Kind kind, Value src, Value dest) {
-        int sizestored = getArgSizeFromKind(kind);
+    public final void emitSpillStore(Value src, Value dest) {
+        int sizestored = getArgSize(src);
         if (maxDataTypeSize < sizestored) {
             maxDataTypeSize = sizestored;
         }
@@ -207,7 +206,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
         if (maxStackOffset < stackoffset) {
             maxStackOffset = stackoffset;
         }
-        emitString("st_spill_" + getArgTypeFromKind(kind) + " " + HSAIL.mapRegister(src) + ", " + mapStackSlot(dest, getArgSizeFromKind(kind)) + ";");
+        emitString("st_spill_" + getArgType(src) + " " + HSAIL.mapRegister(src) + ", " + mapStackSlot(dest, getArgSize(src)) + ";");
     }
 
     /**
@@ -227,11 +226,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
     }
 
     public int getArgSize(Value src) {
-        return getArgSizeFromKind(src.getKind());
-    }
-
-    private static int getArgSizeFromKind(Kind kind) {
-        switch (kind) {
+        switch (src.getKind()) {
             case Int:
             case Float:
                 return 32;
@@ -282,11 +277,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
     }
 
     public static final String getArgTypeForceUnsigned(Value src) {
-        return getArgTypeForceUnsignedKind(src.getKind());
-    }
-
-    public static final String getArgTypeForceUnsignedKind(Kind kind) {
-        switch (kind) {
+        switch (src.getKind()) {
             case Int:
                 return "u32";
             case Long:
@@ -305,7 +296,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
 
     /**
      * Emits a compare instruction.
-     *
+     * 
      * @param src0 - the first source register
      * @param src1 - the second source register
      * @param condition - the compare condition i.e., eq, ne, lt, gt
@@ -316,9 +307,8 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
     public void emitCompare(Value src0, Value src1, String condition, boolean unordered, boolean isUnsignedCompare) {
         // Formulate the prefix of the instruction.
         // if unordered is true, it should be ignored unless the src type is f32 or f64
-        String argType = getArgTypeFromKind(src1.getKind().getStackKind());
-        String unorderedPrefix = (argType.startsWith("f") && unordered ? "u" : "");
-        String prefix = "cmp_" + condition + unorderedPrefix + "_b1_" + (isUnsignedCompare ? getArgTypeForceUnsigned(src1) : argType);
+        String unorderedPrefix = (getArgType(src1).startsWith("f") && unordered ? "u" : "");
+        String prefix = "cmp_" + condition + unorderedPrefix + "_b1_" + (isUnsignedCompare ? getArgTypeForceUnsigned(src1) : getArgType(src1));
         // Generate a comment for debugging purposes
         String comment = (isConstant(src1) && (src1.getKind() == Kind.Object) && (asConstant(src1).asObject() == null) ? " // null test " : "");
         // Emit the instruction.
@@ -339,7 +329,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
     /**
      * Emits a convert instruction that uses unsigned prefix, regardless of the type of dest and
      * src.
-     *
+     * 
      * @param dest the destination operand
      * @param src the source operand
      */
@@ -382,7 +372,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
 
     /**
      * Emits an instruction.
-     *
+     * 
      * @param mnemonic the instruction mnemonic
      * @param dest the destination operand
      * @param sources the source operands
@@ -394,25 +384,20 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
 
     /**
      * Emits an unsigned instruction.
-     *
+     * 
      * @param mnemonic the instruction mnemonic
      * @param dest the destination argument
      * @param sources the source arguments
-     *
+     * 
      */
     public final void emitForceUnsigned(String mnemonic, Value dest, Value... sources) {
         String prefix = getArgTypeForceUnsigned(dest);
         emitTextFormattedInstruction(mnemonic + "_" + prefix, dest, sources);
     }
 
-    public final void emitForceUnsignedKind(String mnemonic, Kind kind, Value dest, Value... sources) {
-        String prefix = getArgTypeForceUnsignedKind(kind);
-        emitTextFormattedInstruction(mnemonic + "_" + prefix, dest, sources);
-    }
-
     /**
      * Emits an instruction for a bitwise logical operation.
-     *
+     * 
      * @param mnemonic the instruction mnemonic
      * @param dest the destination
      * @param sources the source operands
@@ -425,7 +410,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
     /**
      * Central helper routine that emits a text formatted HSAIL instruction via call to
      * AbstractAssembler.emitString. All the emit routines in the assembler end up calling this one.
-     *
+     * 
      * @param instr the full instruction mnenomics including any prefixes
      * @param dest the destination operand
      * @param sources the source operand
@@ -457,7 +442,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
 
     /**
      * Emits a conditional move instruction.
-     *
+     * 
      * @param dest the destination operand storing result of the move
      * @param trueReg the register that should be copied to dest if the condition is true
      * @param falseReg the register that should be copied to dest if the condition is false
@@ -474,7 +459,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
      * shift. The compressed value could represent either a normal oop or a klass ptr. If the
      * compressed value is 0, the uncompressed must also be 0. We only emit this if base and shift
      * are not both zero.
-     *
+     * 
      * @param result the register containing the compressed value on input and the uncompressed ptr
      *            on output
      * @param base the amount to be added to the compressed value
@@ -486,7 +471,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
         assert (!isConstant(result));
         if (base == 0) {
             // we don't have to test for null if shl is the only operation
-            emitForceUnsignedKind("shl", Kind.Long, result, result, Constant.forInt(shift));
+            emitForceUnsigned("shl", result, result, Constant.forInt(shift));
         } else if (shift == 0) {
             // only use add if result is not starting as null (test only if testForNull is true)
             emitWithOptionalTestForNull(testForNull, "add", result, result, Constant.forLong(base));
@@ -501,7 +486,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
      * and shift. The compressed value could represent either a normal oop or a klass ptr. If the
      * ptr is 0, the compressed value must also be 0. We only emit this if base and shift are not
      * both zero.
-     *
+     * 
      * @param result the register containing the 64-bit pointer on input and the compressed value on
      *            output
      * @param base the amount to be subtracted from the 64-bit pointer
@@ -517,7 +502,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
         }
         if (shift != 0) {
             // note that the shr can still be done even if the result is null
-            emitForceUnsignedKind("shr", Kind.Long, result, result, Constant.forInt(shift));
+            emitForceUnsigned("shr", result, result, Constant.forInt(shift));
         }
     }
 
@@ -525,7 +510,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
      * Emits code for the requested mnemonic on the result and sources. In addition, if testForNull
      * is true, surrounds the instruction with code that will guarantee that if the result starts as
      * 0, it will remain 0.
-     *
+     * 
      * @param testForNull true if we want to add the code to check for and preserve null
      * @param mnemonic the instruction to be applied (without size prefix)
      * @param result the register which is both an input and the final output
@@ -543,7 +528,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
 
     /**
      * Emits an atomic_cas_global instruction.
-     *
+     * 
      * @param result result operand that gets the original contents of the memory location
      * @param address the memory location
      * @param cmpValue the value that will be compared against the memory location
@@ -557,7 +542,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
 
     /**
      * Emits an atomic_add_global instruction.
-     *
+     * 
      * @param result result operand that gets the original contents of the memory location
      * @param address the memory location
      * @param deltaValue the amount to add
@@ -568,7 +553,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
 
     /**
      * Emits a comment. Useful for debugging purposes.
-     *
+     * 
      * @param comment
      */
     public void emitComment(String comment) {
@@ -603,7 +588,7 @@ public class HSAILAssembler extends AbstractHSAILAssembler {
         // emitString(String.format("maxwaveid_u32 %s;", HSAIL.mapRegister(dest)));
         int hardCodedMaxWaveId = 36;
         emitComment("// Hard-coded maxwaveid=" + hardCodedMaxWaveId + " until it works");
-        emitMov(Kind.Int, dest, Constant.forInt(hardCodedMaxWaveId));
+        emitMov(dest, Constant.forInt(hardCodedMaxWaveId));
     }
 
     public void emitMultiplyByWavesize(Value dest) {

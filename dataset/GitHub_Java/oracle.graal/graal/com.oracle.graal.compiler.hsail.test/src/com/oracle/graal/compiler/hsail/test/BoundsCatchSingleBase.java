@@ -23,20 +23,32 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import org.junit.Test;
-
 /**
- * For globalsize 16384, deopt on many gids but then catch the exception in the run routine itself.
+ * Base Class for tests that deopt on a single gid but then catch the exception in the run routine
+ * itself.
  */
-public class BoundsCatchMany16384Test extends BoundsCatchManyBase {
+public abstract class BoundsCatchSingleBase extends BoundsCatchBase {
 
-    @Override
-    int getGlobalSize() {
-        return 16384;
+    int getDeoptGid() {
+        return 512;
     }
 
-    @Test
-    public void test() {
-        testGeneratedHsail();
+    boolean isDeoptGid(int gid) {
+        return (gid == getDeoptGid());
     }
+
+    @Result public int exceptionGid;
+
+    public void run(int gid) {
+        int outval = getOutval(gid);
+        try {
+            int index = (isDeoptGid(gid) ? num + 1 : gid);
+            outArray[index] = outval;
+        } catch (ArrayIndexOutOfBoundsException e) {
+            // set up so we can detect if we go thru here twice
+            outArray[gid] -= outval;
+            exceptionGid = gid;
+        }
+    }
+
 }

@@ -23,20 +23,53 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import org.junit.Test;
+import org.junit.*;
 
 /**
- * For globalsize 16384, deopt on many gids but then catch the exception in the run routine itself.
+ * Tests an object array stream with the object stream itself being null.
  */
-public class BoundsCatchMany16384Test extends BoundsCatchManyBase {
+public class Vec3ObjStreamNullParamCheckTest extends SingleExceptionTestBase {
+
+    static final int NUM = 20;
+
+    public Vec3[] inArray = new Vec3[NUM];
+
+    static class MyVec3 extends Vec3 {
+        public MyVec3(float x, float y, float z) {
+            super(x, y, z);
+        }
+    }
+
+    void setupArrays() {
+        for (int i = 0; i < NUM; i++) {
+            inArray[i] = new MyVec3(i, i + 1, -1);
+        }
+        // insert one null
+        inArray[10] = null;
+    }
+
+    /**
+     * The "kernel" method we will be testing. For Array Stream, an object from the array will be
+     * the last parameter
+     */
+    public void run(Vec3 vec3) {
+        MyVec3 myvec3 = (MyVec3) vec3;
+        myvec3.z = myvec3.x + myvec3.y;
+    }
 
     @Override
-    int getGlobalSize() {
-        return 16384;
+    public void runTest() {
+        setupArrays();
+        try {
+            dispatchMethodKernel(null);
+        } catch (Exception e) {
+            recordException(e);
+        }
     }
 
     @Test
     public void test() {
         testGeneratedHsail();
     }
+
 }

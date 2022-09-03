@@ -29,10 +29,9 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.graph.*;
-import com.oracle.graal.phases.graph.ReentrantBlockIterator.BlockIteratorClosure;
+import com.oracle.graal.phases.graph.ReentrantBlockIterator.*;
 import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.phases.schedule.SchedulePhase.MemoryScheduling;
-import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
+import com.oracle.graal.phases.schedule.SchedulePhase.*;
 
 public final class GraphOrder {
 
@@ -81,7 +80,7 @@ public final class GraphOrder {
         final ArrayList<Node> nodes = new ArrayList<>();
         final NodeBitMap visited = graph.createNodeBitMap();
 
-        new StatelessPostOrderNodeIterator(graph.start()) {
+        new PostOrderNodeIterator<MergeableState.EmptyState>(graph.start(), new MergeableState.EmptyState()) {
             @Override
             protected void node(FixedNode node) {
                 visitForward(nodes, visited, node, false);
