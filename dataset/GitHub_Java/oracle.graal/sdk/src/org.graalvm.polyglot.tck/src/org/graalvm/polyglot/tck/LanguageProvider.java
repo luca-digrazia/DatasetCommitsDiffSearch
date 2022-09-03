@@ -36,7 +36,7 @@ import org.graalvm.polyglot.Value;
  * implementations are loaded by the {@link ServiceLoader} and should be registered in the
  * 'META-INF/services/org.graalvm.polyglot.tck.LanguageProvider'.
  *
- * @since 0.30
+ * @since 0.29
  */
 public interface LanguageProvider {
 
@@ -45,7 +45,7 @@ public interface LanguageProvider {
      * the tested language.
      *
      * @return the language identification
-     * @since 0.30
+     * @since 0.29
      */
     String getId();
 
@@ -61,16 +61,14 @@ public interface LanguageProvider {
      *
      * @param context the context for a guest language code literal evaluation
      * @return the {@link Value} representing the identity function
-     * @since 0.30
+     * @since 0.29
      */
     Value createIdentityFunction(Context context);
 
     /**
      * Creates a collection of functions creating language data types. For each language data type
      * create a function returning a value of given type and assign a correct {@link TypeDescriptor}
-     * to it. The {@link TypeDescriptor} can be one of the predefined {@link TypeDescriptor}s, an
-     * array with component type, an executable with required parameter types or an intersection
-     * type.
+     * to it.
      *
      * <p>
      * The JavaScript sample implementation creating a boolean type:
@@ -81,16 +79,14 @@ public interface LanguageProvider {
      *
      * @param context the context for a guest language code literal evaluation
      * @return factories creating the language data types
-     * @since 0.30
+     * @since 0.29
      */
     Collection<? extends Snippet> createValueConstructors(Context context);
 
     /**
      * Creates a collection of functions representing language expressions to test. For each
      * language operator create a function performing given operator and assign a correct
-     * {@link TypeDescriptor}s to its parameters and return type. The parameter types and return
-     * type can be one of the predefined {@link TypeDescriptor}s, an array with component type, an
-     * executable with required parameter types or an union type.
+     * {@link TypeDescriptor}s to its parameters and return type.
      *
      * <p>
      * The JavaScript sample implementation creating a plus operator:
@@ -101,16 +97,14 @@ public interface LanguageProvider {
      *
      * @param context the context for a guest language code literal evaluation
      * @return factories creating the language expressions
-     * @since 0.30
+     * @since 0.29
      */
     Collection<? extends Snippet> createExpressions(Context context);
 
     /**
      * Creates a collection of functions representing language statements to test. For each control
      * flow statement create a function performing given statement and assign a correct
-     * {@link TypeDescriptor}s to its parameters and return type. The parameter types and return
-     * type can be one of the predefined {@link TypeDescriptor}s, an array with component type, an
-     * executable with required parameter types or an union type.
+     * {@link TypeDescriptor}s to its parameters and return type.
      *
      * <p>
      * The JavaScript sample implementation creating the {@code if} statement:
@@ -121,7 +115,7 @@ public interface LanguageProvider {
      *
      * @param context the context for a guest language code literal evaluation
      * @return factories creating the language statements
-     * @since 0.30
+     * @since 0.29
      */
     Collection<? extends Snippet> createStatements(Context context);
 
@@ -135,7 +129,7 @@ public interface LanguageProvider {
      *
      * @param context the context for a guest language code literal evaluation
      * @return the language scripts
-     * @since 0.30
+     * @since 0.29
      */
     Collection<? extends Snippet> createScripts(Context context);
 
@@ -147,7 +141,7 @@ public interface LanguageProvider {
      *
      * @param context the context for a guest language code literal evaluation
      * @return the scripts
-     * @since 0.30
+     * @since 0.29
      */
     Collection<? extends Source> createInvalidSyntaxScripts(Context context);
 }

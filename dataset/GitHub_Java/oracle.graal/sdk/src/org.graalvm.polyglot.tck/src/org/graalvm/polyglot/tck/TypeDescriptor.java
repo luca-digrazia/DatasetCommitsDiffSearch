@@ -38,7 +38,7 @@ import org.graalvm.polyglot.Value;
  * Represents a type of a polyglot value. Types include primitive types, null type, object type,
  * array type with an optional content type and union type.
  *
- * @since 0.30
+ * @since 0.29
  */
 public final class TypeDescriptor {
 
@@ -46,35 +46,35 @@ public final class TypeDescriptor {
      * The NULL type represents a type of null or undefined value.
      *
      * @see Value#isNull().
-     * @since 0.30
+     * @since 0.29
      */
     public static final TypeDescriptor NULL = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.NULL));
     /**
      * Represents a boolean type.
      *
      * @see Value#isBoolean().
-     * @since 0.30
+     * @since 0.29
      */
     public static final TypeDescriptor BOOLEAN = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.BOOLEAN));
     /**
      * Represents a numeric type.
      *
      * @see Value#isNumber().
-     * @since 0.30
+     * @since 0.29
      */
     public static final TypeDescriptor NUMBER = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.NUMBER));
     /**
      * Represents a string type.
      *
      * @see Value#isString().
-     * @since 0.30
+     * @since 0.29
      */
     public static final TypeDescriptor STRING = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.STRING));
     /**
      * Represents an object created by a guest language.
      *
      * @see Value#hasMembers().
-     * @since 0.30
+     * @since 0.29
      */
     public static final TypeDescriptor OBJECT = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.OBJECT));
     /**
@@ -84,34 +84,23 @@ public final class TypeDescriptor {
      *
      * @see #isAssignable(org.graalvm.polyglot.tck.TypeDescriptor).
      * @see Value#hasMembers().
-     * @since 0.30
+     * @since 0.29
      */
     public static final TypeDescriptor ARRAY = new TypeDescriptor(new ArrayImpl(null));
     /**
      * Represents a host object.
      *
      * @see Value#isHostObject().
-     * @since 0.30
+     * @since 0.29
      */
     public static final TypeDescriptor HOST_OBJECT = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.HOST_OBJECT));
     /**
      * Represents a native pointer.
      *
      * @see Value#isNativePointer().
-     * @since 0.30
+     * @since 0.29
      */
     public static final TypeDescriptor NATIVE_POINTER = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.NATIVE_POINTER));
-
-    /**
-     * Represents an executable type returning any type and accepting any number of parameters of
-     * any type. To create an executable type with concrete types use
-     * {@link TypeDescriptor#executable(org.graalvm.polyglot.tck.TypeDescriptor, org.graalvm.polyglot.tck.TypeDescriptor...)}
-     * .
-     *
-     * @see Value#canExecute().
-     * @since 0.30
-     */
-    public static final TypeDescriptor EXECUTABLE = new TypeDescriptor(new ExecutableImpl(null, Collections.emptyList()));
 
     private static final TypeDescriptor[] PREDEFINED_TYPES = new TypeDescriptor[]{
                     NULL, BOOLEAN, NUMBER, STRING, HOST_OBJECT, NATIVE_POINTER, OBJECT, ARRAY
@@ -127,7 +116,7 @@ public final class TypeDescriptor {
     /**
      * {@inheritDoc}
      *
-     * @since 0.30
+     * @since 0.29
      */
     @Override
     public int hashCode() {
@@ -137,7 +126,7 @@ public final class TypeDescriptor {
     /**
      * {@inheritDoc}
      *
-     * @since 0.30
+     * @since 0.29
      */
     @Override
     public boolean equals(Object obj) {
@@ -153,7 +142,7 @@ public final class TypeDescriptor {
     /**
      * {@inheritDoc}
      *
-     * @since 0.30
+     * @since 0.29
      */
     @Override
     public String toString() {
@@ -170,7 +159,7 @@ public final class TypeDescriptor {
      *
      * @param fromType the type to assign
      * @return true if the fromType is assignable to this type
-     * @since 0.30
+     * @since 0.29
      */
     public boolean isAssignable(final TypeDescriptor fromType) {
         final TypeDescriptorImpl narrowedImpl = impl.narrow(impl, fromType.impl);
@@ -182,7 +171,7 @@ public final class TypeDescriptor {
      *
      * @param types the types to include in the union
      * @return the union type containing the given types
-     * @since 0.30
+     * @since 0.29
      */
     public static TypeDescriptor union(TypeDescriptor... types) {
         Objects.requireNonNull(types);
@@ -244,32 +233,10 @@ public final class TypeDescriptor {
      *
      * @param componentType the required component type.
      * @return an array type with given component
-     * @since 0.30
+     * @since 0.29
      */
     public static TypeDescriptor array(TypeDescriptor componentType) {
         return componentType == null ? ARRAY : new TypeDescriptor(new ArrayImpl(componentType.impl));
-    }
-
-    /**
-     * Creates a new executable type with a given return type and parameter types.
-     *
-     * @param returnType the required return type, use {@code null} literal as any type
-     * @param parameterTypes the required parameter types
-     * @return an executable type
-     * @since 0.30
-     */
-    public static TypeDescriptor executable(TypeDescriptor returnType, TypeDescriptor... parameterTypes) {
-        Objects.requireNonNull(parameterTypes, "Parameter types cannot be null");
-        if (returnType == null && parameterTypes.length == 0) {
-            return EXECUTABLE;
-        }
-        final TypeDescriptorImpl retImpl = returnType == null ? null : returnType.impl;
-        final List<TypeDescriptorImpl> paramTypeImpls = new ArrayList<>(parameterTypes.length);
-        for (TypeDescriptor td : parameterTypes) {
-            Objects.requireNonNull(td, "Parameter types cannot contain null");
-            paramTypeImpls.add(td.impl);
-        }
-        return new TypeDescriptor(new ExecutableImpl(retImpl, paramTypeImpls));
     }
 
     /**
@@ -277,7 +244,7 @@ public final class TypeDescriptor {
      *
      * @param value the value to create {@link TypeDescriptor} for
      * @return the type of value, may by an union type containing more primitive or array types.
-     * @since 0.30
+     * @since 0.29
      */
     public static TypeDescriptor forValue(final Value value) {
         final List<TypeDescriptor> descs = new ArrayList<>();
@@ -423,109 +390,6 @@ public final class TypeDescriptor {
         }
     }
 
-    private static final class ExecutableImpl extends TypeDescriptorImpl {
-        private final TypeDescriptorImpl retType;
-        private final List<? extends TypeDescriptorImpl> paramTypes;
-
-        ExecutableImpl(final TypeDescriptorImpl retType, final List<? extends TypeDescriptorImpl> paramTypes) {
-            assert paramTypes != null;
-            this.retType = retType;
-            this.paramTypes = paramTypes;
-        }
-
-        @Override
-        TypeDescriptorImpl narrow(final TypeDescriptorImpl origType, final TypeDescriptorImpl byType) {
-            final TypeDescriptorImpl other = other(origType, byType);
-            final Class<? extends TypeDescriptorImpl> otherClz = other.getClass();
-            if (otherClz == PrimitiveImpl.class) {
-                return null;
-            }
-            if (otherClz == ExecutableImpl.class) {
-                ExecutableImpl otherExecutable = (ExecutableImpl) other;
-                final TypeDescriptorImpl narrowedRetType;
-                if (retType == null) {
-                    narrowedRetType = otherExecutable.retType;
-                } else {
-                    narrowedRetType = otherExecutable.retType == null ? null : retType.narrow(retType, otherExecutable.retType);
-                    if (narrowedRetType == null) {
-                        return null;
-                    }
-                }
-                final List<? extends TypeDescriptorImpl> narrowedParamTypes;
-                if (otherExecutable.paramTypes.isEmpty()) {
-                    narrowedParamTypes = paramTypes;
-                } else {
-                    if (paramTypes.size() < otherExecutable.paramTypes.size()) {
-                        return null;
-                    }
-                    final List<TypeDescriptorImpl> npts = new ArrayList<>(paramTypes.size());
-                    for (int i = 0; i < paramTypes.size(); i++) {
-                        final TypeDescriptorImpl pt = paramTypes.get(i);
-                        final TypeDescriptorImpl npt;
-                        if (i < otherExecutable.paramTypes.size()) {
-                            final TypeDescriptorImpl opt = otherExecutable.paramTypes.get(i);
-                            npt = opt.narrow(opt, pt);
-                            if (npt == null) {
-                                return null;
-                            }
-                        } else {
-                            npt = pt;
-                        }
-                        npts.add(npt);
-                    }
-                    narrowedParamTypes = npts;
-                }
-                return new ExecutableImpl(narrowedRetType, narrowedParamTypes);
-            } else {
-                return other.narrow(origType, byType);
-            }
-        }
-
-        @Override
-        Set<? extends TypeDescriptorImpl> explode() {
-            return Collections.singleton(this);
-        }
-
-        @Override
-        public int hashCode() {
-            int res = 17;
-            res = res + (retType == null ? 0 : retType.hashCode());
-            for (TypeDescriptorImpl paramType : paramTypes) {
-                res = res * 31 + paramType.hashCode();
-            }
-            return res;
-        }
-
-        @Override
-        public boolean equals(final Object obj) {
-            if (obj == this) {
-                return true;
-            }
-            if (obj == null || obj.getClass() != ExecutableImpl.class) {
-                return false;
-            }
-            final ExecutableImpl other = (ExecutableImpl) obj;
-            return Objects.equals(retType, other.retType) && paramTypes.equals(other.paramTypes);
-        }
-
-        @Override
-        public String toString() {
-            final StringBuilder sb = new StringBuilder("Executable(");
-            boolean first = true;
-            for (TypeDescriptorImpl paramType : paramTypes) {
-                if (first) {
-                    first = false;
-                } else {
-                    sb.append(", ");
-                }
-                sb.append(paramType);
-            }
-            sb.append("):");
-            sb.append(retType == null ? "<any>" : retType);
-            return sb.toString();
-        }
-    }
-
     private static final class ArrayImpl extends TypeDescriptorImpl {
         private final TypeDescriptorImpl contentType;
 
@@ -537,7 +401,7 @@ public final class TypeDescriptor {
         TypeDescriptorImpl narrow(final TypeDescriptorImpl origType, final TypeDescriptorImpl byType) {
             final TypeDescriptorImpl other = other(origType, byType);
             final Class<? extends TypeDescriptorImpl> otherClz = other.getClass();
-            if (otherClz == PrimitiveImpl.class || otherClz == ExecutableImpl.class) {
+            if (otherClz == PrimitiveImpl.class) {
                 return null;
             } else if (otherClz == ArrayImpl.class) {
                 final ArrayImpl origArray = (ArrayImpl) origType;
@@ -608,7 +472,7 @@ public final class TypeDescriptor {
         TypeDescriptorImpl narrow(final TypeDescriptorImpl origType, TypeDescriptorImpl byType) {
             final TypeDescriptorImpl other = other(origType, byType);
             final Class<? extends TypeDescriptorImpl> otherClz = other.getClass();
-            if (otherClz == PrimitiveImpl.class || otherClz == ArrayImpl.class || otherClz == ExecutableImpl.class) {
+            if (otherClz == PrimitiveImpl.class || otherClz == ArrayImpl.class) {
                 for (TypeDescriptorImpl type : types) {
                     final TypeDescriptorImpl narrowed = other == origType ? other.narrow(other, type) : type.narrow(type, other);
                     if (narrowed != null) {
@@ -621,17 +485,11 @@ public final class TypeDescriptor {
                 final UnionImpl byUnion = (UnionImpl) byType;
                 final Set<TypeDescriptorImpl> copy = new HashSet<>(origUnion.types.size());
                 ArrayImpl arrayToNarrow = null;
-                Collection<ExecutableImpl> execsToNarrow = null;
                 for (TypeDescriptorImpl type : origUnion.types) {
                     if (byUnion.types.contains(type)) {
                         copy.add(type);
                     } else if (type.getClass() == ArrayImpl.class) {
                         arrayToNarrow = (ArrayImpl) type;
-                    } else if (type.getClass() == ExecutableImpl.class) {
-                        if (execsToNarrow == null) {
-                            execsToNarrow = new ArrayList<>();
-                        }
-                        execsToNarrow.add((ExecutableImpl) type);
                     }
                 }
                 if (arrayToNarrow != null) {
@@ -646,23 +504,6 @@ public final class TypeDescriptor {
                         final TypeDescriptorImpl narrowedArray = arrayToNarrow.narrow(arrayToNarrow, byArray);
                         if (narrowedArray != null) {
                             copy.add(narrowedArray);
-                        }
-                    }
-                }
-                if (execsToNarrow != null) {
-                    final List<ExecutableImpl> byExecs = new ArrayList<>();
-                    for (TypeDescriptorImpl type : byUnion.types) {
-                        if (type.getClass() == ExecutableImpl.class) {
-                            byExecs.add((ExecutableImpl) type);
-                        }
-                    }
-                    for (ExecutableImpl execToNarrow : execsToNarrow) {
-                        for (ExecutableImpl byExec : byExecs) {
-                            final TypeDescriptorImpl narrowedExec = execToNarrow.narrow(execToNarrow, byExec);
-                            if (narrowedExec != null) {
-                                copy.add(narrowedExec);
-                                break;
-                            }
                         }
                     }
                 }
