@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,11 +24,11 @@ package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
 import static com.oracle.graal.compiler.common.GraalOptions.VerifyPhases;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
 
 import com.oracle.graal.hotspot.HotSpotBackend;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.HotSpotInstructionProfiling;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.phases.AheadOfTimeVerificationPhase;
 import com.oracle.graal.hotspot.phases.LoadJavaMirrorWithKlassPhase;
 import com.oracle.graal.hotspot.phases.WriteBarrierAdditionPhase;
@@ -42,7 +42,6 @@ import com.oracle.graal.nodes.SimplifyingGraphDecoder;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.options.OptionValues;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.common.AddressLoweringPhase;
@@ -57,13 +56,13 @@ import com.oracle.graal.phases.tiers.SuitesCreator;
  */
 public class HotSpotSuitesProvider extends SuitesProviderBase {
 
-    protected final GraalHotSpotVMConfig config;
+    protected final HotSpotVMConfig config;
     protected final HotSpotGraalRuntimeProvider runtime;
 
     private final AddressLowering addressLowering;
     private final SuitesCreator defaultSuitesCreator;
 
-    public HotSpotSuitesProvider(SuitesCreator defaultSuitesCreator, GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, AddressLowering addressLowering) {
+    public HotSpotSuitesProvider(SuitesCreator defaultSuitesCreator, HotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, AddressLowering addressLowering) {
         this.defaultSuitesCreator = defaultSuitesCreator;
         this.config = config;
         this.runtime = runtime;
@@ -72,19 +71,19 @@ public class HotSpotSuitesProvider extends SuitesProviderBase {
     }
 
     @Override
-    public Suites createSuites(OptionValues options) {
-        Suites ret = defaultSuitesCreator.createSuites(options);
+    public Suites createSuites() {
+        Suites ret = defaultSuitesCreator.createSuites();
 
-        if (ImmutableCode.getValue(options)) {
+        if (ImmutableCode.getValue()) {
             // lowering introduces class constants, therefore it must be after lowering
             ret.getHighTier().appendPhase(new LoadJavaMirrorWithKlassPhase(config.classMirrorOffset, config.useCompressedOops ? config.getOopEncoding() : null));
-            if (VerifyPhases.getValue(options)) {
+            if (VerifyPhases.getValue()) {
                 ret.getHighTier().appendPhase(new AheadOfTimeVerificationPhase());
             }
         }
 
         ret.getMidTier().appendPhase(new WriteBarrierAdditionPhase(config));
-        if (VerifyPhases.getValue(options)) {
+        if (VerifyPhases.getValue()) {
             ret.getMidTier().appendPhase(new WriteBarrierVerificationPhase(config));
         }
 
@@ -113,8 +112,8 @@ public class HotSpotSuitesProvider extends SuitesProviderBase {
             protected void run(StructuredGraph graph, HighTierContext context) {
                 EncodedGraph encodedGraph = GraphEncoder.encodeSingleGraph(graph, runtime.getTarget().arch);
 
-                SimplifyingGraphDecoder graphDecoder = new SimplifyingGraphDecoder(context.getMetaAccess(), context.getConstantReflection(), context.getConstantFieldProvider(),
-                                context.getStampProvider(), !ImmutableCode.getValue(graph.getOptions()), runtime.getTarget().arch);
+                SimplifyingGraphDecoder graphDecoder = new SimplifyingGraphDecoder(context.getMetaAccess(), context.getConstantReflection(), context.getStampProvider(), !ImmutableCode.getValue(),
+                                runtime.getTarget().arch);
                 StructuredGraph targetGraph = new StructuredGraph(graph.method(), AllowAssumptions.YES);
                 graphDecoder.decode(targetGraph, encodedGraph);
             }
@@ -137,9 +136,9 @@ public class HotSpotSuitesProvider extends SuitesProviderBase {
     }
 
     @Override
-    public LIRSuites createLIRSuites(OptionValues options) {
-        LIRSuites suites = defaultSuitesCreator.createLIRSuites(options);
-        String profileInstructions = HotSpotBackend.Options.ASMInstructionProfiling.getValue(options);
+    public LIRSuites createLIRSuites() {
+        LIRSuites suites = defaultSuitesCreator.createLIRSuites();
+        String profileInstructions = HotSpotBackend.Options.ASMInstructionProfiling.getValue();
         if (profileInstructions != null) {
             suites.getPostAllocationOptimizationStage().appendPhase(new HotSpotInstructionProfiling(profileInstructions));
         }

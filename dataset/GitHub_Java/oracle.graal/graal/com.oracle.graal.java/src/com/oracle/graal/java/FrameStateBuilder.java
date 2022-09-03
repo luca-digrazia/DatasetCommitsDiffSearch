@@ -69,10 +69,8 @@ import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.ValuePhiNode;
 import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.SideEffectsState;
 import com.oracle.graal.nodes.graphbuilderconf.ParameterPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.TypePlugin;
 import com.oracle.graal.nodes.java.MonitorIdNode;
 import com.oracle.graal.nodes.util.GraphUtil;
 
@@ -155,7 +153,7 @@ public final class FrameStateBuilder implements SideEffectsState {
         }
     }
 
-    public void initializeForMethodStart(Assumptions assumptions, boolean eagerResolve, Plugins plugins) {
+    public void initializeForMethodStart(Assumptions assumptions, boolean eagerResolve, ParameterPlugin[] parameterPlugins) {
 
         int javaIndex = 0;
         int index = 0;
@@ -163,31 +161,16 @@ public final class FrameStateBuilder implements SideEffectsState {
         if (!method.isStatic()) {
             // add the receiver
             FloatingNode receiver = null;
-            StampPair receiverStamp = null;
-            if (plugins != null) {
-                for (TypePlugin plugin : plugins.getTypePlugins()) {
-                    receiverStamp = plugin.interceptType(parser, originalType, true);
-                    if (receiverStamp != null) {
-                        break;
-                    }
-                }
-            }
-            if (receiverStamp == null) {
-                receiverStamp = StampFactory.forDeclaredType(assumptions, originalType, true);
-            }
-
-            if (plugins != null) {
-                for (ParameterPlugin plugin : plugins.getParameterPlugins()) {
-                    receiver = plugin.interceptParameter(parser, index, receiverStamp);
-                    if (receiver != null) {
-                        break;
-                    }
+            StampPair receiverStamp = StampFactory.forDeclaredType(assumptions, originalType, true);
+            for (ParameterPlugin plugin : parameterPlugins) {
+                receiver = plugin.interceptParameter(parser, index, receiverStamp);
+                if (receiver != null) {
+                    break;
                 }
             }
             if (receiver == null) {
                 receiver = new ParameterNode(javaIndex, receiverStamp);
             }
-
             locals[javaIndex] = graph.unique(receiver);
             javaIndex = 1;
             index = 1;
@@ -201,32 +184,17 @@ public final class FrameStateBuilder implements SideEffectsState {
                 type = type.resolve(accessingClass);
             }
             JavaKind kind = type.getJavaKind();
-            StampPair stamp = null;
-            if (plugins != null) {
-                for (TypePlugin plugin : plugins.getTypePlugins()) {
-                    stamp = plugin.interceptType(parser, type, false);
-                    if (stamp != null) {
-                        break;
-                    }
-                }
-            }
-            if (stamp == null) {
-                stamp = StampFactory.forDeclaredType(assumptions, type, false);
-            }
-
+            StampPair stamp = StampFactory.forDeclaredType(assumptions, type, false);
             FloatingNode param = null;
-            if (plugins != null) {
-                for (ParameterPlugin plugin : plugins.getParameterPlugins()) {
-                    param = plugin.interceptParameter(parser, index, stamp);
-                    if (param != null) {
-                        break;
-                    }
+            for (ParameterPlugin plugin : parameterPlugins) {
+                param = plugin.interceptParameter(parser, index, stamp);
+                if (param != null) {
+                    break;
                 }
             }
             if (param == null) {
                 param = new ParameterNode(index, stamp);
             }
-
             locals[javaIndex] = graph.unique(param);
             javaIndex++;
             if (kind.needsTwoSlots()) {

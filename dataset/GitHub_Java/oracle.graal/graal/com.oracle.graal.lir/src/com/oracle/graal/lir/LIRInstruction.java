@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,83 +22,104 @@
  */
 package com.oracle.graal.lir;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.COMPOSITE;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.CONST;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.OUTGOING;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.UNINITIALIZED;
+import static com.oracle.graal.lir.LIRInstruction.OperandMode.ALIVE;
+import static com.oracle.graal.lir.LIRInstruction.OperandMode.DEF;
+import static com.oracle.graal.lir.LIRInstruction.OperandMode.TEMP;
 
-import java.util.*;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import java.util.EnumMap;
+import java.util.EnumSet;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.asm.*;
+import jdk.vm.ci.code.BytecodePosition;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.Value;
+
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugMetric;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 /**
- * The {@code LIRInstruction} class definition.
+ * The base class for an {@code LIRInstruction}.
  */
 public abstract class LIRInstruction {
-
-    public static final Value[] NO_OPERANDS = {};
-
-    /**
-     * Iterator for iterating over a list of values. Subclasses must overwrite one of the doValue methods.
-     * Clients of the class must only call the doValue method that takes additional parameters.
-     */
-    public abstract static class ValueProcedure {
-        /**
-         * Iterator method to be overwritten. This version of the iterator does not take additional parameters
-         * to keep the signature short.
-         *
-         * @param value The value that is iterated.
-         * @return The new value to replace the value that was passed in.
-         */
-        protected Value doValue(Value value) {
-            throw GraalInternalError.shouldNotReachHere("One of the doValue() methods must be overwritten");
-        }
-
-        /**
-         * Iterator method to be overwritten. This version of the iterator gets additional parameters about the
-         * processed value.
-         *
-         * @param value The value that is iterated.
-         * @param mode The operand mode for the value.
-         * @param flags A set of flags for the value.
-         * @return The new value to replace the value that was passed in.
-         */
-        public Value doValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
-            return doValue(value);
-        }
-    }
-
-
     /**
      * Constants denoting how a LIR instruction uses an operand.
      */
     public enum OperandMode {
         /**
-         * The value must have been defined before. It is alive before the instruction until the beginning of the
-         * instruction, but not necessarily throughout the instruction. A register assigned to it can also be assigend
-         * to a Temp or Output operand. The value can be used again after the instruction, so the instruction must not
-         * modify the register.
+         * The value must have been defined before. It is alive before the instruction until the
+         * beginning of the instruction, but not necessarily throughout the instruction. A register
+         * assigned to it can also be assigned to a {@link #TEMP} or {@link #DEF} operand. The value
+         * can be used again after the instruction, so the instruction must not modify the register.
          */
-        Input,
+        USE,
 
         /**
-         * The value must have been defined before. It is alive before the instruction and throughout the instruction. A
-         * register assigned to it cannot be assigned to a Temp or Output operand. The value can be used again after the
-         * instruction, so the instruction must not modify the register.
+         * The value must have been defined before. It is alive before the instruction and
+         * throughout the instruction. A register assigned to it cannot be assigned to a
+         * {@link #TEMP} or {@link #DEF} operand. The value can be used again after the instruction,
+         * so the instruction must not modify the register.
          */
-        Alive,
+        ALIVE,
 
         /**
-         * The value must not have been defined before, and must not be used after the instruction. The instruction can
-         * do whatever it wants with the register assigned to it (or not use it at all).
+         * The value must not have been defined before, and must not be used after the instruction.
+         * The instruction can do whatever it wants with the register assigned to it (or not use it
+         * at all).
          */
-        Temp,
+        TEMP,
 
         /**
-         * The value must not have been defined before. The instruction has to assign a value to the register. The
-         * value can (and most likely will) be used after the instruction.
+         * The value must not have been defined before. The instruction has to assign a value to the
+         * register. The value can (and most likely will) be used after the instruction.
          */
-        Output,
+        DEF,
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.FIELD)
+    public static @interface Use {
+
+        OperandFlag[] value() default OperandFlag.REG;
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.FIELD)
+    public static @interface Alive {
+
+        OperandFlag[] value() default OperandFlag.REG;
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.FIELD)
+    public static @interface Temp {
+
+        OperandFlag[] value() default OperandFlag.REG;
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.FIELD)
+    public static @interface Def {
+
+        OperandFlag[] value() default OperandFlag.REG;
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.FIELD)
+    public static @interface State {
     }
 
     /**
@@ -108,83 +129,63 @@ public abstract class LIRInstruction {
         /**
          * The value can be a {@link RegisterValue}.
          */
-        Register,
+        REG,
 
         /**
          * The value can be a {@link StackSlot}.
          */
-        Stack,
+        STACK,
 
         /**
-         * The value can be a {@link Address}.
+         * The value can be a {@link CompositeValue}.
          */
-        Address,
+        COMPOSITE,
 
         /**
-         * The value can be a {@link Constant}.
+         * The value can be a {@link JavaConstant}.
          */
-        Constant,
+        CONST,
 
         /**
-         * The value can be {@link CiValue#IllegalValue}.
+         * The value can be {@link Value#ILLEGAL}.
          */
-        Illegal,
+        ILLEGAL,
 
         /**
          * The register allocator should try to assign a certain register to improve code quality.
          * Use {@link LIRInstruction#forEachRegisterHint} to access the register hints.
          */
-        RegisterHint,
+        HINT,
 
         /**
-         * The value can be uninitialized, e.g., a stack slot that has not written to before. This is only
-         * used to avoid false positives in verification code.
+         * The value can be uninitialized, e.g., a stack slot that has not written to before. This
+         * is only used to avoid false positives in verification code.
          */
-        Uninitialized,
+        UNINITIALIZED,
+
+        /** Outgoing block value. */
+        OUTGOING,
     }
 
     /**
      * For validity checking of the operand flags defined by instruction subclasses.
      */
-    private static final EnumMap<OperandMode, EnumSet<OperandFlag>> ALLOWED_FLAGS;
+    protected static final EnumMap<OperandMode, EnumSet<OperandFlag>> ALLOWED_FLAGS;
 
     static {
         ALLOWED_FLAGS = new EnumMap<>(OperandMode.class);
-        ALLOWED_FLAGS.put(OperandMode.Input,  EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Address, OperandFlag.Constant, OperandFlag.Illegal, OperandFlag.RegisterHint, OperandFlag.Uninitialized));
-        ALLOWED_FLAGS.put(OperandMode.Alive,  EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Address, OperandFlag.Constant, OperandFlag.Illegal, OperandFlag.RegisterHint, OperandFlag.Uninitialized));
-        ALLOWED_FLAGS.put(OperandMode.Temp,   EnumSet.of(OperandFlag.Register, OperandFlag.Constant, OperandFlag.Illegal, OperandFlag.RegisterHint));
-        ALLOWED_FLAGS.put(OperandMode.Output, EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Illegal, OperandFlag.RegisterHint));
+        ALLOWED_FLAGS.put(OperandMode.USE, EnumSet.of(REG, STACK, COMPOSITE, CONST, ILLEGAL, HINT, UNINITIALIZED));
+        ALLOWED_FLAGS.put(ALIVE, EnumSet.of(REG, STACK, COMPOSITE, CONST, ILLEGAL, HINT, UNINITIALIZED, OUTGOING));
+        ALLOWED_FLAGS.put(TEMP, EnumSet.of(REG, STACK, COMPOSITE, ILLEGAL, HINT));
+        ALLOWED_FLAGS.put(DEF, EnumSet.of(REG, STACK, COMPOSITE, ILLEGAL, HINT));
     }
 
     /**
-     * The opcode of this instruction.
+     * The flags of the base and index value of an address.
      */
-    protected final Object code;
+    protected static final EnumSet<OperandFlag> ADDRESS_FLAGS = EnumSet.of(REG, ILLEGAL);
 
-    /**
-     * The output operands for this instruction (modified by the register allocator).
-     */
-    protected Value[] outputs;
-
-    /**
-     * The input operands for this instruction (modified by the register allocator).
-     */
-    protected Value[] inputs;
-
-    /**
-     * The alive operands for this instruction (modified by the register allocator).
-     */
-    protected Value[] alives;
-
-    /**
-     * The temp operands for this instruction (modified by the register allocator).
-     */
-    protected Value[] temps;
-
-    /**
-     * Used to emit debug information.
-     */
-    public final LIRDebugInfo info;
+    private final LIRInstructionClass<?> instructionClass;
 
     /**
      * Instruction id for register allocation.
@@ -192,26 +193,23 @@ public abstract class LIRInstruction {
     private int id;
 
     /**
-     * Constructs a new LIR instruction that has input and temp operands.
-     *
-     * @param opcode the opcode of the new instruction
-     * @param outputs the operands that holds the operation results of this instruction.
-     * @param info the {@link LIRDebugInfo} info that is to be preserved for the instruction. This will be {@code null} when no debug info is required for the instruction.
-     * @param inputs the input operands for the instruction.
-     * @param temps the temp operands for the instruction.
+     * The source position of the code that generated this instruction.
      */
-    public LIRInstruction(Object opcode, Value[] outputs, LIRDebugInfo info, Value[] inputs, Value[] alives, Value[] temps) {
-        this.code = opcode;
-        this.outputs = outputs;
-        this.inputs = inputs;
-        this.alives = alives;
-        this.temps = temps;
-        this.info = info;
-        this.id = -1;
+    private BytecodePosition position;
+
+    private static final DebugMetric LIR_NODE_COUNT = Debug.metric("LIRNodes");
+
+    /**
+     * Constructs a new LIR instruction.
+     */
+    public LIRInstruction(LIRInstructionClass<? extends LIRInstruction> c) {
+        LIR_NODE_COUNT.increment();
+        instructionClass = c;
+        assert c.getClazz() == this.getClass();
+        id = -1;
     }
 
-    public abstract void emitCode(TargetMethodAssembler tasm);
-
+    public abstract void emitCode(CompilationResultBuilder crb);
 
     public final int id() {
         return id;
@@ -221,154 +219,135 @@ public abstract class LIRInstruction {
         this.id = id;
     }
 
-    /**
-     * Gets an input operand of this instruction.
-     *
-     * @param index the index of the operand requested.
-     * @return the {@code index}'th input operand.
-     */
-    protected final Value input(int index) {
-        return inputs[index];
+    public final BytecodePosition getPosition() {
+        return position;
     }
 
-    /**
-     * Gets an alive operand of this instruction.
-     *
-     * @param index the index of the operand requested.
-     * @return the {@code index}'th alive operand.
-     */
-    protected final Value alive(int index) {
-        return alives[index];
+    public final void setPosition(BytecodePosition position) {
+        this.position = position;
     }
 
-    /**
-     * Gets a temp operand of this instruction.
-     *
-     * @param index the index of the operand requested.
-     * @return the {@code index}'th temp operand.
-     */
-    protected final Value temp(int index) {
-        return temps[index];
+    public final String name() {
+        return instructionClass.getOpcode(this);
     }
 
-    /**
-     * Gets the result operand for this instruction.
-     *
-     * @return return the result operand
-     */
-    protected final Value output(int index) {
-        return outputs[index];
+    public final boolean hasOperands() {
+        return instructionClass.hasOperands() || hasState() || destroysCallerSavedRegisters();
     }
 
-    /**
-     * Gets the instruction name.
-     */
-    public String name() {
-        return code.toString();
+    public final boolean hasState() {
+        return instructionClass.hasState(this);
     }
 
-    public boolean hasOperands() {
-        return inputs.length > 0 || alives.length > 0 || temps.length > 0 || outputs.length > 0 || info != null || hasCall();
+    public boolean destroysCallerSavedRegisters() {
+        return false;
     }
 
-    private static final EnumSet<OperandFlag> ADDRESS_FLAGS = EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
-
-    private void forEach(Value[] values, OperandMode mode, ValueProcedure proc) {
-        for (int i = 0; i < values.length; i++) {
-            assert ALLOWED_FLAGS.get(mode).containsAll(flagsFor(mode, i));
-
-            Value value = values[i];
-            if (isAddress(value)) {
-                assert flagsFor(mode, i).contains(OperandFlag.Address);
-                Address address = asAddress(value);
-                address.setBase(proc.doValue(address.getBase(), mode, ADDRESS_FLAGS));
-                address.setIndex(proc.doValue(address.getIndex(), mode, ADDRESS_FLAGS));
-            } else {
-                values[i] = proc.doValue(values[i], mode, flagsFor(mode, i));
-            }
-        }
+    // InstructionValueProcedures
+    public final void forEachInput(InstructionValueProcedure proc) {
+        instructionClass.forEachUse(this, proc);
     }
 
+    public final void forEachAlive(InstructionValueProcedure proc) {
+        instructionClass.forEachAlive(this, proc);
+    }
+
+    public final void forEachTemp(InstructionValueProcedure proc) {
+        instructionClass.forEachTemp(this, proc);
+    }
+
+    public final void forEachOutput(InstructionValueProcedure proc) {
+        instructionClass.forEachDef(this, proc);
+    }
+
+    public final void forEachState(InstructionValueProcedure proc) {
+        instructionClass.forEachState(this, proc);
+    }
+
+    // ValueProcedures
     public final void forEachInput(ValueProcedure proc) {
-        forEach(inputs, OperandMode.Input, proc);
+        instructionClass.forEachUse(this, proc);
     }
 
     public final void forEachAlive(ValueProcedure proc) {
-        forEach(alives, OperandMode.Alive, proc);
+        instructionClass.forEachAlive(this, proc);
     }
 
     public final void forEachTemp(ValueProcedure proc) {
-        forEach(temps, OperandMode.Temp, proc);
+        instructionClass.forEachTemp(this, proc);
     }
 
     public final void forEachOutput(ValueProcedure proc) {
-        forEach(outputs, OperandMode.Output, proc);
+        instructionClass.forEachDef(this, proc);
     }
 
     public final void forEachState(ValueProcedure proc) {
-        if (info != null) {
-            info.forEachState(proc);
-
-            if (this instanceof LIRXirInstruction) {
-                LIRXirInstruction xir = (LIRXirInstruction) this;
-                if (xir.infoAfter != null) {
-                    xir.infoAfter.forEachState(proc);
-                }
-            }
-        }
+        instructionClass.forEachState(this, proc);
     }
 
-    /**
-     * Returns true when this instruction is a call instruction that destroys all caller-saved registers.
-     */
-    public final boolean hasCall() {
-        return this instanceof StandardOp.CallOp;
+    // States
+    public final void forEachState(InstructionStateProcedure proc) {
+        instructionClass.forEachState(this, proc);
     }
 
-    /**
-     * Iterates all register hints for the specified value, i.e., all preferred candidates for the register to be
-     * assigned to the value.
-     * <br>
-     * Subclasses can override this method. The default implementation processes all Input operands as the hints for
-     * an Output operand, and all Output operands as the hints for an Input operand.
-     *
-     * @param value The value the hints are needed for.
-     * @param mode The operand mode of the value.
-     * @param proc The procedure invoked for all the hints. If the procedure returns a non-null value, the iteration is stopped
-     *             and the value is returned by this method, i.e., clients can stop the iteration once a suitable hint has been found.
-     * @return The non-null value returned by the procedure, or null.
-     */
-    public Value forEachRegisterHint(Value value, OperandMode mode, ValueProcedure proc) {
-        Value[] hints;
-        if (mode == OperandMode.Input) {
-            hints = outputs;
-        } else if (mode == OperandMode.Output) {
-            hints = inputs;
-        } else {
-            return null;
-        }
-
-        for (int i = 0; i < hints.length; i++) {
-            Value result = proc.doValue(hints[i], null, null);
-            if (result != null) {
-                return result;
-            }
-        }
-        return null;
+    public final void forEachState(StateProcedure proc) {
+        instructionClass.forEachState(this, proc);
     }
 
-    /**
-     * Used by the register allocator to decide which kind of location can be assigned to the operand.
-     * @param mode The kind of operand.
-     * @param index The index of the operand.
-     * @return The flags for the operand.
-     */
-    // TODO (cwimmer) this method will go away when we have named operands, the flags will be specified as annotations instead.
-    protected abstract EnumSet<OperandFlag> flagsFor(OperandMode mode, int index);
-
-    protected void verify() {
+    // InstructionValueConsumers
+    public final void visitEachInput(InstructionValueConsumer proc) {
+        instructionClass.visitEachUse(this, proc);
     }
 
+    public final void visitEachAlive(InstructionValueConsumer proc) {
+        instructionClass.visitEachAlive(this, proc);
+    }
+
+    public final void visitEachTemp(InstructionValueConsumer proc) {
+        instructionClass.visitEachTemp(this, proc);
+    }
+
+    public final void visitEachOutput(InstructionValueConsumer proc) {
+        instructionClass.visitEachDef(this, proc);
+    }
+
+    public final void visitEachState(InstructionValueConsumer proc) {
+        instructionClass.visitEachState(this, proc);
+    }
+
+    // ValueConsumers
+    public final void visitEachInput(ValueConsumer proc) {
+        instructionClass.visitEachUse(this, proc);
+    }
+
+    public final void visitEachAlive(ValueConsumer proc) {
+        instructionClass.visitEachAlive(this, proc);
+    }
+
+    public final void visitEachTemp(ValueConsumer proc) {
+        instructionClass.visitEachTemp(this, proc);
+    }
+
+    public final void visitEachOutput(ValueConsumer proc) {
+        instructionClass.visitEachDef(this, proc);
+    }
+
+    public final void visitEachState(ValueConsumer proc) {
+        instructionClass.visitEachState(this, proc);
+    }
+
+    @SuppressWarnings("unused")
+    public final Value forEachRegisterHint(Value value, OperandMode mode, InstructionValueProcedure proc) {
+        return instructionClass.forEachRegisterHint(this, mode, proc);
+    }
+
+    @SuppressWarnings("unused")
+    public final Value forEachRegisterHint(Value value, OperandMode mode, ValueProcedure proc) {
+        return instructionClass.forEachRegisterHint(this, mode, proc);
+    }
+
+    public void verify() {
+    }
 
     public final String toStringWithIdPrefix() {
         if (id != -1) {
@@ -377,72 +356,12 @@ public abstract class LIRInstruction {
         return "     " + toString();
     }
 
-    /**
-     * Gets the operation performed by this instruction in terms of its operands as a string.
-     */
-    public String operationString() {
-        StringBuilder buf = new StringBuilder();
-        String sep = "";
-        if (outputs.length > 1) {
-            buf.append("(");
-        }
-        for (Value output : outputs) {
-            buf.append(sep).append(output);
-            sep = ", ";
-        }
-        if (outputs.length > 1) {
-            buf.append(")");
-        }
-        if (outputs.length > 0) {
-            buf.append(" = ");
-        }
-
-        if (inputs.length + alives.length != 1) {
-            buf.append("(");
-        }
-        sep = "";
-        for (Value input : inputs) {
-            buf.append(sep).append(input);
-            sep = ", ";
-        }
-        for (Value input : alives) {
-            buf.append(sep).append(input).append(" ~");
-            sep = ", ";
-        }
-        if (inputs.length + alives.length != 1) {
-            buf.append(")");
-        }
-
-        if (temps.length > 0) {
-            buf.append(" [");
-        }
-        sep = "";
-        for (Value temp : temps) {
-            buf.append(sep).append(temp);
-            sep = ", ";
-        }
-        if (temps.length > 0) {
-            buf.append("]");
-        }
-        return buf.toString();
-    }
-
-    protected void appendDebugInfo(StringBuilder buf) {
-        if (info != null) {
-            buf.append(" [bci:");
-            String sep = "";
-            for (BytecodeFrame cur = info.topFrame; cur != null; cur = cur.caller()) {
-                buf.append(sep).append(cur.getBCI());
-                sep = ",";
-            }
-            buf.append("]");
-        }
-    }
-
     @Override
     public String toString() {
-        StringBuilder buf = new StringBuilder(name()).append(' ').append(operationString());
-        appendDebugInfo(buf);
-        return buf.toString();
+        return instructionClass.toString(this);
+    }
+
+    public LIRInstructionClass<?> getLIRInstructionClass() {
+        return instructionClass;
     }
 }

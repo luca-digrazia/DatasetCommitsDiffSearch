@@ -53,36 +53,36 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
     public static final NodeClass<InstanceOfNode> TYPE = NodeClass.create(InstanceOfNode.class);
 
     protected final ObjectStamp checkedStamp;
-    @OptionalInput(InputType.Association) protected TypeProfileNode profile;
+    @OptionalInput(InputType.Anchor) protected TypeProfileNode anchor;
 
     private InstanceOfNode(ObjectStamp checkedStamp, ValueNode object, TypeProfileNode profile) {
         this(TYPE, checkedStamp, object, profile);
     }
 
-    protected InstanceOfNode(NodeClass<? extends InstanceOfNode> c, ObjectStamp checkedStamp, ValueNode object, TypeProfileNode profile) {
+    protected InstanceOfNode(NodeClass<? extends InstanceOfNode> c, ObjectStamp checkedStamp, ValueNode object, TypeProfileNode anchor) {
         super(c, object);
         this.checkedStamp = checkedStamp;
-        this.profile = profile;
+        this.anchor = anchor;
         assert checkedStamp != null;
     }
 
-    public static LogicNode createAllowNull(TypeReference type, ValueNode object, TypeProfileNode profile) {
+    public static LogicNode createAllowNull(TypeReference type, ValueNode object, TypeProfileNode anchor) {
         if (StampTool.isPointerNonNull(object)) {
-            return create(type, object, profile);
+            return create(type, object, anchor);
         }
-        return createHelper(StampFactory.object(type), object, profile);
+        return createHelper(StampFactory.object(type), object, anchor);
     }
 
     public static LogicNode create(TypeReference type, ValueNode object, TypeProfileNode anchor) {
         return createHelper(StampFactory.objectNonNull(type), object, anchor);
     }
 
-    public static LogicNode createHelper(ObjectStamp checkedStamp, ValueNode object, TypeProfileNode profile) {
+    public static LogicNode createHelper(ObjectStamp checkedStamp, ValueNode object, TypeProfileNode anchor) {
         LogicNode synonym = findSynonym(checkedStamp, object);
         if (synonym != null) {
             return synonym;
         } else {
-            return new InstanceOfNode(checkedStamp, object, profile);
+            return new InstanceOfNode(checkedStamp, object, anchor);
         }
     }
 
@@ -136,7 +136,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
     }
 
     public JavaTypeProfile profile() {
-        return (profile == null ? null : profile.getProfile());
+        return (anchor == null ? null : anchor.getProfile());
     }
 
     @Override
@@ -182,11 +182,11 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
         return !checkedStamp.nonNull();
     }
 
-    public void setProfile(JavaTypeProfile typeProfile) {
-        profile.setProfile(typeProfile);
+    public void setProfile(JavaTypeProfile profile) {
+        anchor.setProfile(profile);
     }
 
-    public TypeProfileNode getProfile() {
-        return profile;
+    public TypeProfileNode getAnchor() {
+        return anchor;
     }
 }

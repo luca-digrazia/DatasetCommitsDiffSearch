@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.graph;
 
+import static com.oracle.graal.graph.Edges.Type.Successors;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -29,13 +31,14 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import jdk.vm.ci.common.JVMCIError;
+
 import com.oracle.graal.compiler.common.CollectionsFactory;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.DebugTimer;
 import com.oracle.graal.debug.Fingerprint;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.options.Option;
@@ -229,11 +232,13 @@ public class Graph {
         this(null);
     }
 
+    public static final boolean MODIFICATION_COUNTS_ENABLED = assertionsEnabled();
+
     /**
      * Determines if assertions are enabled for the {@link Graph} class.
      */
     @SuppressWarnings("all")
-    public static boolean isModificationCountsEnabled() {
+    private static boolean assertionsEnabled() {
         boolean enabled = false;
         assert enabled = true;
         return enabled;
@@ -251,7 +256,7 @@ public class Graph {
         iterableNodesFirst = new ArrayList<>(NodeClass.allocatedNodeIterabledIds());
         iterableNodesLast = new ArrayList<>(NodeClass.allocatedNodeIterabledIds());
         this.name = name;
-        if (isModificationCountsEnabled()) {
+        if (MODIFICATION_COUNTS_ENABLED) {
             nodeModCounts = new int[INITIAL_NODES_SIZE];
             nodeUsageModCounts = new int[INITIAL_NODES_SIZE];
         }
@@ -421,24 +426,16 @@ public class Graph {
         return add(node);
     }
 
-    private final class AddInputsFilter extends Node.EdgeVisitor {
-
-        @Override
-        public Node apply(Node self, Node input) {
-            if (!input.isAlive()) {
+    private <T extends Node> void addInputs(T node) {
+        NodePosIterator iterator = node.inputs().iterator();
+        while (iterator.hasNext()) {
+            Position pos = iterator.nextPosition();
+            Node input = pos.get(node);
+            if (input != null && !input.isAlive()) {
                 assert !input.isDeleted();
-                return addOrUniqueWithInputs(input);
-            } else {
-                return input;
+                pos.initialize(node, addOrUniqueWithInputs(input));
             }
         }
-
-    }
-
-    private AddInputsFilter addInputsFilter = new AddInputsFilter();
-
-    private <T extends Node> void addInputs(T node) {
-        node.applyInputs(addInputsFilter);
     }
 
     private <T extends Node> T addHelper(T node) {
@@ -603,8 +600,7 @@ public class Graph {
         assert node.graph() == this || node.graph() == null;
         assert node.getNodeClass().valueNumberable();
         assert node.getNodeClass().isLeafNode() : node.getClass();
-        CacheEntry entry = new CacheEntry(node);
-        cachedLeafNodes.put(entry, node);
+        cachedLeafNodes.put(new CacheEntry(node), node);
     }
 
     Node findNodeInCache(Node node) {
@@ -645,18 +641,20 @@ public class Graph {
             int minCount = Integer.MAX_VALUE;
             Node minCountNode = null;
             for (Node input : node.inputs()) {
-                int usageCount = input.getUsageCount();
-                if (usageCount == earlyExitUsageCount) {
-                    return null;
-                } else if (usageCount < minCount) {
-                    minCount = usageCount;
-                    minCountNode = input;
+                if (input != null) {
+                    int usageCount = input.getUsageCount();
+                    if (usageCount == earlyExitUsageCount) {
+                        return null;
+                    } else if (usageCount < minCount) {
+                        minCount = usageCount;
+                        minCountNode = input;
+                    }
                 }
             }
             if (minCountNode != null) {
                 for (Node usage : minCountNode.usages()) {
-                    if (usage != node && nodeClass == usage.getNodeClass() && node.valueEquals(usage) && nodeClass.equalInputs(node, usage) &&
-                                    nodeClass.equalSuccessors(node, usage)) {
+                    if (usage != node && nodeClass == usage.getNodeClass() && node.valueEquals(usage) && nodeClass.getInputEdges().areEqualIn(node, usage) &&
+                                    nodeClass.getEdges(Successors).areEqualIn(node, usage)) {
                         return (T) usage;
                     }
                 }
@@ -777,7 +775,7 @@ public class Graph {
 
     public static final int COMPRESSION_THRESHOLD = Options.GraphCompressionThreshold.getValue();
 
-    private static final DebugCounter GraphCompressions = Debug.counter("GraphCompressions");
+    private static final DebugMetric GraphCompressions = Debug.metric("GraphCompressions");
 
     /**
      * If the {@linkplain #COMPRESSION_THRESHOLD compression threshold} is met, the list of nodes is
@@ -808,7 +806,7 @@ public class Graph {
                 nextId++;
             }
         }
-        if (isModificationCountsEnabled()) {
+        if (MODIFICATION_COUNTS_ENABLED) {
             // This will cause any current iteration to fail with an assertion
             Arrays.fill(nodeModCounts, 0);
             Arrays.fill(nodeUsageModCounts, 0);
@@ -1016,12 +1014,12 @@ public class Graph {
                     try {
                         assert node.verify();
                     } catch (AssertionError t) {
-                        throw new GraalError(t);
+                        throw new JVMCIError(t);
                     } catch (RuntimeException t) {
-                        throw new GraalError(t);
+                        throw new JVMCIError(t);
                     }
-                } catch (GraalError e) {
-                    throw GraalGraphError.transformAndAddContext(e, node).addContext(this);
+                } catch (JVMCIError e) {
+                    throw GraalGraphJVMCIError.transformAndAddContext(e, node).addContext(this);
                 }
             }
         }
