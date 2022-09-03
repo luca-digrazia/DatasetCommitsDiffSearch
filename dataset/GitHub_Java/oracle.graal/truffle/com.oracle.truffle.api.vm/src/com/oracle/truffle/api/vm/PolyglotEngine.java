@@ -24,6 +24,7 @@
  */
 package com.oracle.truffle.api.vm;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -528,14 +529,12 @@ public class PolyglotEngine {
 
     @SuppressWarnings("try")
     private Object evalImpl(TruffleLanguage<?>[] fillLang, Source s, Language l) throws IOException {
-        ContextStore prev = Access.EXEC.executionStarted(context);
-        try {
+        try (Closeable d = Access.EXEC.executionStart(context, -1, debugger, s)) {
             Access.DEBUG.executionStarted(PolyglotEngine.this, -1, debugger, s);
             TruffleLanguage<?> langImpl = l.getImpl(true);
             fillLang[0] = langImpl;
             return Access.LANGS.eval(langImpl, s, l.cache);
         } finally {
-            Access.EXEC.executionEnded(prev);
             Access.DEBUG.executionEnded(PolyglotEngine.this, debugger);
         }
     }
@@ -546,13 +545,11 @@ public class PolyglotEngine {
         Object res;
         CompilerAsserts.neverPartOfCompilation();
         if (executor == null) {
-            ContextStore prev = Access.EXEC.executionStarted(context);
-            try {
+            try (final Closeable c = Access.EXEC.executionStart(context, -1, debugger, null)) {
                 Access.DEBUG.executionStarted(PolyglotEngine.this, -1, debugger, null);
                 final Object[] args = ForeignAccess.getArguments(frame).toArray();
                 res = ForeignAccess.execute(foreignNode, frame, receiver, args);
             } finally {
-                Access.EXEC.executionEnded(prev);
                 Access.DEBUG.executionEnded(PolyglotEngine.this, debugger);
             }
         } else {
@@ -576,15 +573,13 @@ public class PolyglotEngine {
             @SuppressWarnings("try")
             @Override
             protected Object compute() throws IOException {
-                ContextStore prev = Access.EXEC.executionStarted(context);
-                try {
+                try (final Closeable c = Access.EXEC.executionStart(context, -1, debugger, null)) {
                     Access.DEBUG.executionStarted(PolyglotEngine.this, -1, debugger, null);
                     final Object[] args = ForeignAccess.getArguments(materialized).toArray();
                     RootNode node = SymbolInvokerImpl.createTemporaryRoot(TruffleLanguage.class, foreignNode, receiver, args.length);
                     final CallTarget target = Truffle.getRuntime().createCallTarget(node);
                     return target.call(args);
                 } finally {
-                    Access.EXEC.executionEnded(prev);
                     Access.DEBUG.executionEnded(PolyglotEngine.this, debugger);
                 }
             }
@@ -857,8 +852,7 @@ public class PolyglotEngine {
 
         @SuppressWarnings("try")
         private Object executeDirect(Object[] args) throws IOException {
-            ContextStore prev = Access.EXEC.executionStarted(context);
-            try {
+            try (final Closeable c = Access.EXEC.executionStart(context, -1, debugger, null)) {
                 Access.DEBUG.executionStarted(PolyglotEngine.this, -1, debugger, null);
                 for (;;) {
                     try {
@@ -871,7 +865,6 @@ public class PolyglotEngine {
                     }
                 }
             } finally {
-                Access.EXEC.executionEnded(prev);
                 Access.DEBUG.executionEnded(PolyglotEngine.this, debugger);
             }
         }
@@ -1082,12 +1075,11 @@ public class PolyglotEngine {
         @SuppressWarnings("try")
         public Value getGlobalObject() {
             checkThread();
-            ContextStore prev = Access.EXEC.executionStarted(context);
-            try {
+            try (Closeable d = Access.EXEC.executionStart(context, -1, debugger, null)) {
                 Object res = Access.LANGS.languageGlobal(getEnv(true));
                 return res == null ? null : new Value(new TruffleLanguage[]{info.getImpl(true)}, res);
-            } finally {
-                Access.EXEC.executionEnded(prev);
+            } catch (IOException ex) {
+                throw new IllegalStateException(ex);
             }
         }
 

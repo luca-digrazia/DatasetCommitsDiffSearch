@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.Assumption;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -87,7 +86,6 @@ public final class Debugger {
 
     private static final SourceSectionFilter CALL_FILTER = SourceSectionFilter.newBuilder().tagIs(CallTag.class).build();
     private static final SourceSectionFilter HALT_FILTER = SourceSectionFilter.newBuilder().tagIs(StatementTag.class).build();
-    private static final Assumption NO_DEBUGGER = Truffle.getRuntime().createAssumption("No debugger assumption");
 
     /** Counter for externally requested step actions. */
     private static int nextActionID = 0;
@@ -151,7 +149,6 @@ public final class Debugger {
         this.engine = engine;
         this.instrumenter = instrumenter;
         this.breakpoints = new BreakpointFactory(instrumenter, breakpointCallback, warningLog);
-        NO_DEBUGGER.invalidate();
     }
 
     interface BreakpointCallback {
@@ -1012,11 +1009,6 @@ public final class Debugger {
                 if (debugger[0] != null) {
                     ((Debugger) debugger[0]).executionEnded();
                 }
-            }
-
-            @Override
-            public Assumption assumeNoDebugger() {
-                return NO_DEBUGGER;
             }
         }
 
