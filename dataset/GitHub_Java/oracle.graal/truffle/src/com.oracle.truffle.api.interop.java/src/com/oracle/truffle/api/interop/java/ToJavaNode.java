@@ -196,7 +196,7 @@ abstract class ToJavaNode extends Node {
         } else if (targetType == List.class) {
             if (primitive.hasSize(truffleObject)) {
                 TypeAndClass<?> elementType = getGenericParameterType(genericType, 0);
-                obj = TruffleList.create(elementType.clazz, elementType.type, truffleObject, languageContext);
+                obj = TruffleList.create(elementType, truffleObject, languageContext);
             } else {
                 throw newClassCastException(truffleObject, targetType, "has no size");
             }
@@ -270,19 +270,20 @@ abstract class ToJavaNode extends Node {
         return TypeAndClass.ANY;
     }
 
-    private static Type getGenericArrayComponentType(Type genericType) {
+    private static TypeAndClass<?> getGenericArrayComponentType(Class<?> type, Type genericType) {
+        assert type.isArray();
+        Class<?> componentType = type.getComponentType();
         Type genericComponentType = null;
         if (!TruffleOptions.AOT && genericType instanceof GenericArrayType) {
             GenericArrayType genericArrayType = (GenericArrayType) genericType;
             genericComponentType = genericArrayType.getGenericComponentType();
         }
-        return genericComponentType;
+        return new TypeAndClass<>(genericComponentType, componentType);
     }
 
     private static Object truffleObjectToArray(TruffleObject foreignObject, Class<?> arrayType, Type genericArrayType, Object languageContext) {
-        Class<?> componentType = arrayType.getComponentType();
-        List<?> list = TruffleList.create(componentType, getGenericArrayComponentType(genericArrayType), foreignObject, languageContext);
-        Object array = Array.newInstance(componentType, list.size());
+        List<?> list = TruffleList.create(getGenericArrayComponentType(arrayType, genericArrayType), foreignObject, languageContext);
+        Object array = Array.newInstance(arrayType.getComponentType(), list.size());
         for (int i = 0; i < list.size(); i++) {
             Array.set(array, i, list.get(i));
         }
