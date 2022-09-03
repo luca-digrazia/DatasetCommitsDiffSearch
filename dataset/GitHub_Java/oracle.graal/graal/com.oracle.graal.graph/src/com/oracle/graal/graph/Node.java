@@ -209,12 +209,12 @@ public abstract class Node implements Cloneable, Formattable {
     public static final int NOT_ITERABLE = -1;
 
     public Node(NodeClass<? extends Node> c) {
-        init(c);
-    }
-
-    final void init(NodeClass<? extends Node> c) {
+        init();
         assert c.getJavaClass() == this.getClass();
         this.nodeClass = c;
+    }
+
+    final void init() {
         id = INITIAL_ID;
         extraUsages = NO_NODES;
     }
@@ -433,7 +433,7 @@ public abstract class Node implements Cloneable, Formattable {
             this.movUsageFromEndTo(1);
             return true;
         }
-        for (int i = this.extraUsagesCount - 1; i >= 0; i--) {
+        for (int i = 0; i < this.extraUsagesCount; ++i) {
             if (extraUsages[i] == node) {
                 this.movUsageFromEndTo(i + INLINE_USAGE_COUNT);
                 return true;
@@ -683,12 +683,12 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     private void unregisterInputs() {
-        acceptInputs((node, input) -> {
-            node.removeThisFromUsages(input);
+        for (Node input : inputs()) {
+            removeThisFromUsages(input);
             if (input.hasNoUsages()) {
-                node.maybeNotifyZeroUsages(input);
+                maybeNotifyZeroUsages(input);
             }
-        });
+        }
     }
 
     public void clearInputs() {
@@ -851,6 +851,7 @@ public abstract class Node implements Cloneable, Formattable {
         for (Node input : inputs()) {
             assertFalse(input.isDeleted(), "input was deleted");
             assertTrue(input.isAlive(), "input is not alive yet, i.e., it was not yet added to the graph");
+            assertTrue(input.usages().contains(this), "missing usage in input %s", input);
         }
         return true;
     }
@@ -858,22 +859,7 @@ public abstract class Node implements Cloneable, Formattable {
     public boolean verify() {
         assertTrue(isAlive(), "cannot verify inactive nodes (id=%d)", id);
         assertTrue(graph() != null, "null graph");
-        if (Options.VerifyGraalGraphEdges.getValue()) {
-            verifyEdges();
-        }
-        return true;
-    }
-
-    /**
-     * Perform expensive verification of inputs, usages, predecessors and successors.
-     *
-     * @return true
-     */
-    public boolean verifyEdges() {
         verifyInputs();
-        for (Node input : inputs()) {
-            assertTrue(input.usages().contains(this), "missing usage in input %s", input);
-        }
         for (Node successor : successors()) {
             assertTrue(successor.predecessor() == this, "missing predecessor in %s (actual: %s)", successor, successor.predecessor());
             assertTrue(successor.graph() == graph(), "mismatching graph in successor %s", successor);
