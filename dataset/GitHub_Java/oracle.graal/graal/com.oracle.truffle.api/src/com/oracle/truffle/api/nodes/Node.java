@@ -29,7 +29,6 @@ import java.util.*;
 import java.util.concurrent.*;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.api.utilities.*;
 
@@ -38,9 +37,9 @@ import com.oracle.truffle.api.utilities.*;
  */
 public abstract class Node implements Cloneable {
 
-    @CompilationFinal private Node parent;
+    private Node parent;
 
-    @CompilationFinal private SourceSection sourceSection;
+    private SourceSection sourceSection;
 
     /**
      * Marks array fields that are children of this node.
@@ -124,16 +123,12 @@ public abstract class Node implements Cloneable {
      *
      * @return the assigned source code section
      */
-    @ExplodeLoop
+    @CompilerDirectives.SlowPath
     public final SourceSection getEncapsulatingSourceSection() {
-        Node current = this;
-        while (current != null) {
-            if (current.sourceSection != null) {
-                return current.sourceSection;
-            }
-            current = current.parent;
+        if (sourceSection == null && getParent() != null) {
+            return getParent().getEncapsulatingSourceSection();
         }
-        return null;
+        return sourceSection;
     }
 
     /**
@@ -304,17 +299,12 @@ public abstract class Node implements Cloneable {
     }
 
     private void reportReplace(Node oldNode, Node newNode, CharSequence reason) {
-        Node node = this;
-        while (node != null) {
-            if (node instanceof ReplaceObserver) {
-                ((ReplaceObserver) node).nodeReplaced(oldNode, newNode, reason);
-            } else if (node instanceof RootNode) {
-                CallTarget target = ((RootNode) node).getCallTarget();
-                if (target instanceof ReplaceObserver) {
-                    ((ReplaceObserver) target).nodeReplaced(oldNode, newNode, reason);
-                }
+        RootNode rootNode = getRootNode();
+        if (rootNode != null) {
+            CallTarget target = rootNode.getCallTarget();
+            if (target instanceof ReplaceObserver) {
+                ((ReplaceObserver) target).nodeReplaced(oldNode, newNode, reason);
             }
-            node = node.getParent();
         }
         if (TruffleOptions.TraceRewrites) {
             NodeUtil.traceRewrite(this, newNode, reason);
