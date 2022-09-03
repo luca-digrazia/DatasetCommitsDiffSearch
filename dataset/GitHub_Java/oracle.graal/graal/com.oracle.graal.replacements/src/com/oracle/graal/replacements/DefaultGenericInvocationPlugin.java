@@ -29,7 +29,6 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
@@ -57,23 +56,8 @@ public class DefaultGenericInvocationPlugin implements GenericInvocationPlugin {
         this.structuralInputType = metaAccess.lookupJavaType(StructuralInput.class);
     }
 
-    /**
-     * Calls in replacements to methods matching one of these filters are elided. Only void methods
-     * are considered for elision. The use of "snippets" in name of the variable and system property
-     * is purely for legacy reasons.
-     */
-    private static final MethodFilter[] MethodsElidedInSnippets = getMethodsElidedInSnippets();
-
-    private static MethodFilter[] getMethodsElidedInSnippets() {
-        String commaSeparatedPatterns = System.getProperty("graal.MethodsElidedInSnippets");
-        if (commaSeparatedPatterns != null) {
-            return MethodFilter.parse(commaSeparatedPatterns);
-        }
-        return null;
-    }
-
     public boolean apply(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
-        if (b.parsingReplacement() && wordOperationPlugin.apply(b, method, args)) {
+        if (wordOperationPlugin.apply(b, method, args)) {
             return true;
         } else if (b.parsingReplacement()) {
             NodeIntrinsic intrinsic = nodeIntrinsification.getIntrinsic(method);
@@ -101,18 +85,11 @@ public class DefaultGenericInvocationPlugin implements GenericInvocationPlugin {
                 if (!COULD_NOT_FOLD.equals(constant)) {
                     if (constant != null) {
                         // Replace the invoke with the result of the call
-                        ConstantNode res = b.add(ConstantNode.forConstant(constant, b.getMetaAccess()));
+                        ConstantNode res = b.append(ConstantNode.forConstant(constant, b.getMetaAccess()));
                         b.addPush(res.getKind().getStackKind(), res);
                     } else {
                         // This must be a void invoke
                         assert method.getSignature().getReturnKind() == Kind.Void;
-                    }
-                    return true;
-                }
-            } else if (MethodsElidedInSnippets != null) {
-                if (MethodFilter.matches(MethodsElidedInSnippets, method)) {
-                    if (method.getSignature().getReturnKind() != Kind.Void) {
-                        throw new GraalInternalError("Cannot elide non-void method " + method.format("%H.%n(%p)"));
                     }
                     return true;
                 }
@@ -121,14 +98,19 @@ public class DefaultGenericInvocationPlugin implements GenericInvocationPlugin {
         return false;
     }
 
-    private InputType getInputType(ResolvedJavaType type) {
+    private InputType getInputType(ObjectStamp stamp) {
+        ResolvedJavaType type = stamp.type();
         if (type != null && structuralInputType.isAssignableFrom(type)) {
-            MarkerType markerType = type.getAnnotation(MarkerType.class);
-            if (markerType != null) {
-                return markerType.value();
-            } else {
-                throw GraalInternalError.shouldNotReachHere(String.format("%s extends StructuralInput, but is not annotated with @MarkerType", type));
+            while (type != null) {
+                MarkerType markerType = type.getAnnotation(MarkerType.class);
+                if (markerType != null) {
+                    return markerType.value();
+                }
+
+                type = type.getSuperclass();
             }
+
+            throw GraalInternalError.shouldNotReachHere(String.format("%s extends StructuralInput, but is not annotated with @MarkerType", stamp.type()));
         } else {
             return InputType.Value;
         }
@@ -141,7 +123,7 @@ public class DefaultGenericInvocationPlugin implements GenericInvocationPlugin {
         }
         if (res instanceof UnsafeCopyNode) {
             UnsafeCopyNode copy = (UnsafeCopyNode) res;
-            UnsafeLoadNode value = b.add(new UnsafeLoadNode(copy.sourceObject(), copy.sourceOffset(), copy.accessKind(), copy.getLocationIdentity()));
+            UnsafeLoadNode value = b.append(new UnsafeLoadNode(copy.sourceObject(), copy.sourceOffset(), copy.accessKind(), copy.getLocationIdentity()));
             b.add(new UnsafeStoreNode(copy.destinationObject(), copy.destinationOffset(), value, copy.accessKind(), copy.getLocationIdentity()));
             return true;
         } else if (res instanceof ForeignCallNode) {
@@ -149,19 +131,18 @@ public class DefaultGenericInvocationPlugin implements GenericInvocationPlugin {
             foreign.setBci(b.bci());
         }
 
-        res = b.add(res);
+        res = b.append(res);
 
-        boolean nonValueType = false;
+        InputType inputType = InputType.Value;
         if (returnKind == Kind.Object && stamp instanceof ObjectStamp) {
-            ResolvedJavaType type = ((ObjectStamp) stamp).type();
-            if (type != null && structuralInputType.isAssignableFrom(type)) {
-                assert res.isAllowedUsageType(getInputType(type));
-                nonValueType = true;
-            }
+            inputType = getInputType((ObjectStamp) stamp);
         }
 
-        if (returnKind != Kind.Void) {
-            assert nonValueType || res.getKind().getStackKind() != Kind.Void;
+        if (inputType != InputType.Value) {
+            assert res.isAllowedUsageType(inputType);
+            b.push(Kind.Object, res);
+        } else if (returnKind != Kind.Void) {
+            assert res.getKind().getStackKind() != Kind.Void;
             b.push(returnKind.getStackKind(), res);
         } else {
             assert res.getKind().getStackKind() == Kind.Void;
@@ -170,7 +151,7 @@ public class DefaultGenericInvocationPlugin implements GenericInvocationPlugin {
         if (res instanceof StateSplit) {
             StateSplit stateSplit = (StateSplit) res;
             if (stateSplit.stateAfter() == null) {
-                b.setStateAfter(stateSplit);
+                stateSplit.setStateAfter(b.createStateAfter());
             }
         }
 
@@ -179,7 +160,7 @@ public class DefaultGenericInvocationPlugin implements GenericInvocationPlugin {
 
     protected ValueNode createNodeIntrinsic(GraphBuilderContext b, ResolvedJavaMethod method, NodeIntrinsic intrinsic, List<ValueNode> args, Stamp stamp) {
         ValueNode res = nodeIntrinsification.createIntrinsicNode(args, stamp, method, b.getGraph(), intrinsic);
-        assert res != null || b.getGraph().method().getAnnotation(Snippet.class) != null : String.format(
+        assert res != null || b.getRootMethod().getAnnotation(Snippet.class) != null : String.format(
                         "Could not create node intrinsic for call to %s as one of the arguments expected to be constant isn't: arguments=%s", method.format("%H.%n(%p)"), args);
         return res;
     }
