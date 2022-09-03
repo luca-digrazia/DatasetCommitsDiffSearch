@@ -150,12 +150,11 @@ public abstract class RootNode extends ExecutableNode {
     protected RootNode(TruffleLanguage<?> language, FrameDescriptor frameDescriptor) {
         super(language);
         CompilerAsserts.neverPartOfCompilation();
-        if (this.language != null) {
-            this.sourceVM = Node.ACCESSOR.engineSupport().getVMFromLanguageObject(Node.ACCESSOR.languageSupport().getLanguageInfo(this.language).getEngineObject());
+        if (this.languageInfo != null) {
+            this.sourceVM = Node.ACCESSOR.engineSupport().getVMFromLanguageObject(this.languageInfo.getEngineObject());
         } else {
             this.sourceVM = getCurrentVM();
         }
-
         this.frameDescriptor = frameDescriptor == null ? new FrameDescriptor() : frameDescriptor;
     }
 
@@ -182,7 +181,7 @@ public abstract class RootNode extends ExecutableNode {
      * @since 0.27
      */
     public final <C, T extends TruffleLanguage<C>> C getCurrentContext(Class<T> languageClass) {
-        if (language == null) {
+        if (languageInfo == null) {
             return null;
         }
         return getLanguage(languageClass).getContextReference().get();
