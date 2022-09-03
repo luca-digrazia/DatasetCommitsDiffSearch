@@ -1,7 +1,6 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2016, Intel Corporation. All rights reserved.
- * Intel Math Library (LIBM) Source Code
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Intel Corporation. Intel Math Library (LIBM) Source Code
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,10 +45,8 @@ import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.recordExternalAd
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler;
-import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.lir.LIRInstructionClass;
-import org.graalvm.compiler.lir.StubPort;
 import org.graalvm.compiler.lir.asm.ArrayDataPointerConstant;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 
@@ -78,13 +75,6 @@ import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
  *  log10(+INF) = +INF
  * </pre>
  */
-// @formatter:off
-@StubPort(path      = "src/hotspot/cpu/x86/macroAssembler_x86_log10.cpp",
-          lineStart = 0,
-          lineEnd   = 382,
-          commit    = "12bac3a02d7b0f17da78d5ee810fd2742ec43ba6",
-          sha1      = "ce7879887e5360ad4c1ca8b776daca5497d6b349")
-// @formatter:on
 public final class AMD64MathLog10Op extends AMD64MathIntrinsicUnaryOp {
 
     public static final LIRInstructionClass<AMD64MathLog10Op> TYPE = LIRInstructionClass.create(AMD64MathLog10Op.class);
@@ -286,7 +276,8 @@ public final class AMD64MathLog10Op extends AMD64MathIntrinsicUnaryOp {
         masm.pshufd(xmm6, xmm5, 78);
         masm.psrlq(xmm1, 12);
         masm.subl(rax, 16);
-        masm.cmplAndJcc(rax, 32736, ConditionFlag.AboveEqual, block0, false);
+        masm.cmpl(rax, 32736);
+        masm.jcc(AMD64Assembler.ConditionFlag.AboveEqual, block0);
 
         masm.bind(block1);
         masm.mulss(xmm0, xmm7);
@@ -349,8 +340,10 @@ public final class AMD64MathLog10Op extends AMD64MathIntrinsicUnaryOp {
         masm.movq(xmm0, new AMD64Address(rsp, 0));
         masm.movq(xmm1, new AMD64Address(rsp, 0));
         masm.addl(rax, 16);
-        masm.cmplAndJcc(rax, 32768, ConditionFlag.AboveEqual, block2, false);
-        masm.cmplAndJcc(rax, 16, ConditionFlag.Below, block3, false);
+        masm.cmpl(rax, 32768);
+        masm.jcc(AMD64Assembler.ConditionFlag.AboveEqual, block2);
+        masm.cmpl(rax, 16);
+        masm.jcc(AMD64Assembler.ConditionFlag.Below, block3);
 
         masm.bind(block4);
         masm.addsd(xmm0, xmm0);
@@ -358,7 +351,8 @@ public final class AMD64MathLog10Op extends AMD64MathIntrinsicUnaryOp {
 
         masm.bind(block5);
         masm.jcc(AMD64Assembler.ConditionFlag.Above, block4);
-        masm.cmplAndJcc(rdx, 0, ConditionFlag.Above, block4, false);
+        masm.cmpl(rdx, 0);
+        masm.jcc(AMD64Assembler.ConditionFlag.Above, block4);
         masm.jmp(block6);
 
         masm.bind(block3);
@@ -368,7 +362,8 @@ public final class AMD64MathLog10Op extends AMD64MathIntrinsicUnaryOp {
         masm.psrlq(xmm1, 32);
         masm.movdl(rcx, xmm1);
         masm.orl(rdx, rcx);
-        masm.cmplAndJcc(rdx, 0, ConditionFlag.Equal, block7, false);
+        masm.cmpl(rdx, 0);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block7);
         masm.xorpd(xmm1, xmm1);
         masm.movl(rax, 18416);
         masm.pinsrw(xmm1, rax, 3);
@@ -395,9 +390,11 @@ public final class AMD64MathLog10Op extends AMD64MathIntrinsicUnaryOp {
         masm.psrlq(xmm1, 32);
         masm.movdl(rcx, xmm1);
         masm.addl(rcx, rcx);
-        masm.cmplAndJcc(rcx, -2097152, ConditionFlag.AboveEqual, block5, false);
+        masm.cmpl(rcx, -2097152);
+        masm.jcc(AMD64Assembler.ConditionFlag.AboveEqual, block5);
         masm.orl(rdx, rcx);
-        masm.cmplAndJcc(rdx, 0, ConditionFlag.Equal, block7, false);
+        masm.cmpl(rdx, 0);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block7);
 
         masm.bind(block6);
         masm.xorpd(xmm1, xmm1);
