@@ -82,14 +82,6 @@ public abstract class Node implements Cloneable {
         this.sourceSection = section;
     }
 
-    public Kind getKind() {
-        NodeInfo info = getClass().getAnnotation(NodeInfo.class);
-        if (info != null) {
-            return info.kind();
-        }
-        return Kind.SPECIALIZED;
-    }
-
     /**
      * Clears any previously assigned guest language source code from this node.
      */
@@ -180,7 +172,7 @@ public abstract class Node implements Cloneable {
      * @return the new node
      */
     public final <T extends Node> T replace(T newNode, String reason) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
+        CompilerDirectives.transferToInterpreter();
         if (this.getParent() == null) {
             throw new IllegalStateException("This node cannot be replaced, because it does not yet have a parent.");
         }
@@ -193,7 +185,7 @@ public abstract class Node implements Cloneable {
         if (!NodeUtil.replaceChild(this.parent, this, newNode)) {
             fixupTree();
         }
-        reportReplace(this, newNode, reason);
+        reportReplace();
         return newNode;
     }
 
@@ -253,12 +245,11 @@ public abstract class Node implements Cloneable {
         return false;
     }
 
-    private void reportReplace(Node oldNode, Node newNode, String reason) {
-        RootNode rootNode = getRootNode();
+    private void reportReplace() {
+        RootNode rootNode = NodeUtil.findOutermostRootNode(this);
         if (rootNode != null) {
-            CallTarget target = rootNode.getCallTarget();
-            if (target instanceof ReplaceObserver) {
-                ((ReplaceObserver) target).nodeReplaced(oldNode, newNode, reason);
+            if (rootNode.getCallTarget() instanceof ReplaceObserver) {
+                ((ReplaceObserver) rootNode.getCallTarget()).nodeReplaced();
             }
         }
     }
@@ -404,7 +395,7 @@ public abstract class Node implements Cloneable {
      * 
      * @return the {@link RootNode} or {@code null} if there is none.
      */
-    public final RootNode getRootNode() {
+    protected final RootNode getRootNode() {
         Node rootNode = this;
         while (rootNode.getParent() != null) {
             assert !(rootNode instanceof RootNode) : "root node must not have a parent";
