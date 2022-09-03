@@ -125,7 +125,7 @@ public class LLVM {
     }
 
     public static int executeMain(File file, Object... args) {
-        if (LLVMOptions.debugEnabled()) {
+        if (LLVMOptions.isDebug()) {
             System.out.println("current file: " + file.getAbsolutePath());
         }
         Source fileSource;
@@ -139,7 +139,7 @@ public class LLVM {
 
     public static int executeMain(String codeString, Object... args) {
         Source fromText = Source.fromText(codeString, "code string").withMimeType(LLVMLanguage.LLVM_MIME_TYPE);
-        if (LLVMOptions.debugEnabled()) {
+        if (LLVMOptions.isDebug()) {
             System.out.println("current code string: " + codeString);
         }
         return evaluateFromSource(fromText, args);
@@ -175,7 +175,7 @@ public class LLVM {
             }
             RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(globalFunction);
             Object result = callTarget.call(args);
-            if (LLVMOptions.printNativeCallStats()) {
+            if (LLVMOptions.isNativeCallStats()) {
                 printNativeCallStats(module);
             }
             // TODO: specialize instead
