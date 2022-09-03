@@ -76,17 +76,11 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
     protected final MetaAccessProvider metaAccess;
 
     /**
-     * Specifies if the {@linkplain #getMethod() method} being parsed implements the semantics of
-     * another method (i.e., an intrinsic) or bytecode instruction (i.e., a snippet). substitution.
-     */
-    protected final boolean parsingReplacement;
-
-    /**
      * Meters the number of actual bytecodes parsed.
      */
     public static final DebugMetric BytecodesParsed = Debug.metric("BytecodesParsed");
 
-    public AbstractBytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, boolean isReplacement) {
+    public AbstractBytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
         this.graphBuilderConfig = graphBuilderConfig;
         this.optimisticOpts = optimisticOpts;
         this.metaAccess = metaAccess;
@@ -94,7 +88,6 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
         this.profilingInfo = (graphBuilderConfig.getUseProfiling() ? method.getProfilingInfo() : null);
         this.constantPool = method.getConstantPool();
         this.method = method;
-        this.parsingReplacement = isReplacement;
         assert metaAccess != null;
     }
 
@@ -913,7 +906,6 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
         if (profilingInfo == null) {
             return 0.5;
         }
-        assert assertAtIfBytecode();
         double probability = profilingInfo.getBranchTakenProbability(bci());
         if (probability < 0) {
             assert probability == -1 : "invalid probability";
@@ -929,31 +921,6 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
             }
         }
         return probability;
-    }
-
-    private boolean assertAtIfBytecode() {
-        int bytecode = stream.currentBC();
-        switch (bytecode) {
-            case IFEQ:
-            case IFNE:
-            case IFLT:
-            case IFGE:
-            case IFGT:
-            case IFLE:
-            case IF_ICMPEQ:
-            case IF_ICMPNE:
-            case IF_ICMPLT:
-            case IF_ICMPGE:
-            case IF_ICMPGT:
-            case IF_ICMPLE:
-            case IF_ACMPEQ:
-            case IF_ACMPNE:
-            case IFNULL:
-            case IFNONNULL:
-                return true;
-        }
-        assert false : String.format("%x is not an if bytecode", bytecode);
-        return true;
     }
 
     protected abstract void iterateBytecodesForBlock(BciBlock block);

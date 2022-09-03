@@ -26,8 +26,6 @@ import static com.oracle.graal.api.meta.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.bytecode.Bytecodes.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.nodes.StructuredGraph.*;
-import static java.lang.String.*;
 
 import java.util.*;
 
@@ -47,7 +45,6 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.ExceptionDispatchBlock;
 import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
-import com.oracle.graal.java.GraphBuilderPlugin.AnnotatedInvocationPlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.InlineInvokePlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.InvocationPlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.LoopExplosionPlugin;
@@ -75,7 +72,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
     @Override
     protected void run(StructuredGraph graph, HighTierContext context) {
-        new Instance(context.getMetaAccess(), context.getStampProvider(), null, context.getConstantReflection(), graphBuilderConfig, context.getOptimisticOptimizations()).run(graph);
+        new Instance(context.getMetaAccess(), context.getStampProvider(), null, null, context.getConstantReflection(), graphBuilderConfig, context.getOptimisticOptimizations()).run(graph);
     }
 
     public GraphBuilderConfiguration getGraphBuilderConfig() {
@@ -96,6 +93,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
         private final ConstantReflectionProvider constantReflection;
         private final SnippetReflectionProvider snippetReflectionProvider;
 
+        private final Replacements replacements;
+
         /**
          * Gets the graph being processed by this builder.
          */
@@ -103,20 +102,21 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             return currentGraph;
         }
 
-        public Instance(MetaAccessProvider metaAccess, StampProvider stampProvider, SnippetReflectionProvider snippetReflectionProvider, ConstantReflectionProvider constantReflection,
-                        GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
+        public Instance(MetaAccessProvider metaAccess, StampProvider stampProvider, SnippetReflectionProvider snippetReflectionProvider, Replacements replacements,
+                        ConstantReflectionProvider constantReflection, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
             this.graphBuilderConfig = graphBuilderConfig;
             this.optimisticOpts = optimisticOpts;
             this.metaAccess = metaAccess;
             this.stampProvider = stampProvider;
             this.constantReflection = constantReflection;
             this.snippetReflectionProvider = snippetReflectionProvider;
+            this.replacements = replacements;
             assert metaAccess != null;
         }
 
         public Instance(MetaAccessProvider metaAccess, StampProvider stampProvider, ConstantReflectionProvider constantReflection, GraphBuilderConfiguration graphBuilderConfig,
                         OptimisticOptimizations optimisticOpts) {
-            this(metaAccess, stampProvider, null, constantReflection, graphBuilderConfig, optimisticOpts);
+            this(metaAccess, stampProvider, null, null, constantReflection, graphBuilderConfig, optimisticOpts);
         }
 
         @Override
@@ -130,7 +130,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             frameState.initializeForMethodStart(graphBuilderConfig.eagerResolving(), this.graphBuilderConfig.getParameterPlugin());
             TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
             try {
-                BytecodeParser parser = new BytecodeParser(metaAccess, method, graphBuilderConfig, optimisticOpts, entryBCI, false);
+                BytecodeParser parser = new BytecodeParser(metaAccess, method, graphBuilderConfig, optimisticOpts, entryBCI);
                 parser.build(0, graph.start(), frameState);
 
                 parser.connectLoopEndToBegin();
@@ -198,14 +198,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             private int returnCount;
             private boolean controlFlowSplit;
 
-            /**
-             * @param isReplacement specifies if this object is being used to parse a method that
-             *            implements the semantics of another method (i.e., an intrinsic) or
-             *            bytecode instruction (i.e., a snippet)
-             */
-            public BytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, int entryBCI,
-                            boolean isReplacement) {
-                super(metaAccess, method, graphBuilderConfig, optimisticOpts, isReplacement);
+            public BytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, int entryBCI) {
+                super(metaAccess, method, graphBuilderConfig, optimisticOpts);
                 this.entryBCI = entryBCI;
 
                 if (graphBuilderConfig.insertNonSafepointDebugInfo()) {
@@ -297,7 +291,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     processBlock(this, unwindBlock);
 
                     if (Debug.isDumpEnabled() && this.beforeReturnNode != startInstruction) {
-                        Debug.dump(currentGraph, "Bytecodes parsed: " + method.getDeclaringClass().getUnqualifiedName() + "." + method.getName());
+                        // Debug.dump(currentGraph, "Bytecodes parsed: " +
+// method.getDeclaringClass().getUnqualifiedName() + "." + method.getName());
                     }
                 }
             }
@@ -321,7 +316,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 context.peelIteration = this.getCurrentDimension();
                 context.targetPeelIteration = -1;
                 explodeLoopsContext.push(context);
-                Debug.dump(currentGraph, "before loop explosion " + context.peelIteration);
+                // Debug.dump(currentGraph, "before loop explosion " + context.peelIteration);
 
                 while (true) {
 
@@ -333,10 +328,14 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
                     if (context.targetPeelIteration != -1) {
                         // We were reaching the backedge during explosion. Explode further.
+                        // Debug.dump(currentGraph, "Before loop explosion " +
+// context.targetPeelIteration);
                         context.peelIteration = context.targetPeelIteration;
                         context.targetPeelIteration = -1;
                     } else {
                         // We did not reach the backedge. Exit.
+                        // Debug.dump(currentGraph, "after loop explosion " +
+// context.peelIteration);
                         break;
                     }
                 }
@@ -858,30 +857,45 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     }
                 }
 
-                if (tryInvocationPlugin(args, targetMethod, resultType)) {
+                if (tryUsingInvocationPlugin(args, targetMethod, resultType)) {
                     if (GraalOptions.TraceInlineDuringParsing.getValue()) {
-                        TTY.println(format("%sUsed invocation plugin for %s", nSpaces(currentDepth), targetMethod));
+                        for (int i = 0; i < this.currentDepth; ++i) {
+                            TTY.print(' ');
+                        }
+                        TTY.println("Used invocation plugin for " + targetMethod);
                     }
                     return;
                 }
 
-                if (tryAnnotatedInvocationPlugin(args, targetMethod)) {
-                    System.out.println("plugin used for : " + targetMethod);
-                    if (GraalOptions.TraceInlineDuringParsing.getValue()) {
-                        TTY.println(format("%sUsed annotated invocation plugin for %s", nSpaces(currentDepth), targetMethod));
-                    }
-                    return;
-                }
+                InlineInvokePlugin inlineInvokePlugin = graphBuilderConfig.getInlineInvokePlugin();
+                if (inlineInvokePlugin != null && invokeKind.isDirect() && targetMethod.canBeInlined() && targetMethod.hasBytecodes() &&
+                                (replacements == null || (replacements.getMethodSubstitution(targetMethod) == null && replacements.getMacroSubstitution(targetMethod) == null))) {
 
-                if (tryInline(args, targetMethod, invokeKind, returnType)) {
-                    return;
+                    ResolvedJavaMethod inlinedMethod = inlineInvokePlugin.getInlinedMethod(this, targetMethod, args, returnType, currentDepth);
+                    if (inlinedMethod != null) {
+                        if (GraalOptions.TraceInlineDuringParsing.getValue()) {
+                            int bci = this.bci();
+                            for (int i = 0; i < this.currentDepth; ++i) {
+                                TTY.print(' ');
+                            }
+                            StackTraceElement stackTraceElement = this.method.asStackTraceElement(bci);
+                            String s = String.format("%s (%s:%d)", method.getName(), stackTraceElement.getFileName(), stackTraceElement.getLineNumber());
+                            TTY.print(s);
+                            TTY.println(" inlining call " + targetMethod.getName());
+                        }
+
+                        ResolvedJavaMethod inlinedTargetMethod = inlinedMethod;
+                        parseAndInlineCallee(inlinedTargetMethod, args);
+                        inlineInvokePlugin.postInline(inlinedTargetMethod);
+                        return;
+                    }
                 }
 
                 MethodCallTargetNode callTarget = currentGraph.add(createMethodCallTarget(invokeKind, targetMethod, args, returnType));
 
                 // be conservative if information was not recorded (could result in endless
                 // recompiles otherwise)
-                if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo != null && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
+                if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
                     createInvoke(callTarget, resultType);
                 } else {
                     InvokeWithExceptionNode invoke = createInvokeWithException(callTarget, resultType);
@@ -891,7 +905,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
             }
 
-            private boolean tryInvocationPlugin(ValueNode[] args, ResolvedJavaMethod targetMethod, Kind resultType) {
+            private boolean tryUsingInvocationPlugin(ValueNode[] args, ResolvedJavaMethod targetMethod, Kind resultType) {
                 InvocationPlugin plugin = graphBuilderConfig.getInvocationPlugins().lookupInvocation(targetMethod);
                 if (plugin != null) {
                     int beforeStackSize = frameState.stackSize;
@@ -909,11 +923,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return false;
             }
 
-            private boolean tryAnnotatedInvocationPlugin(ValueNode[] args, ResolvedJavaMethod targetMethod) {
-                AnnotatedInvocationPlugin plugin = graphBuilderConfig.getAnnotatedInvocationPlugin();
-                return plugin != null && plugin.apply(this, targetMethod, args);
-            }
-
             private boolean containsNullCheckOf(NodeIterable<Node> nodes, Node value) {
                 for (Node n : nodes) {
                     if (n instanceof GuardingPiNode) {
@@ -926,28 +935,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return false;
             }
 
-            private boolean tryInline(ValueNode[] args, ResolvedJavaMethod targetMethod, InvokeKind invokeKind, JavaType returnType) {
-                InlineInvokePlugin plugin = graphBuilderConfig.getInlineInvokePlugin();
-                if (plugin == null || !invokeKind.isDirect() || !targetMethod.canBeInlined()) {
-                    return false;
-                }
-                ResolvedJavaMethod inlinedMethod = plugin.getInlinedMethod(this, targetMethod, args, returnType, currentDepth);
-                if (inlinedMethod != null && inlinedMethod.hasBytecodes()) {
-                    if (TraceInlineDuringParsing.getValue()) {
-                        int bci = this.bci();
-                        StackTraceElement ste = this.method.asStackTraceElement(bci);
-                        TTY.println(format("%s%s (%s:%d) inlining call to %s", nSpaces(currentDepth), method.getName(), ste.getFileName(), ste.getLineNumber(), inlinedMethod.format("%h.%n(%p)")));
-                    }
-                    parseAndInlineCallee(inlinedMethod, args, parsingReplacement || !inlinedMethod.equals(targetMethod));
-                    plugin.postInline(inlinedMethod);
-                    return true;
-                }
-
-                return false;
-            }
-
-            private void parseAndInlineCallee(ResolvedJavaMethod targetMethod, ValueNode[] args, boolean isReplacement) {
-                BytecodeParser parser = new BytecodeParser(metaAccess, targetMethod, graphBuilderConfig, optimisticOpts, INVOCATION_ENTRY_BCI, isReplacement);
+            private void parseAndInlineCallee(ResolvedJavaMethod targetMethod, ValueNode[] args) {
+                BytecodeParser parser = new BytecodeParser(metaAccess, targetMethod, graphBuilderConfig, optimisticOpts, StructuredGraph.INVOCATION_ENTRY_BCI);
                 final FrameState[] lazyFrameState = new FrameState[1];
                 HIRFrameStateBuilder startFrameState = new HIRFrameStateBuilder(targetMethod, currentGraph, () -> {
                     if (lazyFrameState[0] == null) {
@@ -1260,7 +1249,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                                 // time mark the context loop begin as hit during the current
                                 // iteration.
                                 context.targetPeelIteration = nextPeelIteration++;
-                                if (nextPeelIteration > MaximumLoopExplosionCount.getValue()) {
+                                if (nextPeelIteration > GraalOptions.MaximumLoopExplosionCount.getValue()) {
                                     throw new BailoutException("too many loop explosion interations - does the explosion not terminate?");
                                 }
                             }
@@ -1835,13 +1824,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return snippetReflectionProvider;
             }
 
-            public boolean parsingReplacement() {
-                return parsingReplacement;
-            }
         }
-    }
-
-    static String nSpaces(int n) {
-        return n == 0 ? "" : format("%" + n + "s", "");
     }
 }
