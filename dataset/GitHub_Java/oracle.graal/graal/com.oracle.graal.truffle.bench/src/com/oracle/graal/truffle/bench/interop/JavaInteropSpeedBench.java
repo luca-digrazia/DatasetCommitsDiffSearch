@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,6 +23,7 @@
 package com.oracle.graal.truffle.bench.interop;
 
 import java.util.Random;
+import java.util.function.IntBinaryOperator;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
@@ -32,7 +31,6 @@ import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -48,8 +46,7 @@ public class JavaInteropSpeedBench {
     private static int[] arr;
 
     @Setup
-    public static void beforeTesting() {
-        InstrumentationTestMode.set(true);
+    public void beforeTesting() {
         arr = initArray(REPEAT);
     }
 
@@ -62,11 +59,6 @@ public class JavaInteropSpeedBench {
         return tmp;
     }
 
-    @TearDown
-    public static void after() {
-        InstrumentationTestMode.set(false);
-    }
-
     @Benchmark
     public int doMinMaxInJava() {
         int max = 0;
@@ -76,19 +68,19 @@ public class JavaInteropSpeedBench {
         return max;
     }
 
-    private static final TruffleObject TRUFFLE_MAX = JavaInterop.asTruffleFunction(IntBinaryOperation.class, new IntBinaryOperation() {
+    private static final TruffleObject TRUFFLE_MAX = JavaInterop.asTruffleFunction(IntBinaryOperator.class, new IntBinaryOperator() {
         @Override
-        public int compute(int a, int b) {
-            return Math.max(a, b);
+        public int applyAsInt(int left, int right) {
+            return Math.max(left, right);
         }
     });
-    private static final IntBinaryOperation MAX = JavaInterop.asJavaFunction(IntBinaryOperation.class, TRUFFLE_MAX);
+    private static final IntBinaryOperator MAX = JavaInterop.asJavaFunction(IntBinaryOperator.class, TRUFFLE_MAX);
 
     @Benchmark
     public int doMinMaxWithInterOp() {
         int max = 0;
         for (int i = 0; i < arr.length; i++) {
-            max = MAX.compute(arr[i], max);
+            max = MAX.applyAsInt(arr[i], max);
         }
         return max;
     }
