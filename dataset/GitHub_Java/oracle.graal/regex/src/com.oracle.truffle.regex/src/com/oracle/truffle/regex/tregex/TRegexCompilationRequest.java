@@ -30,7 +30,6 @@ import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.regex.CompiledRegex;
 import com.oracle.truffle.regex.CompiledRegexObject;
-import com.oracle.truffle.regex.RegexLanguageOptions;
 import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.UnsupportedRegexException;
@@ -73,7 +72,6 @@ final class TRegexCompilationRequest {
     private final DebugUtil.Timer timer = DebugUtil.LOG_PHASES ? new DebugUtil.Timer() : null;
 
     private final TRegexCompiler tRegexCompiler;
-    private final RegexLanguageOptions languageOptions;
 
     private final RegexSource source;
     private RegexAST ast = null;
@@ -86,7 +84,6 @@ final class TRegexCompilationRequest {
 
     TRegexCompilationRequest(TRegexCompiler tRegexCompiler, RegexSource source) {
         this.tRegexCompiler = tRegexCompiler;
-        this.languageOptions = tRegexCompiler.getLanguage().getLanguageOptions();
         this.source = source;
     }
 
@@ -214,7 +211,7 @@ final class TRegexCompilationRequest {
             phaseEnd("Flavor");
         }
         phaseStart("Parser");
-        ast = new RegexParser(ecmascriptSource, options, languageOptions).parse();
+        ast = new RegexParser(ecmascriptSource, options).parse();
         phaseEnd("Parser");
         debugAST();
     }
@@ -227,7 +224,7 @@ final class TRegexCompilationRequest {
     }
 
     private TRegexDFAExecutorNode createDFAExecutor(NFA nfaArg, boolean forward, boolean searching, boolean trackCaptureGroups) {
-        DFAGenerator dfa = new DFAGenerator(nfaArg, createExecutorProperties(nfaArg, forward, searching, trackCaptureGroups), compilationBuffer, languageOptions);
+        DFAGenerator dfa = new DFAGenerator(nfaArg, createExecutorProperties(nfaArg, forward, searching, trackCaptureGroups), compilationBuffer);
         phaseStart(dfa.getDebugDumpName() + " DFA");
         dfa.calcDFA();
         TRegexDFAExecutorNode executorNode = dfa.createDFAExecutor();
@@ -292,14 +289,14 @@ final class TRegexCompilationRequest {
     }
 
     private void debugAST() {
-        if (languageOptions.isDumpAutomata()) {
+        if (DebugUtil.DEBUG) {
             ASTLaTexExportVisitor.exportLatex(ast, "./ast.tex", ASTLaTexExportVisitor.DrawPointers.LOOKBEHIND_ENTRIES);
             ast.getWrappedRoot().toJson().dump("ast.json");
         }
     }
 
     private void debugNFA() {
-        if (languageOptions.isDumpAutomata()) {
+        if (DebugUtil.DEBUG) {
             NFAExport.exportDot(nfa, "./nfa.gv", true, false);
             NFAExport.exportLaTex(nfa, "./nfa.tex", false, true);
             NFAExport.exportDotReverse(nfa, "./nfa_reverse.gv", true, false);
@@ -308,14 +305,14 @@ final class TRegexCompilationRequest {
     }
 
     private void debugTraceFinder() {
-        if (languageOptions.isDumpAutomata()) {
+        if (DebugUtil.DEBUG) {
             NFAExport.exportDotReverse(traceFinderNFA, "./trace_finder.gv", true, false);
             traceFinderNFA.toJson().dump("nfa_trace_finder.json");
         }
     }
 
-    private void debugDFA(DFAGenerator dfa) {
-        if (languageOptions.isDumpAutomata()) {
+    private static void debugDFA(DFAGenerator dfa) {
+        if (DebugUtil.DEBUG) {
             DFAExport.exportDot(dfa, "dfa_" + dfa.getDebugDumpName() + ".gv", false);
             Json.obj(Json.prop("dfa", dfa.toJson())).dump("dfa_" + dfa.getDebugDumpName() + ".json");
         }

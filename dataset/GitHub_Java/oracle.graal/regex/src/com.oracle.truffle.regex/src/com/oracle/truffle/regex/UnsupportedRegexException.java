@@ -83,7 +83,7 @@ public class UnsupportedRegexException extends RuntimeException {
      */
     @SuppressWarnings("sync-override")
     @Override
-    public final Throwable fillInStackTrace() {
-        return this;
+    public Throwable fillInStackTrace() {
+        return null;
     }
 }
