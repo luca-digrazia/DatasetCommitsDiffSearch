@@ -30,13 +30,11 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 
-public class IntrinsicReflectionRootNode extends RootNode implements LinkedNode {
+public class IntrinsicReflectionRootNode extends RootNode {
 
     private final Method method;
-    private Meta.Method originalMethod;
 
     public IntrinsicReflectionRootNode(EspressoLanguage language, Method method) {
         super(language);
@@ -66,14 +64,5 @@ public class IntrinsicReflectionRootNode extends RootNode implements LinkedNode 
     @CompilerDirectives.TruffleBoundary
     private Object callIntrinsic(Object... args) throws InvocationTargetException, IllegalAccessException {
         return method.invoke(null, args);
-    }
-
-    @Override
-    public Meta.Method getOriginalMethod() {
-        return originalMethod;
-    }
-
-    public void setOriginalMethod(Meta.Method originalMethod) {
-        this.originalMethod = originalMethod;
     }
 }
