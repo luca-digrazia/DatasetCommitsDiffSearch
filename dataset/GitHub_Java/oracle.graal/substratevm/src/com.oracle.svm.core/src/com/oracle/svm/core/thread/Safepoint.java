@@ -108,7 +108,7 @@ import com.oracle.svm.core.util.VMError;
  * reset to {@value SafepointRequestValues#RESET}. Because {@link #safepointRequested} still
  * eventually decrements to 0, threads can very infrequently call {@link #slowPathSafepointCheck()}
  * without cause.
- *
+ * 
  * @see SafepointCheckNode
  */
 public final class Safepoint {
@@ -192,18 +192,15 @@ public final class Safepoint {
         do {
             IsolateThread requestingThread = Master.singleton().getRequestingThread();
             if (requestingThread.isNonNull()) {
-                if (VMOperationControl.isLockOwner()) {
+                if (requestingThread == myself) {
                     /*
                      * This can happen when a VM operation executes so many safepoint checks that
                      * safepointRequested reaches zero and enters this slow path, so we just reset
-                     * the counter and return. The counter is re-initialized after the safepoint is
-                     * over and normal execution continues.
+                     * the counter and return.
                      */
                     setSafepointRequested(myself, SafepointRequestValues.RESET);
                     return;
                 }
-                VMError.guarantee(requestingThread != myself, "Must be the LockOwner");
-
                 if (needsCallback && !wasFrozen) {
                     callbackTime = System.nanoTime();
                     callbackValue = getSafepointRequestedValueBeforeSafepoint(myself);
@@ -255,7 +252,7 @@ public final class Safepoint {
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.")
-    protected static int getSafepointRequested(IsolateThread vmThread) {
+    private static int getSafepointRequested(IsolateThread vmThread) {
         return safepointRequested.get(vmThread); // need not be volatile
     }
 
