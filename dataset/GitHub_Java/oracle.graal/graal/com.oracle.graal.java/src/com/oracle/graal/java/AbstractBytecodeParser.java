@@ -698,7 +698,7 @@ public abstract class AbstractBytecodeParser {
     }
 
     private void maybeEagerlyResolve(int cpi, int bytecode) {
-        if (graphBuilderConfig.eagerResolving() || replacementContext instanceof IntrinsicContext) {
+        if (graphBuilderConfig.eagerResolving() || parsingReplacement()) {
             constantPool.loadReferencedType(cpi, bytecode);
         }
     }

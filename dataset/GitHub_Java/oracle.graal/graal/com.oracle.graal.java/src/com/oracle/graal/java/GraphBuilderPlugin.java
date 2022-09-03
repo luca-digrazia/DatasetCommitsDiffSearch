@@ -75,29 +75,22 @@ public interface GraphBuilderPlugin {
         public static class InlineInfo {
 
             /**
-             * The method to be inlined.
+             * The method to be inlined. If this is not equal to the {@code method} argument passed
+             * to {@link InlineInvokePlugin#getClass()}, the graph builder context interprets it as
+             * a {@linkplain GraphBuilderContext.Replacement replacement}.
              */
             public final ResolvedJavaMethod methodToInline;
-
-            /**
-             * Specifies if {@link #methodToInline} is to be considered a
-             * {@linkplain GraphBuilderContext.Replacement replacement} for the {@code method}
-             * passed to {@link InlineInvokePlugin#getInlineInfo}.
-             */
-            public final boolean isReplacement;
 
             /**
              * Specifies if {@link #methodToInline} is an intrinsic for the original method. If so,
              * any {@link StateSplit} node created in the (recursive) inlining scope will be given a
              * frame state that restarts the interpreter just before the intrinsified invocation.
              */
-            public final boolean isIntrinsic;
+            public final boolean adoptBeforeCallFrameState;
 
-            public InlineInfo(ResolvedJavaMethod methodToInline, boolean isReplacement, boolean isIntrinsic) {
+            public InlineInfo(ResolvedJavaMethod methodToInline, boolean adoptBeforeCallFrameState) {
                 this.methodToInline = methodToInline;
-                this.isIntrinsic = isIntrinsic;
-                this.isReplacement = isReplacement;
-                assert !isIntrinsic || isReplacement : "cannot be an intrinsic without also being a replacement";
+                this.adoptBeforeCallFrameState = adoptBeforeCallFrameState;
             }
         }
 
@@ -218,7 +211,7 @@ public interface GraphBuilderPlugin {
             if (ALLOW_INVOCATION_PLUGIN_TO_DO_INLINING) {
                 ResolvedJavaMethod subst = plugin.getSubstitute();
                 if (subst != null) {
-                    return ((BytecodeParser) b).inline(null, targetMethod, new InlineInfo(subst, true, false), args);
+                    return ((BytecodeParser) b).inline(null, targetMethod, new InlineInfo(subst, false), args);
                 }
             }
             if (args.length == 0) {
