@@ -41,8 +41,12 @@
 package com.oracle.truffle.sl.nodes.call;
 
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.StandardTags;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.sl.nodes.SLExpressionNode;
@@ -56,23 +60,19 @@ import com.oracle.truffle.sl.runtime.SLFunction;
  * inline cache.
  */
 @NodeInfo(shortName = "invoke")
-public final class SLInvokeNode extends SLExpressionNode {
-
-    @Child private SLExpressionNode functionNode;
+@NodeChildren({@NodeChild(value = "functionNode", type = SLExpressionNode.class)})
+public abstract class SLInvokeNode extends SLExpressionNode {
     @Children private final SLExpressionNode[] argumentNodes;
     @Child private SLDispatchNode dispatchNode;
 
-    public SLInvokeNode(SLExpressionNode functionNode, SLExpressionNode[] argumentNodes) {
-        this.functionNode = functionNode;
+    SLInvokeNode(SLExpressionNode[] argumentNodes) {
         this.argumentNodes = argumentNodes;
         this.dispatchNode = SLDispatchNodeGen.create();
     }
 
+    @Specialization
     @ExplodeLoop
-    @Override
-    public Object executeGeneric(VirtualFrame frame) {
-        Object function = functionNode.executeGeneric(frame);
-
+    public Object executeGeneric(VirtualFrame frame, TruffleObject function) {
         /*
          * The number of arguments is constant for one invoke node. During compilation, the loop is
          * unrolled and the execute methods of all arguments are inlined. This is triggered by the

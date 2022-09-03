@@ -58,6 +58,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.sl.nodes.interop.SLForeignToSLTypeNode;
 import com.oracle.truffle.sl.nodes.interop.SLForeignToSLTypeNodeGen;
 import com.oracle.truffle.sl.runtime.SLFunction;
+import com.oracle.truffle.sl.runtime.SLNull;
 import com.oracle.truffle.sl.runtime.SLUndefinedNameException;
 
 public abstract class SLDispatchNode extends Node {
@@ -140,38 +141,42 @@ public abstract class SLDispatchNode extends Node {
         return callNode.call(frame, callTarget, arguments);
     }
 
+    /*
+     * All code below is only needed for language interoperability.
+     */
+
+    /** The child node to call the foreign function. */
+    @Child private Node crossLanguageCall;
+
+    /** The child node to convert the result of the foreign function call to an SL value. */
+    @Child private SLForeignToSLTypeNode toSLType;
+
     /**
-     * Language interoperability: If the function is a foreign value, i.e., not a SLFunction, we use
-     * Truffle's interop API to execute the foreign function.
+     * If the function is a foreign value, i.e., not a SLFunction, we use Truffle's interop API to
+     * execute the foreign function.
      */
     @Specialization(guards = "isForeignFunction(function)")
-    protected Object doForeign(VirtualFrame frame, TruffleObject function, Object[] arguments,
-                    // The child node to call the foreign function
-                    @Cached("createCrossLanguageCallNode(arguments)") Node crossLanguageCallNode,
-                    // The child node to convert the result of the foreign call to a SL value
-                    @Cached("createToSLTypeNode()") SLForeignToSLTypeNode toSLTypeNode) {
-
+    protected Object doForeign(VirtualFrame frame, TruffleObject function, Object[] arguments) {
+        // Lazily insert the foreign object access nodes upon the first execution.
+        if (crossLanguageCall == null) {
+            // SL maps a function invocation to an EXECUTE message.
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            crossLanguageCall = insert(Message.createExecute(arguments.length).createNode());
+            toSLType = insert(SLForeignToSLTypeNodeGen.create(null));
+        }
         try {
-            /* Perform the foreign function call. */
-            Object res = ForeignAccess.sendExecute(crossLanguageCallNode, frame, function, arguments);
-            /* Convert the result to a SL value. */
-            return toSLTypeNode.executeConvert(frame, res);
-
+            // Perform the foreign function call.
+            Object res = ForeignAccess.sendExecute(crossLanguageCall, frame, function, arguments);
+            // Convert the result to an SL value.
+            Object slValue = toSLType.executeWithTarget(frame, res);
+            return slValue;
         } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-            /* Foreign access was not successful. */
-            throw new SLUndefinedNameException("function", function);
+            // In case the foreign function call is not successful, we return null.
+            return SLNull.SINGLETON;
         }
     }
 
-    protected static boolean isForeignFunction(TruffleObject function) {
+    protected boolean isForeignFunction(TruffleObject function) {
         return !(function instanceof SLFunction);
-    }
-
-    protected static Node createCrossLanguageCallNode(Object[] arguments) {
-        return Message.createExecute(arguments.length).createNode();
-    }
-
-    protected static SLForeignToSLTypeNode createToSLTypeNode() {
-        return SLForeignToSLTypeNodeGen.create();
     }
 }
