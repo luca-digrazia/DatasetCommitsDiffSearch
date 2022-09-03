@@ -24,14 +24,12 @@
  */
 package com.oracle.svm.reflect.target;
 
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
 
 class ReflectionHelper {
     static Target_java_lang_reflect_Executable getHolder(Target_java_lang_reflect_Executable executable) {
-        Target_java_lang_reflect_Executable holder = getRoot(executable);
+        Target_java_lang_reflect_Executable holder = executable.getRoot();
         if (holder == null) {
             holder = executable;
         }
@@ -39,7 +37,7 @@ class ReflectionHelper {
     }
 
     static Target_java_lang_reflect_Constructor getHolder(Target_java_lang_reflect_Constructor constructor) {
-        Target_java_lang_reflect_Constructor holder = asConstructor(getRoot(asExecutable(constructor)));
+        Target_java_lang_reflect_Constructor holder = ReflectionHelper.asConstructor(constructor.getRoot());
         if (holder == null) {
             holder = constructor;
         }
@@ -65,17 +63,5 @@ class ReflectionHelper {
 
     private static Target_java_lang_reflect_Constructor asConstructor(Target_java_lang_reflect_Executable executable) {
         return KnownIntrinsics.unsafeCast(executable, Target_java_lang_reflect_Constructor.class);
-    }
-
-    private static Target_java_lang_reflect_Executable asExecutable(Object executable) {
-        return KnownIntrinsics.unsafeCast(executable, Target_java_lang_reflect_Executable.class);
-    }
-
-    private static Target_java_lang_reflect_Executable getRoot(Target_java_lang_reflect_Executable executable) {
-        if (JavaVersionUtil.Java8OrEarlier) {
-            return executable.getRoot();
-        } else {
-            return asExecutable(KnownIntrinsics.unsafeCast(executable, Target_java_lang_reflect_AccessibleObject.class).getRoot());
-        }
     }
 }
