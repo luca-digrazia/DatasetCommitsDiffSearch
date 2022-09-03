@@ -41,7 +41,6 @@ import com.oracle.truffle.api.instrumentation.InstrumentationHandler.AccessorIns
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * <p>
@@ -69,8 +68,49 @@ import com.oracle.truffle.api.source.SourceSection;
  * <li>The {@link Instrumenter} instance available in the provided {@linkplain Env environment} may
  * not be used after disposal.</li>
  * </ul>
- * <h4>Example for a simple expression coverage instrument:</h4>
- * {@codesnippet com.oracle.truffle.api.instrumentation.test.examples.CoverageExample}
+ * <h4>Example</h4>
+ * <p>
+ * <b> Example for a simple expression coverage instrument: </b>
+ *
+ * <pre>
+ * &#064;Registration(name = Coverage.NAME, version = Coverage.VERSION, instrumentType = Coverage.TYPE)
+ * &#064;RequiredTags(&quot;EXPRESSION&quot;)
+ * public final class Coverage extends TruffleInstrument {
+ *
+ *     public static final String NAME = &quot;sample-coverage&quot;;
+ *     public static final String TYPE = &quot;coverage&quot;;
+ *     public static final String VERSION = &quot;coverage&quot;;
+ *
+ *     private final Set&lt;SourceSection&gt; coverage = new HashSet&lt;&gt;();
+ *
+ *     &#064;Override
+ *     protected void onCreate(Env env, Instrumenter instrumenter) {
+ *         instrumenter.attachFactory(SourceSectionFilter.newBuilder() //
+ *                         .tagIs(&quot;EXPRESSION&quot;).build(), new ExecutionEventNodeFactory() {
+ *                             public ExecutionEventNode create(final EventContext context) {
+ *                                 return new ExecutionEventNode() {
+ *                                     &#064;CompilationFinal private boolean visited;
+ *
+ *                                     &#064;Override
+ *                                     public void onReturnValue(VirtualFrame vFrame, Object result) {
+ *                                         if (!visited) {
+ *                                             CompilerDirectives.transferToInterpreterAndInvalidate();
+ *                                             visited = true;
+ *                                             coverage.add(context.getInstrumentedSourceSection());
+ *                                         }
+ *                                     }
+ *                                 };
+ *                             }
+ *                         });
+ *     }
+ *
+ *     &#064;Override
+ *     protected void onDispose(Env env) {
+ *         // print result
+ *     }
+ *
+ * }
+ * </pre>
  *
  * @since 0.12
  */
@@ -267,49 +307,13 @@ public abstract class TruffleInstrument {
          * @return a human readable string representation of the value.
          * @since 0.17
          */
+        @SuppressWarnings({"rawtypes"})
         public String toString(Node node, Object value) {
-            final TruffleLanguage.Env env = getLangEnv(node);
+            RootNode rootNode = node.getRootNode();
+            final Class<? extends TruffleLanguage> languageClass = AccessorInstrumentHandler.nodesAccess().findLanguage(rootNode);
+            final TruffleLanguage.Env env = AccessorInstrumentHandler.engineAccess().findEnv(vm, languageClass);
             final TruffleLanguage<?> language = AccessorInstrumentHandler.langAccess().findLanguage(env);
             return AccessorInstrumentHandler.langAccess().toString(language, env, value);
-        }
-
-        /**
-         * Find a meta-object of a value, if any. The meta-object represents a description of the
-         * object, reveals it's kind and it's features. Some information that a meta-object might
-         * define includes the base object's type, interface, class, methods, attributes, etc. When
-         * no meta-object is known, <code>null</code> is returned.
-         *
-         * @param node a node
-         * @param value a value to find the meta-object of
-         * @return the meta-object, or <code>null</code>
-         * @since 0.22
-         */
-        public Object findMetaObject(Node node, Object value) {
-            final TruffleLanguage.Env env = getLangEnv(node);
-            final TruffleLanguage<?> language = AccessorInstrumentHandler.langAccess().findLanguage(env);
-            return AccessorInstrumentHandler.langAccess().findMetaObject(language, env, value);
-        }
-
-        /**
-         * Find a source location where a value is declared, if any.
-         *
-         * @param node a node
-         * @param value a value to get the source location for
-         * @return a source location of the object, or <code>null</code>
-         * @since 0.22
-         */
-        public SourceSection findSourceLocation(Node node, Object value) {
-            final TruffleLanguage.Env env = getLangEnv(node);
-            final TruffleLanguage<?> language = AccessorInstrumentHandler.langAccess().findLanguage(env);
-            return AccessorInstrumentHandler.langAccess().findSourceLocation(language, env, value);
-        }
-
-        @SuppressWarnings({"rawtypes"})
-        private TruffleLanguage.Env getLangEnv(Node node) {
-            RootNode rootNode = node.getRootNode();
-            Class<? extends TruffleLanguage> languageClass = AccessorInstrumentHandler.nodesAccess().findLanguage(rootNode);
-            TruffleLanguage.Env env = AccessorInstrumentHandler.engineAccess().findEnv(vm, languageClass);
-            return env;
         }
 
     }
