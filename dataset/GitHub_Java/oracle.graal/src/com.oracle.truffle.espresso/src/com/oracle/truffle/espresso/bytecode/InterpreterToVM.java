@@ -82,7 +82,6 @@ import com.oracle.truffle.espresso.intrinsics.Target_sun_misc_Unsafe;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_misc_VM;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_nio_fs_UnixNativeDispatcher;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_reflect_NativeConstructorAccessorImpl;
-import com.oracle.truffle.espresso.intrinsics.Target_sun_reflect_NativeMethodAccessorImpl;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_reflect_Reflection;
 import com.oracle.truffle.espresso.intrinsics.Type;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -95,6 +94,7 @@ import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
+import com.oracle.truffle.espresso.runtime.Utils;
 
 import sun.misc.Unsafe;
 
@@ -147,7 +147,6 @@ public class InterpreterToVM {
                     Target_sun_misc_VM.class,
                     Target_sun_nio_fs_UnixNativeDispatcher.class,
                     Target_sun_reflect_NativeConstructorAccessorImpl.class,
-                    Target_sun_reflect_NativeMethodAccessorImpl.class,
                     Target_sun_reflect_Reflection.class);
 
     private InterpreterToVM(EspressoLanguage language, List<Class<?>> intrinsics) {
@@ -419,9 +418,6 @@ public class InterpreterToVM {
 
     public void setArrayObject(Object value, int index, Object arr) {
         // TODO(peterssen): Array store check.
-        if (value != StaticObject.NULL && !instanceOf(value, ((StaticObjectArray) arr).getKlass().getComponentType())) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayStoreException.class);
-        }
         ((StaticObjectArray) arr).getWrapped()[index] = value;
     }
     // endregion
@@ -561,10 +557,6 @@ public class InterpreterToVM {
     public StaticObject newMultiArray(Klass klass, int[] dimensions) {
         assert dimensions.length > 1;
 
-        if (Arrays.stream(dimensions).anyMatch(i -> i < 0)) {
-            throw meta(klass).getMeta().throwEx(NegativeArraySizeException.class);
-        }
-
         Klass componentType = klass.getComponentType();
 
         if (dimensions.length == 2) {
@@ -634,8 +626,11 @@ public class InterpreterToVM {
         if (instance == StaticObject.NULL || instanceOf(instance, klass)) {
             return instance;
         }
+        instanceOf(instance, klass);
         Meta meta = klass.getContext().getMeta();
-        throw meta.throwEx(ClassCastException.class);
+        StaticObject ex = meta.exceptionKlass(ClassCastException.class).allocateInstance();
+        meta(ex).method("<init>", void.class).invokeDirect();
+        throw new EspressoException(ex);
     }
 
     @CompilerDirectives.TruffleBoundary

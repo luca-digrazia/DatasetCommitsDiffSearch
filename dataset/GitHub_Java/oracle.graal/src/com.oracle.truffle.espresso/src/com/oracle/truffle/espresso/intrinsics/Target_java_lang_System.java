@@ -82,21 +82,21 @@ public class Target_java_lang_System {
         Meta.Method.WithInstance setProperty = meta(props).method("setProperty", Object.class, String.class, String.class);
 
         for (String prop : importedProps) {
-            String propValue;
+
+            StaticObject guestPropKey = context.getMeta().toGuest(prop);
+            StaticObject guestPropValue;
+
             // Inject guest classpath.
             if (prop.equals("java.class.path")) {
-                propValue = context.getClasspath().toString();
+                guestPropValue = context.getMeta().toGuest(context.getClasspath().toString());
             } else {
-                propValue = System.getProperty(prop);
+                guestPropValue = context.getMeta().toGuest(System.getProperty(prop));
             }
-            if (propValue != null) {
-                StaticObject guestPropKey = context.getMeta().toGuest(prop);
-                StaticObject guestPropValue = context.getMeta().toGuest(propValue);
-                setProperty.invokeDirect(guestPropKey, guestPropValue);
-            }
+
+            setProperty.invokeDirect(guestPropKey, guestPropValue);
         }
 
-        // setProperty.invoke("sun.misc.URLClassPath.debug", "true");
+        setProperty.invoke("sun.misc.URLClassPath.debug", "true");
 
         return props;
     }

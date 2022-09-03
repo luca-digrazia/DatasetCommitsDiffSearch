@@ -27,6 +27,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Method;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -37,7 +38,6 @@ import com.oracle.truffle.espresso.classfile.StringTable;
 import com.oracle.truffle.espresso.classfile.SymbolTable;
 import com.oracle.truffle.espresso.impl.ClassRegistries;
 import com.oracle.truffle.espresso.impl.Klass;
-import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
@@ -49,9 +49,7 @@ public class EspressoContext {
     private final EspressoLanguage language;
 
     private final TruffleLanguage.Env env;
-
-    // Must be initialized after the context instance creation.
-    private InterpreterToVM vm;
+    private final InterpreterToVM vm;
     private final StringTable strings;
     private final ClassRegistries registries;
     private boolean initialized = false;
@@ -63,9 +61,8 @@ public class EspressoContext {
     private Meta meta;
     private StaticObject mainThread;
 
-    private final ConcurrentHashMap<Long, TruffleObject> nativeLibraries = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, TruffleObject> nativeLibraries =  new ConcurrentHashMap<>();
     private final AtomicLong nativeHandleCount = new AtomicLong();
-    private JniEnv jniEnv;
 
     public long addNativeLibrary(TruffleObject library) {
         long handle = nativeHandleCount.incrementAndGet();
@@ -77,6 +74,7 @@ public class EspressoContext {
     public EspressoContext(TruffleLanguage.Env env, EspressoLanguage language) {
         this.env = env;
         this.language = language;
+        this.vm = new InterpreterToVM(language);
         this.registries = new ClassRegistries(this);
         this.strings = new StringTable(this);
     }
@@ -159,13 +157,6 @@ public class EspressoContext {
     }
 
     private void createVm() {
-        this.vm = new InterpreterToVM(language);
-
-        // FIXME(peterssen): Contextualize the JniENv, even if shared libraries are isolated,
-        // currently
-        // we assume a singleton context.
-        JniEnv.touch();
-        getJniEnv(); // initialize native context
 
         initializeClass(Object.class);
 
@@ -176,15 +167,13 @@ public class EspressoContext {
             }
         }
 
-        for (Class<?> clazz : new Class<?>[]{
+        Stream.of(
                         String.class,
                         System.class,
                         ThreadGroup.class,
                         Thread.class,
                         Class.class,
-                        Method.class}) {
-            initializeClass(clazz);
-        }
+                        Method.class).forEachOrdered(this::initializeClass);
 
         // Finalizer is not public.
         initializeClass("Ljava/lang/ref/Finalizer;");
@@ -193,7 +182,7 @@ public class EspressoContext {
         meta.knownKlass(System.class).staticMethod("initializeSystemClass", void.class).invokeDirect();
 
         // System exceptions.
-        for (Class<?> clazz : new Class<?>[]{
+        Stream.of(
                         OutOfMemoryError.class,
                         NullPointerException.class,
                         ClassCastException.class,
@@ -201,9 +190,7 @@ public class EspressoContext {
                         ArithmeticException.class,
                         StackOverflowError.class,
                         IllegalMonitorStateException.class,
-                        IllegalArgumentException.class}) {
-            initializeClass(clazz);
-        }
+                        IllegalArgumentException.class).forEachOrdered(this::initializeClass);
 
         // Load system class loader.
         appClassLoader = meta.knownKlass(ClassLoader.class).staticMethod("getSystemClassLoader", ClassLoader.class).invokeDirect();
@@ -252,12 +239,5 @@ public class EspressoContext {
 
     public ConcurrentHashMap<Long, TruffleObject> getNativeLibraries() {
         return nativeLibraries;
-    }
-
-    public JniEnv getJniEnv() {
-        if (jniEnv == null) {
-            jniEnv = JniEnv.create();
-        }
-        return jniEnv;
     }
 }
