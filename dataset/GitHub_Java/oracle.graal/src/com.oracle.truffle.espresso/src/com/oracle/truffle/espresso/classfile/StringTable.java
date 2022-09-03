@@ -58,7 +58,7 @@ public final class StringTable {
     }
 
     public synchronized StaticObject intern(StaticObject stringObject) {
-        String s = Meta.toHostString(stringObject);
+        String s = Meta.toHost(stringObject);
         return intern(s);
     }
 }

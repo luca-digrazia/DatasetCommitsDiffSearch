@@ -32,7 +32,7 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.espresso.meta.EspressoError;
 
-public class Callback implements TruffleObject {
+class Callback implements TruffleObject {
 
     private final int arity;
     private final Function function;

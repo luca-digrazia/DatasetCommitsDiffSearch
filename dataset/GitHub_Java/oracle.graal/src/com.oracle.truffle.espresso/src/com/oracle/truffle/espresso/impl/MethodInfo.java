@@ -31,9 +31,7 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
-import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.jni.Mangle;
 import com.oracle.truffle.espresso.jni.NativeLibrary;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -44,8 +42,6 @@ import com.oracle.truffle.espresso.meta.LocalVariableTable;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.ModifiersProvider;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
-import com.oracle.truffle.espresso.nodes.IntrinsicReflectionRootNode;
-import com.oracle.truffle.espresso.nodes.IntrinsicRootNode;
 import com.oracle.truffle.espresso.nodes.JniNativeNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.types.SignatureDescriptor;
@@ -67,8 +63,6 @@ public final class MethodInfo implements ModifiersProvider {
     private final LineNumberTable lineNumberTable;
     private final LocalVariableTable localVariableTable;
     private final int modifiers;
-
-    @CompilerDirectives.CompilationFinal private boolean intrinsified = false;
 
     @CompilerDirectives.CompilationFinal private CallTarget callTarget;
     @CompilerDirectives.CompilationFinal private Klass returnType;
@@ -153,7 +147,7 @@ public final class MethodInfo implements ModifiersProvider {
         throw EspressoError.unimplemented();
     }
 
-    private static NativeSimpleType kindToType(JavaKind kind, boolean javaToNative) {
+    private static NativeSimpleType kindToType(JavaKind kind) {
         switch (kind) {
             case Boolean:
                 return NativeSimpleType.UINT8; // ?
@@ -174,13 +168,7 @@ public final class MethodInfo implements ModifiersProvider {
             case Void:
                 return NativeSimpleType.VOID;
             case Object:
-                // TODO(peterssen): We don't want Interop null passed verbatim to native, but native
-                // NULL instead.
-
-                return javaToNative
-                                ? NativeSimpleType.OBJECT_OR_NULL
-                                : NativeSimpleType.OBJECT;
-
+                return NativeSimpleType.OBJECT;
             default:
                 throw EspressoError.shouldNotReachHere();
         }
@@ -192,14 +180,12 @@ public final class MethodInfo implements ModifiersProvider {
         SignatureDescriptor signature = method.rawMethod().getSignature();
 
         // Receiver for instance methods, class for static methods.
-        sb.append(", ").append(NativeSimpleType.OBJECT_OR_NULL);
-
+        sb.append(", ").append(NativeSimpleType.OBJECT);
         int argCount = signature.getParameterCount(false);
         for (int i = 0; i < argCount; ++i) {
-            sb.append(", ").append(kindToType(signature.getParameterKind(i), true));
+            sb.append(", ").append(kindToType(signature.getParameterKind(i)));
         }
-
-        sb.append("): ").append(kindToType(signature.resultKind(), false));
+        sb.append("): ").append(kindToType(signature.resultKind()));
 
         return sb.toString();
     }
@@ -216,33 +202,14 @@ public final class MethodInfo implements ModifiersProvider {
             CompilerDirectives.transferToInterpreterAndInvalidate();
 
             // TODO(peterssen): Rethink method substitution logic.
-            RootNode redirectedMethod = getContext().getVm().getIntrinsic(this);
+            CallTarget redirectedMethod = getContext().getVm().getIntrinsic(this);
             if (redirectedMethod != null) {
-                if (redirectedMethod instanceof IntrinsicReflectionRootNode) {
-                    ((IntrinsicReflectionRootNode) redirectedMethod).setOriginalMethod(Meta.meta(this));
-                } else if (redirectedMethod instanceof IntrinsicRootNode) {
-                    ((IntrinsicRootNode) redirectedMethod).setOriginalMethod(Meta.meta(this));
-                }
-                intrinsified = true;
-                callTarget = Truffle.getRuntime().createCallTarget(redirectedMethod);
+                callTarget = redirectedMethod;
             } else {
                 if (this.isNative()) {
                     // Bind native method.
                     System.err.println("Linking native method: " + meta(this).getDeclaringClass().getName() + "#" + getName() + " " + getSignature());
                     Meta meta = getContext().getMeta();
-
-                    // If the loader is null we have a system class, so we attempt a lookup in
-                    // the native Java library.
-                    if (getDeclaringClass().getClassLoader() == null) {
-                        // Look in libjava
-                        String mangledName = Mangle.mangleMethod(meta(this), false);
-                        try {
-                            TruffleObject nativeMethod = bind(JniEnv.javaLibrary, meta(this), mangledName);
-                            callTarget = Truffle.getRuntime().createCallTarget(new JniNativeNode(getContext().getLanguage(), nativeMethod, meta(this)));
-                            return callTarget;
-                        } catch (Throwable t) {
-                        }
-                    }
 
                     Meta.Method.WithInstance findNative = meta.knownKlass(ClassLoader.class).staticMethod("findNative", long.class, ClassLoader.class, String.class);
 
@@ -252,11 +219,7 @@ public final class MethodInfo implements ModifiersProvider {
                         callTarget = lookupJniCallTarget(findNative, true);
                     }
 
-                    // TODO(peterssen): Search JNI methods with OS prefix/suffix
-                    // (print_jni_name_suffix_on ...)
-
                     if (callTarget == null) {
-                        System.err.println("Failed to link native method: " + meta(this).getDeclaringClass().getName() + "#" + getName() + " " + getSignature());
                         throw meta.throwEx(UnsatisfiedLinkError.class);
                     }
                 } else {
@@ -329,10 +292,6 @@ public final class MethodInfo implements ModifiersProvider {
             return null;
         }
         return pool.getClassLoader();
-    }
-
-    public boolean isIntrinsified() {
-        return intrinsified;
     }
 
     public static class Builder implements BuilderBase<MethodInfo> {
