@@ -25,10 +25,11 @@ package com.oracle.truffle.api.dsl.test.interop;
 import org.junit.Assert;
 import org.junit.Test;
 
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
@@ -41,7 +42,7 @@ public class ValidTruffleObject15Test {
         ValidTruffleObject15 object = new ValidTruffleObject15();
         Node read = Message.WRITE.createNode();
         try {
-            ForeignAccess.sendWrite(read, object, "name", new UnknownObject());
+            ForeignAccess.sendWrite(read, Truffle.getRuntime().createVirtualFrame(new Object[]{}, new FrameDescriptor()), object, "name", new Object());
         } catch (UnknownIdentifierException e) {
             Assert.fail();
         } catch (UnsupportedMessageException e) {
@@ -55,15 +56,7 @@ public class ValidTruffleObject15Test {
     public void expectTypeError() throws UnknownIdentifierException, UnsupportedTypeException, UnsupportedMessageException {
         ValidTruffleObject15 object = new ValidTruffleObject15();
         Node read = Message.WRITE.createNode();
-        ForeignAccess.sendWrite(read, object, new UnknownObject(), new UnknownObject());
+        ForeignAccess.sendWrite(read, Truffle.getRuntime().createVirtualFrame(new Object[]{}, new FrameDescriptor()), object, new Object(), new Object());
     }
 
-    private static final class UnknownObject implements TruffleObject {
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return null;
-        }
-
-    }
 }
