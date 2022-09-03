@@ -40,7 +40,7 @@ public final class LocationMarker {
 
     public static class Options {
         // @formatter:off
-        @Option(help = "Use decoupled pass for location marking (instead of using LSRA marking)")
+        @Option(help = "Use decoupled pass for location marking (instead of using LSRA marking)", type = OptionType.Debug)
         public static final OptionValue<Boolean> UseLocationMarker = new OptionValue<>(true);
         // @formatter:on
     }
@@ -94,12 +94,12 @@ public final class LocationMarker {
      * Merge outSet with in-set of successors.
      */
     private boolean updateOutBlock(AbstractBlock<?> block) {
-        ReferenceMap merged = frameMap.initReferenceMap(true);
-        block.getSuccessors().forEach(succ -> merged.mergeMaps(liveInMap.get(succ)));
+        ReferenceMap union = frameMap.initReferenceMap(true);
+        block.getSuccessors().forEach(succ -> union.updateUnion(liveInMap.get(succ)));
         ReferenceMap outSet = liveOutMap.get(block);
         // check if changed
-        if (outSet == null || !merged.equals(outSet)) {
-            liveOutMap.put(block, merged);
+        if (outSet == null || !union.equals(outSet)) {
+            liveOutMap.put(block, union);
             return true;
         }
         return false;
@@ -188,11 +188,14 @@ public final class LocationMarker {
             if (shouldProcessValue(operand)) {
                 Debug.log("clear operand: %s", operand);
                 frameMap.clearReference(operand, currentSet);
+            } else {
+                assert isIllegal(operand) || operand.getPlatformKind() != Kind.Illegal || mode == OperandMode.TEMP : String.format("Illegal PlatformKind is only allowed for TEMP mode: %s, %s",
+                                operand, mode);
             }
         }
 
         protected boolean shouldProcessValue(Value operand) {
-            return (isRegister(operand) && attributes(asRegister(operand)).isAllocatable() || isStackSlot(operand)) && operand.getKind() != Kind.Illegal;
+            return (isRegister(operand) && attributes(asRegister(operand)).isAllocatable() || isStackSlot(operand)) && operand.getPlatformKind() != Kind.Illegal;
         }
     }
 
@@ -203,7 +206,7 @@ public final class LocationMarker {
         if (!info.hasDebugInfo()) {
             info.initDebugInfo(frameMap, !op.destroysCallerSavedRegisters() || !frameMap.getRegisterConfig().areAllAllocatableRegistersCallerSaved());
         }
-        info.markLocation(refMap);
+        info.updateUnion(refMap);
     }
 
     /**
