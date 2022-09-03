@@ -22,29 +22,30 @@
  */
 package com.sun.c1x.ir;
 
-import com.sun.c1x.*;
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code LoadField} instruction represents a read of a static or instance field.
- *
- * @author Ben L. Titzer
  */
 public final class LoadField extends AccessField {
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     /**
      * Creates a new LoadField instance.
      * @param object the receiver object
      * @param field the compiler interface field
      * @param isStatic indicates if the field is static
-     * @param stateBefore the state before the field access
+     * @param stateAfter the state after the field access
+     * @param graph
      * @param isLoaded indicates if the class is loaded
      */
-    public LoadField(Value object, RiField field, boolean isStatic, FrameState stateBefore, boolean isLoaded) {
-        super(field.kind().stackKind(), object, field, isStatic, stateBefore, isLoaded);
+    public LoadField(Value object, RiField field, Graph graph) {
+        super(field.kind().stackKind(), object, field, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     /**
@@ -73,27 +74,6 @@ public final class LoadField extends AccessField {
         v.visitLoadField(this);
     }
 
-    /**
-     * Gets a constant value to which this load can be reduced.
-     *
-     * @return {@code null} if this load cannot be reduced to a constant
-     */
-    public CiConstant constantValue() {
-        if (!C1XOptions.CanonicalizeConstantFields) {
-            return null;
-        }
-        if (isStatic()) {
-            return field.constantValue(null);
-        } else if (object().isConstant()) {
-            CiConstant cons = field.constantValue(object().asConstant());
-            if (cons != null) {
-                return cons;
-            }
-            return cons;
-        }
-        return null;
-    }
-
     @Override
     public void print(LogStream out) {
         out.print(object()).
@@ -102,5 +82,17 @@ public final class LoadField extends AccessField {
         print(" [field: ").
         print(CiUtil.format("%h.%n:%t", field, false)).
         print("]");
+    }
+
+    @Override
+    public boolean needsStateAfter() {
+        return false;
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        LoadField x = new LoadField(null, field, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

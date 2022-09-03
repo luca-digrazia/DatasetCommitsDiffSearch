@@ -28,7 +28,6 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 
 /**
  * The {@code TableSwitch} instruction represents a table switch.
@@ -45,12 +44,11 @@ public final class TableSwitch extends Switch {
      * @param value the instruction producing the value being switched on
      * @param successors the list of successors
      * @param lowKey the lowest integer key in the table
-     * @param stateBefore the state before the switch
-     * @param isSafepoint {@code true} if this instruction is a safepoint
+     * @param stateAfter the state after the switch
      * @param graph
      */
-    public TableSwitch(Value value, List<BlockBegin> successors, int lowKey, FrameState stateBefore, boolean isSafepoint, Graph graph) {
-        super(value, successors, stateBefore, isSafepoint, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public TableSwitch(Value value, List<? extends Instruction> successors, int lowKey, Graph graph) {
+        super(value, successors, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.lowKey = lowKey;
     }
 
@@ -78,16 +76,20 @@ public final class TableSwitch extends Switch {
     @Override
     public void print(LogStream out) {
         out.print("tableswitch ");
-        if (isSafepoint()) {
-            out.print("(safepoint) ");
-        }
         out.println(value());
         int l = numberOfCases();
         for (int i = 0; i < l; i++) {
             INSTRUCTION.advance(out);
-            out.printf("case %5d: B%d%n", lowKey() + i, blockSuccessors().get(i).blockID);
+            out.printf("case %5d: B%d%n", lowKey() + i, blockSuccessors().get(i));
         }
         INSTRUCTION.advance(out);
-        out.print("default   : B").print(defaultSuccessor().blockID);
+        out.print("default   : ").print(defaultSuccessor());
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        TableSwitch x = new TableSwitch(null, Arrays.asList(new Instruction[numberOfCases() + 1]), lowKey, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

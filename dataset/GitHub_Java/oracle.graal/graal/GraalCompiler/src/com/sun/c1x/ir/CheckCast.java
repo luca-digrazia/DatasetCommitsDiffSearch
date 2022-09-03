@@ -22,29 +22,31 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.util.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code CheckCast} instruction represents a {@link Bytecodes#CHECKCAST}.
- *
- * @author Ben L. Titzer
  */
 public final class CheckCast extends TypeCheck {
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     /**
      * Creates a new CheckCast instruction.
      * @param targetClass the class being cast to
      * @param object the instruction producing the object
      * @param stateBefore the state before the cast
+     * @param graph
      */
-    public CheckCast(RiType targetClass, Value targetClassInstruction, Value object, FrameState stateBefore) {
-        super(targetClass, targetClassInstruction, object, CiKind.Object, stateBefore);
-        initFlag(Flag.NonNull, object.isNonNull());
+    public CheckCast(RiType targetClass, Value targetClassInstruction, Value object, Graph graph) {
+        super(targetClass, targetClassInstruction, object, CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        setNonNull(true);
     }
 
     /**
@@ -72,14 +74,14 @@ public final class CheckCast extends TypeCheck {
 
     @Override
     public int valueNumber() {
-        return targetClass.isResolved() ? Util.hash1(Bytecodes.CHECKCAST, object) : 0;
+        return targetClass.isResolved() ? Util.hash1(Bytecodes.CHECKCAST, object()) : 0;
     }
 
     @Override
-    public boolean valueEqual(Instruction i) {
+    public boolean valueEqual(Node i) {
         if (i instanceof CheckCast) {
             CheckCast o = (CheckCast) i;
-            return targetClass == o.targetClass && object == o.object;
+            return targetClass == o.targetClass && object() == o.object();
         }
         return false;
     }
@@ -92,5 +94,12 @@ public final class CheckCast extends TypeCheck {
         print(targetClassInstruction()).
         print(") ").
         print(CiUtil.toJavaName(targetClass()));
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        CheckCast x = new CheckCast(targetClass, null, null, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

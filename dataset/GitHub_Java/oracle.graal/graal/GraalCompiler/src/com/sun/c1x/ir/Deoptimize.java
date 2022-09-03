@@ -24,49 +24,25 @@ package com.sun.c1x.ir;
 
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
-
-/**
- *
- */
 public class Deoptimize extends Instruction {
 
-    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_COUNT = 0;
     private static final int SUCCESSOR_COUNT = 0;
-    private static final int INPUT_STATE_BEFORE = 0;
 
-    /**
-     * @param kind
-     * @param inputCount
-     * @param successorCount
-     * @param graph
-     */
-    public Deoptimize(Graph graph, FrameState stateBefore) {
+    private String message;
+
+    public Deoptimize(Graph graph) {
         super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-        this.setStateBefore(stateBefore);
     }
 
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public void setMessage(String message) {
+        this.message = message;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The state for this instruction.
-     */
-    public FrameState stateBefore() {
-        return (FrameState) inputs().get(super.inputCount() + INPUT_STATE_BEFORE);
-    }
-
-    public FrameState setStateBefore(FrameState n) {
-        return (FrameState) inputs().set(super.inputCount() + INPUT_STATE_BEFORE, n);
+    public String message() {
+        return message;
     }
 
     @Override
@@ -79,4 +55,16 @@ public class Deoptimize extends Instruction {
         out.print("deoptimize");
     }
 
+    @Override
+    public String shortName() {
+        return "Deopt " + message;
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        Deoptimize x = new Deoptimize(into);
+        x.setMessage(message);
+        x.setNonNull(isNonNull());
+        return x;
+    }
 }

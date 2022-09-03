@@ -30,13 +30,14 @@ import com.sun.cri.ci.*;
 /**
  * The {@code Throw} instruction represents a throw of an exception.
  */
-public final class Throw extends BlockEnd {
+public final class Throw extends BlockEnd implements ExceptionEdgeInstruction {
 
     private static final int INPUT_COUNT = 2;
     private static final int INPUT_EXCEPTION = 0;
     private static final int INPUT_STATE_BEFORE = 1;
 
-    private static final int SUCCESSOR_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 1;
+    private static final int SUCCESSOR_EXCEPTION_EDGE = 0;
 
     @Override
     protected int inputCount() {
@@ -60,37 +61,38 @@ public final class Throw extends BlockEnd {
     }
 
     /**
-     * The state before this throw would occur.
+     * The state for this instruction.
      */
-     @Override
     public FrameState stateBefore() {
         return (FrameState) inputs().get(super.inputCount() + INPUT_STATE_BEFORE);
     }
 
-    private FrameState setStateBefore(FrameState n) {
+    public FrameState setStateBefore(FrameState n) {
         return (FrameState) inputs().set(super.inputCount() + INPUT_STATE_BEFORE, n);
+    }
+
+    /**
+     * The entry to the exception dispatch chain for this throw.
+     * TODO ls: this needs more cleanup - throw should either unwind or jump to the exception dispatch chain
+     */
+    @Override
+    public Instruction exceptionEdge() {
+        return (Instruction) successors().get(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE);
+    }
+
+    public Instruction setExceptionEdge(Instruction n) {
+        return (Instruction) successors().set(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE, n);
     }
 
     /**
      * Creates a new Throw instruction.
      * @param exception the instruction that generates the exception to throw
      * @param stateAfter the state before the exception is thrown but after the exception object has been popped
-     * @param isSafepoint {@code true} if this instruction is a safepoint instruction
      * @param graph
      */
-    public Throw(Value exception, FrameState stateAfter, boolean isSafepoint, Graph graph) {
-        super(CiKind.Illegal, null, isSafepoint, 0, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-        setStateBefore(stateAfter);
+    public Throw(Value exception, Graph graph) {
+        super(CiKind.Illegal, 0, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setException(exception);
-    }
-
-    /**
-     * Checks whether this instruction can trap.
-     * @return {@code true} because this instruction definitely throws an exception!
-     */
-    @Override
-    public boolean canTrap() {
-        return true;
     }
 
     @Override
@@ -101,5 +103,12 @@ public final class Throw extends BlockEnd {
     @Override
     public void print(LogStream out) {
         out.print("throw ").print(exception());
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        Throw x = new Throw(null, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

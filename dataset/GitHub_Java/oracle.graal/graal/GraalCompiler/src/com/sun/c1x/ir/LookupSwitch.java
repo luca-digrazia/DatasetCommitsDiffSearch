@@ -28,7 +28,6 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 
 /**
  * The {@code LookupSwitch} instruction represents a lookup switch bytecode, which has a sorted
@@ -46,12 +45,11 @@ public final class LookupSwitch extends Switch {
      * @param value the instruction producing the value being switched on
      * @param successors the list of successors
      * @param keys the list of keys, sorted
-     * @param stateBefore the state before the switch
-     * @param isSafepoint {@code true} if this instruction is a safepoint
+     * @param stateAfter the state after the switch
      * @param graph
      */
-    public LookupSwitch(Value value, List<BlockBegin> successors, int[] keys, FrameState stateBefore, boolean isSafepoint, Graph graph) {
-        super(value, successors, stateBefore, isSafepoint, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public LookupSwitch(Value value, List<? extends Instruction> successors, int[] keys, Graph graph) {
+        super(value, successors, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.keys = keys;
     }
 
@@ -76,16 +74,20 @@ public final class LookupSwitch extends Switch {
     @Override
     public void print(LogStream out) {
         out.print("lookupswitch ");
-        if (isSafepoint()) {
-            out.print("(safepoint) ");
-        }
         out.println(value());
         int l = numberOfCases();
         for (int i = 0; i < l; i++) {
             INSTRUCTION.advance(out);
-            out.printf("case %5d: B%d%n", keyAt(i), blockSuccessors().get(i).blockID);
+            out.printf("case %5d: B%d%n", keyAt(i), blockSuccessors().get(i));
         }
         INSTRUCTION.advance(out);
-        out.print("default   : B").print(defaultSuccessor().blockID);
+        out.print("default   : ").print(defaultSuccessor());
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        LookupSwitch x = new LookupSwitch(null, Arrays.asList(new Instruction[numberOfCases() + 1]), keys.clone(), into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

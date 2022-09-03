@@ -24,22 +24,109 @@ package com.oracle.max.graal.schedule;
 
 import java.util.*;
 
+import com.oracle.graal.graph.*;
+import com.sun.c1x.ir.*;
+
 
 public class Block {
 
+    private int blockID;
     private final List<Block> successors = new ArrayList<Block>();
     private final List<Block> predecessors = new ArrayList<Block>();
+    private List<Node> instructions = new ArrayList<Node>();
+    private Block dominator;
+    private final List<Block> dominators = new ArrayList<Block>();
+
+    private Node firstNode;
+    private Node lastNode;
+
+    public Node firstNode() {
+        return firstNode;
+    }
+
+    public void setFirstNode(Node node) {
+        this.firstNode = node;
+    }
+
+    public Node lastNode() {
+        return lastNode;
+    }
+
+    public void setLastNode(Node node) {
+        this.lastNode = node;
+    }
 
     public List<Block> getSuccessors() {
         return Collections.unmodifiableList(successors);
+    }
+
+    public void setDominator(Block dominator) {
+        assert this.dominator == null;
+        assert dominator != null;
+        this.dominator = dominator;
+        dominator.dominators.add(this);
+    }
+
+    public List<Block> getDominators() {
+        return Collections.unmodifiableList(dominators);
+    }
+
+    public List<Node> getInstructions() {
+        return instructions;
     }
 
     public List<Block> getPredecessors() {
         return Collections.unmodifiableList(predecessors);
     }
 
+    public Block(int blockID) {
+        this.blockID = blockID;
+    }
+
     public void addSuccessor(Block other) {
         successors.add(other);
         other.predecessors.add(this);
+    }
+
+    public int blockID() {
+        return blockID;
+    }
+
+    /**
+     * Iterate over this block, its exception handlers, and its successors, in that order.
+     *
+     * @param closure the closure to apply to each block
+     */
+    public void iteratePreOrder(BlockClosure closure) {
+        // XXX: identity hash map might be too slow, consider a boolean array or a mark field
+        iterate(new IdentityHashMap<Block, Block>(), closure);
+    }
+
+    private void iterate(IdentityHashMap<Block, Block> mark, BlockClosure closure) {
+        if (!mark.containsKey(this)) {
+            mark.put(this, this);
+            closure.apply(this);
+
+            iterateReverse(mark, closure, this.successors);
+        }
+    }
+
+    private void iterateReverse(IdentityHashMap<Block, Block> mark, BlockClosure closure, List<Block> list) {
+        for (int i = list.size() - 1; i >= 0; i--) {
+            list.get(i).iterate(mark, closure);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "B" + blockID;
+    }
+
+    public Block dominator() {
+        return dominator;
+    }
+
+    public void setInstructions(List<Node> instructions) {
+        this.instructions = instructions;
     }
 }

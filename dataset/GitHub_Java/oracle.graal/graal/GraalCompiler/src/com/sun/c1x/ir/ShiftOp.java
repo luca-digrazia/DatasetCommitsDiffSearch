@@ -22,15 +22,18 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.cri.bytecode.*;
+import com.sun.cri.ci.*;
 
 /**
  * The {@code ShiftOp} class represents shift operations.
- *
- * @author Ben L. Titzer
  */
 public final class ShiftOp extends Op2 {
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     /**
      * Creates a new shift operation.
@@ -38,8 +41,12 @@ public final class ShiftOp extends Op2 {
      * @param x the first input value
      * @param y the second input value
      */
-    public ShiftOp(int opcode, Value x, Value y) {
-        super(x.kind, opcode, x, y);
+    public ShiftOp(int opcode, Value x, Value y, Graph graph) {
+        super(x.kind, opcode, x, y, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    }
+
+    private ShiftOp(CiKind kind, int opcode, Graph graph) {
+        super(kind, opcode, null, null, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override
@@ -50,5 +57,12 @@ public final class ShiftOp extends Op2 {
     @Override
     public void print(LogStream out) {
         out.print(x()).print(' ').print(Bytecodes.operator(opcode)).print(' ').print(y());
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        ShiftOp x = new ShiftOp(kind, opcode, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

@@ -64,10 +64,10 @@ public final class Unwind extends BlockEnd {
         return (Value) inputs().set(super.inputCount() + INPUT_EXCEPTION, n);
     }
 
-    public Unwind(Value exception, Node successor, Graph graph) {
+    public Unwind(Value exception, Graph graph) {
         super(CiKind.Object, 0, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setException(exception);
-        successors().set(SUCCESSOR_END, successor);
+        successors().set(SUCCESSOR_END, graph.end());
     }
 
     @Override
@@ -82,7 +82,7 @@ public final class Unwind extends BlockEnd {
 
     @Override
     public Node copy(Graph into) {
-        Unwind x = new Unwind(null, null, into);
+        Unwind x = new Unwind(null, into);
         x.setNonNull(isNonNull());
         return x;
     }

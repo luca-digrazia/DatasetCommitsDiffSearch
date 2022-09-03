@@ -22,36 +22,26 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
 /**
  * The {@code ExceptionObject} instruction represents the incoming exception object to an exception handler.
- *
- * @author Ben L. Titzer
  */
 public final class ExceptionObject extends Instruction {
 
-    /**
-     * Debug info is required if safepoints are placed at exception handlers.
-     */
-    public final FrameState stateBefore;
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     /**
      * Constructs a new ExceptionObject instruction.
      * @param stateBefore TODO
+     * @param graph
      */
-    public ExceptionObject(FrameState stateBefore) {
-        super(CiKind.Object);
-        setFlag(Flag.NonNull);
-        setFlag(Flag.LiveSideEffect);
-        this.stateBefore = stateBefore;
-    }
-
-    @Override
-    public FrameState stateBefore() {
-        return stateBefore;
+    public ExceptionObject(Graph graph) {
+        super(CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        setNonNull(true);
     }
 
     @Override
@@ -62,5 +52,12 @@ public final class ExceptionObject extends Instruction {
     @Override
     public void print(LogStream out) {
         out.print("incoming exception");
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        ExceptionObject x = new ExceptionObject(into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

@@ -22,16 +22,18 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
 /**
  * The {@code CompareOp} instruction represents comparisons such as equals, not equal, etc.
- *
- * @author Ben L. Titzer
  */
 public final class CompareOp extends Op2 {
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     /**
      * Creates a new compare operation.
@@ -40,12 +42,8 @@ public final class CompareOp extends Op2 {
      * @param x the first input
      * @param y the second input
      */
-    public CompareOp(int opcode, CiKind kind, Value x, Value y) {
-        super(kind, opcode, x, y);
-        if (kind.isVoid()) {
-            // A compare that does not produce a value exists soley for it's side effect (i.e. setting condition codes)
-            setFlag(Flag.LiveSideEffect);
-        }
+    public CompareOp(int opcode, CiKind kind, Value x, Value y, Graph graph) {
+        super(kind, opcode, x, y, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override
@@ -60,5 +58,12 @@ public final class CompareOp extends Op2 {
             print(Bytecodes.operator(opcode)).
             print(' ').
             print(y());
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        CompareOp x = new CompareOp(opcode, kind, null, null, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

@@ -22,83 +22,54 @@
  */
 package com.sun.c1x.ir;
 
-import static com.sun.c1x.ir.Value.Flag.*;
-
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
 /**
  * The {@code StoreIndexed} instruction represents a write to an array element.
- *
- * @author Ben L. Titzer
  */
 public final class StoreIndexed extends AccessIndexed {
 
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_VALUE = 0;
+
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
     /**
-     * The value to store.
+     * The instruction that produces the value that is to be stored into the array.
      */
-    Value value;
+     public Value value() {
+        return (Value) inputs().get(super.inputCount() + INPUT_VALUE);
+    }
+
+    public Value setValue(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_VALUE, n);
+    }
 
     /**
      * Creates a new StoreIndexed instruction.
      * @param array the instruction producing the array
      * @param index the instruction producing the index
      * @param length the instruction producing the length
-     * @param elementType the element type
+     * @param elementKind the element type
      * @param value the value to store into the array
-     * @param stateBefore the state before executing this instruction
+     * @param stateAfter the state after executing this instruction
+     * @param graph
      */
-    public StoreIndexed(Value array, Value index, Value length, CiKind elementType, Value value, FrameState stateBefore) {
-        super(CiKind.Void, array, index, length, elementType, stateBefore);
-        this.value = value;
-        setFlag(Flag.LiveStore);
-        if (elementType != CiKind.Object) {
-            setFlag(Flag.NoWriteBarrier);
-        }
-    }
-
-    /**
-     * Gets the instruction that produces the value that is to be stored into the array.
-     * @return the value to write into the array
-     */
-    public Value value() {
-        return value;
-    }
-
-    /**
-     * Checks if this instruction needs a write barrier.
-     * @return {@code true} if this instruction needs a write barrier
-     */
-    public boolean needsWriteBarrier() {
-        return !checkFlag(Flag.NoWriteBarrier);
-    }
-
-    /**
-     * Checks if this instruction needs a store check.
-     * @return {@code true} if this instruction needs a store check
-     */
-    public boolean needsStoreCheck() {
-        return !checkFlag(Flag.NoStoreCheck);
-    }
-
-    public void eliminateStoreCheck() {
-        clearRuntimeCheck(NoStoreCheck);
-    }
-
-    /**
-     * Checks whether this instruction can cause a trap.
-     * @return {@code true} if this instruction can cause a trap
-     */
-    @Override
-    public boolean canTrap() {
-        return super.canTrap() || needsStoreCheck();
-    }
-
-    @Override
-    public void inputValuesDo(ValueClosure closure) {
-        super.inputValuesDo(closure);
-        value = closure.apply(value);
+    public StoreIndexed(Value array, Value index, Value length, CiKind elementKind, Value value, Graph graph) {
+        super(CiKind.Void, array, index, length, elementKind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        setValue(value);
     }
 
     @Override
@@ -109,5 +80,12 @@ public final class StoreIndexed extends AccessIndexed {
     @Override
     public void print(LogStream out) {
         out.print(array()).print('[').print(index()).print("] := ").print(value()).print(" (").print(kind.typeChar).print(')');
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        StoreIndexed x = new StoreIndexed(null, null, null, elementKind(), null, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

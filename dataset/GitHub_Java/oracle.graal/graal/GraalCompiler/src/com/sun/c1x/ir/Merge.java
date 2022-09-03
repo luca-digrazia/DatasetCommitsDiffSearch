@@ -256,28 +256,10 @@ public class Merge extends StateSplit {
     }
 
     @Override
-    public String shortName() {
-        return "Merge #" + id();
-    }
-
-    @Override
     public Node copy(Graph into) {
         assert getClass() == Merge.class : "copy of " + getClass();
         Merge x = new Merge(into);
         x.setNonNull(isNonNull());
         return x;
-    }
-
-    public void removePhiPredecessor(ExceptionDispatch successor) {
-        int predIndex = predecessors().indexOf(successor);
-        assert predIndex != -1;
-
-        for (Node usage : usages()) {
-            if (usage instanceof Phi) {
-                Phi phi = (Phi) usage;
-                assert phi.valueCount() == predecessors().size();
-                phi.removeInput(predIndex + 1);
-            }
-        }
     }
 }

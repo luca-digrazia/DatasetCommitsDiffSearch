@@ -43,6 +43,7 @@ public final class Local extends Value {
     public Local(CiKind kind, int javaIndex, Graph graph) {
         super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.index = javaIndex;
+        this.inputs().set(0, graph.start());
     }
 
     /**
@@ -97,4 +98,6 @@ public final class Local extends Value {
         x.setNonNull(isNonNull());
         return x;
     }
+
+
 }

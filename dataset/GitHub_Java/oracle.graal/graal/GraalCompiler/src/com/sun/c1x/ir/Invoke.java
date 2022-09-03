@@ -22,8 +22,6 @@
  */
 package com.sun.c1x.ir;
 
-import java.util.*;
-
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.util.*;
@@ -83,7 +81,6 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
     public final int opcode;
     public final RiMethod target;
     public final RiType returnType;
-    public final int bci; // XXX needed because we can not compute the bci from the sateBefore bci of this Invoke was optimized from INVOKEINTERFACE to INVOKESPECIAL
 
     /**
      * Constructs a new Invoke instruction.
@@ -95,12 +92,11 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
      * @param target the target method being called
      * @param stateBefore the state before executing the invocation
      */
-    public Invoke(int bci, int opcode, CiKind result, Value[] args, RiMethod target, RiType returnType, Graph graph) {
+    public Invoke(int opcode, CiKind result, Value[] args, RiMethod target, RiType returnType, Graph graph) {
         super(result, args.length, SUCCESSOR_COUNT, graph);
         this.opcode = opcode;
         this.target = target;
         this.returnType = returnType;
-        this.bci = bci;
 
         this.argumentCount = args.length;
         for (int i = 0; i < args.length; i++) {
@@ -186,17 +182,8 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
     }
 
     @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("opcode", Bytecodes.nameOf(opcode));
-        properties.put("target", CiUtil.format("%H.%n(%p):%r", target, false));
-        properties.put("bci", bci);
-        return properties;
-    }
-
-    @Override
     public Node copy(Graph into) {
-        Invoke x = new Invoke(bci, opcode, kind, new Value[argumentCount], target, returnType, into);
+        Invoke x = new Invoke(opcode, kind, new Value[argumentCount], target, returnType, into);
         x.setNonNull(isNonNull());
         return x;
     }

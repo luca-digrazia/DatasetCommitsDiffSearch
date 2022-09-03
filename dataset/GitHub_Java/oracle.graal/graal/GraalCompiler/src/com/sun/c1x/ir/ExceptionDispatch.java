@@ -24,8 +24,8 @@ package com.sun.c1x.ir;
 
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * This instruction takes an exception object and has two successors:
@@ -59,28 +59,28 @@ public final class ExceptionDispatch extends BlockEnd {
         return (Value) inputs().set(super.inputCount() + INPUT_EXCEPTION, n);
     }
 
-    private final ExceptionHandler handler;
+    private final RiType catchType;
 
     /**
      * Constructs a new ExceptionDispatch instruction.
      */
-    public ExceptionDispatch(Value exception, BlockBegin catchSuccessor, BlockBegin otherSuccessor, ExceptionHandler handler, FrameState stateAfter, boolean isSafepoint, Graph graph) {
-        super(CiKind.Int, stateAfter, isSafepoint, 2, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public ExceptionDispatch(Value exception, Instruction catchSuccessor, Instruction otherSuccessor, RiType catchType, Graph graph) {
+        super(CiKind.Int, 2, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setException(exception);
         setBlockSuccessor(0, otherSuccessor);
         setBlockSuccessor(1, catchSuccessor);
-        this.handler = handler;
+        this.catchType = catchType;
     }
 
-    public ExceptionHandler handler() {
-        return handler;
+    public RiType catchType() {
+        return catchType;
     }
 
     /**
      * Gets the block corresponding to the catch block.
      * @return the true successor
      */
-    public BlockBegin catchSuccessor() {
+    public Instruction catchSuccessor() {
         return blockSuccessor(1);
     }
 
@@ -88,7 +88,7 @@ public final class ExceptionDispatch extends BlockEnd {
      * Gets the block corresponding to the rest of the dispatch chain.
      * @return the false successor
      */
-    public BlockBegin otherSuccessor() {
+    public Instruction otherSuccessor() {
         return blockSuccessor(0);
     }
 
@@ -97,19 +97,8 @@ public final class ExceptionDispatch extends BlockEnd {
      * @param istrue {@code true} if the true successor is requested, {@code false} otherwise
      * @return the corresponding successor
      */
-    public BlockBegin successor(boolean istrue) {
+    public Instruction successor(boolean istrue) {
         return blockSuccessor(istrue ? 1 : 0);
-    }
-
-    /**
-     * Swaps the successor blocks to this if and negates the condition (e.g. == goes to !=)
-     * @see Condition#negate()
-     */
-    public void swapSuccessors() {
-        BlockBegin t = blockSuccessor(0);
-        BlockBegin f = blockSuccessor(1);
-        setBlockSuccessor(0, f);
-        setBlockSuccessor(1, t);
     }
 
     @Override
@@ -124,20 +113,22 @@ public final class ExceptionDispatch extends BlockEnd {
         print(' ').
         print("instanceof").
         print(' ').
-        print(handler.handler.catchType().name()).
-        print(" then B").
-        print(blockSuccessors().get(1).blockID).
+        print(catchType().name()).
+        print(" then ").
+        print(blockSuccessors().get(1).toString()).
         print(" else B").
-        print(blockSuccessors().get(0).blockID);
-        if (isSafepoint()) {
-            out.print(" (safepoint)");
-        }
+        print(blockSuccessors().get(0).toString());
     }
 
     @Override
     public String shortName() {
-        return "Dispatch " + handler.handler.catchType().name();
+        return "Dispatch " + catchType().name();
     }
 
-
+    @Override
+    public Node copy(Graph into) {
+        ExceptionDispatch x = new ExceptionDispatch(null, null, null, catchType, into);
+        x.setNonNull(isNonNull());
+        return x;
+    }
 }

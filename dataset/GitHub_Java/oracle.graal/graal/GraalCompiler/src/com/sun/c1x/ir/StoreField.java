@@ -22,61 +22,53 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code StoreField} instruction represents a write to a static or instance field.
- *
- * @author Ben L. Titzer
  */
 public final class StoreField extends AccessField {
 
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_VALUE = 0;
+
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
     /**
-     * The value to store.
+     * The value that is written to the field.
      */
-    Value value;
+     public Value value() {
+        return (Value) inputs().get(super.inputCount() + INPUT_VALUE);
+    }
+
+    public Value setValue(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_VALUE, n);
+    }
 
     /**
      * Creates a new LoadField instance.
      * @param object the receiver object
      * @param field the compiler interface field
      * @param value the instruction representing the value to store to the field
-     * @param isStatic indicates if the field is static
-     * @param stateBefore the state before the field access
-     * @param isLoaded indicates if the class is loaded
+     * @param stateAfter the state after the field access
+     * @param graph
      */
-    public StoreField(Value object, RiField field, Value value, boolean isStatic, FrameState stateBefore, boolean isLoaded) {
-        super(CiKind.Void, object, field, isStatic, stateBefore, isLoaded);
-        this.value = value;
-        setFlag(Flag.LiveStore);
-        if (value.kind != CiKind.Object) {
-            setFlag(Flag.NoWriteBarrier);
-        }
-    }
-
-    /**
-     * Gets the value that is written to the field.
-     * @return the value
-     */
-    public Value value() {
-        return value;
-    }
-
-    /**
-     * Checks whether this instruction needs a write barrier.
-     * @return {@code true} if this instruction needs a write barrier
-     */
-    public boolean needsWriteBarrier() {
-        return !checkFlag(Flag.NoWriteBarrier);
-    }
-
-    @Override
-    public void inputValuesDo(ValueClosure closure) {
-        super.inputValuesDo(closure);
-        value = closure.apply(value);
+    public StoreField(Value object, RiField field, Value value, Graph graph) {
+        super(CiKind.Void, object, field, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        setValue(value);
     }
 
     @Override
@@ -93,5 +85,12 @@ public final class StoreField extends AccessField {
         print(value()).
         print(" [type: ").print(CiUtil.format("%h.%n:%t", field(), false)).
         print(']');
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        StoreField x = new StoreField(null, field, null, into);
+        x.setNonNull(isNonNull());
+        return x;
     }
 }

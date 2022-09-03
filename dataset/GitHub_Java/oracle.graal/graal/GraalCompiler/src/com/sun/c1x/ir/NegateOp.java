@@ -69,7 +69,6 @@ public final class NegateOp extends Value {
         setX(x);
     }
 
-    // for copying
     private NegateOp(CiKind kind, Graph graph) {
         super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
