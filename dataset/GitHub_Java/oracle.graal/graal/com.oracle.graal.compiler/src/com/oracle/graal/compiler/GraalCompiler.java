@@ -170,10 +170,6 @@ public class GraalCompiler {
         if (GraalOptions.OptLoops) {
             new SafepointPollingEliminationPhase().apply(graph);
         }
-        new RemoveValueProxyPhase().apply(graph);
-        if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-        }
         if (GraalOptions.OptGVN) {
             new GlobalValueNumberingPhase().apply(graph);
         }
