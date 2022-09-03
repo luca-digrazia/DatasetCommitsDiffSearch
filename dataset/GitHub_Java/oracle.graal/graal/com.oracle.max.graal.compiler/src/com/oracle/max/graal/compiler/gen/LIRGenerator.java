@@ -45,7 +45,6 @@ import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
-import com.sun.cri.ri.RiType.*;
 import com.sun.cri.xir.*;
 import com.sun.cri.xir.CiXirAssembler.*;
 
@@ -240,6 +239,19 @@ public abstract class LIRGenerator extends ValueVisitor {
             if (instr instanceof Instruction) {
                 stateAfter = ((Instruction) instr).stateAfter();
             }
+            FrameState stateBefore = null;
+            if (instr instanceof StateSplit && ((StateSplit) instr).stateBefore() != null) {
+                stateBefore = ((StateSplit) instr).stateBefore();
+            }
+            if (stateBefore != null) {
+                lastState = stateBefore;
+                if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
+                    TTY.println("STATE CHANGE (stateBefore)");
+                    if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
+                        TTY.println(stateBefore.toString());
+                    }
+                }
+            }
             if (instr != instr.graph().start()) {
                 walkState(instr, stateAfter);
                 doRoot((Value) instr);
@@ -254,7 +266,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                 }
             }
         }
-        if (block.blockSuccessors().size() >= 1 && !block.endsWithJump()) {
+        if (block.blockSuccessors().size() >= 1 && !jumpsToNextBlock(block.lastInstruction())) {
             block.lir().jump(getLIRBlock((FixedNode) block.lastInstruction().successors().get(0)));
         }
 
@@ -270,6 +282,10 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitMerge(Merge x) {
         // Nothing to do.
+    }
+
+    private static boolean jumpsToNextBlock(Node node) {
+        return node instanceof BlockEnd || node instanceof EndNode || node instanceof LoopEnd;
     }
 
     @Override
@@ -706,13 +722,6 @@ public abstract class LIRGenerator extends ValueVisitor {
             CiValue value = load(x.object());
             LIRDebugInfo info = stateFor(x);
             lir.nullCheck(value, info);
-        } else if (comp instanceof IsType) {
-            IsType x = (IsType) comp;
-            CiValue value = load(x.object());
-            LIRDebugInfo info = stateFor(x);
-            XirArgument clazz = toXirArgument(x.type().getEncoding(Representation.ObjectHub));
-            XirSnippet typeCheck = xir.genTypeCheck(site(x), toXirArgument(x.object()), clazz, x.type());
-            emitXir(typeCheck, x, info, compilation.method, false);
         }
     }
 
@@ -964,9 +973,10 @@ public abstract class LIRGenerator extends ValueVisitor {
             if (rangeDensity >= GraalOptions.RangeTestsSwitchDensity) {
                 visitSwitchRanges(switchRanges, tag, getLIRBlock(x.defaultSuccessor()));
             } else {
-                LIRBlock[] targets = new LIRBlock[x.numberOfCases()];
-                for (int i = 0; i < x.numberOfCases(); ++i) {
-                    targets[i] = getLIRBlock(x.blockSuccessor(i));
+                List<Instruction> nonDefaultSuccessors = x.blockSuccessors().subList(0, x.numberOfCases());
+                LIRBlock[] targets = new LIRBlock[nonDefaultSuccessors.size()];
+                for (int i = 0; i < nonDefaultSuccessors.size(); ++i) {
+                    targets[i] = getLIRBlock(nonDefaultSuccessors.get(i));
                 }
                 lir.tableswitch(tag, x.lowKey(), getLIRBlock(x.defaultSuccessor()), targets);
             }
@@ -1089,7 +1099,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitRegisterFinalizer(RegisterFinalizer x) {
         CiValue receiver = load(x.object());
-        LIRDebugInfo info = stateFor(x);
+        LIRDebugInfo info = stateFor(x, x.stateBefore());
         callRuntime(CiRuntimeCall.RegisterFinalizer, info, receiver);
         setNoResult(x);
     }
@@ -1415,7 +1425,6 @@ public abstract class LIRGenerator extends ValueVisitor {
     public void visitEndNode(EndNode end) {
         setNoResult(end);
         Merge merge = end.merge();
-        assert merge != null;
         moveToPhi(merge, merge.endIndex(end));
         lir.jump(getLIRBlock(end.merge()));
     }
@@ -1424,7 +1433,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitLoopEnd(LoopEnd x) {
         setNoResult(x);
-        moveToPhi(x.loopBegin(), x.loopBegin().endCount());
+        //moveToPhi(x.loopBegin(), x.loopBegin().endCount()); //TODO gd
         lir.jump(getLIRBlock(x.loopBegin()));
     }
 
@@ -1450,6 +1459,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
         }
         resolver.dispose();
+        /*
         //TODO (gd) remove that later
         if (merge instanceof LoopBegin) {
             for (Node usage : merge.usages()) {
@@ -1470,7 +1480,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                     }
                 }
             }
-        }
+        }*/
     }
 
     /**

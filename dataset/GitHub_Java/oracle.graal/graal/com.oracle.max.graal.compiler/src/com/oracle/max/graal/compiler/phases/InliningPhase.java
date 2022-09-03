@@ -244,7 +244,7 @@ public class InliningPhase extends Phase {
             clipNode.setNode(new IsNonNull(parameters[0], compilation.graph));
             pred = clipNode;
         } else {
-            pred = new Placeholder(compilation.graph);
+            pred = new Placeholder(compilation.graph); //(Instruction) invoke.predecessors().get(0);//new Merge(compilation.graph);
         }
         invoke.predecessors().get(0).successors().replace(invoke, pred);
         replacements.put(startNode, pred);
