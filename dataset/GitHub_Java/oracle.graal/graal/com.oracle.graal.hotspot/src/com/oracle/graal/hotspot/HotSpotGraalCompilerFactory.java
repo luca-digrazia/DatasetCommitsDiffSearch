@@ -43,13 +43,16 @@ import com.oracle.graal.options.OptionType;
 import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.options.OptionsParser;
 import com.oracle.graal.phases.tiers.CompilerConfiguration;
+import com.oracle.graal.serviceprovider.ServiceProvider;
 
 import jdk.vm.ci.common.InitTimer;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotSignature;
 import jdk.vm.ci.hotspot.services.HotSpotJVMCICompilerFactory;
 import jdk.vm.ci.runtime.JVMCIRuntime;
+import jdk.vm.ci.runtime.services.JVMCICompilerFactory;
 
+@ServiceProvider(JVMCICompilerFactory.class)
 public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFactory {
 
     /**
@@ -76,12 +79,6 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
      */
     public static String asSystemPropertySetting(OptionValue<?> value) {
         return GRAAL_OPTION_PROPERTY_PREFIX + value.getName() + "=" + value.getValue();
-    }
-
-    private final HotSpotGraalJVMCIAccess access;
-
-    public HotSpotGraalCompilerFactory(HotSpotGraalJVMCIAccess access) {
-        this.access = access;
     }
 
     @Override
@@ -200,16 +197,11 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
 
     @Override
     public HotSpotGraalCompiler createCompiler(JVMCIRuntime runtime) {
-        HotSpotGraalCompiler compiler = createCompiler(runtime, CompilerConfigurationFactory.selectFactory(null));
-        // Only the HotSpotGraalRuntime associated with the compiler created via
-        // jdk.vm.ci.runtime.JVMCIRuntime.getCompiler() is registered for receiving
-        // VM events.
-        access.onCompilerCreation(compiler);
-        return compiler;
+        return createCompiler(runtime, CompilerConfigurationFactory.selectFactory(null));
     }
 
     /**
-     * Creates a new {@link HotSpotGraalRuntime} object and a new {@link HotSpotGraalCompiler} and
+     * Creates a new {@link HotSpotGraalRuntime} object a new {@link HotSpotGraalCompiler} and
      * returns the latter.
      *
      * @param runtime the JVMCI runtime on which the {@link HotSpotGraalRuntime} is built
@@ -220,6 +212,7 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
         HotSpotJVMCIRuntime jvmciRuntime = (HotSpotJVMCIRuntime) runtime;
         try (InitTimer t = timer("HotSpotGraalRuntime.<init>")) {
             HotSpotGraalRuntime graalRuntime = new HotSpotGraalRuntime(jvmciRuntime, compilerConfigurationFactory);
+            HotSpotGraalVMEventListener.addRuntime(graalRuntime);
             return new HotSpotGraalCompiler(jvmciRuntime, graalRuntime);
         }
     }
