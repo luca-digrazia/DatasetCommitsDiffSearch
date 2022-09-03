@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,10 +29,15 @@
  */
 package com.oracle.truffle.llvm.runtime.vector;
 
+import java.util.Arrays;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
 
 @ValueType
-public final class LLVMDoubleVector extends LLVMVector {
+public final class LLVMDoubleVector {
+
     private final double[] vector;
 
     public static LLVMDoubleVector create(double[] vector) {
@@ -43,6 +48,90 @@ public final class LLVMDoubleVector extends LLVMVector {
         this.vector = vector;
     }
 
+    // We do not want to use lambdas because of bad startup
+    private interface Operation {
+        double eval(double a, double b);
+    }
+
+    private static LLVMDoubleVector doOperation(LLVMDoubleVector lhs, LLVMDoubleVector rhs, Operation op) {
+        double[] left = lhs.vector;
+        double[] right = rhs.vector;
+
+        // not sure if this assert is true for llvm ir in general
+        // this implementation however assumes it
+        assert left.length == right.length;
+
+        double[] result = new double[left.length];
+
+        for (int i = 0; i < left.length; i++) {
+            result[i] = op.eval(left[i], right[i]);
+        }
+        return create(result);
+    }
+
+    public static LLVMI1Vector compare(LLVMDoubleVector a, LLVMDoubleVector b, BiFunction<Double, Double, Boolean> function) {
+        boolean[] result = new boolean[a.vector.length];
+
+        for (int i = 0; i < a.vector.length; i++) {
+            result[i] = function.apply(a.vector[i], b.vector[i]);
+        }
+        return LLVMI1Vector.create(result);
+    }
+
+    public LLVMDoubleVector apply(Function<Double, Double> function) {
+        double[] result = new double[vector.length];
+
+        for (int i = 0; i < vector.length; i++) {
+            result[i] = function.apply(vector[i]);
+        }
+        return create(result);
+    }
+
+    public LLVMDoubleVector add(LLVMDoubleVector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public double eval(double a, double b) {
+                return a + b;
+            }
+        });
+    }
+
+    public LLVMDoubleVector mul(LLVMDoubleVector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public double eval(double a, double b) {
+                return a * b;
+            }
+        });
+    }
+
+    public LLVMDoubleVector sub(LLVMDoubleVector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public double eval(double a, double b) {
+                return a - b;
+            }
+        });
+    }
+
+    public LLVMDoubleVector div(LLVMDoubleVector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public double eval(double a, double b) {
+                return a / b;
+            }
+        });
+    }
+
+    public LLVMDoubleVector rem(LLVMDoubleVector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public double eval(double a, double b) {
+                return a % b;
+            }
+        });
+    }
+
     public double[] getValues() {
         return vector;
     }
@@ -51,7 +140,12 @@ public final class LLVMDoubleVector extends LLVMVector {
         return vector[index];
     }
 
-    @Override
+    public LLVMDoubleVector insert(double element, int index) {
+        double[] copyOf = Arrays.copyOf(vector, vector.length);
+        copyOf[index] = element;
+        return create(copyOf);
+    }
+
     public int getLength() {
         return vector.length;
     }
