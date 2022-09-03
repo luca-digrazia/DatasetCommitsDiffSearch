@@ -52,10 +52,7 @@ import com.oracle.truffle.api.source.SourceSection;
  *
  * @see Probe
  * @see Instrumenter
- * @since 0.8 or earlier
  */
-@SuppressWarnings("deprecation")
-@Deprecated
 public abstract class ProbeInstrument extends Instrument {
     Probe probe = null;
 
@@ -121,8 +118,6 @@ public abstract class ProbeInstrument extends Instrument {
     /**
      * Removes this Instrument from the Probe to which it attached and renders this Instrument
      * inert.
-     *
-     * @since 0.8 or earlier
      */
     @Override
     protected void innerDispose() {
@@ -137,8 +132,6 @@ public abstract class ProbeInstrument extends Instrument {
      * Gets the {@link Probe} to which this {@link Instrument} is currently attached: {@code null}
      * if not yet attached to a Probe or if this Instrument has been {@linkplain #dispose()
      * disposed}.
-     *
-     * @since 0.8 or earlier
      */
     public Probe getProbe() {
         return probe;
@@ -459,10 +452,8 @@ public abstract class ProbeInstrument extends Instrument {
         }
     }
 
-    // Experimental
-    /** @since 0.8 or earlier */
+    // TODO (mlvdv) experimental
     public interface TruffleOptListener {
-        /** @since 0.8 or earlier */
         void notifyIsCompiled(boolean isCompiled);
     }
 

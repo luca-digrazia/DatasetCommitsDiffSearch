@@ -27,6 +27,9 @@ package com.oracle.truffle.api.instrument;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrument.ProbeInstrument.AbstractInstrumentNode;
+import com.oracle.truffle.api.instrument.TagInstrument.AfterTagInstrument;
+import com.oracle.truffle.api.instrument.TagInstrument.BeforeTagInstrument;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -46,17 +49,14 @@ import com.oracle.truffle.api.nodes.NodeInfo;
  * clones consistent.
  */
 @NodeInfo(cost = NodeCost.NONE)
-@SuppressWarnings("deprecation")
-@Deprecated
 final class ProbeNode extends EventHandlerNode {
 
     // Never changed once set.
     @CompilationFinal Probe probe = null;
     /**
-     * First {@link com.oracle.truffle.api.instrument.ProbeInstrument.AbstractInstrumentNode} node
-     * in chain; {@code null} of no instruments in chain.
+     * First {@link AbstractInstrumentNode} node in chain; {@code null} of no instruments in chain.
      */
-    @Child protected com.oracle.truffle.api.instrument.ProbeInstrument.AbstractInstrumentNode firstInstrumentNode;
+    @Child protected AbstractInstrumentNode firstInstrumentNode;
 
     @Override
     public Node copy() {
@@ -76,7 +76,7 @@ final class ProbeNode extends EventHandlerNode {
     @Override
     public void enter(Node node, VirtualFrame frame) {
         this.probe.checkProbeUnchanged();
-        final com.oracle.truffle.api.instrument.TagInstrument.BeforeTagInstrument beforeTagInstrument = probe.getBeforeTagInstrument();
+        final BeforeTagInstrument beforeTagInstrument = probe.getBeforeTagInstrument();
         if (beforeTagInstrument != null) {
             beforeTagInstrument.getListener().onEnter(probe, ((WrapperNode) this.getParent()).getChild(), frame);
         }
@@ -91,7 +91,7 @@ final class ProbeNode extends EventHandlerNode {
         if (firstInstrumentNode != null) {
             firstInstrumentNode.returnVoid(node, frame);
         }
-        final com.oracle.truffle.api.instrument.TagInstrument.AfterTagInstrument afterTagInstrument = probe.getAfterTagInstrument();
+        final AfterTagInstrument afterTagInstrument = probe.getAfterTagInstrument();
         if (afterTagInstrument != null) {
             afterTagInstrument.getListener().onReturnVoid(probe, ((WrapperNode) this.getParent()).getChild(), frame);
         }
@@ -103,7 +103,7 @@ final class ProbeNode extends EventHandlerNode {
         if (firstInstrumentNode != null) {
             firstInstrumentNode.returnValue(node, frame, result);
         }
-        final com.oracle.truffle.api.instrument.TagInstrument.AfterTagInstrument afterTagInstrument = probe.getAfterTagInstrument();
+        final AfterTagInstrument afterTagInstrument = probe.getAfterTagInstrument();
         if (afterTagInstrument != null) {
             afterTagInstrument.getListener().onReturnValue(probe, ((WrapperNode) this.getParent()).getChild(), frame, result);
         }
@@ -121,7 +121,7 @@ final class ProbeNode extends EventHandlerNode {
         if (firstInstrumentNode != null) {
             firstInstrumentNode.returnExceptional(node, frame, exception);
         }
-        final com.oracle.truffle.api.instrument.TagInstrument.AfterTagInstrument afterTagInstrument = probe.getAfterTagInstrument();
+        final AfterTagInstrument afterTagInstrument = probe.getAfterTagInstrument();
         if (afterTagInstrument != null) {
             afterTagInstrument.getListener().onReturnExceptional(probe, ((WrapperNode) this.getParent()).getChild(), frame, exception);
         }
@@ -140,8 +140,7 @@ final class ProbeNode extends EventHandlerNode {
     }
 
     /**
-     * Adds an {@link com.oracle.truffle.api.instrument.ProbeInstrument.AbstractInstrumentNode} to
-     * this chain.
+     * Adds an {@link AbstractInstrumentNode} to this chain.
      */
     @TruffleBoundary
     void addInstrument(ProbeInstrument instrument) {
@@ -159,7 +158,7 @@ final class ProbeNode extends EventHandlerNode {
     @TruffleBoundary
     void removeInstrument(ProbeInstrument instrument) {
         assert instrument.getProbe() == probe;
-        final com.oracle.truffle.api.instrument.ProbeInstrument.AbstractInstrumentNode modifiedChain = instrument.removeFromChain(firstInstrumentNode);
+        final AbstractInstrumentNode modifiedChain = instrument.removeFromChain(firstInstrumentNode);
         if (modifiedChain == null) {
             firstInstrumentNode = null;
         } else {

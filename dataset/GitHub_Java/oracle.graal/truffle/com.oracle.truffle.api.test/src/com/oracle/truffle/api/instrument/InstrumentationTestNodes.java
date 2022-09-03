@@ -32,7 +32,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 /**
  * Tests instrumentation where a client can attach a node that gets attached into the AST.
  */
-@SuppressWarnings("deprecation")
 class InstrumentationTestNodes {
 
     abstract static class TestLanguageNode extends Node {

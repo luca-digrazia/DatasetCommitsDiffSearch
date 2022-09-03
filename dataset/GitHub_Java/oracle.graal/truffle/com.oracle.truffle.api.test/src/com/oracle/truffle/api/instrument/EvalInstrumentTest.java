@@ -34,6 +34,8 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag;
+import com.oracle.truffle.api.instrument.impl.DefaultProbeListener;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
@@ -42,8 +44,6 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
  * Tests the kind of instrumentation where a client can provide guest language code to be
  * <em>spliced</em> directly into the AST.
  */
-@Deprecated
-@SuppressWarnings("deprecation")
 public class EvalInstrumentTest {
 
     PolyglotEngine vm;
@@ -51,6 +51,7 @@ public class EvalInstrumentTest {
 
     @Before
     public void before() {
+        // TODO (mlvdv) eventually abstract this
         try {
             vm = PolyglotEngine.newBuilder().build();
             final Field field = PolyglotEngine.class.getDeclaredField("instrumenter");
@@ -78,11 +79,11 @@ public class EvalInstrumentTest {
         final Source source13 = InstrumentationTestingLanguage.createAdditionSource13("testEvalInstrumentListener");
 
         final Probe[] addNodeProbe = new Probe[1];
-        instrumenter.addProbeListener(new com.oracle.truffle.api.instrument.impl.DefaultProbeListener() {
+        instrumenter.addProbeListener(new DefaultProbeListener() {
 
             @Override
             public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
-                if (tag == com.oracle.truffle.api.instrument.InstrumentationTestingLanguage.InstrumentTestTag.ADD_TAG) {
+                if (tag == InstrumentTestTag.ADD_TAG) {
                     addNodeProbe[0] = probe;
                 }
             }

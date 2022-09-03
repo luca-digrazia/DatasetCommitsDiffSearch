@@ -41,6 +41,11 @@
 package com.oracle.truffle.sl.nodes.instrument;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrument.EventHandlerNode;
+import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.Probe;
+import com.oracle.truffle.api.instrument.ProbeInstrument;
+import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -55,12 +60,10 @@ import com.oracle.truffle.sl.runtime.SLFunction;
  * interact with AST execution may attach {@link ProbeInstrument}s to the {@link Probe} uniquely
  * associated with the wrapper, and to which this wrapper routes execution events.
  */
-@Deprecated
-@SuppressWarnings("deprecation")
 @NodeInfo(cost = NodeCost.NONE)
-public final class SLExpressionWrapperNode extends SLExpressionNode implements com.oracle.truffle.api.instrument.WrapperNode {
+public final class SLExpressionWrapperNode extends SLExpressionNode implements WrapperNode {
     @Child private SLExpressionNode child;
-    @Child private com.oracle.truffle.api.instrument.EventHandlerNode eventHandlerNode;
+    @Child private EventHandlerNode eventHandlerNode;
 
     /**
      * Constructor.
@@ -82,11 +85,11 @@ public final class SLExpressionWrapperNode extends SLExpressionNode implements c
         return child;
     }
 
-    public void insertEventHandlerNode(com.oracle.truffle.api.instrument.EventHandlerNode eventHandler) {
+    public void insertEventHandlerNode(EventHandlerNode eventHandler) {
         this.eventHandlerNode = eventHandler;
     }
 
-    public com.oracle.truffle.api.instrument.Probe getProbe() {
+    public Probe getProbe() {
         return eventHandlerNode.getProbe();
     }
 

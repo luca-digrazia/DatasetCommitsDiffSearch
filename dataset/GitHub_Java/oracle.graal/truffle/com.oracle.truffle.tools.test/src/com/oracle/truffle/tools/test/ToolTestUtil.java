@@ -51,7 +51,7 @@ public class ToolTestUtil {
 
     static final String MIME_TYPE = "text/x-toolTest";
 
-    enum ToolTestTag implements SyntaxTag {
+    static enum ToolTestTag implements SyntaxTag {
 
         ADD_TAG("addition", "test language addition node"),
 
@@ -60,7 +60,7 @@ public class ToolTestUtil {
         private final String name;
         private final String description;
 
-        ToolTestTag(String name, String description) {
+        private ToolTestTag(String name, String description) {
             this.name = name;
             this.description = description;
         }
@@ -167,17 +167,10 @@ public class ToolTestUtil {
     }
 
     abstract static class ToolTestLangNode extends Node {
-        private final SourceSection section;
-
         public abstract Object execute(VirtualFrame frame);
 
         protected ToolTestLangNode(SourceSection ss) {
-            this.section = ss;
-        }
-
-        @Override
-        public SourceSection getSourceSection() {
-            return section;
+            super(ss);
         }
     }
 
@@ -186,7 +179,7 @@ public class ToolTestUtil {
         @Child private ToolTestLangNode child;
         @Child private EventHandlerNode eventHandlerNode;
 
-        ToolTestWrapperNode(ToolTestLangNode child) {
+        public ToolTestWrapperNode(ToolTestLangNode child) {
             super(null);
             assert !(child instanceof ToolTestWrapperNode);
             this.child = child;
@@ -232,7 +225,7 @@ public class ToolTestUtil {
     static class TestValueNode extends ToolTestLangNode {
         private final int value;
 
-        TestValueNode(int value, SourceSection s) {
+        public TestValueNode(int value, SourceSection s) {
             super(s);
             this.value = value;
         }
@@ -250,7 +243,7 @@ public class ToolTestUtil {
         @Child private ToolTestLangNode leftChild;
         @Child private ToolTestLangNode rightChild;
 
-        TestAdditionNode(TestValueNode leftChild, TestValueNode rightChild, SourceSection s) {
+        public TestAdditionNode(TestValueNode leftChild, TestValueNode rightChild, SourceSection s) {
             super(s);
             this.leftChild = insert(leftChild);
             this.rightChild = insert(rightChild);
@@ -275,7 +268,7 @@ public class ToolTestUtil {
          * newly created AST. Global registry is not used, since that would interfere with other
          * tests run in the same environment.
          */
-        InstrumentationTestRootNode(ToolTestLangNode body) {
+        public InstrumentationTestRootNode(ToolTestLangNode body) {
             super(ToolTestLang.class, null, null);
             this.body = body;
         }
@@ -307,7 +300,7 @@ public class ToolTestUtil {
          * newly created AST. Global registry is not used, since that would interfere with other
          * tests run in the same environment.
          */
-        TestRootNode(ToolTestLangNode body, Instrumenter instrumenter) {
+        public TestRootNode(ToolTestLangNode body, Instrumenter instrumenter) {
             super(ToolTestLang.class, null, null);
             this.instrumenter = instrumenter;
             this.body = body;
