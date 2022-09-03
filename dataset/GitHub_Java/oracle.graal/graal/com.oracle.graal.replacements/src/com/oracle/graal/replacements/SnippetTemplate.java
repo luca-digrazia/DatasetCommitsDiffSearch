@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.replacements;
 
+import static com.oracle.graal.api.meta.LocationIdentity.*;
+import static com.oracle.graal.debug.Debug.*;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
 import static com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates.*;
-import static com.oracle.jvmci.debug.Debug.*;
-import static com.oracle.jvmci.meta.LocationIdentity.*;
 import static java.util.FormattableFlags.*;
 
 import java.io.*;
@@ -36,8 +36,13 @@ import java.util.concurrent.atomic.*;
 import java.util.function.*;
 import java.util.stream.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node;
@@ -47,8 +52,8 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.common.*;
@@ -60,11 +65,6 @@ import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.Snippet.VarargsParameter;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
-import com.oracle.jvmci.meta.*;
 
 /**
  * A snippet template is a graph created by parsing a snippet method and then specialized by binding
@@ -151,7 +151,7 @@ public class SnippetTemplate {
 
         protected SnippetInfo(ResolvedJavaMethod method, LocationIdentity[] privateLocations) {
             this.method = method;
-            this.privateLocations = SnippetCounterNode.addSnippetCounters(privateLocations);
+            this.privateLocations = privateLocations;
             instantiationCounter = Debug.metric("SnippetInstantiationCount[%s]", method.getName());
             instantiationTimer = Debug.timer("SnippetInstantiationTime[%s]", method.getName());
             assert method.isStatic() : "snippet method must be static: " + method.format("%H.%n");
@@ -194,11 +194,6 @@ public class SnippetTemplate {
                 return names[paramIdx];
             }
             return null;
-        }
-
-        @Override
-        public String toString() {
-            return getClass().getSimpleName() + ":" + method.format("%h.%n");
         }
     }
 
@@ -657,7 +652,7 @@ public class SnippetTemplate {
                         // The template lowering doesn't really treat this as an array so you can't
                         // store back into the varargs. Allocate your own array if you really need
                         // this and EA should eliminate it.
-                        throw new JVMCIError("Can't store into VarargsParameter array");
+                        throw new GraalInternalError("Can't store into VarargsParameter array");
                     }
                 }
             } else {
@@ -1156,7 +1151,7 @@ public class SnippetTemplate {
                         MemoryNode replacement = map.getLastLocationAccess(location);
                         if (replacement == null) {
                             assert LocationIdentity.any().equals(location) || Arrays.stream(info.privateLocations).anyMatch(Predicate.isEqual(location)) : "Snippet " + info.method.format("%h.%n") +
-                                            " contains access to the non-private location " + location + ", but replacee doesn't access this location." + map.getLocations();
+                                            " contains access to the non-private location " + location + ", but replacee doesn't access this location.";
                         } else {
                             pos.set(usage, replacement.asNode());
                         }
@@ -1312,7 +1307,7 @@ public class SnippetTemplate {
      * Gets a copy of the specialized graph.
      */
     public StructuredGraph copySpecializedGraph() {
-        return (StructuredGraph) snippet.copy();
+        return snippet.copy();
     }
 
     /**
