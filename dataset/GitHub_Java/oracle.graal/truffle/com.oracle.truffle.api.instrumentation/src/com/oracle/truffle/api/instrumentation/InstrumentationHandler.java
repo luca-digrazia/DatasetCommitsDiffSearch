@@ -99,7 +99,7 @@ final class InstrumentationHandler {
     }
 
     void addInstrument(Object key, Class<?> clazz) {
-        addInstrumenter(key, new InstrumentClientInstrumenter(clazz, out, err, in));
+        addInstrumenter(key, new ClientInstrumenter(clazz, out, err, in));
     }
 
     void disposeInstrumenter(Object key, boolean cleanupRequired) {
@@ -131,7 +131,7 @@ final class InstrumentationHandler {
     }
 
     Instrumenter forLanguage(TruffleLanguage.Env context, TruffleLanguage<?> language) {
-        return new LanguageClientInstrumenter<>(language, context);
+        return new LanguageInstrumenter<>(language, context);
     }
 
     void detachLanguage(Object context) {
@@ -546,17 +546,17 @@ final class InstrumentationHandler {
     }
 
     /**
-     * Provider of instrumentation services for {@linkplain TruffleInstrument external clients} of
+     * Instrumenter implementation for use by {@linkplain TruffleInstrument external clients} of
      * instrumentation.
      */
-    final class InstrumentClientInstrumenter extends AbstractInstrumenter {
+    final class ClientInstrumenter extends AbstractInstrumenter {
 
         private final Class<?> instrumentClass;
         private Object[] services;
         private TruffleInstrument instrument;
         private final Env env;
 
-        InstrumentClientInstrumenter(Class<?> instrumentClass, OutputStream out, OutputStream err, InputStream in) {
+        ClientInstrumenter(Class<?> instrumentClass, OutputStream out, OutputStream err, InputStream in) {
             this.instrumentClass = instrumentClass;
             this.env = new Env(this, out, err, in);
         }
@@ -636,14 +636,13 @@ final class InstrumentationHandler {
     }
 
     /**
-     * Provider of instrumentation services for {@linkplain TruffleLanguage language
-     * implementations}.
+     * Instrumenter implementation for use by {@linkplain TruffleLanguage language implementations}.
      */
-    final class LanguageClientInstrumenter<T> extends AbstractInstrumenter {
+    final class LanguageInstrumenter<T> extends AbstractInstrumenter {
         @SuppressWarnings("unused") private final TruffleLanguage.Env env;
         private final TruffleLanguage<T> language;
 
-        LanguageClientInstrumenter(TruffleLanguage<T> language, TruffleLanguage.Env env) {
+        LanguageInstrumenter(TruffleLanguage<T> language, TruffleLanguage.Env env) {
             this.language = language;
             this.env = env;
         }
@@ -674,8 +673,10 @@ final class InstrumentationHandler {
     }
 
     /**
-     * Shared implementation of instrumentation services for clients whose requirements and
-     * privileges may vary.
+     * We have two APIs both need an Instrumenter implementation they slightly differ in their
+     * behavior depending on the context in which they are used: <em>external clients</em> of
+     * instrumentation services (instances of {@link TruffleInstrument}) or
+     * <em>language implementations</em> (instances of {@link TruffleLanguage}).
      */
     abstract class AbstractInstrumenter extends Instrumenter {
 
