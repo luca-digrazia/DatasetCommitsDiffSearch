@@ -24,7 +24,7 @@ package com.oracle.graal.compiler.common.spi;
 
 import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionKey;
+import com.oracle.graal.options.OptionValue;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaType;
@@ -39,7 +39,7 @@ public abstract class JavaConstantFieldProvider implements ConstantFieldProvider
 
     static class Options {
         @Option(help = "Determines whether to treat final fields with default values as constant.")//
-        public static final OptionKey<Boolean> TrustFinalDefaultFields = new OptionKey<>(true);
+        public static final OptionValue<Boolean> TrustFinalDefaultFields = new OptionValue<>(true);
     }
 
     protected JavaConstantFieldProvider(MetaAccessProvider metaAccess) {
@@ -92,7 +92,7 @@ public abstract class JavaConstantFieldProvider implements ConstantFieldProvider
 
     @SuppressWarnings("unused")
     protected boolean isFinalFieldValueConstant(ResolvedJavaField field, JavaConstant value, ConstantFieldTool<?> tool) {
-        return !value.isDefaultForKind() || Options.TrustFinalDefaultFields.getValue(tool.getOptions());
+        return !value.isDefaultForKind() || Options.TrustFinalDefaultFields.getValue();
     }
 
     @SuppressWarnings("unused")
