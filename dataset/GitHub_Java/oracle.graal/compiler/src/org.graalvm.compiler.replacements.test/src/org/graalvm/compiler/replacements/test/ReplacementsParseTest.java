@@ -181,10 +181,12 @@ public class ReplacementsParseTest extends ReplacementsTest {
             return copyFirstL2RBody(left, right);
         }
 
-        static int nonVoidIntrinsicWithCall(@SuppressWarnings("unused") int x, int y) {
+        @SuppressWarnings("unused")
+        static int nonVoidIntrinsicWithCall(int x, int y) {
             return y;
         }
 
+        @SuppressWarnings("unused")
         static int nonVoidIntrinsicWithOptimizedSplit(int x) {
             return x;
         }
