@@ -31,15 +31,16 @@ import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractInstrumentImpl;
 
 import com.oracle.truffle.api.InstrumentInfo;
-import com.oracle.truffle.api.vm.PolyglotImpl.VMObject;
+import com.oracle.truffle.api.TruffleException;
 
 @SuppressWarnings("deprecation")
-class PolyglotInstrument extends AbstractInstrumentImpl implements VMObject {
+class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.truffle.api.vm.PolyglotImpl.VMObject {
 
     Instrument api;
     InstrumentInfo info;
     final InstrumentCache cache;
     final PolyglotEngineImpl engine;
+    private final Object instrumentLock = new Object();
 
     private volatile OptionDescriptors options;
     private volatile OptionValuesImpl optionValues;
@@ -61,7 +62,7 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements VMObject {
 
     OptionValuesImpl getOptionValues() {
         if (optionValues == null) {
-            synchronized (engine) {
+            synchronized (instrumentLock) {
                 if (optionValues == null) {
                     optionValues = new OptionValuesImpl(engine, getOptions());
                 }
@@ -77,7 +78,7 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements VMObject {
 
     void ensureInitialized() {
         if (!initialized) {
-            synchronized (engine) {
+            synchronized (instrumentLock) {
                 if (!initialized) {
                     try {
                         Class<?> loadedInstrument = cache.getInstrumentationClass();
@@ -94,17 +95,23 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements VMObject {
 
     void ensureCreated() {
         if (!created) {
-            synchronized (engine) {
+            synchronized (instrumentLock) {
                 if (!created) {
                     if (!initialized) {
                         ensureInitialized();
                     }
-                    try {
-                        INSTRUMENT.createInstrument(engine.instrumentationHandler, this, cache.services(), getOptionValues());
-                    } catch (Exception e) {
-                        throw new IllegalStateException(String.format("Error initializing instrument '%s' using class '%s'.", cache.getId(), cache.getClassName()), e);
-                    }
+                    INSTRUMENT.createInstrument(engine.instrumentationHandler, this, cache.services(), getOptionValues());
                     created = true;
+                }
+            }
+        }
+    }
+
+    void notifyClosing() {
+        if (created) {
+            synchronized (instrumentLock) {
+                if (created) {
+                    INSTRUMENT.finalizeInstrument(engine.instrumentationHandler, this);
                 }
             }
         }
@@ -113,21 +120,35 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements VMObject {
     void ensureClosed() {
         assert Thread.holdsLock(engine);
         if (created) {
-            if (created) {
-                INSTRUMENT.disposeInstrument(engine.instrumentationHandler, this, false);
+            synchronized (instrumentLock) {
+                if (created) {
+                    INSTRUMENT.disposeInstrument(engine.instrumentationHandler, this, false);
+                }
+                created = false;
+                initialized = false;
+                options = null;
+                optionValues = null;
             }
-            created = false;
-            initialized = false;
-            options = null;
-            optionValues = null;
         }
     }
 
     @Override
     public <T> T lookup(Class<T> serviceClass) {
+        return lookup(serviceClass, true);
+    }
+
+    <T> T lookup(Class<T> serviceClass, boolean wrapExceptions) {
         engine.checkState();
         if (cache.supportsService(serviceClass)) {
-            ensureCreated();
+            try {
+                ensureCreated();
+            } catch (Throwable t) {
+                if (wrapExceptions) {
+                    throw PolyglotImpl.wrapGuestException(engine, t);
+                } else {
+                    throw t;
+                }
+            }
             return INSTRUMENT.getInstrumentationHandlerService(engine.instrumentationHandler, this, serviceClass);
         } else {
             return null;
