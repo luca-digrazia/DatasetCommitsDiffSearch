@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -77,9 +75,9 @@ public final class DefaultTraceRegisterAllocationPolicy {
         public static final OptionKey<Integer> TraceRAnumVariables = new OptionKey<>(null);
         @Option(help = "Use LSRA / BottomUp ratio", type = OptionType.Debug)
         public static final OptionKey<Double> TraceRAbottomUpRatio = new OptionKey<>(0.0);
-        @Option(help = "Frequency Threshold", type = OptionType.Debug)
-        public static final OptionKey<Double> TraceRAfrequencyThreshold = new OptionKey<>(0.8);
-        @Option(help = "Sum Frequency Budget Threshold", type = OptionType.Debug)
+        @Option(help = "Probability Threshold", type = OptionType.Debug)
+        public static final OptionKey<Double> TraceRAprobalilityThreshold = new OptionKey<>(0.8);
+        @Option(help = "Sum Probability Budget Threshold", type = OptionType.Debug)
         public static final OptionKey<Double> TraceRAsumBudget = new OptionKey<>(0.5);
         @Option(help = "TraceRA allocation policy to use.", type = OptionType.Debug)
         public static final EnumOptionKey<TraceRAPolicies> TraceRAPolicy = new EnumOptionKey<>(TraceRAPolicies.Default);
@@ -277,22 +275,22 @@ public final class DefaultTraceRegisterAllocationPolicy {
 
     public static final class BottomUpMaxFrequencyStrategy extends BottomUpStrategy {
 
-        private final double maxRelativeFrequency;
-        private final double frequencyThreshold;
+        private final double maxMethodProbability;
+        private final double probabilityThreshold;
 
         public BottomUpMaxFrequencyStrategy(TraceRegisterAllocationPolicy plan) {
             // explicitly specify the enclosing instance for the superclass constructor call
             super(plan);
-            maxRelativeFrequency = maxRelativeFrequency(getLIR().getControlFlowGraph().getBlocks());
-            frequencyThreshold = Options.TraceRAfrequencyThreshold.getValue(plan.getOptions());
+            maxMethodProbability = maxProbability(getLIR().getControlFlowGraph().getBlocks());
+            probabilityThreshold = Options.TraceRAprobalilityThreshold.getValue(plan.getOptions());
         }
 
-        private static double maxRelativeFrequency(AbstractBlockBase<?>[] blocks) {
+        private static double maxProbability(AbstractBlockBase<?>[] blocks) {
             double max = 0;
             for (AbstractBlockBase<?> block : blocks) {
-                double frequency = block.getRelativeFrequency();
-                if (frequency > max) {
-                    max = frequency;
+                double probability = block.probability();
+                if (probability > max) {
+                    max = probability;
                 }
             }
             return max;
@@ -303,23 +301,23 @@ public final class DefaultTraceRegisterAllocationPolicy {
             if (!super.shouldApplyTo(trace)) {
                 return false;
             }
-            return maxRelativeFrequency(trace.getBlocks()) / maxRelativeFrequency <= frequencyThreshold;
+            return maxProbability(trace.getBlocks()) / maxMethodProbability <= probabilityThreshold;
         }
 
     }
 
     public static final class BottomUpFrequencyBudgetStrategy extends BottomUpStrategy {
 
-        private final double[] cumulativeTraceFrequency;
+        private final double[] cumulativeTraceProbability;
         private final double budget;
 
         public BottomUpFrequencyBudgetStrategy(TraceRegisterAllocationPolicy plan) {
             // explicitly specify the enclosing instance for the superclass constructor call
             super(plan);
             ArrayList<Trace> traces = getTraceBuilderResult().getTraces();
-            this.cumulativeTraceFrequency = new double[traces.size()];
-            double sumMethodFrequency = init(traces, this.cumulativeTraceFrequency);
-            this.budget = sumMethodFrequency * Options.TraceRAsumBudget.getValue(plan.getOptions());
+            this.cumulativeTraceProbability = new double[traces.size()];
+            double sumMethodProbability = init(traces, this.cumulativeTraceProbability);
+            this.budget = sumMethodProbability * Options.TraceRAsumBudget.getValue(plan.getOptions());
         }
 
         private static double init(ArrayList<Trace> traces, double[] sumTraces) {
@@ -327,7 +325,7 @@ public final class DefaultTraceRegisterAllocationPolicy {
             for (Trace trace : traces) {
                 double traceSum = 0;
                 for (AbstractBlockBase<?> block : trace.getBlocks()) {
-                    traceSum += block.getRelativeFrequency();
+                    traceSum += block.probability();
                 }
                 sumMethod += traceSum;
                 // store cumulative sum for trace
@@ -341,8 +339,8 @@ public final class DefaultTraceRegisterAllocationPolicy {
             if (!super.shouldApplyTo(trace)) {
                 return false;
             }
-            double cumTraceFrequency = cumulativeTraceFrequency[trace.getId()];
-            return cumTraceFrequency > budget;
+            double cumTraceProb = cumulativeTraceProbability[trace.getId()];
+            return cumTraceProb > budget;
         }
 
     }
