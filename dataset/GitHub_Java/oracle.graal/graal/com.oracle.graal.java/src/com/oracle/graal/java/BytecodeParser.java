@@ -341,7 +341,6 @@ public class BytecodeParser implements GraphBuilderContext {
         return this.beforeUnwindNode;
     }
 
-    @SuppressWarnings("try")
     protected void buildRootMethod() {
         FrameStateBuilder startFrameState = new FrameStateBuilder(this, method, graph);
         startFrameState.initializeForMethodStart(graphBuilderConfig.eagerResolving() || intrinsicContext != null, graphBuilderConfig.getPlugins().getParameterPlugins());
@@ -354,7 +353,6 @@ public class BytecodeParser implements GraphBuilderContext {
         ComputeLoopFrequenciesClosure.compute(graph);
     }
 
-    @SuppressWarnings("try")
     protected void build(FixedWithNextNode startInstruction, FrameStateBuilder startFrameState) {
         if (PrintProfilingInformation.getValue() && profilingInfo != null) {
             TTY.println("Profiling info for " + method.format("%H.%n(%p)"));
@@ -1540,7 +1538,6 @@ public class BytecodeParser implements GraphBuilderContext {
         return res;
     }
 
-    @SuppressWarnings("try")
     private void parseAndInlineCallee(ResolvedJavaMethod targetMethod, ValueNode[] args, IntrinsicContext calleeIntrinsicContext) {
         try (IntrinsicScope s = calleeIntrinsicContext != null && !parsingIntrinsic() ? new IntrinsicScope(this, targetMethod.getSignature().toParameterKinds(!targetMethod.isStatic()), args) : null) {
 
@@ -2124,7 +2121,6 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    @SuppressWarnings("try")
     protected void processBlock(BytecodeParser parser, BciBlock block) {
         // Ignore blocks that have no predecessors by the time their bytecodes are parsed
         int currentDimension = this.getCurrentDimension();
@@ -3623,8 +3619,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private void genArrayLength() {
-        ValueNode array = emitExplicitExceptions(frameState.pop(Kind.Object), null);
-        frameState.push(Kind.Int, append(genArrayLength(array)));
+        frameState.push(Kind.Int, append(genArrayLength(frameState.pop(Kind.Object))));
     }
 
     public ResolvedJavaMethod getMethod() {
