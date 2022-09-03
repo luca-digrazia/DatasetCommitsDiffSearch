@@ -52,19 +52,12 @@ import com.oracle.graal.lir.Variable;
 public interface LIRGeneratorTool extends BenchmarkCounterFactory {
 
     /**
-     * Factory for creating moves.
+     * Factory for creating spill moves.
+     *
+     * The instructions returned by the methods must only depend on the input values. References to
+     * values that require interaction with register allocation are strictly forbidden.
      */
-    public interface MoveFactory {
-
-        /**
-         * Checks whether the supplied constant can be used without loading it into a register for
-         * most operations, i.e., for commonly used arithmetic, logical, and comparison operations.
-         *
-         * @param c The constant to check.
-         * @return True if the constant can be used directly, false if the constant needs to be in a
-         *         register.
-         */
-        boolean canInlineConstant(JavaConstant c);
+    public interface SpillMoveFactory {
 
         LIRInstruction createMove(AllocatableValue result, Value input);
 
@@ -99,15 +92,7 @@ public interface LIRGeneratorTool extends BenchmarkCounterFactory {
 
     boolean hasBlockEnd(AbstractBlockBase<?> block);
 
-    MoveFactory getMoveFactory();
-
-    /**
-     * Get a special {@link MoveFactory} for spill moves.
-     *
-     * The instructions returned by this factory must only depend on the input values. References to
-     * values that require interaction with register allocation are strictly forbidden.
-     */
-    MoveFactory getSpillMoveFactory();
+    SpillMoveFactory getSpillMoveFactory();
 
     BlockScope getBlockScope(AbstractBlockBase<?> block);
 
@@ -116,14 +101,18 @@ public interface LIRGeneratorTool extends BenchmarkCounterFactory {
     Value emitJavaConstant(JavaConstant constant);
 
     /**
-     * Some backends need to convert sub-word kinds to a larger kind in
-     * {@link ArithmeticLIRGeneratorTool#emitLoad} and {@link #emitLoadConstant} because sub-word
-     * registers can't be accessed. This method converts the {@link LIRKind} of a memory location or
-     * constant to the {@link LIRKind} that will be used when it is loaded into a register.
+     * Some backends need to convert sub-word kinds to a larger kind in {@link #emitLoad} and
+     * {@link #emitLoadConstant} because sub-word registers can't be accessed. This method converts
+     * the {@link LIRKind} of a memory location or constant to the {@link LIRKind} that will be used
+     * when it is loaded into a register.
      */
     LIRKind toRegisterKind(LIRKind kind);
 
     AllocatableValue emitLoadConstant(LIRKind kind, Constant constant);
+
+    Variable emitLoad(LIRKind kind, Value address, LIRFrameState state);
+
+    void emitStore(LIRKind kind, Value address, Value input, LIRFrameState state);
 
     void emitNullCheck(Value address, LIRFrameState state);
 
