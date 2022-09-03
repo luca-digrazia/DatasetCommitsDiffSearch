@@ -31,15 +31,16 @@ package com.oracle.truffle.llvm.nodes.memory.load;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
@@ -51,18 +52,11 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public abstract class LLVMDirectLoadNode {
 
+    @NodeChild(type = LLVMExpressionNode.class)
     @NodeField(name = "bitWidth", type = int.class)
-    public abstract static class LLVMIVarBitDirectLoadNode extends LLVMLoadNode {
+    public abstract static class LLVMIVarBitDirectLoadNode extends LLVMExpressionNode {
 
         public abstract int getBitWidth();
-
-        private int getByteSize() {
-            int nrFullBytes = getBitWidth() / Byte.SIZE;
-            if (getBitWidth() % Byte.SIZE != 0) {
-                nrFullBytes += 1;
-            }
-            return nrFullBytes;
-        }
 
         @Specialization
         public LLVMIVarBit executeI64(LLVMAddress addr) {
@@ -73,18 +67,10 @@ public abstract class LLVMDirectLoadNode {
         public LLVMIVarBit executeI64(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
             return LLVMMemory.getIVarBit(globalAccess.getNativeLocation(addr), getBitWidth());
         }
-
-        LLVMForeignReadNode createForeignRead() {
-            return new LLVMForeignReadNode(ForeignToLLVMType.VARBIT, getByteSize());
-        }
-
-        @Specialization
-        public Object executeForeign(VirtualFrame frame, LLVMTruffleObject addr, @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
-            return foreignRead.execute(frame, addr);
-        }
     }
 
-    public abstract static class LLVM80BitFloatDirectLoadNode extends LLVMLoadNode {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVM80BitFloatDirectLoadNode extends LLVMExpressionNode {
 
         @Specialization
         public LLVM80BitFloat executeDouble(LLVMAddress addr) {
@@ -97,7 +83,8 @@ public abstract class LLVMDirectLoadNode {
         }
     }
 
-    public abstract static class LLVMFunctionDirectLoadNode extends LLVMLoadNode {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMFunctionDirectLoadNode extends LLVMExpressionNode {
 
         @Specialization
         public LLVMFunctionHandle executeAddress(LLVMAddress addr) {
@@ -108,18 +95,10 @@ public abstract class LLVMDirectLoadNode {
         public LLVMFunctionHandle executeAddress(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
             return LLVMFunctionHandle.createHandle(LLVMHeap.getFunctionPointer(globalAccess.getNativeLocation(addr)));
         }
-
-        static LLVMForeignReadNode createForeignRead() {
-            return new LLVMForeignReadNode(ForeignToLLVMType.POINTER, ADDRESS_SIZE_IN_BYTES);
-        }
-
-        @Specialization
-        public Object executeForeign(VirtualFrame frame, LLVMTruffleObject addr, @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
-            return foreignRead.execute(frame, addr);
-        }
     }
 
-    public abstract static class LLVMAddressDirectLoadNode extends LLVMLoadNode {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMAddressDirectLoadNode extends LLVMExpressionNode {
 
         @Child protected ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.POINTER);
 
@@ -149,8 +128,8 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        public Object executeIndirectedForeign(VirtualFrame frame, LLVMTruffleObject addr, @Cached("createForeignReadNode()") LLVMForeignReadNode foreignRead) {
-            return foreignRead.execute(frame, addr);
+        public Object executeIndirectedForeign(LLVMTruffleObject addr, @Cached("createForeignReadNode()") LLVMForeignReadNode foreignRead) {
+            return foreignRead.execute(addr);
         }
 
         protected LLVMForeignReadNode createForeignReadNode() {
@@ -174,15 +153,11 @@ public abstract class LLVMDirectLoadNode {
 
     }
 
-    public abstract static class LLVMStructDirectLoadNode extends LLVMLoadNode {
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMStructDirectLoadNode extends LLVMExpressionNode {
 
         @Specialization
         public LLVMAddress executeAddress(LLVMAddress addr) {
-            return addr; // we do not actually load the struct into a virtual register
-        }
-
-        @Specialization
-        public LLVMTruffleObject executeTruffleObject(LLVMTruffleObject addr) {
             return addr; // we do not actually load the struct into a virtual register
         }
     }

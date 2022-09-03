@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.CanResolve;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
@@ -44,10 +43,11 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectReadNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectWriteNode;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.VoidType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess;
 
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
@@ -61,6 +61,7 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
             protected static boolean test(TruffleObject receiver) {
                 return receiver instanceof ManagedMallocObject;
             }
+
         }
 
         @Resolve(message = "HAS_SIZE")
@@ -69,6 +70,7 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
             protected Object access(@SuppressWarnings("unused") ManagedMallocObject malloc) {
                 return true;
             }
+
         }
 
         @Resolve(message = "GET_SIZE")
@@ -77,6 +79,7 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
             protected Object access(ManagedMallocObject malloc) {
                 return malloc.getSize();
             }
+
         }
 
         @Resolve(message = "READ")
@@ -85,6 +88,7 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
             protected Object access(ManagedMallocObject malloc, int index) {
                 return malloc.get(index);
             }
+
         }
 
         @Resolve(message = "WRITE")
@@ -94,6 +98,7 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
                 malloc.set(index, value);
                 return value;
             }
+
         }
 
     }
@@ -142,7 +147,7 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
         }
 
         @Override
-        public Object executeRead(VirtualFrame frame, Object obj, Object identifier, long offset) throws InteropException {
+        public Object executeRead(Object obj, Object identifier, long offset) throws InteropException {
             assert offset % LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES == 0 : "invalid offset";
             long idx = offset / LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES;
             return ((ManagedMallocObject) obj).get((int) idx);
@@ -157,7 +162,7 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
         }
 
         @Override
-        public void executeWrite(VirtualFrame frame, Object obj, Object identifier, long offset, Object value) throws InteropException {
+        public void executeWrite(Object obj, Object identifier, long offset, Object value) throws InteropException {
             assert offset % LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES == 0 : "invalid offset";
             long idx = offset / LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES;
             ((ManagedMallocObject) obj).set((int) idx, value);
@@ -165,7 +170,7 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
     }
 
     @Specialization
-    protected Object doIntrinsic(long size) {
+    public Object executeIntrinsic(long size) {
         if (size < 0) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalArgumentException("Can't truffle_managed_malloc less than zero bytes");
@@ -177,6 +182,7 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
             throw new IllegalArgumentException("Can't truffle_managed_malloc for more than 2^31 objects");
         }
 
-        return new LLVMTruffleObject(new ManagedMallocObject((int) sizeInWords), PointerType.VOID);
+        return new LLVMTruffleObject(new ManagedMallocObject((int) sizeInWords), new PointerType(VoidType.INSTANCE));
     }
+
 }
