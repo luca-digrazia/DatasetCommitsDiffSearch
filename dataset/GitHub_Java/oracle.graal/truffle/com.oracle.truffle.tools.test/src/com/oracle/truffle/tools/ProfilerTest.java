@@ -69,7 +69,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.hasData());
         Assert.assertNull(profiler.getMimeTypes());
 
-        assertEvalOut(source, "");
+        run(source);
 
         counters = profiler.getCounters();
         Assert.assertEquals(4, counters.size());
@@ -77,10 +77,10 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.isTiming());
         Assert.assertTrue(profiler.hasData());
 
-        final SourceSection rootSection = source.createSection(0, 140);
-        final SourceSection leafSection = source.createSection(17, 16);
-        final SourceSection callfooSection = source.createSection(47, 27);
-        final SourceSection callbarSection = source.createSection(88, 27);
+        final SourceSection rootSection = source.createSection(null, 0, 140);
+        final SourceSection leafSection = source.createSection(null, 17, 16);
+        final SourceSection callfooSection = source.createSection(null, 47, 27);
+        final SourceSection callbarSection = source.createSection(null, 88, 27);
         Counter root = counters.get(rootSection);
         Counter leaf = counters.get(leafSection);
         Counter callfoo = counters.get(callfooSection);
@@ -103,7 +103,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.isTiming());
         Assert.assertTrue(profiler.hasData());
 
-        assertEvalOut(source, "");
+        run(source);
 
         Assert.assertFalse(profiler.isCollecting());
         Assert.assertFalse(profiler.isTiming());
@@ -131,7 +131,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.isTiming());
         Assert.assertFalse(profiler.hasData());
 
-        assertEvalOut(source, "");
+        run(source);
 
         Assert.assertTrue(profiler.isCollecting());
         Assert.assertFalse(profiler.isTiming());
@@ -152,7 +152,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertEquals(4, counters.size());
 
         for (int i = 0; i < 10000; i++) {
-            assertEvalOut(source, "");
+            run(source);
         }
 
         Assert.assertTrue(profiler.isCollecting());
@@ -189,7 +189,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.hasData());
         Assert.assertNull(profiler.getMimeTypes());
 
-        assertEvalOut(source, "");
+        run(source);
 
         counters = profiler.getCounters();
         Assert.assertEquals(4, counters.size());
@@ -197,10 +197,10 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.isTiming());
         Assert.assertTrue(profiler.hasData());
 
-        final SourceSection rootSection = source.createSection(0, 140);
-        final SourceSection leafSection = source.createSection(17, 16);
-        final SourceSection callfooSection = source.createSection(47, 27);
-        final SourceSection callbarSection = source.createSection(88, 27);
+        final SourceSection rootSection = source.createSection(null, 0, 140);
+        final SourceSection leafSection = source.createSection(null, 17, 16);
+        final SourceSection callfooSection = source.createSection(null, 47, 27);
+        final SourceSection callbarSection = source.createSection(null, 88, 27);
         Counter root = counters.get(rootSection);
         Counter leaf = counters.get(leafSection);
         Counter callfoo = counters.get(callfooSection);
@@ -227,7 +227,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertTrue(profiler.isTiming());
         Assert.assertTrue(profiler.hasData());
 
-        assertEvalOut(source, "");
+        run(source);
 
         Assert.assertTrue(root.getTotalTime(testTimeKind) > 0);
         Assert.assertTrue(leaf.getTotalTime(testTimeKind) > 0);
@@ -243,7 +243,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.isTiming());
         Assert.assertTrue(profiler.hasData());
 
-        assertEvalOut(source, "");
+        run(source);
 
         Assert.assertTrue(root.getTotalTime(testTimeKind) > 0);
         Assert.assertTrue(leaf.getTotalTime(testTimeKind) > 0);
@@ -257,7 +257,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         profiler.clearData();
 
-        assertEvalOut(source, "");
+        run(source);
 
         Assert.assertFalse(profiler.isTiming());
         Assert.assertTrue(profiler.hasData());
@@ -310,10 +310,10 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         run(source);
 
         counters = profiler.getCounters();
-        final SourceSection rootSection = source.createSection(0, 140);
-        final SourceSection leafSection = source.createSection(17, 16);
-        final SourceSection callfooSection = source.createSection(47, 27);
-        final SourceSection callbarSection = source.createSection(88, 27);
+        final SourceSection rootSection = source.createSection(null, 0, 140);
+        final SourceSection leafSection = source.createSection(null, 17, 16);
+        final SourceSection callfooSection = source.createSection(null, 47, 27);
+        final SourceSection callbarSection = source.createSection(null, 88, 27);
         Counter root = counters.get(rootSection);
         Counter leaf = counters.get(leafSection);
         Counter callfoo = counters.get(callfooSection);
@@ -333,7 +333,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertNull(profiler.getMimeTypes());
         Assert.assertFalse(profiler.hasData());
 
-        assertEvalOut(source, "");
+        run(source);
 
         Assert.assertTrue(profiler.hasData());
 
@@ -342,7 +342,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         Assert.assertFalse(profiler.hasData());
 
-        assertEvalOut(source, "");
+        run(source);
 
         Assert.assertTrue(profiler.hasData());
 
@@ -351,7 +351,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         Assert.assertFalse(profiler.hasData());
 
-        assertEvalOut(source, "");
+        run(source);
 
         Assert.assertTrue(profiler.hasData());
 
@@ -360,13 +360,13 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         Assert.assertFalse(profiler.hasData());
 
-        assertEvalOut(source, "");
+        run(source);
 
         Assert.assertFalse(profiler.hasData());
 
         profiler.setMimeTypes(null);
 
-        assertEvalOut(source, "");
+        run(source);
 
         Assert.assertTrue(profiler.hasData());
     }
