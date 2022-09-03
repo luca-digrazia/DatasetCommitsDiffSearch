@@ -23,16 +23,17 @@
 package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.api.meta.MetaUtil.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectType.*;
+import static com.oracle.graal.phases.GraalOptions.*;
+import static java.lang.reflect.Modifier.*;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.replacements.*;
@@ -173,6 +174,8 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
 
                 fields.add(metaAccess.lookupJavaField(Throwable.class.getDeclaredField("UNASSIGNED_STACK")));
                 fields.add(metaAccess.lookupJavaField(Throwable.class.getDeclaredField("SUPPRESSED_SENTINEL")));
+
+                fields.add(metaAccess.lookupJavaField(NodeClass.class.getDeclaredField("registry")));
             } catch (SecurityException | NoSuchFieldException e) {
                 throw new GraalInternalError(e);
             }
@@ -199,8 +202,8 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         assert !ImmutableCode.getValue() || isCalledForSnippets() : receiver;
 
         if (receiver == null) {
-            assert isStatic();
-            if (isFinal()) {
+            assert isStatic(modifiers);
+            if (Modifier.isFinal(getModifiers())) {
                 if (holder.isInitialized() && !holder.getName().equals(SystemClassName) && isEmbeddable()) {
                     return readValue(receiver);
                 }
@@ -210,35 +213,29 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
              * for non-static final fields, we must assume that they are only initialized if they
              * have a non-default value.
              */
-            assert !isStatic();
+            assert !isStatic(modifiers);
             Object object = HotSpotObjectConstant.asObject(receiver);
 
             // Canonicalization may attempt to process an unsafe read before
             // processing a guard (e.g. a null check or a type check) for this read
             // so we need to check the object being read
-            if (object != null) {
-                if (isFinal()) {
-                    if (isInObject(object)) {
-                        Constant value = readValue(receiver);
-                        if (assumeNonStaticFinalFieldsAsFinal(object.getClass()) || !value.isDefaultForKind()) {
-                            return value;
-                        }
+            if (object != null && isInObject(object)) {
+                if (Modifier.isFinal(getModifiers())) {
+                    Constant value = readValue(receiver);
+                    if (assumeNonStaticFinalFieldsAsFinal(object.getClass()) || !value.isDefaultForKind()) {
+                        return value;
                     }
                 } else if (isStable()) {
-                    if (isInObject(object)) {
-                        Constant value = readValue(receiver);
-                        if (assumeDefaultStableFieldsAsFinal(object.getClass()) || !value.isDefaultForKind()) {
-                            return value;
-                        }
+                    Constant value = readValue(receiver);
+                    if (assumeDefaultStableFieldsAsFinal(object.getClass()) || !value.isDefaultForKind()) {
+                        return value;
                     }
                 } else {
                     Class<?> clazz = object.getClass();
                     if (StableOptionValue.class.isAssignableFrom(clazz)) {
-                        if (isInObject(object)) {
-                            assert getName().equals("value") : "Unexpected field in " + StableOptionValue.class.getName() + " hierarchy:" + this;
-                            StableOptionValue<?> option = (StableOptionValue<?>) object;
-                            return HotSpotObjectConstant.forObject(option.getValue());
-                        }
+                        assert getName().equals("value") : "Unexpected field in " + StableOptionValue.class.getName() + " hierarchy:" + this;
+                        StableOptionValue<?> option = (StableOptionValue<?>) object;
+                        return HotSpotObjectConstant.forObject(option.getValue());
                     }
                 }
             }
@@ -253,7 +250,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
      *         {@code object}'s class
      */
     public boolean isInObject(Object object) {
-        if (isStatic()) {
+        if (isStatic(modifiers)) {
             return false;
         }
         return getDeclaringClass().isAssignableFrom(HotSpotResolvedObjectType.fromClass(object.getClass()));
@@ -262,13 +259,13 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
     @Override
     public Constant readValue(Constant receiver) {
         if (receiver == null) {
-            assert isStatic();
+            assert isStatic(modifiers);
             if (holder.isInitialized()) {
                 return runtime().getHostProviders().getConstantReflection().readUnsafeConstant(getKind(), HotSpotObjectConstant.forObject(holder.mirror()), offset);
             }
             return null;
         } else {
-            assert !isStatic();
+            assert !isStatic(modifiers);
             assert receiver.isNonNull() && isInObject(HotSpotObjectConstant.asObject(receiver));
             return runtime().getHostProviders().getConstantReflection().readUnsafeConstant(getKind(), receiver, offset);
         }
