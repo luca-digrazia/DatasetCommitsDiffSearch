@@ -175,9 +175,8 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
     }
 
     @Specialization
-    protected Object writeVector(VirtualFrame frame, LLVMAddress address, LLVMFunctionVector value, @Cached("getLLVMMemory()") LLVMMemory memory,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
-        memory.putVector(address, value, globalAccess, frame);
+    protected Object writeVector(LLVMAddress address, LLVMFunctionVector value, @Cached("getLLVMMemory()") LLVMMemory memory) {
+        memory.putVector(address, value);
         return null;
     }
 
@@ -185,7 +184,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
     protected Object writeVector(VirtualFrame frame, LLVMGlobal address, LLVMFunctionVector value,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
-        memory.putVector(globalAccess.executeWithTarget(frame, address), value, globalAccess, frame);
+        memory.putVector(globalAccess.executeWithTarget(frame, address), value);
         return null;
     }
 
