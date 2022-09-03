@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.impl.func;
 
-import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 
@@ -52,7 +51,7 @@ import com.oracle.truffle.llvm.runtime.LLVMExitException;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
 /**
  * The global entry point initializes the global scope and starts execution with the main function.
@@ -85,7 +84,7 @@ public class LLVMGlobalRootNode extends RootNode {
         try {
             Object result = null;
             for (int i = 0; i < executionCount; i++) {
-                assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
+                assert (LLVMSignal.getNumberOfRegisteredSignals() == 0);
 
                 frame.setObject(stackPointerSlot, stackPointer);
                 Object[] realArgs = new Object[arguments.length + LLVMCallNode.ARG_START_INDEX];
@@ -94,12 +93,12 @@ public class LLVMGlobalRootNode extends RootNode {
                 result = executeIteration(frame, i, realArgs);
 
                 context.awaitThreadTermination();
-                assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
+                assert (LLVMSignal.getNumberOfRegisteredSignals() == 0);
             }
             return result;
         } catch (LLVMExitException e) {
             context.awaitThreadTermination();
-            assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
+            assert (LLVMSignal.getNumberOfRegisteredSignals() == 0);
             return e.getReturnCode();
         } finally {
             // if not done already, we want at least call a shutdown command
@@ -123,8 +122,6 @@ public class LLVMGlobalRootNode extends RootNode {
         }
 
         result = main.call(frame, args);
-
-        executeAtExitFunctions();
 
         if (printExecutionTime) {
             endExecutionTime = System.currentTimeMillis();
@@ -168,22 +165,14 @@ public class LLVMGlobalRootNode extends RootNode {
     }
 
     @TruffleBoundary
-    protected void executeAtExitFunctions() {
-        Deque<RootCallTarget> atExitFunctions = context.getAtExitFunctions();
-        while (!atExitFunctions.isEmpty()) {
-            atExitFunctions.pop().call(atExitFunctions);
-        }
-    }
-
-    @TruffleBoundary
     protected static void printNativeCallStats(LLVMContext context) {
-        Map<LLVMFunction, Integer> nativeFunctionCallSites = context.getNativeFunctionLookupStats();
+        Map<LLVMFunctionDescriptor, Integer> nativeFunctionCallSites = context.getNativeFunctionLookupStats();
         // Checkstyle: stop
         if (!nativeFunctionCallSites.isEmpty()) {
             System.out.println("==========================");
             System.out.println("native function sites:");
             System.out.println("==========================");
-            for (LLVMFunction function : nativeFunctionCallSites.keySet()) {
+            for (LLVMFunctionDescriptor function : nativeFunctionCallSites.keySet()) {
                 String output = String.format("%15s: %3d", function.getName(), nativeFunctionCallSites.get(function));
                 System.out.println(output);
             }

@@ -37,18 +37,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMThread;
+import com.oracle.truffle.llvm.nodes.base.LLVMThreadNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
@@ -56,8 +57,8 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode.LLVMUnresolvedCallNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.nodes.impl.literals.LLVMFunctionLiteralNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.literals.LLVMSimpleLiteralNode.LLVMAddressLiteralNode;
 import com.oracle.truffle.llvm.nodes.impl.literals.LLVMSimpleLiteralNode.LLVMI32LiteralNode;
+import com.oracle.truffle.llvm.nodes.impl.literals.LLVMSimpleLiteralNode.LLVMAddressLiteralNode;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
@@ -99,7 +100,6 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
 
     private static final Map<Integer, LLVMSignalHandler> registeredSignals = new HashMap<>();
 
-    @TruffleBoundary
     public static int getNumberOfRegisteredSignals() {
         return registeredSignals.size();
     }
@@ -138,8 +138,8 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
     }
 
     // TODO: stack handling should work without predefined sizes,...
-    private static final long SIGNAL_STACK_SIZE_KB = 512;
-    private static final long SIGNAL_STACK_SIZE_BYTE = SIGNAL_STACK_SIZE_KB * 1024;
+    private static final long TMP_SIGNAL_STACK_SIZE_KB = 512;
+    private static final long TMP_SIGNAL_STACK_SIZE_BYTE = TMP_SIGNAL_STACK_SIZE_KB * 1024;
 
     /**
      * Registers a signal handler using sun.misc.SignalHandler. Unfortunately, using signals in java
@@ -154,7 +154,7 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
      * wait until the signal was handled (which is not guaranteed because of the asynchronous
      * behavior in our implementation).
      */
-    private static final class LLVMSignalHandler implements SignalHandler, LLVMThread {
+    private static final class LLVMSignalHandler implements SignalHandler, LLVMThreadNode {
 
         private final Signal signal;
         private final LLVMFunctionDescriptor function;
@@ -169,44 +169,40 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
         private LLVMSignalHandler(Signal signal, LLVMFunctionDescriptor function) throws IllegalArgumentException {
             this.signal = signal;
             this.function = function;
+            LLVMFunctionNode functionNode = LLVMFunctionLiteralNodeGen.create(function);
 
-            this.context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
+            LLVMAddressLiteralNode signalStack = new LLVMAddressLiteralNode(stack.allocate(TMP_SIGNAL_STACK_SIZE_BYTE));
+            LLVMI32LiteralNode sigNumArg = new LLVMI32LiteralNode(signal.getNumber());
+            LLVMExpressionNode[] args = {signalStack, sigNumArg};
+
+            context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
+
+            LLVMUnresolvedCallNode callNode = new LLVMUnresolvedCallNode(functionNode, args, LLVMRuntimeType.VOID, context);
+
+            callTarget = Truffle.getRuntime().createCallTarget(
+                            new LLVMFunctionStartNode(callNode,
+                                            new LLVMNode[]{},
+                                            new LLVMNode[]{},
+                                            SourceSection.createUnavailable("", null),
+                                            new FrameDescriptor(), ""));
 
             lock.lock();
             try {
                 if (function.equals(LLVM_SIG_DFL)) {
                     Signal.handle(signal, SignalHandler.SIG_DFL);
-                    isRunning.set(true);
-                    context.registerThread(this);
-                    return;
+                    stack.free();
                 } else if (function.equals(LLVM_SIG_IGN)) {
                     Signal.handle(signal, SignalHandler.SIG_IGN);
-                    isRunning.set(true);
-                    context.registerThread(this);
-                    return;
+                    stack.free();
+                } else {
+                    Signal.handle(signal, this);
                 }
 
-                Signal.handle(signal, this);
-
                 // only when we reach this point, the signal handler was registered successfully
-                LLVMAddressLiteralNode signalStack = new LLVMAddressLiteralNode(stack.allocate(SIGNAL_STACK_SIZE_BYTE));
-                LLVMI32LiteralNode sigNumArg = new LLVMI32LiteralNode(signal.getNumber());
-                LLVMExpressionNode[] args = {signalStack, sigNumArg};
-
-                LLVMFunctionNode functionNode = LLVMFunctionLiteralNodeGen.create(function);
-
-                LLVMUnresolvedCallNode callNode = new LLVMUnresolvedCallNode(functionNode, args, LLVMRuntimeType.VOID, context);
-
-                callTarget = Truffle.getRuntime().createCallTarget(
-                                new LLVMFunctionStartNode(callNode,
-                                                new LLVMNode[]{},
-                                                new LLVMNode[]{},
-                                                null,
-                                                new FrameDescriptor(), ""));
-
                 isRunning.set(true);
                 context.registerThread(this);
             } catch (IllegalArgumentException e) {
+                stack.free();
                 throw e;
             } finally {
                 lock.unlock();
@@ -235,7 +231,7 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
                     return;
                 }
             } catch (InterruptedException e) {
-                throw new AssertionError(e);
+                e.printStackTrace();
             }
             lock.lock();
             try {
@@ -302,7 +298,7 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
         }
 
         /**
-         * Unregister this SignalHandler from context.
+         * Unregister this SignalHandler from context
          */
         private void unregisterFromContext() {
             assert !isRunning.get();
@@ -317,17 +313,14 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
             }
 
             lock.lock();
-            try {
-                if (!stack.isFreed()) {
-                    stack.free();
-                }
-            } finally {
-                lock.unlock();
+            if (!stack.isFreed()) {
+                stack.free();
             }
+            lock.unlock();
         }
 
         /**
-         * Only unregister this SignalHandler, if there is currently no lock held.
+         * Only unregister this SignalHandler, if there is currently no lock held
          */
         private boolean tryUnregisterFromContext() {
             assert !isRunning.get();

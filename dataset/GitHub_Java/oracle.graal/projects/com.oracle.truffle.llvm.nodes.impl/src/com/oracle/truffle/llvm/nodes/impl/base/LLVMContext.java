@@ -36,15 +36,13 @@ import java.util.Map;
 
 import com.oracle.nfi.api.NativeFunctionHandle;
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.ExecutionContext;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMThread;
-import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
-import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.nodes.base.LLVMThreadNode;
+import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.memory.LLVMStack;
 
@@ -54,7 +52,7 @@ public class LLVMContext extends ExecutionContext {
     private final List<RootCallTarget> globalVarDeallocs = new ArrayList<>();
     private final List<RootCallTarget> constructorFunctions = new ArrayList<>();
     private final List<RootCallTarget> destructorFunctions = new ArrayList<>();
-    private final List<LLVMThread> runningThreads = new ArrayList<>();
+    private final List<LLVMThreadNode> runningThreads = new ArrayList<>();
 
     private final LLVMFunctionRegistry functionRegistry;
     private final LLVMGlobalVariableRegistry globalVariableRegistry = new LLVMGlobalVariableRegistry();
@@ -84,7 +82,7 @@ public class LLVMContext extends ExecutionContext {
     }
 
     public NativeFunctionHandle getNativeHandle(LLVMFunctionDescriptor function, LLVMExpressionNode[] args) {
-        LLVMFunction sameFunction = getFunctionDescriptor(function);
+        LLVMFunctionDescriptor sameFunction = getFunctionDescriptor(function);
         return getNativeLookup().getNativeHandle(sameFunction, args);
     }
 
@@ -97,13 +95,13 @@ public class LLVMContext extends ExecutionContext {
      * needs the return type of the function, we here have to look up the complete function
      * descriptor.
      */
-    private LLVMFunction getFunctionDescriptor(LLVMFunctionDescriptor incompleteFunctionDescriptor) {
+    private LLVMFunctionDescriptor getFunctionDescriptor(LLVMFunctionDescriptor incompleteFunctionDescriptor) {
         int validFunctionIndex = incompleteFunctionDescriptor.getFunctionIndex();
-        LLVMFunction[] completeFunctionDescriptors = functionRegistry.getFunctionDescriptors();
+        LLVMFunctionDescriptor[] completeFunctionDescriptors = functionRegistry.getFunctionDescriptors();
         return completeFunctionDescriptors[validFunctionIndex];
     }
 
-    public LLVMGlobalVariableRegistry getGlobalVariableRegistry() {
+    public LLVMGlobalVariableRegistry getGlobalVaraibleRegistry() {
         return globalVariableRegistry;
     }
 
@@ -115,7 +113,7 @@ public class LLVMContext extends ExecutionContext {
         return getNativeLookup().getNativeHandle(functionName);
     }
 
-    public Map<LLVMFunction, Integer> getNativeFunctionLookupStats() {
+    public Map<LLVMFunctionDescriptor, Integer> getNativeFunctionLookupStats() {
         return getNativeLookup().getNativeFunctionLookupStats();
     }
 
@@ -155,32 +153,30 @@ public class LLVMContext extends ExecutionContext {
         globalVarInits.add(globalVarInit);
     }
 
-    public synchronized void registerThread(LLVMThread thread) {
-        assert !runningThreads.contains(thread);
+    public synchronized void registerThread(LLVMThreadNode thread) {
+        assert (!runningThreads.contains(thread));
         runningThreads.add(thread);
     }
 
-    public synchronized void unregisterThread(LLVMThread thread) {
+    public synchronized void unregisterThread(LLVMThreadNode thread) {
         runningThreads.remove(thread);
-        assert !runningThreads.contains(thread);
+        assert (!runningThreads.contains(thread));
     }
 
-    @TruffleBoundary
     public synchronized void shutdownThreads() {
         // we need to iterate over a copy of the list, because stop() can modify the original list
-        for (LLVMThread node : new ArrayList<>(runningThreads)) {
+        for (LLVMThreadNode node : new ArrayList<>(runningThreads)) {
             node.stop();
         }
     }
 
-    @TruffleBoundary
     public synchronized void awaitThreadTermination() {
         shutdownThreads();
 
         while (!runningThreads.isEmpty()) {
-            LLVMThread node = runningThreads.get(0);
+            LLVMThreadNode node = runningThreads.get(0);
             node.awaitFinish();
-            assert !runningThreads.contains(node); // should be unregistered by LLVMThreadNode
+            assert (!runningThreads.contains(node)); // should be unregistered by LLVMThreadNode
         }
     }
 
@@ -200,7 +196,7 @@ public class LLVMContext extends ExecutionContext {
         return globalVarInits;
     }
 
-    public synchronized List<LLVMThread> getRunningThreads() {
+    public synchronized List<LLVMThreadNode> getRunningThreads() {
         return Collections.unmodifiableList(runningThreads);
     }
 
