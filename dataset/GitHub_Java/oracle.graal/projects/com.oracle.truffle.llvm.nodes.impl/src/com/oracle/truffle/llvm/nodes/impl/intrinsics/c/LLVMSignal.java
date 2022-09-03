@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.nodes.impl.intrinsics.c;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -96,39 +95,20 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
         }
     }
 
-    private static Lock globalSignalHandlerLock = new ReentrantLock();
-
     private static final Map<Integer, LLVMSignalHandler> registeredSignals = new HashMap<>();
-
-    public static int getNumberOfRegisteredSignals() {
-        return registeredSignals.size();
-    }
 
     @TruffleBoundary
     private static LLVMFunctionDescriptor setSignalHandler(Signal signal, LLVMFunctionDescriptor function) {
         int signalId = signal.getNumber();
         LLVMFunctionDescriptor returnFunction = LLVM_SIG_DFL;
 
+        if (registeredSignals.containsKey(signalId)) {
+            LLVMSignalHandler currentFunction = registeredSignals.get(signalId);
+            returnFunction = currentFunction.getFunction();
+        }
+
         try {
-            LLVMSignalHandler newSignalHandler = new LLVMSignalHandler(signal, function);
-            synchronized (registeredSignals) {
-                if (registeredSignals.containsKey(signalId)) {
-
-                    LLVMSignalHandler currentFunction = registeredSignals.get(signalId);
-
-                    if (currentFunction.isRunning()) {
-                        returnFunction = currentFunction.getFunction();
-
-                        /*
-                         * the new signal handler already manages this signal, so we can safely
-                         * deactivate the old one.
-                         */
-                        currentFunction.setStopped();
-                    }
-                }
-
-                registeredSignals.put(signalId, newSignalHandler);
-            }
+            registeredSignals.put(signalId, new LLVMSignalHandler(signal, function));
         } catch (IllegalArgumentException e) {
             LLVMLogger.error("could not register signal with id " + signalId + " (" + signal + ")");
             return LLVM_SIG_ERR;
@@ -141,19 +121,6 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
     private static final long TMP_SIGNAL_STACK_SIZE_KB = 512;
     private static final long TMP_SIGNAL_STACK_SIZE_BYTE = TMP_SIGNAL_STACK_SIZE_KB * 1024;
 
-    /**
-     * Registers a signal handler using sun.misc.SignalHandler. Unfortunately, using signals in java
-     * leads to some problems which are not resolved in our implementation yet.
-     *
-     * One of this issue is, that signals are executed in an asynchronous way, which means raise()
-     * exits before the signal was handled. Another Issue is that Java already registered some
-     * signal handlers, which therefore cannot be used in sulong.
-     *
-     * Therefore, our implementation does not comply with the ANSI C standard and could lead to
-     * timing issues when calling multiple signals in a defined sequence, or when a program has to
-     * wait until the signal was handled (which is not guaranteed because of the asynchronous
-     * behavior in our implementation).
-     */
     private static final class LLVMSignalHandler implements SignalHandler, LLVMThreadNode {
 
         private final Signal signal;
@@ -162,8 +129,8 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
         private RootCallTarget callTarget;
         private final LLVMStack stack = new LLVMStack();
 
-        private final Lock lock = new ReentrantLock();
-        private final AtomicBoolean isRunning = new AtomicBoolean(false);
+        Lock lock = new ReentrantLock();
+        private AtomicBoolean isRunning = new AtomicBoolean(true);
 
         @TruffleBoundary
         private LLVMSignalHandler(Signal signal, LLVMFunctionDescriptor function) throws IllegalArgumentException {
@@ -186,31 +153,15 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
                                             SourceSection.createUnavailable("", null),
                                             new FrameDescriptor(), ""));
 
-            lock.lock();
-            try {
-                if (function.equals(LLVM_SIG_DFL)) {
-                    Signal.handle(signal, SignalHandler.SIG_DFL);
-                    stack.free();
-                } else if (function.equals(LLVM_SIG_IGN)) {
-                    Signal.handle(signal, SignalHandler.SIG_IGN);
-                    stack.free();
-                } else {
-                    Signal.handle(signal, this);
-                }
+            context.registerThread(this);
 
-                // only when we reach this point, the signal handler was registered successfully
-                isRunning.set(true);
-                context.registerThread(this);
-            } catch (IllegalArgumentException e) {
-                stack.free();
-                throw e;
-            } finally {
-                lock.unlock();
+            if (function.equals(LLVM_SIG_DFL)) {
+                Signal.handle(signal, SignalHandler.SIG_DFL);
+            } else if (function.equals(LLVM_SIG_IGN)) {
+                Signal.handle(signal, SignalHandler.SIG_IGN);
+            } else {
+                Signal.handle(signal, this);
             }
-        }
-
-        public boolean isRunning() {
-            return isRunning.get();
         }
 
         @Override
@@ -218,21 +169,23 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
         protected void finalize() throws Throwable {
             super.finalize();
             stop();
-            unregisterFromContext();
+            // TODO: wait for finish of running handle?
+            context.unregisterThread(this);
+            stack.free();
         }
-
-        private static final long HANDLE_MAX_WAITING_TIME = 250; // ms
 
         @Override
         public void handle(Signal arg0) {
-            try {
-                if (!globalSignalHandlerLock.tryLock(HANDLE_MAX_WAITING_TIME, TimeUnit.MILLISECONDS)) {
-                    LLVMLogger.error("could not execute signal handler. Sulong can currently only execute one signal at once!");
-                    return;
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            /*
+             * https://en.wikipedia.org/wiki/Sigaction#Replacement_of_deprecated_signal.28.29
+             *
+             * Signal handlers installed by the signal() interface will be uninstalled immediately
+             * prior to execution of the handler.
+             *
+             * @note I made such a program, and I had to delete the handler manually, so this
+             * sentence is probably not true
+             */
+
             lock.lock();
             try {
                 if (isRunning.get()) {
@@ -240,12 +193,6 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
                 }
             } finally {
                 lock.unlock();
-                globalSignalHandlerLock.unlock();
-            }
-
-            // probably, this was our last turn for the signal handler
-            if (!isRunning.get()) {
-                unregisterFromContext();
             }
         }
 
@@ -253,36 +200,9 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
             return function;
         }
 
-        /**
-         * Required to call if a new LLVMSignalHandler take over the signal. Otherwise it would
-         * unregister the signal when this Object is going to be deallocated or stopped.
-         */
-        private void setStopped() {
-            isRunning.set(false);
-
-            /*
-             * Either no handler is currently running, or it would unregister after finishing it's
-             * execution.
-             */
-            tryUnregisterFromContext();
-        }
-
         @Override
         public void stop() {
-            if (isRunning.getAndSet(false)) {
-                /*
-                 * it seems like we don't want to catch this signal anymore, as well as there is no
-                 * other signal handler which want to catch it. So we simply reset it to look like
-                 * no signal handler was registered at all.
-                 */
-                Signal.handle(signal, SignalHandler.SIG_DFL);
-            }
-
-            /*
-             * Either no handler is currently running, or it would unregister after finishing it's
-             * execution.
-             */
-            tryUnregisterFromContext();
+            isRunning.set(false);
         }
 
         @Override
@@ -292,48 +212,6 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
             // wait until handle is finished
             lock.lock();
             lock.unlock();
-
-            // this thread wouldn't start anymore, so we can assume it's stopped
-            unregisterFromContext();
-        }
-
-        /**
-         * Unregister this SignalHandler from context
-         */
-        private void unregisterFromContext() {
-            assert !isRunning.get();
-
-            context.unregisterThread(this);
-
-            int signalId = signal.getNumber();
-            synchronized (registeredSignals) {
-                if (registeredSignals.get(signalId) == this) {
-                    registeredSignals.remove(signalId);
-                }
-            }
-
-            lock.lock();
-            if (!stack.isFreed()) {
-                stack.free();
-            }
-            lock.unlock();
-        }
-
-        /**
-         * Only unregister this SignalHandler, if there is currently no lock held
-         */
-        private boolean tryUnregisterFromContext() {
-            assert !isRunning.get();
-
-            if (lock.tryLock()) {
-                try {
-                    unregisterFromContext();
-                } finally {
-                    lock.unlock();
-                }
-                return true;
-            }
-            return false;
         }
 
         @Override
