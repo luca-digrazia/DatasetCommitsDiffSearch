@@ -30,27 +30,20 @@ import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.StandardTags.RootTag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
-import com.oracle.truffle.api.source.SourceSection;
-import org.graalvm.options.OptionCategory;
-import org.graalvm.options.OptionDescriptor;
-import org.graalvm.options.OptionKey;
-import org.graalvm.options.OptionType;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.tools.profiler.impl.CPUSamplerInstrument;
+import com.oracle.truffle.tools.profiler.impl.ProfilerToolFactory;
 
 import java.io.Closeable;
-import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 
 /**
  * Implementation of a sampling based profiler for
@@ -58,106 +51,39 @@ import java.util.function.Function;
  * {@linkplain TruffleInstrument Truffle instrumentation framework}.
  * <p>
  * The sampler keeps a shadow stack during execution. This shadow stack is sampled at regular
- * intervals, i.e. the state of the stack is copied and saved into trees of {@linkplain CallTreeNode
+ * intervals, i.e. the state of the stack is copied and saved into trees of {@linkplain ProfilerNode
  * nodes}, which represent the profile of the execution.
+ * <p>
+ * Usage example: {@link CPUSamplerSnippets#example}
  *
- * @since 0.29
+ * @since 0.30
  */
 public final class CPUSampler implements Closeable {
 
     /**
-     * The {@linkplain TruffleInstrument instrument} for the CPU sampler.
-     *
-     * @since 0.29
-     */
-    @TruffleInstrument.Registration(id = Instrument.ID, name = "CPU Sampler", version = "1.0", services = {CPUSampler.class})
-    public static final class Instrument extends TruffleInstrument {
-
-        /**
-         * A string used to identify the sampler, i.e. as the name of the tool.
-         *
-         * @since 0.29
-         */
-        public static final String ID = "cpusampler";
-        static CPUSampler sampler;
-        List<OptionDescriptor> descriptors = new ArrayList<>();
-
-        @Override
-        protected void onCreate(Env env) {
-            sampler = new CPUSampler(env);
-            if (env.getOptions().get(CLI.ENABLED)) {
-                sampler.setPeriod(env.getOptions().get(CLI.SAMPLE_PERIOD));
-                sampler.setDelay(env.getOptions().get(CLI.DELAY_PERIOD));
-                sampler.setStackLimit(env.getOptions().get(CLI.STACK_LIMIT));
-                sampler.setFilter(getSourceSectionFilter(env));
-                sampler.setExcludeInlinedRoots(env.getOptions().get(CLI.MODE) == CLI.Mode.COMPILED);
-                sampler.setCollecting(true);
-            }
-            env.registerService(sampler);
-        }
-
-        private static SourceSectionFilter getSourceSectionFilter(Env env) {
-            CLI.Mode mode = env.getOptions().get(CLI.MODE);
-            final boolean statements = mode == CLI.Mode.STATEMENTS;
-            final boolean internals = env.getOptions().get(CLI.SAMPLE_INTERNAL);
-            final Object[] filterRootName = env.getOptions().get(CLI.FILTER_ROOT);
-            final Object[] filterFile = env.getOptions().get(CLI.FILTER_FILE);
-            final String filterLanguage = env.getOptions().get(CLI.FILTER_LANGUAGE);
-            return CLI.buildFilter(true, statements, false, internals, filterRootName, filterFile, filterLanguage);
-        }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        protected List<OptionDescriptor> describeOptions() {
-            descriptors.add(OptionDescriptor.newBuilder(CLI.ENABLED, ID).category(OptionCategory.USER).help("Enable the CPU sampler.").build());
-            descriptors.add(OptionDescriptor.newBuilder(CLI.SAMPLE_PERIOD, ID + ".Period").category(OptionCategory.USER).help("Period in milliseconds to sample the stack.").build());
-            descriptors.add(OptionDescriptor.newBuilder(CLI.DELAY_PERIOD, ID + ".Delay").category(OptionCategory.USER).help("Delay the sampling for this many milliseconds (default: 0).").build());
-            descriptors.add(OptionDescriptor.newBuilder(CLI.STACK_LIMIT, ID + ".StackLimit").category(OptionCategory.USER).help("Maximum number of maximum stack elements.").build());
-            descriptors.add(OptionDescriptor.newBuilder(CLI.OUTPUT, ID + ".Output").category(OptionCategory.USER).help("Print a 'histogram' or 'calltree' as output (default:HISTOGRAM).").build());
-            descriptors.add(OptionDescriptor.newBuilder(CLI.MODE, ID + ".Mode").category(OptionCategory.USER).help(
-                            "Describes level of sampling detail. NOTE: Increased detail can lead to reduced accuracy. Modes:" + System.lineSeparator() +
-                                            "'compiled' - samples roots excluding inlined functions (default)" + System.lineSeparator() + "'roots' - samples roots including inlined functions" +
-                                            System.lineSeparator() + "'statements' - samples all statements.").build());
-            descriptors.add(OptionDescriptor.newBuilder(CLI.SAMPLE_INTERNAL, ID + ".SampleInternal").category(OptionCategory.USER).help("Capture internal elements (default:false).").build());
-            descriptors.add(OptionDescriptor.newBuilder(CLI.FILTER_ROOT, ID + ".FilterRootName").category(OptionCategory.USER).help(
-                            "Wildcard filter for program roots. (eg. Math.*, default:*).").build());
-            descriptors.add(OptionDescriptor.newBuilder(CLI.FILTER_FILE, ID + ".FilterFile").category(OptionCategory.USER).help(
-                            "Wildcard filter for source file paths. (eg. *program*.sl, default:*).").build());
-            descriptors.add(OptionDescriptor.newBuilder(CLI.FILTER_LANGUAGE, ID + ".FilterLanguage").category(OptionCategory.USER).help(
-                            "Only profile languages with mime-type. (eg. +, default:no filter).").build());
-            return descriptors;
-        }
-
-        @Override
-        protected void onDispose(Env env) {
-            if (env.getOptions().get(CLI.ENABLED)) {
-                CLI.handleOutput(env, sampler, descriptors);
-            }
-            sampler.close();
-        }
-    }
-
-    /**
      * Wrapper for information on how many times an element was seen on the shadow stack. Used as a
-     * template parameter of {@link CallTreeNode}. Differentiates between an execution in compiled
+     * template parameter of {@link ProfilerNode}. Differentiates between an execution in compiled
      * code and in the interpreter.
      *
-     * @since 0.29
+     * @since 0.30
      */
-    public final class HitCounts {
+    public static final class Payload {
+
+        Payload() {
+        }
+
         int compiledHitCount;
         int interpretedHitCount;
 
         int selfCompiledHitCount;
         int selfInterpretedHitCount;
 
-        long firstHitTime;
-        long lastHitTime;
+        final List<Long> selfHitTimes = new ArrayList<>();
 
         /**
          * @return The number of times the element was found bellow the top of the shadow stack as
          *         compiled code
-         * @since 0.29
+         * @since 0.30
          */
         public int getCompiledHitCount() {
             return compiledHitCount;
@@ -166,7 +92,7 @@ public final class CPUSampler implements Closeable {
         /**
          * @return The number of times the element was found bellow the top of the shadow stack as
          *         interpreted code
-         * @since 0.29
+         * @since 0.30
          */
         public int getInterpretedHitCount() {
             return interpretedHitCount;
@@ -175,7 +101,7 @@ public final class CPUSampler implements Closeable {
         /**
          * @return The number of times the element was found on the top of the shadow stack as
          *         compiled code
-         * @since 0.29
+         * @since 0.30
          */
         public int getSelfCompiledHitCount() {
             return selfCompiledHitCount;
@@ -184,31 +110,15 @@ public final class CPUSampler implements Closeable {
         /**
          * @return The number of times the element was found on the top of the shadow stack as
          *         interpreted code
-         * @since 0.29
+         * @since 0.30
          */
         public int getSelfInterpretedHitCount() {
             return selfInterpretedHitCount;
         }
 
         /**
-         * @return When was the element first found on the stack
-         * @since 0.29
-         */
-        public long getFirstHitTime() {
-            return firstHitTime;
-        }
-
-        /**
-         * @return When was the element last found on the stack
-         * @since 0.29
-         */
-        public long getLastHitTime() {
-            return lastHitTime;
-        }
-
-        /**
          * @return Total number of times the element was found on the top of the shadow stack
-         * @since 0.29
+         * @since 0.30
          */
         public int getSelfHitCount() {
             return selfCompiledHitCount + selfInterpretedHitCount;
@@ -216,13 +126,53 @@ public final class CPUSampler implements Closeable {
 
         /**
          * @return Total number of times the element was found bellow the top of the shadow stack
-         * @since 0.29
+         * @since 0.30
          */
         public int getHitCount() {
             return compiledHitCount + interpretedHitCount;
         }
 
+        /**
+         * @return An immutable list of time stamps for the times that the element was on the top of
+         *         the stack
+         * @since 0.30
+         */
+        public List<Long> getSelfHitTimes() {
+            return Collections.unmodifiableList(selfHitTimes);
+        }
     }
+
+    /**
+     * Describes the different modes in which the CPU sampler can operate.
+     *
+     * @since 0.30
+     */
+    public enum Mode {
+        /**
+         * Sample {@link RootTag Roots} <b>excluding</b> the ones that get inlined during
+         * compilation. This mode is the default and has the least amount of impact on peak
+         * performance.
+         *
+         * @since 0.30
+         */
+        EXCLUDE_INLINED_ROOTS,
+        /**
+         * Sample {@link RootTag Roots} <b>including</b> the ones that get inlined during
+         * compilation.
+         *
+         * @since 0.30
+         */
+        ROOTS,
+        /**
+         * Sample all {@link com.oracle.truffle.api.instrumentation.StandardTags.StatementTag
+         * Statements}. This mode has serious impact on peek performance.
+         *
+         * @since 0.30
+         */
+        STATEMENTS
+    }
+
+    private Mode mode = Mode.EXCLUDE_INLINED_ROOTS;
 
     static final SourceSectionFilter DEFAULT_FILTER = SourceSectionFilter.newBuilder().tagIs(RootTag.class).build();
 
@@ -240,8 +190,6 @@ public final class CPUSampler implements Closeable {
 
     private boolean stackOverflowed = false;
 
-    private boolean excludeInlinedRoots;
-
     private AtomicLong samplesTaken = new AtomicLong(0);
 
     private Timer samplerThread;
@@ -252,22 +200,34 @@ public final class CPUSampler implements Closeable {
 
     private EventBinding<?> stacksBinding;
 
-    private final CallTreeNode<HitCounts> rootNode = new CallTreeNode<>(this, new HitCounts());
+    private final ProfilerNode<Payload> rootNode = new ProfilerNode<>(this, new Payload());
 
     private final Env env;
+
+    private boolean gatherSelfHitTimes = false;
 
     CPUSampler(Env env) {
         this.env = env;
     }
 
     /**
+     * Finds {@link CPUSampler} associated with given engine.
+     *
+     * @param engine the engine to find debugger for
+     * @return an instance of associated {@link CPUSampler}
+     * @since 0.30
+     */
+    public static CPUSampler find(PolyglotEngine engine) {
+        return CPUSamplerInstrument.getSampler(engine);
+    }
+
+    /**
      * Controls whether the sampler is collecting data or not.
      *
      * @param collecting the new state of the sampler.
-     * @since 0.29
+     * @since 0.30
      */
     public synchronized void setCollecting(boolean collecting) {
-        verifyConfigAllowed();
         if (this.collecting != collecting) {
             this.collecting = collecting;
             resetSampling();
@@ -276,29 +236,28 @@ public final class CPUSampler implements Closeable {
 
     /**
      * @return whether or not the sampler is currently collecting data.
-     * @since 0.29
+     * @since 0.30
      */
     public synchronized boolean isCollecting() {
         return collecting;
     }
 
     /**
-     * Controls whether the sampler shoulde exclude inlined roots. This means that functions that
-     * are inlined during compilation do not appear on the shadow stack. This reduces overhead.
-     *
-     * @param excludeInlinedRoots the new state of the sampler
-     * @since 0.29
+     * Sets the {@link Mode mode} for the sampler.
+     * 
+     * @param mode the new mode for the sampler.
+     * @since 0.30
      */
-    public synchronized void setExcludeInlinedRoots(boolean excludeInlinedRoots) {
+    public synchronized void setMode(Mode mode) {
         verifyConfigAllowed();
-        this.excludeInlinedRoots = excludeInlinedRoots;
+        this.mode = mode;
     }
 
     /**
      * Sets the sampling period i.e. the time between two samples of the shadow stack are taken.
      *
      * @param samplePeriod the new sampling period.
-     * @since 0.29
+     * @since 0.30
      */
     public synchronized void setPeriod(long samplePeriod) {
         verifyConfigAllowed();
@@ -310,18 +269,18 @@ public final class CPUSampler implements Closeable {
 
     /**
      * @return the sampling period i.e. the time between two samples of the shadow stack are taken.
-     * @since 0.29
+     * @since 0.30
      */
     public synchronized long getPeriod() {
         return period;
     }
 
     /**
-     * Sets the delay period i.e. the time that is allowed to pass before the sampler starts taking
-     * samples.
+     * Sets the delay period i.e. the time that is allowed to pass between when the first sample
+     * would have been taken and when the sampler actually starts taking samples.
      *
      * @param delay the delay period.
-     * @since 0.29
+     * @since 0.30
      */
     public synchronized void setDelay(long delay) {
         verifyConfigAllowed();
@@ -329,11 +288,11 @@ public final class CPUSampler implements Closeable {
     }
 
     /**
-     * Sets the size of the shadow stack. Whether or not the shadow stack grew more than the
-     * provided size during execution can be checked with {@linkplain #hasStackOverflowed}
+     * Sets the maximum amount of stack frames that are sampled. Whether or not the stack grew more
+     * than the provided size during execution can be checked with {@linkplain #hasStackOverflowed}
      *
      * @param stackLimit the new size of the shadow stack
-     * @since 0.29
+     * @since 0.30
      */
     public synchronized void setStackLimit(int stackLimit) {
         verifyConfigAllowed();
@@ -345,18 +304,18 @@ public final class CPUSampler implements Closeable {
 
     /**
      * @return size of the shadow stack
-     * @since 0.29
+     * @since 0.30
      */
     public synchronized int getStackLimit() {
         return stackLimit;
     }
 
     /**
-     * Sets the {@link SourceSectionFilter filter} for the sampler. This allows the sampler to
-     * observe only parts of the executed source code.
+     * Sets the {@link SourceSectionFilter filter} for the sampler. The sampler will only observe
+     * parts of the executed source code that is specified by the filter.
      *
      * @param filter The new filter describing which part of the source code to sample
-     * @since 0.29
+     * @since 0.30
      */
     public synchronized void setFilter(SourceSectionFilter filter) {
         verifyConfigAllowed();
@@ -365,7 +324,7 @@ public final class CPUSampler implements Closeable {
 
     /**
      * @return The filter describing which part of the source code to sample
-     * @since 0.29
+     * @since 0.30
      */
     public synchronized SourceSectionFilter getFilter() {
         return filter;
@@ -373,15 +332,15 @@ public final class CPUSampler implements Closeable {
 
     /**
      * @return Total number of samples taken during execution
-     * @since 0.29
+     * @since 0.30
      */
-    public long getTotalSamples() {
+    public long getSampleCount() {
         return samplesTaken.get();
     }
 
     /**
      * @return was the shadow stack size insufficient for the execution.
-     * @since 0.29
+     * @since 0.30
      */
     public boolean hasStackOverflowed() {
         return stackOverflowed;
@@ -389,20 +348,20 @@ public final class CPUSampler implements Closeable {
 
     /**
      * @return The roots of the trees representing the profile of the execution.
-     * @since 0.29
+     * @since 0.30
      */
-    public Collection<CallTreeNode<HitCounts>> getRootNodes() {
+    public Collection<ProfilerNode<Payload>> getRootNodes() {
         return rootNode.getChildren();
     }
 
     /**
      * Erases all the data gathered by the sampler and resets the sample count to 0.
      *
-     * @since 0.29
+     * @since 0.30
      */
     public synchronized void clearData() {
         samplesTaken.set(0);
-        Map<SourceLocation, CallTreeNode<HitCounts>> rootChildren = rootNode.children;
+        Map<SourceLocation, ProfilerNode<Payload>> rootChildren = rootNode.children;
         if (rootChildren != null) {
             rootChildren.clear();
         }
@@ -410,17 +369,17 @@ public final class CPUSampler implements Closeable {
 
     /**
      * @return whether or not the sampler has collected any data so far.
-     * @since 0.29
+     * @since 0.30
      */
     public synchronized boolean hasData() {
-        Map<SourceLocation, CallTreeNode<HitCounts>> rootChildren = rootNode.children;
+        Map<SourceLocation, ProfilerNode<Payload>> rootChildren = rootNode.children;
         return rootChildren != null && !rootChildren.isEmpty();
     }
 
     /**
      * Closes the sampler for fuhrer use, deleting all the gathered data.
      *
-     * @since 0.29
+     * @since 0.30
      */
     @Override
     public synchronized void close() {
@@ -430,30 +389,26 @@ public final class CPUSampler implements Closeable {
     }
 
     /**
-     * Creates a histogram - a mapping from a {@link SourceLocation source location} to a
-     * {@link List} of {@link CallTreeNode} corresponding to that source location. This gives an
-     * overview of the execution profile of each {@link SourceLocation source location}.
+     * @return Whether or not timestamp information for the element at the top of the stack for each
+     *         sample is gathered
      *
-     * @return the source location histogram based on the sampling data
-     * @since 0.29
+     * @since 0.30
      */
-    public Map<SourceLocation, List<CallTreeNode<HitCounts>>> computeHistogram() {
-        Map<SourceLocation, List<CallTreeNode<HitCounts>>> histogram = new HashMap<>();
-        computeHistogramImpl(rootNode.getChildren(), histogram);
-        return histogram;
+    public boolean isGatherSelfHitTimes() {
+        return gatherSelfHitTimes;
     }
 
-    private void computeHistogramImpl(Collection<CallTreeNode<HitCounts>> children, Map<SourceLocation, List<CallTreeNode<HitCounts>>> histogram) {
-        for (CallTreeNode<HitCounts> treeNode : children) {
-            List<CallTreeNode<HitCounts>> nodes = histogram.computeIfAbsent(treeNode.getSourceLocation(), new Function<SourceLocation, List<CallTreeNode<HitCounts>>>() {
-                @Override
-                public List<CallTreeNode<HitCounts>> apply(SourceLocation sourceLocation) {
-                    return new ArrayList<>();
-                }
-            });
-            nodes.add(treeNode);
-            computeHistogramImpl(treeNode.getChildren(), histogram);
-        }
+    /**
+     * Sets whether or not to gather timestamp information for the element at the top of the stack
+     * for each sample.
+     * 
+     * @param gatherSelfHitTimes new value for whether or not to gather timestamps
+     *
+     * @since 0.30
+     */
+    public void setGatherSelfHitTimes(boolean gatherSelfHitTimes) {
+        verifyConfigAllowed();
+        this.gatherSelfHitTimes = gatherSelfHitTimes;
     }
 
     private void resetSampling() {
@@ -474,11 +429,22 @@ public final class CPUSampler implements Closeable {
         }
         this.stackOverflowed = false;
         this.shadowStack = new ShadowStack(stackLimit);
-        this.stacksBinding = this.shadowStack.install(env.getInstrumenter(), f, excludeInlinedRoots);
+        this.stacksBinding = this.shadowStack.install(env.getInstrumenter(), combine(f, mode), mode == Mode.EXCLUDE_INLINED_ROOTS);
 
         this.samplerTask = new SamplingTimerTask();
         this.samplerThread.schedule(samplerTask, 0, period);
 
+    }
+
+    private static SourceSectionFilter combine(SourceSectionFilter filter, Mode mode) {
+        List<Class<?>> tags = new ArrayList<>();
+        if (mode == Mode.EXCLUDE_INLINED_ROOTS || mode == Mode.ROOTS) {
+            tags.add(StandardTags.RootTag.class);
+        }
+        if (mode == Mode.STATEMENTS) {
+            tags.add(StandardTags.StatementTag.class);
+        }
+        return SourceSectionFilter.newBuilder().tagIs(tags.toArray(new Class<?>[0])).and(filter).build();
     }
 
     private void cleanup() {
@@ -546,20 +512,23 @@ public final class CPUSampler implements Closeable {
                 return false;
             }
             // now traverse the stack and insert the path into the tree
-            CallTreeNode<HitCounts> treeNode = rootNode;
+            ProfilerNode<Payload> treeNode = rootNode;
             for (int i = 0; i < correctedStackInfo.getLength(); i++) {
                 SourceLocation location = correctedStackInfo.getStack()[i];
                 boolean isCompiled = correctedStackInfo.getCompiledStack()[i];
 
-                treeNode = addOrUpdateChild(timestamp, treeNode, location);
-                HitCounts payload = treeNode.getPayload();
-                payload.lastHitTime = timestamp;
+                treeNode = addOrUpdateChild(treeNode, location);
+                Payload payload = treeNode.getPayload();
                 if (i == correctedStackInfo.getLength() - 1) {
                     // last element is counted as self time
                     if (isCompiled) {
                         payload.selfCompiledHitCount++;
                     } else {
                         payload.selfInterpretedHitCount++;
+                    }
+                    if (gatherSelfHitTimes) {
+                        payload.selfHitTimes.add(timestamp);
+                        assert payload.selfHitTimes.size() == payload.getSelfHitCount();
                     }
                 }
                 if (isCompiled) {
@@ -571,269 +540,50 @@ public final class CPUSampler implements Closeable {
             return true;
         }
 
-        private CallTreeNode<HitCounts> addOrUpdateChild(long timestamp, CallTreeNode<HitCounts> treeNode, SourceLocation location) {
-            CallTreeNode<HitCounts> child = treeNode.findChild(location);
+        private ProfilerNode<Payload> addOrUpdateChild(ProfilerNode<Payload> treeNode, SourceLocation location) {
+            ProfilerNode<Payload> child = treeNode.findChild(location);
             if (child == null) {
-                HitCounts payload = new HitCounts();
-                payload.firstHitTime = timestamp;
-                child = new CallTreeNode<>(treeNode, location, payload);
+                Payload payload = new Payload();
+                child = new ProfilerNode<>(treeNode, location, payload);
                 treeNode.addChild(location, child);
             }
             return child;
         }
     }
 
-    private static final class CLI extends ProfilerCLI {
+    static {
+        CPUSamplerInstrument.setFactory(new ProfilerToolFactory<CPUSampler>() {
+            @Override
+            public CPUSampler create(Env env) {
+                return new CPUSampler(env);
+            }
+        });
+    }
+}
 
-        enum Output {
-            HISTOGRAM,
-            CALLTREE
+class CPUSamplerSnippets {
+
+    @SuppressWarnings("unused")
+    public void example() {
+        // @formatter:off
+        // BEGIN: CPUSamplerSnippets#example
+        PolyglotEngine engine = PolyglotEngine.newBuilder().build();
+
+        CPUSampler sampler = CPUSampler.find(engine);
+        sampler.setCollecting(true);
+        Source someCode = Source.newBuilder("...").
+                mimeType("...").
+                name("example").build();
+        engine.eval(someCode);
+        sampler.setCollecting(false);
+        sampler.close();
+        // Read information about the roots of the tree.
+        for (ProfilerNode<CPUSampler.Payload> node : sampler.getRootNodes()) {
+            final String rootName = node.getRootName();
+            final int selfHitCount = node.getPayload().getSelfHitCount();
+            // ...
         }
-
-        enum Mode {
-            COMPILED,
-            ROOTS,
-            STATEMENTS
-        }
-
-        static final OptionType<Output> CLI_OUTPUT_TYPE = new OptionType<>("Output",
-                        Output.HISTOGRAM,
-                        new Function<String, Output>() {
-                            @Override
-                            public Output apply(String s) {
-                                try {
-                                    return Output.valueOf(s.toUpperCase());
-                                } catch (IllegalArgumentException e) {
-                                    throw new IllegalArgumentException("Output can be: histogram or calltree");
-                                }
-                            }
-                        });
-
-        static final OptionType<Mode> CLI_MODE_TYPE = new OptionType<>("Mode",
-                        Mode.COMPILED,
-                        new Function<String, Mode>() {
-                            @Override
-                            public Mode apply(String s) {
-                                try {
-                                    return Mode.valueOf(s.toUpperCase());
-                                } catch (IllegalArgumentException e) {
-                                    throw new IllegalArgumentException("Mode can be: compiled, roots or statements.");
-                                }
-                            }
-                        });
-
-        static final OptionKey<Boolean> ENABLED = new OptionKey<>(false);
-        static final OptionKey<Mode> MODE = new OptionKey<>(Mode.COMPILED, CLI_MODE_TYPE);
-        static final OptionKey<Long> SAMPLE_PERIOD = new OptionKey<>(1L);
-        static final OptionKey<Long> DELAY_PERIOD = new OptionKey<>(0L);
-        static final OptionKey<Integer> STACK_LIMIT = new OptionKey<>(10000);
-        static final OptionKey<Output> OUTPUT = new OptionKey<>(Output.HISTOGRAM, CLI_OUTPUT_TYPE);
-
-        static final OptionKey<Object[]> FILTER_ROOT = new OptionKey<>(new Object[0], WILDCARD_FILTER_TYPE);
-        static final OptionKey<Object[]> FILTER_FILE = new OptionKey<>(new Object[0], WILDCARD_FILTER_TYPE);
-        static final OptionKey<String> FILTER_LANGUAGE = new OptionKey<>("");
-
-        static final OptionKey<Boolean> SAMPLE_INTERNAL = new OptionKey<>(false);
-
-        static void handleOutput(Env env, CPUSampler sampler, List<OptionDescriptor> descriptors) {
-            PrintStream out = new PrintStream(env.out());
-            if (sampler.hasStackOverflowed()) {
-                out.println("-------------------------------------------------------------------------------- ");
-                out.println("ERROR: Shadow stack has overflowed its capacity of " + env.getOptions().get(STACK_LIMIT) + " during execution!");
-                out.println("The gathered data is incomplete and incorrect!");
-                String name = "";
-                Iterator<OptionDescriptor> iterator = descriptors.iterator();
-                while (iterator.hasNext()) {
-                    OptionDescriptor descriptor = iterator.next();
-                    if (descriptor.getKey().equals(STACK_LIMIT)) {
-                        name = descriptor.getName();
-                        break;
-                    }
-                }
-                assert !name.equals("");
-                out.println("Use --" + name + "=<" + STACK_LIMIT.getType().getName() + "> to set stack capacity.");
-                out.println("-------------------------------------------------------------------------------- ");
-                return;
-            }
-            switch (env.getOptions().get(OUTPUT)) {
-                case HISTOGRAM:
-                    printSamplingHistogram(out, sampler);
-                    break;
-                case CALLTREE:
-                    printSamplingCallTree(out, sampler);
-                    break;
-            }
-        }
-
-        private static void printSamplingHistogram(PrintStream out, CPUSampler sampler) {
-
-            final Map<SourceLocation, List<CallTreeNode<CPUSampler.HitCounts>>> histogram = sampler.computeHistogram();
-
-            List<List<CallTreeNode<CPUSampler.HitCounts>>> lines = new ArrayList<>(histogram.values());
-            Collections.sort(lines, new Comparator<List<CallTreeNode<HitCounts>>>() {
-                @Override
-                public int compare(List<CallTreeNode<HitCounts>> o1, List<CallTreeNode<HitCounts>> o2) {
-                    long sum1 = 0;
-                    for (CallTreeNode<CPUSampler.HitCounts> tree : o1) {
-                        sum1 += tree.getPayload().getSelfHitCount();
-                    }
-
-                    long sum2 = 0;
-                    for (CallTreeNode<CPUSampler.HitCounts> tree : o2) {
-                        sum2 += tree.getPayload().getSelfHitCount();
-                    }
-                    return Long.compare(sum2, sum1);
-                }
-            });
-
-            int maxLength = 10;
-            for (List<CallTreeNode<CPUSampler.HitCounts>> line : lines) {
-                maxLength = Math.max(computeRootNameMaxLength(line.get(0)), maxLength);
-            }
-
-            String title = String.format(" %-" + maxLength + "s |      Total Time     |  Opt %% ||       Self Time     |  Opt %% | Location             ", "Name");
-            long samples = sampler.getTotalSamples();
-            String sep = repeat("-", title.length());
-            out.println(sep);
-            out.println(String.format("Sampling Histogram. Recorded %s samples with period %dms", samples, sampler.getPeriod()));
-            out.println("  Self Time: Time spent on the top of the stack.");
-            out.println("  Total Time: Time the location spent on the stack. ");
-            out.println("  Opt %: Percent of time spent in compiled and therfore non-interpreted code.");
-            out.println(sep);
-            out.println(title);
-            out.println(sep);
-            for (List<CallTreeNode<CPUSampler.HitCounts>> line : lines) {
-                printAttributes(out, sampler, "", line, maxLength);
-            }
-            out.println(sep);
-        }
-
-        private static void printSamplingCallTree(PrintStream out, CPUSampler sampler) {
-            int maxLength = Math.max(10, computeTitleMaxLength(sampler.getRootNodes(), 0));
-            String title = String.format(" %-" + maxLength + "s |      Total Time     |  Opt %% ||       Self Time     |  Opt %% | Location             ", "Name");
-            String sep = repeat("-", title.length());
-            out.println(sep);
-            out.println(String.format("Sampling CallTree. Recorded %s samples with period %dms.", sampler.getTotalSamples(), sampler.getPeriod()));
-            out.println("  Self Time: Time spent on the top of the stack.");
-            out.println("  Total Time: Time spent somewhere on the stack. ");
-            out.println("  Opt %: Percent of time spent in compiled and therfore non-interpreted code.");
-            out.println(sep);
-            out.println(title);
-            out.println(sep);
-            printSamplingCallTreeRec(sampler, maxLength, "", sampler.getRootNodes(), out);
-            out.println(sep);
-        }
-
-        private static void printSamplingCallTreeRec(CPUSampler sampler, int maxRootLength, String prefix, Collection<CallTreeNode<CPUSampler.HitCounts>> children, PrintStream out) {
-            List<CallTreeNode<CPUSampler.HitCounts>> sortedChildren = new ArrayList<>(children);
-            Collections.sort(sortedChildren, new Comparator<CallTreeNode<HitCounts>>() {
-                @Override
-                public int compare(CallTreeNode<HitCounts> o1, CallTreeNode<HitCounts> o2) {
-                    return Long.compare(o2.getPayload().getHitCount(), o1.getPayload().getHitCount());
-                }
-            });
-
-            for (CallTreeNode<CPUSampler.HitCounts> treeNode : sortedChildren) {
-                if (treeNode == null) {
-                    continue;
-                }
-                printAttributes(out, sampler, prefix, Arrays.asList(treeNode), maxRootLength);
-                printSamplingCallTreeRec(sampler, maxRootLength, prefix + " ", treeNode.getChildren(), out);
-            }
-        }
-
-        private static int computeTitleMaxLength(Collection<CallTreeNode<CPUSampler.HitCounts>> children, int baseLength) {
-            int maxLength = baseLength;
-            for (CallTreeNode<CPUSampler.HitCounts> treeNode : children) {
-                int rootNameLength = computeRootNameMaxLength(treeNode);
-                maxLength = Math.max(baseLength + rootNameLength, maxLength);
-                maxLength = Math.max(maxLength, computeTitleMaxLength(treeNode.getChildren(), baseLength + 1));
-            }
-            return maxLength;
-        }
-
-        private static boolean intersectsLines(SourceSection section1, SourceSection section2) {
-            int x1 = section1.getStartLine();
-            int x2 = section1.getEndLine();
-            int y1 = section2.getStartLine();
-            int y2 = section2.getEndLine();
-            return x2 >= y1 && y2 >= x1;
-        }
-
-        private static void printAttributes(PrintStream out, CPUSampler sampler, String prefix, List<CallTreeNode<CPUSampler.HitCounts>> nodes, int maxRootLength) {
-            long samplePeriod = sampler.getPeriod();
-            long samples = sampler.getTotalSamples();
-
-            long selfInterpreted = 0;
-            long selfCompiled = 0;
-            long totalInterpreted = 0;
-            long totalCompiled = 0;
-            for (CallTreeNode<CPUSampler.HitCounts> tree : nodes) {
-                CPUSampler.HitCounts payload = tree.getPayload();
-                selfInterpreted += payload.getSelfInterpretedHitCount();
-                selfCompiled += payload.getSelfCompiledHitCount();
-                if (!tree.isRecursive()) {
-                    totalInterpreted += payload.getInterpretedHitCount();
-                    totalCompiled += payload.getCompiledHitCount();
-                }
-            }
-
-            long totalSamples = totalInterpreted + totalCompiled;
-            if (totalSamples <= 0L) {
-                // hide methods without any cost
-                return;
-            }
-            assert totalSamples < samples;
-            CallTreeNode<CPUSampler.HitCounts> firstNode = nodes.get(0);
-            SourceSection sourceSection = firstNode.getSourceSection();
-            String rootName = firstNode.getRootName();
-
-            if (!firstNode.getTags().contains(StandardTags.RootTag.class)) {
-                rootName += "~" + formatIndices(sourceSection, needsColumnSpecifier(firstNode));
-            }
-
-            long selfSamples = selfInterpreted + selfCompiled;
-            long selfTime = selfSamples * samplePeriod;
-            double selfCost = selfSamples / (double) samples;
-            double selfCompiledP = 0.0;
-            if (selfSamples > 0) {
-                selfCompiledP = selfCompiled / (double) selfSamples;
-            }
-            String selfTimes = String.format("%10dms %5.1f%% | %5.1f%%", selfTime, selfCost * 100, selfCompiledP * 100);
-
-            long totalTime = totalSamples * samplePeriod;
-            double totalCost = totalSamples / (double) samples;
-            double totalCompiledP = totalCompiled / (double) totalSamples;
-            String totalTimes = String.format("%10dms %5.1f%% | %5.1f%%", totalTime, totalCost * 100, totalCompiledP * 100);
-
-            String location = getShortDescription(sourceSection);
-
-            out.println(String.format(" %-" + Math.max(maxRootLength, 10) + "s | %s || %s | %s ", //
-                            prefix + rootName, totalTimes, selfTimes, location));
-        }
-
-        private static boolean needsColumnSpecifier(CallTreeNode<CPUSampler.HitCounts> firstNode) {
-            boolean needsColumnsSpecifier = false;
-            SourceSection sourceSection = firstNode.getSourceSection();
-            for (CallTreeNode<CPUSampler.HitCounts> node : firstNode.getParent().getChildren()) {
-                if (node.getSourceSection() == sourceSection) {
-                    continue;
-                }
-                if (intersectsLines(node.getSourceSection(), sourceSection)) {
-                    needsColumnsSpecifier = true;
-                    break;
-                }
-            }
-            return needsColumnsSpecifier;
-        }
-
-        private static int computeRootNameMaxLength(CallTreeNode<CPUSampler.HitCounts> treeNode) {
-            int length = treeNode.getRootName().length();
-            if (!treeNode.getTags().contains(StandardTags.RootTag.class)) {
-                // reserve some space for the line and column info
-                length += formatIndices(treeNode.getSourceSection(), needsColumnSpecifier(treeNode)).length() + 1;
-            }
-            return length;
-        }
+        // END: CPUSamplerSnippets#example
+        // @formatter:on
     }
 }
