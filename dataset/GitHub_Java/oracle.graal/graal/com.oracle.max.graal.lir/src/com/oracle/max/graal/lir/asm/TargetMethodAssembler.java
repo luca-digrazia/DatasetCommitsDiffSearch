@@ -87,7 +87,7 @@ public class TargetMethodAssembler {
         if (exceptionInfoList != null) {
             for (ExceptionInfo ei : exceptionInfoList) {
                 int codeOffset = ei.codeOffset;
-                targetMethod.recordExceptionHandler(codeOffset, -1, 0, ei.exceptionEdge.label().position(), -1, null);
+                targetMethod.recordExceptionHandler(codeOffset, ei.exceptionEdge.label().position());
             }
         }
 
@@ -97,7 +97,7 @@ public class TargetMethodAssembler {
         Debug.metric("DataPatches").add(targetMethod.dataReferences.size());
         Debug.metric("ExceptionHandlersEmitted").add(targetMethod.exceptionHandlers.size());
 
-        Debug.log("Finished target method %s, isStub %d", name, isStub);
+        Debug.log("Finished target method %s, isStub %b", name, isStub);
 /*
         if (GraalOptions.PrintAssembly && !TTY.isSuppressed() && !isStub) {
             Util.printSection("Target Method", Util.SECTION_CHARACTER);
