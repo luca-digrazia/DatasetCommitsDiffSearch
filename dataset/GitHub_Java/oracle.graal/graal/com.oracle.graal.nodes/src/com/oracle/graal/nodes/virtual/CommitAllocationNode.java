@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,19 +26,16 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-@NodeInfo(nameTemplate = "Alloc {i#virtualObjects}", allowedUsageTypes = {InputType.Extension})
+@NodeInfo(nameTemplate = "Alloc {i#virtualObjects}")
 public final class CommitAllocationNode extends FixedWithNextNode implements VirtualizableAllocation, Lowerable, Simplifiable {
 
     @Input private final NodeInputList<VirtualObjectNode> virtualObjects = new NodeInputList<>(this);
     @Input private final NodeInputList<ValueNode> values = new NodeInputList<>(this);
-    @Input(InputType.Association) private final NodeInputList<MonitorIdNode> locks = new NodeInputList<>(this);
-    private ArrayList<Integer> lockIndexes = new ArrayList<>(Arrays.asList(0));
+    private List<int[]> locks = new ArrayList<>();
 
     public CommitAllocationNode() {
         super(StampFactory.forVoid());
@@ -52,14 +49,13 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
         return values;
     }
 
-    public List<MonitorIdNode> getLocks(int objIndex) {
-        return locks.subList(lockIndexes.get(objIndex), lockIndexes.get(objIndex + 1));
+    public List<int[]> getLocks() {
+        return locks;
     }
 
     @Override
     public boolean verify() {
-        assertTrue(virtualObjects.size() + 1 == lockIndexes.size(), "lockIndexes size doesn't match " + virtualObjects + ", " + lockIndexes);
-        assertTrue(lockIndexes.get(lockIndexes.size() - 1) == locks.size(), "locks size doesn't match " + lockIndexes + ", " + locks);
+        assertTrue(virtualObjects.size() == locks.size(), "lockCounts size doesn't match");
         int valueCount = 0;
         for (VirtualObjectNode virtual : virtualObjects) {
             valueCount += virtual.entryCount();
@@ -70,17 +66,14 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
-    public void afterClone(Node other) {
-        lockIndexes = new ArrayList<>(lockIndexes);
-    }
-
-    public void addLocks(List<MonitorIdNode> monitorIds) {
-        locks.addAll(monitorIds);
-        lockIndexes.add(locks.size());
+    public Node clone(Graph into) {
+        CommitAllocationNode clone = (CommitAllocationNode) super.clone(into);
+        clone.locks = new ArrayList<>(locks);
+        return clone;
     }
 
     @Override
@@ -89,7 +82,7 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
         for (int i = 0; i < virtualObjects.size(); i++) {
             VirtualObjectNode virtualObject = virtualObjects.get(i);
             int entryCount = virtualObject.entryCount();
-            tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), getLocks(i));
+            tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), locks.get(i));
             pos += entryCount;
         }
         tool.delete();
@@ -108,8 +101,8 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
                 s.append(i == 0 ? "" : ",").append(value == null ? "_" : value.toString(Verbosity.Id));
             }
             s.append("]");
-            if (!getLocks(objIndex).isEmpty()) {
-                s.append(" locked(").append(getLocks(objIndex)).append(")");
+            if (locks.get(objIndex).length > 0) {
+                s.append(" locked(").append(Arrays.toString(locks.get(objIndex))).append(")");
             }
             properties.put("object(" + virtual.toString(Verbosity.Id) + ")", s.toString());
         }
@@ -126,14 +119,6 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
             assert !used[index];
             used[index] = true;
             usedCount++;
-        }
-        if (usedCount == 0) {
-            List<Node> inputSnapshot = inputs().snapshot();
-            graph().removeFixed(this);
-            for (Node input : inputSnapshot) {
-                tool.removeIfUnused(input);
-            }
-            return;
         }
         boolean progress;
         do {
@@ -158,17 +143,14 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
 
         if (usedCount < virtualObjects.size()) {
             List<VirtualObjectNode> newVirtualObjects = new ArrayList<>(usedCount);
-            List<MonitorIdNode> newLocks = new ArrayList<>(usedCount);
-            ArrayList<Integer> newLockIndexes = new ArrayList<>(usedCount + 1);
-            newLockIndexes.add(0);
+            List<int[]> newLocks = new ArrayList<>(usedCount);
             List<ValueNode> newValues = new ArrayList<>();
             int valuePos = 0;
             for (int objIndex = 0; objIndex < virtualObjects.size(); objIndex++) {
                 VirtualObjectNode virtualObject = virtualObjects.get(objIndex);
                 if (used[objIndex]) {
                     newVirtualObjects.add(virtualObject);
-                    newLocks.addAll(getLocks(objIndex));
-                    newLockIndexes.add(newLocks.size());
+                    newLocks.add(locks.get(objIndex));
                     newValues.addAll(values.subList(valuePos, valuePos + virtualObject.entryCount()));
                 }
                 valuePos += virtualObject.entryCount();
@@ -179,7 +161,6 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
             locks.addAll(newLocks);
             values.clear();
             values.addAll(newValues);
-            lockIndexes = newLockIndexes;
         }
     }
 
