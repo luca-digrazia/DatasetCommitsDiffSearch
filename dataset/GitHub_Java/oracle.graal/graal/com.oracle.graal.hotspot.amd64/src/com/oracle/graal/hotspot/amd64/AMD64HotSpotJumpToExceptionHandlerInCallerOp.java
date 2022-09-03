@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,48 +22,57 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.amd64.AMD64.*;
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static jdk.vm.ci.amd64.AMD64.rbp;
+import static jdk.vm.ci.amd64.AMD64.rsp;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.AllocatableValue;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.asm.amd64.AMD64Address;
 import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
-import com.oracle.graal.lir.LIRInstruction.Opcode;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 /**
  * Sets up the arguments for an exception handler in the callers frame, removes the current frame
  * and jumps to the handler.
  */
 @Opcode("JUMP_TO_EXCEPTION_HANDLER_IN_CALLER")
-final class AMD64HotSpotJumpToExceptionHandlerInCallerOp extends AMD64HotSpotEpilogueOp {
+final class AMD64HotSpotJumpToExceptionHandlerInCallerOp extends AMD64HotSpotEpilogueBlockEndOp {
+
+    public static final LIRInstructionClass<AMD64HotSpotJumpToExceptionHandlerInCallerOp> TYPE = LIRInstructionClass.create(AMD64HotSpotJumpToExceptionHandlerInCallerOp.class);
 
     @Use(REG) AllocatableValue handlerInCallerPc;
     @Use(REG) AllocatableValue exception;
     @Use(REG) AllocatableValue exceptionPc;
+    private final Register thread;
+    private final int isMethodHandleReturnOffset;
 
-    AMD64HotSpotJumpToExceptionHandlerInCallerOp(AllocatableValue handlerInCallerPc, AllocatableValue exception, AllocatableValue exceptionPc) {
+    AMD64HotSpotJumpToExceptionHandlerInCallerOp(AllocatableValue handlerInCallerPc, AllocatableValue exception, AllocatableValue exceptionPc, int isMethodHandleReturnOffset, Register thread) {
+        super(TYPE);
         this.handlerInCallerPc = handlerInCallerPc;
         this.exception = exception;
         this.exceptionPc = exceptionPc;
+        this.isMethodHandleReturnOffset = isMethodHandleReturnOffset;
+        this.thread = thread;
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        leaveFrameAndRestoreRbp(tasm, masm);
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        leaveFrameAndRestoreRbp(crb, masm);
 
         // Discard the return address, thus completing restoration of caller frame
         masm.incrementq(rsp, 8);
 
-        // Restore rsp from rbp if the exception PC is a method handle call site.
-        Register thread = graalRuntime().getRuntime().threadRegister();
-        int isMethodHandleReturnOffset = graalRuntime().getConfig().threadIsMethodHandleReturnOffset;
-        AMD64Address dst = new AMD64Address(thread, isMethodHandleReturnOffset);
-        masm.cmpl(dst, 0);
-        masm.cmovq(ConditionFlag.NotEqual, rsp, rbp);
+        if (System.getProperty("java.specification.version").compareTo("1.9") < 0) {
+            // Restore rsp from rbp if the exception PC is a method handle call site.
+            AMD64Address dst = new AMD64Address(thread, isMethodHandleReturnOffset);
+            masm.cmpl(dst, 0);
+            masm.cmovq(ConditionFlag.NotEqual, rsp, rbp);
+        }
 
         masm.jmp(asRegister(handlerInCallerPc));
     }
