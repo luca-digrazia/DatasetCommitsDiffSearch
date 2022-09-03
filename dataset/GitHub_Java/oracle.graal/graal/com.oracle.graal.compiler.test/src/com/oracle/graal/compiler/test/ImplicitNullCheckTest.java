@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.compiler.test;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 
 import org.junit.*;
 
@@ -59,14 +59,13 @@ public class ImplicitNullCheckTest extends GraphScheduleTest {
         test("test1Snippet");
     }
 
-    @SuppressWarnings("try")
     private void test(final String snippet) {
         try (Scope s = Debug.scope("FloatingReadTest", new DebugDumpScope(snippet))) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
             PhaseContext context = new PhaseContext(getProviders());
             new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
             new FloatingReadPhase().apply(graph);
-            MidTierContext midTierContext = new MidTierContext(getProviders(), getTargetProvider(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
+            MidTierContext midTierContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
             new GuardLoweringPhase().apply(graph, midTierContext);
 
             Assert.assertEquals(0, graph.getNodes(DeoptimizeNode.TYPE).count());
