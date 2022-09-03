@@ -457,7 +457,6 @@ public final class BciBlockMapping {
             block.successors.add(block.retSuccessor);
             assert block.retSuccessor != block.jsrSuccessor;
         }
-        Debug.log("JSR alternatives block %s  sux %s  jsrSux %s  retSux %s  jsrScope %s", block, block.successors, block.jsrSuccessor, block.retSuccessor, block.jsrScope);
 
         if (block.jsrSuccessor != null || !scope.isEmpty()) {
             for (int i = 0; i < block.successors.size(); i++) {
@@ -469,7 +468,7 @@ public final class BciBlockMapping {
                 if (successor == block.retSuccessor) {
                     nextScope = scope.pop();
                 }
-                if (!successor.jsrScope.isPrefixOf(nextScope)) {
+                if (!successor.jsrScope.isEmpty()) {
                     throw new JsrNotSupportedBailout("unstructured control flow  (" + successor.jsrScope + " " + nextScope + ")");
                 }
                 if (!nextScope.isEmpty()) {
