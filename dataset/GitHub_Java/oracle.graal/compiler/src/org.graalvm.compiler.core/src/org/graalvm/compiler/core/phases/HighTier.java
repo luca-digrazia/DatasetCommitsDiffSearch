@@ -76,16 +76,12 @@ public class HighTier extends PhaseSuite<HighTierContext> {
         appendPhase(canonicalizer);
 
         if (NodeCounterPhase.Options.NodeCounters.getValue(options)) {
-            appendPhase(new NodeCounterPhase(NodeCounterPhase.Stage.INIT));
+            appendPhase(new NodeCounterPhase());
         }
 
         if (Options.Inline.getValue(options)) {
             appendPhase(new InliningPhase(canonicalizer));
             appendPhase(new DeadCodeEliminationPhase(Optional));
-        }
-
-        if (NodeCounterPhase.Options.NodeCounters.getValue(options)) {
-            appendPhase(new NodeCounterPhase(NodeCounterPhase.Stage.EARLY));
         }
 
         if (OptConvertDeoptsToGuards.getValue(options)) {
@@ -122,12 +118,7 @@ public class HighTier extends PhaseSuite<HighTierContext> {
 
         appendPhase(new RemoveValueProxyPhase());
 
-        if (NodeCounterPhase.Options.NodeCounters.getValue(options)) {
-            appendPhase(new NodeCounterPhase(NodeCounterPhase.Stage.LATE));
-        }
-
         appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER));
-
     }
 
     public LoopPolicies createLoopPolicies() {
