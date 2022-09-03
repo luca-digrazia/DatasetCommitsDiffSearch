@@ -27,15 +27,17 @@ import java.math.*;
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.api.frame.*;
 
-@NodeChild(value = "rightNode", type = TypedNode.class)
 public abstract class WriteLocalNode extends FrameSlotNode {
 
-    public WriteLocalNode(FrameSlot slot) {
+    @Child protected TypedNode rightNode;
+
+    public WriteLocalNode(FrameSlot slot, TypedNode right) {
         super(slot);
+        this.rightNode = adoptChild(right);
     }
 
     public WriteLocalNode(WriteLocalNode node) {
-        this(node.slot);
+        this(node.slot, node.rightNode);
     }
 
     @Specialization
