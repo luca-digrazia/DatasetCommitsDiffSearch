@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
@@ -37,9 +36,8 @@ import com.oracle.graal.nodes.spi.*;
  * performed before the store.
  */
 @NodeInfo
-public final class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, MemoryCheckpoint.Single {
+public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, MemoryCheckpoint.Single {
 
-    public static final NodeClass TYPE = NodeClass.get(UnsafeStoreNode.class);
     @Input ValueNode value;
     @OptionalInput(InputType.State) FrameState stateAfter;
 
@@ -48,7 +46,7 @@ public final class UnsafeStoreNode extends UnsafeAccessNode implements StateSpli
     }
 
     public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
-        super(TYPE, StampFactory.forVoid(), object, offset, accessKind, locationIdentity);
+        super(StampFactory.forVoid(), object, offset, accessKind, locationIdentity);
         this.value = value;
         this.stateAfter = stateAfter;
         assert accessKind != Kind.Void && accessKind != Kind.Illegal;
