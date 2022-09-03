@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,218 +29,277 @@
  */
 package com.oracle.truffle.llvm.runtime.memory;
 
-import java.lang.reflect.Field;
+import java.util.function.BinaryOperator;
+import java.util.function.IntBinaryOperator;
+import java.util.function.LongBinaryOperator;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.api.CompilerDirectives.ValueType;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFunctionVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
-
-import sun.misc.Unsafe;
+import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
 public abstract class LLVMMemory {
 
-    static final Unsafe UNSAFE = getUnsafe();
+    /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode} instead. */
+    @Deprecated
+    public abstract void memset(LLVMNativePointer address, long size, byte value);
 
-    @SuppressWarnings("restriction")
-    static Unsafe getUnsafe() {
-        CompilerAsserts.neverPartOfCompilation();
-        try {
-            Field singleoneInstanceField = Unsafe.class.getDeclaredField("theUnsafe");
-            singleoneInstanceField.setAccessible(true);
-            return (Unsafe) singleoneInstanceField.get(null);
-        } catch (Exception e) {
-            throw new AssertionError();
+    /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode} instead. */
+    @Deprecated
+    public abstract void copyMemory(long sourceAddress, long targetAddress, long length);
+
+    public abstract void free(LLVMNativePointer address);
+
+    public abstract void free(long address);
+
+    public abstract LLVMNativePointer allocateMemory(long size);
+
+    public abstract LLVMNativePointer reallocateMemory(LLVMNativePointer addr, long size);
+
+    /**
+     * Allocates {@code #OBJECT_SIZE} bytes in the Kernel space.
+     */
+    public abstract LLVMNativePointer allocateDerefMemory();
+
+    public abstract boolean getI1(LLVMNativePointer addr);
+
+    public abstract boolean getI1(long ptr);
+
+    public abstract byte getI8(LLVMNativePointer addr);
+
+    public abstract byte getI8(long ptr);
+
+    public abstract short getI16(LLVMNativePointer addr);
+
+    public abstract short getI16(long ptr);
+
+    public abstract int getI32(LLVMNativePointer addr);
+
+    public abstract int getI32(long ptr);
+
+    public abstract LLVMIVarBit getIVarBit(LLVMNativePointer addr, int bitWidth);
+
+    public abstract long getI64(LLVMNativePointer addr);
+
+    public abstract long getI64(long ptr);
+
+    public abstract float getFloat(LLVMNativePointer addr);
+
+    public abstract float getFloat(long ptr);
+
+    public abstract double getDouble(LLVMNativePointer addr);
+
+    public abstract double getDouble(long ptr);
+
+    public abstract LLVM80BitFloat get80BitFloat(LLVMNativePointer addr);
+
+    public abstract LLVMNativePointer getPointer(LLVMNativePointer addr);
+
+    public abstract LLVMNativePointer getPointer(long ptr);
+
+    public abstract void putI1(LLVMNativePointer addr, boolean value);
+
+    public abstract void putI1(long ptr, boolean value);
+
+    public abstract void putI8(LLVMNativePointer addr, byte value);
+
+    public abstract void putI8(long ptr, byte value);
+
+    public abstract void putI16(LLVMNativePointer addr, short value);
+
+    public abstract void putI16(long ptr, short value);
+
+    public abstract void putI32(LLVMNativePointer addr, int value);
+
+    public abstract void putI32(long ptr, int value);
+
+    public abstract void putI64(LLVMNativePointer addr, long value);
+
+    public abstract void putI64(long ptr, long value);
+
+    public abstract void putIVarBit(LLVMNativePointer addr, LLVMIVarBit value);
+
+    public abstract void putFloat(LLVMNativePointer addr, float value);
+
+    public abstract void putFloat(long ptr, float value);
+
+    public abstract void putDouble(LLVMNativePointer addr, double value);
+
+    public abstract void putDouble(long ptr, double value);
+
+    public abstract void put80BitFloat(LLVMNativePointer addr, LLVM80BitFloat value);
+
+    public abstract void put80BitFloat(long ptr, LLVM80BitFloat value);
+
+    public abstract void putPointer(LLVMNativePointer addr, LLVMNativePointer value);
+
+    public abstract void putPointer(LLVMNativePointer addr, long ptrValue);
+
+    public abstract void putPointer(long ptr, LLVMNativePointer value);
+
+    public abstract void putPointer(long ptr, long ptrValue);
+
+    public abstract LLVMI32Vector getI32Vector(LLVMNativePointer address, int vectorLength);
+
+    public abstract LLVMI8Vector getI8Vector(LLVMNativePointer address, int vectorLength);
+
+    public abstract LLVMI1Vector getI1Vector(LLVMNativePointer address, int vectorLength);
+
+    public abstract LLVMI16Vector getI16Vector(LLVMNativePointer address, int vectorLength);
+
+    public abstract LLVMI64Vector getI64Vector(LLVMNativePointer address, int vectorLength);
+
+    public abstract LLVMFloatVector getFloatVector(LLVMNativePointer address, int vectorLength);
+
+    public abstract LLVMDoubleVector getDoubleVector(LLVMNativePointer address, int vectorLength);
+
+    public abstract LLVMPointerVector getPointerVector(LLVMNativePointer address, int vectorLength);
+
+    public abstract LLVMFunctionVector getFunctionVector(LLVMNativePointer address, int vectorLength);
+
+    public abstract void putVector(LLVMNativePointer address, LLVMDoubleVector vector, int vectorLength);
+
+    public abstract void putVector(LLVMNativePointer address, LLVMFloatVector vector, int vectorLength);
+
+    public abstract void putVector(LLVMNativePointer address, LLVMI16Vector vector, int vectorLength);
+
+    public abstract void putVector(LLVMNativePointer address, LLVMI1Vector vector, int vectorLength);
+
+    public abstract void putVector(LLVMNativePointer address, LLVMI32Vector vector, int vectorLength);
+
+    public abstract void putVector(LLVMNativePointer address, LLVMI64Vector vector, int vectorLength);
+
+    public abstract void putVector(LLVMNativePointer address, LLVMI8Vector vector, int vectorLength);
+
+    public abstract void putVector(LLVMNativePointer address, LLVMPointerVector vector, int vectorLength);
+
+    public abstract void putVector(LLVMNativePointer address, LLVMFunctionVector vector, int vectorLength, LLVMToNativeNode toNative);
+
+    public abstract LLVMNativePointer allocateCString(String string);
+
+    public abstract void putFunctionPointer(LLVMNativePointer address, long functionIndex);
+
+    public abstract void putFunctionPointer(long ptr, long functionIndex);
+
+    public abstract long getFunctionPointer(LLVMNativePointer addr);
+
+    public abstract CMPXCHGI32 compareAndSwapI32(LLVMNativePointer p, int comparisonValue, int newValue);
+
+    public abstract CMPXCHGI64 compareAndSwapI64(LLVMNativePointer p, long comparisonValue, long newValue);
+
+    public abstract CMPXCHGI8 compareAndSwapI8(LLVMNativePointer p, byte comparisonValue, byte newValue);
+
+    public abstract CMPXCHGI16 compareAndSwapI16(LLVMNativePointer p, short comparisonValue, short newValue);
+
+    public abstract long getAndSetI64(LLVMNativePointer address, long value);
+
+    public abstract long getAndAddI64(LLVMNativePointer address, long value);
+
+    public abstract long getAndSubI64(LLVMNativePointer address, long value);
+
+    public abstract long getAndOpI64(LLVMNativePointer address, long value, LongBinaryOperator f);
+
+    public abstract int getAndSetI32(LLVMNativePointer address, int value);
+
+    public abstract int getAndAddI32(LLVMNativePointer address, int value);
+
+    public abstract int getAndSubI32(LLVMNativePointer address, int value);
+
+    public abstract int getAndOpI32(LLVMNativePointer address, int value, IntBinaryOperator f);
+
+    public abstract short getAndOpI16(LLVMNativePointer address, short value, BinaryOperator<Short> f);
+
+    public abstract byte getAndOpI8(LLVMNativePointer address, byte value, BinaryOperator<Byte> f);
+
+    public abstract boolean getAndOpI1(LLVMNativePointer address, boolean value, BinaryOperator<Boolean> f);
+
+    public abstract void fullFence();
+
+    public abstract boolean isDerefMemory(LLVMNativePointer addr);
+
+    @ValueType
+    public static final class CMPXCHGI8 {
+        private final byte value;
+        private final boolean swap;
+
+        public CMPXCHGI8(byte value, boolean swap) {
+            this.value = value;
+            this.swap = swap;
+        }
+
+        public byte getValue() {
+            return value;
+        }
+
+        public boolean isSwap() {
+            return swap;
         }
     }
 
-    static long extractAddrNullPointerAllowed(LLVMAddress addr) {
-        return addr.getVal();
-    }
+    @ValueType
+    public static final class CMPXCHGI16 {
+        private final short value;
+        private final boolean swap;
 
-    public static boolean getI1(LLVMAddress addr) {
-        return UNSAFE.getByte(LLVMMemory.extractAddr(addr)) == 0 ? false : true;
-    }
-
-    public static byte getI8(LLVMAddress addr) {
-        return UNSAFE.getByte(LLVMMemory.extractAddr(addr));
-    }
-
-    public static short getI16(LLVMAddress addr) {
-        return UNSAFE.getShort(LLVMMemory.extractAddr(addr));
-    }
-
-    public static int getI32(LLVMAddress addr) {
-        return UNSAFE.getInt(LLVMMemory.extractAddr(addr));
-    }
-
-    public static LLVMIVarBit getIVarBit(LLVMAddress addr, int bitWidth) {
-        if (bitWidth % Byte.SIZE != 0) {
-            CompilerDirectives.transferToInterpreter();
-            throw new AssertionError();
+        public CMPXCHGI16(short value, boolean swap) {
+            this.value = value;
+            this.swap = swap;
         }
-        int bytes = bitWidth / Byte.SIZE;
-        byte[] loadedBytes = new byte[bytes];
-        LLVMAddress currentAddress = addr;
-        for (int i = loadedBytes.length - 1; i >= 0; i--) {
-            loadedBytes[i] = getI8(currentAddress);
-            currentAddress = currentAddress.increment(Byte.BYTES);
+
+        public short getValue() {
+            return value;
         }
-        return LLVMIVarBit.create(bitWidth, loadedBytes);
-    }
 
-    public static long getI64(LLVMAddress addr) {
-        return UNSAFE.getLong(LLVMMemory.extractAddr(addr));
-    }
-
-    public static float getFloat(LLVMAddress addr) {
-        return UNSAFE.getFloat(LLVMMemory.extractAddr(addr));
-    }
-
-    public static double getDouble(LLVMAddress addr) {
-        return UNSAFE.getDouble(LLVMMemory.extractAddr(addr));
-    }
-
-    public static LLVM80BitFloat get80BitFloat(LLVMAddress addr) {
-        byte[] bytes = new byte[LLVM80BitFloat.BYTE_WIDTH];
-        LLVMAddress currentAddress = addr;
-        for (int i = 0; i < bytes.length; i++) {
-            bytes[i] = getI8(currentAddress);
-            currentAddress = currentAddress.increment(Byte.BYTES);
-        }
-        return LLVM80BitFloat.fromBytes(bytes);
-    }
-
-    static long extractAddr(LLVMAddress addr) {
-        assert addr.getVal() != 0;
-        return addr.getVal();
-    }
-
-    public static LLVMAddress getAddress(LLVMAddress addr) {
-        return LLVMAddress.fromLong(UNSAFE.getAddress(extractAddr(addr)));
-    }
-
-    public static void putI1(LLVMAddress addr, boolean value) {
-        UNSAFE.putByte(extractAddr(addr), (byte) (value ? 1 : 0));
-    }
-
-    public static void putI8(LLVMAddress addr, byte value) {
-        UNSAFE.putByte(extractAddr(addr), value);
-    }
-
-    public static void putI16(LLVMAddress addr, short value) {
-        UNSAFE.putShort(extractAddr(addr), value);
-    }
-
-    public static void putI32(LLVMAddress addr, int value) {
-        UNSAFE.putInt(extractAddr(addr), value);
-    }
-
-    public static void putI64(LLVMAddress addr, long value) {
-        UNSAFE.putLong(extractAddr(addr), value);
-    }
-
-    public static void putIVarBit(LLVMAddress addr, LLVMIVarBit value) {
-        byte[] bytes = value.getBytes();
-        LLVMAddress currentAddress = addr;
-        for (int i = bytes.length - 1; i >= 0; i--) {
-            putI8(currentAddress, bytes[i]);
-            currentAddress = currentAddress.increment(Byte.BYTES);
+        public boolean isSwap() {
+            return swap;
         }
     }
 
-    static void putByteArray(LLVMAddress addr, byte[] bytes) {
-        LLVMAddress currentAddress = addr;
-        for (int i = 0; i < bytes.length; i++) {
-            putI8(currentAddress, bytes[i]);
-            currentAddress = currentAddress.increment(Byte.BYTES);
+    @ValueType
+    public static final class CMPXCHGI32 {
+        private final int value;
+        private final boolean swap;
+
+        public CMPXCHGI32(int value, boolean swap) {
+            this.value = value;
+            this.swap = swap;
+        }
+
+        public int getValue() {
+            return value;
+        }
+
+        public boolean isSwap() {
+            return swap;
         }
     }
 
-    public static void putFloat(LLVMAddress addr, float value) {
-        UNSAFE.putFloat(extractAddr(addr), value);
-    }
+    @ValueType
+    public static final class CMPXCHGI64 {
+        private final long value;
+        private final boolean swap;
 
-    public static void putDouble(LLVMAddress addr, double value) {
-        UNSAFE.putDouble(extractAddr(addr), value);
-    }
+        public CMPXCHGI64(long value, boolean swap) {
+            this.value = value;
+            this.swap = swap;
+        }
 
-    public static void put80BitFloat(LLVMAddress addr, LLVM80BitFloat value) {
-        putByteArray(addr, value.getBytes());
-    }
+        public long getValue() {
+            return value;
+        }
 
-    public static void putAddress(LLVMAddress addr, LLVMAddress value) {
-        UNSAFE.putAddress(extractAddr(addr), value.getVal());
+        public boolean isSwap() {
+            return swap;
+        }
     }
-
-    public static LLVMI32Vector getI32Vector(LLVMAddress addr, int size) {
-        return LLVMI32Vector.create(addr, size);
-    }
-
-    public static LLVMI8Vector getI8Vector(LLVMAddress addr, int size) {
-        return LLVMI8Vector.create(addr, size);
-    }
-
-    public static LLVMI1Vector getI1Vector(LLVMAddress addr, int size) {
-        return LLVMI1Vector.create(addr, size);
-    }
-
-    public static LLVMI16Vector getI16Vector(LLVMAddress addr, int size) {
-        return LLVMI16Vector.create(addr, size);
-    }
-
-    public static LLVMI64Vector getI64Vector(LLVMAddress addr, int size) {
-        return LLVMI64Vector.create(addr, size);
-    }
-
-    public static LLVMFloatVector getFloatVector(LLVMAddress addr, int size) {
-        return LLVMFloatVector.createFloatVector(addr, size);
-    }
-
-    public static LLVMDoubleVector getDoubleVector(LLVMAddress addr, int size) {
-        return LLVMDoubleVector.createDoubleVector(addr, size);
-    }
-
-    public static void putStruct(LLVMAddress address, LLVMAddress value, int structSize) {
-        LLVMHeap.memCopy(address, value, structSize);
-    }
-
-    // watch out for casts such as I32* to I32Vector* when changing the way how vectors are
-    // implemented
-    public static void putVector(LLVMAddress addr, LLVMDoubleVector vector) {
-        LLVMHeap.memCopy(addr, vector.getAddress(), vector.getVectorByteSize());
-    }
-
-    public static void putVector(LLVMAddress addr, LLVMFloatVector vector) {
-        LLVMHeap.memCopy(addr, vector.getAddress(), vector.getVectorByteSize());
-    }
-
-    public static void putVector(LLVMAddress addr, LLVMI16Vector vector) {
-        LLVMHeap.memCopy(addr, vector.getAddress(), vector.getVectorByteSize());
-    }
-
-    public static void putVector(LLVMAddress addr, LLVMI1Vector vector) {
-        LLVMHeap.memCopy(addr, vector.getAddress(), vector.getVectorByteSize());
-    }
-
-    public static void putVector(LLVMAddress addr, LLVMI32Vector vector) {
-        LLVMHeap.memCopy(addr, vector.getAddress(), vector.getVectorByteSize());
-    }
-
-    public static void putVector(LLVMAddress addr, LLVMI64Vector vector) {
-        LLVMHeap.memCopy(addr, vector.getAddress(), vector.getVectorByteSize());
-    }
-
-    public static void putVector(LLVMAddress addr, LLVMI8Vector vector) {
-        LLVMHeap.memCopy(addr, vector.getAddress(), vector.getVectorByteSize());
-    }
-
 }
