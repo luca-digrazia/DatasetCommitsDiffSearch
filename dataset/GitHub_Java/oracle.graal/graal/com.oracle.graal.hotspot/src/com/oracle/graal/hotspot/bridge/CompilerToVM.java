@@ -284,8 +284,6 @@ public interface CompilerToVM {
 
     Class<?> getJavaMirror(long metaspaceKlass);
 
-    void setNodeClass(Class<?> c, NodeClass nodeClass);
-
     long readUnsafeKlassPointer(Object o);
 
     void doNotInlineOrCompile(long metaspaceMethod);
@@ -343,7 +341,7 @@ public interface CompilerToVM {
      *            returned
      * @return the frame, or {@code null} if the end of the stack was reached during the search
      */
-    HotSpotStackFrameReference getNextStackFrame(HotSpotStackFrameReference frame, long[] methods);
+    HotSpotStackFrameReference getNextStackFrame(HotSpotStackFrameReference frame, long[] methods, int initialSkip);
 
     /**
      * Materialized all virtual objects within the given stack frame and update the locals within
