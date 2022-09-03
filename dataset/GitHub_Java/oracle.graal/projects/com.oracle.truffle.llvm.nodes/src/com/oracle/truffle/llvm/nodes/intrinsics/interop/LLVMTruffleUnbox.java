@@ -84,6 +84,10 @@ public abstract class LLVMTruffleUnbox extends LLVMIntrinsic {
         }
     }
 
+    protected Node createIsBoxed() {
+        return Message.IS_BOXED.createNode();
+    }
+
     @Specialization
     protected Object doIntrinsic(LLVMBoxedPrimitive value) {
         return toLLVM.executeWithTarget(value.getValue());

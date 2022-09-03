@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -33,21 +33,52 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.runtime.LLVMException;
+import com.oracle.truffle.api.instrumentation.GenerateWrapper;
+import com.oracle.truffle.api.instrumentation.InstrumentableNode;
+import com.oracle.truffle.api.instrumentation.ProbeNode;
+import com.oracle.truffle.llvm.runtime.except.LLVMUserException;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
-public final class LLVMResumeNode extends LLVMControlFlowNode {
+@GenerateWrapper
+public class LLVMResumeNode extends LLVMControlFlowNode implements InstrumentableNode {
 
     private final FrameSlot exceptionSlot;
 
-    public LLVMResumeNode(FrameSlot exceptionSlot) {
+    public LLVMResumeNode(FrameSlot exceptionSlot, LLVMSourceLocation sourceSection) {
+        super(sourceSection);
         this.exceptionSlot = exceptionSlot;
     }
 
+    public LLVMResumeNode(LLVMResumeNode delegate) {
+        super(delegate.getSourceLocation());
+        this.exceptionSlot = delegate.exceptionSlot;
+    }
+
     @Override
-    public int executeGetSuccessorIndex(VirtualFrame frame) {
+    public WrapperNode createWrapper(ProbeNode probe) {
+        return new LLVMResumeNodeWrapper(this, this, probe);
+    }
+
+    @Override
+    public boolean isInstrumentable() {
+        return getSourceLocation() != null;
+    }
+
+    @Override
+    public int getSuccessorCount() {
+        return 0;
+    }
+
+    @Override
+    public LLVMStatementNode getPhiNode(int successorIndex) {
+        return null;
+    }
+
+    public void execute(VirtualFrame frame) {
         try {
-            LLVMException thrownException = (LLVMException) frame.getObject(exceptionSlot);
+            LLVMUserException thrownException = (LLVMUserException) frame.getObject(exceptionSlot);
             throw thrownException;
         } catch (FrameSlotTypeException e) {
             CompilerDirectives.transferToInterpreter();

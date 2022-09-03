@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,31 +22,34 @@
  */
 package org.graalvm.compiler.nodes.java;
 
+import static org.graalvm.compiler.nodeinfo.InputType.Association;
 import static org.graalvm.compiler.nodeinfo.InputType.Memory;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_8;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_2;
 
+import jdk.vm.ci.meta.JavaKind;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.memory.AbstractMemoryCheckpoint;
-import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
-import org.graalvm.compiler.nodes.spi.Lowerable;
+import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
+import org.graalvm.compiler.nodes.memory.address.AddressNode;
+import org.graalvm.compiler.nodes.spi.LIRLowerable;
+import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.word.LocationIdentity;
 
-import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
 
 /**
  * Represents an atomic read-and-add operation like
  * {@link sun.misc.Unsafe#getAndAddInt(Object, long, int)}.
  */
 @NodeInfo(allowedUsageTypes = Memory, cycles = CYCLES_8, size = SIZE_2)
-public final class AtomicReadAndAddNode extends AbstractMemoryCheckpoint implements Lowerable, SingleMemoryKill {
+public final class AtomicReadAndAddNode extends AbstractMemoryCheckpoint implements LIRLowerable, MemoryCheckpoint.Single {
 
     public static final NodeClass<AtomicReadAndAddNode> TYPE = NodeClass.create(AtomicReadAndAddNode.class);
-    @Input ValueNode object;
-    @Input ValueNode offset;
+    @Input(Association) AddressNode address;
     @Input ValueNode delta;
     /**
      * We explicitly track the kind of this node instead of using {#delta.getStackKind()} to be able
@@ -58,33 +59,26 @@ public final class AtomicReadAndAddNode extends AbstractMemoryCheckpoint impleme
 
     protected final LocationIdentity locationIdentity;
 
-    public AtomicReadAndAddNode(ValueNode object, ValueNode offset, ValueNode delta, JavaKind valueKind, LocationIdentity locationIdentity) {
+    public AtomicReadAndAddNode(AddressNode address, ValueNode delta, JavaKind valueKind, LocationIdentity locationIdentity) {
         super(TYPE, StampFactory.forKind(valueKind));
-        this.object = object;
-        this.offset = offset;
+        this.address = address;
         this.delta = delta;
         this.valueKind = valueKind;
         this.locationIdentity = locationIdentity;
-    }
-
-    public ValueNode object() {
-        return object;
-    }
-
-    public ValueNode offset() {
-        return offset;
     }
 
     public ValueNode delta() {
         return delta;
     }
 
-    public JavaKind getValueKind() {
-        return valueKind;
+    @Override
+    public LocationIdentity getLocationIdentity() {
+        return locationIdentity;
     }
 
     @Override
-    public LocationIdentity getKilledLocationIdentity() {
-        return locationIdentity;
+    public void generate(NodeLIRBuilderTool gen) {
+        Value result = gen.getLIRGeneratorTool().emitAtomicReadAndAdd(gen.operand(address), gen.getLIRGeneratorTool().getValueKind(valueKind), gen.operand(delta));
+        gen.setResult(this, result);
     }
 }

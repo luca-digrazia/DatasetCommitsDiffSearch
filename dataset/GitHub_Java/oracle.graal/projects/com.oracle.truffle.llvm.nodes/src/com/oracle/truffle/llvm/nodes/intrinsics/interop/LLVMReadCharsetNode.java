@@ -34,44 +34,49 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
 @NodeChild(type = LLVMExpressionNode.class)
-public abstract class LLVMReadCharsetNode extends Node {
+public abstract class LLVMReadCharsetNode extends LLVMNode {
 
     @Child LLVMReadStringNode readString = LLVMReadStringNodeGen.create();
 
     public abstract Object execute(VirtualFrame frame);
 
-    @Specialization(guards = "cachedAddress.equals(address)")
+    @Specialization(guards = "cachedPointer.equals(pointer)")
     @SuppressWarnings("unused")
-    protected LLVMCharset doCachedAddress(VirtualFrame frame, LLVMAddress address,
-                    @Cached("address") LLVMAddress cachedAddress,
-                    @Cached("doGeneric(frame, address)") LLVMCharset cachedCharset) {
+    protected LLVMCharset doCachedPointer(LLVMPointer pointer,
+                    @Cached("pointer") LLVMPointer cachedPointer,
+                    @Cached("doGeneric(cachedPointer)") LLVMCharset cachedCharset) {
         return cachedCharset;
     }
 
     @Specialization(guards = "address == cachedAddress")
     @SuppressWarnings("unused")
-    protected LLVMCharset doCachedOther(VirtualFrame frame, Object address,
+    protected LLVMCharset doCachedOther(Object address,
                     @Cached("address") Object cachedAddress,
-                    @Cached("doGeneric(frame, address)") LLVMCharset cachedCharset) {
+                    @Cached("doGeneric(cachedAddress)") LLVMCharset cachedCharset) {
         return cachedCharset;
     }
 
-    @Specialization(replaces = {"doCachedAddress", "doCachedOther"})
-    protected LLVMCharset doGeneric(VirtualFrame frame, Object strPtr) {
-        String string = readString.executeWithTarget(frame, strPtr);
+    @Specialization(replaces = {"doCachedPointer", "doCachedOther"})
+    protected LLVMCharset doGeneric(Object strPtr) {
+        String string = readString.executeWithTarget(strPtr);
         return lookup(string);
     }
 
     @TruffleBoundary
-    private static LLVMCharset lookup(String str) {
-        return new LLVMCharset(Charset.forName(str));
+    private LLVMCharset lookup(String str) {
+        try {
+            return new LLVMCharset(Charset.forName(str));
+        } catch (Exception e) {
+            throw new LLVMPolyglotException(this, "Invalid charset '%s'.", str);
+        }
     }
 
     public static final class LLVMCharset {

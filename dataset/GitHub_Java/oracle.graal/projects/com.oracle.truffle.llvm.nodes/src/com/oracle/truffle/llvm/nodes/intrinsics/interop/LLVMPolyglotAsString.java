@@ -29,8 +29,11 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -44,12 +47,14 @@ import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMPolyglotAsStringNode
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMPolyglotAsStringNodeGen.WriteStringNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMReadCharsetNode.LLVMCharset;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNode.LLVMIncrementPointerNode;
-import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.LLVMGetElementPtrNode.LLVMIncrementPointerNode;
+import com.oracle.truffle.llvm.nodes.memory.LLVMGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI8StoreNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.store.LLVMStoreNode;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
+import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import java.nio.ByteBuffer;
 
 @NodeChild(value = "object", type = LLVMExpressionNode.class)
@@ -71,7 +76,7 @@ public abstract class LLVMPolyglotAsString extends LLVMIntrinsic {
         return writeString.execute(frame, result, buffer, buflen, charset.zeroTerminatorLen);
     }
 
-    abstract static class EncodeStringNode extends Node {
+    abstract static class EncodeStringNode extends LLVMNode {
 
         protected abstract ByteBuffer execute(Object str, LLVMCharset charset);
 
@@ -80,14 +85,15 @@ public abstract class LLVMPolyglotAsString extends LLVMIntrinsic {
             return charset.encode(str);
         }
 
-        @Specialization(guards = "obj.getOffset() == 0")
-        ByteBuffer doForeign(LLVMTruffleObject obj, LLVMCharset charset,
+        @Specialization
+        ByteBuffer doForeign(LLVMManagedPointer obj, LLVMCharset charset,
+                        @Cached("create()") LLVMAsForeignNode asForeign,
                         @Cached("create()") BoxedEncodeStringNode encode) {
-            return encode.execute(obj.getObject(), charset);
+            return encode.execute(asForeign.execute(obj), charset);
         }
     }
 
-    abstract static class BoxedEncodeStringNode extends Node {
+    abstract static class BoxedEncodeStringNode extends LLVMNode {
 
         @Child Node isBoxed = Message.IS_BOXED.createNode();
         @Child Node unbox = Message.UNBOX.createNode();
@@ -108,36 +114,43 @@ public abstract class LLVMPolyglotAsString extends LLVMIntrinsic {
             }
         }
 
+        @Fallback
+        @TruffleBoundary
+        @SuppressWarnings("unused")
+        ByteBuffer doFail(TruffleObject object, LLVMCharset charset) {
+            throw new LLVMPolyglotException(this, "Polyglot value is not a string.");
+        }
+
         public static BoxedEncodeStringNode create() {
             return BoxedEncodeStringNodeGen.create();
         }
     }
 
-    abstract static class WriteStringNode extends Node {
+    abstract static class WriteStringNode extends LLVMNode {
 
         @Child private LLVMIncrementPointerNode inc = LLVMIncrementPointerNodeGen.create();
-        @Child private LLVMStoreNode write = LLVMI8StoreNodeGen.create();
+        @Child private LLVMStoreNode write = LLVMI8StoreNodeGen.create(null, null);
 
         protected abstract long execute(VirtualFrame frame, ByteBuffer source, Object target, long targetLen, int zeroTerminatorLen);
 
         @Specialization(guards = "srcBuffer.getClass() == srcBufferClass")
-        long doWrite(VirtualFrame frame, ByteBuffer srcBuffer, Object target, long targetLen, int zeroTerminatorLen,
+        long doWrite(ByteBuffer srcBuffer, Object target, long targetLen, int zeroTerminatorLen,
                         @Cached("srcBuffer.getClass()") Class<? extends ByteBuffer> srcBufferClass) {
             ByteBuffer source = CompilerDirectives.castExact(srcBuffer, srcBufferClass);
 
             long bytesWritten = 0;
             Object ptr = target;
             while (source.hasRemaining() && bytesWritten < targetLen) {
-                write.executeWithTarget(frame, ptr, source.get());
-                ptr = inc.executeWithTarget(frame, ptr, Byte.BYTES);
+                write.executeWithTarget(ptr, source.get());
+                ptr = inc.executeWithTarget(ptr, Byte.BYTES);
                 bytesWritten++;
             }
 
             long ret = bytesWritten;
 
             for (int i = 0; i < zeroTerminatorLen && bytesWritten < targetLen; i++) {
-                write.executeWithTarget(frame, ptr, (byte) 0);
-                ptr = inc.executeWithTarget(frame, ptr, Byte.BYTES);
+                write.executeWithTarget(ptr, (byte) 0);
+                ptr = inc.executeWithTarget(ptr, Byte.BYTES);
                 bytesWritten++;
             }
 

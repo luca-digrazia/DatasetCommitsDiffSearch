@@ -29,70 +29,80 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMPolyglotGetStringSizeNodeGen.BoxedGetStringSizeNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
+import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
-@NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-public abstract class LLVMPolyglotGetStringSize extends LLVMIntrinsic {
+public final class LLVMPolyglotRemove {
 
-    @Specialization
-    long getForeignStringSize(LLVMManagedPointer object,
-                    @Cached("create()") LLVMAsForeignNode asForeign,
-                    @Cached("create()") BoxedGetStringSize getSize) {
-        return getSize.execute(asForeign.execute(object));
-    }
+    @NodeChild(type = LLVMExpressionNode.class)
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMPolyglotRemoveMember extends LLVMIntrinsic {
 
-    @Specialization
-    long getStringSize(String str) {
-        return str.length();
-    }
+        @Child private Node foreignRemove = Message.REMOVE.createNode();
+        @Child private LLVMAsForeignNode asForeign = LLVMAsForeignNode.create();
 
-    abstract static class BoxedGetStringSize extends LLVMNode {
-
-        @Child Node isBoxed = Message.IS_BOXED.createNode();
-        @Child Node unbox = Message.UNBOX.createNode();
-
-        abstract long execute(TruffleObject object);
-
-        boolean checkBoxed(TruffleObject object) {
-            return ForeignAccess.sendIsBoxed(isBoxed, object);
-        }
-
-        @Specialization(guards = "checkBoxed(object)")
-        long doBoxed(TruffleObject object) {
+        @Specialization
+        protected boolean doRemove(LLVMManagedPointer value, Object id,
+                        @Cached("createReadString()") LLVMReadStringNode readStr) {
+            TruffleObject foreign = asForeign.execute(value);
             try {
-                String unboxed = (String) ForeignAccess.sendUnbox(unbox, object);
-                return unboxed.length();
+                return ForeignAccess.sendRemove(foreignRemove, foreign, readStr.executeWithTarget(id));
+            } catch (UnknownIdentifierException ex) {
+                CompilerDirectives.transferToInterpreter();
+                throw new LLVMPolyglotException(this, "Member '%s' does not exist.", ex.getUnknownIdentifier());
             } catch (UnsupportedMessageException ex) {
-                throw ex.raise();
+                CompilerDirectives.transferToInterpreter();
+                throw new LLVMPolyglotException(this, "Can not remove member '%s' from polyglot value.", id);
             }
         }
 
         @Fallback
         @TruffleBoundary
         @SuppressWarnings("unused")
-        long doFail(TruffleObject object) {
-            throw new LLVMPolyglotException(this, "Polyglot value is not a string.");
+        public boolean error(Object value, Object id) {
+            throw new LLVMPolyglotException(this, "Invalid argument to polyglot builtin.");
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMPolyglotRemoveArrayElement extends LLVMIntrinsic {
+
+        @Child private Node foreignRemove = Message.REMOVE.createNode();
+        @Child private LLVMAsForeignNode asForeign = LLVMAsForeignNode.create();
+
+        @Specialization
+        protected boolean doRemove(LLVMManagedPointer value, int idx) {
+            TruffleObject foreign = asForeign.execute(value);
+            try {
+                return ForeignAccess.sendRemove(foreignRemove, foreign, idx);
+            } catch (UnknownIdentifierException ex) {
+                throw new LLVMPolyglotException(this, "Index %d does not exist.", idx);
+            } catch (UnsupportedMessageException ex) {
+                throw new LLVMPolyglotException(this, "Can not remove index %d from polyglot value.", idx);
+            }
         }
 
-        public static BoxedGetStringSize create() {
-            return BoxedGetStringSizeNodeGen.create();
+        @Fallback
+        @TruffleBoundary
+        @SuppressWarnings("unused")
+        public boolean fallback(Object value, Object id) {
+            throw new LLVMPolyglotException(this, "Invalid argument to polyglot builtin.");
         }
     }
 }

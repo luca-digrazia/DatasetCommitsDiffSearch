@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
@@ -43,7 +44,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
-import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -53,20 +53,18 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
 
     @Child private Node foreignGetSize = Message.GET_SIZE.createNode();
-    @Child private LLVMAsForeignNode asForeign = LLVMAsForeignNode.create();
     @Child private ForeignToLLVM toLLVM;
-
-    private final ForeignToLLVMType type;
+    @Child private LLVMAsForeignNode asForeign = LLVMAsForeignNode.create();
 
     protected LLVMTruffleGetSize(ForeignToLLVMType type) {
-        this.type = type;
+        this.toLLVM = ForeignToLLVM.create(type);
     }
 
     @Specialization(rewriteOn = UnsupportedMessageException.class)
     protected Object doIntrinsic(LLVMManagedPointer value) throws UnsupportedMessageException {
         TruffleObject foreign = asForeign.execute(value);
         Object rawValue = ForeignAccess.sendGetSize(foreignGetSize, foreign);
-        return getToLLVM().executeWithTarget(rawValue);
+        return toLLVM.executeWithTarget(rawValue);
     }
 
     @Specialization
@@ -76,7 +74,7 @@ public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
         if (ForeignAccess.sendHasSize(hasSize, foreign)) {
             try {
                 Object rawValue = ForeignAccess.sendGetSize(foreignGetSize, foreign);
-                return getToLLVM().executeWithTarget(rawValue);
+                return toLLVM.executeWithTarget(rawValue);
             } catch (UnsupportedMessageException ex) {
                 CompilerDirectives.transferToInterpreter();
                 throw ex.raise();
@@ -84,14 +82,6 @@ public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
         } else {
             throw new LLVMPolyglotException(this, "Polyglot value is no array.");
         }
-    }
-
-    private ForeignToLLVM getToLLVM() {
-        if (toLLVM == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            toLLVM = getNodeFactory().createForeignToLLVM(type);
-        }
-        return toLLVM;
     }
 
     protected Node createHasSize() {

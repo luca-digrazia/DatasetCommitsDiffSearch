@@ -27,38 +27,37 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.nodes.intrinsics.interop;
+package com.oracle.truffle.llvm.runtime.except;
 
-import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeChildren;
-import com.oracle.truffle.api.dsl.NodeField;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.func.LLVMCallNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.api.TruffleException;
+import com.oracle.truffle.api.nodes.Node;
 
-@NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-@NodeField(name = "sourceLocation", type = LLVMSourceLocation.class)
-public abstract class LLVMTruffleGetArg extends LLVMIntrinsic {
+/**
+ * Common base class for all LLVM exceptions.
+ */
+public abstract class LLVMException extends RuntimeException implements TruffleException {
 
-    @Override
-    public abstract LLVMSourceLocation getSourceLocation();
+    private static final long serialVersionUID = 1L;
 
-    @Specialization(rewriteOn = ArrayIndexOutOfBoundsException.class)
-    protected Object doIntrinsic(VirtualFrame frame, int index) {
-        Object[] arguments = frame.getArguments();
-        return arguments[LLVMCallNode.USER_ARGUMENT_OFFSET + index];
+    private final Node location;
+
+    protected LLVMException(Node location, String message) {
+        super(message);
+        this.location = location;
     }
 
-    @Specialization
-    protected Object doWithBoundsCheck(VirtualFrame frame, int index) {
-        Object[] arguments = frame.getArguments();
-        if (index < 0 || index + LLVMCallNode.USER_ARGUMENT_OFFSET >= arguments.length) {
-            throw new LLVMPolyglotException(this, "Argument index %d out of bounds.", index);
-        }
-        return arguments[LLVMCallNode.USER_ARGUMENT_OFFSET + index];
+    protected LLVMException(Node location) {
+        this.location = location;
+    }
+
+    @Override
+    public Node getLocation() {
+        return location;
+    }
+
+    @Override
+    @SuppressWarnings("sync-override")
+    public final Throwable fillInStackTrace() {
+        return null;
     }
 }
