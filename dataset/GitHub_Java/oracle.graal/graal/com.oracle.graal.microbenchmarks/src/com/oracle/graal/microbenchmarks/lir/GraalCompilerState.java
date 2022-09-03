@@ -82,7 +82,6 @@ public abstract class GraalCompilerState {
      * We only allow inner classes to subclass this to ensure that the {@link Setup} methods are
      * executed in the right order.
      */
-    @SuppressWarnings("try")
     private GraalCompilerState() {
         this.backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
         this.providers = backend.getProviders();
