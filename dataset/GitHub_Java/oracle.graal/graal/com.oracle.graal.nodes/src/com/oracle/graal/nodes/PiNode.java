@@ -40,7 +40,6 @@ import com.oracle.graal.nodes.type.*;
  * is as narrow or narrower than the PiNode's type. The PiNode, and therefore also the scheduling
  * restriction enforced by the anchor, will go away.
  */
-@NodeInfo
 public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, IterableNodeType, Canonicalizable, ValueProxy {
 
     @Input private ValueNode object;
