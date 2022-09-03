@@ -39,17 +39,6 @@ public final class HeapSummary {
     HeapSummary() {
     }
 
-    HeapSummary(HeapSummary summary) {
-        add(summary);
-    }
-
-    final void add(HeapSummary summary) {
-        this.totalBytes += summary.totalBytes;
-        this.aliveInstances += summary.aliveInstances;
-        this.totalInstances += summary.totalInstances;
-        this.aliveBytes += summary.aliveBytes;
-    }
-
     /**
      * Returns the total number of allocated instances.
      *
