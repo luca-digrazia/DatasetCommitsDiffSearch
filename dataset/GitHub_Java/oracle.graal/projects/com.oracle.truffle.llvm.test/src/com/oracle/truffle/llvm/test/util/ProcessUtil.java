@@ -100,7 +100,7 @@ public class ProcessUtil {
 
     }
 
-    public static ProcessResult executeSulongTestMain(File bitcodeFile, String[] args) throws Exception {
+    public static ProcessResult executeSulongTestMain(File bitcodeFile, String[] args) throws IOException {
         if (TestOptions.TEST_AOT_IMAGE == null) {
             try (CaptureOutput out = new CaptureOutput()) {
                 int result = Sulong.executeMain(bitcodeFile, args);
