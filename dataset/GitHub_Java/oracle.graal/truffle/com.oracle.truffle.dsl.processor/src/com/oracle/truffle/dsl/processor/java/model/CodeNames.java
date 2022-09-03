@@ -22,13 +22,13 @@
  */
 package com.oracle.truffle.dsl.processor.java.model;
 
-import java.util.*;
-
-import javax.lang.model.element.*;
+import java.util.HashMap;
+import java.util.Map;
+import javax.lang.model.element.Name;
 
 public abstract class CodeNames {
 
-    private static Map<String, Name> names = new HashMap<>();
+    private static final Map<String, Name> names = new HashMap<>();
 
     public static Name of(String value) {
         Name name = names.get(value);
@@ -43,7 +43,7 @@ public abstract class CodeNames {
 
         private final String name;
 
-        public NameImpl(String name) {
+        NameImpl(String name) {
             this.name = name;
         }
 
