@@ -73,7 +73,6 @@ public class IfBoxingEliminationTest extends GraalCompilerTest {
 
     private void test(final String snippet) {
         Debug.scope("IfBoxingEliminationTest", new DebugDumpScope(snippet), new Runnable() {
-
             @Override
             public void run() {
                 StructuredGraph graph = parse(snippet);
