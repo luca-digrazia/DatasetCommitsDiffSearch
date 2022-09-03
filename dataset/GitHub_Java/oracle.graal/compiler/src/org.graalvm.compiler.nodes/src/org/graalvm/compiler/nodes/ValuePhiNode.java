@@ -105,11 +105,11 @@ public class ValuePhiNode extends PhiNode implements ArrayLengthProvider {
         for (ValueNode input : values()) {
             assert input != null;
             if (s == null) {
-                s = input.stamp(NodeView.DEFAULT);
+                s = input.stamp();
             } else {
-                if (!s.isCompatible(input.stamp(NodeView.DEFAULT))) {
+                if (!s.isCompatible(input.stamp())) {
                     fail("Phi Input Stamps are not compatible. Phi:%s inputs:%s", this,
-                                    CollectionsUtil.mapAndJoin(values(), x -> x.toString() + ":" + x.stamp(NodeView.DEFAULT), ", "));
+                                    CollectionsUtil.mapAndJoin(values(), x -> x.toString() + ":" + x.stamp(), ", "));
                 }
             }
         }
@@ -118,7 +118,7 @@ public class ValuePhiNode extends PhiNode implements ArrayLengthProvider {
 
     @Override
     protected String valueDescription() {
-        return stamp(NodeView.DEFAULT).unrestricted().toString();
+        return stamp().unrestricted().toString();
     }
 
     @Override
