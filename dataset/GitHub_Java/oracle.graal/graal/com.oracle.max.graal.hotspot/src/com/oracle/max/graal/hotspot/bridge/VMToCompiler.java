@@ -32,7 +32,7 @@ import com.oracle.max.graal.hotspot.ri.*;
  */
 public interface VMToCompiler {
 
-    boolean compileMethod(HotSpotMethodResolved method, int entryBCI, boolean blocking) throws Throwable;
+    void compileMethod(HotSpotMethodResolved method, int entryBCI, boolean blocking) throws Throwable;
 
     void shutdownCompiler() throws Throwable;
 

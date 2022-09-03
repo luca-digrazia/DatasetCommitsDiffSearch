@@ -49,11 +49,15 @@ public interface CompilerToVM {
 
     int RiMethod_invocationCount(HotSpotMethodResolved method);
 
-    HotSpotMethodData RiMethod_methodData(HotSpotMethodResolved method);
+    int RiMethod_exceptionProbability(HotSpotMethodResolved method, int bci);
 
-    boolean HotSpotMethodData_isMature(HotSpotMethodData methodData);
+    RiTypeProfile RiMethod_typeProfile(HotSpotMethodResolved method, int bci);
 
-    RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass, boolean eagerResolve);
+    double RiMethod_branchProbability(HotSpotMethodResolved method, int bci);
+
+    double[] RiMethod_switchProbability(HotSpotMethodResolved method, int bci);
+
+    RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass);
 
     Object RiConstantPool_lookupConstant(HotSpotTypeResolved pool, int cpi);
 

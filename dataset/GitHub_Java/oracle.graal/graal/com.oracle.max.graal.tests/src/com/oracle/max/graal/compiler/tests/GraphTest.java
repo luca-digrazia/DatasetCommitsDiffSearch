@@ -76,10 +76,6 @@ public abstract class GraphTest {
      * @param methodName the name of the method in {@code this.getClass()} to be parsed
      */
     protected StructuredGraph parse(String methodName) {
-        return parse(getMethod(methodName));
-    }
-
-    protected Method getMethod(String methodName) {
         Method found = null;
         for (Method m : this.getClass().getMethods()) {
             if (m.getName().equals(methodName)) {
@@ -88,7 +84,7 @@ public abstract class GraphTest {
             }
         }
         if (found != null) {
-            return found;
+            return parse(found);
         } else {
             throw new RuntimeException("method not found: " + methodName);
         }
@@ -100,7 +96,18 @@ public abstract class GraphTest {
      * @param methodName the name of the method in {@code this.getClass()} to be parsed
      */
     protected StructuredGraph parseProfiled(String methodName) {
-        return parseProfiled(getMethod(methodName));
+        Method found = null;
+        for (Method m : this.getClass().getMethods()) {
+            if (m.getName().equals(methodName)) {
+                Assert.assertNull(found);
+                found = m;
+            }
+        }
+        if (found != null) {
+            return parseProfiled(found);
+        } else {
+            throw new RuntimeException("method not found: " + methodName);
+        }
     }
 
     /**
