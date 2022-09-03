@@ -30,7 +30,6 @@ import java.util.concurrent.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
-import com.oracle.graal.compiler.*;
 import com.oracle.graal.java.bytecode.*;
 
 /**
@@ -214,13 +213,12 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
 
     @Override
     public RiProfilingInfo profilingInfo() {
-        if (GraalOptions.UseProfilingInformation && methodData == null) {
+        if (methodData == null) {
             methodData = compiler.getVMEntries().RiMethod_methodData(this);
         }
 
         if (methodData == null) {
-            // Be optimistic and return false for exceptionSeen. A methodDataOop is allocated in case of a deoptimization.
-            return BaseProfilingInfo.get(RiExceptionSeen.FALSE);
+            return new HotSpotNoProfilingInfo(compiler);
         } else {
             return new HotSpotProfilingInfo(compiler, methodData);
         }
@@ -279,18 +277,6 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
                     }
                     TTY.println(" not recorded (%f)", typeProfile.getNotRecordedProbability());
                 }
-            }
-        }
-
-        boolean firstDeoptReason = true;
-        for (RiDeoptReason reason: RiDeoptReason.values()) {
-            int count = profilingInfo.getDeoptimizationCount(reason);
-            if (count > 0) {
-                if (firstDeoptReason) {
-                    TTY.println("Deopt History");
-                    firstDeoptReason = false;
-                }
-                TTY.println("  %s: %d", reason.name(), count);
             }
         }
     }
