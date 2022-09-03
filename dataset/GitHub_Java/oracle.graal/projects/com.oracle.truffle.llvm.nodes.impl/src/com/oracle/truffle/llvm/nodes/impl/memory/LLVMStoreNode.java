@@ -162,7 +162,7 @@ public abstract class LLVMStoreNode extends LLVMNode {
 
         @Specialization
         public void execute(LLVMAddress address, LLVMFunctionDescriptor function) {
-            LLVMHeap.putFunctionIndex(address, function.getFunctionIndex());
+            LLVMHeap.putFunction(address, function);
         }
 
     }
@@ -422,7 +422,7 @@ public abstract class LLVMStoreNode extends LLVMNode {
             LLVMAddress currentAddress = addr;
             for (int i = 0; i < values.length; i++) {
                 LLVMFunctionDescriptor currentValue = values[i].executeFunction(frame);
-                LLVMHeap.putFunctionIndex(currentAddress, currentValue.getFunctionIndex());
+                LLVMHeap.putFunction(currentAddress, currentValue);
                 currentAddress = currentAddress.increment(stride);
             }
             return addr;

@@ -77,7 +77,6 @@ import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 
 public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
@@ -360,11 +359,6 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     @Override
     public RootNode createFunctionSubstitutionRootNode(LLVMNode intrinsicNode) {
         return LLVMFunctionFactory.createFunctionSubstitutionRootNode(intrinsicNode);
-    }
-
-    @Override
-    public LLVMFunctionDescriptor createFunctionDescriptor(String name, LLVMRuntimeType convertType, LLVMRuntimeType[] convertTypes, boolean varArgs) {
-        return LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0()).getFunctionRegistry().createFunctionDescriptor(name, convertType, convertTypes, varArgs);
     }
 
 }

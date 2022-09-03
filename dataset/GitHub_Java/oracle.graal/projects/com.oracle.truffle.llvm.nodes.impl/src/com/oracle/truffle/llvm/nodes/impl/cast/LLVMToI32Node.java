@@ -180,7 +180,7 @@ public abstract class LLVMToI32Node extends LLVMI32Node {
 
         @Specialization
         public int executeI32(LLVMFunctionDescriptor from) {
-            return from.getFunctionIndex();
+            return (int) from.getFunctionAddress().getVal();
         }
     }
 

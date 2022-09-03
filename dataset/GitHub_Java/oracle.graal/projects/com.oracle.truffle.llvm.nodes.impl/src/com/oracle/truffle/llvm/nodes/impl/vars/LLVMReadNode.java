@@ -47,6 +47,7 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMIVarBitNode;
+import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
@@ -158,8 +159,8 @@ public abstract class LLVMReadNode extends LLVMExpressionNode {
         protected abstract FrameSlot getSlot();
 
         @Specialization
-        protected Object readObject(VirtualFrame frame) {
-            return FrameUtil.getObjectSafe(frame, getSlot());
+        protected LLVMAddress readI32(VirtualFrame frame) {
+            return (LLVMAddress) FrameUtil.getObjectSafe(frame, getSlot());
         }
     }
 

@@ -109,9 +109,7 @@ public class LLVMTypeHelper {
     private static int getStructSizeByte(ResolvedStructType type) {
         int sumByte = 0;
         for (ResolvedType field : type.getFieldTypes()) {
-            if (!type.isPacked()) {
-                sumByte += computePaddingByte(sumByte, field);
-            }
+            sumByte += computePaddingByte(sumByte, field);
             sumByte += getByteSize(field);
         }
         int padding;
@@ -172,30 +170,6 @@ public class LLVMTypeHelper {
         } else if (elementType.isPointer()) {
             if (elementType.getContainedType(0).isFunction()) {
                 return LLVMBaseType.FUNCTION_ADDRESS;
-            } else if (elementType.getContainedType(0) instanceof ResolvedIntegerType) {
-                switch (elementType.getContainedType(0).getBits().intValue()) {
-                    case 1:
-                        return LLVMBaseType.I1_POINTER;
-                    case 8:
-                        return LLVMBaseType.I8_POINTER;
-                    case 16:
-                        return LLVMBaseType.I16_POINTER;
-                    case 32:
-                        return LLVMBaseType.I32_POINTER;
-                    case 64:
-                        return LLVMBaseType.I64_POINTER;
-                    default:
-                        return LLVMBaseType.ADDRESS;
-                }
-            } else if (elementType.getContainedType(0) instanceof ResolvedFloatingType) {
-                switch (elementType.getContainedType(0).getBits().intValue()) {
-                    case 32:
-                        return LLVMBaseType.FLOAT_POINTER;
-                    case 64:
-                        return LLVMBaseType.DOUBLE_POINTER;
-                    default:
-                        return LLVMBaseType.ADDRESS;
-                }
             } else {
                 return LLVMBaseType.ADDRESS;
             }
@@ -331,14 +305,6 @@ public class LLVMTypeHelper {
             case I32:
             case I64:
             case I8:
-            case I1_POINTER:
-            case I8_POINTER:
-            case I16_POINTER:
-            case I32_POINTER:
-            case I64_POINTER:
-            case HALF_POINTER:
-            case FLOAT_POINTER:
-            case DOUBLE_POINTER:
             case ADDRESS:
             case PPC_FP128:
             case STRUCT:

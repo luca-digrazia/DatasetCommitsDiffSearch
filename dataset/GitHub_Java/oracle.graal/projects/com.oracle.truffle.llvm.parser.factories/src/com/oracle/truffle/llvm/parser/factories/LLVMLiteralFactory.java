@@ -39,9 +39,7 @@ import com.intel.llvm.ireditor.types.ResolvedType;
 import com.intel.llvm.ireditor.types.ResolvedVectorType;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVM80BitFloatNode;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMDoubleNode;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMFloatNode;
@@ -84,7 +82,6 @@ import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
 
 public final class LLVMLiteralFactory {
@@ -142,9 +139,7 @@ public final class LLVMLiteralFactory {
             case ADDRESS:
                 return new LLVMAddressLiteralNode(LLVMAddress.createUndefinedAddress());
             case FUNCTION_ADDRESS:
-                LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
-                LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createFunctionDescriptor("<undefined function>", LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
-                return LLVMFunctionLiteralNodeGen.create(functionDescriptor);
+                return LLVMFunctionLiteralNodeGen.create(LLVMFunctionDescriptor.createUndefinedFunction());
             default:
                 throw new AssertionError(type);
         }
@@ -197,9 +192,7 @@ public final class LLVMLiteralFactory {
                 }
             case FUNCTION_ADDRESS:
                 if (stringValue.equals("null")) {
-                    LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
-                    LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createFunctionDescriptor("<zero function>", LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
-                    return LLVMFunctionLiteralNodeGen.create(functionDescriptor);
+                    return LLVMFunctionLiteralNodeGen.create(LLVMFunctionDescriptor.createZeroFunction());
                 } else {
                     throw new AssertionError(stringValue);
                 }
