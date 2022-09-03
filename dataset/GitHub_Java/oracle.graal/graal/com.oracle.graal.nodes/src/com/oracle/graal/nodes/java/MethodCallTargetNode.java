@@ -35,7 +35,14 @@ import com.oracle.graal.nodes.type.*;
 public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Simplifiable {
     protected final JavaType returnType;
 
-    public MethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType) {
+    /**
+     * @param arguments
+     */
+    public static MethodCallTargetNode create(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType) {
+        return new MethodCallTargetNode(invokeKind, targetMethod, arguments, returnType);
+    }
+
+    protected MethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType) {
         super(arguments, targetMethod, invokeKind);
         this.returnType = returnType;
     }
@@ -74,7 +81,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
             assertTrue(n instanceof Invoke, "call target can only be used from an invoke (%s)", n);
         }
         if (invokeKind().isDirect()) {
-            assertTrue(targetMethod().isConcrete(), "special calls or static calls are only allowed for concrete methods (%s)", targetMethod());
+            assertFalse(targetMethod().isAbstract(), "special calls or static calls are only allowed for concrete methods (%s)", targetMethod());
         }
         if (invokeKind() == InvokeKind.Static) {
             assertTrue(targetMethod().isStatic(), "static calls are only allowed for static methods (%s)", targetMethod());
@@ -183,11 +190,11 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                  * an assumption but as we need an instanceof check anyway we can verify both
                  * properties by checking of the receiver is an instance of the single implementor.
                  */
-                LogicNode condition = graph().unique(new InstanceOfNode(singleImplementor, receiver, getProfile()));
+                LogicNode condition = graph().unique(InstanceOfNode.create(singleImplementor, receiver, getProfile()));
                 GuardNode guard = graph().unique(
-                                new GuardNode(condition, BeginNode.prevBegin(invoke().asNode()), DeoptimizationReason.OptimizedTypeCheckViolated, DeoptimizationAction.InvalidateRecompile, false,
+                                GuardNode.create(condition, BeginNode.prevBegin(invoke().asNode()), DeoptimizationReason.OptimizedTypeCheckViolated, DeoptimizationAction.InvalidateRecompile, false,
                                                 JavaConstant.NULL_POINTER));
-                PiNode piNode = graph().unique(new PiNode(receiver, StampFactory.declaredNonNull(singleImplementor), guard));
+                PiNode piNode = graph().unique(PiNode.create(receiver, StampFactory.declaredNonNull(singleImplementor), guard));
                 arguments().set(0, piNode);
                 setInvokeKind(InvokeKind.Virtual);
                 setTargetMethod(singleImplementorMethod);

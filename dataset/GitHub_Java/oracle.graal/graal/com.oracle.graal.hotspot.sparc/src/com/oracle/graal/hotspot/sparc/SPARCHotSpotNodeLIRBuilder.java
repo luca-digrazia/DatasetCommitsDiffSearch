@@ -85,10 +85,10 @@ public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements H
             assert !gen.getCodeCache().needsDataPatch(asConstant(offset));
             Variable longAddress = gen.newVariable(LIRKind.value(Kind.Long));
             gen.emitMove(longAddress, address);
-            address = getGen().emitAdd(longAddress, asConstant(offset), false);
+            address = getGen().emitAdd(longAddress, asConstant(offset));
         } else {
             if (isLegal(offset)) {
-                address = getGen().emitAdd(address, offset, false);
+                address = getGen().emitAdd(address, offset);
             }
         }
 
@@ -104,7 +104,7 @@ public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements H
         } else {
             assert invokeKind.isDirect();
             HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
-            assert resolvedMethod.isConcrete() : "Cannot make direct call to abstract method.";
+            assert !resolvedMethod.isAbstract() : "Cannot make direct call to abstract method.";
             append(new SPARCHotspotDirectStaticCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind));
         }
     }

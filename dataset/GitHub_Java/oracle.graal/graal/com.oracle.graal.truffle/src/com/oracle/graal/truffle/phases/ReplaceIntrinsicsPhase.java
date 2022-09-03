@@ -23,9 +23,9 @@
 package com.oracle.graal.truffle.phases;
 
 import com.oracle.graal.debug.*;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.inlining.*;
@@ -46,7 +46,7 @@ public class ReplaceIntrinsicsPhase extends Phase {
         for (MethodCallTargetNode methodCallTarget : graph.getNodes(MethodCallTargetNode.class)) {
             if (methodCallTarget.isAlive()) {
                 InvokeKind invokeKind = methodCallTarget.invokeKind();
-                if (invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special) {
+                if (invokeKind.isDirect()) {
                     Class<? extends FixedWithNextNode> macroSubstitution = replacements.getMacroSubstitution(methodCallTarget.targetMethod());
                     if (macroSubstitution != null) {
                         InliningUtil.inlineMacroNode(methodCallTarget.invoke(), methodCallTarget.targetMethod(), macroSubstitution);
@@ -54,7 +54,7 @@ public class ReplaceIntrinsicsPhase extends Phase {
                     } else {
                         StructuredGraph inlineGraph = replacements.getMethodSubstitution(methodCallTarget.targetMethod());
                         if (inlineGraph != null) {
-                            InliningUtil.inline(methodCallTarget.invoke(), inlineGraph, true);
+                            InliningUtil.inline(methodCallTarget.invoke(), inlineGraph, true, null);
                             Debug.dump(graph, "After inlining %s", methodCallTarget.targetMethod().toString());
                         }
                     }

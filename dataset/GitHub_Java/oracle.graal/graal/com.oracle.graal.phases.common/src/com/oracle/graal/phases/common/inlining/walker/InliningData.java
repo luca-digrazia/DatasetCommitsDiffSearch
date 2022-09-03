@@ -100,7 +100,8 @@ public class InliningData {
         this.inliningPolicy = inliningPolicy;
         this.maxGraphs = 1;
 
-        invocationQueue.push(new MethodInvocation(null, 1.0, 1.0, null));
+        Assumptions rootAssumptions = context.getAssumptions();
+        invocationQueue.push(new MethodInvocation(null, rootAssumptions, 1.0, 1.0, null));
         graphQueue.push(new CallsiteHolderExplorable(rootGraph, 1.0, 1.0, null));
     }
 
@@ -117,7 +118,7 @@ public class InliningData {
             return "it is an abstract method";
         } else if (!method.getDeclaringClass().isInitialized()) {
             return "the method's class is not initialized";
-        } else if (!method.canBeInlined() && !context.getReplacements().isForcedSubstitution(method)) {
+        } else if (!method.canBeInlined()) {
             return "it is marked non-inlinable";
         } else if (countRecursiveInlining(method) > MaximumRecursiveInlining.getValue()) {
             return "it exceeds the maximum recursive inlining depth";
@@ -144,7 +145,7 @@ public class InliningData {
      * @param invoke the invoke that should be inlined
      * @return an instance of InlineInfo, or null if no inlining is possible at the given invoke
      */
-    private InlineInfo getInlineInfo(Invoke invoke) {
+    private InlineInfo getInlineInfo(Invoke invoke, Assumptions assumptions) {
         final String failureMessage = InliningUtil.checkInvokeConditions(invoke);
         if (failureMessage != null) {
             InliningUtil.logNotInlinedMethod(invoke, failureMessage);
@@ -193,7 +194,7 @@ public class InliningData {
             }
         }
 
-        if (callTarget.graph().getAssumptions() != null) {
+        if (assumptions.useOptimisticAssumptions()) {
             ResolvedJavaType uniqueSubtype = holder.findUniqueConcreteSubtype();
             if (uniqueSubtype != null) {
                 ResolvedJavaMethod resolvedMethod = uniqueSubtype.resolveConcreteMethod(targetMethod, contextType);
@@ -238,7 +239,7 @@ public class InliningData {
             }
 
             ResolvedJavaType type = ptypes[0].getType();
-            assert type.isArray() || type.isConcrete();
+            assert type.isArray() || !type.isAbstract();
             ResolvedJavaMethod concrete = type.resolveConcreteMethod(targetMethod, contextType);
             if (!checkTargetConditions(invoke, concrete)) {
                 return null;
@@ -338,30 +339,31 @@ public class InliningData {
     }
 
     private InlineInfo getAssumptionInlineInfo(Invoke invoke, ResolvedJavaMethod concrete, Assumptions.Assumption takenAssumption) {
-        assert concrete.isConcrete();
-        if (checkTargetConditions(invoke, concrete)) {
-            return new AssumptionInlineInfo(invoke, concrete, takenAssumption);
+        assert !concrete.isAbstract();
+        if (!checkTargetConditions(invoke, concrete)) {
+            return null;
         }
-        return null;
+        return new AssumptionInlineInfo(invoke, concrete, takenAssumption);
     }
 
     private InlineInfo getExactInlineInfo(Invoke invoke, ResolvedJavaMethod targetMethod) {
-        assert targetMethod.isConcrete();
-        if (checkTargetConditions(invoke, targetMethod)) {
-            return new ExactInlineInfo(invoke, targetMethod);
+        assert !targetMethod.isAbstract();
+        if (!checkTargetConditions(invoke, targetMethod)) {
+            return null;
         }
-        return null;
+        return new ExactInlineInfo(invoke, targetMethod);
     }
 
-    private void doInline(CallsiteHolderExplorable callerCallsiteHolder, MethodInvocation calleeInvocation) {
+    private void doInline(CallsiteHolderExplorable callerCallsiteHolder, MethodInvocation calleeInvocation, Assumptions callerAssumptions) {
         StructuredGraph callerGraph = callerCallsiteHolder.graph();
         InlineInfo calleeInfo = calleeInvocation.callee();
         try {
             try (Debug.Scope scope = Debug.scope("doInline", callerGraph)) {
                 Set<Node> canonicalizedNodes = Node.newSet();
                 calleeInfo.invoke().asNode().usages().snapshotTo(canonicalizedNodes);
-                Collection<Node> parameterUsages = calleeInfo.inline(new Providers(context));
+                Collection<Node> parameterUsages = calleeInfo.inline(new Providers(context), callerAssumptions);
                 canonicalizedNodes.addAll(parameterUsages);
+                callerAssumptions.record(calleeInvocation.assumptions());
                 metricInliningRuns.increment();
                 Debug.dump(callerGraph, "after %s", calleeInfo);
 
@@ -407,19 +409,20 @@ public class InliningData {
      *
      * @return true iff inlining was actually performed
      */
-    private boolean tryToInline(MethodInvocation calleeInvocation, int inliningDepth) {
+    private boolean tryToInline(MethodInvocation calleeInvocation, MethodInvocation parentInvocation, int inliningDepth) {
         CallsiteHolderExplorable callerCallsiteHolder = (CallsiteHolderExplorable) currentGraph();
         InlineInfo calleeInfo = calleeInvocation.callee();
         assert callerCallsiteHolder.containsInvoke(calleeInfo.invoke());
+        Assumptions callerAssumptions = parentInvocation.assumptions();
         metricInliningConsidered.increment();
 
         if (inliningPolicy.isWorthInlining(context.getReplacements(), calleeInvocation, inliningDepth, true)) {
-            doInline(callerCallsiteHolder, calleeInvocation);
+            doInline(callerCallsiteHolder, calleeInvocation, callerAssumptions);
             return true;
         }
 
         if (context.getOptimisticOptimizations().devirtualizeInvokes()) {
-            calleeInfo.tryToDevirtualizeInvoke(new Providers(context));
+            calleeInfo.tryToDevirtualizeInvoke(new Providers(context), callerAssumptions);
         }
 
         return false;
@@ -447,19 +450,22 @@ public class InliningData {
      * <p>
      * The {@link InlineInfo} used to get things rolling is kept around in the
      * {@link MethodInvocation}, it will be needed in case of inlining, see
-     * {@link InlineInfo#inline(Providers)}
+     * {@link InlineInfo#inline(Providers, Assumptions)}
      * </p>
      */
     private void processNextInvoke() {
         CallsiteHolderExplorable callsiteHolder = (CallsiteHolderExplorable) currentGraph();
         Invoke invoke = callsiteHolder.popInvoke();
-        InlineInfo info = getInlineInfo(invoke);
+        MethodInvocation callerInvocation = currentInvocation();
+        Assumptions parentAssumptions = callerInvocation.assumptions();
+        InlineInfo info = getInlineInfo(invoke, parentAssumptions);
 
         if (info != null) {
-            info.populateInlinableElements(context, currentGraph().graph(), canonicalizer);
+            Assumptions calleeAssumptions = new Assumptions(parentAssumptions.useOptimisticAssumptions());
+            info.populateInlinableElements(context, calleeAssumptions, canonicalizer);
             double invokeProbability = callsiteHolder.invokeProbability(invoke);
             double invokeRelevance = callsiteHolder.invokeRelevance(invoke);
-            MethodInvocation methodInvocation = new MethodInvocation(info, invokeProbability, invokeRelevance, freshlyInstantiatedArguments(invoke, callsiteHolder.getFixedParams()));
+            MethodInvocation methodInvocation = new MethodInvocation(info, calleeAssumptions, invokeProbability, invokeRelevance, freshlyInstantiatedArguments(invoke, callsiteHolder.getFixedParams()));
             pushInvocationAndGraphs(methodInvocation);
         }
     }
@@ -634,12 +640,12 @@ public class InliningData {
      * {@link #processNextInvoke() delve} into one of the callsites hosted in the current graph,
      * such callsite is explored next by {@link #moveForward()}</li>
      * <li>
-     * {@link #tryToInline(MethodInvocation, int) try to inline}: move past the current graph
-     * (remove it from the topmost element).
+     * {@link #tryToInline(MethodInvocation, MethodInvocation, int) try to inline}: move past the
+     * current graph (remove it from the topmost element).
      * <ul>
      * <li>
-     * If that was the last one then {@link #tryToInline(MethodInvocation, int) try to inline} the
-     * callsite under consideration (ie, the "current invocation").</li>
+     * If that was the last one then {@link #tryToInline(MethodInvocation, MethodInvocation, int)
+     * try to inline} the callsite under consideration (ie, the "current invocation").</li>
      * <li>
      * Whether inlining occurs or not, that callsite is removed from the top of {@link InliningData}
      * .</li>
@@ -697,8 +703,9 @@ public class InliningData {
              * "all concrete methods that come into question already had the callees they contain analyzed for inlining"
              */
             popInvocation();
+            final MethodInvocation parentInvoke = currentInvocation();
             try (Debug.Scope s = Debug.scope("Inlining", inliningContext())) {
-                return tryToInline(currentInvocation, inliningDepth() + 1);
+                return tryToInline(currentInvocation, parentInvoke, inliningDepth() + 1);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }

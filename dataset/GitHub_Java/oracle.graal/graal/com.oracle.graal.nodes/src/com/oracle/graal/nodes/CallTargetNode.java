@@ -42,7 +42,7 @@ public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
             this.direct = direct;
         }
 
-        private final boolean direct;
+        private boolean direct;
 
         public boolean hasReceiver() {
             return this != Static;
@@ -54,10 +54,6 @@ public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
 
         public boolean isIndirect() {
             return !direct;
-        }
-
-        public boolean isInterface() {
-            return this == InvokeKind.Interface;
         }
     }
 
