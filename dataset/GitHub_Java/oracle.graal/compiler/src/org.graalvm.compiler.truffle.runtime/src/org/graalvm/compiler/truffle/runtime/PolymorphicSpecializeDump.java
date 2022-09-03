@@ -69,22 +69,8 @@ class PolymorphicSpecializeDump {
             }
 
             final Node node;
-
             final int id = idCounter++;
             DumpEdge edge;
-            DumpNodeClass nodeClass;
-
-            void setNewClass() {
-                nodeClass = new DumpNodeClass(this);
-            }
-        }
-
-        static class DumpNodeClass {
-            final DumpNode node;
-
-            DumpNodeClass(DumpNode node) {
-                this.node = node;
-            }
         }
 
         class DumpEdge {
@@ -101,7 +87,6 @@ class PolymorphicSpecializeDump {
 
         DumpNode makeNode(Node node) {
             DumpNode n = new DumpNode(node);
-            n.setNewClass();
             nodes.add(n);
             return n;
         }
@@ -127,7 +112,7 @@ class PolymorphicSpecializeDump {
     }
 
     static class PolymorphicSpecializeGraphStructure
-                    implements GraphStructure<PolymorphicSpecializeGraph, PolymorphicSpecializeGraph.DumpNode, PolymorphicSpecializeGraph.DumpNodeClass, PolymorphicSpecializeGraph.DumpEdge> {
+                    implements GraphStructure<PolymorphicSpecializeGraph, PolymorphicSpecializeGraph.DumpNode, PolymorphicSpecializeGraph.DumpNode, PolymorphicSpecializeGraph.DumpEdge> {
 
         @Override
         public PolymorphicSpecializeGraph graph(PolymorphicSpecializeGraph currentGraph, Object obj) {
@@ -178,34 +163,34 @@ class PolymorphicSpecializeDump {
         }
 
         @Override
-        public PolymorphicSpecializeGraph.DumpNodeClass nodeClass(Object obj) {
-            return (obj instanceof PolymorphicSpecializeGraph.DumpNodeClass) ? (PolymorphicSpecializeGraph.DumpNodeClass) obj : null;
+        public PolymorphicSpecializeGraph.DumpNode nodeClass(Object obj) {
+            return (obj instanceof PolymorphicSpecializeGraph.DumpNode) ? (PolymorphicSpecializeGraph.DumpNode) obj : null;
 
         }
 
         @Override
-        public PolymorphicSpecializeGraph.DumpNodeClass classForNode(PolymorphicSpecializeGraph.DumpNode node) {
-            return node.nodeClass;
+        public PolymorphicSpecializeGraph.DumpNode classForNode(PolymorphicSpecializeGraph.DumpNode node) {
+            return node;
         }
 
         @Override
-        public String nameTemplate(PolymorphicSpecializeGraph.DumpNodeClass nodeClass) {
+        public String nameTemplate(PolymorphicSpecializeGraph.DumpNode nodeClass) {
             return "{p#label}";
         }
 
         @Override
-        public Object nodeClassType(PolymorphicSpecializeGraph.DumpNodeClass nodeClass) {
+        public Object nodeClassType(PolymorphicSpecializeGraph.DumpNode nodeClass) {
             return nodeClass.getClass();
         }
 
         @Override
-        public PolymorphicSpecializeGraph.DumpEdge portInputs(PolymorphicSpecializeGraph.DumpNodeClass nodeClass) {
+        public PolymorphicSpecializeGraph.DumpEdge portInputs(PolymorphicSpecializeGraph.DumpNode nodeClass) {
             return null;
         }
 
         @Override
-        public PolymorphicSpecializeGraph.DumpEdge portOutputs(PolymorphicSpecializeGraph.DumpNodeClass nodeClass) {
-            return nodeClass.node.edge;
+        public PolymorphicSpecializeGraph.DumpEdge portOutputs(PolymorphicSpecializeGraph.DumpNode nodeClass) {
+            return nodeClass.edge;
         }
 
         @Override
