@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,8 +23,6 @@
 package org.graalvm.compiler.phases.contract;
 
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.Predicate;
 
 import org.graalvm.compiler.graph.Node;
@@ -41,42 +37,36 @@ import org.graalvm.compiler.phases.VerifyPhase;
  * values for {@link NodeCycles} and {@link NodeSize} in its {@link NodeInfo} annotation.
  */
 public class VerifyNodeCosts {
-    static boolean gr30893IsResolved = false;
 
     public static void verifyNodeClass(Class<?> clazz) {
-        if (Node.class.isAssignableFrom(clazz)) {
-            NodeInfo nodeInfo = clazz.getAnnotation(NodeInfo.class);
-            if (nodeInfo == null) {
-                throw new VerifyPhase.VerificationError("%s extends %s but does not specify a %s annotation.",
-                                clazz.getName(), Node.class.getName(), NodeInfo.class.getName());
+        Class<?> nodeClass = Node.class;
+        if (nodeClass.isAssignableFrom(clazz)) {
+            if (!clazz.isAnnotationPresent(NodeInfo.class)) {
+                throw new VerifyPhase.VerificationError("%s.java extends Node.java but does not specify a NodeInfo annotation.", clazz.getName());
             }
 
-            List<String> errors = new ArrayList<>();
-
-            if (gr30893IsResolved && nodeInfo.cycles() == NodeCycles.CYCLES_UNKNOWN && nodeInfo.cyclesRationale().isEmpty()) {
-                errors.add(String.format("Requires a non-empty value for cyclesRationale since its cycles value is %s.", NodeCycles.CYCLES_UNKNOWN));
-            }
-            if (gr30893IsResolved && nodeInfo.size() == NodeSize.SIZE_UNKNOWN && nodeInfo.sizeRationale().isEmpty()) {
-                errors.add(String.format("Requires a non-empty value for sizeRationale since its size value is %s.", NodeSize.SIZE_UNKNOWN));
-            }
             if (!Modifier.isAbstract(clazz.getModifiers())) {
-                NodeClass<?> clazzType = NodeClass.get(clazz);
-                boolean cyclesSet = walkCHUntil(clazzType, Node.TYPE, cur -> {
+                boolean cyclesSet = walkCHUntil(getType(clazz), getType(nodeClass), cur -> {
                     return cur.cycles() != NodeCycles.CYCLES_UNSET;
                 });
-                boolean sizeSet = walkCHUntil(clazzType, Node.TYPE, cur -> {
+                boolean sizeSet = walkCHUntil(getType(clazz), getType(nodeClass), cur -> {
                     return cur.size() != NodeSize.SIZE_UNSET;
                 });
                 if (!cyclesSet) {
-                    errors.add(String.format("Does not specify a %s value in its class hierarchy.", NodeCycles.class.getSimpleName()));
+                    throw new VerifyPhase.VerificationError("%s.java does not specify a NodeCycles value in its class hierarchy.", clazz.getName());
                 }
                 if (!sizeSet) {
-                    errors.add(String.format("Does not specify a %s value in its class hierarchy.", NodeSize.class.getSimpleName()));
+                    throw new VerifyPhase.VerificationError("%s.java does not specify a NodeSize value in its class hierarchy.", clazz.getName());
                 }
             }
-            if (!errors.isEmpty()) {
-                throw new VerifyPhase.VerificationError("Errors for " + clazz.getName() + System.lineSeparator() + String.join(System.lineSeparator(), errors));
-            }
+        }
+    }
+
+    private static NodeClass<?> getType(Class<?> c) {
+        try {
+            return NodeClass.get(c);
+        } catch (Throwable t) {
+            throw new VerifyPhase.VerificationError("%s.java does not specify a TYPE field.", c.getName());
         }
     }
 
@@ -90,4 +80,5 @@ public class VerifyNodeCosts {
         }
         return false;
     }
+
 }
