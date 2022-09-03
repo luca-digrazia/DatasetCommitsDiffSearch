@@ -354,7 +354,6 @@ public class SnippetTemplate {
         }
     }
 
-    @NodeInfo
     static class VarargsPlaceholderNode extends FloatingNode implements ArrayLengthProvider {
 
         final Varargs varargs;
