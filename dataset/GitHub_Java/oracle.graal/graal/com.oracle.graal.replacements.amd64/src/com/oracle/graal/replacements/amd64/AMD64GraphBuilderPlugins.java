@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,21 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import com.oracle.jvmci.amd64.*;
 import com.oracle.jvmci.code.ForeignCallsProvider;
 import com.oracle.jvmci.meta.ResolvedJavaMethod;
 import com.oracle.jvmci.meta.Kind;
 import com.oracle.jvmci.meta.LocationIdentity;
-
 import static com.oracle.graal.compiler.target.Backend.*;
 import static com.oracle.graal.replacements.amd64.AMD64MathIntrinsicNode.Operation.*;
 import sun.misc.*;
 
+import com.oracle.graal.amd64.*;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.graphbuilderconf.InvocationPlugin.Receiver;
 import com.oracle.graal.graphbuilderconf.InvocationPlugins.Registration;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.replacements.*;
 
 public class AMD64GraphBuilderPlugins {
@@ -119,7 +117,6 @@ public class AMD64GraphBuilderPlugins {
                     // Emits a null-check for the otherwise unused receiver
                     unsafe.get();
                     b.addPush(kind, new AtomicReadAndWriteNode(object, offset, value, kind, LocationIdentity.any()));
-                    b.getGraph().markUnsafeAccess();
                     return true;
                 }
             });
@@ -128,9 +125,7 @@ public class AMD64GraphBuilderPlugins {
                     public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unsafe, ValueNode object, ValueNode offset, ValueNode delta) {
                         // Emits a null-check for the otherwise unused receiver
                         unsafe.get();
-                        AddressNode address = b.add(new OffsetAddressNode(object, offset));
-                        b.addPush(kind, new AtomicReadAndAddNode(address, delta, LocationIdentity.any()));
-                        b.getGraph().markUnsafeAccess();
+                        b.addPush(kind, new AtomicReadAndAddNode(object, offset, delta, LocationIdentity.any()));
                         return true;
                     }
                 });

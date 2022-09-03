@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.graphbuilderconf;
 
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.jvmci.code.ForeignCallsProvider;
+import com.oracle.jvmci.meta.ResolvedJavaMethod;
+import com.oracle.jvmci.meta.ForeignCallDescriptor;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 

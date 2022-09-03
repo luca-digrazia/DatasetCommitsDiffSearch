@@ -28,10 +28,8 @@ import com.oracle.jvmci.meta.JavaConstant;
 import com.oracle.jvmci.meta.ConstantReflectionProvider;
 import com.oracle.jvmci.meta.ResolvedJavaMethod;
 import com.oracle.jvmci.meta.Kind;
-
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
-import static com.oracle.graal.java.BytecodeParser.Options.*;
 
 import java.lang.invoke.*;
 import java.util.zip.*;
@@ -75,19 +73,16 @@ public class HotSpotGraphBuilderPlugins {
         InvocationPlugins invocationPlugins = new HotSpotInvocationPlugins(config, metaAccess);
 
         Plugins plugins = new Plugins(invocationPlugins);
-        NodeIntrinsificationPhase nodeIntrinsificationPhase = new NodeIntrinsificationPhase(metaAccess, constantReflection, snippetReflection, foreignCalls, stampProvider);
-        NodeIntrinsificationPlugin nodeIntrinsificationPlugin = new NodeIntrinsificationPlugin(metaAccess, nodeIntrinsificationPhase, wordTypes, false);
+        NodeIntrinsificationPhase nodeIntrinsification = new NodeIntrinsificationPhase(metaAccess, constantReflection, snippetReflection, foreignCalls, stampProvider);
         HotSpotWordOperationPlugin wordOperationPlugin = new HotSpotWordOperationPlugin(snippetReflection, wordTypes);
-        HotSpotNodePlugin nodePlugin = new HotSpotNodePlugin(wordOperationPlugin, nodeIntrinsificationPlugin);
 
-        plugins.appendParameterPlugin(nodePlugin);
-        plugins.appendNodePlugin(nodePlugin);
-        plugins.appendNodePlugin(new MethodHandlePlugin(constantReflection.getMethodHandleAccess()));
-
-        plugins.appendInlineInvokePlugin(replacements);
-        if (InlineDuringParsing.getValue()) {
-            plugins.appendInlineInvokePlugin(new InlineDuringParsingPlugin());
-        }
+        plugins.setParameterPlugin(new HotSpotParameterPlugin(wordTypes));
+        plugins.setLoadFieldPlugin(new HotSpotLoadFieldPlugin(metaAccess, constantReflection));
+        plugins.setLoadIndexedPlugin(new HotSpotLoadIndexedPlugin(wordTypes));
+        plugins.setTypeCheckPlugin(wordOperationPlugin);
+        plugins.setInlineInvokePlugin(new DefaultInlineInvokePlugin(replacements));
+        plugins.setGenericInvocationPlugin(new MethodHandleInvocationPlugin(constantReflection.getMethodHandleAccess(), new DefaultGenericInvocationPlugin(metaAccess, nodeIntrinsification,
+                        wordOperationPlugin)));
 
         registerObjectPlugins(invocationPlugins);
         registerClassPlugins(plugins);
