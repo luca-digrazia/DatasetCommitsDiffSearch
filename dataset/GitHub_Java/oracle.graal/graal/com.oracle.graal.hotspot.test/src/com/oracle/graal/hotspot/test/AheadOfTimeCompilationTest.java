@@ -64,7 +64,7 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
     public void testStaticFinalObjectAOT() {
         StructuredGraph result = compile("getStaticFinalObject", true);
         assertEquals(1, result.getNodes().filter(ConstantNode.class).count());
-        assertEquals(getCodeCache().getTarget().wordKind, result.getNodes().filter(ConstantNode.class).first().kind());
+        assertEquals(runtime.getTarget().wordKind, result.getNodes().filter(ConstantNode.class).first().kind());
         assertEquals(2, result.getNodes(FloatingReadNode.class).count());
         assertEquals(0, result.getNodes().filter(ReadNode.class).count());
     }
@@ -88,7 +88,7 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
 
         NodeIterable<ConstantNode> filter = result.getNodes().filter(ConstantNode.class);
         assertEquals(1, filter.count());
-        HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) getMetaAccess().lookupJavaType(AheadOfTimeCompilationTest.class);
+        HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) runtime.lookupJavaType(AheadOfTimeCompilationTest.class);
         assertEquals(type.klass(), filter.first().asConstant());
 
         assertEquals(1, result.getNodes(FloatingReadNode.class).count());
@@ -118,7 +118,7 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         StructuredGraph result = compile("getPrimitiveClassObject", true);
         NodeIterable<ConstantNode> filter = result.getNodes().filter(ConstantNode.class);
         assertEquals(1, filter.count());
-        assertEquals(getCodeCache().getTarget().wordKind, filter.first().kind());
+        assertEquals(runtime.getTarget().wordKind, filter.first().kind());
 
         assertEquals(2, result.getNodes(FloatingReadNode.class).count());
         assertEquals(0, result.getNodes().filter(ReadNode.class).count());
@@ -175,18 +175,18 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         StructuredGraph result = compile("getBoxedBoolean", true);
 
         assertEquals(2, result.getNodes(FloatingReadNode.class).count());
-        assertEquals(1, result.getNodes(PiNode.class).count());
+        assertEquals(1, result.getNodes(UnsafeCastNode.class).count());
         assertEquals(1, result.getNodes().filter(ConstantNode.class).count());
         ConstantNode constant = result.getNodes().filter(ConstantNode.class).first();
         assertEquals(Kind.Long, constant.kind());
-        assertEquals(((HotSpotResolvedObjectType) getMetaAccess().lookupJavaType(Boolean.class)).klass(), constant.asConstant());
+        assertEquals(((HotSpotResolvedObjectType) runtime.lookupJavaType(Boolean.class)).klass(), constant.asConstant());
     }
 
     @Test
     public void testBoxedBoolean() {
         StructuredGraph result = compile("getBoxedBoolean", false);
         assertEquals(0, result.getNodes(FloatingReadNode.class).count());
-        assertEquals(0, result.getNodes(PiNode.class).count());
+        assertEquals(0, result.getNodes(UnsafeCastNode.class).count());
         assertEquals(1, result.getNodes().filter(ConstantNode.class).count());
         ConstantNode constant = result.getNodes().filter(ConstantNode.class).first();
         assertEquals(Kind.Object, constant.kind());
@@ -200,13 +200,13 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         boolean originalSetting = AOTCompilation.getValue();
         AOTCompilation.setValue(compileAOT);
         PhasePlan phasePlan = new PhasePlan();
-        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(getMetaAccess(), GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
+        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
-        CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
+        CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
         // create suites everytime, as we modify options for the compiler
         final Suites suitesLocal = Graal.getRequiredCapability(SuitesProvider.class).createSuites();
-        final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, method, getMetaAccess(), getConstantReflection(), getCodeCache(), getLowerer(), replacements, backend,
-                        getCodeCache().getTarget(), null, phasePlan, OptimisticOptimizations.ALL, new SpeculationLog(), suitesLocal, new CompilationResult());
+        final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, method, runtime, replacements, backend, runtime().getTarget(), null, phasePlan, OptimisticOptimizations.ALL,
+                        new SpeculationLog(), suitesLocal, new CompilationResult());
         addMethod(method, compResult);
 
         AOTCompilation.setValue(originalSetting);

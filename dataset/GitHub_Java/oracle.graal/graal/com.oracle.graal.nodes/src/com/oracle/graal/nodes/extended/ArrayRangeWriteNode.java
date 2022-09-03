@@ -28,7 +28,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * Base class for nodes that modify a range of an array.
  */
-public abstract class ArrayRangeWriteNode extends AbstractMemoryCheckpoint {
+public abstract class ArrayRangeWriteNode extends AbstractStateSplit {
 
     protected ArrayRangeWriteNode(Stamp stamp) {
         super(stamp);
