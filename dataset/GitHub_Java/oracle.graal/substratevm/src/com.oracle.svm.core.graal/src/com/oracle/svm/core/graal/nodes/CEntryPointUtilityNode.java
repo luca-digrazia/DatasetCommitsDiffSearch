@@ -34,8 +34,6 @@ import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.nativeimage.c.function.CEntryPointContext;
 
-import com.oracle.svm.core.c.function.CEntryPointActions;
-
 import jdk.vm.ci.meta.JavaKind;
 
 @NodeInfo(cycles = CYCLES_2, size = SIZE_2)
@@ -43,47 +41,27 @@ public final class CEntryPointUtilityNode extends FixedWithNextNode implements L
 
     public static final NodeClass<CEntryPointUtilityNode> TYPE = NodeClass.create(CEntryPointUtilityNode.class);
 
-    /**
-     * @see CEntryPointContext
-     * @see CEntryPointActions
-     */
+    /** @see CEntryPointContext, CEntryPointActions */
     public enum UtilityAction {
-        IsAttached(JavaKind.Boolean),
-        FailFatally(JavaKind.Void);
-
-        final JavaKind resultKind;
-
-        UtilityAction(JavaKind resultKind) {
-            this.resultKind = resultKind;
-        }
+        IsAttached,
     }
 
     protected final UtilityAction utilityAction;
 
-    @OptionalInput protected ValueNode parameter0;
-    @OptionalInput protected ValueNode parameter1;
+    @OptionalInput protected ValueNode parameter;
 
     public CEntryPointUtilityNode(UtilityAction utilityAction, ValueNode parameter) {
-        this(utilityAction, parameter, null);
-    }
-
-    public CEntryPointUtilityNode(UtilityAction utilityAction, ValueNode parameter0, ValueNode parameter1) {
-        super(TYPE, StampFactory.forKind(utilityAction.resultKind));
+        super(TYPE, StampFactory.forKind(JavaKind.Int));
         this.utilityAction = utilityAction;
-        this.parameter0 = parameter0;
-        this.parameter1 = parameter1;
+        this.parameter = parameter;
     }
 
     public UtilityAction getUtilityAction() {
         return utilityAction;
     }
 
-    public ValueNode getParameter0() {
-        return parameter0;
-    }
-
-    public ValueNode getParameter1() {
-        return parameter1;
+    public ValueNode getParameter() {
+        return parameter;
     }
 
     @Override
