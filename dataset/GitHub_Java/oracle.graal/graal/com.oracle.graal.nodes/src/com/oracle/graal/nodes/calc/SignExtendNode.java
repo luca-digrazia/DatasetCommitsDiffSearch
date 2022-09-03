@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -105,16 +104,7 @@ public class SignExtendNode extends IntegerConvertNode {
     }
 
     @Override
-    public void generate(NodeLIRBuiderTool gen) {
-        gen.setResult(this, gen.getLIRGeneratorTool().emitSignExtend(gen.operand(getInput()), getInputBits(), getResultBits()));
-    }
-
-    @Override
-    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
-        Value result = gen.emitSignExtendMemory(access, access.nullCheckLocation().getValueKind().getBitCount(), getResultBits());
-        if (result != null) {
-            gen.setResult(this, result);
-        }
-        return result != null;
+    public void generate(ArithmeticLIRGenerator gen) {
+        gen.setResult(this, gen.emitSignExtend(gen.operand(getInput()), getInputBits(), getResultBits()));
     }
 }

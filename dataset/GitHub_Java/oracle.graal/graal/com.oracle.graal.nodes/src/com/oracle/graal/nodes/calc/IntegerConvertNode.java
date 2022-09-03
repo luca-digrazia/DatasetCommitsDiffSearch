@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * An {@code IntegerConvert} converts an integer to an integer of different width.
  */
-public abstract class IntegerConvertNode extends ConvertNode implements ArithmeticLIRLowerable, Canonicalizable, MemoryArithmeticLIRLowerable {
+public abstract class IntegerConvertNode extends ConvertNode implements ArithmeticLIRLowerable, Canonicalizable {
 
     private final int resultBits;
 
@@ -67,7 +67,7 @@ public abstract class IntegerConvertNode extends ConvertNode implements Arithmet
                 return getInput();
             } else if (getInput().isConstant()) {
                 Constant ret = evalConst(getInput().asConstant());
-                return ConstantNode.forIntegerBits(resultBits, ret.asLong(), graph());
+                return ConstantNode.forIntegerBits(resultBits, false, ret.asLong(), graph());
             }
         }
 
@@ -86,11 +86,19 @@ public abstract class IntegerConvertNode extends ConvertNode implements Arithmet
             result = graph.unique(new NarrowNode(input, toStamp.getBits()));
         } else {
             // toStamp.getBits() > fromStamp.getBits()
-            result = graph.unique(new SignExtendNode(input, toStamp.getBits()));
+            if (fromStamp.isUnsigned()) {
+                result = graph.unique(new ZeroExtendNode(input, toStamp.getBits()));
+            } else {
+                result = graph.unique(new SignExtendNode(input, toStamp.getBits()));
+            }
         }
 
         IntegerStamp resultStamp = (IntegerStamp) result.stamp();
         assert toStamp.getBits() == resultStamp.getBits();
-        return result;
+        if (toStamp.isUnsigned() == resultStamp.isUnsigned()) {
+            return result;
+        } else {
+            return graph.unique(new ReinterpretNode(toStamp, result));
+        }
     }
 }
