@@ -34,13 +34,11 @@ import javax.lang.model.util.*;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.*;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.service.*;
-
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.match.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.jvmci.common.*;
 
 /**
  * Processes classes annotated with {@link MatchRule}. A {@link MatchStatementSet} service is
@@ -478,7 +476,6 @@ public class MatchProcessor extends AbstractProcessor {
         try (PrintWriter out = createSourceFile(pkg, matchStatementClassName, filer, originatingElements)) {
 
             out.println("// CheckStyle: stop header check");
-            out.println("// CheckStyle: stop line length check");
             out.println("// GENERATED CONTENT - DO NOT EDIT");
             out.println("// Source: " + topDeclaringClass + ".java");
             out.println("package " + pkg + ";");
@@ -487,13 +484,11 @@ public class MatchProcessor extends AbstractProcessor {
             out.println("import " + MatchStatementSet.class.getPackage().getName() + ".*;");
             out.println("import " + NodeLIRBuilder.class.getName() + ";");
             out.println("import " + Position.class.getName() + ";");
-            out.println("import " + ServiceProvider.class.getName() + ";");
             for (String p : info.requiredPackages) {
                 out.println("import " + p + ".*;");
             }
             out.println("");
 
-            out.println("@" + ServiceProvider.class.getSimpleName() + "(" + MatchStatementSet.class.getSimpleName() + ".class)");
             out.println("public class " + matchStatementClassName + " implements " + MatchStatementSet.class.getSimpleName() + " {");
 
             out.println();
