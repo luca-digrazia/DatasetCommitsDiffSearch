@@ -133,10 +133,7 @@ public class LIRFrameState {
         frameMap.setReference(location, debugInfo.getReferenceMap());
     }
 
-    /**
-     * Updates this reference map with all references that are marked in {@code refMap}.
-     */
-    public void updateUnion(ReferenceMap refMap) {
+    public void markLocation(ReferenceMap refMap) {
         debugInfo.getReferenceMap().updateUnion(refMap);
     }
 
