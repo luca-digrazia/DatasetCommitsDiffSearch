@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.api.code.CodeUtil.*;
-import static com.oracle.graal.compiler.GraalCompiler.*;
 import static com.oracle.graal.nodes.StructuredGraph.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.phases.common.InliningUtil.*;
@@ -36,6 +35,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.CompilerThreadFactory.CompilerThread;
+import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
@@ -47,7 +47,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
-public class CompilationTask implements Runnable {
+public final class CompilationTask implements Runnable {
 
     public static final ThreadLocal<Boolean> withinEnqueue = new ThreadLocal<Boolean>() {
 
@@ -64,7 +64,6 @@ public class CompilationTask implements Runnable {
     private final HotSpotBackend backend;
     private final PhasePlan plan;
     private final OptimisticOptimizations optimisticOpts;
-    private final ProfilingInfo profilingInfo;
     private final HotSpotResolvedJavaMethod method;
     private final int entryBCI;
     private final int id;
@@ -72,18 +71,16 @@ public class CompilationTask implements Runnable {
 
     private StructuredGraph graph;
 
-    public static CompilationTask create(HotSpotBackend backend, PhasePlan plan, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, HotSpotResolvedJavaMethod method, int entryBCI,
-                    int id) {
-        return new CompilationTask(backend, plan, optimisticOpts, profilingInfo, method, entryBCI, id);
+    public static CompilationTask create(HotSpotBackend backend, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id) {
+        return new CompilationTask(backend, plan, optimisticOpts, method, entryBCI, id);
     }
 
-    protected CompilationTask(HotSpotBackend backend, PhasePlan plan, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, HotSpotResolvedJavaMethod method, int entryBCI, int id) {
+    private CompilationTask(HotSpotBackend backend, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id) {
         assert id >= 0;
         this.backend = backend;
         this.plan = plan;
         this.method = method;
         this.optimisticOpts = optimisticOpts;
-        this.profilingInfo = profilingInfo;
         this.entryBCI = entryBCI;
         this.id = id;
         this.status = new AtomicReference<>(CompilationStatus.Queued);
@@ -119,10 +116,6 @@ public class CompilationTask implements Runnable {
     public static final DebugTimer CompilationTime = Debug.timer("CompilationTime");
 
     public static final DebugTimer CodeInstallationTime = Debug.timer("CodeInstallation");
-
-    protected Suites getSuites(HotSpotProviders providers) {
-        return providers.getSuites().getDefaultSuites();
-    }
 
     public void runCompilation() {
         /*
@@ -168,8 +161,8 @@ public class CompilationTask implements Runnable {
                 }
                 InlinedBytecodes.add(method.getCodeSize());
                 CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
-                Suites suites = getSuites(providers);
-                result = compileGraph(graph, cc, method, providers, backend, backend.getTarget(), graphCache, plan, optimisticOpts, profilingInfo, method.getSpeculationLog(), suites, true,
+                Suites suites = providers.getSuites().getDefaultSuites();
+                result = GraalCompiler.compileGraph(graph, cc, method, providers, backend, backend.getTarget(), graphCache, plan, optimisticOpts, method.getSpeculationLog(), suites, true,
                                 new CompilationResult(), CompilationResultBuilderFactory.Default);
 
             } catch (Throwable e) {

@@ -23,7 +23,6 @@
 package com.oracle.graal.truffle;
 
 import static com.oracle.graal.api.code.CodeUtil.*;
-import static com.oracle.graal.compiler.GraalCompiler.*;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
 import java.io.*;
@@ -46,6 +45,7 @@ import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.printer.*;
@@ -80,7 +80,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         this.backend = runtime.getHostBackend();
         Replacements truffleReplacements = ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements();
         this.providers = backend.getProviders().copyWith(truffleReplacements);
-        this.suites = backend.getSuites().getDefaultSuites();
+        this.suites = backend.getSuites().createSuites();
         this.skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
 
         // Create compilation queue.
@@ -208,7 +208,9 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         }
     }
 
-    public InstalledCode compileMethodHelper(StructuredGraph graph, GraphBuilderConfiguration config, Assumptions assumptions) {
+    public InstalledCode compileMethodHelper(final StructuredGraph graph, final GraphBuilderConfiguration config, final Assumptions assumptions) {
+        final PhasePlan plan = createPhasePlan(config);
+
         try (Scope s = Debug.scope("TruffleFinal")) {
             Debug.dump(graph, "After TruffleTier");
         } catch (Throwable e) {
@@ -220,8 +222,8 @@ public class TruffleCompilerImpl implements TruffleCompiler {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
             CompilationResult compilationResult = new CompilationResult(graph.method().toString());
-            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, createGraphBuilderSuite(config), OptimisticOptimizations.ALL, getProfilingInfo(graph),
-                            new SpeculationLog(), suites, false, compilationResult, CompilationResultBuilderFactory.Default);
+            result = GraalCompiler.compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, plan, OptimisticOptimizations.ALL, new SpeculationLog(), suites, false,
+                            compilationResult, CompilationResultBuilderFactory.Default);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
@@ -244,7 +246,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
         InstalledCode installedCode = null;
         try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache()); TimerCloseable a = CodeInstallationTime.start()) {
-            installedCode = providers.getCodeCache().addMethod(graph.method(), result, null);
+            installedCode = providers.getCodeCache().addMethod(graph.method(), result);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
@@ -259,12 +261,11 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         return installedCode;
     }
 
-    private PhaseSuite<HighTierContext> createGraphBuilderSuite(GraphBuilderConfiguration config) {
-        PhaseSuite<HighTierContext> suite = backend.getSuites().getDefaultGraphBuilderSuite().copy();
-        ListIterator<BasePhase<? super HighTierContext>> iterator = suite.findPhase(GraphBuilderPhase.class);
-        iterator.remove();
-        iterator.add(new GraphBuilderPhase(config));
-        return suite;
+    private PhasePlan createPhasePlan(final GraphBuilderConfiguration config) {
+        final PhasePlan phasePlan = new PhasePlan();
+        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(providers.getMetaAccess(), providers.getForeignCalls(), config, TruffleCompilerImpl.Optimizations);
+        phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
+        return phasePlan;
     }
 
     public void processAssumption(Assumptions newAssumptions, Assumption assumption, List<AssumptionValidAssumption> manual) {
