@@ -26,19 +26,20 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
+import static jdk.vm.ci.aarch64.AArch64.zr;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 
+import com.oracle.graal.asm.Label;
 import com.oracle.graal.asm.aarch64.AArch64Assembler;
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
+import com.oracle.graal.hotspot.CompressEncoding;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.StandardOp.LoadConstantOp;
 import com.oracle.graal.lir.aarch64.AArch64LIRInstruction;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 import jdk.vm.ci.code.Register;
-import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.hotspot.HotSpotConstant;
-import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
 
@@ -61,9 +62,9 @@ public class AArch64HotSpotMove {
             crb.recordInlineDataInCode(constant);
             if (constant.isCompressed()) {
                 // masm.forceMov(asRegister(result), 0);
-                throw JVMCIError.unimplemented();
+                masm.movNarrowAddress(asRegister(result), 0);
             } else {
-                masm.forceMov(asRegister(result), 0);
+                masm.movNativeAddress(asRegister(result), 0);
             }
         }
 
@@ -161,14 +162,20 @@ public class AArch64HotSpotMove {
             Register base = asRegister(baseRegister);
             // result = base + (ptr << shift)
             if (nonNull) {
-                assert encoding.shift == encoding.alignment;
-                masm.add(64, resultRegister, base, ptr, AArch64Assembler.ShiftType.ASR, encoding.shift);
+                assert encoding.shift == encoding.alignment || encoding.shift == 0;
+                masm.add(64, resultRegister, base, ptr, AArch64Assembler.ShiftType.LSL, encoding.shift);
+            } else if (encoding.base == 0) {
+                masm.add(64, resultRegister, zr, ptr, AArch64Assembler.ShiftType.LSL, encoding.shift);
             } else {
                 // if ptr is null it has to be null after decompression
-                // masm.cmp(64, );
-                throw JVMCIError.unimplemented();
+                Label done = new Label();
+                if (!resultRegister.equals(ptr)) {
+                    masm.mov(32, resultRegister, ptr);
+                }
+                masm.cbz(32, resultRegister, done);
+                masm.add(64, resultRegister, base, resultRegister, AArch64Assembler.ShiftType.LSL, encoding.shift);
+                masm.bind(done);
             }
-
         }
     }
 
