@@ -59,7 +59,7 @@ import com.intel.llvm.ireditor.lLVM_IR.impl.Instruction_brImpl;
 import com.intel.llvm.ireditor.lLVM_IR.impl.LocalValueRefImpl;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.llvm.parser.base.util.LLVMParserAsserts;
+import com.oracle.truffle.llvm.parser.impl.LLVMParserAsserts;
 import com.oracle.truffle.llvm.parser.impl.LLVMPhiVisitor;
 import com.oracle.truffle.llvm.parser.impl.LLVMPhiVisitor.Phi;
 import com.oracle.truffle.llvm.parser.impl.LLVMReadVisitor;
@@ -286,6 +286,10 @@ public final class LLVMLifeTimeAnalysisVisitor {
                         Set<FrameSlot> deadAtBegin = new HashSet<>(out.get(instr));
                         deadAtBegin.removeAll(in.get(firstInstruction));
                         bbBeginKills.put(bas, deadAtBegin);
+                    }
+                    EObject instruction = ((TerminatorInstruction) instr).getInstruction();
+                    if (instruction instanceof Instruction_ret || instruction instanceof Instruction_unreachable) {
+                        kills.put(instr, new HashSet<>(frameDescriptor.getSlots()));
                     }
                 }
                 kills.put(instr, instructionKills);
