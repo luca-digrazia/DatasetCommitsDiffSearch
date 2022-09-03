@@ -85,7 +85,7 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         editPhasePlan(method, graph, phasePlan);
         CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
         final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, method, runtime, replacements, backend, runtime().getTarget(), null, phasePlan, OptimisticOptimizations.ALL,
-                        new SpeculationLog(), suites);
+                        new SpeculationLog());
         addMethod(method, compResult, graphCopy);
 
         OptCanonicalizeReads.setValue(originalSetting);

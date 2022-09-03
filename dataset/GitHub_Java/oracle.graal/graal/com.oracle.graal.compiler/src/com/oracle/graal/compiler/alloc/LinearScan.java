@@ -63,8 +63,6 @@ public final class LinearScan {
     final RegisterAttributes[] registerAttributes;
     final Register[] registers;
 
-    boolean callKillsRegisters;
-
     private static final int INITIAL_SPLIT_INTERVALS_CAPACITY = 32;
 
     public static class BlockData {
@@ -1704,7 +1702,7 @@ public final class LinearScan {
     }
 
     private void computeDebugInfo(IntervalWalker iw, final LIRInstruction op, LIRFrameState info) {
-        BitSet registerRefMap = op.destroysCallerSavedRegisters() && callKillsRegisters ? null : frameMap.initRegisterRefMap();
+        BitSet registerRefMap = op.destroysCallerSavedRegisters() ? null : frameMap.initRegisterRefMap();
         BitSet frameRefMap = frameMap.initFrameRefMap();
         computeOopMap(iw, op, registerRefMap, frameRefMap);
 
