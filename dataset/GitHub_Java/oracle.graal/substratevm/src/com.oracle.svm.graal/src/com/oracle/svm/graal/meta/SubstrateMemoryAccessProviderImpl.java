@@ -28,14 +28,12 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.SignedWord;
-import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.graal.meta.SubstrateMemoryAccessProvider;
 import com.oracle.svm.core.heap.ReferenceAccess;
-import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
-import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.meta.Constant;
@@ -107,20 +105,16 @@ public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryA
         }
 
         if (type.isArray()) {
-            int length = KnownIntrinsics.readArrayLength(object);
-            if (length < 1) {
+            ResolvedJavaType componentType = type.getComponentType();
+            JavaKind componentKind = componentType.getJavaKind();
+            final int headerSize = ConfigurationValues.getObjectLayout().getArrayBaseOffset(componentKind);
+            int sizeOfElement = ConfigurationValues.getObjectLayout().getArrayIndexScale(componentKind);
+            int length = BarrieredAccess.readInt(object, ConfigurationValues.getObjectLayout().getArrayLengthOffset());
+            long arrayEnd = ConfigurationValues.getObjectLayout().getArraySize(componentKind, length);
+            if (displacement < 0 || displacement > (arrayEnd - sizeOfElement)) {
+                int index = (int) ((displacement - headerSize) / sizeOfElement);
                 throw new IllegalArgumentException("Unsafe array access: reading element of kind " + kind +
-                                " at offset " + displacement + " from zero-sized array " +
-                                type.toJavaName());
-            }
-            int encoding = KnownIntrinsics.readHub(object).getLayoutEncoding();
-            UnsignedWord unsignedDisplacement = WordFactory.unsigned(displacement);
-            UnsignedWord maxDisplacement = LayoutEncoding.getArrayElementOffset(encoding, length - 1);
-            if (displacement < 0 || maxDisplacement.belowThan(unsignedDisplacement)) {
-                int elementSize = LayoutEncoding.getArrayIndexScale(encoding);
-                UnsignedWord index = unsignedDisplacement.subtract(LayoutEncoding.getArrayBaseOffset(encoding)).unsignedDivide(elementSize);
-                throw new IllegalArgumentException("Unsafe array access: reading element of kind " + kind +
-                                " at offset " + displacement + " (index ~ " + index.rawValue() + ") in " +
+                                " at offset " + displacement + " (index ~ " + index + ") in " +
                                 type.toJavaName() + " object of length " + length);
             }
         } else {
