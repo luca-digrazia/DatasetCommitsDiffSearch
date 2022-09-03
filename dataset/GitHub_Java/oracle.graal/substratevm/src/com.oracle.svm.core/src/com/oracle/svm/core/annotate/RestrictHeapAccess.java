@@ -35,8 +35,7 @@ import java.lang.annotation.Target;
 public @interface RestrictHeapAccess {
     enum Access {
         UNRESTRICTED,
-        NO_ALLOCATION,
-        NO_HEAP_ACCESS;
+        NO_ALLOCATION;
 
         public boolean isMoreRestrictiveThan(Access other) {
             return ordinal() > other.ordinal();
