@@ -79,17 +79,16 @@ public class OnStackReplacementPhase extends Phase {
             NodeIterable<EntryMarkerNode> osrNodes = graph.getNodes(EntryMarkerNode.class);
             osr = osrNodes.first();
             if (osr == null) {
-                throw new BailoutException("No OnStackReplacementNode generated");
+                throw new BailoutException("no OnStackReplacementNode generated");
             }
             if (osrNodes.count() > 1) {
-                // this can happen with JSR inlining
-                throw new BailoutException("Multiple OnStackReplacementNodes generated");
+                throw new GraalInternalError("multiple OnStackReplacementNodes generated");
             }
             if (osr.stateAfter().locksSize() != 0) {
-                throw new BailoutException("OSR with locks not supported");
+                throw new BailoutException("osr with locks not supported");
             }
             if (osr.stateAfter().stackSize() != 0) {
-                throw new BailoutException("OSR with stack entries not supported: " + osr.stateAfter().toString(Verbosity.Debugger));
+                throw new BailoutException("osr with stack entries not supported: " + osr.stateAfter().toString(Verbosity.Debugger));
             }
             LoopEx osrLoop = null;
             LoopsData loops = new LoopsData(graph);
@@ -105,7 +104,7 @@ public class OnStackReplacementPhase extends Phase {
 
             LoopTransformations.peel(osrLoop);
             for (Node usage : osr.usages().snapshot()) {
-                ProxyNode proxy = (ProxyNode) usage;
+                ValueProxyNode proxy = (ValueProxyNode) usage;
                 proxy.replaceAndDelete(proxy.value());
             }
             FixedNode next = osr.next();
@@ -137,7 +136,7 @@ public class OnStackReplacementPhase extends Phase {
         for (int i = 0; i < osrState.localsSize(); i++) {
             ValueNode value = osrState.localAt(i);
             if (value != null) {
-                ProxyNode proxy = (ProxyNode) value;
+                ValueProxyNode proxy = (ValueProxyNode) value;
                 int size = FrameStateBuilder.stackSlots(value.kind());
                 int offset = localsOffset - (i + size - 1) * 8;
                 UnsafeLoadNode load = graph.add(new UnsafeLoadNode(buffer, offset, ConstantNode.forInt(0, graph), value.kind()));
