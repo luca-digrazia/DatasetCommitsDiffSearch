@@ -24,8 +24,7 @@ package com.oracle.graal.nodes.calc;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.FloatConvertOp;
@@ -113,7 +112,7 @@ public final class FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> 
         tool.getLowerer().lower(this, tool);
     }
 
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
-        nodeValueMap.setResult(this, gen.emitFloatConvert(getFloatConvert(), nodeValueMap.operand(getValue())));
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        builder.setResult(this, gen.emitFloatConvert(getFloatConvert(), builder.operand(getValue())));
     }
 }
