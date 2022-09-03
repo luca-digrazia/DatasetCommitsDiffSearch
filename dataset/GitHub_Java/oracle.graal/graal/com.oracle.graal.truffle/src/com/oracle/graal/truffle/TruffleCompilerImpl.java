@@ -38,7 +38,6 @@ import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.CompilerThreadFactory.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
@@ -110,16 +109,21 @@ public class TruffleCompilerImpl implements TruffleCompiler {
     }
 
     public Future<InstalledCode> compile(final OptimizedCallTarget compilable) {
-        return compileQueue.submit(new Callable<InstalledCode>() {
+        Future<InstalledCode> future = compileQueue.submit(new Callable<InstalledCode>() {
+
             @Override
             public InstalledCode call() throws Exception {
-                try (Scope s = Debug.scope("Truffle", new TruffleDebugJavaMethod(compilable))) {
-                    return compileMethodImpl(compilable);
-                } catch (Throwable e) {
-                    throw Debug.handle(e);
-                }
+                Object[] debug = new Object[]{new TruffleDebugJavaMethod(compilable)};
+                return Debug.scope("Truffle", debug, new Callable<InstalledCode>() {
+
+                    @Override
+                    public InstalledCode call() throws Exception {
+                        return compileMethodImpl(compilable);
+                    }
+                });
             }
         });
+        return future;
     }
 
     public static final DebugTimer PartialEvaluationTime = Debug.timer("PartialEvaluationTime");
@@ -204,22 +208,31 @@ public class TruffleCompilerImpl implements TruffleCompiler {
     public InstalledCode compileMethodHelper(final StructuredGraph graph, final GraphBuilderConfiguration config, final Assumptions assumptions) {
         final PhasePlan plan = createPhasePlan(config);
 
-        try (Scope s = Debug.scope("TruffleFinal")) {
-            Debug.dump(graph, "After TruffleTier");
-        } catch (Throwable e) {
-            throw Debug.handle(e);
-        }
+        Debug.scope("TruffleFinal", new Runnable() {
 
-        CompilationResult result = null;
-        try (TimerCloseable a = CompilationTime.start(); Scope s = Debug.scope("TruffleGraal.GraalCompiler", graph, providers.getCodeCache())) {
-            CodeCacheProvider codeCache = providers.getCodeCache();
-            CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
-            CompilationResult compilationResult = new CompilationResult(graph.method().toString());
-            result = GraalCompiler.compileGraphNoScope(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, plan, OptimisticOptimizations.ALL, new SpeculationLog(), suites,
-                            compilationResult);
-        } catch (Throwable e) {
-            throw Debug.handle(e);
-        }
+            @Override
+            public void run() {
+                Debug.dump(graph, "After TruffleTier");
+            }
+        });
+
+        final CompilationResult result = Debug.scope("TruffleGraal", new Callable<CompilationResult>() {
+
+            @Override
+            public CompilationResult call() {
+                try (TimerCloseable a = CompilationTime.start()) {
+                    return Debug.scope("GraalCompiler", new Object[]{graph, providers.getCodeCache()}, new Callable<CompilationResult>() {
+                        public CompilationResult call() {
+                            CodeCacheProvider codeCache = providers.getCodeCache();
+                            CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
+                            CompilationResult compilationResult = new CompilationResult(graph.method().toString());
+                            return GraalCompiler.compileGraphNoScope(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, plan, OptimisticOptimizations.ALL,
+                                            new SpeculationLog(), suites, compilationResult);
+                        }
+                    });
+                }
+            }
+        });
 
         List<AssumptionValidAssumption> validAssumptions = new ArrayList<>();
         Assumptions newAssumptions = new Assumptions(true);
@@ -237,16 +250,19 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
         result.setAssumptions(newAssumptions);
 
-        InstalledCode compiledMethod = null;
-        try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache()); TimerCloseable a = CodeInstallationTime.start()) {
-            InstalledCode installedCode = providers.getCodeCache().addMethod(graph.method(), result);
-            if (installedCode != null) {
-                Debug.dump(new Object[]{result, installedCode}, "After code installation");
+        InstalledCode compiledMethod = Debug.scope("CodeInstall", new Object[]{providers.getCodeCache()}, new Callable<InstalledCode>() {
+
+            @Override
+            public InstalledCode call() throws Exception {
+                try (TimerCloseable a = CodeInstallationTime.start()) {
+                    InstalledCode installedCode = providers.getCodeCache().addMethod(graph.method(), result);
+                    if (installedCode != null) {
+                        Debug.dump(new Object[]{result, installedCode}, "After code installation");
+                    }
+                    return installedCode;
+                }
             }
-            compiledMethod = installedCode;
-        } catch (Throwable e) {
-            throw Debug.handle(e);
-        }
+        });
 
         for (AssumptionValidAssumption a : validAssumptions) {
             a.getAssumption().registerInstalledCode(compiledMethod);
