@@ -74,9 +74,6 @@ public class TruffleCompilerOptions {
     @Option(help = "Stop inlining if caller's cumulative tree size would exceed this limit", type = OptionType.Expert)
     public static final OptionValue<Integer> TruffleInliningMaxCallerSize = new OptionValue<>(2250);
 
-    @Option(help = "Maximum level of recursive inlining", type = OptionType.Expert)
-    public static final OptionValue<Integer> TruffleMaximumRecursiveInlining = new OptionValue<>(4);
-
     @Option(help = "Defines the number of graal nodes that triggers a performance warning.", type = OptionType.Debug)
     public static final OptionValue<Integer> TrufflePerformanceWarningGraalNodeCount = new OptionValue<>(1000);
 
@@ -155,9 +152,6 @@ public class TruffleCompilerOptions {
 
     @Option(help = "Print source secions for printed expansion trees", type = OptionType.Debug)
     public static final OptionValue<Boolean> TraceTruffleExpansionSource = new OptionValue<>(false);
-
-    @Option(help = "Prints a histogram of all expanded Java methods.", type = OptionType.Debug)
-    public static final OptionValue<Boolean> PrintTruffleExpansionHistogram = new OptionValue<>(false);
 
     @Option(help = "Print detailed information for the Truffle compilation cache", type = OptionType.Debug)
     public static final OptionValue<Boolean> TraceTruffleCacheDetails = new OptionValue<>(false);
