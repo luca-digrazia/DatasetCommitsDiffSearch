@@ -24,8 +24,6 @@
  */
 package com.oracle.truffle.api.impl;
 
-import java.io.Closeable;
-import java.lang.reflect.Method;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.ServiceConfigurationError;
@@ -62,20 +60,15 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
     private final ThreadLocal<DefaultFrameInstance> stackTraces = new ThreadLocal<>();
     private final DefaultTVMCI tvmci = new DefaultTVMCI();
 
-    private final TVMCI.Test<Closeable, CallTarget> testTvmci = new TVMCI.Test<Closeable, CallTarget>() {
+    private final TVMCI.Test<CallTarget> testTvmci = new TVMCI.Test<CallTarget>() {
 
         @Override
-        protected Closeable createTestContext(String testName) {
-            return null;
-        }
-
-        @Override
-        public CallTarget createTestCallTarget(Closeable testContext, RootNode testNode) {
+        public CallTarget createTestCallTarget(RootNode testNode) {
             return createCallTarget(testNode);
         }
 
         @Override
-        public void finishWarmup(Closeable testContext, CallTarget callTarget) {
+        public void finishWarmup(CallTarget callTarget, String testName) {
             // do nothing if we have no compiler
         }
     };
@@ -202,7 +195,6 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
         }
     }
 
-    @Override
     public <T> T getCapability(Class<T> capability) {
         if (capability == TVMCI.Test.class) {
             return capability.cast(testTvmci);
@@ -210,38 +202,11 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
             return capability.cast(tvmci);
         }
 
-        final Iterator<T> it = Loader.load(capability).iterator();
+        final Iterator<T> it = ServiceLoader.load(capability).iterator();
         try {
             return it.hasNext() ? it.next() : null;
         } catch (ServiceConfigurationError e) {
             return null;
-        }
-    }
-
-    private static final class Loader {
-        private static final Method LOAD_METHOD;
-        static {
-            Method loadMethod = null;
-            try {
-                Class<?> servicesClass = Class.forName("jdk.vm.ci.services.Services");
-                loadMethod = servicesClass.getMethod("load", Class.class);
-            } catch (ClassNotFoundException | NoSuchMethodException e) {
-                // Services.load is not available
-            }
-            LOAD_METHOD = loadMethod;
-        }
-
-        @SuppressWarnings("unchecked")
-        static <S> Iterable<S> load(Class<S> service) {
-            if (LOAD_METHOD != null) {
-                try {
-                    return (Iterable<S>) LOAD_METHOD.invoke(null, service);
-                } catch (Exception e) {
-                    throw new InternalError(e);
-                }
-            } else {
-                return ServiceLoader.load(service);
-            }
         }
     }
 
