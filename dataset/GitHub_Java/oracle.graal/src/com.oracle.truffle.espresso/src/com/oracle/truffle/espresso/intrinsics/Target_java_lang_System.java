@@ -31,7 +31,6 @@ import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.MethodInfo;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
@@ -158,7 +157,16 @@ public class Target_java_lang_System {
 
     @Intrinsic
     public static int identityHashCode(Object object) {
-        return System.identityHashCode(MetaUtil.unwrap(object));
+        return System.identityHashCode(unwrap(object));
     }
 
+    private static Object unwrap(Object object) {
+        if (object == StaticObject.NULL) {
+            return null;
+        }
+        if (object instanceof StaticObjectWrapper) {
+            return ((StaticObjectWrapper) object).getWrapped();
+        }
+        return object;
+    }
 }
