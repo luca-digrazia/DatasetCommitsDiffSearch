@@ -48,17 +48,6 @@ public class BailoutException extends RuntimeException {
     /**
      * Creates a new {@link BailoutException}.
      *
-     *
-     * @param args parameters to the formatter
-     */
-    public BailoutException(Throwable cause, String format, Object... args) {
-        super(String.format(Locale.ENGLISH, format, args), cause);
-        this.permanent = true;
-    }
-
-    /**
-     * Creates a new {@link BailoutException}.
-     *
      * @param permanent specifies whether this exception will occur again if compilation is retried
      * @param args parameters to the formatter
      */
