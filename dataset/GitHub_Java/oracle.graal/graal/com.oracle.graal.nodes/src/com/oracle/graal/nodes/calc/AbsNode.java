@@ -22,26 +22,28 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp.Abs;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * Absolute value.
  */
-@NodeInfo
-public class AbsNode extends UnaryArithmeticNode<Abs> implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
+@NodeInfo(cycles = CYCLES_3, size = SIZE_1)
+public final class AbsNode extends UnaryArithmeticNode<Abs> implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
+    public static final NodeClass<AbsNode> TYPE = NodeClass.create(AbsNode.class);
 
-    public static AbsNode create(ValueNode x) {
-        return new AbsNode(x);
-    }
-
-    protected AbsNode(ValueNode x) {
-        super(ArithmeticOpTable::getAbs, x);
+    public AbsNode(ValueNode x) {
+        super(TYPE, ArithmeticOpTable::getAbs, x);
     }
 
     @Override
@@ -57,17 +59,7 @@ public class AbsNode extends UnaryArithmeticNode<Abs> implements ArithmeticLIRLo
     }
 
     @Override
-    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitMathAbs(builder.operand(getValue())));
-    }
-
-    @NodeIntrinsic
-    public static float abs(float n) {
-        return Math.abs(n);
-    }
-
-    @NodeIntrinsic
-    public static double abs(double n) {
-        return Math.abs(n);
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        nodeValueMap.setResult(this, gen.emitMathAbs(nodeValueMap.operand(getValue())));
     }
 }
