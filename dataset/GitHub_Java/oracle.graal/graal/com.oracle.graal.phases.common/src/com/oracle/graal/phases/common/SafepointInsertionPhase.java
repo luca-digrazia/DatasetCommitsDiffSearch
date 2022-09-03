@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.phases.common;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
@@ -35,7 +33,7 @@ public class SafepointInsertionPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        if (GenLoopSafepoints.getValue()) {
+        if (GraalOptions.GenLoopSafepoints) {
             for (LoopEndNode loopEndNode : graph.getNodes(LoopEndNode.class)) {
                 if (!loopEndNode.canSafepoint()) {
                     continue;
@@ -45,8 +43,8 @@ public class SafepointInsertionPhase extends Phase {
             }
         }
 
-        if (GenSafepoints.getValue()) {
-            if (!OptEliminateSafepoints.getValue() || graph.getNodes(MethodCallTargetNode.class).isNotEmpty()) {
+        if (GraalOptions.GenSafepoints) {
+            if (!GraalOptions.OptEliminateSafepoints || graph.getNodes(MethodCallTargetNode.class).isNotEmpty()) {
                 for (ReturnNode returnNode : graph.getNodes(ReturnNode.class)) {
                     SafepointNode safepoint = graph.add(new SafepointNode());
                     graph.addBeforeFixed(returnNode, safepoint);
