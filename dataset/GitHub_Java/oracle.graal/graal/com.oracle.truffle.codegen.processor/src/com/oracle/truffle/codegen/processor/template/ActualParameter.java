@@ -29,17 +29,15 @@ import com.oracle.truffle.codegen.processor.typesystem.*;
 public class ActualParameter {
 
     private final ParameterSpec specification;
-    private TypeData typeSystemType;
+    private final TypeMirror actualType;
     private TemplateMethod method;
     private final String localName;
     private final int index;
     private final boolean implicit;
-    private final TypeMirror type;
 
     public ActualParameter(ParameterSpec specification, TypeMirror actualType, int index, boolean implicit) {
         this.specification = specification;
-        this.type = actualType;
-        this.typeSystemType = null;
+        this.actualType = actualType;
 
         this.index = index;
         this.implicit = implicit;
@@ -51,12 +49,7 @@ public class ActualParameter {
         this.localName = valueName;
     }
 
-    public ActualParameter(ParameterSpec specification, TypeData actualType, int index, boolean implicit) {
-        this(specification, actualType.getPrimitiveType(), index, implicit);
-        this.typeSystemType = actualType;
-    }
-
-    public ActualParameter(ActualParameter parameter, TypeData otherType) {
+    public ActualParameter(ActualParameter parameter, TypeMirror otherType) {
         this(parameter.specification, otherType, parameter.index, parameter.implicit);
     }
 
@@ -84,12 +77,12 @@ public class ActualParameter {
         return method;
     }
 
-    public TypeMirror getType() {
-        return type;
+    public TypeMirror getActualType() {
+        return actualType;
     }
 
-    public TypeData getTypeSystemType() {
-        return typeSystemType;
+    public TypeData getActualTypeData(TypeSystemData typeSystem) {
+        return typeSystem.findTypeData(actualType);
     }
 
     public ActualParameter getPreviousParameter() {

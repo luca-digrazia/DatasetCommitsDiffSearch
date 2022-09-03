@@ -144,9 +144,7 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
 
     public List<ActualParameter> getReturnTypeAndParameters() {
         List<ActualParameter> allParameters = new ArrayList<>(getParameters().size() + 1);
-        if (getReturnType() != null) {
-            allParameters.add(getReturnType());
-        }
+        allParameters.add(getReturnType());
         allParameters.addAll(getParameters());
         return Collections.unmodifiableList(allParameters);
     }
