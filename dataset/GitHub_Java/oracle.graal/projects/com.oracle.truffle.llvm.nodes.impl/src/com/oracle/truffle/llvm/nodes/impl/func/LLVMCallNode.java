@@ -68,7 +68,6 @@ import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
-import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
@@ -132,7 +131,7 @@ public abstract class LLVMCallNode {
         }
 
         @ExplodeLoop
-        protected Object[] evaluateArgs(VirtualFrame frame) {
+        Object[] evaluateArgs(VirtualFrame frame) {
             Object[] argValues = new Object[args.length];
             for (int i = 0; i < args.length; i++) {
                 argValues[i] = args[i].executeGeneric(frame);
@@ -331,17 +330,10 @@ public abstract class LLVMCallNode {
                 return Truffle.getRuntime().createCallTarget(new RootNode(LLVMLanguage.class, null, null) {
 
                     @Override
-                    @ExplodeLoop
                     public Object execute(VirtualFrame frame) {
                         Object[] arguments = frame.getArguments();
                         Object[] newArguments = new Object[arguments.length - LLVMCallNode.ARG_START_INDEX];
                         System.arraycopy(arguments, LLVMCallNode.ARG_START_INDEX, newArguments, 0, newArguments.length);
-                        CompilerAsserts.compilationConstant(arguments.length);
-                        for (int i = 0; i < newArguments.length; i++) {
-                            if (newArguments[i] instanceof LLVMAddress) {
-                                newArguments[i] = ((LLVMAddress) newArguments[i]).getVal();
-                            }
-                        }
                         return nativeHandle.call(newArguments);
                     }
                 });

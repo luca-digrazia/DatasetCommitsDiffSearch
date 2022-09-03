@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.nodes.impl.vars;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMStructWriteNode;
@@ -43,7 +44,7 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 import com.oracle.truffle.llvm.types.memory.LLVMMemory;
@@ -212,6 +213,7 @@ public class StructLiteralNode extends LLVMAddressNode {
     }
 
     @Override
+    @ExplodeLoop
     public LLVMAddress executePointee(VirtualFrame frame) {
         LLVMAddress addr = address.executePointee(frame);
         for (int i = 0; i < offsets.length; i++) {
@@ -247,8 +249,8 @@ public class StructLiteralNode extends LLVMAddressNode {
 
         @Override
         public void executeWrite(VirtualFrame frame, LLVMAddress address) {
-            LLVMFunction value = valueNode.executeFunction(frame);
-            LLVMHeap.putFunction(address, value);
+            LLVMFunctionDescriptor value = (LLVMFunctionDescriptor) valueNode.executeFunction(frame);
+            LLVMHeap.putFunctionIndex(address, value.getFunctionIndex());
         }
 
     }
