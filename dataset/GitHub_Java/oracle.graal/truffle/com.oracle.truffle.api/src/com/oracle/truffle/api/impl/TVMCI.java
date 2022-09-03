@@ -127,7 +127,7 @@ public abstract class TVMCI {
      *
      * @since 0.24
      */
-    protected RootNode cloneUninitialized(RootNode root) {
+    protected RootNode cloneUnitialized(RootNode root) {
         return Accessor.nodesAccess().cloneUninitialized(root);
     }
 }
