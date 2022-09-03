@@ -32,6 +32,8 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.word.*;
@@ -43,7 +45,7 @@ import com.oracle.graal.word.*;
  */
 public class TypeCheckSnippetUtils {
 
-    public static final LocationIdentity TYPE_DISPLAY_LOCATION = new NamedLocationIdentity("TypeDisplay");
+    public static final LocationIdentity TYPE_DISPLAY_LOCATION = LocationNode.createLocation("TypeDisplay");
 
     static boolean checkSecondarySubType(Word t, Word s) {
         // if (S.cache == T) return true
@@ -57,7 +59,7 @@ public class TypeCheckSnippetUtils {
 
     static boolean checkUnknownSubType(Word t, Word s) {
         // int off = T.offset
-        int superCheckOffset = t.readInt(superCheckOffsetOffset(), LocationIdentity.FINAL_LOCATION);
+        int superCheckOffset = t.readInt(superCheckOffsetOffset(), FINAL_LOCATION);
         boolean primary = superCheckOffset != secondarySuperCacheOffset();
 
         // if (T = S[off]) return true
@@ -88,7 +90,7 @@ public class TypeCheckSnippetUtils {
 
         // if (S.scan_s_s_array(T)) { S.cache = T; return true; }
         Word secondarySupers = s.readWord(secondarySupersOffset(), SECONDARY_SUPERS_LOCATION);
-        int length = secondarySupers.readInt(metaspaceArrayLengthOffset(), LocationIdentity.FINAL_LOCATION);
+        int length = secondarySupers.readInt(metaspaceArrayLengthOffset(), FINAL_LOCATION);
         for (int i = 0; i < length; i++) {
             if (probability(NOT_LIKELY_PROBABILITY, t.equal(loadSecondarySupersElement(secondarySupers, i)))) {
                 s.writeWord(secondarySuperCacheOffset(), t, SECONDARY_SUPER_CACHE_LOCATION);
@@ -142,7 +144,7 @@ public class TypeCheckSnippetUtils {
     }
 
     static Word loadSecondarySupersElement(Word metaspaceArray, int index) {
-        return metaspaceArray.readWord(metaspaceArrayBaseOffset() + index * wordSize(), LocationIdentity.FINAL_LOCATION);
+        return metaspaceArray.readWord(metaspaceArrayBaseOffset() + index * wordSize(), FINAL_LOCATION);
     }
 
     private static final SnippetCounter.Group counters = GraalOptions.SnippetCounters ? new SnippetCounter.Group("TypeCheck") : null;

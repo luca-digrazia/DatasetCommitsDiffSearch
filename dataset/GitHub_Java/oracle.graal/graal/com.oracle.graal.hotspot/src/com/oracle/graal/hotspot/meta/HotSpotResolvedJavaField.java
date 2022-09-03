@@ -31,7 +31,8 @@ import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.options.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.replacements.*;
 
 /**
@@ -83,7 +84,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
             assert Modifier.isStatic(flags);
             if (constant == null) {
                 if (holder.isInitialized() && !holder.getName().equals(SystemClassName)) {
-                    if (Modifier.isFinal(getModifiers())) {
+                    if (Modifier.isFinal(getModifiers()) || assumeStaticFieldsFinal(holder.mirror())) {
                         constant = readValue(receiver);
                     }
                 }
@@ -119,10 +120,11 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         }
     }
 
+    private static boolean assumeStaticFieldsFinal(Class<?> clazz) {
+        return clazz == GraalOptions.class;
+    }
+
     private static boolean assumeNonStaticFinalFieldsAsFinal(Class<?> clazz) {
-        if (clazz == OptionValue.class) {
-            return true;
-        }
         return clazz == SnippetCounter.class;
     }
 

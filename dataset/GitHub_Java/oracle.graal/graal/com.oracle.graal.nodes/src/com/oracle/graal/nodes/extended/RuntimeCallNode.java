@@ -22,47 +22,88 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public final class RuntimeCallNode extends AbstractCallNode implements LIRLowerable {
+@NodeInfo(nameTemplate = "RuntimeCall#{p#descriptor/s}")
+public final class RuntimeCallNode extends AbstractCallNode implements LIRLowerable, DeoptimizingNode {
 
-    @Data private final CiRuntimeCall call;
+    private final Descriptor descriptor;
+    @Input private FrameState deoptState;
 
-    public CiRuntimeCall call() {
-        return call;
+    public RuntimeCallNode(Descriptor descriptor, ValueNode... arguments) {
+        super(StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())), arguments);
+        this.descriptor = descriptor;
     }
 
-    public RuntimeCallNode(CiRuntimeCall call) {
-        this(call, new ValueNode[0]);
+    public Descriptor getDescriptor() {
+        return descriptor;
     }
 
-    public RuntimeCallNode(CiRuntimeCall call, ValueNode arg1) {
-        this(call, new ValueNode[] {arg1});
+    @Override
+    public boolean hasSideEffect() {
+        return descriptor.hasSideEffect();
     }
 
-    public RuntimeCallNode(CiRuntimeCall call, ValueNode[] arguments) {
-        super(StampFactory.forKind(call.resultKind), arguments);
-        this.call = call;
+    @Override
+    public LocationIdentity[] getLocationIdentities() {
+        return new LocationIdentity[]{LocationNode.ANY_LOCATION};
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.emitRuntimeCall(this);
+        gen.visitRuntimeCall(this);
     }
 
-    // specialized on return type (instead of public static <T> T performCall) until boxing/unboxing is sorted out in intrinsification
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static <S> double performCall(@ConstantNodeParameter CiRuntimeCall call, S arg1) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    @Override
+    public String toString(Verbosity verbosity) {
+        if (verbosity == Verbosity.Name) {
+            return super.toString(verbosity) + "#" + descriptor;
+        }
+        return super.toString(verbosity);
     }
 
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static long performCall(@ConstantNodeParameter CiRuntimeCall call) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    @Override
+    public boolean canDeoptimize() {
+        return true;
+    }
+
+    @Override
+    public FrameState getDeoptimizationState() {
+        if (deoptState != null) {
+            return deoptState;
+        } else if (stateAfter() != null) {
+            FrameState stateDuring = stateAfter();
+            if ((stateDuring.stackSize() > 0 && stateDuring.stackAt(stateDuring.stackSize() - 1) == this) || (stateDuring.stackSize() > 1 && stateDuring.stackAt(stateDuring.stackSize() - 2) == this)) {
+                stateDuring = stateDuring.duplicateModified(stateDuring.bci, stateDuring.rethrowException(), this.kind());
+            }
+            updateUsages(deoptState, stateDuring);
+            return deoptState = stateDuring;
+        }
+        return null;
+    }
+
+    @Override
+    public void setDeoptimizationState(FrameState f) {
+        if (deoptState != null) {
+            throw new IllegalStateException();
+        }
+        updateUsages(deoptState, f);
+        deoptState = f;
+    }
+
+    @Override
+    public DeoptimizationReason getDeoptimizationReason() {
+        return null;
+    }
+
+    @Override
+    public boolean isCallSiteDeoptimization() {
+        return stateAfter() != null;
     }
 }

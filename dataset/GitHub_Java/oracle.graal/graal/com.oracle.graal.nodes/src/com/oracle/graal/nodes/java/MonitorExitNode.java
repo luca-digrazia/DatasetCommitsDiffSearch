@@ -22,16 +22,16 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.spi.*;
 
 /**
  * The {@code MonitorEnterNode} represents a monitor release.
  */
-public final class MonitorExitNode extends AccessMonitorNode implements Virtualizable, Lowerable, Node.IterableNodeType, MonitorExit, MemoryCheckpoint.Single, MonitorReference {
+public final class MonitorExitNode extends AccessMonitorNode implements Virtualizable, Lowerable, Node.IterableNodeType, MonitorExit, MonitorReference {
 
     private int lockDepth;
 
@@ -46,8 +46,8 @@ public final class MonitorExitNode extends AccessMonitorNode implements Virtuali
     }
 
     @Override
-    public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.ANY_LOCATION;
+    public LocationIdentity[] getLocationIdentities() {
+        return new LocationIdentity[]{LocationNode.ANY_LOCATION};
     }
 
     @Override

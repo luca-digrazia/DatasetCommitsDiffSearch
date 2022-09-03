@@ -188,14 +188,14 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         }
         if (node == null) {
             assert kind() == Kind.Void && usages().isEmpty();
-            graph().removeSplit(this, next());
+            ((StructuredGraph) graph()).removeSplit(this, next());
         } else if (node instanceof ControlSinkNode) {
             this.replaceAtPredecessor(node);
             this.replaceAtUsages(null);
             GraphUtil.killCFG(this);
             return;
         } else {
-            graph().replaceSplit(this, node, next());
+            ((StructuredGraph) graph()).replaceSplit(this, node, next());
         }
         call.safeDelete();
         if (state.usages().isEmpty()) {

@@ -144,14 +144,14 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
             stateSplit.setStateAfter(stateAfter);
         }
         if (node instanceof FixedWithNextNode) {
-            graph().replaceFixedWithFixed(this, (FixedWithNextNode) node);
+            ((StructuredGraph) graph()).replaceFixedWithFixed(this, (FixedWithNextNode) node);
         } else if (node instanceof ControlSinkNode) {
             this.replaceAtPredecessor(node);
             this.replaceAtUsages(null);
             GraphUtil.killCFG(this);
             return;
         } else {
-            graph().replaceFixed(this, node);
+            ((StructuredGraph) graph()).replaceFixed(this, node);
         }
         call.safeDelete();
         if (stateAfter.usages().isEmpty()) {

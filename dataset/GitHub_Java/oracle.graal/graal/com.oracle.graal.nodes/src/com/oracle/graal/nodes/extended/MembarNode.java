@@ -29,16 +29,16 @@ import java.lang.reflect.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
  * Creates a memory barrier.
  */
-public class MembarNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
+public class MembarNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint {
 
     private final int barriers;
 
@@ -51,8 +51,8 @@ public class MembarNode extends FixedWithNextNode implements LIRLowerable, Memor
     }
 
     @Override
-    public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.ANY_LOCATION;
+    public LocationIdentity[] getLocationIdentities() {
+        return new LocationIdentity[]{LocationNode.ANY_LOCATION};
     }
 
     @Override

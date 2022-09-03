@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -70,7 +69,7 @@ public final class AddLocationNode extends LocationNode implements Canonicalizab
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x instanceof ConstantLocationNode) {
             return canonical((ConstantLocationNode) x, getY());
         }
@@ -82,7 +81,7 @@ public final class AddLocationNode extends LocationNode implements Canonicalizab
             IndexedLocationNode yIdx = (IndexedLocationNode) y;
             if (xIdx.getIndexScaling() == yIdx.getIndexScaling()) {
                 long displacement = xIdx.getDisplacement() + yIdx.getDisplacement();
-                ValueNode index = IntegerArithmeticNode.add(graph(), xIdx.getIndex(), yIdx.getIndex());
+                ValueNode index = IntegerArithmeticNode.add(xIdx.getIndex(), yIdx.getIndex());
                 return IndexedLocationNode.create(getLocationIdentity(), getValueKind(), displacement, index, graph(), xIdx.getIndexScaling());
             }
         }

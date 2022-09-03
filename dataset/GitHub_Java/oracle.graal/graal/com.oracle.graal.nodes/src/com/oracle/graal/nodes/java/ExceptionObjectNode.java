@@ -58,10 +58,11 @@ public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable,
         if (isLowered()) {
             return;
         }
-        LoadExceptionObjectNode loadException = graph().add(new LoadExceptionObjectNode(stamp()));
+        StructuredGraph graph = (StructuredGraph) graph();
+        LoadExceptionObjectNode loadException = graph.add(new LoadExceptionObjectNode(stamp()));
         loadException.setStateAfter(stateAfter());
         replaceAtUsages(loadException);
-        graph().addAfterFixed(this, loadException);
+        graph.addAfterFixed(this, loadException);
         tool.setLastFixedNode(loadException);
         setStateAfter(null);
         setStamp(StampFactory.forVoid());
