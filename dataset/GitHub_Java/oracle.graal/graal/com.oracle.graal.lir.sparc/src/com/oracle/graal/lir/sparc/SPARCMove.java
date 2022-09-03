@@ -680,14 +680,14 @@ public class SPARCMove {
                 break;
             case Float:
                 if (result.getPlatformKind() == Kind.Float) {
-                    masm.fsrc2s(src, dst);
+                    masm.fmovs(src, dst);
                 } else {
                     throw JVMCIError.shouldNotReachHere();
                 }
                 break;
             case Double:
                 if (result.getPlatformKind() == Kind.Double) {
-                    masm.fsrc2d(src, dst);
+                    masm.fmovd(src, dst);
                 } else {
                     throw JVMCIError.shouldNotReachHere();
                 }
