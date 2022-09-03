@@ -35,7 +35,7 @@ import com.oracle.graal.java.GraphBuilderPlugin.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.*;
 
-final class HotSpotAnnotatedInvocationPlugin implements GenericInvocationPlugin {
+final class HotSpotAnnotatedInvocationPlugin implements AnnotatedInvocationPlugin {
     private final HotSpotSuitesProvider suites;
 
     public HotSpotAnnotatedInvocationPlugin(HotSpotSuitesProvider suites) {
