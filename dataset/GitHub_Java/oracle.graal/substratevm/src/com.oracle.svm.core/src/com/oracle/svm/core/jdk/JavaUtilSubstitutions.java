@@ -263,7 +263,6 @@ class SplittableRandomAccessors {
         return result;
     }
 
-    // Checkstyle: allow synchronization
     private static synchronized AtomicLong initialize() {
         AtomicLong result = defaultGen;
         if (result != null) {
@@ -289,7 +288,6 @@ class SplittableRandomAccessors {
         defaultGen = result;
         return result;
     }
-    // Checkstyle: disallow synchronization
 }
 
 @TargetClass(java.util.Currency.class)
