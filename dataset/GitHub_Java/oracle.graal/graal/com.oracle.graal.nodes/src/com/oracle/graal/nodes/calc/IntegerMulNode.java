@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -31,7 +30,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "*")
 public final class IntegerMulNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
 
-    public IntegerMulNode(Kind kind, ValueNode x, ValueNode y) {
+    public IntegerMulNode(CiKind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
     }
 
@@ -41,10 +40,10 @@ public final class IntegerMulNode extends IntegerArithmeticNode implements Canon
             return graph().unique(new IntegerMulNode(kind(), y(), x()));
         }
         if (x().isConstant()) {
-            if (kind() == Kind.Int) {
+            if (kind() == CiKind.Int) {
                 return ConstantNode.forInt(x().asConstant().asInt() * y().asConstant().asInt(), graph());
             } else {
-                assert kind() == Kind.Long;
+                assert kind() == CiKind.Long;
                 return ConstantNode.forLong(x().asConstant().asLong() * y().asConstant().asLong(), graph());
             }
         } else if (y().isConstant()) {
@@ -55,21 +54,33 @@ public final class IntegerMulNode extends IntegerArithmeticNode implements Canon
             if (c == 0) {
                 return ConstantNode.defaultForKind(kind(), graph());
             }
-            if (c > 0 && CodeUtil.isPowerOf2(c)) {
-                return graph().unique(new LeftShiftNode(kind(), x(), ConstantNode.forInt(CodeUtil.log2(c), graph())));
+            if (c > 0 && CiUtil.isPowerOf2(c)) {
+                return graph().unique(new LeftShiftNode(kind(), x(), ConstantNode.forInt(CiUtil.log2(c), graph())));
             }
             // canonicalize expressions like "(a * 1) * 2"
-            return BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
+            if (x() instanceof IntegerMulNode) {
+                IntegerMulNode other = (IntegerMulNode) x();
+                if (other.y().isConstant()) {
+                    ConstantNode sum;
+                    if (kind() == CiKind.Int) {
+                        sum = ConstantNode.forInt(y().asConstant().asInt() * other.y().asConstant().asInt(), graph());
+                    } else {
+                        assert kind() == CiKind.Long;
+                        sum = ConstantNode.forLong(y().asConstant().asLong() * other.y().asConstant().asLong(), graph());
+                    }
+                    return graph().unique(new IntegerMulNode(kind(), other.x(), sum));
+                }
+            }
         }
         return this;
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        Value op1 = gen.operand(x());
-        Value op2 = gen.operand(y());
+        CiValue op1 = gen.operand(x());
+        CiValue op2 = gen.operand(y());
         if (!y().isConstant() && !FloatAddNode.livesLonger(this, y(), gen)) {
-            Value op = op1;
+            CiValue op = op1;
             op1 = op2;
             op2 = op;
         }

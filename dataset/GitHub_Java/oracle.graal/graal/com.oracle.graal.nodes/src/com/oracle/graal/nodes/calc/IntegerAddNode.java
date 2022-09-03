@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.spi.types.*;
 @NodeInfo(shortName = "+")
 public class IntegerAddNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable, TypeFeedbackProvider {
 
-    public IntegerAddNode(Kind kind, ValueNode x, ValueNode y) {
+    public IntegerAddNode(CiKind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
     }
 
@@ -41,39 +41,45 @@ public class IntegerAddNode extends IntegerArithmeticNode implements Canonicaliz
             return graph().unique(new IntegerAddNode(kind(), y(), x()));
         }
         if (x().isConstant()) {
-            if (kind() == Kind.Int) {
+            if (kind() == CiKind.Int) {
                 return ConstantNode.forInt(x().asConstant().asInt() + y().asConstant().asInt(), graph());
             } else {
-                assert kind() == Kind.Long;
+                assert kind() == CiKind.Long;
                 return ConstantNode.forLong(x().asConstant().asLong() + y().asConstant().asLong(), graph());
             }
         } else if (y().isConstant()) {
-            long c = y().asConstant().asLong();
-            if (c == 0) {
-                return x();
-            }
-            // canonicalize expressions like "(a + 1) + 2"
-            BinaryNode reassociated = BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
-            if (reassociated != this) {
-                return reassociated;
-            }
-            if (c < 0) {
-                if (kind() == Kind.Int) {
-                    return IntegerArithmeticNode.sub(x(), ConstantNode.forInt((int) -c, graph()));
-                } else {
-                    assert kind() == Kind.Long;
-                    return IntegerArithmeticNode.sub(x(), ConstantNode.forLong(-c, graph()));
+            if (kind() == CiKind.Int) {
+                int c = y().asConstant().asInt();
+                if (c == 0) {
+                    return x();
+                }
+            } else {
+                assert kind() == CiKind.Long;
+                long c = y().asConstant().asLong();
+                if (c == 0) {
+                    return x();
                 }
             }
-        }
-        if (x() instanceof NegateNode) {
-            return IntegerArithmeticNode.sub(y(), ((NegateNode) x()).x());
+            // canonicalize expressions like "(a + 1) + 2"
+            if (x() instanceof IntegerAddNode) {
+                IntegerAddNode other = (IntegerAddNode) x();
+                if (other.y().isConstant()) {
+                    ConstantNode sum;
+                    if (kind() == CiKind.Int) {
+                        sum = ConstantNode.forInt(y().asConstant().asInt() + other.y().asConstant().asInt(), graph());
+                    } else {
+                        assert kind() == CiKind.Long;
+                        sum = ConstantNode.forLong(y().asConstant().asLong() + other.y().asConstant().asLong(), graph());
+                    }
+                    return graph().unique(new IntegerAddNode(kind(), other.x(), sum));
+                }
+            }
         }
         return this;
     }
 
     public static boolean isIntegerAddition(ValueNode result, ValueNode a, ValueNode b) {
-        Kind kind = result.kind();
+        CiKind kind = result.kind();
         if (kind != a.kind() || kind != b.kind() || !(kind.isInt() || kind.isLong())) {
             return false;
         }
@@ -92,11 +98,11 @@ public class IntegerAddNode extends IntegerArithmeticNode implements Canonicaliz
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        Value op1 = gen.operand(x());
+        CiValue op1 = gen.operand(x());
         assert op1 != null : x() + ", this=" + this;
-        Value op2 = gen.operand(y());
+        CiValue op2 = gen.operand(y());
         if (!y().isConstant() && !FloatAddNode.livesLonger(this, y(), gen)) {
-            Value op = op1;
+            CiValue op = op1;
             op1 = op2;
             op2 = op;
         }
