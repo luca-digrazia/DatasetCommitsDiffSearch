@@ -483,7 +483,7 @@ public final class EquationalReasoner {
             return isNull;
         }
         ValueNode scrutinee = GraphUtil.unproxify(isNull.object());
-        GuardingNode evidence = nonTrivialNullAnchor(scrutinee);
+        GuardingNode evidence = untrivialNullAnchor(scrutinee);
         if (evidence != null) {
             metricNullCheckRemoved.increment();
             return trueConstant;
@@ -547,7 +547,7 @@ public final class EquationalReasoner {
             return object;
         }
         if (StampTool.isObjectAlwaysNull(object.stamp())) {
-            return nonTrivialNull(object);
+            return untrivialNull(object);
         }
 
         // ------------------------------------------
@@ -556,7 +556,7 @@ public final class EquationalReasoner {
 
         ValueNode scrutinee = GraphUtil.unproxify(object);
 
-        PiNode untrivialNull = nonTrivialNull(scrutinee);
+        PiNode untrivialNull = untrivialNull(scrutinee);
         if (untrivialNull != null) {
             return untrivialNull;
         }
@@ -653,7 +653,7 @@ public final class EquationalReasoner {
      * Otherwise, if an anchor is found it is returned, null otherwise.
      * </p>
      */
-    public GuardingNode nonTrivialNullAnchor(ValueNode object) {
+    public GuardingNode untrivialNullAnchor(ValueNode object) {
         assert FlowUtil.hasLegalObjectStamp(object);
         if (StampTool.isObjectAlwaysNull(object)) {
             return null;
@@ -676,9 +676,9 @@ public final class EquationalReasoner {
      * .
      * </p>
      */
-    public PiNode nonTrivialNull(ValueNode object) {
+    public PiNode untrivialNull(ValueNode object) {
         assert FlowUtil.hasLegalObjectStamp(object);
-        GuardingNode anchor = nonTrivialNullAnchor(object);
+        GuardingNode anchor = untrivialNullAnchor(object);
         if (anchor == null) {
             return null;
         }

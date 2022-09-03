@@ -109,7 +109,7 @@ public abstract class CheckCastReduction extends GuardingPiReduction {
          * others.
          */
 
-        PiNode untrivialNull = reasoner.nonTrivialNull(subject);
+        PiNode untrivialNull = reasoner.untrivialNull(subject);
         if (untrivialNull != null) {
             metricCheckCastRemoved.increment();
             checkCast.replaceAtUsages(untrivialNull);
