@@ -53,9 +53,6 @@ public class Target_java_lang_reflect_Array {
 
     @Intrinsic
     public static boolean getBoolean(@Type(Object.class) StaticObject array, int index) {
-        if (!(array instanceof StaticObjectArray)) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(IllegalArgumentException.class);
-        }
         try {
             return Array.getBoolean(((StaticObjectArray) array).unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
@@ -65,9 +62,6 @@ public class Target_java_lang_reflect_Array {
 
     @Intrinsic
     public static byte getByte(@Type(Object.class) StaticObject array, int index) {
-        if (!(array instanceof StaticObjectArray)) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(IllegalArgumentException.class);
-        }
         try {
             return Array.getByte(((StaticObjectArray) array).unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
@@ -77,9 +71,6 @@ public class Target_java_lang_reflect_Array {
 
     @Intrinsic
     public static char getChar(@Type(Object.class) StaticObject array, int index) {
-        if (!(array instanceof StaticObjectArray)) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(IllegalArgumentException.class);
-        }
         try {
             return Array.getChar(((StaticObjectArray) array).unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
@@ -89,9 +80,6 @@ public class Target_java_lang_reflect_Array {
 
     @Intrinsic
     public static short getShort(@Type(Object.class) StaticObject array, int index) {
-        if (!(array instanceof StaticObjectArray)) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(IllegalArgumentException.class);
-        }
         try {
             return Array.getShort(((StaticObjectArray) array).unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
@@ -101,9 +89,6 @@ public class Target_java_lang_reflect_Array {
 
     @Intrinsic
     public static int getInt(@Type(Object.class) StaticObject array, int index) {
-        if (!(array instanceof StaticObjectArray)) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(IllegalArgumentException.class);
-        }
         try {
             return Array.getInt(((StaticObjectArray) array).unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
@@ -113,9 +98,6 @@ public class Target_java_lang_reflect_Array {
 
     @Intrinsic
     public static float getFloat(@Type(Object.class) StaticObject array, int index) {
-        if (!(array instanceof StaticObjectArray)) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(IllegalArgumentException.class);
-        }
         try {
             return Array.getFloat(((StaticObjectArray) array).unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
@@ -125,9 +107,6 @@ public class Target_java_lang_reflect_Array {
 
     @Intrinsic
     public static double getDouble(@Type(Object.class) StaticObject array, int index) {
-        if (!(array instanceof StaticObjectArray)) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(IllegalArgumentException.class);
-        }
         try {
             return Array.getDouble(((StaticObjectArray) array).unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
@@ -137,9 +116,6 @@ public class Target_java_lang_reflect_Array {
 
     @Intrinsic
     public static long getLong(@Type(Object.class) StaticObject array, int index) {
-        if (!(array instanceof StaticObjectArray)) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(IllegalArgumentException.class);
-        }
         try {
             return Array.getLong(((StaticObjectArray) array).unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
