@@ -109,7 +109,7 @@ public class InliningUtil {
         }
 
         protected static StructuredGraph getGraph(final ResolvedJavaMethod concrete, final InliningCallback callback) {
-            return Debug.scope("GetInliningGraph", concrete, new Callable<StructuredGraph>() {
+            return Debug.scope("Inlining", concrete, new Callable<StructuredGraph>() {
                 @Override
                 public StructuredGraph call() throws Exception {
                     return callback.buildGraph(concrete);
@@ -802,7 +802,7 @@ public class InliningUtil {
      * @param receiverNullCheck true if a null check needs to be generated for non-static inlinings, false if no such check is required
      */
     public static void inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck) {
-        InliningIdentifier identifier = new InliningIdentifier(inlineGraph.method(), invoke);
+        InliningIdentifier identifier = new InliningIdentifier(inlineGraph.method(), invoke.toString());
         NodeInputList<ValueNode> parameters = invoke.callTarget().arguments();
         StructuredGraph graph = (StructuredGraph) invoke.node().graph();
 
