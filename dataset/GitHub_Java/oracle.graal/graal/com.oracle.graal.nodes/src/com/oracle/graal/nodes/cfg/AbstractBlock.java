@@ -30,6 +30,8 @@ public interface AbstractBlock<T extends AbstractBlock<?>> {
 
     int getId();
 
+    AbstractBeginNode getBeginNode();
+
     Loop getLoop();
 
     int getLoopDepth();
