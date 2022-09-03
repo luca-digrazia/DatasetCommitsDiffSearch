@@ -128,6 +128,20 @@ public final class MemoryTracer implements Closeable {
      *
      * @param engine the engine to find debugger for
      * @return an instance of associated {@link MemoryTracer}
+     * @since 0.30
+     * @deprecated use {@link #find(Engine)} instead.
+     */
+    @Deprecated
+    @SuppressWarnings("deprecation")
+    public static MemoryTracer find(com.oracle.truffle.api.vm.PolyglotEngine engine) {
+        return MemoryTracerInstrument.getTracer(engine);
+    }
+
+    /**
+     * Finds {@link MemoryTracer} associated with given engine.
+     *
+     * @param engine the engine to find debugger for
+     * @return an instance of associated {@link MemoryTracer}
      * @since 1.0
      */
     public static MemoryTracer find(Engine engine) {
@@ -220,7 +234,7 @@ public final class MemoryTracer implements Closeable {
      */
     public synchronized void clearData() {
         for (ProfilerNode<Payload> node : rootNodes.values()) {
-            Map<StackTraceEntry, ProfilerNode<Payload>> rootChildren = node.children;
+            Map<SourceLocation, ProfilerNode<Payload>> rootChildren = node.children;
             if (rootChildren != null) {
                 rootChildren.clear();
             }
@@ -234,7 +248,7 @@ public final class MemoryTracer implements Closeable {
     public synchronized boolean hasData() {
         boolean hasData = false;
         for (ProfilerNode<Payload> node : rootNodes.values()) {
-            Map<StackTraceEntry, ProfilerNode<Payload>> rootChildren = node.children;
+            Map<SourceLocation, ProfilerNode<Payload>> rootChildren = node.children;
             hasData |= (rootChildren != null && !rootChildren.isEmpty());
         }
         return hasData;
@@ -289,7 +303,7 @@ public final class MemoryTracer implements Closeable {
      * @since 0.30
      */
     @Override
-    public synchronized void close() {
+    public void close() {
         assert Thread.holdsLock(this);
         if (stacksBinding != null) {
             stacksBinding.dispose();
@@ -311,12 +325,6 @@ public final class MemoryTracer implements Closeable {
 
     private final class Listener implements AllocationListener {
 
-        /**
-         * Used to prevent infinite recursions in case a language does an allocation during meta
-         * object lookup or toString call.
-         */
-        ThreadLocal<Boolean> gettingMetaObject = ThreadLocal.withInitial(() -> false);
-
         @Override
         public void onEnter(AllocationEvent event) {
         }
@@ -324,9 +332,6 @@ public final class MemoryTracer implements Closeable {
         @Override
         @TruffleBoundary
         public void onReturnValue(AllocationEvent event) {
-            if (gettingMetaObject.get()) {
-                return;
-            }
             ShadowStack.ThreadLocalStack stack = shadowStack.getStack(Thread.currentThread());
             if (stack == null || stack.getStackIndex() == -1) {
                 // nothing on the stack
@@ -338,21 +343,19 @@ public final class MemoryTracer implements Closeable {
             }
             LanguageInfo languageInfo = event.getLanguage();
             String metaObjectString;
-            gettingMetaObject.set(true);
             Object metaObject = env.findMetaObject(languageInfo, event.getValue());
             if (metaObject != null) {
                 metaObjectString = env.toString(languageInfo, metaObject);
             } else {
                 metaObjectString = "null";
             }
-            gettingMetaObject.set(false);
             AllocationEventInfo info = new AllocationEventInfo(languageInfo, event.getNewSize() - event.getOldSize(), event.getOldSize() != 0, metaObjectString);
             handleEvent(stack, info);
         }
 
         boolean handleEvent(ShadowStack.ThreadLocalStack stack, AllocationEventInfo info) {
-            StackTraceEntry[] locations = stack.getStack();
-            if (locations == null) {
+            final ShadowStack.ThreadLocalStack.CorrectedStackInfo correctedStackInfo = ShadowStack.ThreadLocalStack.CorrectedStackInfo.build(stack);
+            if (correctedStackInfo == null) {
                 return false;
             }
             synchronized (MemoryTracer.this) {
@@ -363,8 +366,8 @@ public final class MemoryTracer implements Closeable {
                         return new ProfilerNode<>();
                     }
                 });
-                for (int i = 0; i < locations.length; i++) {
-                    StackTraceEntry location = locations[i];
+                for (int i = 0; i < correctedStackInfo.getLength(); i++) {
+                    SourceLocation location = correctedStackInfo.getStack()[i];
                     ProfilerNode<Payload> child = treeNode.findChild(location);
                     if (child == null) {
                         child = new ProfilerNode<>(treeNode, location, new Payload());
