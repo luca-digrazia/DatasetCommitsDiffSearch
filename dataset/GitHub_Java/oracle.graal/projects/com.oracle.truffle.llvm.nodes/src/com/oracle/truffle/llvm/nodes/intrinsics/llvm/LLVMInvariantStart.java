@@ -27,42 +27,19 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86;
+package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMBuiltin;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 
-public abstract class LLVMX86_ConversionNode {
+@NodeChildren({@NodeChild(type = LLVMExpressionNode.class, value = "size"), @NodeChild(type = LLVMExpressionNode.class, value = "expected")})
+public abstract class LLVMInvariantStart extends LLVMBuiltin {
 
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMX86_ConversionFloatToIntNode extends LLVMBuiltin { // implements cvtss2si
-
-        @Specialization
-        public int executeIntrinsic(LLVMFloatVector vector) {
-            if (vector.getLength() != 4)
-                throw new AssertionError("cvtss2si requires a float[4] as parameter");
-
-            return Math.round(vector.getValues()[0]);
-        }
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMX86_ConversionDoubleToIntNode extends LLVMBuiltin { // implements cvtsd2si
-
-        @Specialization
-        public int executeIntrinsic(LLVMDoubleVector vector) {
-            if (vector.getLength() != 2)
-                throw new AssertionError("cvtsd2si requires a double[2] as parameter");
-
-            // returns an int instead of a long,
-            // causes an exception in one OpenCV test application when returning a long
-            return Math.toIntExact(Math.round(vector.getValues()[0]));
-        }
+    @Specialization
+    public Object executeI1(@SuppressWarnings("unused") long size, @SuppressWarnings("unused") Object ptr) {
+        return null;
     }
 
 }
