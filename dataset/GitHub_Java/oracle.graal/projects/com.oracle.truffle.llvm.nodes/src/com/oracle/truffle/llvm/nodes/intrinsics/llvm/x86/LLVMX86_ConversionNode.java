@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -53,7 +53,7 @@ public abstract class LLVMX86_ConversionNode {
                 throw new AssertionError("cvtss2si requires a float[4] as parameter");
             }
 
-            return Math.round(vector.getValue(0));
+            return Math.round(vector.getValues()[0]);
         }
     }
 
@@ -70,7 +70,7 @@ public abstract class LLVMX86_ConversionNode {
 
             // returns an int instead of a long,
             // causes an exception in one OpenCV test application when returning a long
-            return Math.toIntExact(Math.round(vector.getValue(0)));
+            return Math.toIntExact(Math.round(vector.getValues()[0]));
         }
     }
 
