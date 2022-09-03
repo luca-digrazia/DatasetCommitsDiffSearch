@@ -35,7 +35,6 @@ import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.java.StoreIndexedNode;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.tiers.HighTierContext;
-import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaUtil;
@@ -121,15 +120,7 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
             NodeSourcePosition pos = ifNode.getNodeSourcePosition();
             if (pos != null) {
                 if (TruffleInstrumentBranchesPerInlineSite.getValue()) {
-                    StringBuilder sb = new StringBuilder();
-                    while (pos != null) {
-                        MetaUtil.appendLocation(sb.append("at "), pos.getMethod(), pos.getBCI());
-                        pos = pos.getCaller();
-                        if (pos != null) {
-                            sb.append(CodeUtil.NEW_LINE);
-                        }
-                    }
-                    return sb.toString();
+                    return pos.toString();
                 } else {
                     return MetaUtil.appendLocation(new StringBuilder(), pos.getMethod(), pos.getBCI()).toString();
                 }

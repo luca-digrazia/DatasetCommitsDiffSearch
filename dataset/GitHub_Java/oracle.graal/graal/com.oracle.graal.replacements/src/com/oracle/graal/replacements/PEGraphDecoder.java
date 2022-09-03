@@ -75,7 +75,6 @@ import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.InvocationPluginReceiver;
 import com.oracle.graal.nodes.graphbuilderconf.LoopExplosionPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.LoopExplosionPlugin.LoopExplosionKind;
 import com.oracle.graal.nodes.graphbuilderconf.ParameterPlugin;
 import com.oracle.graal.nodes.java.MethodCallTargetNode;
 import com.oracle.graal.nodes.java.MonitorIdNode;
@@ -365,8 +364,12 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     protected static LoopExplosionKind loopExplosionKind(ResolvedJavaMethod method, LoopExplosionPlugin loopExplosionPlugin) {
         if (loopExplosionPlugin == null) {
             return LoopExplosionKind.NONE;
+        } else if (loopExplosionPlugin.shouldMergeExplosions(method)) {
+            return LoopExplosionKind.MERGE_EXPLODE;
+        } else if (loopExplosionPlugin.shouldExplodeLoops(method)) {
+            return LoopExplosionKind.FULL_UNROLL;
         } else {
-            return loopExplosionPlugin.loopExplosionKind(method);
+            return LoopExplosionKind.NONE;
         }
     }
 
@@ -376,7 +379,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                         parameterPlugin, null);
         decode(createInitialLoopScope(methodScope, null));
         cleanupGraph(methodScope, null);
-        assert methodScope.graph.verify();
+        methodScope.graph.verify();
     }
 
     @Override
