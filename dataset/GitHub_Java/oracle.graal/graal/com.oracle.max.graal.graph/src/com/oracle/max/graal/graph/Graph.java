@@ -22,48 +22,365 @@
  */
 package com.oracle.max.graal.graph;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
+import java.util.*;
 
+import com.oracle.max.graal.graph.GraphEvent.NodeEvent;
+import com.oracle.max.graal.graph.Node.IterableNodeType;
+import com.oracle.max.graal.graph.Node.ValueNumberable;
+import com.oracle.max.graal.graph.iterators.*;
+
+/**
+ * This class is a graph container, it contains the set of nodes that belong to this graph.
+ */
 public class Graph {
 
-    private final ArrayList<Node> nodes;
-    private final StartNode start;
-    int nextId;
+    protected final String name;
 
-    static int nextGraphId = 0;
-    int id = nextGraphId++;
+    private static final boolean TIME_TRAVEL = false;
+
+    private final ArrayList<Node> nodes;
+
+    // these two arrays contain one entry for each NodeClass, indexed by NodeClass.iterableId.
+    // they contain the first and last pointer to a linked list of all nodes with this type.
+    private final ArrayList<Node> nodeCacheFirst;
+    private final ArrayList<Node> nodeCacheLast;
+    private int deletedNodeCount;
+    private int mark;
+    private GraphEventLog eventLog;
+
+    ArrayList<Node> usagesDropped = new ArrayList<>();
+    NodeWorkList inputChanged;
+    private final HashMap<CacheEntry, Node> cachedNodes = new HashMap<>();
+
+    private static final class CacheEntry {
+
+        private final Node node;
+
+        public CacheEntry(Node node) {
+            this.node = node;
+        }
+
+        @Override
+        public int hashCode() {
+            return node.getNodeClass().valueNumber(node);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == this) {
+                return true;
+            }
+            if (obj instanceof CacheEntry) {
+                CacheEntry other = (CacheEntry) obj;
+                NodeClass nodeClass = node.getNodeClass();
+                if (other.node.getNodeClass() == nodeClass) {
+                    return nodeClass.valueNumberable() && nodeClass.valueEqual(node, other.node) && nodeClass.edgesEqual(node, other.node);
+                }
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Creates an empty Graph with no name.
+     */
+    public Graph() {
+        this(null);
+    }
+
+    /**
+     * Creates an empty Graph with a given name.
+     *
+     * @param name the name of the graph, used for debugging purposes
+     */
+    public Graph(String name) {
+        nodes = new ArrayList<>(32);
+        nodeCacheFirst = new ArrayList<>(NodeClass.cacheSize());
+        nodeCacheLast = new ArrayList<>(NodeClass.cacheSize());
+        this.name = name;
+    }
+
+    /**
+     * Creates a copy of this graph.
+     */
+    public Graph copy() {
+        return copy(name);
+    }
+
+    /**
+     * Creates a copy of this graph.
+     *
+     * @param name the name of the copy, used for debugging purposes (can be null)
+     */
+    public Graph copy(String newName) {
+        Graph copy = new Graph(newName);
+        Map<Node, Node> emptyMap = Collections.emptyMap();
+        copy.addDuplicates(getNodes(), emptyMap);
+        return copy;
+    }
 
     @Override
     public String toString() {
-        return "Graph " + id;
+        return name == null ? super.toString() : "Graph " + name;
     }
 
-    public Graph() {
-        nodes = new ArrayList<Node>();
-        start = new StartNode(this);
+    /**
+     * Gets the number of live nodes in this graph. That is the number of nodes which have been added to the graph minus the number of deleted nodes.
+     * @return the number of live nodes in this graph
+     */
+    public int getNodeCount() {
+        return nodes.size() - getDeletedNodeCount();
     }
 
-    public List<Node> getNodes() {
-        return Collections.unmodifiableList(nodes);
+    /**
+     * Gets the number of node which have been deleted from this graph.
+     * @return the number of node which have been deleted from this graph
+     */
+    public int getDeletedNodeCount() {
+        return deletedNodeCount;
     }
 
-    int register(Node node) {
-        int id = nextId++;
-        nodes.add(id, node);
-        return id;
+    /**
+     * Adds a new node to the graph.
+     * @param node the node to be added
+     * @return the node which was added to the graph
+     */
+    public <T extends Node> T add(T node) {
+        node.initialize(this);
+        return node;
     }
 
-    void unregister(Node node) {
-        nodes.set(node.id(), Node.Null);
+    public int getUsagesDroppedNodesCount() {
+        return usagesDropped.size();
     }
 
-    public StartNode start() {
+    public List<Node> getAndCleanUsagesDroppedNodes() {
+        ArrayList<Node> result = usagesDropped;
+        usagesDropped = new ArrayList<>();
+        return result;
+    }
+
+    public void trackInputChange(NodeWorkList worklist) {
+        this.inputChanged = worklist;
+    }
+
+    public void stopTrackingInputChange() {
+        inputChanged = null;
+    }
+
+    /**
+     * Adds a new node to the graph, if a <i>similar</i> node already exists in the graph, the provided node will not be added to the graph but the <i>similar</i> node will be returned instead.
+     * @param node
+     * @return the node which was added to the graph or a <i>similar</i> which was already in the graph.
+     */
+    @SuppressWarnings("unchecked")
+    public <T extends Node & ValueNumberable> T unique(T node) {
+        assert checkValueNumberable(node);
+
+        for (Node input : node.inputs()) {
+            if (input != null) {
+                for (Node usage : input.usages()) {
+                    if (usage != node && node.getNodeClass().valueEqual(node, usage) && node.getNodeClass().edgesEqual(node, usage)) {
+                        return (T) usage;
+                    }
+                }
+                return add(node);
+            }
+        }
+        Node cachedNode = cachedNodes.get(new CacheEntry(node));
+        if (cachedNode != null && cachedNode.isAlive()) {
+            return (T) cachedNode;
+        } else {
+            Node result = add(node);
+            cachedNodes.put(new CacheEntry(node), result);
+            return (T) result;
+        }
+    }
+
+    public Node findDuplicate(Node node) {
+        if (node.getNodeClass().valueNumberable()) {
+            for (Node input : node.inputs()) {
+                if (input != null) {
+                    for (Node usage : input.usages()) {
+                        if (usage != node && node.getNodeClass().valueEqual(node, usage) && node.getNodeClass().edgesEqual(node, usage)) {
+                            return usage;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean checkValueNumberable(Node node) {
+        if (!node.getNodeClass().valueNumberable()) {
+            throw new VerificationError("node is not valueNumberable").addContext(node);
+        }
+        return true;
+    }
+
+    public void mark() {
+        this.mark = nodeIdCount();
+    }
+
+    private class NodeIterator implements Iterator<Node> {
+        private int index;
+
+        public NodeIterator() {
+            this(0);
+        }
+
+        public NodeIterator(int index) {
+            this.index = index - 1;
+            forward();
+        }
+
+        private void forward() {
+            if (index < nodes.size()) {
+                do {
+                    index++;
+                } while (index < nodes.size() && nodes.get(index) == null);
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            checkForDeletedNode();
+            return index < nodes.size();
+        }
+
+        private void checkForDeletedNode() {
+            if (index < nodes.size()) {
+                while (index < nodes.size() && nodes.get(index) == null) {
+                    index++;
+                }
+            }
+        }
+
+        @Override
+        public Node next() {
+            try {
+                return nodes.get(index);
+            } finally {
+                forward();
+            }
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    /**
+     * Returns an {@link Iterable} providing all nodes added since the last {@link Graph#mark() mark}.
+     * @return an {@link Iterable} providing the new nodes
+     */
+    public NodeIterable<Node> getNewNodes() {
+        final int index = this.mark;
+        return new NodeIterable<Node>() {
+            @Override
+            public Iterator<Node> iterator() {
+                return new NodeIterator(index);
+            }
+        };
+    }
+
+    /**
+     * Returns an {@link Iterable} providing all the live nodes.
+     * @return an {@link Iterable} providing all the live nodes.
+     */
+    public NodeIterable<Node> getNodes() {
+        return new NodeIterable<Node>() {
+            @Override
+            public Iterator<Node> iterator() {
+                return new NodeIterator();
+            }
+        };
+    }
+
+    private static class TypedNodeIterator<T extends IterableNodeType> implements Iterator<T> {
+        private Node current;
+        private final Node start;
+
+        public TypedNodeIterator(Node start) {
+            if (start != null && start.isDeleted()) {
+                this.current = start;
+            } else {
+                this.current = null;
+            }
+            this.start = start;
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (current != null) {
+                Node next = current.typeCacheNext;
+                if (next != null) {
+                    while (next.isDeleted()) {
+                        next = next.typeCacheNext;
+                        if (next == null) {
+                            return false;
+                        }
+                        current.typeCacheNext = next;
+                    }
+                    return true;
+                }
+                return false;
+            } else {
+                return start != null;
+            }
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public T next() {
+            if (current == null) {
+                Node result = start;
+                current = result;
+                return (T) result;
+            } else {
+                Node result = current.typeCacheNext;
+                current = result;
+                return (T) result;
+            }
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    /**
+     * Returns an {@link Iterable} providing all the live nodes whose type is compatible with {@code type}.
+     * @param type the type of node to return
+     * @return an {@link Iterable} providing all the matching nodes.
+     */
+    public <T extends Node & IterableNodeType> NodeIterable<T> getNodes(final Class<T> type) {
+        final Node start = getStartNode(type);
+        return new NodeIterable<T>() {
+            @Override
+            public Iterator<T> iterator() {
+                return new TypedNodeIterator<>(start);
+            }
+        };
+    }
+
+    /**
+     * Returns whether the graph contains at least one node of the given type.
+     * @param type the type of node that is checked for occurrence
+     * @return whether there is at least one such node
+     */
+    public <T extends Node & IterableNodeType> boolean hasNode(final Class<T> type) {
+        return getNodes(type).iterator().hasNext();
+    }
+
+    private <T> Node getStartNode(final Class<T> type) {
+        int nodeClassId = NodeClass.get(type).iterableId();
+        assert nodeClassId != -1 : type + " is not iterable within graphs (missing \"implements IterableNodeType\"?)";
+        Node start = nodeCacheFirst.size() <= nodeClassId ? null : nodeCacheFirst.get(nodeClassId);
         return start;
     }
 
@@ -72,72 +389,118 @@ public class Graph {
     }
 
     public <T> NodeMap<T> createNodeMap() {
-        return new NodeMap<T>(this);
+        return new NodeMap<>(this);
     }
 
-    public NodeWorklist createNodeWorklist() {
-        return new NodeWorklist(this);
+    public NodeFlood createNodeFlood() {
+        return new NodeFlood(this);
     }
 
-    public Map<Node, Node> addDuplicate(Collection<Node> nodes, Map<Node, Node> replacements) {
-        Map<Node, Node> newNodes = new HashMap<Node, Node>();
-        // create node duplicates
-        for (Node node : nodes) {
-            if (node != null && !replacements.containsKey(node)) {
-                assert node.graph != this;
-                Node newNode = node.copy(this);
-                assert newNode.getClass() == node.getClass();
-                newNodes.put(node, newNode);
+    public NodeWorkList createNodeWorkList() {
+        return new NodeWorkList(this);
+    }
+
+    public NodeWorkList createNodeWorkList(boolean fill, int iterationLimitPerNode) {
+        return new NodeWorkList(this, fill, iterationLimitPerNode);
+    }
+
+    void register(Node node) {
+        assert node.id() == Node.INITIAL_ID;
+        int id = nodes.size();
+        nodes.add(id, node);
+
+        int nodeClassId = node.getNodeClass().iterableId();
+        if (nodeClassId != NodeClass.NOT_ITERABLE) {
+            while (nodeCacheFirst.size() <= nodeClassId) {
+                nodeCacheFirst.add(null);
+                nodeCacheLast.add(null);
             }
+            Node prev = nodeCacheLast.get(nodeClassId);
+            if (prev != null) {
+                prev.typeCacheNext = node;
+            } else {
+                nodeCacheFirst.set(nodeClassId, node);
+            }
+            nodeCacheLast.set(nodeClassId, node);
         }
-        // re-wire inputs
-        for (Entry<Node, Node> entry : newNodes.entrySet()) {
-            Node oldNode = entry.getKey();
-            Node node = entry.getValue();
-            for (int i = 0; i < oldNode.inputs().size(); i++) {
-                Node input = oldNode.inputs().get(i);
-                Node target = replacements.get(input);
-                if (target == null) {
-                    target = newNodes.get(input);
+
+        node.id = id;
+        logNodeAdded(node);
+    }
+
+    void logNodeAdded(Node node) {
+        if (TIME_TRAVEL) {
+            log(new GraphEvent.NodeEvent(node, GraphEvent.NodeEvent.Type.ADDED));
+        }
+    }
+
+    void logNodeDeleted(Node node) {
+        if (TIME_TRAVEL) {
+            log(new GraphEvent.NodeEvent(node, GraphEvent.NodeEvent.Type.DELETED));
+        }
+    }
+
+    private void log(NodeEvent nodeEvent) {
+        if (eventLog == null) {
+            eventLog = new GraphEventLog();
+        }
+        eventLog.add(nodeEvent);
+    }
+
+    public GraphEventLog getEventLog() {
+        return eventLog;
+    }
+
+    void unregister(Node node) {
+        assert !node.isDeleted() : "cannot delete a node twice! node=" + node;
+        logNodeDeleted(node);
+        nodes.set(node.id(), null);
+        deletedNodeCount++;
+
+        // nodes aren't removed from the type cache here - they will be removed during iteration
+    }
+
+    public boolean verify() {
+        for (Node node : getNodes()) {
+            try {
+                try {
+                    assert node.verify();
+                } catch (AssertionError t) {
+                    throw new GraalInternalError(t);
+                } catch (RuntimeException t) {
+                    throw new GraalInternalError(t);
                 }
-                node.inputs().set(i, target);
+            } catch (GraalInternalError e) {
+                throw e.addContext(node).addContext(this);
             }
         }
-        for (Entry<Node, Node> entry : replacements.entrySet()) {
-            Node oldNode = entry.getKey();
-            Node node = entry.getValue();
-            for (int i = 0; i < oldNode.inputs().size(); i++) {
-                Node input = oldNode.inputs().get(i);
-                if (newNodes.containsKey(input)) {
-                    node.inputs().set(i, newNodes.get(input));
-                }
-            }
-        }
-        // re-wire successors
-        for (Entry<Node, Node> entry : newNodes.entrySet()) {
-            Node oldNode = entry.getKey();
-            Node node = entry.getValue();
-            for (int i = 0; i < oldNode.predecessors().size(); i++) {
-                Node pred = oldNode.predecessors().get(i);
-                int predIndex = oldNode.predecessorsIndex().get(i);
-                Node source = replacements.get(pred);
-                if (source == null) {
-                    source = newNodes.get(pred);
-                }
-                source.successors().set(predIndex,  node);
-            }
-        }
-        for (Entry<Node, Node> entry : replacements.entrySet()) {
-            Node oldNode = entry.getKey();
-            Node node = entry.getValue();
-            for (int i = 0; i < oldNode.predecessors().size(); i++) {
-                Node pred = oldNode.predecessors().get(i);
-                int predIndex = oldNode.predecessorsIndex().get(i);
-                if (newNodes.containsKey(pred)) {
-                    newNodes.get(pred).successors().set(predIndex, node);
-                }
-            }
-        }
-        return newNodes;
+        return true;
+    }
+
+    Node getNode(int i) {
+        return nodes.get(i);
+    }
+
+    /**
+     * Returns the number of node ids generated so far.
+     * @return the number of node ids generated so far
+     */
+    int nodeIdCount() {
+        return nodes.size();
+    }
+
+    /**
+     * Adds duplicates of the nodes in {@code nodes} to this graph.
+     * This will recreate any edges between the duplicate nodes. The {@code replacement} map can be used to
+     * replace a node from the source graph by a given node (which must already be in this graph).
+     * Edges between duplicate and replacement nodes will also be recreated so care should be taken
+     * regarding the matching of node types in the replacement map.
+     *
+     * @param newNodes the nodes to be duplicated
+     * @param replacements the replacement map (can be null if no replacement is to be performed)
+     * @return a map which associates the original nodes from {@code nodes} to their duplicates
+     */
+    public Map<Node, Node> addDuplicates(Iterable<Node> newNodes, Map<Node, Node> replacements) {
+        return NodeClass.addGraphDuplicate(this, newNodes, replacements);
     }
 }
