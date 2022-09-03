@@ -486,6 +486,4 @@ public abstract class AbstractPolyglotImpl {
 
     }
 
-    public abstract Class<?> loadLanguageClass(String className);
-
 }

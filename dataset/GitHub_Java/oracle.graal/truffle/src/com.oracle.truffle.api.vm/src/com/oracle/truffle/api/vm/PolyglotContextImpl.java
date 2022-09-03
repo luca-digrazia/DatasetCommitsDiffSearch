@@ -28,7 +28,6 @@ import static com.oracle.truffle.api.vm.PolyglotImpl.checkEngine;
 import static com.oracle.truffle.api.vm.PolyglotImpl.checkStateForGuest;
 import static com.oracle.truffle.api.vm.PolyglotImpl.isGuestInteropValue;
 import static com.oracle.truffle.api.vm.PolyglotImpl.wrapGuestException;
-import static com.oracle.truffle.api.vm.VMAccessor.INSTRUMENT;
 import static com.oracle.truffle.api.vm.VMAccessor.LANGUAGE;
 import static com.oracle.truffle.api.vm.VMAccessor.NODES;
 
@@ -83,19 +82,9 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
                     PolyglotLanguageImpl singlePublicLanguage) {
         super(engine.impl);
         this.applicationArguments = applicationArguments;
-
-        if (out == null) {
-            this.out = engine.out;
-        } else {
-            this.out = INSTRUMENT.createDelegatingOutput(out, engine.out);
-        }
-        if (err == null) {
-            this.err = engine.err;
-        } else {
-            this.err = INSTRUMENT.createDelegatingOutput(err, engine.err);
-        }
-        this.in = in == null ? engine.in : in;
-
+        this.out = out;
+        this.err = err;
+        this.in = in;
         this.options = options;
         this.singlePublicLanguage = singlePublicLanguage;
         this.engine = engine;
