@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -50,7 +48,6 @@ import jdk.vm.ci.code.Register;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.PrimitiveConstant;
 import jdk.vm.ci.meta.Value;
 
 public abstract class AMD64MoveFactory extends AMD64MoveFactoryBase {
@@ -60,20 +57,12 @@ public abstract class AMD64MoveFactory extends AMD64MoveFactoryBase {
     }
 
     @Override
-    public boolean mayEmbedConstantLoad(Constant constant, boolean mayEmbedPrerequisite) {
-        return mayEmbedPrerequisite && (constant instanceof PrimitiveConstant && ((PrimitiveConstant) constant).getJavaKind().isNumericFloat());
-    }
-
-    @Override
     public boolean canInlineConstant(Constant con) {
         if (con instanceof JavaConstant) {
             JavaConstant c = (JavaConstant) con;
             switch (c.getJavaKind()) {
                 case Long:
                     return NumUtil.isInt(c.asLong());
-                case Float:
-                case Double:
-                    return false;
                 case Object:
                     return c.isNull();
                 default:
