@@ -98,6 +98,7 @@ import uk.ac.man.cs.llvm.ir.model.constants.VectorConstant;
 import uk.ac.man.cs.llvm.ir.model.elements.ValueInstruction;
 import uk.ac.man.cs.llvm.ir.model.enums.BinaryOperator;
 import uk.ac.man.cs.llvm.ir.model.enums.CompareOperator;
+import uk.ac.man.cs.llvm.ir.types.FloatingPointType;
 import uk.ac.man.cs.llvm.ir.types.FunctionType;
 import uk.ac.man.cs.llvm.ir.types.IntegerType;
 import uk.ac.man.cs.llvm.ir.types.StructureType;
@@ -153,6 +154,18 @@ public final class LLVMNodeGenerator {
     private static LLVMExpressionNode resolveBigIntegerConstant(BigIntegerConstant constant) {
         final int bits = ((IntegerType) constant.getType()).getBitCount();
         return new LLVMSimpleLiteralNode.LLVMIVarBitLiteralNode(LLVMIVarBit.create(bits, constant.getValue().toByteArray()));
+    }
+
+    private static LLVMExpressionNode resolveFloatingPointConstant(FloatingPointConstant constant) {
+        final FloatingPointType type = (FloatingPointType) constant.getType();
+        switch (type) {
+            case FLOAT:
+                return new LLVMSimpleLiteralNode.LLVMFloatLiteralNode(constant.toFloat());
+            case DOUBLE:
+                return new LLVMSimpleLiteralNode.LLVMDoubleLiteralNode(constant.toDouble());
+            default:
+                throw new UnsupportedOperationException("Unsupported Floating Point Type: " + type);
+        }
     }
 
     private static LLVMExpressionNode resolveIntegerConstant(IntegerConstant constant) {
@@ -369,7 +382,7 @@ public final class LLVMNodeGenerator {
             return resolveBigIntegerConstant((BigIntegerConstant) symbol);
 
         } else if (symbol instanceof FloatingPointConstant) {
-            return LLVMConstantGenerator.toFloatingPointConstant((FloatingPointConstant) symbol);
+            return resolveFloatingPointConstant((FloatingPointConstant) symbol);
 
         } else if (symbol instanceof NullConstant || symbol instanceof UndefinedConstant) {
             return LLVMConstantGenerator.toConstantZeroNode(symbol.getType(), method.getContext(), method.getStackSlot(), typeHelper);
