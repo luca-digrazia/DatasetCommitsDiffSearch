@@ -22,15 +22,18 @@
  */
 package com.oracle.truffle.object.basic;
 
-import java.util.*;
+import java.util.EnumSet;
 
-import com.oracle.truffle.api.object.*;
+import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.api.object.Layout;
+import com.oracle.truffle.api.object.Location;
+import com.oracle.truffle.api.object.ObjectLocation;
+import com.oracle.truffle.api.object.ObjectType;
+import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.api.object.Shape.Allocator;
-import com.oracle.truffle.object.*;
+import com.oracle.truffle.object.LayoutImpl;
+import com.oracle.truffle.object.LayoutStrategy;
 import com.oracle.truffle.object.LocationImpl.InternalLongLocation;
-import com.oracle.truffle.object.Locations.DualLocation;
-import com.oracle.truffle.object.basic.BasicLocations.ObjectFieldLocation;
-import com.oracle.truffle.object.basic.BasicLocations.SimpleObjectFieldLocation;
 
 public class BasicLayout extends LayoutImpl {
     private final ObjectLocation[] objectFields;
@@ -46,8 +49,8 @@ public class BasicLayout extends LayoutImpl {
         this.objectArrayLocation = DynamicObjectBasic.OBJECT_ARRAY_LOCATION;
     }
 
-    static LayoutImpl createLayoutImpl(EnumSet<ImplicitCast> allowedImplicitCasts, LayoutStrategy strategy) {
-        return new BasicLayout(allowedImplicitCasts, strategy);
+    static LayoutImpl createLayoutImpl(Layout.Builder builder, LayoutStrategy strategy) {
+        return new BasicLayout(getAllowedImplicitCasts(builder), strategy);
     }
 
     @Override
@@ -56,8 +59,8 @@ public class BasicLayout extends LayoutImpl {
     }
 
     @Override
-    public Shape createShape(ObjectType operations, Object sharedData, int id) {
-        return new ShapeBasic(this, sharedData, operations, id);
+    public Shape createShape(ObjectType objectType, Object sharedData, int id) {
+        return new ShapeBasic(this, sharedData, objectType, id);
     }
 
     @Override
@@ -103,18 +106,5 @@ public class BasicLayout extends LayoutImpl {
         LayoutImpl layout = this;
         Allocator allocator = getStrategy().createAllocator(layout);
         return allocator;
-    }
-
-    @Override
-    protected int objectFieldIndex(Location location) {
-        if (location instanceof DualLocation) {
-            return objectFieldIndex((Location) ((DualLocation) location).getObjectLocation());
-        } else if (location instanceof ObjectFieldLocation) {
-            return ((ObjectFieldLocation) location).getIndex();
-        } else if (location instanceof SimpleObjectFieldLocation) {
-            return ((SimpleObjectFieldLocation) location).getIndex();
-        } else {
-            return 0;
-        }
     }
 }
