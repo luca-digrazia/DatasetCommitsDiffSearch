@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,8 +29,8 @@ import java.util.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.code.CallingConvention.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 import jdk.internal.jvmci.meta.*;
 import jdk.internal.jvmci.meta.Assumptions.Assumption;
 
@@ -62,7 +62,7 @@ public abstract class TruffleCompiler {
     protected final GraalTruffleCompilationListener compilationNotify;
 
     // @formatter:off
-    private static final Class<?>[] SKIPPED_EXCEPTION_CLASSES = new Class<?>[]{
+    private static final Class<?>[] SKIPPED_EXCEPTION_CLASSES = new Class[]{
         UnexpectedResultException.class,
         SlowPathException.class,
         ArithmeticException.class,
@@ -164,8 +164,8 @@ public abstract class TruffleCompiler {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
             CompilationResult compilationResult = new CompilationResult(name);
-            result = compileGraph(graph, cc, graph.method(), providers, backend, graphBuilderSuite, Optimizations, getProfilingInfo(graph), suites, lirSuites, compilationResult,
-                            CompilationResultBuilderFactory.Default);
+            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), graphBuilderSuite, Optimizations, getProfilingInfo(graph), suites, lirSuites,
+                            compilationResult, CompilationResultBuilderFactory.Default);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
