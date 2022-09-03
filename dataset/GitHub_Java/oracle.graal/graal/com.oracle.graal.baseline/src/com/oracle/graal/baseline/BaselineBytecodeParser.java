@@ -95,7 +95,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             BciBlockMapping blockMap;
             try (Scope ds = Debug.scope("BciBlockMapping")) {
                 // compute the block map, setup exception handlers and get the entrypoint(s)
-                blockMap = BciBlockMapping.create(method, graphBuilderConfig.doLivenessAnalysis());
+                blockMap = BciBlockMapping.create(method);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
@@ -158,7 +158,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
                 try (Scope s = Debug.scope("Allocator")) {
 
                     if (backend.shouldAllocateRegisters()) {
-                        LinearScan.allocate(target, lir, frameMap);
+                        GraalCompiler.runLinearScan(target, lir, frameMap);
                     }
                 } catch (Throwable e) {
                     throw Debug.handle(e);

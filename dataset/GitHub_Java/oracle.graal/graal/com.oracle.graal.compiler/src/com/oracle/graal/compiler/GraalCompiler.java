@@ -242,8 +242,8 @@ public class GraalCompiler {
             throw Debug.handle(e);
         }
         try (Scope ds = Debug.scope("BackEnd", lir)) {
-            FrameMapBuilder frameMapBuilder = backend.newFrameMapBuilder(registerConfig);
-            LIRGenerationResult lirGenRes = backend.newLIRGenerationResult(lir, frameMapBuilder, graph.method(), stub);
+            FrameMap frameMap = backend.newFrameMap(registerConfig);
+            LIRGenerationResult lirGenRes = backend.newLIRGenerationResult(lir, frameMap, graph.method(), stub);
             LIRGeneratorTool lirGen = backend.newLIRGenerator(cc, lirGenRes);
             NodeLIRBuilderTool nodeLirGen = backend.newNodeLIRBuilder(graph, lirGen);
 
@@ -269,10 +269,7 @@ public class GraalCompiler {
 
             try (Scope s = Debug.scope("Allocator", nodeLirGen)) {
                 if (backend.shouldAllocateRegisters()) {
-                    LinearScan.allocate(target, lirGenRes);
-                } else {
-                    // build frame map for targets that do not allocate registers
-                    lirGenRes.buildFrameMap();
+                    LinearScan.allocate(target, lir, frameMap);
                 }
             } catch (Throwable e) {
                 throw Debug.handle(e);
@@ -282,7 +279,7 @@ public class GraalCompiler {
                 EdgeMoveOptimizer.optimize(lir);
                 ControlFlowOptimizer.optimize(lir, codeEmittingOrder);
                 if (lirGen.canEliminateRedundantMoves()) {
-                    RedundantMoveElimination.optimize(lir, frameMapBuilder);
+                    RedundantMoveElimination.optimize(lir, frameMap);
                 }
                 NullCheckOptimizer.optimize(lir, target.implicitNullCheckLimit);
 
@@ -298,8 +295,7 @@ public class GraalCompiler {
 
     public static void emitCode(Backend backend, Assumptions assumptions, LIRGenerationResult lirGenRes, CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner,
                     CompilationResultBuilderFactory factory) {
-        FrameMap frameMap = lirGenRes.getFrameMap();
-        CompilationResultBuilder crb = backend.newCompilationResultBuilder(lirGenRes, frameMap, compilationResult, factory);
+        CompilationResultBuilder crb = backend.newCompilationResultBuilder(lirGenRes, compilationResult, factory);
         backend.emitCode(crb, lirGenRes.getLIR(), installedCodeOwner);
         crb.finish();
         if (!assumptions.isEmpty()) {
