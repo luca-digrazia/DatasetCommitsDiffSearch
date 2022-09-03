@@ -86,6 +86,7 @@ public class IntegerExactExceptionTest extends GraalCompilerTest {
         }
     }
 
+
     static long longCounter = 10;
 
     public void testLongExactOverflowSnippet(long input) {

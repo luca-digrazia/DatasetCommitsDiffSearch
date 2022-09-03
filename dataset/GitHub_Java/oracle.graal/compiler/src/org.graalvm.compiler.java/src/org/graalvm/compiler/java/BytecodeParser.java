@@ -3369,25 +3369,29 @@ public class BytecodeParser implements GraphBuilderContext {
 
             NodeSourcePosition currentPosition = graph.currentNodeSourcePosition();
             if (isNeverExecutedCode(probability)) {
-                NodeSourcePosition survivingSuccessorPosition = graph.trackNodeSourcePosition()
-                                ? new NodeSourcePosition(currentPosition.getCaller(), currentPosition.getMethod(), falseBlock.startBci)
-                                : null;
-                append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, true, survivingSuccessorPosition));
-                if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
-                    profilingPlugin.profileGoto(this, method, bci(), falseBlock.startBci, stateBefore);
+                if (!graph.isOSR() || getParent() != null || graph.getEntryBCI() != trueBlock.startBci) {
+                    NodeSourcePosition survivingSuccessorPosition = graph.trackNodeSourcePosition()
+                                    ? new NodeSourcePosition(currentPosition.getCaller(), currentPosition.getMethod(), falseBlock.startBci)
+                                    : null;
+                    append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, true, survivingSuccessorPosition));
+                    if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
+                        profilingPlugin.profileGoto(this, method, bci(), falseBlock.startBci, stateBefore);
+                    }
+                    appendGoto(falseBlock);
+                    return;
                 }
-                appendGoto(falseBlock);
-                return;
             } else if (isNeverExecutedCode(1 - probability)) {
-                NodeSourcePosition survivingSuccessorPosition = graph.trackNodeSourcePosition()
-                                ? new NodeSourcePosition(currentPosition.getCaller(), currentPosition.getMethod(), trueBlock.startBci)
-                                : null;
-                append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, false, survivingSuccessorPosition));
-                if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
-                    profilingPlugin.profileGoto(this, method, bci(), trueBlock.startBci, stateBefore);
+                if (!graph.isOSR() || getParent() != null || graph.getEntryBCI() != falseBlock.startBci) {
+                    NodeSourcePosition survivingSuccessorPosition = graph.trackNodeSourcePosition()
+                                    ? new NodeSourcePosition(currentPosition.getCaller(), currentPosition.getMethod(), trueBlock.startBci)
+                                    : null;
+                    append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, false, survivingSuccessorPosition));
+                    if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
+                        profilingPlugin.profileGoto(this, method, bci(), trueBlock.startBci, stateBefore);
+                    }
+                    appendGoto(trueBlock);
+                    return;
                 }
-                appendGoto(trueBlock);
-                return;
             }
 
             if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
