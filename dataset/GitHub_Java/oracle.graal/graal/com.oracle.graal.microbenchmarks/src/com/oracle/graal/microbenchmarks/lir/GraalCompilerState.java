@@ -25,7 +25,6 @@ package com.oracle.graal.microbenchmarks.lir;
 import static com.oracle.graal.microbenchmarks.graal.util.GraalUtil.getGraph;
 import static com.oracle.graal.microbenchmarks.graal.util.GraalUtil.getMethodFromMethodSpec;
 
-import java.lang.reflect.Method;
 import java.util.List;
 
 import org.openjdk.jmh.annotations.Level;
@@ -56,7 +55,6 @@ import com.oracle.graal.lir.phases.LIRSuites;
 import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
 import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase.PreAllocationOptimizationContext;
 import com.oracle.graal.microbenchmarks.graal.util.GraalState;
-import com.oracle.graal.microbenchmarks.graal.util.GraalUtil;
 import com.oracle.graal.microbenchmarks.graal.util.MethodSpec;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
@@ -91,7 +89,7 @@ public abstract class GraalCompilerState {
     /**
      * Original graph from which the per-benchmark invocation {@link #graph} is cloned.
      */
-    private StructuredGraph originalGraph;
+    private final StructuredGraph originalGraph;
 
     /**
      * The graph processed by the benchmark.
@@ -118,12 +116,8 @@ public abstract class GraalCompilerState {
             DebugEnvironment.initialize(System.out);
         }
 
-    }
-
-    @SuppressWarnings("try")
-    protected void initializeMethod() {
         GraalState graal = new GraalState();
-        ResolvedJavaMethod method = graal.metaAccess.lookupJavaMethod(getMethod());
+        ResolvedJavaMethod method = graal.metaAccess.lookupJavaMethod(getMethodFromMethodSpec(getClass()));
         StructuredGraph structuredGraph = null;
         try (Debug.Scope s = Debug.scope("GraphState", method)) {
             structuredGraph = preprocessOriginal(getGraph(graal, method));
@@ -131,10 +125,6 @@ public abstract class GraalCompilerState {
             Debug.handle(t);
         }
         this.originalGraph = structuredGraph;
-    }
-
-    protected Method getMethod() {
-        return getMethodFromMethodSpec(getClass());
     }
 
     protected StructuredGraph preprocessOriginal(StructuredGraph structuredGraph) {
@@ -220,7 +210,6 @@ public abstract class GraalCompilerState {
      * can be changed by overriding {@link #createLIRSuites()}.
      */
     protected final void prepareRequest() {
-        assert originalGraph != null : "call initialzeMethod first";
         graph = (StructuredGraph) originalGraph.copy();
         assert !graph.isFrozen();
         ResolvedJavaMethod installedCodeOwner = graph.method();
@@ -347,11 +336,6 @@ public abstract class GraalCompilerState {
 
     public abstract static class Compile extends GraalCompilerState {
 
-        @Setup(Level.Trial)
-        public void init() {
-            initializeMethod();
-        }
-
         @Setup(Level.Invocation)
         public void setup() {
             prepareRequest();
@@ -367,11 +351,6 @@ public abstract class GraalCompilerState {
 
     public abstract static class FrontEndOnly extends GraalCompilerState {
 
-        @Setup(Level.Trial)
-        public void init() {
-            initializeMethod();
-        }
-
         @Setup(Level.Invocation)
         public void setup() {
             prepareRequest();
@@ -385,12 +364,6 @@ public abstract class GraalCompilerState {
     }
 
     public abstract static class BackEndOnly extends GraalCompilerState {
-
-        @Setup(Level.Trial)
-        public void init() {
-            initializeMethod();
-        }
-
         /**
          * Cannot do this {@link Level#Trial only once} since {@link #emitCode()} closes the
          * {@link CompilationResult}.
@@ -413,7 +386,6 @@ public abstract class GraalCompilerState {
          */
         @Setup(Level.Trial)
         public void setupGraph() {
-            initializeMethod();
             prepareRequest();
             emitFrontEnd();
         }
@@ -435,7 +407,6 @@ public abstract class GraalCompilerState {
          */
         @Setup(Level.Trial)
         public void setupGraph() {
-            initializeMethod();
             prepareRequest();
             emitFrontEnd();
         }
@@ -458,7 +429,6 @@ public abstract class GraalCompilerState {
          */
         @Setup(Level.Trial)
         public void setupGraph() {
-            initializeMethod();
             prepareRequest();
             emitFrontEnd();
         }
