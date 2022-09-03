@@ -22,10 +22,7 @@
  */
 package com.oracle.graal.compiler.common.remote;
 
-import static java.lang.reflect.Modifier.*;
-
 import java.lang.reflect.*;
-import java.nio.*;
 import java.util.*;
 
 import sun.awt.util.*;
@@ -33,7 +30,6 @@ import sun.awt.util.*;
 import com.oracle.graal.api.code.Register.RegisterCategory;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
 
 /**
  * Manages a context for replay or remote compilation.
@@ -43,21 +39,6 @@ public class Context implements AutoCloseable {
     private static final ThreadLocal<Context> currentContext = new ThreadLocal<>();
 
     private final Map<Class<?>, Fields> fieldsMap = new HashMap<>();
-
-    public enum Mode {
-        Capturing,
-        Replaying
-    }
-
-    private Mode mode = Mode.Capturing;
-
-    public Mode getMode() {
-        return mode;
-    }
-
-    public void setMode(Mode mode) {
-        this.mode = mode;
-    }
 
     /**
      * Gets a descriptor for the fields in a class that can be used for serialization.
@@ -94,99 +75,6 @@ public class Context implements AutoCloseable {
         NamedLocationIdentity.class
     ));
     // @formatter:on
-
-    private static void registerSharedGlobal(Class<?> declaringClass, String staticFieldName) {
-        try {
-            SharedGlobal global = new SharedGlobal(declaringClass.getDeclaredField(staticFieldName));
-            SharedGlobals.put(global.get(), global);
-        } catch (NoSuchFieldException e) {
-            // ignore non-existing fields
-        } catch (Exception e) {
-            throw new GraalInternalError(e);
-        }
-    }
-
-    private static void registerSharedGlobals(Class<?> declaringClass, Class<?> staticFieldType) {
-        assert !staticFieldType.isPrimitive();
-        try {
-            for (Field f : declaringClass.getDeclaredFields()) {
-                if (isStatic(f.getModifiers()) && isFinal(f.getModifiers()) && !f.getType().isPrimitive()) {
-                    SharedGlobal global = new SharedGlobal(f);
-                    if (staticFieldType.isAssignableFrom(f.getType())) {
-                        SharedGlobals.put(global.get(), global);
-                    } else {
-                        Class<?> componentType = f.getType().getComponentType();
-                        if (componentType != null && staticFieldType.isAssignableFrom(componentType)) {
-                            Object[] vals = global.get();
-                            for (int i = 0; i < vals.length; i++) {
-                                SharedGlobal g = new SharedGlobal(f, i);
-                                Object obj = g.get();
-                                SharedGlobals.put(obj, g);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            throw new GraalInternalError(e);
-        }
-    }
-
-    /**
-     * A shared global is a non-primitive value in a static final variable whose identity is
-     * important to the compiler. That is, equality tests against these values are performed with
-     * {@code ==} or these values are keys in identity hash maps.
-     */
-    static class SharedGlobal {
-        final Field staticField;
-        final Integer index;
-
-        public SharedGlobal(Field staticField) {
-            this(staticField, null);
-        }
-
-        public SharedGlobal(Field staticField, Integer index) {
-            int mods = staticField.getModifiers();
-            assert isStatic(mods) && isFinal(mods) && !staticField.getType().isPrimitive() : staticField;
-            staticField.setAccessible(true);
-            this.staticField = staticField;
-            this.index = index;
-        }
-
-        @SuppressWarnings("unchecked")
-        public <T> T get() {
-            try {
-                Object value = staticField.get(null);
-                if (index != null) {
-                    value = ((Object[]) value)[index.intValue()];
-                }
-                return (T) value;
-            } catch (Exception e) {
-                throw new GraalInternalError(e);
-            }
-        }
-
-        @Override
-        public String toString() {
-            String res = staticField.getDeclaringClass().getName() + "." + staticField.getName();
-            if (index != null) {
-                res += "[" + index + "]";
-            }
-            return res;
-        }
-    }
-
-    /**
-     * Objects that should not be copied but retrieved from final static fields.
-     */
-    private static final Map<Object, SharedGlobal> SharedGlobals = new IdentityHashMap<>();
-    static {
-        registerSharedGlobal(ByteOrder.class, "BIG_ENDIAN");
-        registerSharedGlobal(ByteOrder.class, "LITTLE_ENDIAN");
-        registerSharedGlobal(ArrayList.class, "EMPTY_ELEMENTDATA");
-        registerSharedGlobal(ArrayList.class, "DEFAULTCAPACITY_EMPTY_ELEMENTDATA");
-        registerSharedGlobals(StampFactory.class, Stamp.class);
-    }
 
     /**
      * Determines if a given class is a subclass of any class in a given collection of classes.
@@ -299,7 +187,7 @@ public class Context implements AutoCloseable {
     private Object copyFieldOrElement(Deque<Object> worklist, Map<Object, Object> copies, Object srcValue) {
         Object dstValue = srcValue;
         if (srcValue != null && !Proxy.isProxyClass(srcValue.getClass())) {
-            if (isAssignableTo(srcValue.getClass(), DontCopyClasses) || SharedGlobals.containsKey(srcValue)) {
+            if (isAssignableTo(srcValue.getClass(), DontCopyClasses)) {
                 pool.put(srcValue, srcValue);
                 return srcValue;
             }
@@ -332,7 +220,9 @@ public class Context implements AutoCloseable {
      * In addition, copies in {@link #pool} are re-used.
      */
     private Object copy(Object root) {
-        assert !(isAssignableTo(root.getClass(), DontCopyClasses) || SharedGlobals.containsKey(root));
+        if (isAssignableTo(root.getClass(), DontCopyClasses)) {
+            return root;
+        }
         // System.out.printf("----- %s ------%n", s(obj));
         assert pool.get(root) == null;
         Deque<Object> worklist = new IdentityLinkedList<>();
@@ -380,18 +270,9 @@ public class Context implements AutoCloseable {
             }
             return (T) proxy;
         } else {
-            Object value;
-            if (isAssignableTo(obj.getClass(), DontCopyClasses) || SharedGlobals.containsKey(obj)) {
-                value = obj;
-            } else {
-                value = pool.get(obj);
-                if (value == null) {
-                    if (mode == Mode.Capturing) {
-                        value = copy(obj);
-                    } else {
-                        throw new GraalInternalError("No captured state for %s [class=%s]", obj, obj.getClass());
-                    }
-                }
+            Object value = pool.get(obj);
+            if (value == null) {
+                value = copy(obj);
             }
             return (T) value;
         }
