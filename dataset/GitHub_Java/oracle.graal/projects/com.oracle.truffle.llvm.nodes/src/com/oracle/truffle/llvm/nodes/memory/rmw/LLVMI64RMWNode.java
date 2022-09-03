@@ -33,111 +33,105 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 
 @NodeChildren(value = {@NodeChild(type = LLVMExpressionNode.class, value = "pointerNode"), @NodeChild(type = LLVMExpressionNode.class, value = "valueNode")})
 public abstract class LLVMI64RMWNode extends LLVMExpressionNode {
 
     public abstract static class LLVMI64RMWXchgNode extends LLVMI64RMWNode {
         @Specialization
-        protected long doOp(VirtualFrame frame, LLVMGlobal address, long value,
-                        @Cached("toNative()") LLVMToNativeNode globalAccess) {
-            LLVMAddress adr = globalAccess.executeWithTarget(frame, address);
+        public long execute(LLVMGlobalVariable address, long value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            LLVMAddress adr = globalAccess.getNativeLocation(address);
             return LLVMMemory.getAndSetI64(adr, value);
         }
 
         @Specialization
-        protected long doOp(LLVMAddress address, long value) {
+        public long execute(LLVMAddress address, long value) {
             return LLVMMemory.getAndSetI64(address, value);
         }
     }
 
     public abstract static class LLVMI64RMWAddNode extends LLVMI64RMWNode {
         @Specialization
-        protected long doOp(VirtualFrame frame, LLVMGlobal address, long value,
-                        @Cached("toNative()") LLVMToNativeNode globalAccess) {
-            LLVMAddress adr = globalAccess.executeWithTarget(frame, address);
+        public long execute(LLVMGlobalVariable address, long value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            LLVMAddress adr = globalAccess.getNativeLocation(address);
             return LLVMMemory.getAndAddI64(adr, value);
         }
 
         @Specialization
-        protected long doOp(LLVMAddress address, long value) {
+        public long execute(LLVMAddress address, long value) {
             return LLVMMemory.getAndAddI64(address, value);
         }
     }
 
     public abstract static class LLVMI64RMWSubNode extends LLVMI64RMWNode {
         @Specialization
-        protected long doOp(VirtualFrame frame, LLVMGlobal address, long value,
-                        @Cached("toNative()") LLVMToNativeNode globalAccess) {
-            LLVMAddress adr = globalAccess.executeWithTarget(frame, address);
+        public long execute(LLVMGlobalVariable address, long value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            LLVMAddress adr = globalAccess.getNativeLocation(address);
             return LLVMMemory.getAndSubI64(adr, value);
         }
 
         @Specialization
-        protected long doOp(LLVMAddress address, long value) {
+        public long execute(LLVMAddress address, long value) {
             return LLVMMemory.getAndSubI64(address, value);
         }
     }
 
     public abstract static class LLVMI64RMWAndNode extends LLVMI64RMWNode {
         @Specialization
-        protected long doOp(VirtualFrame frame, LLVMGlobal address, long value,
-                        @Cached("toNative()") LLVMToNativeNode globalAccess) {
-            LLVMAddress adr = globalAccess.executeWithTarget(frame, address);
+        public long execute(LLVMGlobalVariable address, long value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            LLVMAddress adr = globalAccess.getNativeLocation(address);
             return LLVMMemory.getAndOpI64(adr, value, (a, b) -> a & b);
         }
 
         @Specialization
-        protected long doOp(LLVMAddress address, long value) {
+        public long execute(LLVMAddress address, long value) {
             return LLVMMemory.getAndOpI64(address, value, (a, b) -> a & b);
         }
+
     }
 
     public abstract static class LLVMI64RMWNandNode extends LLVMI64RMWNode {
         @Specialization
-        protected long doOp(VirtualFrame frame, LLVMGlobal address, long value,
-                        @Cached("toNative()") LLVMToNativeNode globalAccess) {
-            LLVMAddress adr = globalAccess.executeWithTarget(frame, address);
+        public long execute(LLVMGlobalVariable address, long value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            LLVMAddress adr = globalAccess.getNativeLocation(address);
             return LLVMMemory.getAndOpI64(adr, value, (a, b) -> ~(a & b));
         }
 
         @Specialization
-        protected long doOp(LLVMAddress address, long value) {
+        public long execute(LLVMAddress address, long value) {
             return LLVMMemory.getAndOpI64(address, value, (a, b) -> ~(a & b));
         }
     }
 
     public abstract static class LLVMI64RMWOrNode extends LLVMI64RMWNode {
         @Specialization
-        protected long doOp(VirtualFrame frame, LLVMGlobal address, long value,
-                        @Cached("toNative()") LLVMToNativeNode globalAccess) {
-            LLVMAddress adr = globalAccess.executeWithTarget(frame, address);
+        public long execute(LLVMGlobalVariable address, long value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            LLVMAddress adr = globalAccess.getNativeLocation(address);
             return LLVMMemory.getAndOpI64(adr, value, (a, b) -> a | b);
         }
 
         @Specialization
-        protected long doOp(LLVMAddress address, long value) {
+        public long execute(LLVMAddress address, long value) {
             return LLVMMemory.getAndOpI64(address, value, (a, b) -> a | b);
         }
     }
 
     public abstract static class LLVMI64RMWXorNode extends LLVMI64RMWNode {
         @Specialization
-        protected long doOp(VirtualFrame frame, LLVMGlobal address, long value,
-                        @Cached("toNative()") LLVMToNativeNode globalAccess) {
-            LLVMAddress adr = globalAccess.executeWithTarget(frame, address);
+        public long execute(LLVMGlobalVariable address, long value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            LLVMAddress adr = globalAccess.getNativeLocation(address);
             return LLVMMemory.getAndOpI64(adr, value, (a, b) -> a ^ b);
         }
 
         @Specialization
-        protected long doOp(LLVMAddress address, long value) {
+        public long execute(LLVMAddress address, long value) {
             return LLVMMemory.getAndOpI64(address, value, (a, b) -> a ^ b);
         }
     }
+
 }

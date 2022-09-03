@@ -40,7 +40,6 @@ import com.oracle.truffle.api.CompilerDirectives.ValueType;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.vector.LLVMAddressVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
@@ -180,7 +179,7 @@ public abstract class LLVMMemory {
             loadedBytes[i] = getI8(currentAddressPtr);
             currentAddressPtr += Byte.BYTES;
         }
-        return LLVMIVarBit.create(bitWidth, loadedBytes, bitWidth, false);
+        return LLVMIVarBit.create(bitWidth, loadedBytes);
     }
 
     public static long getI64(LLVMAddress addr) {
@@ -369,10 +368,6 @@ public abstract class LLVMMemory {
 
     public static LLVMDoubleVector getDoubleVector(LLVMAddress addr, int size) {
         return LLVMDoubleVector.readVectorFromMemory(addr, size);
-    }
-
-    public static LLVMAddressVector getAddressVector(LLVMAddress addr, int size) {
-        return LLVMAddressVector.readVectorFromMemory(addr, size);
     }
 
     // watch out for casts such as I32* to I32Vector* when changing the way how vectors are
@@ -659,9 +654,4 @@ public abstract class LLVMMemory {
         } while (compareAndSwapI8(address, old, (byte) (nevv ? 1 : 0)).swap);
         return nevv;
     }
-
-    public static void fullFence() {
-        UNSAFE.fullFence();
-    }
-
 }
