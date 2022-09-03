@@ -22,6 +22,9 @@
  */
 package org.graalvm.compiler.core.test;
 
+import org.junit.Assert;
+import org.junit.Test;
+
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.graph.Node;
@@ -32,14 +35,13 @@ import org.graalvm.compiler.java.ComputeLoopFrequenciesClosure;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.spi.NodeCostProvider;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase.CustomCanonicalizer;
 import org.graalvm.compiler.phases.contract.NodeCostUtil;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
-import org.junit.Assert;
-import org.junit.Test;
 
 public class NodePropertiesTest extends GraalCompilerTest {
 
@@ -145,8 +147,9 @@ public class NodePropertiesTest extends GraalCompilerTest {
     }
 
     public static int arrayStoreTest(int a) {
-        array[2] = a;
-        return a;
+        String s = String.valueOf(a);
+        array[2] = s;
+        return s.length();
     }
 
     public static int fieldLoad(int a) {
@@ -161,10 +164,10 @@ public class NodePropertiesTest extends GraalCompilerTest {
     @Test
     public void testCanonicalizationExample() {
         HighTierContext htc = getDefaultHighTierContext();
-        ImprovementSavingCanonicalizer c1 = new ImprovementSavingCanonicalizer();
+        ImprovementSavingCanonicalizer c1 = new ImprovementSavingCanonicalizer(htc.getNodeCostProvider());
         StructuredGraph g1 = parseForCompile(getResolvedJavaMethod("test1Snippet"));
         new CanonicalizerPhase(c1).apply(g1, htc);
-        ImprovementSavingCanonicalizer c2 = new ImprovementSavingCanonicalizer();
+        ImprovementSavingCanonicalizer c2 = new ImprovementSavingCanonicalizer(htc.getNodeCostProvider());
         StructuredGraph g2 = parseForCompile(getResolvedJavaMethod("test2Snippet"));
         new CanonicalizerPhase(c2).apply(g2, htc);
         Assert.assertTrue(c1.savedCycles > c2.savedCycles);
@@ -267,7 +270,7 @@ public class NodePropertiesTest extends GraalCompilerTest {
         new CanonicalizerPhase().apply(g1, htc);
         GraphCostPhase gc1 = new GraphCostPhase();
         gc1.apply(g1, htc);
-        Assert.assertEquals(15, gc1.finalCycles, 25);
+        Assert.assertEquals(35, gc1.finalCycles, 25);
     }
 
     @Test
@@ -277,7 +280,7 @@ public class NodePropertiesTest extends GraalCompilerTest {
         new CanonicalizerPhase().apply(g1, htc);
         GraphCostPhase gc1 = new GraphCostPhase();
         gc1.apply(g1, htc);
-        Assert.assertEquals(15, gc1.finalCycles, 25);
+        Assert.assertEquals(50, gc1.finalCycles, 25);
     }
 
     @Test
@@ -287,7 +290,7 @@ public class NodePropertiesTest extends GraalCompilerTest {
         new CanonicalizerPhase().apply(g1, htc);
         GraphCostPhase gc1 = new GraphCostPhase();
         gc1.apply(g1, htc);
-        Assert.assertEquals(15, gc1.finalCycles, 25);
+        Assert.assertEquals(30, gc1.finalCycles, 25);
     }
 
     @Test
@@ -297,11 +300,16 @@ public class NodePropertiesTest extends GraalCompilerTest {
         new CanonicalizerPhase().apply(g1, htc);
         GraphCostPhase gc1 = new GraphCostPhase();
         gc1.apply(g1, htc);
-        Assert.assertEquals(15, gc1.finalCycles, 25);
+        Assert.assertEquals(40, gc1.finalCycles, 25);
     }
 
     static class ImprovementSavingCanonicalizer extends CustomCanonicalizer {
         private int savedCycles;
+        private final NodeCostProvider nodeCostProvider;
+
+        ImprovementSavingCanonicalizer(NodeCostProvider nodeCostProvider) {
+            this.nodeCostProvider = nodeCostProvider;
+        }
 
         @Override
         public void simplify(Node node, SimplifierTool tool) {
@@ -310,7 +318,7 @@ public class NodePropertiesTest extends GraalCompilerTest {
                 Canonicalizable.Binary<ValueNode> bc = (Canonicalizable.Binary<ValueNode>) node;
                 Node canonicalized = bc.canonical(tool, bc.getX(), bc.getY());
                 if (canonicalized != node) {
-                    savedCycles += node.estimatedNodeCycles().value - canonicalized.estimatedNodeCycles().value;
+                    savedCycles += nodeCostProvider.getEstimatedCPUCycles(node) - nodeCostProvider.getEstimatedCPUCycles(canonicalized);
                 }
             }
         }
@@ -322,8 +330,8 @@ public class NodePropertiesTest extends GraalCompilerTest {
 
         @Override
         protected void run(StructuredGraph graph, PhaseContext context) {
-            finalCycles = NodeCostUtil.computeGraphCycles(graph, true);
-            finalSize = NodeCostUtil.computeGraphSize(graph);
+            finalCycles = NodeCostUtil.computeGraphCycles(graph, context.getNodeCostProvider(), true);
+            finalSize = NodeCostUtil.computeGraphSize(graph, context.getNodeCostProvider());
         }
 
     }

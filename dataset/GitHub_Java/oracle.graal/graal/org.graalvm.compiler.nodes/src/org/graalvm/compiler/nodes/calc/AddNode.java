@@ -89,8 +89,11 @@ public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArit
             if (op.isNeutral(c)) {
                 return forX;
             }
-            if (associative && self != null) {
+            if (associative) {
                 // canonicalize expressions like "(a + 1) + 2"
+                if (self == null) {
+                    self = (AddNode) new AddNode(forX, forY).maybeCommuteInputs();
+                }
                 ValueNode reassociated = reassociate(self, ValueNode.isConstantPredicate(), forX, forY);
                 if (reassociated != self) {
                     return reassociated;

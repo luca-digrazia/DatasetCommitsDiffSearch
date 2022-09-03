@@ -113,7 +113,10 @@ public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArit
             if (op.isNeutral(c)) {
                 return forX;
             }
-            if (associative && self != null) {
+            if (associative) {
+                if (self == null) {
+                    self = new SubNode(forX, forY);
+                }
                 ValueNode reassociated = reassociate(self, ValueNode.isConstantPredicate(), forX, forY);
                 if (reassociated != self) {
                     return reassociated;
@@ -137,7 +140,10 @@ public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArit
                  */
                 return new NegateNode(forY);
             }
-            if (associative && self != null) {
+            if (associative) {
+                if (self == null) {
+                    self = new SubNode(forX, forY);
+                }
                 return reassociate(self, ValueNode.isConstantPredicate(), forX, forY);
             }
         }
