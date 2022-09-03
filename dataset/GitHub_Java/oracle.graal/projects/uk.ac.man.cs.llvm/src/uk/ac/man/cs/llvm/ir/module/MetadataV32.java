@@ -269,25 +269,15 @@ public class MetadataV32 extends Metadata {
     protected void createDwTagBasicType(MetadataArgumentParser args) {
         MetadataBasicType node = new MetadataBasicType();
 
-        if (args.hasNext()) {
-            metadata.getReference(args.next()); // Reference to context
-            node.setName(metadata.getReference(args.next()));
-            node.setFile(metadata.getReference(args.next()));
-            node.setLine(asInt32(args.next()));
-            node.setSize(asInt64(args.next()));
-            node.setAlign(asInt64(args.next()));
-            node.setOffset(asInt64(args.next()));
-            node.setFlags(asInt32(args.next()));
-            node.setEncoding(asInt32(args.next()));
-        } else {
-            /*
-             * I don't know why, but there is the possibility for an empty DwTagBaseType
-             *
-             * example file which reproduces this special case:
-             *
-             * - test-suite-3.2.src/SingleSource/Regression/C++/2003-06-08-VirtualFunctions.cpp
-             */
-        }
+        metadata.getReference(args.next()); // Reference to context
+        node.setName(metadata.getReference(args.next()));
+        node.setFile(metadata.getReference(args.next()));
+        node.setLine(asInt32(args.next()));
+        node.setSize(asInt64(args.next()));
+        node.setAlign(asInt64(args.next()));
+        node.setOffset(asInt64(args.next()));
+        node.setFlags(asInt32(args.next()));
+        node.setEncoding(asInt32(args.next()));
 
         metadata.add(node);
     }
@@ -304,18 +294,8 @@ public class MetadataV32 extends Metadata {
         node.setOffset(asInt64(args.next()));
         node.setFlags(asInt32(args.next()));
         node.setDerivedFrom(metadata.getReference(args.next()));
-        if (args.hasNext()) {
-            node.setMemberDescriptors(metadata.getReference(args.next()));
-            node.setRuntimeLanguage(asInt32(args.next()));
-        } else {
-            /*
-             * I don't know why, but there is the possibility for an pre ended DwTagComposizeType
-             *
-             * example file which reproduces this special case:
-             *
-             * - test-suite-3.2.src/SingleSource/Regression/C++/2003-06-08-VirtualFunctions.cpp
-             */
-        }
+        node.setMemberDescriptors(metadata.getReference(args.next()));
+        node.setRuntimeLanguage(asInt32(args.next()));
 
         metadata.add(node);
     }
