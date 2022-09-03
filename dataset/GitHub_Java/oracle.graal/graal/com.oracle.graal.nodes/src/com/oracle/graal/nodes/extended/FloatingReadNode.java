@@ -40,8 +40,8 @@ public final class FloatingReadNode extends FloatingAccessNode implements Node.I
         this(object, location, lastLocationAccess, stamp, null, WriteBarrierType.NONE, false);
     }
 
-    public FloatingReadNode(ValueNode object, LocationNode location, Node lastLocationAccess, Stamp stamp, GuardingNode guard, WriteBarrierType barrierType, boolean compressible) {
-        super(object, location, stamp, guard, barrierType, compressible);
+    public FloatingReadNode(ValueNode object, LocationNode location, Node lastLocationAccess, Stamp stamp, GuardingNode guard, WriteBarrierType barrierType, boolean compress) {
+        super(object, location, stamp, guard, barrierType, compress);
         this.lastLocationAccess = lastLocationAccess;
     }
 
@@ -57,11 +57,11 @@ public final class FloatingReadNode extends FloatingAccessNode implements Node.I
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        return ReadNode.canonicalizeRead(this, location(), object(), tool, compressible());
+        return ReadNode.canonicalizeRead(this, location(), object(), tool, compress());
     }
 
     @Override
     public Access asFixedNode() {
-        return graph().add(new ReadNode(object(), nullCheckLocation(), stamp(), getGuard(), getWriteBarrierType(), compressible()));
+        return graph().add(new ReadNode(object(), nullCheckLocation(), stamp(), getGuard(), getWriteBarrierType(), compress()));
     }
 }
