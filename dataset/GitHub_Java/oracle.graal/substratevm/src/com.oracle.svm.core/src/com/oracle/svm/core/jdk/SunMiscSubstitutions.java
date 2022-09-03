@@ -192,7 +192,7 @@ class Package_jdk_internal_ref implements Function<TargetClass, String> {
     }
 }
 
-@TargetClass(classNameProvider = Package_jdk_internal_ref.class, className = "Cleaner")
+@TargetClass(classNameProvider = Package_jdk_internal_ref.class, className = "Cleaner", onlyWith = JDK9OrLater.class)
 final class Target_jdk_internal_ref_Cleaner {
 
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
