@@ -28,11 +28,10 @@ import com.oracle.graal.graph.NodeInputList;
 import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.DeoptimizingFixedWithNextNode;
-import com.oracle.graal.nodes.FrameState;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.java.AccessMonitorNode;
-import com.oracle.graal.nodes.spi.VirtualizableAllocation;
+import com.oracle.graal.nodes.spi.Virtualizable;
 import com.oracle.graal.nodes.spi.VirtualizerTool;
 import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 
@@ -45,7 +44,7 @@ import com.oracle.graal.nodes.virtual.VirtualObjectNode;
  * into an input to the InstrumentationNode.
  */
 @NodeInfo
-public class InstrumentationNode extends DeoptimizingFixedWithNextNode implements VirtualizableAllocation {
+public class InstrumentationNode extends DeoptimizingFixedWithNextNode implements Virtualizable {
 
     public static final NodeClass<InstrumentationNode> TYPE = NodeClass.create(InstrumentationNode.class);
 
@@ -56,15 +55,11 @@ public class InstrumentationNode extends DeoptimizingFixedWithNextNode implement
     protected final boolean anchored;
 
     public InstrumentationNode(ValueNode target, boolean anchored) {
-        this(target, anchored, 0, null);
-    }
-
-    private InstrumentationNode(ValueNode target, boolean anchored, int initialDependencySize, FrameState stateBefore) {
-        super(TYPE, StampFactory.forVoid(), stateBefore);
+        super(TYPE, StampFactory.forVoid());
 
         this.target = target;
         this.anchored = anchored;
-        this.weakDependencies = new NodeInputList<>(this, initialDependencySize);
+        this.weakDependencies = new NodeInputList<>(this);
     }
 
     public ValueNode getTarget() {
@@ -95,46 +90,10 @@ public class InstrumentationNode extends DeoptimizingFixedWithNextNode implement
         return weakDependencies;
     }
 
-    /**
-     * Clone the InstrumentationNode with the given new target. The weakDependencies will be
-     * initialized with aliased nodes.
-     */
-    private InstrumentationNode cloneWithNewTarget(ValueNode newTarget, VirtualizerTool tool) {
-        InstrumentationNode clone = new InstrumentationNode(newTarget, anchored, weakDependencies.size(), stateBefore);
-        clone.instrumentationGraph = instrumentationGraph;
-        for (int i = 0; i < weakDependencies.size(); i++) {
-            ValueNode input = weakDependencies.get(i);
-            if (!(input instanceof VirtualObjectNode)) {
-                ValueNode alias = tool.getAlias(input);
-                if (alias instanceof VirtualObjectNode) {
-                    clone.weakDependencies.initialize(i, alias);
-                    continue;
-                }
-            }
-            clone.weakDependencies.initialize(i, input);
-        }
-        return clone;
-    }
-
-    private boolean hasAliasedWeakDependency(VirtualizerTool tool) {
-        for (ValueNode input : weakDependencies) {
-            if (!(input instanceof VirtualObjectNode)) {
-                ValueNode alias = tool.getAlias(input);
-                if (alias instanceof VirtualObjectNode) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
     @Override
     public void virtualize(VirtualizerTool tool) {
         // InstrumentationNode allows non-materialized inputs. During the inlining of the
-        // InstrumentationNode, non-materialized inputs will be replaced by null. The current
-        // InstrumentationNode is replaced with a clone InstrumentationNode, such that the escape
-        // analysis won't materialize non-materialized inputs at this point.
-        InstrumentationNode replacee = null;
+        // InstrumentationNode, non-materialized inputs will be replaced by null.
         if (target != null) {
             if (target instanceof AccessMonitorNode) {
                 AccessMonitorNode monitor = (AccessMonitorNode) target;
@@ -142,22 +101,24 @@ public class InstrumentationNode extends DeoptimizingFixedWithNextNode implement
                 if (alias instanceof VirtualObjectNode) {
                     MonitorProxyNode proxy = new MonitorProxyNode(null, monitor.getMonitorId());
                     tool.addNode(proxy);
-                    replacee = cloneWithNewTarget(proxy, tool);
+                    tool.replaceFirstInput(target, proxy);
                 }
             } else if (!(target instanceof VirtualObjectNode)) {
                 ValueNode alias = tool.getAlias(target);
                 if (alias instanceof VirtualObjectNode) {
-                    replacee = cloneWithNewTarget(alias, tool);
+                    tool.replaceFirstInput(target, alias);
                 }
             }
         }
-        if (replacee == null && hasAliasedWeakDependency(tool)) {
-            replacee = cloneWithNewTarget(target, tool);
-        }
-        // in case of modification, we replace with the clone
-        if (replacee != null) {
-            tool.addNode(replacee);
-            tool.replaceWithValue(replacee);
+
+        for (ValueNode input : weakDependencies) {
+            if (input instanceof VirtualObjectNode) {
+                continue;
+            }
+            ValueNode alias = tool.getAlias(input);
+            if (alias instanceof VirtualObjectNode) {
+                tool.replaceFirstInput(input, alias);
+            }
         }
     }
 
