@@ -270,12 +270,12 @@ public class AMD64Move {
     public static class StoreConstantOp extends MemOp {
 
         protected final Constant input;
-        private final boolean compressible;
+        private final boolean compress;
 
-        public StoreConstantOp(Kind kind, AMD64AddressValue address, Constant input, LIRFrameState state, boolean compressible) {
+        public StoreConstantOp(Kind kind, AMD64AddressValue address, Constant input, LIRFrameState state, boolean compress) {
             super(kind, address, state);
             this.input = input;
-            this.compressible = compressible;
+            this.compress = compress;
         }
 
         @Override
@@ -294,7 +294,7 @@ public class AMD64Move {
                     break;
                 case Long:
                     if (NumUtil.isInt(input.asLong())) {
-                        if (compressible) {
+                        if (compress) {
                             masm.movl(address.toAddress(), (int) input.asLong());
                         } else {
                             masm.movslq(address.toAddress(), (int) input.asLong());
@@ -310,7 +310,7 @@ public class AMD64Move {
                     throw GraalInternalError.shouldNotReachHere("Cannot store 64-bit constants to memory");
                 case Object:
                     if (input.isNull()) {
-                        if (compressible) {
+                        if (compress) {
                             masm.movl(address.toAddress(), 0);
                         } else {
                             masm.movptr(address.toAddress(), 0);
