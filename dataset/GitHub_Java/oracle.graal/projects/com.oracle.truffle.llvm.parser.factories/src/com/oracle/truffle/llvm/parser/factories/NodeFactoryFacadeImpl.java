@@ -103,18 +103,17 @@ import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 
 public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
 
-    public NodeFactoryFacadeImpl() {
-    }
-
     protected LLVMParserRuntime runtime;
 
     public NodeFactoryFacadeImpl(LLVMParserRuntime runtime) {
         this.runtime = runtime;
     }
 
-    @Override
-    public void setUpFacade(LLVMParserRuntime runtime) {
+    public void setParserRuntime(LLVMParserRuntime runtime) {
         this.runtime = runtime;
+    }
+
+    public NodeFactoryFacadeImpl() {
     }
 
     @Override
