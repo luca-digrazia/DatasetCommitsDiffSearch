@@ -25,6 +25,8 @@ package com.oracle.graal.nodes.type;
 import java.util.Collection;
 import java.util.Iterator;
 
+import jdk.vm.ci.meta.ResolvedJavaType;
+
 import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
 import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
 import com.oracle.graal.compiler.common.type.IntegerStamp;
@@ -32,9 +34,6 @@ import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.TypeReference;
 import com.oracle.graal.nodes.ValueNode;
-
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Helper class that is used to keep all stamp-related operations in one place.
@@ -163,23 +162,6 @@ public class StampTool {
         return type == null ? null : type.getType();
     }
 
-    public static ResolvedJavaType typeOrNull(Stamp stamp, MetaAccessProvider metaAccess) {
-        if (stamp instanceof AbstractObjectStamp && stamp.hasValues()) {
-            AbstractObjectStamp abstractObjectStamp = (AbstractObjectStamp) stamp;
-            ResolvedJavaType type = abstractObjectStamp.type();
-            if (type == null) {
-                return metaAccess.lookupJavaType(Object.class);
-            } else {
-                return type;
-            }
-        }
-        return null;
-    }
-
-    public static ResolvedJavaType typeOrNull(ValueNode node, MetaAccessProvider metaAccess) {
-        return typeOrNull(node.stamp(), metaAccess);
-    }
-
     /**
      * Returns the {@linkplain ResolvedJavaType Java type} this {@linkplain Stamp} has if it is a
      * {@linkplain Stamp#hasValues() legal} Object stamp.
@@ -193,7 +175,7 @@ public class StampTool {
             if (abstractObjectStamp.isExactType()) {
                 return TypeReference.createExactTrusted(abstractObjectStamp.type());
             } else {
-                return TypeReference.createTrustedWithoutAssumptions(abstractObjectStamp.type());
+                return TypeReference.createWithoutAssumptions(abstractObjectStamp.type());
             }
         }
         return null;
