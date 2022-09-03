@@ -47,8 +47,8 @@ import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
-import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateStringNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStackAllocationNode;
@@ -155,7 +155,7 @@ public interface NodeFactory {
 
     LLVMExpressionNode createZeroNode(LLVMParserRuntime runtime, LLVMExpressionNode addressNode, int size);
 
-    RootNode createGlobalRootNode(LLVMParserRuntime runtime, RootCallTarget mainCallTarget, Source sourceFile, Type mainReturnType, Type[] mainTypes);
+    RootNode createGlobalRootNode(LLVMParserRuntime runtime, RootCallTarget mainCallTarget, Source sourceFile, Type[] mainTypes);
 
     RootNode createGlobalRootNodeWrapping(LLVMParserRuntime runtime, RootCallTarget mainCallTarget, Type returnType);
 
@@ -194,13 +194,11 @@ public interface NodeFactory {
 
     LLVMExpressionNode createVarArgCompoundValue(LLVMParserRuntime runtime, int length, int alignment, LLVMExpressionNode parameterNode);
 
-    LLVMExpressionNode createDebugWrite(boolean isDeclaration, LLVMExpressionNode valueRead, FrameSlot targetSlot);
+    LLVMExpressionNode createDebugDeclaration(LLVMSourceSymbol variable, LLVMExpressionNode valueProvider, FrameSlot sourceValuesContainerSlot);
 
-    LLVMExpressionNode createDebugFragmentWrite(boolean isDeclaration, LLVMExpressionNode valueRead, FrameSlot targetSlot, LLVMExpressionNode aggregateRead, int partIndex, int[] clearParts);
+    LLVMExpressionNode createDebugValue(LLVMSourceSymbol variable, LLVMExpressionNode valueProvider, FrameSlot sourceValuesContainerSlot);
 
-    LLVMExpressionNode createDebugFragmentInit(FrameSlot targetSlot, int[] offsets, int[] lengths);
-
-    LLVMDebugValue createDebugConstantValue(LLVMExpressionNode valueNode);
+    LLVMDebugValue createGlobalVariableDebug(LLVMSourceSymbol variable, LLVMExpressionNode globalSymbol);
 
     LLVMExpressionNode registerSourceType(FrameSlot valueSlot, LLVMSourceType type);
 
@@ -208,5 +206,4 @@ public interface NodeFactory {
 
     LLVMMemSetNode createMemSet();
 
-    LLVMAllocateStringNode createAllocateString();
 }
