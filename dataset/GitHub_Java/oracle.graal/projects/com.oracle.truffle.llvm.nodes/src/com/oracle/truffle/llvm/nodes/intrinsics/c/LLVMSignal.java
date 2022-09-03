@@ -42,10 +42,13 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.api.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.nodes.func.LLVMCallNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.nodes.literals.LLVMFunctionLiteralNodeGen;
@@ -57,8 +60,6 @@ import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.LLVMThread;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
@@ -68,6 +69,7 @@ import com.oracle.truffle.llvm.runtime.types.VoidType;
 import sun.misc.Signal;
 import sun.misc.SignalHandler;
 
+@GenerateNodeFactory
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class, value = "signal"), @NodeChild(type = LLVMExpressionNode.class, value = "handler")})
 public abstract class LLVMSignal extends LLVMExpressionNode {
 
@@ -191,7 +193,7 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
 
                 LLVMExpressionNode functionNode = LLVMFunctionLiteralNodeGen.create(context.lookup(function));
 
-                LLVMCallNode callNode = new LLVMCallNode(new FunctionType(VoidType.INSTANCE, argsTypes, false), functionNode, args, null);
+                LLVMCallNode callNode = new LLVMCallNode(new FunctionType(VoidType.INSTANCE, argsTypes, false), functionNode, args);
 
                 callTarget = Truffle.getRuntime().createCallTarget(
                                 new LLVMFunctionStartNode(null, language, callNode,

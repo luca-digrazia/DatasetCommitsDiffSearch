@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.nodes.func;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
@@ -44,12 +43,10 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.NativeLookup;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.Intrinsic;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 
 @SuppressWarnings("unused")
@@ -67,63 +64,27 @@ public abstract class LLVMDispatchNode extends LLVMNode {
     private String getSignature() {
         if (signature == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.signature = LLVMContext.getNativeSignature(type, LLVMCallNode.USER_ARGUMENT_OFFSET);
+            this.signature = LLVMContext.getNativeSignature(type, LLVMCallNode.ARG_START_INDEX);
         }
         return signature;
     }
 
     public abstract Object executeDispatch(VirtualFrame frame, LLVMFunctionDescriptor function, Object[] arguments);
 
-    /*
-     * Function is defined in the user program (available as LLVM IR)
-     */
-
-    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"function.getFunctionIndex() == cachedFunction.getFunctionIndex()", "cachedFunction.isLLVMIRFunction()"})
+    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"function.getFunctionIndex() == cachedFunction.getFunctionIndex()", "cachedFunction.getCallTarget() != null"})
     protected static Object doDirect(LLVMFunctionDescriptor function, Object[] arguments,
                     @Cached("function") LLVMFunctionDescriptor cachedFunction,
-                    @Cached("create(cachedFunction.getLLVMIRFunction())") DirectCallNode callNode) {
+                    @Cached("create(cachedFunction.getCallTarget())") DirectCallNode callNode) {
         return callNode.call(arguments);
     }
 
-    @Specialization(replaces = "doDirect", guards = "descriptor.isLLVMIRFunction()")
+    @Specialization(replaces = "doDirect", guards = "descriptor.getCallTarget() != null")
     protected static Object doIndirect(LLVMFunctionDescriptor descriptor, Object[] arguments,
                     @Cached("create()") IndirectCallNode callNode) {
-        return callNode.call(descriptor.getLLVMIRFunction(), arguments);
+        return callNode.call(descriptor.getCallTarget(), arguments);
     }
 
-    /*
-     * Function is not defined in the user program (not available as LLVM IR). This would normally
-     * result in a native call BUT there is an intrinsification available
-     */
-
-    protected DirectCallNode getIntrinsificationCallNode(Intrinsic intrinsic) {
-        RootCallTarget target = intrinsic.forceSplit() ? intrinsic.generateCallTarget(type) : intrinsic.cachedCallTarget(type);
-        DirectCallNode directCallNode = DirectCallNode.create(target);
-        if (intrinsic.forceInline()) {
-            directCallNode.forceInlining();
-        }
-        return directCallNode;
-    }
-
-    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"function.getFunctionIndex() == cachedFunction.getFunctionIndex()", "cachedFunction.isNativeIntrinsicFunction()"})
-    protected Object doDirectIntrinsic(LLVMFunctionDescriptor function, Object[] arguments,
-                    @Cached("function") LLVMFunctionDescriptor cachedFunction,
-                    @Cached("getIntrinsificationCallNode(cachedFunction.getNativeIntrinsic())") DirectCallNode callNode) {
-        return callNode.call(arguments);
-    }
-
-    @Specialization(replaces = "doDirectIntrinsic", guards = "descriptor.isNativeIntrinsicFunction()")
-    protected Object doIndirectIntrinsic(LLVMFunctionDescriptor descriptor, Object[] arguments,
-                    @Cached("create()") IndirectCallNode callNode) {
-        return callNode.call(descriptor.getNativeIntrinsic().cachedCallTarget(type), arguments);
-    }
-
-    /*
-     * Function is not defined in the user program (not available as LLVM IR). No intrinsic
-     * available. We do a native call.
-     */
-
-    @Specialization(limit = "10", guards = {"descriptor.getFunctionIndex() == cachedDescriptor.getFunctionIndex()", "descriptor.isNativeFunction()"})
+    @Specialization(limit = "10", guards = {"descriptor.getFunctionIndex() == cachedDescriptor.getFunctionIndex()", "descriptor.getCallTarget() == null"})
     protected Object doCachedNative(VirtualFrame frame, LLVMFunctionDescriptor descriptor, Object[] arguments,
                     @Cached("descriptor") LLVMFunctionDescriptor cachedDescriptor,
                     @Cached("createToNativeNodes()") LLVMNativeConvertNode[] toNative,
@@ -139,10 +100,10 @@ public abstract class LLVMDispatchNode extends LLVMNode {
 
     protected TruffleObject bindSymbol(VirtualFrame frame, LLVMFunctionDescriptor descriptor) {
         CompilerAsserts.neverPartOfCompilation();
-        return LLVMNativeCallUtils.bindNativeSymbol(LLVMNativeCallUtils.getBindNode(), descriptor.getNativeFunction(), getSignature());
+        return LLVMNativeCallUtils.bindNativeSymbol(LLVMNativeCallUtils.getBindNode(), getContext().resolveAsNativeFunction(descriptor), getSignature());
     }
 
-    @Specialization(replaces = "doCachedNative", guards = "descriptor.isNativeFunction()")
+    @Specialization(replaces = "doCachedNative", guards = "descriptor.getCallTarget() == null")
     protected Object doNative(VirtualFrame frame, LLVMFunctionDescriptor descriptor, Object[] arguments,
                     @Cached("createToNativeNodes()") LLVMNativeConvertNode[] toNative,
                     @Cached("createFromNativeNode()") LLVMNativeConvertNode fromNative,
@@ -150,7 +111,7 @@ public abstract class LLVMDispatchNode extends LLVMNode {
                     @Cached("getBindNode()") Node bindNode) {
 
         Object[] nativeArgs = prepareNativeArguments(frame, arguments, toNative);
-        TruffleObject boundSymbol = LLVMNativeCallUtils.bindNativeSymbol(bindNode, descriptor.getNativeFunction(), getSignature());
+        TruffleObject boundSymbol = LLVMNativeCallUtils.bindNativeSymbol(bindNode, getContext().resolveAsNativeFunction(descriptor), getSignature());
         Object returnValue = LLVMNativeCallUtils.callNativeFunction(getContext(), nativeCall, boundSymbol, nativeArgs, descriptor);
         return fromNative.executeConvert(frame, returnValue);
     }
