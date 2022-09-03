@@ -33,8 +33,6 @@ import java.util.*;
 import sun.misc.*;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
 import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.nodes.Node.Children;
 import com.oracle.truffle.api.source.*;
@@ -179,7 +177,6 @@ public final class NodeUtil {
         private final long parentOffset;
         private final long[] childOffsets;
         private final long[] childrenOffsets;
-        private final long[] cloneableOffsets;
         private final Class<? extends Node> clazz;
 
         public static NodeClass get(Class<? extends Node> clazz) {
@@ -191,7 +188,6 @@ public final class NodeUtil {
             long parentFieldOffset = -1;
             List<Long> childOffsetsList = new ArrayList<>();
             List<Long> childrenOffsetsList = new ArrayList<>();
-            List<Long> cloneableOffsetsList = new ArrayList<>();
 
             for (Field field : getAllFields(clazz)) {
                 if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
@@ -211,9 +207,6 @@ public final class NodeUtil {
                     checkChildrenField(field);
                     kind = NodeFieldKind.CHILDREN;
                     childrenOffsetsList.add(fieldOffsetProvider.objectFieldOffset(field));
-                } else if (NodeCloneable.class.isAssignableFrom(field.getType())) {
-                    kind = NodeFieldKind.DATA;
-                    cloneableOffsetsList.add(fieldOffsetProvider.objectFieldOffset(field));
                 } else {
                     kind = NodeFieldKind.DATA;
                 }
@@ -228,17 +221,12 @@ public final class NodeUtil {
             this.parentOffset = parentFieldOffset;
             this.childOffsets = toLongArray(childOffsetsList);
             this.childrenOffsets = toLongArray(childrenOffsetsList);
-            this.cloneableOffsets = toLongArray(cloneableOffsetsList);
             this.clazz = clazz;
         }
 
-        private static boolean isNodeType(Class<?> clazz) {
-            return Node.class.isAssignableFrom(clazz) || (clazz.isInterface() && NodeInterface.class.isAssignableFrom(clazz));
-        }
-
         private static void checkChildField(Field field) {
-            if (!isNodeType(field.getType())) {
-                throw new AssertionError("@Child field type must be a subclass of Node or an interface extending NodeInterface (" + field + ")");
+            if (!(Node.class.isAssignableFrom(field.getType()) || field.getType().isInterface())) {
+                throw new AssertionError("@Child field type must be a subclass of Node or an interface (" + field + ")");
             }
             if (Modifier.isFinal(field.getModifiers())) {
                 throw new AssertionError("@Child field must not be final (" + field + ")");
@@ -246,8 +234,8 @@ public final class NodeUtil {
         }
 
         private static void checkChildrenField(Field field) {
-            if (!(field.getType().isArray() && isNodeType(field.getType().getComponentType()))) {
-                throw new AssertionError("@Children field type must be an array of a subclass of Node or an interface extending NodeInterface (" + field + ")");
+            if (!(field.getType().isArray() && (Node.class.isAssignableFrom(field.getType().getComponentType()) || field.getType().getComponentType().isInterface()))) {
+                throw new AssertionError("@Children field type must be an array of a subclass of Node or an interface (" + field + ")");
             }
             if (!Modifier.isFinal(field.getModifiers())) {
                 throw new AssertionError("@Children field must be final (" + field + ")");
@@ -360,7 +348,7 @@ public final class NodeUtil {
         return new RecursiveNodeIterator(node);
     }
 
-    private static final class RecursiveNodeIterator implements Iterator<Node> {
+    private final static class RecursiveNodeIterator implements Iterator<Node> {
         private final List<Iterator<Node>> iteratorStack = new ArrayList<>();
 
         public RecursiveNodeIterator(final Node node) {
@@ -475,12 +463,6 @@ public final class NodeUtil {
                     }
                 }
                 unsafe.putObject(clone, fieldOffset, clonedChildren);
-            }
-        }
-        for (long fieldOffset : nodeClass.cloneableOffsets) {
-            Object cloneable = unsafe.getObject(clone, fieldOffset);
-            if (cloneable != null && cloneable == unsafe.getObject(orig, fieldOffset)) {
-                unsafe.putObject(clone, fieldOffset, ((NodeCloneable) cloneable).clone());
             }
         }
         return (T) clone;
@@ -783,9 +765,6 @@ public final class NodeUtil {
         }
 
         sb.append("  (" + node.getClass().getSimpleName() + ")  ");
-
-        sb.append(printSyntaxTags(node));
-
         sb.append(displaySourceAttribution(node));
         p.println(sb.toString());
 
@@ -812,34 +791,6 @@ public final class NodeUtil {
             }
         }
         return defaultName;
-    }
-
-    /**
-     * Returns a string listing the {@linkplain SyntaxTag syntax tags}, if any, associated with a
-     * node:
-     * <ul>
-     * <li>"[{@linkplain StandardSyntaxTag#STATEMENT STATEMENT},
-     * {@linkplain StandardSyntaxTag#ASSIGNMENT ASSIGNMENT}]" if tags have been applied;</li>
-     * <li>"[]" if the node supports tags, but none are present; and</li>
-     * <li>"" if the node does not support tags.</li>
-     * </ul>
-     */
-    public static String printSyntaxTags(final Object node) {
-        if (node instanceof WrapperNode) {
-            final Probe probe = ((WrapperNode) node).getProbe();
-            final Collection<SyntaxTag> syntaxTags = probe.getSyntaxTags();
-            final StringBuilder sb = new StringBuilder();
-            String prefix = "";
-            sb.append("[");
-            for (SyntaxTag tag : syntaxTags) {
-                sb.append(prefix);
-                prefix = ",";
-                sb.append(tag.toString());
-            }
-            sb.append("]");
-            return sb.toString();
-        }
-        return "";
     }
 
     /**
