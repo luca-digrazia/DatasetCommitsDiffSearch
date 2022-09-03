@@ -28,7 +28,6 @@ import java.util.*;
 
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.runtime.nodes.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ci.CiTargetMethod.Call;
 import com.sun.cri.ci.CiTargetMethod.DataPatch;
@@ -251,27 +250,24 @@ public class HotSpotRuntime implements RiRuntime {
             Graph graph = field.graph();
             int displacement = ((HotSpotField) field.field()).offset();
             assert field.kind != CiKind.Illegal;
-            MemoryRead memoryRead = new MemoryRead(field.field().kind(), field.object(), displacement, graph);
+            MemoryRead memoryRead = new MemoryRead(field.field().kind(), displacement, graph);
             memoryRead.setGuard((GuardNode) tool.createGuard(new IsNonNull(field.object(), graph)));
             memoryRead.setNext(field.next());
+            memoryRead.setLocation(field.object());
             return memoryRead;
         } else if (n instanceof StoreField) {
-            StoreField field = (StoreField) n;
-            if (field.isVolatile()) {
-                return null;
-            }
-            Graph graph = field.graph();
-            int displacement = ((HotSpotField) field.field()).offset();
-            MemoryWrite memoryWrite = new MemoryWrite(field.field().kind(), field.object(), field.value(), displacement, graph);
-            memoryWrite.setGuard((GuardNode) tool.createGuard(new IsNonNull(field.object(), graph)));
-            if (field.field().kind() == CiKind.Object) {
-                FieldWriteBarrier writeBarrier = new FieldWriteBarrier(field.object(), graph);
-                memoryWrite.setNext(writeBarrier);
-                writeBarrier.setNext(field.next());
-            } else {
-                memoryWrite.setNext(field.next());
-            }
-            return memoryWrite;
+            return null;
+//            StoreField field = (StoreField) n;
+//            if (field.isVolatile()) {
+//                return null;
+//            }
+//            Graph graph = field.graph();
+//            int displacement = ((HotSpotField) field.field()).offset();
+//            MemoryWrite memoryWrite = new MemoryWrite(field.field().kind(), field.value(), displacement, graph);
+//            memoryWrite.setGuard((GuardNode) tool.createGuard(new IsNonNull(field.object(), graph)));
+//            memoryWrite.setNext(field.next());
+//            memoryWrite.setLocation(field.object());
+//            return memoryWrite;
         }
         return null;
     }
