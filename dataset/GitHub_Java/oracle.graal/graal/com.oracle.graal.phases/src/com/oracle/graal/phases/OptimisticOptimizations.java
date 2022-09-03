@@ -34,29 +34,24 @@ public final class OptimisticOptimizations {
     private static final DebugMetric disabledOptimisticOptsMetric = Debug.metric("DisabledOptimisticOpts");
 
     public static enum Optimization {
-        RemoveNeverExecutedCode,
-        UseTypeCheckedInlining,
-        UseTypeCheckHints,
-        UseExceptionProbabilityForOperations,
-        UseExceptionProbability,
-        UseLoopLimitChecks
+        RemoveNeverExecutedCode, UseTypeCheckedInlining, UseTypeCheckHints, UseExceptionProbabilityForOperations, UseExceptionProbability, UseLoopLimitChecks
     }
 
     private final Set<Optimization> enabledOpts;
 
-    public OptimisticOptimizations(ProfilingInfo info) {
+    public OptimisticOptimizations(ResolvedJavaMethod method) {
         this.enabledOpts = EnumSet.noneOf(Optimization.class);
 
         enabledOpts.add(Optimization.UseExceptionProbabilityForOperations);
-        addOptimization(info, DeoptimizationReason.UnreachedCode, Optimization.RemoveNeverExecutedCode);
-        addOptimization(info, DeoptimizationReason.TypeCheckedInliningViolated, Optimization.UseTypeCheckedInlining);
-        addOptimization(info, DeoptimizationReason.OptimizedTypeCheckViolated, Optimization.UseTypeCheckHints);
-        addOptimization(info, DeoptimizationReason.NotCompiledExceptionHandler, Optimization.UseExceptionProbability);
-        addOptimization(info, DeoptimizationReason.LoopLimitCheck, Optimization.UseLoopLimitChecks);
+        addOptimization(method, DeoptimizationReason.UnreachedCode, Optimization.RemoveNeverExecutedCode);
+        addOptimization(method, DeoptimizationReason.TypeCheckedInliningViolated, Optimization.UseTypeCheckedInlining);
+        addOptimization(method, DeoptimizationReason.OptimizedTypeCheckViolated, Optimization.UseTypeCheckHints);
+        addOptimization(method, DeoptimizationReason.NotCompiledExceptionHandler, Optimization.UseExceptionProbability);
+        addOptimization(method, DeoptimizationReason.LoopLimitCheck, Optimization.UseLoopLimitChecks);
     }
 
-    private void addOptimization(ProfilingInfo info, DeoptimizationReason deoptReason, Optimization optimization) {
-        if (checkDeoptimizations(info, deoptReason)) {
+    private void addOptimization(ResolvedJavaMethod method, DeoptimizationReason deoptReason, Optimization optimization) {
+        if (checkDeoptimizations(method.getProfilingInfo(), deoptReason)) {
             enabledOpts.add(optimization);
         } else {
             disabledOptimisticOptsMetric.increment();

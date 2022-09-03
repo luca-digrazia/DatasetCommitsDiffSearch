@@ -23,19 +23,13 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.spi.*;
 
-@NodeInfo(allowedUsageTypes = {InputType.Association})
 public class LoopExitNode extends BeginStateSplitNode implements IterableNodeType {
 
-    @Input(InputType.Association) private LoopBeginNode loopBegin;
+    @Input(notDataflow = true) private LoopBeginNode loopBegin;
 
-    public static LoopExitNode create(LoopBeginNode loop) {
-        return new LoopExitNodeGen(loop);
-    }
-
-    protected LoopExitNode(LoopBeginNode loop) {
+    public LoopExitNode(LoopBeginNode loop) {
         assert loop != null;
         loopBegin = loop;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -32,7 +31,7 @@ import com.oracle.graal.nodes.type.*;
  * Implements a type check where the type being checked is loaded at runtime. This is used, for
  * instance, to implement an object array store check.
  */
-public final class CheckCastDynamicNode extends FixedWithNextNode implements Canonicalizable.Binary<ValueNode>, Lowerable {
+public final class CheckCastDynamicNode extends FixedWithNextNode implements Canonicalizable, Lowerable {
 
     @Input private ValueNode object;
     @Input private ValueNode hub;
@@ -54,6 +53,35 @@ public final class CheckCastDynamicNode extends FixedWithNextNode implements Can
         this.forStoreCheck = forStoreCheck;
     }
 
+    public boolean isForStoreCheck() {
+        return forStoreCheck;
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getRuntime().lower(this, tool);
+    }
+
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(object().stamp());
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool) {
+        assert object() != null : this;
+
+        if (ObjectStamp.isObjectAlwaysNull(object())) {
+            return object();
+        }
+        if (hub.isConstant() && hub.kind() == Kind.Object && hub.asConstant().asObject() instanceof Class) {
+            Class clazz = (Class) hub.asConstant().asObject();
+            ResolvedJavaType t = tool.runtime().lookupJavaType(clazz);
+            return graph().add(new CheckCastNode(t, object(), null, forStoreCheck));
+        }
+        return this;
+    }
+
     public ValueNode object() {
         return object;
     }
@@ -63,42 +91,6 @@ public final class CheckCastDynamicNode extends FixedWithNextNode implements Can
      */
     public ValueNode hub() {
         return hub;
-    }
-
-    public ValueNode getX() {
-        return object;
-    }
-
-    public ValueNode getY() {
-        return hub;
-    }
-
-    public boolean isForStoreCheck() {
-        return forStoreCheck;
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
-    }
-
-    @Override
-    public boolean inferStamp() {
-        return updateStamp(object().stamp());
-    }
-
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forObject, ValueNode forHub) {
-        if (StampTool.isObjectAlwaysNull(forObject)) {
-            return forObject;
-        }
-        if (forHub.isConstant()) {
-            ResolvedJavaType t = tool.getConstantReflection().asJavaType(forHub.asConstant());
-            if (t != null) {
-                return graph().add(new CheckCastNode(t, forObject, null, forStoreCheck));
-            }
-        }
-        return this;
     }
 
     @NodeIntrinsic
