@@ -22,13 +22,14 @@
  */
 package com.oracle.graal.truffle.hotspot;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.runtime.*;
 import com.oracle.graal.truffle.*;
-import com.oracle.graal.truffle.hotspot.substitutions.*;
 
 public final class HotSpotTruffleReplacements extends TruffleReplacements {
 
@@ -43,8 +44,7 @@ public final class HotSpotTruffleReplacements extends TruffleReplacements {
     }
 
     @Override
-    protected void registerTruffleSubstitutions() {
-        super.registerTruffleSubstitutions();
-        registerSubstitutions(HotSpotOptimizedCallTargetSubstitutions.class);
+    protected GraphMaker createGraphMaker(ResolvedJavaMethod substitute, ResolvedJavaMethod original, FrameStateProcessing frameStateProcessing) {
+        return new HotSpotReplacementsImpl.HotSpotGraphMaker(this, substitute, original, frameStateProcessing);
     }
 }
