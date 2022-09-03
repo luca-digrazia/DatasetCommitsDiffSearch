@@ -59,7 +59,7 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node {
 
     public final void setStamp(Stamp stamp) {
         this.stamp = stamp;
-        assert !isAlive() || !inferStamp() : "setStamp called on a node that overrides inferStamp: " + this;
+        assert !inferStamp() : "setStamp called on a node that overrides inferStamp: " + this;
     }
 
     @Override
