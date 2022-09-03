@@ -67,7 +67,7 @@ public abstract class RegexCompiler implements RegexLanguageObject {
      * @throws RegexSyntaxException if the engine discovers a syntax error in the regular expression
      * @throws UnsupportedRegexException if the regular expression is not supported by the engine
      */
-    public abstract TruffleObject compile(RegexSource source) throws RegexSyntaxException;
+    public abstract TruffleObject compile(RegexSource source) throws RegexSyntaxException, UnsupportedRegexException;
 
     public static boolean isInstance(TruffleObject object) {
         return object instanceof RegexCompiler;
@@ -99,7 +99,7 @@ public abstract class RegexCompiler implements RegexLanguageObject {
                     }
                     flags = (String) args[1];
                 }
-                RegexSource regexSource = new RegexSource(pattern, RegexFlags.parseFlags(flags));
+                RegexSource regexSource = new RegexSource(pattern, flags);
                 return receiver.compile(regexSource);
             }
         }

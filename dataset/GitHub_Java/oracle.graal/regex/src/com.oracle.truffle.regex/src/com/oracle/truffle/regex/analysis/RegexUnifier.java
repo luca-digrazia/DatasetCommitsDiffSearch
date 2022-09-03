@@ -46,7 +46,7 @@ public final class RegexUnifier {
 
     public RegexUnifier(RegexSource source) {
         this.source = source;
-        this.lexer = new RegexLexer(source, RegexFlags.parseFlags(source.getFlags()), RegexOptions.DEFAULT);
+        this.lexer = new RegexLexer(source, RegexFlags.parseFlags(source.getGeneralFlags()), RegexOptions.DEFAULT);
         this.dump = new StringBuilder(source.getPattern().length());
     }
 
@@ -121,7 +121,7 @@ public final class RegexUnifier {
             }
         }
         dump.append("/");
-        dump.append(source.getFlags());
+        dump.append(source.getGeneralFlags());
         return dump.toString();
     }
 }

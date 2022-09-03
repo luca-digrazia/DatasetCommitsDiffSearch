@@ -25,8 +25,6 @@
 package com.oracle.truffle.regex;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -34,7 +32,6 @@ import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.regex.tregex.parser.RegexParser;
-import org.graalvm.options.OptionDescriptors;
 
 import java.util.Collections;
 
@@ -73,7 +70,7 @@ import java.util.Collections;
  * </pre>
  */
 
-@TruffleLanguage.Registration(name = RegexLanguage.NAME, id = RegexLanguage.ID, characterMimeTypes = RegexLanguage.MIME_TYPE, version = "0.1", internal = true, contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
+@TruffleLanguage.Registration(name = RegexLanguage.NAME, id = RegexLanguage.ID, characterMimeTypes = RegexLanguage.MIME_TYPE, version = "0.1", internal = true)
 @ProvidedTags(StandardTags.RootTag.class)
 public final class RegexLanguage extends TruffleLanguage<Void> {
 
@@ -84,8 +81,6 @@ public final class RegexLanguage extends TruffleLanguage<Void> {
     public final RegexEngineBuilder engineBuilder = new RegexEngineBuilder(this);
 
     private final CallTarget getEngineBuilderCT = Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(engineBuilder));
-
-    @CompilationFinal private RegexLanguageOptions languageOptions = RegexLanguageOptions.DEFAULT;
 
     public static void validateRegex(String pattern, String flags) throws RegexSyntaxException {
         RegexParser.validate(new RegexSource(pattern, flags));
@@ -98,21 +93,12 @@ public final class RegexLanguage extends TruffleLanguage<Void> {
 
     @Override
     protected Void createContext(Env env) {
-        CompilerAsserts.neverPartOfCompilation();
-        this.languageOptions = new RegexLanguageOptions(env.getOptions());
         return null;
     }
 
     @Override
     protected boolean patchContext(Void context, Env newEnv) {
-        CompilerAsserts.neverPartOfCompilation();
-        this.languageOptions = new RegexLanguageOptions(newEnv.getOptions());
         return true;
-    }
-
-    @Override
-    protected OptionDescriptors getOptionDescriptors() {
-        return RegexLanguageOptions.OPTION_DESCRIPTORS;
     }
 
     @Override
@@ -140,9 +126,4 @@ public final class RegexLanguage extends TruffleLanguage<Void> {
     protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
         return true;
     }
-
-    public RegexLanguageOptions getLanguageOptions() {
-        return languageOptions;
-    }
-
 }

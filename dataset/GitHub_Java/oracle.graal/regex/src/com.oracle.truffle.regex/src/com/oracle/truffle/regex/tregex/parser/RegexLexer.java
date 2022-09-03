@@ -220,8 +220,7 @@ public final class RegexLexer {
 
     private Token charClass(CodePointSet codePointSet, boolean invert) {
         CodePointSet processedSet = codePointSet;
-        CaseFoldTable.CaseFoldingAlgorithm caseFolding = flags.isUnicode() ? CaseFoldTable.CaseFoldingAlgorithm.ECMAScriptUnicode : CaseFoldTable.CaseFoldingAlgorithm.ECMAScriptNonUnicode;
-        processedSet = flags.isIgnoreCase() ? CaseFoldTable.applyCaseFold(processedSet, caseFolding) : processedSet;
+        processedSet = flags.isIgnoreCase() ? CaseFoldTable.applyCaseFold(processedSet, flags.isUnicode()) : processedSet;
         processedSet = invert ? processedSet.createInverse() : processedSet;
         return Token.createCharClass(processedSet);
     }
@@ -805,6 +804,6 @@ public final class RegexLexer {
     }
 
     private RegexSyntaxException syntaxError(String msg) {
-        return new RegexSyntaxException(pattern, source.getFlags(), msg);
+        return new RegexSyntaxException(pattern, source.getGeneralFlags(), msg);
     }
 }
