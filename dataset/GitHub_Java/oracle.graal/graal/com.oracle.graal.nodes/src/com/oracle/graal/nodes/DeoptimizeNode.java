@@ -37,7 +37,7 @@ import com.oracle.graal.nodes.type.*;
  * 
  */
 @NodeInfo(shortName = "Deopt", nameTemplate = "Deopt {p#reason/s}")
-public class DeoptimizeNode extends ControlSinkNode implements IterableNodeType, Lowerable, LIRLowerable, DeoptimizingNode {
+public class DeoptimizeNode extends ControlSinkNode implements Node.IterableNodeType, Lowerable, LIRLowerable, DeoptimizingNode {
 
     @Input private FrameState deoptState;
 
@@ -59,7 +59,7 @@ public class DeoptimizeNode extends ControlSinkNode implements IterableNodeType,
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         tool.getRuntime().lower(this, tool);
     }
 
