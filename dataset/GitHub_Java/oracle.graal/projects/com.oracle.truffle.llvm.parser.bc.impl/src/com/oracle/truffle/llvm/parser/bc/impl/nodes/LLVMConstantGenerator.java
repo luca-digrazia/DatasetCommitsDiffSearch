@@ -53,7 +53,7 @@ import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory;
 import com.oracle.truffle.llvm.nodes.impl.vars.StructLiteralNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMLabelList;
-import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
+import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.parser.factories.LLVMCastsFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMGetElementPtrFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMLiteralFactory;
@@ -62,35 +62,35 @@ import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalValueSymbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.Symbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.ArrayConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.BinaryOperationConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.BlockAddressConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.CastConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.CompareConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.floatingpoint.DoubleConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.floatingpoint.FloatConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.floatingpoint.FloatingPointConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.GetElementPointerConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.integer.IntegerConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.NullConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.StringConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.StructureConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.UndefinedConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.VectorConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.floatingpoint.X86FP80Constant;
-import com.oracle.truffle.llvm.parser.base.model.types.ArrayType;
-import com.oracle.truffle.llvm.parser.base.model.types.FloatingPointType;
-import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
-import com.oracle.truffle.llvm.parser.base.model.types.IntegerType;
-import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
-import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
-import com.oracle.truffle.llvm.parser.base.model.types.Type;
-import com.oracle.truffle.llvm.parser.base.model.types.VectorType;
+import uk.ac.man.cs.llvm.ir.model.FunctionDeclaration;
+import uk.ac.man.cs.llvm.ir.model.FunctionDefinition;
+import uk.ac.man.cs.llvm.ir.model.GlobalValueSymbol;
+import uk.ac.man.cs.llvm.ir.model.Symbol;
+import uk.ac.man.cs.llvm.ir.model.ValueSymbol;
+import uk.ac.man.cs.llvm.ir.model.constants.ArrayConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.BinaryOperationConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.BlockAddressConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.CastConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.CompareConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.DoubleConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.FloatConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.FloatingPointConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.GetElementPointerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.NullConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.StringConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.StructureConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.UndefinedConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.VectorConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.X86FP80Constant;
+import uk.ac.man.cs.llvm.ir.types.ArrayType;
+import uk.ac.man.cs.llvm.ir.types.FloatingPointType;
+import uk.ac.man.cs.llvm.ir.types.FunctionType;
+import uk.ac.man.cs.llvm.ir.types.IntegerType;
+import uk.ac.man.cs.llvm.ir.types.PointerType;
+import uk.ac.man.cs.llvm.ir.types.StructureType;
+import uk.ac.man.cs.llvm.ir.types.Type;
+import uk.ac.man.cs.llvm.ir.types.VectorType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -128,9 +128,9 @@ public final class LLVMConstantGenerator {
                 values.add(new LLVMSimpleLiteralNode.LLVMI8LiteralNode((byte) 0));
             }
 
-            final int size = typeHelper.getByteSize(IntegerType.BYTE) * values.size();
+            final int size = typeHelper.getByteSize(new IntegerType(Byte.SIZE)) * values.size();
             final LLVMAllocInstruction.LLVMAllocaInstruction target = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(size, 1, context, stackSlot);
-            return LLVMStoreNodeFactory.LLVMI8ArrayLiteralNodeGen.create(values.toArray(new LLVMI8Node[values.size()]), typeHelper.getByteSize(IntegerType.BYTE), target);
+            return LLVMStoreNodeFactory.LLVMI8ArrayLiteralNodeGen.create(values.toArray(new LLVMI8Node[values.size()]), typeHelper.getByteSize(new IntegerType(Byte.SIZE)), target);
 
         } else if (value instanceof ArrayConstant) {
             return toArrayConstant((ArrayConstant) value, align, variables, context, stackSlot, labels, typeHelper);
@@ -148,15 +148,15 @@ public final class LLVMConstantGenerator {
             final BinaryOperationConstant operation = (BinaryOperationConstant) value;
             final LLVMExpressionNode lhs = toConstantNode(operation.getLHS(), align, variables, context, stackSlot, labels, typeHelper);
             final LLVMExpressionNode rhs = toConstantNode(operation.getRHS(), align, variables, context, stackSlot, labels, typeHelper);
-            final LLVMBaseType type = operation.getType().getLLVMBaseType();
+            final LLVMBaseType type = LLVMBitcodeTypeHelper.getLLVMBaseType(operation.getType());
             return LLVMNodeGenerator.generateBinaryOperatorNode(operation.getOperator(), type, lhs, rhs);
 
         } else if (value instanceof CastConstant) {
             final CastConstant cast = (CastConstant) value;
             final LLVMConversionType type = LLVMBitcodeTypeHelper.toConversionType(cast.getOperator());
             final LLVMExpressionNode fromNode = toConstantNode(cast.getValue(), align, variables, context, stackSlot, labels, typeHelper);
-            final LLVMBaseType from = cast.getValue().getType().getLLVMBaseType();
-            final LLVMBaseType to = cast.getType().getLLVMBaseType();
+            final LLVMBaseType from = LLVMBitcodeTypeHelper.getLLVMBaseType(cast.getValue().getType());
+            final LLVMBaseType to = LLVMBitcodeTypeHelper.getLLVMBaseType(cast.getType());
             return LLVMCastsFactory.cast(fromNode, to, from, type);
 
         } else if (value instanceof CompareConstant) {
@@ -212,13 +212,13 @@ public final class LLVMConstantGenerator {
                         context,
                         stackSlot);
 
-        return LLVMLiteralFactory.createVectorLiteralNode(values, target, constant.getType().getLLVMBaseType());
+        return LLVMLiteralFactory.createVectorLiteralNode(values, target, LLVMBitcodeTypeHelper.getLLVMBaseType(constant.getType()));
     }
 
     private static LLVMExpressionNode toArrayConstant(ArrayConstant array, int align, Function<GlobalValueSymbol, LLVMExpressionNode> variables, LLVMContext context, FrameSlot stackSlot,
                     LLVMLabelList labels, LLVMBitcodeTypeHelper typeHelper) {
         final Type elementType = array.getType().getElementType();
-        final LLVMBaseType llvmElementType = elementType.getLLVMBaseType();
+        final LLVMBaseType llvmElementType = LLVMBitcodeTypeHelper.getLLVMBaseType(elementType);
         final int stride = typeHelper.getByteSize(elementType);
         final LLVMAllocInstruction.LLVMAllocaInstruction allocation = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(typeHelper.getByteSize(array.getType()),
                         typeHelper.getAlignment(array.getType()), context, stackSlot);
@@ -407,7 +407,7 @@ public final class LLVMConstantGenerator {
             offsets[i] = currentOffset;
             final int byteSize = typeHelper.getByteSize(elementType);
             final LLVMExpressionNode resolvedConstant = toConstantNode(constant.getElement(i), align, variables, context, stackSlot, labels, typeHelper);
-            nodes[i] = createStructWriteNode(resolvedConstant, elementType.getLLVMBaseType(), byteSize);
+            nodes[i] = createStructWriteNode(resolvedConstant, LLVMBitcodeTypeHelper.getLLVMBaseType(elementType), byteSize);
             currentOffset += byteSize;
         }
 
@@ -485,7 +485,7 @@ public final class LLVMConstantGenerator {
                             stack);
             final LLVMExpressionNode[] zeroes = new LLVMExpressionNode[vectorType.getElementCount()];
             Arrays.fill(zeroes, toConstantZeroNode(vectorType.getElementType(), context, stack, typeHelper));
-            return LLVMLiteralFactory.createVectorLiteralNode(Arrays.asList(zeroes), target, vectorType.getLLVMBaseType());
+            return LLVMLiteralFactory.createVectorLiteralNode(Arrays.asList(zeroes), target, LLVMBitcodeTypeHelper.getLLVMBaseType(vectorType));
 
         } else if (type instanceof FunctionType) {
             final LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createFunctionDescriptor("<zero function>", LLVMFunctionDescriptor.LLVMRuntimeType.ILLEGAL,
