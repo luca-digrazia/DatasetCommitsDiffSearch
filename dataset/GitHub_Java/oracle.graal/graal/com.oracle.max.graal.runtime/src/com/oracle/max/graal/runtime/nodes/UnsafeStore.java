@@ -33,44 +33,42 @@ import com.sun.cri.ci.*;
  */
 public class UnsafeStore extends StateSplit {
 
-    @Input    private Value object;
+    private static final int INPUT_COUNT = 3;
+    private static final int INPUT_OBJECT = 0;
+    private static final int INPUT_OFFSET = 1;
+    private static final int INPUT_VALUE = 2;
 
-    @Input    private Value offset;
-
-    @Input    private Value value;
-
-    public Value object() {
-        return object;
-    }
-
-    public void setObject(Value x) {
-        updateUsages(object, x);
-        object = x;
-    }
-
-    public Value offset() {
-        return offset;
-    }
-
-    public void setOffset(Value x) {
-        updateUsages(offset, x);
-        offset = x;
-    }
-
-    public Value value() {
-        return value;
-    }
-
-    public void setValue(Value x) {
-        updateUsages(value, x);
-        value = x;
-    }
+    private static final int SUCCESSOR_COUNT = 0;
 
     public UnsafeStore(Value object, Value offset, Value value, CiKind kind, Graph graph) {
-        super(kind, graph);
+        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setObject(object);
         setOffset(offset);
         setValue(value);
+    }
+
+    public Value object() {
+        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
+    }
+
+    public Value setObject(Value object) {
+        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, object);
+    }
+
+    public Value offset() {
+        return (Value) inputs().get(super.inputCount() + INPUT_OFFSET);
+    }
+
+    public Value setOffset(Value offset) {
+        return (Value) inputs().set(super.inputCount() + INPUT_OFFSET, offset);
+    }
+
+    public Value value() {
+        return (Value) inputs().get(super.inputCount() + INPUT_VALUE);
+    }
+
+    public Value setValue(Value value) {
+        return (Value) inputs().set(super.inputCount() + INPUT_VALUE, value);
     }
 
     @SuppressWarnings("unchecked")

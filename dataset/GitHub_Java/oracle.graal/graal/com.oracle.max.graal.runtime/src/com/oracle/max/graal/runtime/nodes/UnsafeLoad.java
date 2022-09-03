@@ -33,32 +33,32 @@ import com.sun.cri.ci.*;
  */
 public class UnsafeLoad extends StateSplit {
 
-    @Input    private Value object;
+    private static final int INPUT_COUNT = 2;
+    private static final int INPUT_OBJECT = 0;
+    private static final int INPUT_OFFSET = 1;
 
-    @Input    private Value offset;
+    private static final int SUCCESSOR_COUNT = 0;
 
-    public Value object() {
-        return object;
+    public UnsafeLoad(Value object, Value offset, CiKind kind, Graph graph) {
+        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        setObject(object);
+        setOffset(offset);
     }
 
-    public void setObject(Value x) {
-        updateUsages(object, x);
-        object = x;
+    public Value object() {
+        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
+    }
+
+    public Value setObject(Value object) {
+        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, object);
     }
 
     public Value offset() {
-        return offset;
+        return (Value) inputs().get(super.inputCount() + INPUT_OFFSET);
     }
 
-    public void setOffset(Value x) {
-        updateUsages(offset, x);
-        offset = x;
-    }
-
-    public UnsafeLoad(Value object, Value offset, CiKind kind, Graph graph) {
-        super(kind, graph);
-        setObject(object);
-        setOffset(offset);
+    public Value setOffset(Value offset) {
+        return (Value) inputs().set(super.inputCount() + INPUT_OFFSET, offset);
     }
 
     @SuppressWarnings("unchecked")

@@ -30,16 +30,9 @@ import com.sun.cri.ci.CiAddress.*;
 
 
 public final class LocationNode extends FloatingNode {
-    @Input private Value index;
-
-    public Value index() {
-        return index;
-    }
-
-    public void setIndex(Value x) {
-        updateUsages(index, x);
-        index = x;
-    }
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_INDEX = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     public static final Object UNSAFE_ACCESS_LOCATION = new Object();
     public static final Object FINAL_LOCATION = new Object();
@@ -71,13 +64,21 @@ public final class LocationNode extends FloatingNode {
         this.indexScalingEnabled = enable;
     }
 
+    public Value index() {
+        return (Value) inputs().get(super.inputCount() + INPUT_INDEX);
+    }
+
+    public void setIndex(Value index) {
+        inputs().set(super.inputCount() + INPUT_INDEX, index);
+    }
+
     public static LocationNode create(Object identity, CiKind kind, int displacement, Graph graph) {
         LocationNode result = new LocationNode(identity, kind, displacement, graph);
         return graph.ideal(result);
     }
 
     private LocationNode(Object identity, CiKind kind, int displacement, Graph graph) {
-        super(CiKind.Illegal, graph);
+        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.displacement = displacement;
         this.valueKind = kind;
         this.locationIdentity = identity;
@@ -111,7 +112,7 @@ public final class LocationNode extends FloatingNode {
         if (this.index() != null) {
             indexValue = lirGenerator.load(this.index());
             if (indexScalingEnabled) {
-            indexScale = Scale.fromInt(valueKind.sizeInBytes(lirGenerator.target().wordSize));
+                indexScale = Scale.fromInt(valueKind.sizeInBytes(lirGenerator.target().wordSize));
             }
         }
         return new CiAddress(valueKind, lirGenerator.load(object), indexValue, indexScale, displacement);
