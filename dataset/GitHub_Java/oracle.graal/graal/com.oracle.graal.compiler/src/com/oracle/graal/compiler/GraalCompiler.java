@@ -269,6 +269,7 @@ public class GraalCompiler {
             graph.maybeCompress();
 
             SchedulePhase schedule = new SchedulePhase();
+            schedule.setScheduleConstants(true);
             schedule.apply(graph);
             Debug.dump(schedule, "Final HIR schedule");
             return schedule;
@@ -283,6 +284,7 @@ public class GraalCompiler {
             // Repeatedly run the LIR code generation pass to improve statistical profiling results.
             for (int i = 0; i < EmitLIRRepeatCount.getValue(); i++) {
                 SchedulePhase dummySchedule = new SchedulePhase();
+                dummySchedule.setScheduleConstants(true);
                 dummySchedule.apply(graph);
                 emitLIR(backend, target, dummySchedule, graph, stub, cc, registerConfig, lirSuites);
             }
@@ -346,7 +348,7 @@ public class GraalCompiler {
         AllocationContext allocContext = new AllocationContext(lirGen.getSpillMoveFactory());
         lirSuites.getAllocationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, allocContext);
 
-        PostAllocationOptimizationContext postAllocOptContext = new PostAllocationOptimizationContext(lirGen);
+        PostAllocationOptimizationContext postAllocOptContext = new PostAllocationOptimizationContext();
         lirSuites.getPostAllocationOptimizationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, postAllocOptContext);
 
         return lirGenRes;
