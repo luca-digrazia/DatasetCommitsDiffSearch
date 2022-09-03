@@ -48,7 +48,7 @@ import com.oracle.graal.nodes.util.*;
  */
 public class ComputeProbabilityClosure {
 
-    private static final double EPSILON = Double.MIN_NORMAL;
+    private static final double EPSILON = Math.nextUp(0);
 
     private final StructuredGraph graph;
     private final NodesToDoubles nodeProbabilities;
@@ -237,7 +237,6 @@ public class ComputeProbabilityClosure {
                             return false;
                         }
                         probability *= loopFrequency;
-                        assert probability >= 0;
                     }
                 }
                 for (Probability other : withStates) {
@@ -249,11 +248,9 @@ public class ComputeProbabilityClosure {
                                 return false;
                             }
                             prob *= loopFrequency;
-                            assert prob >= 0;
                         }
                     }
                     probability += prob;
-                    assert probability >= 0;
                 }
                 loops = intersection;
                 mergeLoops.put(merge, new HashSet<>(intersection));
