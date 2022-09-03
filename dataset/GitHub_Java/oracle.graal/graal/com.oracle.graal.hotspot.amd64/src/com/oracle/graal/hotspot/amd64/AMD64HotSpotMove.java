@@ -23,27 +23,26 @@
 package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.jvmci.code.ValueUtil.*;
 
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
+import com.oracle.graal.asm.amd64.AMD64Assembler.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.LoadConstantOp;
 import com.oracle.graal.lir.StandardOp.StackStoreOp;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
+import com.oracle.jvmci.meta.*;
 
 public class AMD64HotSpotMove {
 
-    public static final class HotSpotLoadObjectConstantOp extends AMD64LIRInstruction implements LoadConstantOp {
+    public static final class HotSpotLoadObjectConstantOp extends AMD64LIRInstruction {
         public static final LIRInstructionClass<HotSpotLoadObjectConstantOp> TYPE = LIRInstructionClass.create(HotSpotLoadObjectConstantOp.class);
 
         @Def({REG, STACK}) private AllocatableValue result;
@@ -87,17 +86,9 @@ public class AMD64HotSpotMove {
                 }
             }
         }
-
-        public Constant getConstant() {
-            return input;
-        }
-
-        public AllocatableValue getResult() {
-            return result;
-        }
     }
 
-    public static final class HotSpotLoadMetaspaceConstantOp extends AMD64LIRInstruction implements LoadConstantOp {
+    public static final class HotSpotLoadMetaspaceConstantOp extends AMD64LIRInstruction {
         public static final LIRInstructionClass<HotSpotLoadMetaspaceConstantOp> TYPE = LIRInstructionClass.create(HotSpotLoadMetaspaceConstantOp.class);
 
         @Def({REG, STACK}) private AllocatableValue result;
@@ -149,14 +140,6 @@ public class AMD64HotSpotMove {
                     throw JVMCIError.shouldNotReachHere("Cannot store 64-bit constants to memory");
                 }
             }
-        }
-
-        public Constant getConstant() {
-            return input;
-        }
-
-        public AllocatableValue getResult() {
-            return result;
         }
     }
 
