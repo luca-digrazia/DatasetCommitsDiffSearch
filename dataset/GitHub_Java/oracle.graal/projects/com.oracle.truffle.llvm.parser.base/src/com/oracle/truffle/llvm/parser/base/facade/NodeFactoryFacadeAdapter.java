@@ -36,6 +36,7 @@ import java.util.Optional;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMType;
 import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
+import org.eclipse.emf.ecore.EObject;
 
 import com.intel.llvm.ireditor.lLVM_IR.FunctionDef;
 import com.intel.llvm.ireditor.lLVM_IR.FunctionHeader;
@@ -110,7 +111,7 @@ public class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMExpressionNode createUndefinedValue(Type t) {
+    public LLVMExpressionNode createUndefinedValue(EObject t) {
         return null;
     }
 

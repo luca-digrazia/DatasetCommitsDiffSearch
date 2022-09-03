@@ -36,6 +36,7 @@ import java.util.Optional;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMType;
 import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
+import org.eclipse.emf.ecore.EObject;
 
 import com.intel.llvm.ireditor.lLVM_IR.FunctionDef;
 import com.intel.llvm.ireditor.lLVM_IR.FunctionHeader;
@@ -96,7 +97,7 @@ public interface NodeFactoryFacade {
 
     LLVMExpressionNode createLogicalOperation(LLVMExpressionNode left, LLVMExpressionNode right, LLVMLogicalInstructionType opCode, LLVMBaseType llvmType, LLVMExpressionNode target);
 
-    LLVMExpressionNode createUndefinedValue(Type t);
+    LLVMExpressionNode createUndefinedValue(EObject t);
 
     LLVMExpressionNode createLiteral(Object value, LLVMBaseType type);
 
