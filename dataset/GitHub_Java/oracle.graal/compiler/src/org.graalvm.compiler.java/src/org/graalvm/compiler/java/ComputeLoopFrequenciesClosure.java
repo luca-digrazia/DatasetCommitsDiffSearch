@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,11 +22,8 @@
  */
 package org.graalvm.compiler.java;
 
-import static org.graalvm.compiler.nodes.cfg.ControlFlowGraph.multiplyRelativeFrequencies;
-
 import java.util.List;
 
-import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.ControlSplitNode;
@@ -39,6 +34,9 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.graph.ReentrantNodeIterator;
+import org.graalvm.util.EconomicMap;
+
+import static org.graalvm.compiler.nodes.cfg.ControlFlowGraph.multiplyProbabilities;
 
 public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.NodeIteratorClosure<Double> {
 
@@ -75,17 +73,17 @@ public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.N
     protected EconomicMap<LoopExitNode, Double> processLoop(LoopBeginNode loop, Double initialState) {
         EconomicMap<LoopExitNode, Double> exitStates = ReentrantNodeIterator.processLoop(this, loop, 1D).exitStates;
 
-        double exitRelativeFrequency = 0.0;
+        double exitProbability = 0.0;
         for (double d : exitStates.getValues()) {
-            exitRelativeFrequency += d;
+            exitProbability += d;
         }
-        exitRelativeFrequency = Math.min(1.0, exitRelativeFrequency);
-        exitRelativeFrequency = Math.max(ControlFlowGraph.MIN_RELATIVE_FREQUENCY, exitRelativeFrequency);
-        double loopFrequency = 1.0 / exitRelativeFrequency;
+        exitProbability = Math.min(1.0, exitProbability);
+        exitProbability = Math.max(ControlFlowGraph.MIN_PROBABILITY, exitProbability);
+        double loopFrequency = 1.0 / exitProbability;
         loop.setLoopFrequency(loopFrequency);
 
         double adjustmentFactor = initialState * loopFrequency;
-        exitStates.replaceAll((exitNode, frequency) -> multiplyRelativeFrequencies(frequency, adjustmentFactor));
+        exitStates.replaceAll((exitNode, probability) -> multiplyProbabilities(probability, adjustmentFactor));
 
         return exitStates;
     }
