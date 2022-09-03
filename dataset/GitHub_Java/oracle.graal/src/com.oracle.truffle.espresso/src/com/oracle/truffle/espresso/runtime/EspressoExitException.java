@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +22,10 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.nodes.Node;
 
-// TODO(peterssen): Fix deprecation, GR-26729
-@SuppressWarnings("deprecation")
-public final class EspressoExitException extends RuntimeException implements com.oracle.truffle.api.TruffleException {
+public final class EspressoExitException extends RuntimeException implements TruffleException {
 
     private static final long serialVersionUID = 7140601650442131207L;
 
