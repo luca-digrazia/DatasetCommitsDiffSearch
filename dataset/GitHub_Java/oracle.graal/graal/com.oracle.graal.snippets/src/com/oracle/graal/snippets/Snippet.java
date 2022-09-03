@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.snippets;
 
+import static com.oracle.graal.api.meta.MetaUtil.*;
+
 import java.lang.annotation.*;
 import java.lang.reflect.*;
 
@@ -29,8 +31,8 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.snippets.Word.Operation;
 import com.oracle.graal.snippets.nodes.*;
-import com.oracle.graal.word.*;
 
 /**
  * A snippet is a Graal graph expressed as a Java source method. Graal snippets can be used for:
@@ -71,11 +73,9 @@ public @interface Snippet {
      * </ul>
      */
     public static class DefaultSnippetInliningPolicy implements SnippetInliningPolicy {
-        private final MetaAccessProvider metaAccess;
         private final BoxingMethodPool pool;
 
-        public DefaultSnippetInliningPolicy(MetaAccessProvider metaAccess, BoxingMethodPool pool) {
-            this.metaAccess = metaAccess;
+        public DefaultSnippetInliningPolicy(BoxingMethodPool pool) {
             this.pool = pool;
         }
 
@@ -90,12 +90,12 @@ public @interface Snippet {
             if (method.getAnnotation(NodeIntrinsic.class) != null) {
                 return false;
             }
-            if (metaAccess.lookupJavaType(Throwable.class).isAssignableFrom(method.getDeclaringClass())) {
+            if (Throwable.class.isAssignableFrom(getMirrorOrFail(method.getDeclaringClass(), null))) {
                 if (method.getName().equals("<init>")) {
                     return false;
                 }
             }
-            if (method.getAnnotation(Word.Operation.class) != null) {
+            if (method.getAnnotation(Operation.class) != null) {
                 return false;
             }
             if (pool.isSpecialMethod(method)) {

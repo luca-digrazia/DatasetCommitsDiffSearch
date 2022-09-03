@@ -127,7 +127,7 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public boolean isAssignableFrom(ResolvedJavaType other) {
+    public boolean isAssignableTo(ResolvedJavaType other) {
         return other == this;
     }
 

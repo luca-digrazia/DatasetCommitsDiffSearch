@@ -24,23 +24,19 @@ package com.oracle.graal.nodes.extended;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 
 public class BoxingMethodPool {
 
     private final Set<JavaMethod> specialMethods = new HashSet<>();
-    private final CodeCacheProvider runtime;
+    private final MetaAccessProvider runtime;
     private final ResolvedJavaMethod[] boxingMethods = new ResolvedJavaMethod[Kind.values().length];
     private final ResolvedJavaMethod[] unboxingMethods = new ResolvedJavaMethod[Kind.values().length];
     private final ResolvedJavaField[] boxFields = new ResolvedJavaField[Kind.values().length];
 
-    public BoxingMethodPool(CodeCacheProvider runtime) {
+    public BoxingMethodPool(MetaAccessProvider runtime) {
         this.runtime = runtime;
-        initialize();
-    }
 
-    private void initialize() {
         try {
             initialize(Kind.Boolean, Boolean.class, "booleanValue");
             initialize(Kind.Byte, Byte.class, "byteValue");
@@ -50,29 +46,26 @@ public class BoxingMethodPool {
             initialize(Kind.Long, Long.class, "longValue");
             initialize(Kind.Float, Float.class, "floatValue");
             initialize(Kind.Double, Double.class, "doubleValue");
-        } catch (SecurityException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchMethodException e) {
+        } catch (SecurityException | NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
     }
 
     private void initialize(Kind kind, Class<?> type, String unboxMethod) throws SecurityException, NoSuchMethodException {
-
         // Get boxing method from runtime.
-        ResolvedJavaMethod boxingMethod = runtime.getResolvedJavaMethod(type.getDeclaredMethod("valueOf", kind.toJavaClass()));
+        ResolvedJavaMethod boxingMethod = runtime.lookupJavaMethod(type.getDeclaredMethod("valueOf", kind.toJavaClass()));
         specialMethods.add(boxingMethod);
         boxingMethods[kind.ordinal()] = boxingMethod;
 
         // Get unboxing method from runtime.
-        ResolvedJavaMethod unboxingMethod = runtime.getResolvedJavaMethod(type.getDeclaredMethod(unboxMethod));
+        ResolvedJavaMethod unboxingMethod = runtime.lookupJavaMethod(type.getDeclaredMethod(unboxMethod));
         unboxingMethods[kind.ordinal()] = unboxingMethod;
         specialMethods.add(unboxingMethod);
 
         // Get the field that contains the boxed value.
-        ResolvedJavaField[] fields = runtime.getResolvedJavaType(type).declaredFields();
+        ResolvedJavaField[] fields = runtime.lookupJavaType(type).getInstanceFields(false);
         ResolvedJavaField boxField = fields[0];
-        assert fields.length == 1 && boxField.kind() == kind;
+        assert fields.length == 1 && boxField.getKind() == kind;
         boxFields[kind.ordinal()] = boxField;
     }
 
@@ -81,11 +74,11 @@ public class BoxingMethodPool {
     }
 
     public boolean isBoxingMethod(ResolvedJavaMethod method) {
-        return isSpecialMethod(method) && method.signature().returnKind() == Kind.Object;
+        return isSpecialMethod(method) && method.getSignature().getReturnKind() == Kind.Object;
     }
 
     public boolean isUnboxingMethod(ResolvedJavaMethod method) {
-        return isSpecialMethod(method) && method.signature().returnKind() != Kind.Object;
+        return isSpecialMethod(method) && method.getSignature().getReturnKind() != Kind.Object;
     }
 
     public ResolvedJavaMethod getBoxingMethod(Kind kind) {

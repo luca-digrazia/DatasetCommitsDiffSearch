@@ -91,7 +91,7 @@ public class SnippetInstaller {
                     throw new RuntimeException("Snippet must not be abstract or native");
                 }
                 ResolvedJavaMethod snippet = runtime.lookupJavaMethod(method);
-                assert snippet.getCompilerStorage().get(Graph.class) == null : method;
+                assert snippet.getCompilerStorage().get(Graph.class) == null;
                 StructuredGraph graph = makeGraph(snippet, inliningPolicy(snippet));
                 //System.out.println("snippet: " + graph);
                 snippet.getCompilerStorage().put(Graph.class, graph);
@@ -105,19 +105,7 @@ public class SnippetInstaller {
                 continue;
             }
             try {
-                InstanceMethodSubstitution methodSubstitution = method.getAnnotation(InstanceMethodSubstitution.class);
-                String originalName = method.getName();
-                Class<?>[] originalParameters = method.getParameterTypes();
-                if (methodSubstitution != null) {
-                    if (!methodSubstitution.value().isEmpty()) {
-                        originalName = methodSubstitution.value();
-                    }
-                    assert originalParameters.length >= 1 : "must be a static method with the this object as its first parameter";
-                    Class<?>[] newParameters = new Class<?>[originalParameters.length - 1];
-                    System.arraycopy(originalParameters, 1, newParameters, 0, newParameters.length);
-                    originalParameters = newParameters;
-                }
-                Method originalMethod = originalClazz.getDeclaredMethod(originalName, originalParameters);
+                Method originalMethod = originalClazz.getDeclaredMethod(method.getName(), method.getParameterTypes());
                 if (!originalMethod.getReturnType().isAssignableFrom(method.getReturnType())) {
                     throw new RuntimeException("Snippet has incompatible return type");
                 }

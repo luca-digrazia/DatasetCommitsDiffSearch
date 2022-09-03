@@ -53,7 +53,7 @@ public class WordTest extends GraalCompilerTest implements SnippetsInterface {
     @Override
     protected StructuredGraph parse(Method m) {
         ResolvedJavaMethod resolvedMethod = runtime.lookupJavaMethod(m);
-        return installer.makeGraph(resolvedMethod, inliningPolicy.get(), false);
+        return installer.makeGraph(resolvedMethod, inliningPolicy.get());
     }
 
     @Test
@@ -116,7 +116,7 @@ public class WordTest extends GraalCompilerTest implements SnippetsInterface {
 
     @Test
     public void test_fromObject() {
-        inliningPolicy.set(new DefaultSnippetInliningPolicy(runtime(), new BoxingMethodPool(runtime())) {
+        inliningPolicy.set(new DefaultSnippetInliningPolicy(new BoxingMethodPool(runtime())) {
             @Override
             public boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller) {
                 return super.shouldInline(method, caller) && !method.getName().equals("hashCode");

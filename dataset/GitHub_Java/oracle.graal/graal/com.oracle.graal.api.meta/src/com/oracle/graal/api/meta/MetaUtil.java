@@ -162,7 +162,7 @@ public class MetaUtil {
      */
     public static String toJavaName(JavaType type, boolean qualified) {
         Kind kind = type.getKind();
-        if (kind == Kind.Object) {
+        if (kind.isObject()) {
             return internalNameToJava(type.getName(), qualified);
         }
         return type.getKind().getJavaName();

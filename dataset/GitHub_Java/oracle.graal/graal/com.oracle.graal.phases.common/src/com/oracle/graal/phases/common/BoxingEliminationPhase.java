@@ -38,6 +38,7 @@ import com.oracle.graal.phases.*;
 public class BoxingEliminationPhase extends Phase {
 
     private final MetaAccessProvider metaAccess;
+    private int virtualIds = Integer.MIN_VALUE;
 
     public BoxingEliminationPhase(MetaAccessProvider metaAccess) {
         this.metaAccess = metaAccess;
@@ -79,7 +80,7 @@ public class BoxingEliminationPhase extends Phase {
                     StructuredGraph graph = (StructuredGraph) phiNode.graph();
                     result = graph.add(new PhiNode(kind, phiNode.merge()));
                     phiReplacements.put(phiNode, result);
-                    virtualizeUsages(phiNode, result, type, kind);
+                    virtualizeUsages(phiNode, result, type);
                     int i = 0;
                     for (ValueNode n : phiNode.values()) {
                         ValueNode unboxedValue = unboxedValue(n, kind, phiReplacements);
@@ -112,10 +113,10 @@ public class BoxingEliminationPhase extends Phase {
         }
     }
 
-    private static void tryEliminate(BoxNode boxNode) {
+    private void tryEliminate(BoxNode boxNode) {
 
         assert boxNode.objectStamp().isExactType();
-        virtualizeUsages(boxNode, boxNode.source(), boxNode.objectStamp().type(), boxNode.getSourceKind());
+        virtualizeUsages(boxNode, boxNode.source(), boxNode.objectStamp().type());
 
         if (boxNode.usages().filter(isNotA(VirtualState.class)).isNotEmpty()) {
             // Elimination failed, because boxing object escapes.
@@ -129,12 +130,12 @@ public class BoxingEliminationPhase extends Phase {
         ((StructuredGraph) boxNode.graph()).removeFixed(boxNode);
     }
 
-    private static void virtualizeUsages(ValueNode boxNode, ValueNode replacement, ResolvedJavaType exactType, Kind sourceKind) {
+    private void virtualizeUsages(ValueNode boxNode, ValueNode replacement, ResolvedJavaType exactType) {
         ValueNode virtualValueNode = null;
         VirtualObjectNode virtualObjectNode = null;
         for (Node n : boxNode.usages().filter(NodePredicates.isA(VirtualState.class)).snapshot()) {
             if (virtualValueNode == null) {
-                virtualObjectNode = n.graph().unique(new BoxedVirtualObjectNode(exactType, sourceKind, replacement));
+                virtualObjectNode = n.graph().unique(new BoxedVirtualObjectNode(virtualIds++, exactType, replacement));
             }
             n.replaceFirstInput(boxNode, virtualObjectNode);
         }
