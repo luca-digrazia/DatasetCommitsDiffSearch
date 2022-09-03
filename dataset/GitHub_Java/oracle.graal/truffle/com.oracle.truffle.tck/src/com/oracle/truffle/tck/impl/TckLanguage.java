@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,24 +28,18 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrument.Visualizer;
-import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 
-import java.io.IOException;
-
 @TruffleLanguage.Registration(mimeType = "application/x-tck", name = "TCK", version = "1.0")
 public final class TckLanguage extends TruffleLanguage<Env> {
-    public static final TckLanguage INSTANCE = new TckLanguage();
 
     @Override
     protected Env createContext(Env env) {
@@ -53,14 +47,15 @@ public final class TckLanguage extends TruffleLanguage<Env> {
     }
 
     @Override
-    protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
+    protected CallTarget parse(ParsingRequest request) throws Exception {
+        Source code = request.getSource();
         final RootNode root;
         final String txt = code.getCode();
         if (txt.startsWith("TCK42:")) {
             int nextColon = txt.indexOf(":", 6);
             String mimeType = txt.substring(6, nextColon);
-            Source toParse = Source.fromText(txt.substring(nextColon + 1), "").withMimeType(mimeType);
-            root = new MultiplyNode(toParse);
+            Source toParse = Source.newBuilder(txt.substring(nextColon + 1)).mimeType(mimeType).name("src.tck").build();
+            root = new MultiplyNode(this, toParse);
         } else {
             final double value = Double.parseDouble(txt);
             root = RootNode.createConstantNode(value);
@@ -83,46 +78,33 @@ public final class TckLanguage extends TruffleLanguage<Env> {
         return false;
     }
 
-    @Override
-    protected Visualizer getVisualizer() {
-        return null;
-    }
-
-    @Override
-    protected boolean isInstrumentable(Node node) {
-        return false;
-    }
-
-    @Override
-    protected WrapperNode createWrapperNode(Node node) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
-        throw new IOException();
-    }
-
     private static final class MultiplyNode extends RootNode implements TruffleObject, ForeignAccess.Factory {
         private final Source code;
 
-        public MultiplyNode(Source toParse) {
-            super(TckLanguage.class, null, null);
+        MultiplyNode(TckLanguage language, Source toParse) {
+            super(language);
             this.code = toParse;
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
-            Env env = TckLanguage.INSTANCE.findContext(TckLanguage.INSTANCE.createFindContextNode());
-            if (frame.getArguments().length == 0) {
+            Env env = getLanguage(TckLanguage.class).getContextReference().get();
+            Object[] arguments = frame.getArguments();
+            return parseAndEval(env, arguments);
+        }
+
+        @TruffleBoundary
+        private Object parseAndEval(Env env, Object[] arguments) {
+            if (arguments.length == 0) {
                 return this;
             }
+            CallTarget call;
             try {
-                CallTarget call = env.parse(code, (String) frame.getArguments()[1], (String) frame.getArguments()[2]);
-                return call.call(6, 7);
-            } catch (IOException ex) {
+                call = env.parse(code, (String) arguments[1], (String) arguments[2]);
+            } catch (Exception ex) {
                 throw new AssertionError("Cannot parse " + code, ex);
             }
+            return call.call(6, 7);
         }
 
         @Override
