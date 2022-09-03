@@ -35,6 +35,7 @@ public class HotSpotOptions {
         C1XOptions.DetailedAsserts = false;
         C1XOptions.CommentedAssembly = false;
         C1XOptions.MethodEndBreakpointGuards = 2;
+        C1XOptions.ResolveClassBeforeStaticInvoke = false;
     }
 
     public static boolean setOption(String option) {
@@ -45,8 +46,6 @@ public class HotSpotOptions {
         Object value = null;
         String fieldName = null;
         String valueString = null;
-
-        System.out.println(option);
 
         char first = option.charAt(0);
         if (first == '+' || first == '-') {
