@@ -195,7 +195,7 @@ public final class Introspection {
 
         /**
          * Returns internal reflection data in undefined format. A DSL user must not call this
-         * method.
+         * method method.
          *
          * @since 0.22
          */
@@ -220,9 +220,8 @@ public final class Introspection {
     }
 
     SpecializationInfo getSpecialization(String methodName) {
-        checkVersion();
-        for (int i = 1; i < data.length; i++) {
-            Object[] fieldData = getIntrospectionData(data[i]);
+        for (Object object : data) {
+            Object[] fieldData = getIntrospectionData(object);
             if (methodName.equals(fieldData[0])) {
                 return createSpecialization(fieldData);
             }
@@ -231,23 +230,11 @@ public final class Introspection {
     }
 
     List<SpecializationInfo> getSpecializations() {
-        checkVersion();
         List<SpecializationInfo> specializations = new ArrayList<>();
-        for (int i = 1; i < data.length; i++) {
-            specializations.add(createSpecialization(getIntrospectionData(data[i])));
+        for (Object object : data) {
+            specializations.add(createSpecialization(getIntrospectionData(object)));
         }
         return Collections.unmodifiableList(specializations);
-    }
-
-    private void checkVersion() {
-        int version = -1;
-        Object objectVersion = data[0];
-        if (data.length > 0 && objectVersion instanceof Integer) {
-            version = (int) objectVersion;
-        }
-        if (version != 0) {
-            throw new IllegalStateException("Unsupported introspection data version: " + version);
-        }
     }
 
     private static Object[] getIntrospectionData(Object specializationData) {
