@@ -29,23 +29,24 @@ import static com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.AL
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 
 import java.util.List;
+import java.util.Set;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CompilationResult;
-import jdk.vm.ci.code.CompilationResult.ConstantReference;
-import jdk.vm.ci.code.CompilationResult.DataPatch;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.DefaultProfilingInfo;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ProfilingInfo;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.TriState;
-import jdk.vm.ci.meta.VMConstant;
-import jdk.vm.ci.options.OptionValue;
-import jdk.vm.ci.options.OptionValue.OverrideScope;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.CompilationResult;
+import jdk.internal.jvmci.code.CompilationResult.ConstantReference;
+import jdk.internal.jvmci.code.CompilationResult.DataPatch;
+import jdk.internal.jvmci.code.RegisterConfig;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.meta.Assumptions;
+import jdk.internal.jvmci.meta.DefaultProfilingInfo;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.ProfilingInfo;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.TriState;
+import jdk.internal.jvmci.meta.VMConstant;
+import jdk.internal.jvmci.options.OptionValue;
+import jdk.internal.jvmci.options.OptionValue.OverrideScope;
 
 import com.oracle.graal.compiler.LIRGenerationPhase.LIRGenerationContext;
 import com.oracle.graal.compiler.common.alloc.ComputeBlockOrder;
@@ -312,10 +313,7 @@ public class GraalCompiler {
             }
 
             try (Scope s = Debug.scope("LIRStages", nodeLirGen, lir)) {
-                Debug.dump(1, lir, "After LIR generation");
-                LIRGenerationResult result = emitLowLevel(backend.getTarget(), codeEmittingOrder, linearScanOrder, lirGenRes, lirGen, lirSuites, backend.newRegisterAllocationConfig(registerConfig));
-                Debug.dump(1, lir, "Before code generation");
-                return result;
+                return emitLowLevel(backend.getTarget(), codeEmittingOrder, linearScanOrder, lirGenRes, lirGen, lirSuites, backend.newRegisterAllocationConfig(registerConfig));
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
@@ -339,7 +337,7 @@ public class GraalCompiler {
     }
 
     @SuppressWarnings("try")
-    public static void emitCode(Backend backend, Assumptions assumptions, ResolvedJavaMethod rootMethod, List<ResolvedJavaMethod> inlinedMethods, int bytecodeSize, LIRGenerationResult lirGenRes,
+    public static void emitCode(Backend backend, Assumptions assumptions, ResolvedJavaMethod rootMethod, Set<ResolvedJavaMethod> inlinedMethods, int bytecodeSize, LIRGenerationResult lirGenRes,
                     CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner, CompilationResultBuilderFactory factory) {
         try (DebugCloseable a = EmitCode.start()) {
             FrameMap frameMap = lirGenRes.getFrameMap();
@@ -349,7 +347,7 @@ public class GraalCompiler {
             if (assumptions != null && !assumptions.isEmpty()) {
                 compilationResult.setAssumptions(assumptions.toArray());
             }
-            if (rootMethod != null) {
+            if (inlinedMethods != null) {
                 compilationResult.setMethods(rootMethod, inlinedMethods);
                 compilationResult.setBytecodeSize(bytecodeSize);
             }
@@ -378,7 +376,7 @@ public class GraalCompiler {
                 Debug.metric("ExceptionHandlersEmitted").add(compilationResult.getExceptionHandlers().size());
             }
 
-            Debug.dump(1, compilationResult, "After code generation");
+            Debug.dump(compilationResult, "After code generation");
         }
     }
 }

@@ -328,14 +328,6 @@ public final class GraalDirectives {
     }
 
     /**
-     * Ensures that the instrumentation is valid only if it is associated with an Invoke node.
-     *
-     * See {@link #instrumentationBegin(int)}.
-     */
-    public static void instrumentationToInvokeBegin(@SuppressWarnings("unused") int offset) {
-    }
-
-    /**
      * Marks the end of the instrumentation boundary. See {@link #instrumentationBegin(int)}.
      */
     public static void instrumentationEnd() {

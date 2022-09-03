@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.compiler.common;
 
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.StableOptionValue;
+import jdk.internal.jvmci.options.Option;
+import jdk.internal.jvmci.options.OptionType;
+import jdk.internal.jvmci.options.OptionValue;
+import jdk.internal.jvmci.options.StableOptionValue;
 
 /**
  * This class encapsulates options that control the behavior of the Graal compiler.
@@ -230,13 +230,6 @@ public final class GraalOptions {
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> CanOmitFrame = new OptionValue<>(true);
 
-    // This and OldInfopoints only exist while developing per-node context info (GRAAL-1305)
-    @Option(help = "", type = OptionType.Debug)
-    public static final OptionValue<Boolean> NewInfopoints = new OptionValue<>(false);
-
-    @Option(help = "", type = OptionType.Debug)
-    public static final OptionValue<Boolean> OldInfopoints = new OptionValue<>(true);
-
     // Ahead of time compilation
     @Option(help = "Try to avoid emitting code where patching is required", type = OptionType.Expert)
     public static final OptionValue<Boolean> ImmutableCode = new OptionValue<>(false);
@@ -302,14 +295,11 @@ public final class GraalOptions {
     @Option(help = "Generate SSA LIR.", type = OptionType.Debug)
     public static final OptionValue<Boolean> SSA_LIR = new OptionValue<>(true);
 
-    @Option(help = "Enable counters for various paths in snippets.", type = OptionType.Debug)
+    /**
+     * Counts the various paths taken through snippets.
+     */
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> SnippetCounters = new OptionValue<>(false);
-
-    @Option(help = "Eagerly construct extra snippet info.", type = OptionType.Debug)
-    public static final OptionValue<Boolean> EagerSnippets = new OptionValue<>(false);
-
-    @Option(help = "Use a cache for snippet graphs.", type = OptionType.Debug)
-    public static final OptionValue<Boolean> UseSnippetGraphCache = new OptionValue<>(true);
 
     @Option(help = "Enable expensive assertions", type = OptionType.Debug)
     public static final OptionValue<Boolean> DetailedAsserts = new StableOptionValue<Boolean>() {

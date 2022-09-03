@@ -33,26 +33,26 @@ import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.HUB_
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.KLASS_LAYOUT_HELPER_LOCATION;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION;
 import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.INIT_LOCATION;
-import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
-import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
-import static jdk.vm.ci.meta.LocationIdentity.any;
+import static jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
+import static jdk.internal.jvmci.hotspot.HotSpotVMConfig.config;
+import static jdk.internal.jvmci.meta.LocationIdentity.any;
 
 import java.lang.ref.Reference;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotConstantReflectionProvider;
-import jdk.vm.ci.hotspot.HotSpotResolvedJavaField;
-import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.hotspot.HotSpotResolvedJavaField;
+import jdk.internal.jvmci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
+import jdk.internal.jvmci.meta.ConstantReflectionProvider;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.JavaType;
+import jdk.internal.jvmci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.ResolvedJavaField;
+import jdk.internal.jvmci.meta.ResolvedJavaType;
 
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
@@ -86,7 +86,6 @@ import com.oracle.graal.hotspot.replacements.KlassLayoutHelperNode;
 import com.oracle.graal.hotspot.replacements.LoadExceptionObjectSnippets;
 import com.oracle.graal.hotspot.replacements.MonitorSnippets;
 import com.oracle.graal.hotspot.replacements.NewObjectSnippets;
-import com.oracle.graal.hotspot.replacements.RuntimeStringSnippets;
 import com.oracle.graal.hotspot.replacements.UnsafeLoadSnippets;
 import com.oracle.graal.hotspot.replacements.WriteBarrierSnippets;
 import com.oracle.graal.hotspot.replacements.arraycopy.ArrayCopyNode;
@@ -101,7 +100,6 @@ import com.oracle.graal.nodes.FixedNode;
 import com.oracle.graal.nodes.Invoke;
 import com.oracle.graal.nodes.LoweredCallTargetNode;
 import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.SafepointNode;
 import com.oracle.graal.nodes.StartNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.UnwindNode;
@@ -113,7 +111,6 @@ import com.oracle.graal.nodes.calc.IntegerRemNode;
 import com.oracle.graal.nodes.calc.RemNode;
 import com.oracle.graal.nodes.calc.UnsignedDivNode;
 import com.oracle.graal.nodes.calc.UnsignedRemNode;
-import com.oracle.graal.nodes.debug.RuntimeStringNode;
 import com.oracle.graal.nodes.debug.VerifyHeapNode;
 import com.oracle.graal.nodes.extended.BytecodeExceptionNode;
 import com.oracle.graal.nodes.extended.ForeignCallNode;
@@ -158,7 +155,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     protected final HotSpotGraalRuntimeProvider runtime;
     protected final ForeignCallsProvider foreignCalls;
     protected final HotSpotRegistersProvider registers;
-    protected final HotSpotConstantReflectionProvider constantReflection;
+    protected final ConstantReflectionProvider constantReflection;
 
     protected CheckCastDynamicSnippets.Templates checkcastDynamicSnippets;
     protected InstanceOfSnippets.Templates instanceofSnippets;
@@ -169,10 +166,9 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     protected UnsafeLoadSnippets.Templates unsafeLoadSnippets;
     protected AssertionSnippets.Templates assertionSnippets;
     protected ArrayCopySnippets.Templates arraycopySnippets;
-    protected RuntimeStringSnippets.Templates runtimeStringSnippets;
 
     public DefaultHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
-                    HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
+                    ConstantReflectionProvider constantReflection, TargetDescription target) {
         super(metaAccess, target);
         this.runtime = runtime;
         this.foreignCalls = foreignCalls;
@@ -193,7 +189,6 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(providers, target);
         assertionSnippets = new AssertionSnippets.Templates(providers, target);
         arraycopySnippets = new ArrayCopySnippets.Templates(providers, target);
-        runtimeStringSnippets = new RuntimeStringSnippets.Templates(providers, target);
         providers.getReplacements().registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(providers, target));
     }
 
@@ -282,12 +277,10 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             exceptionObjectSnippets.lower((LoadExceptionObjectNode) n, registers, tool);
         } else if (n instanceof AssertionNode) {
             assertionSnippets.lower((AssertionNode) n, tool);
-        } else if (n instanceof RuntimeStringNode) {
-            runtimeStringSnippets.lower((RuntimeStringNode) n, tool);
         } else if (n instanceof IntegerDivNode || n instanceof IntegerRemNode || n instanceof UnsignedDivNode || n instanceof UnsignedRemNode) {
             // Nothing to do for division nodes. The HotSpot signal handler catches divisions by
             // zero and the MIN_VALUE / -1 cases.
-        } else if (n instanceof AbstractDeoptimizeNode || n instanceof UnwindNode || n instanceof RemNode || n instanceof SafepointNode) {
+        } else if (n instanceof AbstractDeoptimizeNode || n instanceof UnwindNode || n instanceof RemNode) {
             /* No lowering, we generate LIR directly for these nodes. */
         } else if (n instanceof ClassGetHubNode) {
             lowerClassGetHubNode((ClassGetHubNode) n, tool);

@@ -24,28 +24,28 @@ package com.oracle.graal.replacements;
 
 import static com.oracle.graal.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
 import static com.oracle.graal.nodes.java.ArrayLengthNode.readArrayLength;
-import static jdk.vm.ci.code.MemoryBarriers.JMM_POST_VOLATILE_READ;
-import static jdk.vm.ci.code.MemoryBarriers.JMM_POST_VOLATILE_WRITE;
-import static jdk.vm.ci.code.MemoryBarriers.JMM_PRE_VOLATILE_READ;
-import static jdk.vm.ci.code.MemoryBarriers.JMM_PRE_VOLATILE_WRITE;
-import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.vm.ci.meta.DeoptimizationReason.BoundsCheckException;
+import static jdk.internal.jvmci.code.MemoryBarriers.JMM_POST_VOLATILE_READ;
+import static jdk.internal.jvmci.code.MemoryBarriers.JMM_POST_VOLATILE_WRITE;
+import static jdk.internal.jvmci.code.MemoryBarriers.JMM_PRE_VOLATILE_READ;
+import static jdk.internal.jvmci.code.MemoryBarriers.JMM_PRE_VOLATILE_WRITE;
+import static jdk.internal.jvmci.meta.DeoptimizationAction.InvalidateReprofile;
+import static jdk.internal.jvmci.meta.DeoptimizationReason.BoundsCheckException;
 
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
 
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.code.CodeUtil;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.DeoptimizationAction;
+import jdk.internal.jvmci.meta.DeoptimizationReason;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.ResolvedJavaField;
+import jdk.internal.jvmci.meta.ResolvedJavaType;
 
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.common.type.IntegerStamp;
@@ -96,7 +96,6 @@ import com.oracle.graal.nodes.java.LoadIndexedNode;
 import com.oracle.graal.nodes.java.LoweredAtomicReadAndWriteNode;
 import com.oracle.graal.nodes.java.LoweredCompareAndSwapNode;
 import com.oracle.graal.nodes.java.MonitorEnterNode;
-import com.oracle.graal.nodes.java.MonitorExitNode;
 import com.oracle.graal.nodes.java.MonitorIdNode;
 import com.oracle.graal.nodes.java.NewArrayNode;
 import com.oracle.graal.nodes.java.NewInstanceNode;
@@ -391,25 +390,14 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     protected void lowerMonitorEnterNode(MonitorEnterNode monitorEnter, LoweringTool tool, StructuredGraph graph) {
         ValueNode object = monitorEnter.object();
         GuardingNode nullCheck = createNullCheck(object, monitorEnter, tool);
-        ValueNode nonNullObject;
         if (nullCheck != null) {
-            nonNullObject = graph.unique(new PiNode(object, ((ObjectStamp) object.stamp()).improveWith(StampFactory.objectNonNull()), (ValueNode) nullCheck));
-        } else {
-            nonNullObject = object;
+            object = graph.unique(new PiNode(object, ((ObjectStamp) object.stamp()).improveWith(StampFactory.objectNonNull()), (ValueNode) nullCheck));
         }
-        ValueNode hub = graph.addOrUnique(LoadHubNode.create(nonNullObject, tool.getStampProvider(), tool.getMetaAccess()));
-        MonitorIdNode monitor = monitorEnter.getMonitorId();
-        RawMonitorEnterNode rawMonitorEnter = graph.add(new RawMonitorEnterNode(nonNullObject, hub, monitor));
+        ValueNode hub = graph.addOrUnique(LoadHubNode.create(object, tool.getStampProvider(), tool.getMetaAccess()));
+        RawMonitorEnterNode rawMonitorEnter = graph.add(new RawMonitorEnterNode(object, hub, monitorEnter.getMonitorId()));
         rawMonitorEnter.setStateBefore(monitorEnter.stateBefore());
         rawMonitorEnter.setStateAfter(monitorEnter.stateAfter());
         graph.replaceFixedWithFixed(monitorEnter, rawMonitorEnter);
-
-        // Monitor exit must operate on the same input to the monitor enter
-        if (object != nonNullObject) {
-            for (MonitorExitNode exit : monitor.usages().filter(MonitorExitNode.class)) {
-                exit.replaceFirstInput(object, nonNullObject);
-            }
-        }
     }
 
     protected void lowerCompareAndSwapNode(CompareAndSwapNode cas) {
