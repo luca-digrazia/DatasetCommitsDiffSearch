@@ -36,7 +36,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.common.*;
@@ -630,9 +629,10 @@ public class SnippetTemplate {
      * @param runtime
      * @param replacee the node that will be replaced
      * @param replacer object that replaces the usages of {@code replacee}
+     * @param lastFixedNode the CFG of the snippet is inserted after this node
      * @param args the arguments to be bound to the flattened positional parameters of the snippet
      */
-    public void instantiate(MetaAccessProvider runtime, FloatingNode replacee, UsageReplacer replacer, LoweringTool tool, SnippetTemplate.Arguments args) {
+    public void instantiate(MetaAccessProvider runtime, FloatingNode replacee, UsageReplacer replacer, FixedWithNextNode lastFixedNode, SnippetTemplate.Arguments args) {
 
         // Inline the snippet nodes, replacing parameters with the given args in the process
         String name = snippet.name == null ? "{copy}" : snippet.name + "{copy}";
@@ -644,8 +644,7 @@ public class SnippetTemplate {
         Map<Node, Node> duplicates = replaceeGraph.addDuplicates(nodes, replacements);
         Debug.dump(replaceeGraph, "After inlining snippet %s", snippetCopy.method());
 
-        FixedWithNextNode lastFixedNode = tool.lastFixedNode();
-        assert lastFixedNode != null && lastFixedNode.isAlive() : replaceeGraph;
+        assert lastFixedNode != null : replaceeGraph;
         FixedNode next = lastFixedNode.next();
         lastFixedNode.setNext(null);
         FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
@@ -674,14 +673,10 @@ public class SnippetTemplate {
         assert returnValue != null || replacee.usages().isEmpty();
         replacer.replace(replacee, returnValue);
 
-        tool.setLastFixedNode(null);
         Node returnDuplicate = duplicates.get(returnNode);
         if (returnDuplicate.isAlive()) {
             returnDuplicate.clearInputs();
             returnDuplicate.replaceAndDelete(next);
-            if (next != null && next.predecessor() instanceof FixedWithNextNode) {
-                tool.setLastFixedNode((FixedWithNextNode) next.predecessor());
-            }
         }
 
         Debug.dump(replaceeGraph, "After lowering %s with %s", replacee, this);
