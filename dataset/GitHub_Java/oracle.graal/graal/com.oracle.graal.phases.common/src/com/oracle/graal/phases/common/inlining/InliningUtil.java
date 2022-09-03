@@ -273,10 +273,10 @@ public class InliningUtil {
      */
     @SuppressWarnings("try")
     public static Map<Node, Node> inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck, List<Node> canonicalizedNodes, ResolvedJavaMethod inlineeMethod) {
-        FixedNode invokeNode = invoke.asNode();
-        StructuredGraph graph = invokeNode.graph();
-        MethodMetricsInlineeScopeInfo m = MethodMetricsInlineeScopeInfo.create(graph.getOptions());
+        MethodMetricsInlineeScopeInfo m = MethodMetricsInlineeScopeInfo.create();
         try (Debug.Scope s = Debug.methodMetricsScope("InlineEnhancement", m, false)) {
+            FixedNode invokeNode = invoke.asNode();
+            StructuredGraph graph = invokeNode.graph();
             if (Fingerprint.ENABLED) {
                 Fingerprint.submit("inlining %s into %s: %s", formatGraph(inlineGraph), formatGraph(invoke.asNode().graph()), inlineGraph.getNodes().snapshot());
             }
@@ -364,7 +364,7 @@ public class InliningUtil {
                 unwindNode = (UnwindNode) duplicates.get(unwindNode);
             }
 
-            if (UseGraalInstrumentation.getValue(graph.getOptions())) {
+            if (UseGraalInstrumentation.getValue()) {
                 detachInstrumentation(invoke);
             }
             finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph.getAssumptions(), inlineGraph, canonicalizedNodes);
@@ -779,7 +779,7 @@ public class InliningUtil {
      * This method exclude InstrumentationNode from inlining heuristics.
      */
     public static int getNodeCount(StructuredGraph graph) {
-        if (UseGraalInstrumentation.getValue(graph.getOptions())) {
+        if (UseGraalInstrumentation.getValue()) {
             return graph.getNodeCount() - graph.getNodes().filter(InstrumentationNode.class).count();
         } else {
             return graph.getNodeCount();
