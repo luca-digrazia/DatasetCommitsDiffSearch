@@ -1296,6 +1296,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
             // a block with only one predecessor never has phi functions
             if (sux.numberOfPreds() > 1) {
+                FrameState suxState = sux.stateBefore();
 
 
                 List<Phi> phis = getPhis(sux);
@@ -1329,10 +1330,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                     resolver.dispose();
                 }
 
-                /*
-
-                FrameState suxState = sux.stateBefore();
-                TTY.println("number of preds: " + sux.numberOfPreds());
+                /*TTY.println("number of preds: " + sux.numberOfPreds());
 
                 PhiResolver resolver = new PhiResolver(this);
 

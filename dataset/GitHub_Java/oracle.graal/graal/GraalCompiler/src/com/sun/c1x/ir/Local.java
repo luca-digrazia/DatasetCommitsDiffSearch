@@ -34,7 +34,6 @@ import com.sun.cri.ri.*;
 public final class Local extends Value {
 
     private static final int INPUT_COUNT = 1;
-
     private static final int SUCCESSOR_COUNT = 0;
 
     private final int index;
@@ -84,15 +83,5 @@ public final class Local extends Value {
     @Override
     public void print(LogStream out) {
         out.print("local[index ").print(index()).print(']');
-    }
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
-    }
-
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
     }
 }
