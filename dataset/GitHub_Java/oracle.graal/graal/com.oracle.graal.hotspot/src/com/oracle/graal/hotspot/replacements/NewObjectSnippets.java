@@ -72,14 +72,18 @@ public class NewObjectSnippets implements Snippets {
     }
 
     @Snippet
-    public static Object initializeObject(Word memory, Word hub, Word prototypeMarkWord, @ConstantParameter int size, @ConstantParameter boolean fillContents) {
+    public static Object initializeObject(Word memory, Word hub, Word prototypeMarkWord, @ConstantParameter int size, @ConstantParameter boolean fillContents, @ConstantParameter boolean locked) {
 
         Object result;
         if (probability(SLOW_PATH_PROBABILITY, memory.equal(0))) {
             new_stub.inc();
             result = NewInstanceStubCall.call(hub);
         } else {
-            formatObject(hub, size, memory, prototypeMarkWord, fillContents);
+            if (locked) {
+                formatObject(hub, size, memory, thread().or(biasedLockPattern()), fillContents);
+            } else {
+                formatObject(hub, size, memory, prototypeMarkWord, fillContents);
+            }
             result = memory.toObject();
         }
         /*
@@ -91,7 +95,16 @@ public class NewObjectSnippets implements Snippets {
     }
 
     @Snippet
-    public static Object initializeArray(Word memory, Word hub, int length, int allocationSize, Word prototypeMarkWord, @ConstantParameter int headerSize, @ConstantParameter boolean fillContents) {
+    public static Object initializeArray(Word memory, Word hub, int length, int allocationSize, Word prototypeMarkWord, @ConstantParameter int headerSize, @ConstantParameter boolean fillContents,
+                    @ConstantParameter boolean locked) {
+        if (locked) {
+            return initializeArray(memory, hub, length, allocationSize, thread().or(biasedLockPattern()), headerSize, fillContents);
+        } else {
+            return initializeArray(memory, hub, length, allocationSize, prototypeMarkWord, headerSize, fillContents);
+        }
+    }
+
+    private static Object initializeArray(Word memory, Word hub, int length, int allocationSize, Word prototypeMarkWord, int headerSize, boolean fillContents) {
         Object result;
         if (probability(SLOW_PATH_PROBABILITY, memory.equal(0))) {
             newarray_stub.inc();
@@ -119,7 +132,7 @@ public class NewObjectSnippets implements Snippets {
         }
         int allocationSize = computeArrayAllocationSize(length, alignment, headerSize, log2ElementSize);
         Word memory = TLABAllocateNode.allocateVariableSize(allocationSize);
-        return InitializeArrayNode.initialize(memory, length, allocationSize, type, fillContents);
+        return InitializeArrayNode.initialize(memory, length, allocationSize, type, fillContents, false);
     }
 
     /**
@@ -230,7 +243,7 @@ public class NewObjectSnippets implements Snippets {
                 graph.addBeforeFixed(newInstanceNode, tlabAllocateNode);
                 memory = tlabAllocateNode;
             }
-            InitializeObjectNode initializeNode = graph.add(new InitializeObjectNode(memory, type, newInstanceNode.fillContents()));
+            InitializeObjectNode initializeNode = graph.add(new InitializeObjectNode(memory, type, newInstanceNode.fillContents(), newInstanceNode.locked()));
             graph.replaceFixedWithFixed(newInstanceNode, initializeNode);
         }
 
@@ -256,7 +269,7 @@ public class NewObjectSnippets implements Snippets {
                  * anyway for both allocation and initialization - it just needs to be non-null
                  */
                 ConstantNode size = ConstantNode.forInt(-1, graph);
-                InitializeArrayNode initializeNode = graph.add(new InitializeArrayNode(zero, lengthNode, size, arrayType, newArrayNode.fillContents()));
+                InitializeArrayNode initializeNode = graph.add(new InitializeArrayNode(zero, lengthNode, size, arrayType, newArrayNode.fillContents(), newArrayNode.locked()));
                 graph.replaceFixedWithFixed(newArrayNode, initializeNode);
             } else if (length != null && belowThan(length, MAX_ARRAY_FAST_PATH_ALLOCATION_LENGTH)) {
                 // Calculate aligned size
@@ -264,7 +277,7 @@ public class NewObjectSnippets implements Snippets {
                 ConstantNode sizeNode = ConstantNode.forInt(size, graph);
                 tlabAllocateNode = graph.add(new TLABAllocateNode(sizeNode));
                 graph.addBeforeFixed(newArrayNode, tlabAllocateNode);
-                InitializeArrayNode initializeNode = graph.add(new InitializeArrayNode(tlabAllocateNode, lengthNode, sizeNode, arrayType, newArrayNode.fillContents()));
+                InitializeArrayNode initializeNode = graph.add(new InitializeArrayNode(tlabAllocateNode, lengthNode, sizeNode, arrayType, newArrayNode.fillContents(), newArrayNode.locked()));
                 graph.replaceFixedWithFixed(newArrayNode, initializeNode);
             } else {
                 Arguments args = new Arguments(allocateArrayAndInitialize);
@@ -306,6 +319,7 @@ public class NewObjectSnippets implements Snippets {
             args.add("hub", hub);
             args.add("prototypeMarkWord", type.prototypeMarkWord());
             args.addConst("size", size).addConst("fillContents", initializeNode.fillContents());
+            args.addConst("locked", initializeNode.locked());
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering initializeObject in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, args);
@@ -331,6 +345,7 @@ public class NewObjectSnippets implements Snippets {
             args.add("prototypeMarkWord", type.prototypeMarkWord());
             args.addConst("headerSize", headerSize);
             args.addConst("fillContents", initializeNode.fillContents());
+            args.addConst("locked", initializeNode.locked());
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering initializeArray in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, args);

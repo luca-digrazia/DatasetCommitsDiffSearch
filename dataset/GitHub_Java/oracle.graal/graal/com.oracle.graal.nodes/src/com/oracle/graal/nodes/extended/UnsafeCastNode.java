@@ -36,12 +36,8 @@ public class UnsafeCastNode extends PiNode implements Canonicalizable, LIRLowera
         super(object, stamp);
     }
 
-    public UnsafeCastNode(ValueNode object, Stamp stamp, GuardingNode anchor) {
-        super(object, stamp, anchor);
-    }
-
     public UnsafeCastNode(ValueNode object, Stamp stamp, ValueNode anchor) {
-        this(object, stamp, (GuardingNode) anchor);
+        super(object, stamp, anchor);
     }
 
     public UnsafeCastNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
@@ -54,6 +50,12 @@ public class UnsafeCastNode extends PiNode implements Canonicalizable, LIRLowera
             return false;
         }
         if (stamp() == StampFactory.forNodeIntrinsic()) {
+            return false;
+        }
+        if (object().objectStamp().alwaysNull() && objectStamp().nonNull()) {
+            // a null value flowing into a nonNull UnsafeCastNode should be guarded by a type/isNull
+            // guard, but the
+            // compiler might see this situation before the branch is deleted
             return false;
         }
         return updateStamp(stamp().join(object().stamp()));
@@ -104,7 +106,7 @@ public class UnsafeCastNode extends PiNode implements Canonicalizable, LIRLowera
     public static native <T> T unsafeCast(Object object, @ConstantNodeParameter Stamp stamp);
 
     @NodeIntrinsic
-    public static native <T> T unsafeCast(Object object, @ConstantNodeParameter Stamp stamp, GuardingNode anchor);
+    public static native <T> T unsafeCast(Object object, @ConstantNodeParameter Stamp stamp, ValueNode anchor);
 
     @SuppressWarnings("unused")
     @NodeIntrinsic
