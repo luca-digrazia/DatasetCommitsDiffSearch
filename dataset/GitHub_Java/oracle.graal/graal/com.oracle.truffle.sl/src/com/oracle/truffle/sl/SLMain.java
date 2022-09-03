@@ -242,7 +242,7 @@ public class SLMain extends TruffleLanguage {
                 /* Call the main entry point, without any arguments. */
                 try {
                     result = main.invoke(null);
-                    if (result != null) {
+                    if (result != SLNull.SINGLETON) {
                         out.println(result);
                     }
                 } catch (UnsupportedSpecializationException ex) {
