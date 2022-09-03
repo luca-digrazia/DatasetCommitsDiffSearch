@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,6 +30,14 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Signature;
+
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.graph.Graph;
@@ -51,11 +59,9 @@ import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.FloatingNode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderTool;
 import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.spi.StampProvider;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
@@ -64,21 +70,12 @@ import com.oracle.graal.phases.common.inlining.InliningUtil;
 import com.oracle.graal.phases.util.Providers;
 import com.oracle.graal.word.WordTypes;
 
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Signature;
-
 /**
  * A utility for manually creating a graph. This will be expanded as necessary to support all
  * subsystems that employ manual graph creation (as opposed to {@linkplain GraphBuilderPhase
  * bytecode parsing} based graph creation).
  */
-public class GraphKit implements GraphBuilderTool {
+public class GraphKit {
 
     protected final Providers providers;
     protected final StructuredGraph graph;
@@ -106,29 +103,8 @@ public class GraphKit implements GraphBuilderTool {
         });
     }
 
-    @Override
     public StructuredGraph getGraph() {
         return graph;
-    }
-
-    @Override
-    public ConstantReflectionProvider getConstantReflection() {
-        return providers.getConstantReflection();
-    }
-
-    @Override
-    public MetaAccessProvider getMetaAccess() {
-        return providers.getMetaAccess();
-    }
-
-    @Override
-    public StampProvider getStampProvider() {
-        return providers.getStampProvider();
-    }
-
-    @Override
-    public boolean parsingIntrinsic() {
-        return true;
     }
 
     /**
@@ -147,25 +123,11 @@ public class GraphKit implements GraphBuilderTool {
         return node;
     }
 
-    @Override
-    public <T extends ValueNode> T append(T node) {
-        T result = graph.addOrUnique(changeToWord(node));
-        if (result instanceof FixedNode) {
-            updateLastFixed((FixedNode) result);
-        }
-        return result;
-    }
-
-    @Override
-    public <T extends ValueNode> T recursiveAppend(T node) {
-        T result = graph.addOrUniqueWithInputs(node);
-        if (result instanceof FixedNode) {
-            updateLastFixed((FixedNode) result);
-        }
-        return result;
-    }
-
-    private void updateLastFixed(FixedNode result) {
+    /**
+     * Appends a fixed node to the graph.
+     */
+    public <T extends FixedNode> T append(T node) {
+        T result = graph.add(changeToWord(node));
         assert lastFixedNode != null;
         assert result.predecessor() == null;
         graph.addAfterFixed(lastFixedNode, result);
@@ -174,6 +136,7 @@ public class GraphKit implements GraphBuilderTool {
         } else {
             lastFixedNode = null;
         }
+        return result;
     }
 
     public InvokeNode createInvoke(Class<?> declaringClass, String name, ValueNode... args) {
@@ -224,7 +187,7 @@ public class GraphKit implements GraphBuilderTool {
         Signature signature = method.getSignature();
         JavaType returnType = signature.getReturnType(null);
         assert checkArgs(method, args);
-        StampPair returnStamp = graphBuilderPlugins.getOverridingStamp(this, returnType, false);
+        StampPair returnStamp = graphBuilderPlugins.getOverridingStamp(true, returnType, false);
         if (returnStamp == null) {
             returnStamp = StampFactory.forDeclaredType(graph.getAssumptions(), returnType, false);
         }

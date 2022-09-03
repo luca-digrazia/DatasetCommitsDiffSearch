@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,6 +40,16 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
 
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Signature;
+
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.debug.Debug;
@@ -60,21 +70,10 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.ValuePhiNode;
 import com.oracle.graal.nodes.calc.FloatingNode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderTool;
 import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.SideEffectsState;
 import com.oracle.graal.nodes.graphbuilderconf.ParameterPlugin;
 import com.oracle.graal.nodes.java.MonitorIdNode;
 import com.oracle.graal.nodes.util.GraphUtil;
-
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Signature;
 
 public final class FrameStateBuilder implements SideEffectsState {
 
@@ -82,7 +81,6 @@ public final class FrameStateBuilder implements SideEffectsState {
     private static final MonitorIdNode[] EMPTY_MONITOR_ARRAY = new MonitorIdNode[0];
 
     private final BytecodeParser parser;
-    private final GraphBuilderTool tool;
     private final ResolvedJavaMethod method;
     private int stackSize;
     protected final ValueNode[] locals;
@@ -113,13 +111,8 @@ public final class FrameStateBuilder implements SideEffectsState {
      * @param method the method whose frame is simulated
      * @param graph the target graph of Graal nodes created by the builder
      */
-    public FrameStateBuilder(GraphBuilderTool tool, ResolvedJavaMethod method, StructuredGraph graph) {
-        this.tool = tool;
-        if (tool instanceof BytecodeParser) {
-            this.parser = (BytecodeParser) tool;
-        } else {
-            this.parser = null;
-        }
+    public FrameStateBuilder(BytecodeParser parser, ResolvedJavaMethod method, StructuredGraph graph) {
+        this.parser = parser;
         this.method = method;
         this.locals = allocateArray(method.getMaxLocals());
         this.stack = allocateArray(Math.max(1, method.getMaxStackSize()));
@@ -171,7 +164,7 @@ public final class FrameStateBuilder implements SideEffectsState {
             FloatingNode receiver = null;
             StampPair receiverStamp = null;
             if (plugins != null) {
-                receiverStamp = plugins.getOverridingStamp(tool, originalType, true);
+                receiverStamp = plugins.getOverridingStamp(parser.parsingIntrinsic(), originalType, true);
             }
             if (receiverStamp == null) {
                 receiverStamp = StampFactory.forDeclaredType(assumptions, originalType, true);
@@ -179,7 +172,7 @@ public final class FrameStateBuilder implements SideEffectsState {
 
             if (plugins != null) {
                 for (ParameterPlugin plugin : plugins.getParameterPlugins()) {
-                    receiver = plugin.interceptParameter(tool, index, receiverStamp);
+                    receiver = plugin.interceptParameter(parser, index, receiverStamp);
                     if (receiver != null) {
                         break;
                     }
@@ -204,7 +197,7 @@ public final class FrameStateBuilder implements SideEffectsState {
             JavaKind kind = type.getJavaKind();
             StampPair stamp = null;
             if (plugins != null) {
-                stamp = plugins.getOverridingStamp(tool, type, false);
+                stamp = plugins.getOverridingStamp(parser.parsingIntrinsic(), type, false);
             }
             if (stamp == null) {
                 stamp = StampFactory.forDeclaredType(assumptions, type, false);
@@ -213,7 +206,7 @@ public final class FrameStateBuilder implements SideEffectsState {
             FloatingNode param = null;
             if (plugins != null) {
                 for (ParameterPlugin plugin : plugins.getParameterPlugins()) {
-                    param = plugin.interceptParameter(tool, index, stamp);
+                    param = plugin.interceptParameter(parser, index, stamp);
                     if (param != null) {
                         break;
                     }
@@ -235,7 +228,6 @@ public final class FrameStateBuilder implements SideEffectsState {
 
     private FrameStateBuilder(FrameStateBuilder other) {
         this.parser = other.parser;
-        this.tool = other.tool;
         this.method = other.method;
         this.stackSize = other.stackSize;
         this.locals = other.locals.clone();
@@ -932,9 +924,6 @@ public final class FrameStateBuilder implements SideEffectsState {
                 return false;
             }
             if (other.parser != parser) {
-                return false;
-            }
-            if (other.tool != tool) {
                 return false;
             }
             if (other.rethrowException != rethrowException) {
