@@ -47,14 +47,13 @@ import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMLongNuller;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMBasicBlockNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMTerminatorNode;
-import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMPhiManager.Phi;
 import com.oracle.truffle.llvm.parser.bc.impl.nodes.LLVMNodeGenerator;
 
 import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMFrameIDs;
-import com.oracle.truffle.llvm.parser.base.model.visitors.FunctionVisitor;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalValueSymbol;
-import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionBlock;
+import uk.ac.man.cs.llvm.ir.model.FunctionVisitor;
+import uk.ac.man.cs.llvm.ir.model.GlobalValueSymbol;
+import uk.ac.man.cs.llvm.ir.model.InstructionBlock;
 
 public class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
 
@@ -87,10 +86,6 @@ public class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
         this.phis = phis;
         this.symbolResolver = new LLVMNodeGenerator(this);
         this.argCount = argCount;
-    }
-
-    public DataLayoutConverter.DataSpecConverter getTargetDataLayout() {
-        return module.getTargetDataLayout();
     }
 
     public void addInstruction(LLVMNode node) {

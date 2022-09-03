@@ -48,7 +48,6 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMIVarBitNode;
 import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI32VectorNode;
-import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMVectorNode;
 import com.oracle.truffle.llvm.nodes.impl.control.LLVMRetNode;
 import com.oracle.truffle.llvm.nodes.impl.control.LLVMRetNodeFactory;
 import com.oracle.truffle.llvm.nodes.impl.control.LLVMRetNodeFactory.LLVMVoidReturnNodeGen;
@@ -474,7 +473,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         } else {
             Type type = ret.getValue().getType();
 
-            final LLVMExpressionNode value = symbols.resolve(ret.getValue());
+            LLVMExpressionNode value = symbols.resolve(ret.getValue());
 
             slot.setKind(LLVMBitcodeTypeHelper.toFrameSlotKind(type));
 
@@ -511,15 +510,6 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
                     break;
                 case FUNCTION_ADDRESS:
                     node = LLVMRetNodeFactory.LLVMFunctionRetNodeGen.create((LLVMFunctionNode) value, slot);
-                    break;
-                case I1_VECTOR:
-                case I8_VECTOR:
-                case I16_VECTOR:
-                case I32_VECTOR:
-                case I64_VECTOR:
-                case FLOAT_VECTOR:
-                case DOUBLE_VECTOR:
-                    node = LLVMRetNodeFactory.LLVMVectorRetNodeGen.create((LLVMVectorNode) value, slot);
                     break;
                 case STRUCT:
                     // final int size = typeHelper.getByteSize(type);
