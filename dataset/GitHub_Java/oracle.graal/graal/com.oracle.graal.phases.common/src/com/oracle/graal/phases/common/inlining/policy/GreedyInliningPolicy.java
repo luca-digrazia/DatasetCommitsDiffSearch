@@ -24,14 +24,15 @@ package com.oracle.graal.phases.common.inlining.policy;
 
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugMetric;
+import com.oracle.graal.nodes.FixedNode;
 import com.oracle.graal.nodes.Invoke;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.spi.Replacements;
 import com.oracle.graal.phases.common.inlining.InliningUtil;
 import com.oracle.graal.phases.common.inlining.info.InlineInfo;
-import com.oracle.graal.phases.common.inlining.walker.MethodInvocation;
 
 import java.util.Map;
+import java.util.function.ToDoubleFunction;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 
@@ -53,12 +54,8 @@ public class GreedyInliningPolicy extends AbstractInliningPolicy {
     }
 
     @Override
-    public boolean isWorthInlining(Replacements replacements, MethodInvocation invocation, int inliningDepth, boolean fullyProcessed) {
-
-        final InlineInfo info = invocation.callee();
-        final double probability = invocation.probability();
-        final double relevance = invocation.relevance();
-
+    public boolean isWorthInlining(ToDoubleFunction<FixedNode> probabilities, Replacements replacements, InlineInfo info, int inliningDepth, double probability, double relevance,
+                    boolean fullyProcessed) {
         if (InlineEverything.getValue()) {
             InliningUtil.logInlinedMethod(info, inliningDepth, fullyProcessed, "inline everything");
             return true;
@@ -75,7 +72,7 @@ public class GreedyInliningPolicy extends AbstractInliningPolicy {
         }
 
         double inliningBonus = getInliningBonus(info);
-        int nodes = info.determineNodeCount();
+        int nodes = determineNodeCount(info);
         int lowLevelGraphSize = previousLowLevelGraphSize(info);
 
         if (SmallCompiledLowLevelGraphSize.getValue() > 0 && lowLevelGraphSize > SmallCompiledLowLevelGraphSize.getValue() * inliningBonus) {
@@ -95,7 +92,7 @@ public class GreedyInliningPolicy extends AbstractInliningPolicy {
          * inline those methods but increases bootstrap time (maybe those methods are also getting
          * queued in the compilation queue concurrently)
          */
-        double invokes = determineInvokeProbability(info);
+        double invokes = determineInvokeProbability(probabilities, info);
         if (LimitInlinedInvokes.getValue() > 0 && fullyProcessed && invokes > LimitInlinedInvokes.getValue() * inliningBonus) {
             InliningUtil.logNotInlinedMethod(info, inliningDepth, "callee invoke probability is too high (invokeP=%f, relevance=%f, probability=%f, bonus=%f, nodes=%d)", invokes, relevance,
                             probability, inliningBonus, nodes);
