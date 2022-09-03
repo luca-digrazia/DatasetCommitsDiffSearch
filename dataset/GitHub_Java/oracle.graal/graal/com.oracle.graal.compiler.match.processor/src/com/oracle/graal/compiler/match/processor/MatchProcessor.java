@@ -22,60 +22,25 @@
  */
 package com.oracle.graal.compiler.match.processor;
 
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.io.*;
+import java.util.*;
+import java.util.regex.*;
 
-import javax.annotation.processing.AbstractProcessor;
-import javax.annotation.processing.Filer;
-import javax.annotation.processing.RoundEnvironment;
-import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.lang.model.SourceVersion;
-import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.AnnotationValue;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.Name;
-import javax.lang.model.element.PackageElement;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.MirroredTypeException;
-import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.AbstractAnnotationValueVisitor7;
-import javax.lang.model.util.ElementFilter;
-import javax.lang.model.util.Types;
+import javax.annotation.processing.*;
+import javax.lang.model.*;
+import javax.lang.model.element.*;
+import javax.lang.model.type.*;
+import javax.lang.model.util.*;
 import javax.tools.Diagnostic.Kind;
-import javax.tools.FileObject;
-import javax.tools.JavaFileObject;
-import javax.tools.StandardLocation;
+import javax.tools.*;
 
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.service.ServiceProvider;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.service.*;
 
-import com.oracle.graal.compiler.gen.NodeMatchRules;
-import com.oracle.graal.compiler.match.ComplexMatchResult;
-import com.oracle.graal.compiler.match.MatchRule;
-import com.oracle.graal.compiler.match.MatchRules;
-import com.oracle.graal.compiler.match.MatchStatement;
-import com.oracle.graal.compiler.match.MatchStatementSet;
-import com.oracle.graal.compiler.match.MatchableNode;
-import com.oracle.graal.compiler.match.MatchableNodes;
-import com.oracle.graal.graph.Position;
-import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.match.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * Processes classes annotated with {@link MatchRule}. A {@link MatchStatementSet} service is
@@ -520,7 +485,7 @@ public class MatchProcessor extends AbstractProcessor {
             out.println("");
             out.println("import java.util.*;");
             out.println("import " + MatchStatementSet.class.getPackage().getName() + ".*;");
-            out.println("import " + NodeMatchRules.class.getName() + ";");
+            out.println("import " + NodeLIRBuilder.class.getName() + ";");
             out.println("import " + Position.class.getName() + ";");
             out.println("import " + ServiceProvider.class.getName() + ";");
             for (String p : info.requiredPackages) {
@@ -552,8 +517,8 @@ public class MatchProcessor extends AbstractProcessor {
                 out.printf("    private static final String[] %s = new String[] {%s};\n", invoker.argumentsListName(), args);
                 out.printf("    private static final class %s implements MatchGenerator {\n", invoker.wrapperClass());
                 out.printf("        static MatchGenerator instance = new %s();\n", invoker.wrapperClass());
-                out.printf("        public ComplexMatchResult match(NodeMatchRules nodeMatchRules, Object...args) {\n");
-                out.printf("            return ((%s) nodeMatchRules).%s(%s);\n", invoker.nodeLIRBuilderClass, invoker.methodName, types);
+                out.printf("        public ComplexMatchResult match(NodeLIRBuilder builder, Object...args) {\n");
+                out.printf("            return ((%s) builder).%s(%s);\n", invoker.nodeLIRBuilderClass, invoker.methodName, types);
                 out.printf("        }\n");
                 out.printf("        public String getName() {\n");
                 out.printf("             return \"%s\";\n", invoker.methodName);
@@ -565,7 +530,7 @@ public class MatchProcessor extends AbstractProcessor {
 
             String desc = MatchStatement.class.getSimpleName();
 
-            out.println("    public Class<? extends NodeMatchRules> forClass() {");
+            out.println("    public Class<? extends NodeLIRBuilder> forClass() {");
             out.println("        return " + topDeclaringClass + ".class;");
             out.println("    }");
             out.println();
