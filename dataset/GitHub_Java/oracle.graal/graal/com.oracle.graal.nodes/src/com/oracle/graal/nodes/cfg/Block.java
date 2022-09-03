@@ -81,10 +81,6 @@ public final class Block {
         return getBeginNode().next() instanceof ExceptionObjectNode;
     }
 
-    public Block getFirstPredecessor() {
-        return predecessors.get(0);
-    }
-
     public List<Block> getPredecessors() {
         return predecessors;
     }
