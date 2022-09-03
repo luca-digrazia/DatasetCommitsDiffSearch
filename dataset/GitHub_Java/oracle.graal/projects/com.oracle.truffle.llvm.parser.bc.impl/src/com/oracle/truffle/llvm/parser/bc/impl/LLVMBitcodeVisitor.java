@@ -35,6 +35,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ValueInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.VoidInstruction;
+import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
+import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
+import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
+import com.oracle.truffle.llvm.parser.base.model.types.Type;
+
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -48,6 +55,13 @@ import com.oracle.truffle.llvm.context.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
+import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMFreeFactory;
+import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyFactory;
+import com.oracle.truffle.llvm.nodes.impl.literals.LLVMSimpleLiteralNode.LLVMAddressLiteralNode;
+import com.oracle.truffle.llvm.nodes.impl.literals.LLVMSimpleLiteralNode.LLVMI1LiteralNode;
+import com.oracle.truffle.llvm.nodes.impl.literals.LLVMSimpleLiteralNode.LLVMI32LiteralNode;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMAccessGlobalVariableStorageNodeGen;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.parser.LLVMType;
@@ -67,13 +81,7 @@ import com.oracle.truffle.llvm.parser.base.model.symbols.Symbol;
 import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
 import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.ArrayConstant;
 import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.Instruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ValueInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.VoidInstruction;
 import com.oracle.truffle.llvm.parser.base.model.target.TargetDataLayout;
-import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
-import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
-import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
-import com.oracle.truffle.llvm.parser.base.model.types.Type;
 import com.oracle.truffle.llvm.parser.base.model.visitors.InstructionVisitor;
 import com.oracle.truffle.llvm.parser.base.model.visitors.ModelVisitor;
 import com.oracle.truffle.llvm.parser.base.model.visitors.ReducedInstructionVisitor;
@@ -87,8 +95,11 @@ import com.oracle.truffle.llvm.parser.bc.impl.parser.ir.LLVMParser;
 import com.oracle.truffle.llvm.parser.bc.impl.parser.listeners.ModuleVersion;
 import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMFrameIDs;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
+import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunction;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
+import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
+import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 
 public class LLVMBitcodeVisitor implements ModelVisitor {
 
@@ -186,7 +197,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
     private final Map<LLVMFunction, RootCallTarget> functions = new HashMap<>();
 
-    private final Map<GlobalValueSymbol, LLVMExpressionNode> globals = new HashMap<>();
+    private final Map<GlobalValueSymbol, LLVMAddressNode> globals = new HashMap<>();
 
     private final DataLayoutConverter.DataSpecConverter targetDataLayout;
 
@@ -311,12 +322,12 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
             final LLVMBaseType baseType = type.getLLVMBaseType();
             final int size = parserRuntime.getByteSize(type);
 
-            final LLVMExpressionNode globalVarAddress = getGlobalVariable(global);
+            final LLVMAddressNode globalVarAddress = (LLVMAddressNode) getGlobalVariable(global);
 
             if (size != 0) {
                 final LLVMNode store;
                 if (baseType == LLVMBaseType.ARRAY || baseType == LLVMBaseType.STRUCT) {
-                    store = factoryFacade.createStore(globalVarAddress, constant, type);
+                    store = LLVMMemI32CopyFactory.create(globalVarAddress, (LLVMAddressNode) constant, new LLVMI32LiteralNode(size), new LLVMI32LiteralNode(0), new LLVMI1LiteralNode(false));
                 } else {
                     final Type t = global.getValue().getType();
                     store = factoryFacade.createStore(globalVarAddress, constant, t);
@@ -361,7 +372,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         if (g instanceof GlobalValueSymbol) {
             final GlobalValueSymbol variable = (GlobalValueSymbol) g;
-            LLVMExpressionNode address = globals.get(variable);
+            LLVMAddressNode address = globals.get(variable);
 
             if (address == null) {
                 address = allocateGlobal(variable);
@@ -387,7 +398,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
     }
 
     private LLVMNode[] resolveStructor(GlobalValueSymbol globalVar, FrameSlot stackSlot) {
-        final Object globalVariableDescriptor = globalVariableScope.get(globalVar.getName());
+        final LLVMGlobalVariableDescriptor globalVariableDescriptor = globalVariableScope.get(globalVar.getName());
         final ArrayConstant arrayConstant = (ArrayConstant) globalVar.getValue();
         final int elemCount = arrayConstant.getElementCount();
 
@@ -401,7 +412,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         for (int i = 0; i < elemCount; i++) {
             final LLVMExpressionNode globalVarAddress = factoryFacade.createLiteral(globalVariableDescriptor, LLVMBaseType.ADDRESS);
             final LLVMExpressionNode iNode = factoryFacade.createLiteral(i, LLVMBaseType.I32);
-            final LLVMExpressionNode structPointer = factoryFacade.createGetElementPtr(LLVMBaseType.I32, globalVarAddress, iNode, structSize);
+            final LLVMAddressNode structPointer = (LLVMAddressNode) factoryFacade.createGetElementPtr(LLVMBaseType.I32, globalVarAddress, iNode, structSize);
             final LLVMExpressionNode loadedStruct = factoryFacade.createLoad(elementType, structPointer);
 
             final LLVMExpressionNode oneLiteralNode = factoryFacade.createLiteral(1, LLVMBaseType.I32);
@@ -415,16 +426,37 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         return structors;
     }
 
-    private final Map<String, Object> globalVariableScope = new HashMap<>();
+    private final Map<String, LLVMGlobalVariableDescriptor> globalVariableScope = new HashMap<>();
 
     // NativeLookup expects a NodeFactoryFacade but does not use it for our purpose
     private final NativeLookup nativeLookup = new NativeLookup(null);
 
-    private LLVMExpressionNode allocateGlobal(GlobalValueSymbol global) {
-        final Object globalVariable = factoryFacade.allocateGlobalVariable(global);
-        assert !globalVariableScope.containsKey(global.getName());
-        globalVariableScope.put(global.getName(), globalVariable);
-        return factoryFacade.createLiteral(globalVariable, LLVMBaseType.ADDRESS);
+    private LLVMAddressNode allocateGlobal(GlobalValueSymbol global) {
+        final String name = global.getName();
+
+        final LLVMGlobalVariableDescriptor.NativeResolver nativeResolver = () -> LLVMAddress.fromLong(nativeLookup.getNativeHandle(name));
+
+        final LLVMGlobalVariableDescriptor descriptor;
+        if (global.isStatic()) {
+            descriptor = new LLVMGlobalVariableDescriptor(name, nativeResolver);
+        } else {
+            descriptor = context.getGlobalVariableRegistry().lookupOrAdd(name, nativeResolver);
+        }
+
+        // if the global does not have an associated value the compiler did not initialize it, in
+        // this case we assume memory has already been allocated elsewhere
+        final boolean allocateMemory = !descriptor.isDeclared() && global.getValue() != null;
+        if (allocateMemory) {
+            final int byteSize = parserRuntime.getByteSize(((PointerType) global.getType()).getPointeeType());
+            final LLVMAddress nativeStorage = LLVMHeap.allocateMemory(byteSize);
+            final LLVMAddressNode addressLiteralNode = new LLVMAddressLiteralNode(nativeStorage);
+            parserRuntime.addDestructor(LLVMFreeFactory.create(addressLiteralNode));
+            descriptor.declare(nativeStorage);
+        }
+
+        globalVariableScope.put(global.getName(), descriptor);
+
+        return LLVMAccessGlobalVariableStorageNodeGen.create(descriptor);
     }
 
     public List<LLVMNode> getGobalVariables() {
