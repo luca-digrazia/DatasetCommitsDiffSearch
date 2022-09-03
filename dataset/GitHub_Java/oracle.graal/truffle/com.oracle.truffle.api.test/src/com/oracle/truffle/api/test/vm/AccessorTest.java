@@ -27,14 +27,12 @@ import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.test.vm.ImplicitExplicitExportTest.ExportImportLanguage1;
 import static com.oracle.truffle.api.test.vm.ImplicitExplicitExportTest.L1;
-import com.oracle.truffle.api.vm.TruffleVM;
+import com.oracle.truffle.api.vm.Portaal;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.concurrent.Executors;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -50,8 +48,8 @@ public class AccessorTest {
 
     @Test
     public void canGetAccessToOwnLanguageInstance() throws Exception {
-        TruffleVM vm = TruffleVM.newVM().executor(Executors.newSingleThreadExecutor()).build();
-        TruffleVM.Language language = vm.getLanguages().get(L1);
+        Portaal vm = Portaal.createNew().executor(Executors.newSingleThreadExecutor()).build();
+        Portaal.Language language = vm.getLanguages().get(L1);
         assertNotNull("L1 language is defined", language);
 
         Source s = Source.fromText("return nothing", "nothing").withMimeType(L1);
@@ -63,7 +61,7 @@ public class AccessorTest {
         assertTrue("Right instance: " + afterInitialization, afterInitialization instanceof ExportImportLanguage1);
     }
 
-    Object findLanguageByClass(TruffleVM vm) throws IllegalAccessException, NoSuchMethodException, SecurityException, IllegalArgumentException, InvocationTargetException, NoSuchFieldException {
+    Object findLanguageByClass(Portaal vm) throws IllegalAccessException, NoSuchMethodException, SecurityException, IllegalArgumentException, InvocationTargetException, NoSuchFieldException {
         Method find = Accessor.class.getDeclaredMethod("findLanguage", Object.class, Class.class);
         find.setAccessible(true);
         TruffleLanguage.Env env = (TruffleLanguage.Env) find.invoke(API, vm, ExportImportLanguage1.class);

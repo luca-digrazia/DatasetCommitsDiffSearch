@@ -48,7 +48,7 @@ import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.api.vm.*;
-import com.oracle.truffle.api.vm.TruffleVM.Symbol;
+import com.oracle.truffle.api.vm.Portaal.Value;
 import com.oracle.truffle.sl.builtins.*;
 import com.oracle.truffle.sl.nodes.*;
 import com.oracle.truffle.sl.nodes.call.*;
@@ -58,14 +58,12 @@ import com.oracle.truffle.sl.nodes.instrument.*;
 import com.oracle.truffle.sl.nodes.local.*;
 import com.oracle.truffle.sl.parser.*;
 import com.oracle.truffle.sl.runtime.*;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.math.BigInteger;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -144,7 +142,7 @@ import java.util.List;
  */
 
 /*
- *
+ * 
  * <p> <b>Tools:</b><br> The use of some of Truffle's support for developer tools (based on the
  * Truffle Instrumentation Framework) are demonstrated in this file, for example: <ul> <li>a
  * {@linkplain NodeExecCounter counter for node executions}, tabulated by node type; and</li> <li>a
@@ -156,11 +154,10 @@ import java.util.List;
 public final class SLLanguage extends TruffleLanguage<SLContext> {
     private static List<NodeFactory<? extends SLBuiltinNode>> builtins = Collections.emptyList();
     private static Visualizer visualizer = new SLDefaultVisualizer();
-    private List<ASTProber> astProbers;
+    private static ASTProber registeredASTProber; // non-null if prober already registered
+    private DebugSupportProvider debugSupport;
 
     private SLLanguage() {
-        this.astProbers = new ArrayList<>();
-        astProbers.add(new SLStandardASTProber());
     }
 
     public static final SLLanguage INSTANCE = new SLLanguage();
@@ -183,7 +180,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
      * The main entry point. Use the mx command "mx sl" to run it with the correct class path setup.
      */
     public static void main(String[] args) throws IOException {
-        TruffleVM vm = TruffleVM.newVM().build();
+        Portaal vm = Portaal.createNew().build();
         assert vm.getLanguages().containsKey("application/x-sl");
 
         setupToolDemos();
@@ -200,7 +197,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
             source = Source.fromFileName(args[0]);
         }
         vm.eval(source);
-        Symbol main = vm.findGlobalSymbol("main");
+        Value main = vm.findGlobalSymbol("main");
         if (main == null) {
             throw new SLException("No function main() defined in SL source file.");
         }
@@ -213,12 +210,11 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
     /**
      * Temporary method during API evolution, supports debugger integration.
      */
-    @Deprecated
     public static void run(Source source) throws IOException {
-        TruffleVM vm = TruffleVM.newVM().build();
+        Portaal vm = Portaal.createNew().build();
         assert vm.getLanguages().containsKey("application/x-sl");
         vm.eval(source);
-        Symbol main = vm.findGlobalSymbol("main");
+        Value main = vm.findGlobalSymbol("main");
         if (main == null) {
             throw new SLException("No function main() defined in SL source file.");
         }
@@ -229,7 +225,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
      * Parse and run the specified SL source. Factored out in a separate method so that it can also
      * be used by the unit test harness.
      */
-    public static long run(TruffleVM context, Path path, PrintWriter logOutput, PrintWriter out, int repeats, List<NodeFactory<? extends SLBuiltinNode>> currentBuiltins) throws IOException {
+    public static long run(Portaal context, Path path, PrintWriter logOutput, PrintWriter out, int repeats, List<NodeFactory<? extends SLBuiltinNode>> currentBuiltins) throws IOException {
         builtins = currentBuiltins;
 
         if (logOutput != null) {
@@ -245,7 +241,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
         }
 
         /* Lookup our main entry point, which is per definition always named "main". */
-        Symbol main = context.findGlobalSymbol("main");
+        Value main = context.findGlobalSymbol("main");
         if (main == null) {
             throw new SLException("No function main() defined in SL source file.");
         }
@@ -436,56 +432,28 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
     }
 
     @Override
-    protected Visualizer getVisualizer() {
-        if (visualizer == null) {
-            visualizer = new SLDefaultVisualizer();
-        }
-        return visualizer;
-    }
-
-    @Override
-    protected List<ASTProber> getASTProbers() {
-        return astProbers;
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    protected void enableASTProbing(ASTProber prober) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
-        throw new IllegalStateException("evalInContext not supported in this language");
-    }
-
-    @Override
-    protected AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
-        throw new IllegalStateException("createAdvancedInstrumentRootFactory not supported in this language");
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
     protected ToolSupportProvider getToolSupport() {
-        return null;
+        return getDebugSupport();
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     protected DebugSupportProvider getDebugSupport() {
-        return null;
-    }
-
-    public Node createFindContextNode0() {
-        return createFindContextNode();
-    }
-
-    public SLContext findContext0(Node contextNode) {
-        return findContext(contextNode);
+        if (debugSupport == null) {
+            debugSupport = new SLDebugProvider();
+        }
+        return debugSupport;
     }
 
     // TODO (mlvdv) remove the static hack when we no longer have the static demo variables
     private static void setupToolDemos() {
+        // if (statementCounts || coverage) {
+        // if (registeredASTProber == null) {
+        // final ASTProber newProber = new SLStandardASTProber();
+        // // This should be registered on the TruffleVM
+        // Probe.registerASTProber(newProber);
+        // registeredASTProber = newProber;
+        // }
+        // }
         // if (nodeExecCounts) {
         // nodeExecCounter = new NodeExecCounter();
         // nodeExecCounter.install();
@@ -515,6 +483,48 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
         // coverageTracker.print(System.out);
         // coverageTracker.dispose();
         // }
+    }
+
+    public Node createFindContextNode0() {
+        return createFindContextNode();
+    }
+
+    public SLContext findContext0(Node contextNode) {
+        return findContext(contextNode);
+    }
+
+    private final class SLDebugProvider implements DebugSupportProvider {
+
+        public SLDebugProvider() {
+            if (registeredASTProber == null) {
+                registeredASTProber = new SLStandardASTProber();
+                // This should be registered on the TruffleVM
+                Probe.registerASTProber(registeredASTProber);
+            }
+        }
+
+        public Visualizer getVisualizer() {
+            if (visualizer == null) {
+                visualizer = new SLDefaultVisualizer();
+            }
+            return visualizer;
+        }
+
+        public void enableASTProbing(ASTProber prober) {
+            if (prober != null) {
+                // This should be registered on the TruffleVM
+                Probe.registerASTProber(prober);
+            }
+        }
+
+        public Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws DebugSupportException {
+            throw new DebugSupportException("evalInContext not supported in this language");
+        }
+
+        public AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(String expr, AdvancedInstrumentResultListener resultListener) throws DebugSupportException {
+            throw new DebugSupportException("createAdvancedInstrumentRootFactory not supported in this language");
+        }
+
     }
 
 }

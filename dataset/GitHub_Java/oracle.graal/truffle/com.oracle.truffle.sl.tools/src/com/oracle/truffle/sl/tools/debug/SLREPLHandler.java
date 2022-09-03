@@ -40,16 +40,15 @@
  */
 package com.oracle.truffle.sl.tools.debug;
 
-import com.oracle.truffle.api.instrument.KillException;
-import com.oracle.truffle.api.instrument.QuitException;
+import java.io.*;
+import java.util.*;
+
+import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.TruffleVM;
-import com.oracle.truffle.tools.debug.shell.REPLMessage;
-import com.oracle.truffle.tools.debug.shell.client.SimpleREPLClient;
-import com.oracle.truffle.tools.debug.shell.server.REPLHandler;
-import com.oracle.truffle.tools.debug.shell.server.REPLServerContext;
-import java.io.File;
-import java.util.ArrayList;
+import com.oracle.truffle.api.vm.*;
+import com.oracle.truffle.tools.debug.shell.*;
+import com.oracle.truffle.tools.debug.shell.client.*;
+import com.oracle.truffle.tools.debug.shell.server.*;
 
 /**
  * Instantiation of the "server handler" part of the "REPL*" debugger for the simple language.
@@ -128,9 +127,9 @@ public abstract class SLREPLHandler extends REPLHandler {
             if (!file.canRead()) {
                 return finishReplyFailed(reply, "can't find file \"" + fileName + "\"");
             }
-            final TruffleVM vm = serverContext.vm();
+            final Portaal vm = serverContext.vm();
             vm.eval(Source.fromFileName(file.getPath()));
-            TruffleVM.Symbol main = vm.findGlobalSymbol("main");
+            Portaal.Value main = vm.findGlobalSymbol("main");
             if (main != null) {
                 main.invoke(null);
             }

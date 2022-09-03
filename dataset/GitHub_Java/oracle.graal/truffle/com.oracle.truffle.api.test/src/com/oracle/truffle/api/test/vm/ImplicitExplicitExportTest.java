@@ -22,48 +22,28 @@
  */
 package com.oracle.truffle.api.test.vm;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-
-import java.io.IOException;
-import java.io.Reader;
-import java.util.Collections;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.Executors;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.debug.DebugSupportProvider;
-import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.instrument.ASTProber;
-import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
-import com.oracle.truffle.api.instrument.AdvancedInstrumentRootFactory;
-import com.oracle.truffle.api.instrument.ToolSupportProvider;
-import com.oracle.truffle.api.instrument.Visualizer;
+import com.oracle.truffle.api.debug.*;
+import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.TruffleVM;
+import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.vm.*;
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.Executors;
+import org.junit.*;
+import static org.junit.Assert.*;
 
 public class ImplicitExplicitExportTest {
     private static Thread mainThread;
-    private TruffleVM vm;
+    private Portaal vm;
 
     @Before
     public void initializeVM() {
         mainThread = Thread.currentThread();
-        vm = TruffleVM.newVM().executor(Executors.newSingleThreadExecutor()).build();
+        vm = Portaal.createNew().executor(Executors.newSingleThreadExecutor()).build();
         assertTrue("Found " + L1 + " language", vm.getLanguages().containsKey(L1));
         assertTrue("Found " + L2 + " language", vm.getLanguages().containsKey(L2));
         assertTrue("Found " + L3 + " language", vm.getLanguages().containsKey(L3));
@@ -182,41 +162,13 @@ public class ImplicitExplicitExportTest {
         }
 
         @Override
-        protected Visualizer getVisualizer() {
-            return null;
-        }
-
-        @Override
-        protected List<ASTProber> getASTProbers() {
-            return Collections.emptyList();
-        }
-
-        @Override
-        protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
-            return null;
-        }
-
-        @Override
-        protected AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
-            return null;
-        }
-
-        @SuppressWarnings("deprecation")
-        @Override
         protected ToolSupportProvider getToolSupport() {
-            throw new UnsupportedOperationException();
+            return null;
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         protected DebugSupportProvider getDebugSupport() {
-            throw new UnsupportedOperationException();
-        }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        protected void enableASTProbing(ASTProber astProber) {
-            throw new UnsupportedOperationException();
+            return null;
         }
 
         private Object importExport(Source code) {
