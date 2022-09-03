@@ -31,7 +31,8 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.java.GraphBuilderPlugin.ParameterPlugin;
+import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
+import com.oracle.graal.java.GraphBuilderPlugins.ParameterPlugin;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -69,14 +70,14 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
         int index = 0;
         if (!method.isStatic()) {
             // set the receiver
-            locals[javaIndex] = arguments[index];
+            storeLocal(javaIndex, arguments[index]);
             javaIndex = 1;
             index = 1;
         }
         Signature sig = method.getSignature();
         int max = sig.getParameterCount(false);
         for (int i = 0; i < max; i++) {
-            locals[javaIndex] = arguments[index];
+            storeLocal(javaIndex, arguments[index]);
             javaIndex += arguments[index].getKind().getSlotCount();
             index++;
         }
@@ -95,7 +96,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
             if (receiver == null) {
                 receiver = new ParameterNode(javaIndex, StampFactory.declaredNonNull(method.getDeclaringClass()));
             }
-            locals[javaIndex] = graph.unique(receiver);
+            storeLocal(javaIndex, graph.unique(receiver));
             javaIndex = 1;
             index = 1;
         }
@@ -121,7 +122,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
             if (param == null) {
                 param = new ParameterNode(index, stamp);
             }
-            locals[javaIndex] = graph.unique(param);
+            storeLocal(javaIndex, graph.unique(param));
             javaIndex += kind.getSlotCount();
             index++;
         }
