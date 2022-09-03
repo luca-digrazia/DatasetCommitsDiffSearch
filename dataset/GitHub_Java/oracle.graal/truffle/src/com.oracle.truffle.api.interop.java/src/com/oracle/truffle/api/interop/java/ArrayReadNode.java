@@ -59,7 +59,7 @@ abstract class ArrayReadNode extends Node {
     @TruffleBoundary
     @Specialization(guards = {"isList(receiver)"})
     protected Object doListIntIndex(JavaObject receiver, int index) {
-        return JavaInterop.toGuestValue(((List<?>) receiver.obj).get(index), receiver.languageContext);
+        return ((List<?>) receiver.obj).get(index);
     }
 
     @TruffleBoundary

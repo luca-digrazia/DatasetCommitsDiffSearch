@@ -499,8 +499,6 @@ abstract class ProxyInvokeNode extends Node {
      */
     protected static final int LIMIT = Integer.MAX_VALUE;
 
-    @CompilationFinal private boolean invokeFailed;
-
     /*
      * It is supposed to be safe to compare method names with == only as they are always interned.
      */
@@ -522,7 +520,7 @@ abstract class ProxyInvokeNode extends Node {
                     @Cached("maybeCreateNode(message)") Node messageNode) {
         Object result;
         if (message == null) {
-            result = invokeOrExecute(languageContext, receiver, arguments, name, invokeNode, keyInfoNode, readNode, isExecutableNode, executeNode, branchProfile);
+            result = invokeOrExecute(receiver, arguments, name, invokeNode, keyInfoNode, readNode, isExecutableNode, executeNode, branchProfile);
         } else {
             // legacy behavior for MethodMessage
             try {
@@ -597,55 +595,43 @@ abstract class ProxyInvokeNode extends Node {
         return method.getGenericReturnType().equals(returnType);
     }
 
-    private Object invokeOrExecute(Object polyglotContext, TruffleObject receiver, Object[] arguments, String name, Node invokeNode, Node keyInfoNode, Node readNode, Node isExecutableNode,
-                    Node executeNode,
-                    ConditionProfile invokeOrReadAndExecuteProfile) {
+    private static Object invokeOrExecute(TruffleObject receiver, Object[] arguments, String name, Node invokeNode, Node keyInfoNode, Node readNode, Node isExecutableNode, Node executeNode,
+                    ConditionProfile branchProfile) {
         try {
-            if (!invokeFailed) {
+            int keyInfo = ForeignAccess.sendKeyInfo(keyInfoNode, receiver, name);
+            if (branchProfile.profile(KeyInfo.isInvocable(keyInfo))) {
                 try {
                     return ForeignAccess.sendInvoke(invokeNode, receiver, name, arguments);
-                } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                } catch (UnsupportedMessageException e) {
+                    CompilerDirectives.transferToInterpreter();
                     // fallthrough to unsupported
-                    invokeFailed = true;
                 }
-            }
-            if (invokeFailed) {
-                int keyInfo = ForeignAccess.sendKeyInfo(keyInfoNode, receiver, name);
-                if (invokeOrReadAndExecuteProfile.profile(KeyInfo.isInvocable(keyInfo))) {
-                    try {
-                        return ForeignAccess.sendInvoke(invokeNode, receiver, name, arguments);
-                    } catch (UnsupportedMessageException e) {
-                        CompilerDirectives.transferToInterpreter();
-                        // fallthrough to unsupported
+            } else if (KeyInfo.isReadable(keyInfo)) {
+                Object readValue = ForeignAccess.sendRead(readNode, receiver, name);
+                if (readValue instanceof TruffleObject) {
+                    TruffleObject truffleReadValue = (TruffleObject) readValue;
+                    if (ForeignAccess.sendIsExecutable(isExecutableNode, truffleReadValue)) {
+                        return ForeignAccess.sendExecute(executeNode, truffleReadValue, arguments);
                     }
-                } else if (KeyInfo.isReadable(keyInfo)) {
-                    Object readValue = ForeignAccess.sendRead(readNode, receiver, name);
-                    if (readValue instanceof TruffleObject) {
-                        TruffleObject truffleReadValue = (TruffleObject) readValue;
-                        if (ForeignAccess.sendIsExecutable(isExecutableNode, truffleReadValue)) {
-                            return ForeignAccess.sendExecute(executeNode, truffleReadValue, arguments);
-                        }
-                    }
-                    if (arguments.length == 0) {
-                        return readValue;
-                    }
+                }
+                if (arguments.length == 0) {
+                    return readValue;
                 }
             }
             CompilerDirectives.transferToInterpreter();
-            throw JavaInteropErrors.invokeUnsupported(polyglotContext, receiver, name);
+            throw HostEntryRootNode.newUnsupportedOperationException("Member " + name + " not executable or readable.");
         } catch (UnknownIdentifierException e) {
             CompilerDirectives.transferToInterpreter();
-            throw JavaInteropErrors.invokeUnsupported(polyglotContext, receiver, name);
+            throw HostEntryRootNode.newUnsupportedOperationException("Unknown member " + e.getUnknownIdentifier() + ".");
         } catch (UnsupportedTypeException e) {
             CompilerDirectives.transferToInterpreter();
-            throw JavaInteropErrors.invalidExecuteArgumentType(polyglotContext, receiver, e.getSuppliedValues());
+            throw HostEntryRootNode.newIllegalArgumentException("Illegal argument provided.");
         } catch (ArityException e) {
             CompilerDirectives.transferToInterpreter();
-            throw JavaInteropErrors.invalidExecuteArity(polyglotContext, receiver, arguments, e.getExpectedArity(), e.getActualArity());
+            throw HostEntryRootNode.newIllegalArgumentException("Illegal number of arguments.");
         } catch (UnsupportedMessageException e) {
             CompilerDirectives.transferToInterpreter();
-            throw JavaInteropErrors.invokeUnsupported(polyglotContext, receiver, name);
+            throw HostEntryRootNode.newUnsupportedOperationException("Unsupported operation.");
         }
     }
 

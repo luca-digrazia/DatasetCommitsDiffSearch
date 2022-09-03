@@ -273,8 +273,8 @@ class JavaObjectMessageResolution {
         }
 
         public Object access(JavaObject object, String name) {
-            if (TruffleOptions.AOT || object == JavaObject.NULL) {
-                throw UnsupportedMessageException.raise(Message.READ);
+            if (TruffleOptions.AOT) {
+                return JavaObject.NULL;
             }
             JavaFieldDesc foundField = lookupField(object, name);
             if (foundField != null) {
@@ -344,7 +344,7 @@ class JavaObjectMessageResolution {
         }
 
         public Object access(JavaObject receiver, String name, Object value) {
-            if (TruffleOptions.AOT || receiver == JavaObject.NULL) {
+            if (TruffleOptions.AOT) {
                 throw UnsupportedMessageException.raise(Message.WRITE);
             }
             JavaFieldDesc f = lookupField(receiver, name);
