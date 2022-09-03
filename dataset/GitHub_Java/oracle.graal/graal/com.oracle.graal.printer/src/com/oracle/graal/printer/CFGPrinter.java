@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,54 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
+import static java.lang.Character.toLowerCase;
 
-import java.io.*;
-import java.util.*;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
-import com.oracle.max.criutils.*;
-import com.oracle.graal.alloc.util.*;
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.alloc.*;
-import com.oracle.graal.compiler.alloc.Interval.UsePosList;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.Verbosity;
-import com.oracle.graal.graph.NodeClass.NodeClassIterator;
-import com.oracle.graal.graph.NodeClass.Position;
-import com.oracle.graal.java.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.cfg.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.bytecode.BytecodeDisassembler;
+import com.oracle.graal.bytecode.Bytecode;
+import com.oracle.graal.compiler.common.alloc.Trace;
+import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
+import com.oracle.graal.compiler.gen.NodeLIRBuilder;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeBitMap;
+import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.graph.Position;
+import com.oracle.graal.java.BciBlockMapping;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.debug.IntervalDumper;
+import com.oracle.graal.lir.debug.IntervalDumper.IntervalVisitor;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.AbstractEndNode;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.PhiNode;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.ValuePhiNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.cfg.Block;
+import com.oracle.graal.nodes.cfg.ControlFlowGraph;
+
+import jdk.vm.ci.code.DebugInfo;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
 
 /**
  * Utility for printing Graal IR at various compilation phases.
@@ -51,15 +78,17 @@ class CFGPrinter extends CompilationPrinter {
 
     protected TargetDescription target;
     protected LIR lir;
-    protected LIRGenerator lirGenerator;
+    protected NodeLIRBuilder nodeLirGenerator;
     protected ControlFlowGraph cfg;
+    protected ScheduleResult schedule;
+    protected ResolvedJavaMethod method;
 
     /**
      * Creates a control flow graph printer.
      *
-     * @param buffer where the output generated via this printer shown be written
+     * @param out where the output generated via this printer shown be written
      */
-    public CFGPrinter(OutputStream out) {
+    CFGPrinter(OutputStream out) {
         super(out);
     }
 
@@ -67,12 +96,13 @@ class CFGPrinter extends CompilationPrinter {
      * Prints the control flow graph denoted by a given block map.
      *
      * @param label A label describing the compilation phase that produced the control flow graph.
-     * @param blockMap A data structure describing the blocks in a method and how they are connected.
+     * @param blockMap A data structure describing the blocks in a method and how they are
+     *            connected.
      */
     public void printCFG(String label, BciBlockMapping blockMap) {
         begin("cfg");
         out.print("name \"").print(label).println('"');
-        for (BciBlockMapping.Block block : blockMap.blocks) {
+        for (BciBlockMapping.BciBlock block : blockMap.getBlocks()) {
             begin("block");
             printBlock(block);
             end("block");
@@ -80,7 +110,7 @@ class CFGPrinter extends CompilationPrinter {
         end("cfg");
     }
 
-    private void printBlock(BciBlockMapping.Block block) {
+    private void printBlock(BciBlockMapping.BciBlock block) {
         out.print("name \"B").print(block.startBci).println('"');
         out.print("from_bci ").println(block.startBci);
         out.print("to_bci ").println(block.endBci);
@@ -88,7 +118,7 @@ class CFGPrinter extends CompilationPrinter {
         out.println("predecessors ");
 
         out.print("successors ");
-        for (BciBlockMapping.Block succ : block.successors) {
+        for (BciBlockMapping.BciBlock succ : block.getSuccessors()) {
             if (!succ.isExceptionEntry) {
                 out.print("\"B").print(succ.startBci).print("\" ");
             }
@@ -96,7 +126,7 @@ class CFGPrinter extends CompilationPrinter {
         out.println();
 
         out.print("xhandlers");
-        for (BciBlockMapping.Block succ : block.successors) {
+        for (BciBlockMapping.BciBlock succ : block.getSuccessors()) {
             if (succ.isExceptionEntry) {
                 out.print("\"B").print(succ.startBci).print("\" ");
             }
@@ -115,12 +145,11 @@ class CFGPrinter extends CompilationPrinter {
         out.print("loop_depth ").println(Long.bitCount(block.loops));
     }
 
-
     private NodeMap<Block> latestScheduling;
     private NodeBitMap printedNodes;
 
     private boolean inFixedSchedule(Node node) {
-        return lir != null || node.isDeleted() || cfg.getNodeToBlock().get(node) != null;
+        return lir != null || schedule != null || node.isDeleted() || cfg.getNodeToBlock().get(node) != null;
     }
 
     /**
@@ -129,10 +158,14 @@ class CFGPrinter extends CompilationPrinter {
      * @param label A label describing the compilation phase that produced the control flow graph.
      * @param blocks The list of blocks to be printed.
      */
-    public void printCFG(String label, List<Block> blocks) {
+    public void printCFG(String label, AbstractBlockBase<?>[] blocks, boolean printNodes) {
         if (lir == null) {
             latestScheduling = new NodeMap<>(cfg.getNodeToBlock());
-            for (Block block : blocks) {
+            for (AbstractBlockBase<?> abstractBlock : blocks) {
+                if (abstractBlock == null) {
+                    continue;
+                }
+                Block block = (Block) abstractBlock;
                 Node cur = block.getBeginNode();
                 while (true) {
                     assert inFixedSchedule(cur) && latestScheduling.get(cur) == block;
@@ -146,25 +179,30 @@ class CFGPrinter extends CompilationPrinter {
                 }
             }
         }
-        printedNodes = new NodeBitMap(cfg.graph);
 
         begin("cfg");
         out.print("name \"").print(label).println('"');
-        for (Block block : blocks) {
-            printBlock(block);
+        for (AbstractBlockBase<?> block : blocks) {
+            printBlock(block, printNodes);
         }
         end("cfg");
+        // NOTE: we do this only because the c1visualizer does not recognize the bytecode block if
+        // it is proceeding the cfg blocks. Currently we have no direct influence on the emit order.
+        // As a workaround we dump the bytecode after every cfg.
+        if (method != null) {
+            printBytecodes(new BytecodeDisassembler(false).disassemble(method));
+        }
 
         latestScheduling = null;
-        printedNodes = null;
     }
 
     private void scheduleInputs(Node node, Block nodeBlock) {
-        if (node instanceof PhiNode) {
+        if (node instanceof ValuePhiNode) {
             PhiNode phi = (PhiNode) node;
-            assert nodeBlock.getBeginNode() == phi.merge();
-            for (Block pred : nodeBlock.getPredecessors()) {
-                schedule(phi.valueAt((EndNode) pred.getEndNode()), pred);
+            Block phiBlock = latestScheduling.get(phi.merge());
+            assert phiBlock != null;
+            for (Block pred : phiBlock.getPredecessors()) {
+                schedule(phi.valueAt((AbstractEndNode) pred.getEndNode()), pred);
             }
 
         } else {
@@ -178,7 +216,7 @@ class CFGPrinter extends CompilationPrinter {
         if (!inFixedSchedule(input)) {
             Block inputBlock = block;
             if (latestScheduling.get(input) != null) {
-                inputBlock = ControlFlowGraph.commonDominator(inputBlock, latestScheduling.get(input));
+                inputBlock = AbstractControlFlowGraph.commonDominatorTyped(inputBlock, latestScheduling.get(input));
             }
             if (inputBlock != latestScheduling.get(input)) {
                 latestScheduling.set(input, inputBlock);
@@ -187,7 +225,24 @@ class CFGPrinter extends CompilationPrinter {
         }
     }
 
-    private void printBlock(Block block) {
+    private void printBlock(AbstractBlockBase<?> block, boolean printNodes) {
+        if (block == null) {
+            return;
+        }
+        printBlockProlog(block);
+        if (printNodes) {
+            assert block instanceof Block;
+            printNodes((Block) block);
+        }
+        printBlockEpilog(block);
+    }
+
+    private void printBlockEpilog(AbstractBlockBase<?> block) {
+        printLIR(block);
+        end("block");
+    }
+
+    private void printBlockProlog(AbstractBlockBase<?> block) {
         begin("block");
 
         out.print("name \"").print(blockToString(block)).println('"');
@@ -195,13 +250,13 @@ class CFGPrinter extends CompilationPrinter {
         out.println("to_bci -1");
 
         out.print("predecessors ");
-        for (Block pred : block.getPredecessors()) {
+        for (AbstractBlockBase<?> pred : block.getPredecessors()) {
             out.print("\"").print(blockToString(pred)).print("\" ");
         }
         out.println();
 
         out.print("successors ");
-        for (Block succ : block.getSuccessors()) {
+        for (AbstractBlockBase<?> succ : block.getSuccessors()) {
             if (!succ.isExceptionEntry()) {
                 out.print("\"").print(blockToString(succ)).print("\" ");
             }
@@ -209,7 +264,7 @@ class CFGPrinter extends CompilationPrinter {
         out.println();
 
         out.print("xhandlers");
-        for (Block succ : block.getSuccessors()) {
+        for (AbstractBlockBase<?> succ : block.getSuccessors()) {
             if (succ.isExceptionEntry()) {
                 out.print("\"").print(blockToString(succ)).print("\" ");
             }
@@ -229,65 +284,52 @@ class CFGPrinter extends CompilationPrinter {
         out.println();
 
         if (block.getLoop() != null) {
-            out.print("loop_index ").println(block.getLoop().index);
-            out.print("loop_depth ").println(block.getLoop().depth);
+            out.print("loop_index ").println(block.getLoop().getIndex());
+            out.print("loop_depth ").println(block.getLoop().getDepth());
         }
 
-        printNodes(block);
-        printLIR(block);
-        end("block");
+        out.print("probability ").println(Double.doubleToRawLongBits(block.probability()));
     }
 
     private void printNodes(Block block) {
+        printedNodes = new NodeBitMap(cfg.graph);
         begin("IR");
         out.println("HIR");
         out.disableIndentation();
 
-        if (block.getPredecessors().size() == 0) {
-            // Currently method parameters are not in the schedule, so print them separately here.
-            for (ValueNode param : block.getBeginNode().graph().getNodes(LocalNode.class)) {
-                printNode(param, false);
-            }
-        }
-        if (block.getBeginNode() instanceof MergeNode) {
+        if (block.getBeginNode() instanceof AbstractMergeNode) {
             // Currently phi functions are not in the schedule, so print them separately here.
-            for (ValueNode phi : ((MergeNode) block.getBeginNode()).phis()) {
+            for (ValueNode phi : ((AbstractMergeNode) block.getBeginNode()).phis()) {
                 printNode(phi, false);
             }
         }
 
-        if (lir != null) {
-            for (Node node : lir.nodesFor(block)) {
-                printNode(node, false);
-            }
-        } else {
-            Node cur = block.getBeginNode();
-            while (true) {
-                printNode(cur, false);
+        Node cur = block.getBeginNode();
+        while (true) {
+            printNode(cur, false);
 
-                if (cur == block.getEndNode()) {
-                    for (Map.Entry<Node, Block> entry : latestScheduling.entries()) {
-                        if (entry.getValue() == block && !inFixedSchedule(entry.getKey()) && !printedNodes.isMarked(entry.getKey())) {
-                            printNode(entry.getKey(), true);
-                        }
+            if (cur == block.getEndNode()) {
+                for (Map.Entry<Node, Block> entry : latestScheduling.entries()) {
+                    if (entry.getValue() == block && !inFixedSchedule(entry.getKey()) && !printedNodes.isMarked(entry.getKey())) {
+                        printNode(entry.getKey(), true);
                     }
-                    break;
                 }
-                assert cur.successors().count() == 1;
-                cur = cur.successors().first();
+                break;
             }
-
+            assert cur.successors().count() == 1;
+            cur = cur.successors().first();
         }
 
         out.enableIndentation();
         end("IR");
+        printedNodes = null;
     }
 
     private void printNode(Node node, boolean unscheduled) {
         assert !printedNodes.isMarked(node);
         printedNodes.mark(node);
 
-        if (!(node instanceof PhiNode)) {
+        if (!(node instanceof ValuePhiNode)) {
             for (Node input : node.inputs()) {
                 if (!inFixedSchedule(input) && !printedNodes.isMarked(input)) {
                     printNode(input, true);
@@ -296,7 +338,7 @@ class CFGPrinter extends CompilationPrinter {
         }
 
         if (unscheduled) {
-            assert lir == null : "unscheduled nodes can only be present before LIR generation";
+            assert lir == null && schedule == null : "unscheduled nodes can only be present before LIR generation";
             out.print("f ").print(HOVER_START).print("u").print(HOVER_SEP).print("unscheduled").print(HOVER_END).println(COLUMN_END);
         } else if (node instanceof FixedWithNextNode) {
             out.print("f ").print(HOVER_START).print("#").print(HOVER_SEP).print("fixed with next").print(HOVER_END).println(COLUMN_END);
@@ -307,8 +349,8 @@ class CFGPrinter extends CompilationPrinter {
         }
         out.print("tid ").print(nodeToString(node)).println(COLUMN_END);
 
-        if (lirGenerator != null) {
-            Value operand = lirGenerator.nodeOperands.get(node);
+        if (nodeLirGenerator != null) {
+            Value operand = nodeLirGenerator.hasOperand(node) ? nodeLirGenerator.operand(node) : null;
             if (operand != null) {
                 out.print("result ").print(operand.toString()).println(COLUMN_END);
             }
@@ -329,11 +371,11 @@ class CFGPrinter extends CompilationPrinter {
             out.print(entry.getKey().toString()).print(": ").print(entry.getValue() == null ? "[null]" : entry.getValue().toString()).println();
         }
         out.println("=== Inputs ===");
-        printNamedNodes(node, node.inputs().iterator(), "", "\n", null);
+        printNamedNodes(node, node.inputPositions().iterator(), "", "\n", null);
         out.println("=== Succesors ===");
-        printNamedNodes(node, node.successors().iterator(), "", "\n", null);
+        printNamedNodes(node, node.successorPositions().iterator(), "", "\n", null);
         out.println("=== Usages ===");
-        if (!node.usages().isEmpty()) {
+        if (!node.hasNoUsages()) {
             for (Node usage : node.usages()) {
                 out.print(nodeToString(usage)).print(" ");
             }
@@ -345,8 +387,8 @@ class CFGPrinter extends CompilationPrinter {
 
         out.print("instruction ");
         out.print(HOVER_START).print(node.getNodeClass().shortName()).print(HOVER_SEP).print(node.getClass().getName()).print(HOVER_END).print(" ");
-        printNamedNodes(node, node.inputs().iterator(), "", "", "#NDF");
-        printNamedNodes(node, node.successors().iterator(), "#", "", "#NDF");
+        printNamedNodes(node, node.inputPositions().iterator(), "", "", "#NDF");
+        printNamedNodes(node, node.successorPositions().iterator(), "#", "", "#NDF");
         for (Map.Entry<Object, Object> entry : props.entrySet()) {
             String key = entry.getKey().toString();
             if (key.startsWith("data.") && !key.equals("data.stamp")) {
@@ -356,22 +398,22 @@ class CFGPrinter extends CompilationPrinter {
         out.print(COLUMN_END).print(' ').println(COLUMN_END);
     }
 
-    private void printNamedNodes(Node node, NodeClassIterator iter, String prefix, String suffix, String hideSuffix) {
+    private void printNamedNodes(Node node, Iterator<Position> iter, String prefix, String suffix, String hideSuffix) {
         int lastIndex = -1;
         while (iter.hasNext()) {
-            Position pos = iter.nextPosition();
-            if (hideSuffix != null && node.getNodeClass().getName(pos).endsWith(hideSuffix)) {
+            Position pos = iter.next();
+            if (hideSuffix != null && pos.getName().endsWith(hideSuffix)) {
                 continue;
             }
 
-            if (pos.index != lastIndex) {
+            if (pos.getIndex() != lastIndex) {
                 if (lastIndex != -1) {
                     out.print(suffix);
                 }
-                out.print(prefix).print(node.getNodeClass().getName(pos)).print(": ");
-                lastIndex = pos.index;
+                out.print(prefix).print(pos.getName()).print(": ");
+                lastIndex = pos.getIndex();
             }
-            out.print(nodeToString(node.getNodeClass().get(node, pos))).print(" ");
+            out.print(nodeToString(pos.get(node))).print(" ");
         }
         if (lastIndex != -1) {
             out.print(suffix);
@@ -382,7 +424,7 @@ class CFGPrinter extends CompilationPrinter {
         StringBuilder buf = new StringBuilder();
         FrameState curState = state;
         do {
-            buf.append(CodeUtil.toLocation(curState.method(), curState.bci)).append('\n');
+            buf.append(Bytecode.toLocation(curState.getCode(), curState.bci)).append('\n');
 
             if (curState.stackSize() > 0) {
                 buf.append("stack: ");
@@ -398,6 +440,12 @@ class CFGPrinter extends CompilationPrinter {
             }
             buf.append("\n");
 
+            buf.append("locks: ");
+            for (int i = 0; i < curState.locksSize(); i++) {
+                buf.append(stateValueToString(curState.lockAt(i))).append(' ');
+            }
+            buf.append("\n");
+
             curState = curState.outerFrameState();
         } while (curState != null);
 
@@ -406,11 +454,10 @@ class CFGPrinter extends CompilationPrinter {
 
     private String stateValueToString(ValueNode value) {
         String result = nodeToString(value);
-        if (lirGenerator != null && lirGenerator.nodeOperands != null && value != null) {
-            Value operand = lirGenerator.nodeOperands.get(value);
-            if (operand != null) {
-                result += ": " + operand;
-            }
+        if (nodeLirGenerator != null && value != null && nodeLirGenerator.hasOperand(value)) {
+            Value operand = nodeLirGenerator.operand(value);
+            assert operand != null;
+            result += ": " + operand;
         }
         return result;
     }
@@ -420,8 +467,11 @@ class CFGPrinter extends CompilationPrinter {
      *
      * @param block the block to print
      */
-    private void printLIR(Block block) {
-        List<LIRInstruction> lirInstructions = block.lir;
+    private void printLIR(AbstractBlockBase<?> block) {
+        if (lir == null) {
+            return;
+        }
+        List<LIRInstruction> lirInstructions = lir.getLIRforBlock(block);
         if (lirInstructions == null) {
             return;
         }
@@ -431,27 +481,37 @@ class CFGPrinter extends CompilationPrinter {
 
         for (int i = 0; i < lirInstructions.size(); i++) {
             LIRInstruction inst = lirInstructions.get(i);
+            printLIRInstruction(inst);
+        }
+        end("IR");
+    }
+
+    private void printLIRInstruction(LIRInstruction inst) {
+        if (inst == null) {
+            out.print("nr   -1 ").print(COLUMN_END).print(" instruction ").print("<deleted>").print(COLUMN_END);
+            out.println(COLUMN_END);
+        } else {
             out.printf("nr %4d ", inst.id()).print(COLUMN_END);
 
-            if (inst.info != null) {
+            final StringBuilder stateString = new StringBuilder();
+            inst.forEachState(state -> {
+                if (state.hasDebugInfo()) {
+                    DebugInfo di = state.debugInfo();
+                    stateString.append(debugInfoToString(di.getBytecodePosition(), di.getReferenceMap(), state.getLiveBasePointers(), di.getCalleeSaveInfo()));
+                } else {
+                    stateString.append(debugInfoToString(state.topFrame, null, state.getLiveBasePointers(), null));
+                }
+            });
+            if (stateString.length() > 0) {
                 int level = out.indentationLevel();
                 out.adjustIndentation(-level);
-                String state;
-                if (inst.info.hasDebugInfo()) {
-                    state = debugInfoToString(inst.info.debugInfo().getBytecodePosition(), inst.info.debugInfo().getRegisterRefMap(), inst.info.debugInfo().getFrameRefMap(), target.arch);
-                } else {
-                    state = debugInfoToString(inst.info.topFrame, null, null, target.arch);
-                }
-                if (state != null) {
-                    out.print(" st ").print(HOVER_START).print("st").print(HOVER_SEP).print(state).print(HOVER_END).print(COLUMN_END);
-                }
+                out.print(" st ").print(HOVER_START).print("st").print(HOVER_SEP).print(stateString.toString()).print(HOVER_END).print(COLUMN_END);
                 out.adjustIndentation(level);
             }
 
             out.print(" instruction ").print(inst.toString()).print(COLUMN_END);
             out.println(COLUMN_END);
         }
-        end("IR");
     }
 
     private String nodeToString(Node node) {
@@ -459,14 +519,14 @@ class CFGPrinter extends CompilationPrinter {
             return "-";
         }
         String prefix;
-        if (node instanceof BeginNode && lir == null) {
+        if (node instanceof AbstractBeginNode && (lir == null && schedule == null)) {
             prefix = "B";
         } else if (node instanceof ValueNode) {
             ValueNode value = (ValueNode) node;
-            if (value.kind() == Kind.Illegal) {
+            if (value.getStackKind() == JavaKind.Illegal) {
                 prefix = "v";
             } else {
-                prefix = String.valueOf(value.kind().typeChar);
+                prefix = String.valueOf(toLowerCase(value.getStackKind().getTypeChar()));
             }
         } else {
             prefix = "?";
@@ -474,91 +534,260 @@ class CFGPrinter extends CompilationPrinter {
         return prefix + node.toString(Verbosity.Id);
     }
 
-    private String blockToString(Block block) {
-        if (lir == null) {
-            // During all the front-end phases, the block schedule is built only for the debug output.
-            // Therefore, the block numbers would be different for every CFG printed -> use the id of the first instruction.
-            return "B" + block.getBeginNode().toString(Verbosity.Id);
+    private String blockToString(AbstractBlockBase<?> block) {
+        if (lir == null && schedule == null && block instanceof Block) {
+            // During all the front-end phases, the block schedule is built only for the debug
+            // output.
+            // Therefore, the block numbers would be different for every CFG printed -> use the id
+            // of the first instruction.
+            return "B" + ((Block) block).getBeginNode().toString(Verbosity.Id);
         } else {
-            // LIR instructions contain references to blocks and these blocks are printed as the blockID -> use the blockID.
+            // LIR instructions contain references to blocks and these blocks are printed as the
+            // blockID -> use the blockID.
             return "B" + block.getId();
         }
     }
 
+    IntervalVisitor intervalVisitor = new IntervalVisitor() {
 
-    public void printIntervals(String label, Interval[] intervals) {
+        /**
+         * @return a formatted description of the operand that the C1Visualizer can handle.
+         */
+        String getFormattedOperand(Value operand) {
+            String s = operand.toString();
+            int last = s.lastIndexOf('|');
+            if (last != -1) {
+                return s.substring(0, last) + "|" + operand.getPlatformKind().getTypeChar();
+            }
+            return s;
+        }
+
+        @Override
+        public void visitIntervalStart(Value parentOperand, Value splitOperand, Value location, Value hint, String typeName) {
+            out.printf("%s %s ", getFormattedOperand(splitOperand), typeName);
+            if (location != null) {
+                out.printf("\"[%s]\"", getFormattedOperand(location));
+            } else {
+                out.printf("\"[%s]\"", getFormattedOperand(splitOperand));
+            }
+            out.printf(" %s %s ", getFormattedOperand(parentOperand), hint != null ? getFormattedOperand(hint) : -1);
+        }
+
+        @Override
+        public void visitRange(int from, int to) {
+            out.printf("[%d, %d[", from, to);
+        }
+
+        @Override
+        public void visitUsePos(int usePos, Object registerPriority) {
+            out.printf("%d %s ", usePos, registerPriority);
+        }
+
+        @Override
+        public void visitIntervalEnd(Object spillState) {
+            out.printf(" \"%s\"", spillState);
+            out.println();
+        }
+
+    };
+
+    public void printIntervals(String label, IntervalDumper intervals) {
         begin("intervals");
         out.println(String.format("name \"%s\"", label));
 
-        for (Interval interval : intervals) {
-            if (interval != null) {
-                printInterval(interval);
-            }
-        }
+        intervals.visitIntervals(intervalVisitor);
 
         end("intervals");
     }
 
-    private void printInterval(Interval interval) {
-        out.printf("%s %s ", interval.operand, (isRegister(interval.operand) ? "fixed" : interval.kind().name()));
-        if (isRegister(interval.operand)) {
-            out.printf("\"[%s|%c]\"", interval.operand, interval.operand.kind.typeChar);
-        } else {
-            if (interval.location() != null) {
-                out.printf("\"[%s|%c]\"", interval.location(), interval.location().kind.typeChar);
+    public void printSchedule(String message, ScheduleResult theSchedule) {
+        schedule = theSchedule;
+        cfg = schedule.getCFG();
+        printedNodes = new NodeBitMap(cfg.graph);
+
+        begin("cfg");
+        out.print("name \"").print(message).println('"');
+        for (Block b : schedule.getCFG().getBlocks()) {
+            if (schedule.nodesFor(b) != null) {
+                printScheduledBlock(b, schedule.nodesFor(b));
+            }
+        }
+        end("cfg");
+
+        schedule = null;
+        cfg = null;
+        printedNodes = null;
+    }
+
+    private void printScheduledBlock(Block block, List<Node> nodesFor) {
+        printBlockProlog(block);
+        begin("IR");
+        out.println("HIR");
+        out.disableIndentation();
+
+        if (block.getBeginNode() instanceof AbstractMergeNode) {
+            // Currently phi functions are not in the schedule, so print them separately here.
+            for (ValueNode phi : ((AbstractMergeNode) block.getBeginNode()).phis()) {
+                printNode(phi, false);
             }
         }
 
-        Interval hint = interval.locationHint(false);
-        out.printf("%s %s ", interval.splitParent().operand, hint != null ? hint.operand : -1);
-
-        // print ranges
-        Range cur = interval.first();
-        while (cur != Range.EndMarker) {
-            out.printf("[%d, %d[", cur.from, cur.to);
-            cur = cur.next;
-            assert cur != null : "range list not closed with range sentinel";
+        for (Node n : nodesFor) {
+            printNode(n, false);
         }
 
-        // print use positions
-        int prev = 0;
-        UsePosList usePosList = interval.usePosList();
-        for (int i = usePosList.size() - 1; i >= 0; --i) {
-            assert prev < usePosList.usePos(i) : "use positions not sorted";
-            out.printf("%d %s ", usePosList.usePos(i), usePosList.registerPriority(i));
-            prev = usePosList.usePos(i);
+        out.enableIndentation();
+        end("IR");
+
+        printBlockEpilog(block);
+    }
+
+    public void printTraces(String label, TraceBuilderResult traces) {
+        begin("cfg");
+        out.print("name \"").print(label).println('"');
+
+        for (Trace trace : traces.getTraces()) {
+            printTrace(trace, traces);
         }
 
-        out.printf(" \"%s\"", interval.spillState());
+        end("cfg");
+    }
+
+    private void printTrace(Trace trace, TraceBuilderResult traceBuilderResult) {
+        printTraceProlog(trace, traceBuilderResult);
+        printTraceInstructions(trace, traceBuilderResult);
+        printTraceEpilog();
+    }
+
+    private void printTraceProlog(Trace trace, TraceBuilderResult traceBuilderResult) {
+        begin("block");
+
+        out.print("name \"").print(traceToString(trace)).println('"');
+        out.println("from_bci -1");
+        out.println("to_bci -1");
+
+        out.print("predecessors ");
+        for (Trace pred : getPredecessors(trace, traceBuilderResult)) {
+            out.print("\"").print(traceToString(pred)).print("\" ");
+        }
         out.println();
-    }
 
-    public void printIntervals(String label, IntervalPrinter.Interval[] intervals) {
-        begin("intervals");
-        out.println(String.format("name \"%s\"", label));
-
-        for (IntervalPrinter.Interval interval : intervals) {
-            printInterval(interval);
+        out.print("successors ");
+        for (Trace succ : getSuccessors(trace, traceBuilderResult)) {
+            // if (!succ.isExceptionEntry()) {
+            out.print("\"").print(traceToString(succ)).print("\" ");
+            // }
         }
+        out.println();
 
-        end("intervals");
+        out.print("xhandlers");
+        // TODO(je) add support for exception handler
+        out.println();
+
+        out.print("flags ");
+        // TODO(je) add support for flags
+        out.println();
+        // TODO(je) add support for loop infos
     }
 
-    private void printInterval(IntervalPrinter.Interval interval) {
-        out.printf("%s %s \"%s\" %s %s ", interval.name, interval.type, interval.description, interval.variable, "no");
-        if (interval.ranges.size() == 0) {
-            // One range is required in the spec, so output a dummy range.
-            out.printf("[0, 0[ ");
-        } else {
-            for (IntervalPrinter.Range range : interval.ranges) {
-                out.printf("[%d, %d[ ", range.from, range.to);
+    private void printTraceInstructions(Trace trace, TraceBuilderResult traceBuilderResult) {
+        if (lir == null) {
+            return;
+        }
+        begin("IR");
+        out.println("LIR");
+
+        for (AbstractBlockBase<?> block : trace.getBlocks()) {
+            List<LIRInstruction> lirInstructions = lir.getLIRforBlock(block);
+            if (lirInstructions == null) {
+                continue;
+            }
+            printBlockInstruction(block, traceBuilderResult);
+            for (int i = 0; i < lirInstructions.size(); i++) {
+                LIRInstruction inst = lirInstructions.get(i);
+                printLIRInstruction(inst);
             }
         }
-        for (IntervalPrinter.UsePosition usePos : interval.uses) {
-            out.printf("%d %s ", usePos.pos, usePos.kind);
-        }
-        out.printf("\"%s\"", "no");
-        out.println();
+        end("IR");
     }
+
+    private void printBlockInstruction(AbstractBlockBase<?> block, TraceBuilderResult traceBuilderResult) {
+        out.print("nr ").print(block.toString()).print(COLUMN_END).print(" instruction ");
+
+        if (block.getPredecessorCount() > 0) {
+            out.print("<- ");
+            printBlockListWithTrace(Arrays.asList(block.getPredecessors()), traceBuilderResult);
+            out.print(" ");
+        }
+        if (block.getSuccessorCount() > 0) {
+            out.print("-> ");
+            printBlockListWithTrace(Arrays.asList(block.getSuccessors()), traceBuilderResult);
+        }
+
+        out.print(COLUMN_END);
+        out.println(COLUMN_END);
+    }
+
+    private void printBlockListWithTrace(List<? extends AbstractBlockBase<?>> blocks, TraceBuilderResult traceBuilderResult) {
+        Iterator<? extends AbstractBlockBase<?>> it = blocks.iterator();
+        printBlockWithTrace(it.next(), traceBuilderResult);
+        while (it.hasNext()) {
+            out.print(",");
+            printBlockWithTrace(it.next(), traceBuilderResult);
+        }
+    }
+
+    private void printBlockWithTrace(AbstractBlockBase<?> block, TraceBuilderResult traceBuilderResult) {
+        out.print(block.toString());
+        out.print("[T").print(traceBuilderResult.getTraceForBlock(block).getId()).print("]");
+    }
+
+    private void printTraceEpilog() {
+        end("block");
+    }
+
+    private static boolean isLoopBackEdge(AbstractBlockBase<?> src, AbstractBlockBase<?> dst) {
+        return dst.isLoopHeader() && dst.getLoop().equals(src.getLoop());
+    }
+
+    private static List<Trace> getSuccessors(Trace trace, TraceBuilderResult traceBuilderResult) {
+        BitSet bs = new BitSet(traceBuilderResult.getTraces().size());
+        for (AbstractBlockBase<?> block : trace.getBlocks()) {
+            for (AbstractBlockBase<?> s : block.getSuccessors()) {
+                Trace otherTrace = traceBuilderResult.getTraceForBlock(s);
+                int otherTraceId = otherTrace.getId();
+                if (trace.getId() != otherTraceId || isLoopBackEdge(block, s)) {
+                    bs.set(otherTraceId);
+                }
+            }
+        }
+        List<Trace> succ = new ArrayList<>();
+        for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i + 1)) {
+            succ.add(traceBuilderResult.getTraces().get(i));
+        }
+        return succ;
+    }
+
+    private static List<Trace> getPredecessors(Trace trace, TraceBuilderResult traceBuilderResult) {
+        BitSet bs = new BitSet(traceBuilderResult.getTraces().size());
+        for (AbstractBlockBase<?> block : trace.getBlocks()) {
+            for (AbstractBlockBase<?> p : block.getPredecessors()) {
+                Trace otherTrace = traceBuilderResult.getTraceForBlock(p);
+                int otherTraceId = otherTrace.getId();
+                if (trace.getId() != otherTraceId || isLoopBackEdge(p, block)) {
+                    bs.set(traceBuilderResult.getTraceForBlock(p).getId());
+                }
+            }
+        }
+        List<Trace> pred = new ArrayList<>();
+        for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i + 1)) {
+            pred.add(traceBuilderResult.getTraces().get(i));
+        }
+        return pred;
+    }
+
+    private static String traceToString(Trace trace) {
+        return new StringBuilder("T").append(trace.getId()).toString();
+    }
+
 }
-
