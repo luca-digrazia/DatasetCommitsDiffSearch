@@ -702,8 +702,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         if (StampTool.isPointerNonNull(object)) {
             return null;
         }
-        return tool.createGuard(before, before.graph().unique(new IsNullNode(object)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, JavaConstant.NULL_POINTER,
-                        true);
+        return tool.createGuard(before, before.graph().unique(new IsNullNode(object)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true);
     }
 
     @Override
