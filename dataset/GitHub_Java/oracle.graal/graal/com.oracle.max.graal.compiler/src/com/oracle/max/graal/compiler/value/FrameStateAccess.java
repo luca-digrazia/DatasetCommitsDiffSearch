@@ -34,6 +34,8 @@ public interface FrameStateAccess {
 
     int locksSize();
 
+    boolean rethrowException();
+
     Value valueAt(int i);
 
     Value localAt(int i);
@@ -42,10 +44,12 @@ public interface FrameStateAccess {
 
     Value stackAt(int i);
 
-    FrameState duplicateWithEmptyStack(int bci);
-
     void setValueAt(int j, Value v);
 
+    void setRethrowException(boolean b);
+
     Value outerFrameState();
+
+    FrameState duplicateWithException(int bci, Value exceptionObject);
 
 }

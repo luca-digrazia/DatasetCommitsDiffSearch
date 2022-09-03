@@ -42,10 +42,12 @@ public class FrameStateBuilder implements FrameStateAccess {
     private final ArrayList<Value> locks;
 
     private int stackIndex;
+    private boolean rethrowException;
 
     private final RiMethod method;
 
     public FrameStateBuilder(RiMethod method, Graph graph) {
+        assert graph != null;
         this.method = method;
         this.graph = graph;
         this.locals = new Value[method.maxLocals()];
@@ -58,7 +60,6 @@ public class FrameStateBuilder implements FrameStateAccess {
         if (!isStatic(method.accessFlags())) {
             // add the receiver and assume it is non null
             Local local = new Local(method.holder().kind(), javaIndex, graph);
-            local.inputs().set(0, graph.start());
             local.setDeclaredType(method.holder());
             storeLocal(javaIndex, local);
             javaIndex = 1;
@@ -71,7 +72,6 @@ public class FrameStateBuilder implements FrameStateAccess {
             RiType type = sig.argumentTypeAt(i, accessingClass);
             CiKind kind = type.kind().stackKind();
             Local local = new Local(kind, index, graph);
-            local.inputs().set(0, graph.start());
             if (type.isResolved()) {
                 local.setDeclaredType(type);
             }
@@ -80,6 +80,11 @@ public class FrameStateBuilder implements FrameStateAccess {
             index++;
         }
         this.locks = new ArrayList<Value>();
+    }
+
+    @Override
+    public String toString() {
+        return String.format("FrameStateBuilder[stackSize=%d]", stackIndex);
     }
 
     public void initializeFrom(FrameState other) {
@@ -97,15 +102,15 @@ public class FrameStateBuilder implements FrameStateAccess {
         for (int i = 0; i < other.locksSize(); i++) {
             locks.add(other.lockAt(i));
         }
+        this.rethrowException = other.rethrowException();
     }
 
     public FrameState create(int bci) {
-        return new FrameState(method, bci, locals, stack, stackIndex, locks, graph);
+        return new FrameState(method, bci, locals, stack, stackIndex, locks, rethrowException, graph);
     }
 
-    @Override
-    public FrameState duplicateWithEmptyStack(int bci) {
-        FrameState frameState = new FrameState(method, bci, locals, new Value[0], 0, locks, graph);
+    public FrameState duplicateWithException(int bci, Value exceptionObject) {
+        FrameState frameState = new FrameState(method, bci, locals, new Value[]{exceptionObject}, 1, locks, true, graph);
         frameState.setOuterFrameState(outerFrameState());
         return frameState;
     }
@@ -503,5 +508,21 @@ public class FrameStateBuilder implements FrameStateAccess {
     @Override
     public FrameState outerFrameState() {
         return null;
+    }
+
+    public FrameState duplicateWithoutStack(int bci) {
+        FrameState frameState = new FrameState(method, bci, locals, new Value[0], 0, locks, false, graph);
+        frameState.setOuterFrameState(outerFrameState());
+        return frameState;
+    }
+
+    @Override
+    public boolean rethrowException() {
+        return rethrowException;
+    }
+
+    @Override
+    public void setRethrowException(boolean b) {
+        rethrowException = b;
     }
 }
