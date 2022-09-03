@@ -58,7 +58,6 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractValueImpl;
  * to evaluate code code should be run in.
  *
  */
-// TODO document that the current context class loader is captured when the engine is created.
 public final class Engine implements AutoCloseable {
 
     private static volatile AbstractPolyglotImpl IMPL;
@@ -289,7 +288,7 @@ public final class Engine implements AutoCloseable {
                 throw new IllegalStateException("The Polyglot API implementation failed to load.");
             }
             return loadedImpl.buildEngine(out, err, in, options, 0, null,
-                            false, 0, useSystemProperties, Thread.currentThread().getContextClassLoader());
+                            false, 0, useSystemProperties);
         }
 
     }
