@@ -70,7 +70,7 @@ import java.util.Collections;
  * </pre>
  */
 
-@TruffleLanguage.Registration(name = RegexLanguage.NAME, id = RegexLanguage.ID, characterMimeTypes = RegexLanguage.MIME_TYPE, version = "0.1", internal = true)
+@TruffleLanguage.Registration(name = RegexLanguage.NAME, id = RegexLanguage.ID, mimeType = RegexLanguage.MIME_TYPE, version = "0.1", internal = true)
 @ProvidedTags(StandardTags.RootTag.class)
 public final class RegexLanguage extends TruffleLanguage<Void> {
 
@@ -83,7 +83,7 @@ public final class RegexLanguage extends TruffleLanguage<Void> {
     private final CallTarget getEngineBuilderCT = Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(engineBuilder));
 
     public static void validateRegex(String pattern, String flags) throws RegexSyntaxException {
-        RegexParser.validate(new RegexSource(pattern, flags));
+        RegexParser.validate(new RegexSource(pattern, RegexFlags.parseFlags(flags)));
     }
 
     @Override
