@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,163 +22,127 @@
  */
 package com.oracle.graal.lir.gen;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.api.meta.Value.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.lir.LIR.*;
-import static com.oracle.graal.lir.LIRValueUtil.*;
+import static com.oracle.graal.lir.LIRValueUtil.asConstant;
+import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
+import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
+import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
+import static com.oracle.graal.lir.LIRValueUtil.isVariable;
+import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
+import static jdk.vm.ci.code.ValueUtil.asAllocatableValue;
+import static jdk.vm.ci.code.ValueUtil.isAllocatableValue;
+import static jdk.vm.ci.code.ValueUtil.isLegal;
+import static jdk.vm.ci.code.ValueUtil.isStackSlot;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.compiler.common.spi.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.asm.Label;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.calc.Condition;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.compiler.common.spi.CodeGenProviders;
+import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
+import com.oracle.graal.compiler.common.spi.LIRKindTool;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.debug.TTY;
+import com.oracle.graal.graph.NodeSourcePosition;
+import com.oracle.graal.lir.ConstantValue;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.LIRVerifier;
+import com.oracle.graal.lir.LabelRef;
+import com.oracle.graal.lir.StandardOp;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
-import com.oracle.graal.lir.StandardOp.NoOp;
-import com.oracle.graal.options.*;
+import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
+import com.oracle.graal.lir.SwitchStrategy;
+import com.oracle.graal.lir.Variable;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionType;
+import com.oracle.graal.options.OptionValue;
+
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterAttributes;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.meta.ValueKind;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
  */
-public abstract class LIRGenerator implements LIRGeneratorTool, PlatformKindTool {
+public abstract class LIRGenerator implements LIRGeneratorTool {
 
     public static class Options {
         // @formatter:off
-        @Option(help = "Print HIR along side LIR as the latter is generated")
+        @Option(help = "Print HIR along side LIR as the latter is generated", type = OptionType.Debug)
         public static final OptionValue<Boolean> PrintIRWithLIR = new OptionValue<>(false);
-        @Option(help = "The trace level for the LIR generator")
+        @Option(help = "The trace level for the LIR generator", type = OptionType.Debug)
         public static final OptionValue<Integer> TraceLIRGeneratorLevel = new OptionValue<>(0);
         // @formatter:on
     }
 
+    private final LIRKindTool lirKindTool;
+
     private final CodeGenProviders providers;
-    private final CallingConvention cc;
 
-    private AbstractBlock<?> currentBlock;
-
-    /**
-     * Handle for an operation that loads a constant into a variable. The operation starts in the
-     * first block where the constant is used but will eventually be
-     * {@linkplain LIRGenerator#insertConstantLoads() moved} to a block dominating all usages of the
-     * constant.
-     */
-    public static class LoadConstant implements Comparable<LoadConstant> {
-        /**
-         * The index of {@link #op} within {@link #block}'s instruction list or -1 if {@code op} is
-         * to be moved to a dominator block.
-         */
-        int index;
-
-        /**
-         * The operation that loads the constant.
-         */
-        private final LIRInstruction op;
-
-        /**
-         * The block that does or will contain {@link #op}. This is initially the block where the
-         * first usage of the constant is seen during LIR generation.
-         */
-        AbstractBlock<?> block;
-
-        /**
-         * The variable into which the constant is loaded.
-         */
-        final Variable variable;
-
-        public LoadConstant(Variable variable, AbstractBlock<?> block, int index, LIRInstruction op) {
-            this.variable = variable;
-            this.block = block;
-            this.index = index;
-            this.op = op;
-        }
-
-        /**
-         * Sorts {@link LoadConstant} objects according to their enclosing blocks. This is used to
-         * group loads per block in {@link LIRGenerator#insertConstantLoads()}.
-         */
-        public int compareTo(LoadConstant o) {
-            if (block.getId() < o.block.getId()) {
-                return -1;
-            }
-            if (block.getId() > o.block.getId()) {
-                return 1;
-            }
-            return 0;
-        }
-
-        @Override
-        public String toString() {
-            return block + "#" + op;
-        }
-
-        /**
-         * Removes the {@link #op} from its original location if it is still at that location.
-         */
-        public void unpin(LIR lir) {
-            if (index >= 0) {
-                // Replace the move with a filler op so that the operation
-                // list does not need to be adjusted.
-                List<LIRInstruction> instructions = lir.getLIRforBlock(block);
-                instructions.set(index, new NoOp(null, -1));
-                index = -1;
-            }
-        }
-
-        public AbstractBlock<?> getBlock() {
-            return block;
-        }
-
-        public void setBlock(AbstractBlock<?> block) {
-            this.block = block;
-        }
-
-        public Variable getVariable() {
-            return variable;
-        }
-
-        public int getIndex() {
-            return index;
-        }
-
-        public void setIndex(int index) {
-            this.index = index;
-        }
-    }
-
-    private Map<Constant, LoadConstant> constantLoads;
+    private AbstractBlockBase<?> currentBlock;
 
     private LIRGenerationResult res;
 
-    /**
-     * Checks whether the supplied constant can be used without loading it into a register for store
-     * operations, i.e., on the right hand side of a memory access.
-     *
-     * @param c The constant to check.
-     * @return True if the constant can be used directly, false if the constant needs to be in a
-     *         register.
-     */
-    public abstract boolean canStoreConstant(Constant c, boolean isCompressed);
+    protected final ArithmeticLIRGenerator arithmeticLIRGen;
+    private final MoveFactory moveFactory;
 
-    public LIRGenerator(CodeGenProviders providers, CallingConvention cc, LIRGenerationResult res) {
+    public LIRGenerator(LIRKindTool lirKindTool, ArithmeticLIRGenerator arithmeticLIRGen, MoveFactory moveFactory, CodeGenProviders providers, LIRGenerationResult res) {
+        this.lirKindTool = lirKindTool;
+        this.arithmeticLIRGen = arithmeticLIRGen;
         this.res = res;
         this.providers = providers;
-        this.cc = cc;
+
+        assert arithmeticLIRGen.lirGen == null;
+        arithmeticLIRGen.lirGen = this;
+        this.moveFactory = moveFactory;
     }
 
-    /**
-     * Returns true if the redundant move elimination optimization should be done after register
-     * allocation.
-     */
-    public boolean canEliminateRedundantMoves() {
-        return true;
+    @Override
+    public ArithmeticLIRGeneratorTool getArithmetic() {
+        return arithmeticLIRGen;
+    }
+
+    @Override
+    public MoveFactory getMoveFactory() {
+        return moveFactory;
+    }
+
+    private MoveFactory spillMoveFactory;
+
+    @Override
+    public MoveFactory getSpillMoveFactory() {
+        if (spillMoveFactory == null) {
+            boolean verify = false;
+            assert (verify = true) == true;
+            if (verify) {
+                spillMoveFactory = new VerifyingMoveFactory(moveFactory);
+            } else {
+                spillMoveFactory = moveFactory;
+            }
+        }
+        return spillMoveFactory;
+    }
+
+    @Override
+    public LIRKind getValueKind(JavaKind javaKind) {
+        return LIRKind.fromJavaKind(target().arch, javaKind);
     }
 
     @Override
@@ -186,6 +150,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool, PlatformKindTool
         return getCodeCache().getTarget();
     }
 
+    @Override
     public CodeGenProviders getProviders() {
         return providers;
     }
@@ -205,33 +170,86 @@ public abstract class LIRGenerator implements LIRGeneratorTool, PlatformKindTool
         return providers.getForeignCalls();
     }
 
+    public LIRKindTool getLIRKindTool() {
+        return lirKindTool;
+    }
+
     /**
-     * Creates a new {@linkplain Variable variable}.
-     *
-     * @param platformKind The kind of the new variable.
-     * @return a new variable
+     * Hide {@link #nextVariable()} from other users.
      */
+    public abstract static class VariableProvider {
+        private int numVariables;
+
+        public int numVariables() {
+            return numVariables;
+        }
+
+        private int nextVariable() {
+            return numVariables++;
+        }
+    }
+
     @Override
-    public Variable newVariable(PlatformKind platformKind) {
-        return new Variable(platformKind, res.getLIR().nextVariable());
+    public Variable newVariable(ValueKind<?> valueKind) {
+        return new Variable(valueKind, ((VariableProvider) res.getLIR()).nextVariable());
     }
 
     @Override
     public RegisterAttributes attributes(Register register) {
-        return res.getFrameMap().registerConfig.getAttributesMap()[register.number];
+        return res.getFrameMapBuilder().getRegisterConfig().getAttributesMap()[register.number];
     }
 
     @Override
-    public abstract Variable emitMove(Value input);
+    public Variable emitMove(Value input) {
+        assert !(input instanceof Variable) : "Creating a copy of a variable via this method is not supported (and potentially a bug): " + input;
+        Variable result = newVariable(input.getValueKind());
+        emitMove(result, input);
+        return result;
+    }
 
+    @Override
+    public void emitMove(AllocatableValue dst, Value src) {
+        append(moveFactory.createMove(dst, src));
+    }
+
+    @Override
+    public void emitMoveConstant(AllocatableValue dst, Constant src) {
+        append(moveFactory.createLoad(dst, src));
+    }
+
+    @Override
+    public Value emitConstant(LIRKind kind, Constant constant) {
+        if (constant instanceof JavaConstant && moveFactory.canInlineConstant((JavaConstant) constant)) {
+            return new ConstantValue(toRegisterKind(kind), constant);
+        } else {
+            return emitLoadConstant(kind, constant);
+        }
+    }
+
+    @Override
+    public Value emitJavaConstant(JavaConstant constant) {
+        return emitConstant(getValueKind(constant.getJavaKind()), constant);
+    }
+
+    @Override
+    public AllocatableValue emitLoadConstant(ValueKind<?> kind, Constant constant) {
+        Variable result = newVariable(kind);
+        emitMoveConstant(result, constant);
+        return result;
+    }
+
+    @Override
     public AllocatableValue asAllocatable(Value value) {
         if (isAllocatableValue(value)) {
             return asAllocatableValue(value);
+        } else if (isConstantValue(value)) {
+            return emitLoadConstant(value.getValueKind(), asConstant(value));
         } else {
             return emitMove(value);
         }
     }
 
+    @Override
     public Variable load(Value value) {
         if (!isVariable(value)) {
             return emitMove(value);
@@ -239,8 +257,9 @@ public abstract class LIRGenerator implements LIRGeneratorTool, PlatformKindTool
         return (Variable) value;
     }
 
+    @Override
     public Value loadNonConst(Value value) {
-        if (isConstant(value) && !canInlineConstant((Constant) value)) {
+        if (isJavaConstant(value) && !moveFactory.canInlineConstant(asJavaConstant(value))) {
             return emitMove(value);
         }
         return value;
@@ -249,6 +268,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool, PlatformKindTool
     /**
      * Determines if only oop maps are required for the code generated from the LIR.
      */
+    @Override
     public boolean needOnlyOopMaps() {
         return false;
     }
@@ -256,27 +276,40 @@ public abstract class LIRGenerator implements LIRGeneratorTool, PlatformKindTool
     /**
      * Gets the ABI specific operand used to return a value of a given kind from a method.
      *
-     * @param kind the kind of value being returned
+     * @param javaKind the kind of value being returned
+     * @param valueKind the backend type of the value being returned
      * @return the operand representing the ABI defined location used return a value of kind
      *         {@code kind}
      */
-    public AllocatableValue resultOperandFor(Kind kind) {
-        if (kind == Kind.Void) {
-            return ILLEGAL;
-        }
-        return res.getFrameMap().registerConfig.getReturnRegister(kind).asValue(kind);
+    @Override
+    public AllocatableValue resultOperandFor(JavaKind javaKind, ValueKind<?> valueKind) {
+        Register reg = res.getFrameMapBuilder().getRegisterConfig().getReturnRegister(javaKind);
+        assert target().arch.canStoreValue(reg.getRegisterCategory(), valueKind.getPlatformKind()) : reg.getRegisterCategory() + " " + valueKind.getPlatformKind();
+        return reg.asValue(valueKind);
     }
 
-    public void append(LIRInstruction op) {
+    NodeSourcePosition currentPosition;
+
+    @Override
+    public void setSourcePosition(NodeSourcePosition position) {
+        currentPosition = position;
+    }
+
+    @Override
+    public <I extends LIRInstruction> I append(I op) {
         if (Options.PrintIRWithLIR.getValue() && !TTY.isSuppressed()) {
             TTY.println(op.toStringWithIdPrefix());
             TTY.println();
         }
         assert LIRVerifier.verify(op);
-        res.getLIR().getLIRforBlock(currentBlock).add(op);
+        List<LIRInstruction> lirForBlock = res.getLIR().getLIRforBlock(getCurrentBlock());
+        op.setPosition(currentPosition);
+        lirForBlock.add(op);
+        return op;
     }
 
-    public boolean hasBlockEnd(AbstractBlock<?> block) {
+    @Override
+    public boolean hasBlockEnd(AbstractBlockBase<?> block) {
         List<LIRInstruction> ops = getResult().getLIR().getLIRforBlock(block);
         if (ops.size() == 0) {
             return false;
@@ -284,75 +317,92 @@ public abstract class LIRGenerator implements LIRGeneratorTool, PlatformKindTool
         return ops.get(ops.size() - 1) instanceof BlockEndOp;
     }
 
-    public final void doBlockStart(AbstractBlock<?> block) {
-        if (Options.PrintIRWithLIR.getValue()) {
-            TTY.print(block.toString());
+    private final class BlockScopeImpl extends BlockScope {
+
+        private BlockScopeImpl(AbstractBlockBase<?> block) {
+            currentBlock = block;
         }
 
-        currentBlock = block;
+        private void doBlockStart() {
+            if (Options.PrintIRWithLIR.getValue()) {
+                TTY.print(currentBlock.toString());
+            }
 
-        // set up the list of LIR instructions
-        assert res.getLIR().getLIRforBlock(block) == null : "LIR list already computed for this block";
-        res.getLIR().setLIRforBlock(block, new ArrayList<LIRInstruction>());
+            // set up the list of LIR instructions
+            assert res.getLIR().getLIRforBlock(currentBlock) == null : "LIR list already computed for this block";
+            res.getLIR().setLIRforBlock(currentBlock, new ArrayList<LIRInstruction>());
 
-        append(new LabelOp(new Label(block.getId()), block.isAligned()));
+            append(new LabelOp(new Label(currentBlock.getId()), currentBlock.isAligned()));
 
-        if (Options.TraceLIRGeneratorLevel.getValue() >= 1) {
-            TTY.println("BEGIN Generating LIR for block B" + block.getId());
+            if (Options.TraceLIRGeneratorLevel.getValue() >= 1) {
+                TTY.println("BEGIN Generating LIR for block B" + currentBlock.getId());
+            }
         }
+
+        private void doBlockEnd() {
+            if (Options.TraceLIRGeneratorLevel.getValue() >= 1) {
+                TTY.println("END Generating LIR for block B" + currentBlock.getId());
+            }
+
+            if (Options.PrintIRWithLIR.getValue()) {
+                TTY.println();
+            }
+            currentBlock = null;
+        }
+
+        @Override
+        public AbstractBlockBase<?> getCurrentBlock() {
+            return currentBlock;
+        }
+
+        @Override
+        public void close() {
+            doBlockEnd();
+        }
+
     }
 
-    public final void doBlockEnd(AbstractBlock<?> block) {
-
-        if (Options.TraceLIRGeneratorLevel.getValue() >= 1) {
-            TTY.println("END Generating LIR for block B" + block.getId());
-        }
-
-        currentBlock = null;
-
-        if (Options.PrintIRWithLIR.getValue()) {
-            TTY.println();
-        }
+    @Override
+    public final BlockScope getBlockScope(AbstractBlockBase<?> block) {
+        BlockScopeImpl blockScope = new BlockScopeImpl(block);
+        blockScope.doBlockStart();
+        return blockScope;
     }
 
+    @Override
     public void emitIncomingValues(Value[] params) {
-        ((LabelOp) res.getLIR().getLIRforBlock(currentBlock).get(0)).setIncomingValues(params);
+        ((LabelOp) res.getLIR().getLIRforBlock(getCurrentBlock()).get(0)).setIncomingValues(params);
     }
 
+    @Override
     public abstract void emitJump(LabelRef label);
 
+    @Override
     public abstract void emitCompareBranch(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
                     double trueDestinationProbability);
 
-    public abstract void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, double overflowProbability);
+    @Override
+    public abstract void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, LIRKind cmpKind, double overflowProbability);
 
+    @Override
     public abstract void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueSuccessorProbability);
 
+    @Override
     public abstract Variable emitConditionalMove(PlatformKind cmpKind, Value leftVal, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue);
 
+    @Override
     public abstract Variable emitIntegerTestMove(Value leftVal, Value right, Value trueValue, Value falseValue);
 
-    protected abstract void emitForeignCall(ForeignCallLinkage linkage, Value result, Value[] arguments, Value[] temps, LIRFrameState info);
-
-    public static AllocatableValue toStackKind(AllocatableValue value) {
-        if (value.getKind().getStackKind() != value.getKind()) {
-            // We only have stack-kinds in the LIR, so convert the operand kind for values from the
-            // calling convention.
-            if (isRegister(value)) {
-                return asRegister(value).asValue(value.getKind().getStackKind());
-            } else if (isStackSlot(value)) {
-                return StackSlot.get(value.getKind().getStackKind(), asStackSlot(value).getRawOffset(), asStackSlot(value).getRawAddFrameSize());
-            } else {
-                throw GraalInternalError.shouldNotReachHere();
-            }
-        }
-        return value;
-    }
+    /**
+     * Emits the single call operation at the heart of generating LIR for a
+     * {@linkplain #emitForeignCall(ForeignCallLinkage, LIRFrameState, Value...) foreign call}.
+     */
+    protected abstract void emitForeignCallOp(ForeignCallLinkage linkage, Value result, Value[] arguments, Value[] temps, LIRFrameState info);
 
     @Override
     public Variable emitForeignCall(ForeignCallLinkage linkage, LIRFrameState frameState, Value... args) {
         LIRFrameState state = null;
-        if (linkage.canDeoptimize()) {
+        if (linkage.needsDebugInfo()) {
             if (frameState != null) {
                 state = frameState;
             } else {
@@ -363,7 +413,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool, PlatformKindTool
 
         // move the arguments into the correct location
         CallingConvention linkageCc = linkage.getOutgoingCallingConvention();
-        res.getFrameMap().callsMethod(linkageCc);
+        res.getFrameMapBuilder().callsMethod(linkageCc);
         assert linkageCc.getArgumentCount() == args.length : "argument count mismatch";
         Value[] argLocations = new Value[args.length];
         for (int i = 0; i < args.length; i++) {
@@ -373,7 +423,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool, PlatformKindTool
             argLocations[i] = loc;
         }
         res.setForeignCall(true);
-        emitForeignCall(linkage, linkageCc.getReturn(), argLocations, linkage.getTemporaries(), state);
+        emitForeignCallOp(linkage, linkageCc.getReturn(), argLocations, linkage.getTemporaries(), state);
 
         if (isLegal(linkageCc.getReturn())) {
             return emitMove(linkageCc.getReturn());
@@ -382,7 +432,8 @@ public abstract class LIRGenerator implements LIRGeneratorTool, PlatformKindTool
         }
     }
 
-    public void emitStrategySwitch(Constant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value) {
+    @Override
+    public void emitStrategySwitch(JavaConstant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value) {
         int keyCount = keyConstants.length;
         SwitchStrategy strategy = SwitchStrategy.getBestStrategy(keyProbabilities, keyConstants, keyTargets);
         long valueRange = keyConstants[keyCount - 1].asLong() - keyConstants[0].asLong() + 1;
@@ -409,186 +460,99 @@ public abstract class LIRGenerator implements LIRGeneratorTool, PlatformKindTool
         }
     }
 
+    @Override
     public abstract void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget);
 
     protected abstract void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key);
 
-    public CallingConvention getCallingConvention() {
-        return cc;
-    }
-
     @Override
     public void beforeRegisterAllocation() {
-        insertConstantLoads();
-    }
-
-    /**
-     * Moves deferred {@linkplain LoadConstant loads} of constants into blocks dominating all usages
-     * of the constant. Any operations inserted into a block are guaranteed to be immediately prior
-     * to the first control flow instruction near the end of the block.
-     */
-    private void insertConstantLoads() {
-        if (constantLoads != null) {
-            // Remove loads where all usages are in the same block.
-            for (Iterator<Map.Entry<Constant, LoadConstant>> iter = constantLoads.entrySet().iterator(); iter.hasNext();) {
-                LoadConstant lc = iter.next().getValue();
-
-                // Move loads of constant outside of loops
-                if (OptScheduleOutOfLoops.getValue()) {
-                    AbstractBlock<?> outOfLoopDominator = lc.block;
-                    while (outOfLoopDominator.getLoop() != null) {
-                        outOfLoopDominator = outOfLoopDominator.getDominator();
-                    }
-                    if (outOfLoopDominator != lc.block) {
-                        lc.unpin(res.getLIR());
-                        lc.block = outOfLoopDominator;
-                    }
-                }
-
-                if (lc.index != -1) {
-                    assert res.getLIR().getLIRforBlock(lc.block).get(lc.index) == lc.op;
-                    iter.remove();
-                }
-            }
-            if (constantLoads.isEmpty()) {
-                return;
-            }
-
-            // Sorting groups the loads per block.
-            LoadConstant[] groupedByBlock = constantLoads.values().toArray(new LoadConstant[constantLoads.size()]);
-            Arrays.sort(groupedByBlock);
-
-            int groupBegin = 0;
-            while (true) {
-                int groupEnd = groupBegin + 1;
-                AbstractBlock<?> block = groupedByBlock[groupBegin].block;
-                while (groupEnd < groupedByBlock.length && groupedByBlock[groupEnd].block == block) {
-                    groupEnd++;
-                }
-                int groupSize = groupEnd - groupBegin;
-
-                List<LIRInstruction> ops = res.getLIR().getLIRforBlock(block);
-                int lastIndex = ops.size() - 1;
-                assert ops.get(lastIndex) instanceof BlockEndOp;
-                int insertionIndex = lastIndex;
-                for (int i = Math.max(0, lastIndex - MAX_EXCEPTION_EDGE_OP_DISTANCE_FROM_END); i < lastIndex; i++) {
-                    if (getExceptionEdge(ops.get(i)) != null) {
-                        insertionIndex = i;
-                        break;
-                    }
-                }
-
-                if (groupSize == 1) {
-                    ops.add(insertionIndex, groupedByBlock[groupBegin].op);
-                } else {
-                    assert groupSize > 1;
-                    List<LIRInstruction> moves = new ArrayList<>(groupSize);
-                    for (int i = groupBegin; i < groupEnd; i++) {
-                        moves.add(groupedByBlock[i].op);
-                    }
-                    ops.addAll(insertionIndex, moves);
-                }
-
-                if (groupEnd == groupedByBlock.length) {
-                    break;
-                }
-                groupBegin = groupEnd;
-            }
-            constantLoads = null;
-        }
     }
 
     /**
      * Gets a garbage value for a given kind.
      */
-    protected Constant zapValueForKind(PlatformKind kind) {
-        long dead = 0xDEADDEADDEADDEADL;
-        switch ((Kind) kind) {
-            case Boolean:
-                return Constant.FALSE;
-            case Byte:
-                return Constant.forByte((byte) dead);
-            case Char:
-                return Constant.forChar((char) dead);
-            case Short:
-                return Constant.forShort((short) dead);
-            case Int:
-                return Constant.forInt((int) dead);
-            case Double:
-                return Constant.forDouble(Double.longBitsToDouble(dead));
-            case Float:
-                return Constant.forFloat(Float.intBitsToFloat((int) dead));
-            case Long:
-                return Constant.forLong(dead);
-            case Object:
-                return Constant.NULL_OBJECT;
-            default:
-                throw new IllegalArgumentException(kind.toString());
-        }
+    protected abstract JavaConstant zapValueForKind(PlatformKind kind);
+
+    @Override
+    public LIRKind getLIRKind(Stamp stamp) {
+        return stamp.getLIRKind(lirKindTool);
     }
 
-    /**
-     * Default implementation: Return the Java stack kind for each stamp.
-     */
-    public PlatformKind getPlatformKind(Stamp stamp) {
-        return stamp.getPlatformKind(this);
-    }
-
-    public PlatformKind getIntegerKind(int bits) {
-        if (bits <= 8) {
-            return Kind.Byte;
-        } else if (bits <= 16) {
-            return Kind.Short;
-        } else if (bits <= 32) {
-            return Kind.Int;
+    protected LIRKind getAddressKind(Value base, long displacement, Value index) {
+        if (LIRKind.isValue(base) && (index.equals(Value.ILLEGAL) || LIRKind.isValue(index))) {
+            return LIRKind.value(target().arch.getWordKind());
+        } else if (base.getValueKind() instanceof LIRKind && base.getValueKind(LIRKind.class).isReference(0) && displacement == 0L && index.equals(Value.ILLEGAL)) {
+            return LIRKind.reference(target().arch.getWordKind());
         } else {
-            assert bits <= 64;
-            return Kind.Long;
+            return LIRKind.unknownReference(target().arch.getWordKind());
         }
     }
 
-    public PlatformKind getFloatingKind(int bits) {
-        switch (bits) {
-            case 32:
-                return Kind.Float;
-            case 64:
-                return Kind.Double;
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
-    public PlatformKind getObjectKind() {
-        return Kind.Object;
-    }
-
-    public abstract void emitBitCount(Variable result, Value operand);
-
-    public abstract void emitBitScanForward(Variable result, Value operand);
-
-    public abstract void emitBitScanReverse(Variable result, Value operand);
-
-    public abstract void emitByteSwap(Variable result, Value operand);
-
-    public abstract void emitArrayEquals(Kind kind, Variable result, Value array1, Value array2, Value length);
-
-    public AbstractBlock<?> getCurrentBlock() {
+    @Override
+    public AbstractBlockBase<?> getCurrentBlock() {
         return currentBlock;
     }
 
-    void setCurrentBlock(AbstractBlock<?> block) {
-        currentBlock = block;
-    }
-
+    @Override
     public LIRGenerationResult getResult() {
         return res;
     }
 
-    public Map<Constant, LoadConstant> getConstantLoads() {
-        return constantLoads;
+    @Override
+    public void emitBlackhole(Value operand) {
+        append(new StandardOp.BlackholeOp(operand));
     }
 
-    public void setConstantLoads(Map<Constant, LoadConstant> constantLoads) {
-        this.constantLoads = constantLoads;
+    @Override
+    public LIRInstruction createBenchmarkCounter(String name, String group, Value increment) {
+        throw GraalError.unimplemented();
+    }
+
+    @Override
+    public LIRInstruction createMultiBenchmarkCounter(String[] names, String[] groups, Value[] increments) {
+        throw GraalError.unimplemented();
+    }
+
+    @Override
+    public abstract SaveRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues);
+
+    @Override
+    public SaveRegistersOp createZapRegisters() {
+        Register[] zappedRegisters = getResult().getFrameMap().getRegisterConfig().getAllocatableRegisters().toArray();
+        JavaConstant[] zapValues = new JavaConstant[zappedRegisters.length];
+        for (int i = 0; i < zappedRegisters.length; i++) {
+            PlatformKind kind = target().arch.getLargestStorableKind(zappedRegisters[i].getRegisterCategory());
+            zapValues[i] = zapValueForKind(kind);
+        }
+        return createZapRegisters(zappedRegisters, zapValues);
+    }
+
+    @Override
+    public abstract LIRInstruction createZapArgumentSpace(StackSlot[] zappedStack, JavaConstant[] zapValues);
+
+    @Override
+    public LIRInstruction zapArgumentSpace() {
+        List<StackSlot> slots = null;
+        for (AllocatableValue arg : res.getCallingConvention().getArguments()) {
+            if (isStackSlot(arg)) {
+                if (slots == null) {
+                    slots = new ArrayList<>();
+                }
+                slots.add((StackSlot) arg);
+            } else {
+                assert !isVirtualStackSlot(arg);
+            }
+        }
+        if (slots == null) {
+            return null;
+        }
+        StackSlot[] zappedStack = slots.toArray(new StackSlot[slots.size()]);
+        JavaConstant[] zapValues = new JavaConstant[zappedStack.length];
+        for (int i = 0; i < zappedStack.length; i++) {
+            PlatformKind kind = zappedStack[i].getPlatformKind();
+            zapValues[i] = zapValueForKind(kind);
+        }
+        return createZapArgumentSpace(zappedStack, zapValues);
     }
 }
