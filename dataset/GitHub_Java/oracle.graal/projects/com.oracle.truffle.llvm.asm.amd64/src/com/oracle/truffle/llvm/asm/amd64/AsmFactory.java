@@ -35,43 +35,41 @@ import java.util.List;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64DeclNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64AddlNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64AndlNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64ImulNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64OrlNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64SallNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64SarlNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64ShllNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64ShrlNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64SublNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64XorlNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64I64BinaryNodeFactory.LLVMAMD64I64ShrlNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64IdivlNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64ImmNode;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64InclNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64ModNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64NotlNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64RdtscNodeGen;
-import com.oracle.truffle.llvm.nodes.base.LLVMStructWriteNode;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory;
-import com.oracle.truffle.llvm.nodes.func.LLVMArgNodeGen;
-import com.oracle.truffle.llvm.nodes.func.LLVMCallNode;
-import com.oracle.truffle.llvm.nodes.func.LLVMInlineAssemblyRootNode;
-import com.oracle.truffle.llvm.nodes.others.LLVMUnsupportedInlineAssemblerNode;
-import com.oracle.truffle.llvm.nodes.others.LLVMUnsupportedInlineAssemblerNode.LLVMI32UnsupportedInlineAssemblerNode;
-import com.oracle.truffle.llvm.nodes.vars.LLVMReadNodeFactory.LLVMAddressReadNodeGen;
-import com.oracle.truffle.llvm.nodes.vars.LLVMReadNodeFactory.LLVMI32ReadNodeGen;
-import com.oracle.truffle.llvm.nodes.vars.LLVMReadNodeFactory.LLVMI64ReadNodeGen;
-import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNode.LLVMWriteAddressNode;
-import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNode.LLVMWriteI64Node;
-import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory;
-import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWriteAddressNodeGen;
-import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWriteI32NodeGen;
-import com.oracle.truffle.llvm.nodes.vars.StructLiteralNode;
-import com.oracle.truffle.llvm.nodes.vars.StructLiteralNode.LLVMI32StructWriteNode;
-import com.oracle.truffle.llvm.parser.api.LLVMBaseType;
+import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.base.LLVMNode;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64DeclNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64AddlNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64AndlNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64ImulNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64OrlNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64SallNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64SarlNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64ShllNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64ShrlNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64SublNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64I32BinaryNodeFactory.LLVMAMD64XorlNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64IdivlNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64ImmNode;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64InclNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64ModNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.asm.LLVMAMD64NotlNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMStructWriteNode;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMArgNodeFactory.LLVMAddressArgNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMArgNodeFactory.LLVMI32ArgNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMInlineAssemblyRootNode;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMUnsupportedInlineAssemblerNode;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMUnsupportedInlineAssemblerNode.LLVMI32UnsupportedInlineAssemblerNode;
+import com.oracle.truffle.llvm.nodes.impl.vars.LLVMReadNodeFactory.LLVMAddressReadNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.vars.LLVMReadNodeFactory.LLVMI32ReadNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.vars.LLVMWriteNode.LLVMWriteAddressNode;
+import com.oracle.truffle.llvm.nodes.impl.vars.LLVMWriteNodeFactory.LLVMWriteAddressNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.vars.LLVMWriteNodeFactory.LLVMWriteI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.vars.StructLiteralNode;
+import com.oracle.truffle.llvm.nodes.impl.vars.StructLiteralNode.LLVMI32StructWriteNode;
+import com.oracle.truffle.llvm.parser.LLVMBaseType;
 
 public class AsmFactory {
 
@@ -79,14 +77,12 @@ public class AsmFactory {
     private static final int HEX = 16;
 
     private FrameDescriptor frameDescriptor;
-    private List<LLVMExpressionNode> statements;
-    private List<LLVMExpressionNode> arguments;
+    private List<LLVMNode> statements;
+    private List<LLVMNode> arguments;
     private List<String> registers;
     private LLVMExpressionNode result;
     private String asmFlags;
     private LLVMBaseType retType;
-    private int[] returnStructOffsets;
-    private LLVMStructWriteNode[] returnStructWriteNodes;
 
     public AsmFactory(String asmFlags, LLVMBaseType retType) {
         this.asmFlags = asmFlags;
@@ -100,26 +96,17 @@ public class AsmFactory {
 
     public LLVMInlineAssemblyRootNode finishInline() {
         getArguments();
-        if (retType == LLVMBaseType.STRUCT) {
-            LLVMExpressionNode structAllocInstr = LLVMArgNodeGen.create(1);
-            FrameSlot returnValueSlot = frameDescriptor.addFrameSlot("returnValue");
-            returnValueSlot.setKind(FrameSlotKind.Object);
-            LLVMWriteAddressNode writeStructAddress = LLVMWriteAddressNodeGen.create(structAllocInstr, returnValueSlot);
-            statements.add(writeStructAddress);
-            LLVMExpressionNode readStructAddress = LLVMAddressReadNodeGen.create(returnValueSlot);
-            result = new StructLiteralNode(returnStructOffsets, returnStructWriteNodes, readStructAddress);
-        }
-        return new LLVMInlineAssemblyRootNode(null, frameDescriptor, statements.toArray(new LLVMExpressionNode[statements.size()]), arguments, result);
+        return new LLVMInlineAssemblyRootNode(null, frameDescriptor, statements.toArray(new LLVMNode[statements.size()]), arguments, result);
     }
 
     public void createBinaryOperation(String operation, String left, String right) {
         FrameSlot leftSlot = frameDescriptor.findFrameSlot(left);
         String rightOperand = (right == null) ? "%eax" : right;
         FrameSlot rightSlot = frameDescriptor.findFrameSlot(rightOperand);
-        LLVMExpressionNode leftNode = (leftSlot != null) ? LLVMI32ReadNodeGen.create(leftSlot) : getImmediateNode(left);
-        LLVMExpressionNode rightNode = LLVMI32ReadNodeGen.create(rightSlot);
+        LLVMI32Node leftNode = (leftSlot != null) ? LLVMI32ReadNodeGen.create(leftSlot) : getImmediateNode(left);
+        LLVMI32Node rightNode = LLVMI32ReadNodeGen.create(rightSlot);
         this.result = LLVMI32ReadNodeGen.create(rightSlot);
-        LLVMExpressionNode opNode = null;
+        LLVMI32Node opNode = null;
         switch (operation) {
             case "addl":
                 opNode = LLVMAMD64AddlNodeGen.create(leftNode, rightNode);
@@ -163,9 +150,9 @@ public class AsmFactory {
 
     public void createUnaryOperation(String operation, String node) {
         FrameSlot slot = frameDescriptor.findFrameSlot(node);
-        LLVMExpressionNode childNode = LLVMI32ReadNodeGen.create(slot);
+        LLVMI32Node childNode = LLVMI32ReadNodeGen.create(slot);
         this.result = LLVMI32ReadNodeGen.create(slot);
-        LLVMExpressionNode opNode = null;
+        LLVMI32Node opNode = null;
         switch (operation) {
             case "notl":
                 opNode = LLVMAMD64NotlNodeGen.create(childNode);
@@ -183,62 +170,44 @@ public class AsmFactory {
         this.statements.add(LLVMWriteI32NodeGen.create(opNode, slot));
     }
 
-    public void createMiscOperation(String operation) {
-
-        switch (operation) {
-            case "rdtsc":
-                createRdtscOperation();
-                break;
-            default:
-                statements.add(new LLVMI32UnsupportedInlineAssemblerNode());
-        }
-    }
-
-    public void createRdtscOperation() {
-        LLVMExpressionNode rdtscCalcNode = LLVMAMD64RdtscNodeGen.create();
-        FrameSlot rdtscFrameSlot = frameDescriptor.addFrameSlot("rdtscSlot");
-        rdtscFrameSlot.setKind(FrameSlotKind.Long);
-        LLVMWriteI64Node writeRdtscNode = LLVMWriteNodeFactory.LLVMWriteI64NodeGen.create(rdtscCalcNode, rdtscFrameSlot);
-        statements.add(writeRdtscNode);
-        // 64 bit TSC value is stored by evenly splitting in eax and edx 32 bit registers
-        LLVMExpressionNode rdtscReadNode = LLVMI64ReadNodeGen.create(rdtscFrameSlot);
-        LLVMExpressionNode constant32Node = new LLVMAMD64ImmNode(LLVMExpressionNode.I32_SIZE_IN_BYTES * Byte.SIZE);
-        LLVMExpressionNode edxNode = LLVMToI32NodeFactory.LLVMI64ToI32NodeGen.create(LLVMAMD64I64ShrlNodeGen.create(constant32Node, rdtscReadNode));
-        LLVMExpressionNode eaxNode = LLVMToI32NodeFactory.LLVMI64ToI32NodeGen.create(rdtscReadNode);
-
-        LLVMI32StructWriteNode eax = new LLVMI32StructWriteNode(eaxNode);
-        LLVMI32StructWriteNode edx = new LLVMI32StructWriteNode(edxNode);
-
-        returnStructOffsets = new int[]{0, LLVMExpressionNode.I32_SIZE_IN_BYTES};
-        returnStructWriteNodes = new LLVMStructWriteNode[]{eax, edx};
-    }
-
-    public void createDivisionOperation(String op, String divisor) {
+    public void createDivisionOperatoin(String op, String divisor) {
         FrameSlot slot = frameDescriptor.findFrameSlot(divisor);
-        LLVMExpressionNode divisorNode = (slot != null) ? LLVMI32ReadNodeGen.create(slot) : getImmediateNode(divisor);
+        LLVMI32Node divisorNode = (slot != null) ? LLVMI32ReadNodeGen.create(slot) : getImmediateNode(divisor);
+        LLVMNode statement = new LLVMI32UnsupportedInlineAssemblerNode();
+        LLVMExpressionNode returnNode = new LLVMI32UnsupportedInlineAssemblerNode();
 
         if (op.equals("idivl")) {
             FrameSlot eaxSlot = frameDescriptor.findFrameSlot("%eax");
-            LLVMExpressionNode eaxNode = LLVMI32ReadNodeGen.create(eaxSlot);
+            LLVMI32Node eaxNode = LLVMI32ReadNodeGen.create(eaxSlot);
             FrameSlot edxSlot = frameDescriptor.findFrameSlot("%edx");
-            LLVMExpressionNode edxNode = LLVMI32ReadNodeGen.create(edxSlot);
-            LLVMExpressionNode divisionNode = LLVMAMD64IdivlNodeGen.create(divisorNode, eaxNode, edxNode);
+            LLVMI32Node edxNode = LLVMI32ReadNodeGen.create(edxSlot);
+            LLVMI32Node divisionNode = LLVMAMD64IdivlNodeGen.create(divisorNode, eaxNode, edxNode);
 
             if (retType == LLVMBaseType.STRUCT) {
-                LLVMExpressionNode remainderNode = LLVMAMD64ModNodeGen.create(divisorNode, eaxNode, edxNode);
+                LLVMI32Node remainderNode = LLVMAMD64ModNodeGen.create(divisorNode, eaxNode, edxNode);
                 LLVMI32StructWriteNode quotient = new LLVMI32StructWriteNode(divisionNode);
                 LLVMI32StructWriteNode remainder = new LLVMI32StructWriteNode(remainderNode);
-                returnStructOffsets = new int[]{0, LLVMExpressionNode.I32_SIZE_IN_BYTES};
-                returnStructWriteNodes = new LLVMStructWriteNode[]{remainder, quotient};
+
+                LLVMExpressionNode structAllocInstr = LLVMAddressArgNodeGen.create(1);
+                FrameSlot returnValueSlot = frameDescriptor.addFrameSlot("returnValue");
+                returnValueSlot.setKind(FrameSlotKind.Object);
+                LLVMWriteAddressNode writeStructAddress = LLVMWriteAddressNodeGen.create(structAllocInstr, returnValueSlot);
+                statements.add(writeStructAddress);
+                LLVMAddressNode readStructAddress = LLVMAddressReadNodeGen.create(returnValueSlot);
+                returnNode = new StructLiteralNode(new int[]{0, LLVMI32Node.BYTE_SIZE}, new LLVMStructWriteNode[]{remainder, quotient}, readStructAddress);
             } else if (retType == LLVMBaseType.I32) {
-                result = divisionNode;
+                returnNode = divisionNode;
             } else {
-                result = new LLVMUnsupportedInlineAssemblerNode();
+                returnNode = new LLVMUnsupportedInlineAssemblerNode();
             }
         } else {
             // TODO: Other div instruction shall go here
-            result = new LLVMI32UnsupportedInlineAssemblerNode();
+            returnNode = new LLVMI32UnsupportedInlineAssemblerNode();
+            statement = returnNode;
+            this.statements.add(statement);
         }
+
+        this.result = returnNode;
     }
 
     protected void addFrameSlot(String reg, LLVMBaseType type) {
@@ -263,7 +232,7 @@ public class AsmFactory {
             if (reg != null) {
                 int index = getRegisterIndex(reg);
                 if (index != 0) {
-                    LLVMExpressionNode node = LLVMArgNodeGen.create(index);
+                    LLVMI32Node node = LLVMI32ArgNodeGen.create(index);
                     FrameSlot slot = frameDescriptor.findFrameSlot(reg);
                     arguments.add(LLVMWriteI32NodeGen.create(node, slot));
                 }
