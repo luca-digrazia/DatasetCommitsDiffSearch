@@ -106,7 +106,6 @@ public class LLVMOptions {
         DEBUG("Debug", "Turns debugging on/off", "false", LLVMOptions::parseBoolean, PropertyCategory.DEBUG),
         PRINT_PERFORMANCE_WARNINGS("PrintPerformanceWarnings", "Prints performance warnings", "false", LLVMOptions::parseBoolean, PropertyCategory.DEBUG),
         PRINT_FUNCTION_ASTS("PrintASTs", "Prints the Truffle ASTs for the parsed functions", "false", LLVMOptions::parseBoolean, PropertyCategory.DEBUG),
-        EXECUTION_COUNT("ExecutionCount", "Execute each program for as many times as specified by this option", "1", LLVMOptions::parseInteger, PropertyCategory.DEBUG),
         /*
          * The boot classpath that should be used to execute the remote JVM when executing the LLVM
          * test suite (and other tests). These rely on comparing output sent to stdout that cannot
@@ -141,7 +140,6 @@ public class LLVMOptions {
                         PropertyCategory.PERFORMANCE),
         OPTIMIZATION_SPECIALIZE_EXPECT_INTRINSIC("SpecializeExpectIntrinsic", "Specialize the llvm.expect intrinsic", "true", LLVMOptions::parseBoolean, PropertyCategory.PERFORMANCE),
         OPTIMIZATION_VALUE_PROFILE_MEMORY_READS("ValueProfileMemoryReads", "Enable value profiling for memory reads", "true", LLVMOptions::parseBoolean, PropertyCategory.PERFORMANCE),
-        OPTIMIZATION_VALUE_PROFILE_FUNCTION_ARGS("ValueProfileFunctionArgs", "Enable value profiling for function arguments", "true", LLVMOptions::parseBoolean, PropertyCategory.PERFORMANCE),
         OPTIMIZATION_INJECT_PROBS_SELECT("InjectProbabilitySelect", "Inject branch probabilities for select", "true", LLVMOptions::parseBoolean, PropertyCategory.PERFORMANCE),
         OPTIMIZATION_INTRINSIFY_C_FUNCTIONS("IntrinsifyCFunctions", "Substitute C functions by Java equivalents where possible", "true", LLVMOptions::parseBoolean, PropertyCategory.PERFORMANCE),
         OPTIMIZATION_INJECT_PROBS_COND_BRANCH("InjectProbabilityBr", "Inject branch probabilities for conditional branches", "true", LLVMOptions::parseBoolean, PropertyCategory.PERFORMANCE),
@@ -343,14 +341,6 @@ public class LLVMOptions {
 
     public static int getInlineCacheSize() {
         return getParsedProperty(Property.OPTIMIZATION_INLINE_CACHE_SIZE);
-    }
-
-    public static int getExecutionCount() {
-        return getParsedProperty(Property.EXECUTION_COUNT);
-    }
-
-    public static boolean valueProfileFunctionArgs() {
-        return getParsedProperty(Property.OPTIMIZATION_VALUE_PROFILE_FUNCTION_ARGS);
     }
 
 }
