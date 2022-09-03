@@ -207,7 +207,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                 receiver = new ParameterNode(javaIndex, receiverStamp);
             }
 
-            locals[javaIndex] = graph.addOrUniqueWithInputs(receiver);
+            locals[javaIndex] = graph.addOrUnique(receiver);
             javaIndex = 1;
             index = 1;
         }
@@ -241,7 +241,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                 param = new ParameterNode(index, stamp);
             }
 
-            locals[javaIndex] = graph.addOrUniqueWithInputs(param);
+            locals[javaIndex] = graph.addOrUnique(param);
             javaIndex++;
             if (kind.needsTwoSlots()) {
                 locals[javaIndex] = TWO_SLOT_MARKER;
