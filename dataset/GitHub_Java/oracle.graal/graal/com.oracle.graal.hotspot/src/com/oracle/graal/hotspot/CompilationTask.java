@@ -284,7 +284,7 @@ public class CompilationTask implements Runnable, Comparable {
                     profile.setCompilerIRSize(StructuredGraph.class, graph.getNodeCount());
                 }
             }
-            stats.finish(method, installedCode);
+            stats.finish(method);
         } catch (BailoutException bailout) {
             BAILOUTS.increment();
             if (ExitVMOnBailout.getValue()) {

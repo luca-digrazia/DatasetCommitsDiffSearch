@@ -199,7 +199,7 @@ public final class HotSpotProfilingInfo extends CompilerObject implements Profil
 
     @Override
     public String toString() {
-        return "HotSpotProfilingInfo<" + this.toString(null, "; ") + ">";
+        return "HotSpotProfilingInfo<" + MetaUtil.profileToString(this, null, "; ") + ">";
     }
 
     @Override
