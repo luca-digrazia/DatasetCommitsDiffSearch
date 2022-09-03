@@ -290,7 +290,8 @@ public final class GraphBuilder {
     private void finishStartBlock(Block startBlock) {
         assert bci() == 0;
         Instruction target = createTargetAt(0, frameState);
-        appendGoto(target);
+        Goto base = new Goto(target, graph);
+        appendWithBCI(base);
     }
 
     public void mergeOrClone(Block target, FrameStateAccess newState) {
@@ -318,8 +319,6 @@ public final class GraphBuilder {
         } else {
             if (!C1XOptions.AssumeVerifiedBytecode && !existingState.isCompatibleWith(newState)) {
                 // stacks or locks do not match--bytecodes would not verify
-                TTY.println(existingState.toString());
-                TTY.println(newState.duplicate(0).toString());
                 throw new CiBailout("stack or locks do not match");
             }
             assert existingState.localsSize() == newState.localsSize();
@@ -428,7 +427,6 @@ public final class GraphBuilder {
             FrameState stateWithException = entryState.duplicateModified(bci, CiKind.Void, exception);
 
             Instruction successor = createTarget(dispatchBlock, stateWithException);
-            //exception.appendNext(successor);
             BlockEnd end = new Goto(successor, graph);
             exception.appendNext(end);
 
@@ -612,7 +610,7 @@ public final class GraphBuilder {
     }
 
     private void genGoto(int fromBCI, int toBCI) {
-        appendGoto(createTargetAt(toBCI, frameState));
+        append(new Goto(createTargetAt(toBCI, frameState), graph));
     }
 
     private void ifNode(Value x, Condition cond, Value y) {
@@ -1067,10 +1065,6 @@ public final class GraphBuilder {
         assert block != null && stateAfter != null;
         assert block.isLoopHeader || block.firstInstruction == null || block.firstInstruction.next() == null : "non-loop block must be iterated after all its predecessors";
 
-        if (block.isExceptionEntry) {
-            assert stateAfter.stackSize() == 1;
-        }
-
         if (block.firstInstruction == null) {
             if (block.isLoopHeader) {
                 block.firstInstruction = new BlockBegin(block.startBci, block.blockID, block.isLoopHeader, graph);
@@ -1171,19 +1165,9 @@ public final class GraphBuilder {
                 deopt.setMessage("unresolved " + block.handler.catchType().name());
                 append(deopt);
                 Instruction nextDispatch = createTarget(block.next, frameState);
-                appendGoto(nextDispatch);
+                append(new Goto(nextDispatch, graph));
             }
         }
-    }
-
-    private void appendGoto(Instruction target) {
-        //lastInstr.appendNext(target);
-        append(new Goto(target, graph));
-    }
-
-    private void appendGoto2(Instruction target) {
-        lastInstr.appendNext(target);
-        //append(new Goto(target, graph));
     }
 
     private void iterateBytecodesForBlock(Block block) {
@@ -1191,6 +1175,7 @@ public final class GraphBuilder {
 
         stream.setBCI(block.startBci);
 
+        BlockEnd end = null;
         int endBCI = stream.endBCI();
         boolean blockStart = true;
 
@@ -1198,10 +1183,10 @@ public final class GraphBuilder {
         while (bci < endBCI) {
             Block nextBlock = blockFromBci[bci];
             if (nextBlock != null && nextBlock != block) {
-                assert !nextBlock.isExceptionEntry;
                 // we fell through to the next block, add a goto and break
                 Instruction next = createTarget(nextBlock, frameState);
-                appendGoto(next);
+                end = new Goto(next, graph);
+                lastInstr = lastInstr.appendNext(end);
                 break;
             }
             // read the opcode
@@ -1211,10 +1196,10 @@ public final class GraphBuilder {
             traceInstruction(bci, opcode, blockStart);
             processBytecode(bci, opcode);
 
-            if (lastInstr instanceof BlockEnd || lastInstr.next() != null) {
+            if (lastInstr instanceof BlockEnd) {
+                end = (BlockEnd) lastInstr;
                 break;
             }
-
             stream.next();
             bci = stream.currentBCI();
             if (lastInstr instanceof StateSplit) {
