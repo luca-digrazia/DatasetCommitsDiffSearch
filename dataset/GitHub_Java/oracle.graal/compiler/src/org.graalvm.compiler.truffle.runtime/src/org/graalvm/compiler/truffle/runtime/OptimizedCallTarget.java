@@ -51,7 +51,6 @@ import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionValues;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -675,26 +674,21 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return profilePolluted;
     }
 
-    void pollutionEvent() {
-        this.polluteProfile(0, new ArrayList<>());
-    }
-
-    private void polluteProfile(int depth, List<RootCallTarget> toPollute) {
-        // TODO: what if compiled?
-        if (knownCallNodes.size() == 0 || compilationProfile.getInterpreterCallCount() == 1 || toPollute.containsAll(Arrays.asList(this, this))) {
+    void polluteProfile(int depth) {
+        if (sourceCallTarget != null) {
+            // Since sourceCallTarget is not null we know this is a split. It has only one call site
+            final OptimizedCallTarget callTarget = (OptimizedCallTarget) knownCallNodes.iterator().next().getRootNode().getCallTarget();
+            callTarget.polluteProfile(depth);
             return;
         }
-        if (knownCallNodes.size() == 1) {
-            toPollute.add(this);
-            final OptimizedCallTarget callTarget = (OptimizedCallTarget) knownCallNodes.iterator().next().getRootNode().getCallTarget();
-            callTarget.polluteProfile(depth, toPollute);
-        } else {
-            for (OptimizedDirectCallNode node : knownCallNodes) {
-                node.setNeedsSplit(true);
-            }
-            profilePolluted = true;
-            for (RootCallTarget target : toPollute) {
-                ((OptimizedCallTarget) target).profilePolluted = true;
+        if (depth < 2) {
+            if (profilePolluted) {
+                for (OptimizedDirectCallNode knownCallNode : knownCallNodes) {
+                    final OptimizedCallTarget callTarget = (OptimizedCallTarget) knownCallNode.getRootNode().getCallTarget();
+                    callTarget.polluteProfile(depth + 1);
+                }
+            } else {
+                profilePolluted = true;
             }
         }
     }
