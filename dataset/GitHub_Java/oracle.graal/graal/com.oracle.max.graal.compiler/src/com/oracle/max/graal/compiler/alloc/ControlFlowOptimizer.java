@@ -25,8 +25,9 @@ package com.oracle.max.graal.compiler.alloc;
 import java.util.*;
 
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.graph.*;
+import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.lir.*;
-import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.sun.cri.ci.*;
 
@@ -36,26 +37,24 @@ import com.sun.cri.ci.*;
 final class ControlFlowOptimizer {
 
     /**
-     * Performs control flow optimizations on the given LIR graph.
-     * @param ir the LIR graph that should be optimized
+     * Performs control flow optimizations on the given IR graph.
+     * @param ir the IR graph that should be optimized
      */
-    public static void optimize(LIR ir, GraalContext context) {
-        ControlFlowOptimizer optimizer = new ControlFlowOptimizer(ir, context);
+    public static void optimize(IR ir) {
+        ControlFlowOptimizer optimizer = new ControlFlowOptimizer(ir);
         List<LIRBlock> code = ir.codeEmittingOrder();
-        //optimizer.reorderShortLoops(code);
+        optimizer.reorderShortLoops(code);
         optimizer.deleteEmptyBlocks(code);
         optimizer.deleteUnnecessaryJumps(code);
         optimizer.deleteJumpsToReturn(code);
     }
 
-    private final LIR ir;
-    private final GraalContext context;
+    private final IR ir;
 
-    private ControlFlowOptimizer(LIR ir, GraalContext context) {
+    private ControlFlowOptimizer(IR ir) {
         this.ir = ir;
-        this.context = context;
     }
-/*
+
     private void reorderShortLoop(List<LIRBlock> code, LIRBlock headerBlock, int headerIdx) {
         int i = headerIdx + 1;
         int maxEnd = Math.min(headerIdx + GraalOptions.MaximumShortLoopSize, code.size());
@@ -77,8 +76,8 @@ final class ControlFlowOptimizer {
                 code.set(endIdx, headerBlock);
             }
         }
-    }*/
-/*
+    }
+
     private void reorderShortLoops(List<LIRBlock> code) {
         for (int i = code.size() - 1; i >= 0; i--) {
             LIRBlock block = code.get(i);
@@ -89,23 +88,24 @@ final class ControlFlowOptimizer {
         }
 
         assert verify(code);
-    }*/
+    }
 
     // only blocks with exactly one successor can be deleted. Such blocks
-    // must always end with an unconditional branch to its successor
+    // must always end with an unconditional branch to this successor
     private boolean canDeleteBlock(LIRBlock block) {
         if (block.numberOfSux() != 1 ||
-            block == ir.startBlock() ||
+            block == ir.startBlock ||
             block.suxAt(0) == block) {
             return false;
         }
 
-        List<LIRInstruction> instructions = block.lir();
+        List<LIRInstruction> instructions = block.lir().instructionsList();
 
         assert instructions.size() >= 2 : "block must have label and branch";
-        assert instructions.get(0).code == StandardOpcode.LABEL : "first instruction must always be a label";
-        assert instructions.get(instructions.size() - 1).code == StandardOpcode.JUMP : "last instruction must always be a branch";
-        assert ((LIRBranch) instructions.get(instructions.size() - 1)).destination().label() == block.suxAt(0).label() : "branch target must be the successor " + ((LIRBranch) instructions.get(instructions.size() - 1)).destination();
+        assert instructions.get(0).code == LIROpcode.Label : "first instruction must always be a label";
+        assert instructions.get(instructions.size() - 1) instanceof LIRBranch : "last instruction must always be a branch but is " + instructions.get(instructions.size() - 1);
+        assert ((LIRBranch) instructions.get(instructions.size() - 1)).cond() == Condition.TRUE : "branch must be unconditional";
+        assert ((LIRBranch) instructions.get(instructions.size() - 1)).block() == block.suxAt(0) : "branch target must be the successor " + ((LIRBranch) instructions.get(instructions.size() - 1)).block();
 
         // block must have exactly one successor
 
@@ -117,14 +117,28 @@ final class ControlFlowOptimizer {
         int newPos = 0;
         int numBlocks = code.size();
 
-        assert verify(code);
         while (oldPos < numBlocks) {
             LIRBlock block = code.get(oldPos);
 
             if (canDeleteBlock(block)) {
+                LIRBlock newTarget = block.suxAt(0);
+
+                // update the block references in any branching LIR instructions
+                for (LIRBlock pred : block.blockPredecessors()) {
+                    for (LIRInstruction instr : pred.lir().instructionsList()) {
+                        if (instr instanceof LIRBranch) {
+                            ((LIRBranch) instr).substitute(block, newTarget);
+                        } else if (instr instanceof LIRTableSwitch) {
+                            ((LIRTableSwitch) instr).substitute(block, newTarget);
+                        } else if (instr instanceof LIRXirInstruction) {
+                            ((LIRXirInstruction) instr).substitute(block, newTarget);
+                        }
+                    }
+                }
+
                 // adjust successor and predecessor lists
-                block.replaceWith(block.suxAt(0));
-                context.metrics.BlocksDeleted++;
+                block.replaceWith(newTarget);
+                GraalMetrics.BlocksDeleted++;
             } else {
                 // adjust position of this block in the block list if blocks before
                 // have been deleted
@@ -145,25 +159,36 @@ final class ControlFlowOptimizer {
         // skip the last block because there a branch is always necessary
         for (int i = code.size() - 2; i >= 0; i--) {
             LIRBlock block = code.get(i);
-            List<LIRInstruction> instructions = block.lir();
+            List<LIRInstruction> instructions = block.lir().instructionsList();
 
             LIRInstruction lastOp = instructions.get(instructions.size() - 1);
-            if (lastOp instanceof LIRBranch) {
+            if (lastOp.code == LIROpcode.Branch) {
+                assert lastOp instanceof LIRBranch : "branch must be of type LIRBranch";
                 LIRBranch lastBranch = (LIRBranch) lastOp;
 
+                if (lastBranch.block() == null) {
+                    // this might target a deoptimization stub...
+                    // TODO check if the target is really a deopt stub...
+//                    assert lastBranch.block() != null : "last branch must always have a block as target, current block #" + block.blockID();
+                    continue;
+                }
+                assert lastBranch.label() == lastBranch.block().label() : "must be equal";
+
                 if (lastBranch.info == null) {
-                    if (lastBranch.destination().label() == code.get(i + 1).label()) {
+                    if (lastBranch.block() == code.get(i + 1)) {
                         // delete last branch instruction
                         Util.truncate(instructions, instructions.size() - 1);
 
                     } else {
                         LIRInstruction prevOp = instructions.get(instructions.size() - 2);
-                        if (prevOp instanceof LIRBranch) {
+                        if (prevOp.code == LIROpcode.Branch || prevOp.code == LIROpcode.CondFloatBranch) {
+                            assert prevOp instanceof LIRBranch : "branch must be of type LIRBranch";
                             LIRBranch prevBranch = (LIRBranch) prevOp;
 
-                            if (prevBranch.destination().label() == code.get(i + 1).label && prevBranch.info == null) {
+                            if (prevBranch.block() == code.get(i + 1) && prevBranch.info == null) {
                                 // eliminate a conditional branch to the immediate successor
-                                prevBranch.negate(lastBranch.destination());
+                                prevBranch.changeBlock(lastBranch.block());
+                                prevBranch.negateCondition();
                                 Util.truncate(instructions, instructions.size() - 1);
                             }
                         }
@@ -178,11 +203,11 @@ final class ControlFlowOptimizer {
     private void deleteJumpsToReturn(List<LIRBlock> code) {
         for (int i = code.size() - 1; i >= 0; i--) {
             LIRBlock block = code.get(i);
-            List<LIRInstruction> curInstructions = block.lir();
+            List<LIRInstruction> curInstructions = block.lir().instructionsList();
             LIRInstruction curLastOp = curInstructions.get(curInstructions.size() - 1);
 
-            assert curInstructions.get(0).code == StandardOpcode.LABEL : "first instruction must always be a label";
-            if (curInstructions.size() == 2 && curLastOp.code == StandardOpcode.RETURN) {
+            assert curInstructions.get(0).code == LIROpcode.Label : "first instruction must always be a label";
+            if (curInstructions.size() == 2 && curLastOp.code == LIROpcode.Return) {
                 // the block contains only a label and a return
                 // if a predecessor ends with an unconditional jump to this block, then the jump
                 // can be replaced with a return instruction
@@ -192,20 +217,23 @@ final class ControlFlowOptimizer {
                 // this may lead to unnecesary return instructions in the final code
 
                 assert curLastOp.info == null : "return instructions do not have debug information";
-                CiValue returnOpr = curLastOp.input(0);
+
+                assert curLastOp instanceof LIROp1 : "return must be LIROp1";
+                CiValue returnOpr = ((LIROp1) curLastOp).operand();
 
                 for (int j = block.numberOfPreds() - 1; j >= 0; j--) {
                     LIRBlock pred = block.predAt(j);
-                    List<LIRInstruction> predInstructions = pred.lir();
+                    List<LIRInstruction> predInstructions = pred.lir().instructionsList();
                     LIRInstruction predLastOp = predInstructions.get(predInstructions.size() - 1);
 
-                    if (predLastOp instanceof LIRBranch) {
+                    if (predLastOp.code == LIROpcode.Branch) {
+                        assert predLastOp instanceof LIRBranch : "branch must be LIRBranch";
                         LIRBranch predLastBranch = (LIRBranch) predLastOp;
 
-                        if (predLastBranch.destination().label() == block.label() && predLastBranch.code == StandardOpcode.JUMP && predLastBranch.info == null) {
+                        if (predLastBranch.block() == block && predLastBranch.cond() == Condition.TRUE && predLastBranch.info == null) {
                             // replace the jump to a return with a direct return
                             // Note: currently the edge between the blocks is not deleted
-                            predInstructions.set(predInstructions.size() - 1, StandardOpcode.RETURN.create(returnOpr));
+                            predInstructions.set(predInstructions.size() - 1, new LIROp1(LIROpcode.Return, returnOpr));
                         }
                     }
                 }
@@ -215,11 +243,21 @@ final class ControlFlowOptimizer {
 
     private boolean verify(List<LIRBlock> code) {
         for (LIRBlock block : code) {
-            for (Block sux : block.getSuccessors()) {
+            List<LIRInstruction> instructions = block.lir().instructionsList();
+
+            for (LIRInstruction instr : instructions) {
+                if (instr instanceof LIRBranch) {
+                    LIRBranch opBranch = (LIRBranch) instr;
+                    assert opBranch.block() == null || opBranch.block().blockID() == -1 || code.contains(opBranch.block()) : "missing successor branch from: " + block + " to: " + opBranch.block();
+                    assert opBranch.unorderedBlock() == null || opBranch.unorderedBlock().blockID() == -1 || code.contains(opBranch.unorderedBlock()) : "missing successor branch from: " + block + " to: " + opBranch.unorderedBlock();
+                }
+            }
+
+            for (LIRBlock sux : block.blockSuccessors()) {
                 assert code.contains(sux) : "missing successor from: " + block + "to: " + sux;
             }
 
-            for (Block pred : block.getPredecessors()) {
+            for (LIRBlock pred : block.blockPredecessors()) {
                 assert code.contains(pred) : "missing predecessor from: " + block + "to: " + pred;
             }
         }
