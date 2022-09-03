@@ -32,7 +32,8 @@ package com.oracle.truffle.llvm.nodes.impl.func;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVM80BitFloatNode;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMDoubleNode;
@@ -51,7 +52,6 @@ import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI32VectorNode;
 import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI64VectorNode;
 import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI8VectorNode;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.types.vector.LLVMDoubleVector;
@@ -182,16 +182,28 @@ public class LLVMArgNode {
     }
 
     @NodeField(name = "index", type = int.class)
-    public abstract static class LLVMAddressArgNode extends LLVMAddressNode {
+    public abstract static class LLVMAddressArgNode extends LLVMExpressionNode {
 
         public abstract int getIndex();
 
-        @Specialization
-        @Override
-        public LLVMAddress executePointee(VirtualFrame frame) {
-            return (LLVMAddress) frame.getArguments()[getIndex()];
+        @Specialization(guards = "isAddress(frame)")
+        public Object executePointee(VirtualFrame frame) {
+            /*
+             * Copying the address objects prevents that otherwise virtualized objects that are used
+             * in a phi together with a materialized passed address object also have to be
+             * materialized.
+             */
+            return ((LLVMAddress) frame.getArguments()[getIndex()]).copy();
         }
 
+        public boolean isAddress(VirtualFrame frame) {
+            return frame.getArguments()[getIndex()] instanceof LLVMAddress;
+        }
+
+        @Specialization
+        public Object executeObject(VirtualFrame frame) {
+            return frame.getArguments()[getIndex()];
+        }
     }
 
     @NodeField(name = "index", type = int.class)
@@ -201,10 +213,9 @@ public class LLVMArgNode {
 
         @Specialization
         @Override
-        public LLVMFunction executeFunction(VirtualFrame frame) {
-            return (LLVMFunction) frame.getArguments()[getIndex()];
+        public TruffleObject executeFunction(VirtualFrame frame) {
+            return (TruffleObject) frame.getArguments()[getIndex()];
         }
-
     }
 
     @NodeField(name = "index", type = int.class)
