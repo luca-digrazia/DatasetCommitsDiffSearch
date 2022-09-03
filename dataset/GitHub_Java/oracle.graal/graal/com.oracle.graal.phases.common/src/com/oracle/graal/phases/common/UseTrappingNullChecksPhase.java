@@ -100,20 +100,20 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
             for (AbstractEndNode end : merge.cfgPredecessors().snapshot()) {
                 ValueNode thisReason = reasons != null ? reasons.get(index) : reason;
                 ValueNode thisSpeculation = speculations != null ? speculations.get(index++) : speculation;
-                if (!thisReason.isConstant() || !thisSpeculation.isConstant() || !thisSpeculation.asConstant().equals(JavaConstant.NULL_POINTER)) {
+                if (!thisReason.isConstant() || !thisSpeculation.isConstant() || !thisSpeculation.asConstant().equals(Constant.NULL_OBJECT)) {
                     continue;
                 }
-                DeoptimizationReason deoptimizationReason = metaAccessProvider.decodeDeoptReason(thisReason.asJavaConstant());
+                DeoptimizationReason deoptimizationReason = metaAccessProvider.decodeDeoptReason(thisReason.asConstant());
                 tryUseTrappingNullCheck(deopt, end.predecessor(), deoptimizationReason, null);
             }
         }
     }
 
-    private static void tryUseTrappingNullCheck(AbstractDeoptimizeNode deopt, Node predecessor, DeoptimizationReason deoptimizationReason, JavaConstant speculation) {
+    private static void tryUseTrappingNullCheck(AbstractDeoptimizeNode deopt, Node predecessor, DeoptimizationReason deoptimizationReason, Constant speculation) {
         if (deoptimizationReason != DeoptimizationReason.NullCheckException && deoptimizationReason != DeoptimizationReason.UnreachedCode) {
             return;
         }
-        if (speculation != null && !speculation.equals(JavaConstant.NULL_POINTER)) {
+        if (speculation != null && !speculation.equals(Constant.NULL_OBJECT)) {
             return;
         }
         if (predecessor instanceof MergeNode) {
@@ -162,7 +162,7 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
         IsNullNode isNullNode = (IsNullNode) condition;
         BeginNode nonTrappingContinuation = ifNode.falseSuccessor();
         BeginNode trappingContinuation = ifNode.trueSuccessor();
-        NullCheckNode trappingNullCheck = deopt.graph().add(new NullCheckNode(isNullNode.getValue()));
+        NullCheckNode trappingNullCheck = deopt.graph().add(NullCheckNode.create(isNullNode.getValue()));
         trappingNullCheck.setStateBefore(deopt.stateBefore());
         deopt.graph().replaceSplit(ifNode, trappingNullCheck, nonTrappingContinuation);
 
@@ -172,7 +172,7 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
          * then remove the Begin from the graph.
          */
         nonTrappingContinuation.replaceAtUsages(InputType.Guard, trappingNullCheck);
-        if (nonTrappingContinuation.getClass() == BeginNode.class) {
+        if (nonTrappingContinuation.getNodeClass().is(BeginNode.class)) {
             FixedNode next = nonTrappingContinuation.next();
             nonTrappingContinuation.clearSuccessors();
             trappingNullCheck.setNext(next);
