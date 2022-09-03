@@ -33,23 +33,29 @@ import com.oracle.truffle.api.interop.TruffleObject;
 
 public final class LLVMTruffleObject {
     private final TruffleObject object;
-    private final long offset;
+    private final int index;
     private final String name;
 
-    public LLVMTruffleObject(TruffleObject object, long offset) {
+    public LLVMTruffleObject(TruffleObject object, int index) {
         this.object = object;
-        this.offset = offset;
+        this.index = index;
         this.name = null;
     }
 
     public LLVMTruffleObject(TruffleObject object, String name) {
         this.object = object;
-        this.offset = 0;
+        this.index = 0;
         this.name = name;
     }
 
-    public long getOffset() {
-        return offset;
+    public LLVMTruffleObject(TruffleObject object) {
+        this.object = object;
+        this.index = 0;
+        this.name = null;
+    }
+
+    public int getIndex() {
+        return index;
     }
 
     public TruffleObject getObject() {

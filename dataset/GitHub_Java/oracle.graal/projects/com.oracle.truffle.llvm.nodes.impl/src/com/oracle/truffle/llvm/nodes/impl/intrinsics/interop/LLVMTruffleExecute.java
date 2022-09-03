@@ -63,7 +63,7 @@ public final class LLVMTruffleExecute {
             args[j] = frame.getArguments()[i];
         }
         try {
-            if (value.getOffset() != 0 || value.getName() != null) {
+            if (value.getIndex() != 0 || value.getName() != null) {
                 throw new IllegalAccessError("Pointee must be unmodified");
             }
             Object rawValue = ForeignAccess.sendExecute(foreignExecute, frame, value.getObject(), args);
@@ -91,12 +91,7 @@ public final class LLVMTruffleExecute {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
             }
-            final Object result = doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-            if (result instanceof String) {
-                return result;
-            } else {
-                return new LLVMTruffleObject((TruffleObject) result);
-            }
+            return new LLVMTruffleObject((TruffleObject) doExecute(frame, foreignExecute, value, toLLVM, expectedType));
         }
     }
 
