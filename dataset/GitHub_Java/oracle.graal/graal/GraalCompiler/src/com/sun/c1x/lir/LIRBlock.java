@@ -29,6 +29,7 @@ import com.sun.c1x.alloc.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.ir.*;
 import com.sun.c1x.util.*;
+import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
 /**
@@ -42,7 +43,7 @@ public final class LIRBlock {
     private List<Instruction> instructions = new ArrayList<Instruction>(4);
     private List<LIRBlock> predecessors = new ArrayList<LIRBlock>(4);
     private List<LIRBlock> successors = new ArrayList<LIRBlock>(4);
-    private List<LIRBlock> exceptionHandlerSuccessors = new ArrayList<LIRBlock>(4);
+    private List<Phi> phis = new ArrayList<Phi>(4);
 
     /**
      * Bit map specifying which {@linkplain OperandPool operands} are live upon entry to this block.
@@ -77,10 +78,6 @@ public final class LIRBlock {
     private int lastLirInstructionID;
     public int blockEntryPco;
 
-    public List<LIRBlock> getExceptionHandlerSuccessors() {
-        return exceptionHandlerSuccessors;
-    }
-
     public LIRBlock(int blockID) {
         this.blockID = blockID;
         loopIndex = -1;
@@ -108,6 +105,7 @@ public final class LIRBlock {
     }
 
     public int loopDepth;
+    public int loopIndex;
 
     public LIRList lir() {
         return lir;
@@ -153,11 +151,6 @@ public final class LIRBlock {
         return successors;
     }
 
-    @Override
-    public String toString() {
-        return "B" + blockID();
-    }
-
     public List<LIRBlock> blockPredecessors() {
         return predecessors;
     }
@@ -168,18 +161,9 @@ public final class LIRBlock {
     }
 
     public int loopIndex() {
-        return loopIndex;
+        // TODO(tw): Set correct loop index.
+        return -1;
     }
-
-    public void setLoopIndex(int v) {
-        loopIndex = v;
-    }
-
-    public void setLoopDepth(int v) {
-        this.loopDepth = v;
-    }
-
-    private int loopIndex;
 
     public Label label() {
         return label;
@@ -188,25 +172,7 @@ public final class LIRBlock {
     private int linearScanNumber = -1;
     private boolean linearScanLoopEnd;
     private boolean linearScanLoopHeader;
-    private boolean exceptionEntry;
-    private boolean backwardBranchTarget;
-
-
-    public void setExceptionEntry(boolean b) {
-        this.exceptionEntry = b;
-    }
-
-    public boolean isExceptionEntry() {
-        return exceptionEntry;
-    }
-
-    public void setBackwardBranchTarget(boolean b) {
-        this.backwardBranchTarget = b;
-    }
-
-    public boolean backwardBranchTarget() {
-        return backwardBranchTarget;
-    }
+    private FrameState stateBefore;
 
     public void setLinearScanNumber(int v) {
         linearScanNumber = v;
@@ -230,6 +196,14 @@ public final class LIRBlock {
 
     public boolean isLinearScanLoopHeader() {
         return linearScanLoopHeader;
+    }
+
+    public void setStateBefore(FrameState stateBefore) {
+        this.stateBefore = stateBefore;
+    }
+
+    public FrameState stateBefore() {
+        return stateBefore;
     }
 
     public void replaceWith(LIRBlock other) {
