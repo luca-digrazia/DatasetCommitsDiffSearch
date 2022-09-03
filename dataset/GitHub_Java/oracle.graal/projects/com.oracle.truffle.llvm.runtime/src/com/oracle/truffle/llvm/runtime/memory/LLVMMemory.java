@@ -47,7 +47,6 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
@@ -348,99 +347,90 @@ public final class LLVMMemory {
         unsafe.putAddress(ptr, ptrValue);
     }
 
-    @ExplodeLoop
-    public LLVMI32Vector getI32Vector(LLVMAddress address, int vectorLength) {
-        int[] vector = new int[vectorLength];
+    public LLVMI32Vector getI32Vector(LLVMAddress address, int size) {
+        int[] vector = new int[size];
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < size; i++) {
             vector[i] = getI32(currentPtr);
             currentPtr += I32_SIZE_IN_BYTES;
         }
         return LLVMI32Vector.create(vector);
     }
 
-    @ExplodeLoop
-    public LLVMI8Vector getI8Vector(LLVMAddress address, int vectorLength) {
-        byte[] vector = new byte[vectorLength];
+    public LLVMI8Vector getI8Vector(LLVMAddress address, int size) {
+        byte[] vector = new byte[size];
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < size; i++) {
             vector[i] = getI8(currentPtr);
             currentPtr += I8_SIZE_IN_BYTES;
         }
         return LLVMI8Vector.create(vector);
     }
 
-    @ExplodeLoop
-    public LLVMI1Vector getI1Vector(LLVMAddress address, int vectorLength) {
-        boolean[] vector = new boolean[vectorLength];
+    public LLVMI1Vector getI1Vector(LLVMAddress address, int size) {
+        boolean[] vector = new boolean[size];
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < size; i++) {
             vector[i] = getI1(currentPtr);
             currentPtr += I1_SIZE_IN_BYTES;
         }
         return LLVMI1Vector.create(vector);
     }
 
-    @ExplodeLoop
-    public LLVMI16Vector getI16Vector(LLVMAddress address, int vectorLength) {
-        short[] vector = new short[vectorLength];
+    public LLVMI16Vector getI16Vector(LLVMAddress address, int size) {
+        short[] vector = new short[size];
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < size; i++) {
             vector[i] = getI16(currentPtr);
             currentPtr += I16_SIZE_IN_BYTES;
         }
         return LLVMI16Vector.create(vector);
     }
 
-    @ExplodeLoop
-    public LLVMI64Vector getI64Vector(LLVMAddress address, int vectorLength) {
-        long[] vector = new long[vectorLength];
+    public LLVMI64Vector getI64Vector(LLVMAddress address, int size) {
+        long[] vector = new long[size];
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < size; i++) {
             vector[i] = getI64(currentPtr);
             currentPtr += I64_SIZE_IN_BYTES;
         }
         return LLVMI64Vector.create(vector);
     }
 
-    @ExplodeLoop
-    public LLVMFloatVector getFloatVector(LLVMAddress address, int vectorLength) {
-        float[] vector = new float[vectorLength];
+    public LLVMFloatVector getFloatVector(LLVMAddress address, int size) {
+        float[] vector = new float[size];
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < size; i++) {
             vector[i] = getFloat(currentPtr);
             currentPtr += FLOAT_SIZE_IN_BYTES;
         }
         return LLVMFloatVector.create(vector);
     }
 
-    @ExplodeLoop
-    public LLVMDoubleVector getDoubleVector(LLVMAddress address, int vectorLength) {
-        double[] vector = new double[vectorLength];
+    public LLVMDoubleVector getDoubleVector(LLVMAddress address, int size) {
+        double[] vector = new double[size];
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < size; i++) {
             vector[i] = getDouble(currentPtr);
             currentPtr += DOUBLE_SIZE_IN_BYTES;
         }
         return LLVMDoubleVector.create(vector);
     }
 
-    @ExplodeLoop
-    public LLVMAddressVector getAddressVector(LLVMAddress address, int vectorLength) {
-        LLVMAddress[] vector = new LLVMAddress[vectorLength];
+    public LLVMAddressVector getAddressVector(LLVMAddress address, int size) {
+        LLVMAddress[] vector = new LLVMAddress[size];
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < size; i++) {
             vector[i] = getAddress(currentPtr);
             currentPtr += ADDRESS_SIZE_IN_BYTES;
         }
         return LLVMAddressVector.create(vector);
     }
 
-    @ExplodeLoop
-    public LLVMFunctionVector getFunctionVector(LLVMAddress address, int vectorLength) {
-        long[] vector = new long[vectorLength];
+    public LLVMFunctionVector getFunctionVector(LLVMAddress address, int size) {
+        long[] vector = new long[size];
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < size; i++) {
             vector[i] = getAddress(currentPtr).getVal();
             currentPtr += ADDRESS_SIZE_IN_BYTES;
         }
@@ -449,91 +439,73 @@ public final class LLVMMemory {
 
     // watch out for casts such as I32* to I32Vector* when changing the way how vectors are
     // implemented
-    @ExplodeLoop
-    public void putVector(LLVMAddress address, LLVMDoubleVector vector, int vectorLength) {
-        assert vector.getLength() == vectorLength;
+    public void putVector(LLVMAddress address, LLVMDoubleVector vector) {
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < vector.getLength(); i++) {
             putDouble(currentPtr, vector.getValue(i));
             currentPtr += DOUBLE_SIZE_IN_BYTES;
         }
     }
 
-    @ExplodeLoop
-    public void putVector(LLVMAddress address, LLVMFloatVector vector, int vectorLength) {
-        assert vector.getLength() == vectorLength;
+    public void putVector(LLVMAddress address, LLVMFloatVector vector) {
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < vector.getLength(); i++) {
             putFloat(currentPtr, vector.getValue(i));
             currentPtr += FLOAT_SIZE_IN_BYTES;
         }
     }
 
-    @ExplodeLoop
-    public void putVector(LLVMAddress address, LLVMI16Vector vector, int vectorLength) {
-        assert vector.getLength() == vectorLength;
+    public void putVector(LLVMAddress address, LLVMI16Vector vector) {
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < vector.getLength(); i++) {
             putI16(currentPtr, vector.getValue(i));
             currentPtr += I16_SIZE_IN_BYTES;
         }
     }
 
-    @ExplodeLoop
-    public void putVector(LLVMAddress address, LLVMI1Vector vector, int vectorLength) {
-        assert vector.getLength() == vectorLength;
+    public void putVector(LLVMAddress address, LLVMI1Vector vector) {
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < vector.getLength(); i++) {
             putI1(currentPtr, vector.getValue(i));
             currentPtr += I1_SIZE_IN_BYTES;
         }
     }
 
-    @ExplodeLoop
-    public void putVector(LLVMAddress address, LLVMI32Vector vector, int vectorLength) {
-        assert vector.getLength() == vectorLength;
+    public void putVector(LLVMAddress address, LLVMI32Vector vector) {
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < vector.getLength(); i++) {
             putI32(currentPtr, vector.getValue(i));
             currentPtr += I32_SIZE_IN_BYTES;
         }
     }
 
-    @ExplodeLoop
-    public void putVector(LLVMAddress address, LLVMI64Vector vector, int vectorLength) {
-        assert vector.getLength() == vectorLength;
+    public void putVector(LLVMAddress address, LLVMI64Vector vector) {
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < vector.getLength(); i++) {
             putI64(currentPtr, vector.getValue(i));
             currentPtr += I64_SIZE_IN_BYTES;
         }
     }
 
-    @ExplodeLoop
-    public void putVector(LLVMAddress address, LLVMI8Vector vector, int vectorLength) {
-        assert vector.getLength() == vectorLength;
+    public void putVector(LLVMAddress address, LLVMI8Vector vector) {
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < vector.getLength(); i++) {
             putI8(currentPtr, vector.getValue(i));
             currentPtr += I8_SIZE_IN_BYTES;
         }
     }
 
-    @ExplodeLoop
-    public void putVector(LLVMAddress address, LLVMAddressVector vector, int vectorLength) {
-        assert vector.getLength() == vectorLength;
+    public void putVector(LLVMAddress address, LLVMAddressVector vector) {
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < vector.getLength(); i++) {
             putAddress(currentPtr, vector.getValue(i));
             currentPtr += ADDRESS_SIZE_IN_BYTES;
         }
     }
 
-    @ExplodeLoop
-    public void putVector(LLVMAddress address, LLVMFunctionVector vector, int vectorLength, LLVMToNativeNode toNative, VirtualFrame frame) {
-        assert vector.getLength() == vectorLength;
+    public void putVector(LLVMAddress address, LLVMFunctionVector vector, LLVMToNativeNode toNative, VirtualFrame frame) {
         long currentPtr = address.getVal();
-        for (int i = 0; i < vectorLength; i++) {
+        for (int i = 0; i < vector.getLength(); i++) {
             putAddress(currentPtr, toNative.executeWithTarget(frame, vector.getValue(i)));
             currentPtr += ADDRESS_SIZE_IN_BYTES;
         }

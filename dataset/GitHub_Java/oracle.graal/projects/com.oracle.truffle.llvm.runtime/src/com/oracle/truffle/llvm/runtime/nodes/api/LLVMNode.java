@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -33,7 +33,6 @@ import java.io.PrintStream;
 
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.instrumentation.StandardTags;
-import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -41,7 +40,7 @@ import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeIntArrayAccess;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 public abstract class LLVMNode extends Node {
@@ -84,13 +83,21 @@ public abstract class LLVMNode extends Node {
         }
     }
 
-    public final UnsafeArrayAccess getUnsafeArrayAccess() {
+    public final UnsafeIntArrayAccess getUnsafeIntArrayAccess() {
         RootNode rootNode = getRootNode();
         if (rootNode != null && rootNode.getLanguage(LLVMLanguage.class) != null) {
-            return rootNode.getLanguage(LLVMLanguage.class).getCapability(UnsafeArrayAccess.class);
+            return rootNode.getLanguage(LLVMLanguage.class).getCapability(UnsafeIntArrayAccess.class);
         } else {
-            return LLVMLanguage.getLanguage().getCapability(UnsafeArrayAccess.class);
+            return LLVMLanguage.getLanguage().getCapability(UnsafeIntArrayAccess.class);
         }
+    }
+
+    protected static PrintStream debugStream(ContextReference<LLVMContext> context) {
+        return SulongEngineOption.getStream(context.get().getEnv().getOptions().get(SulongEngineOption.DEBUG));
+    }
+
+    protected static boolean debugEnabled(ContextReference<LLVMContext> context) {
+        return SulongEngineOption.isTrue(context.get().getEnv().getOptions().get(SulongEngineOption.DEBUG));
     }
 
     protected static PrintStream nativeCallStatisticsStream(ContextReference<LLVMContext> context) {
@@ -101,11 +108,12 @@ public abstract class LLVMNode extends Node {
         return SulongEngineOption.isTrue(context.get().getEnv().getOptions().get(SulongEngineOption.NATIVE_CALL_STATS));
     }
 
-    public boolean hasTag(Class<? extends Tag> tag) {
+    @Override
+    protected boolean isTaggedWith(Class<?> tag) {
         // only nodes that have a SourceSection attached are considered to be tagged by any
         // anything, for sulong only those nodes that actually represent source language statements
         // should have one
-        return tag == StandardTags.StatementTag.class;
+        return tag == StandardTags.StatementTag.class || super.isTaggedWith(tag);
     }
 
     public LLVMSourceLocation getSourceLocation() {
