@@ -53,7 +53,6 @@ import com.oracle.svm.core.posix.PosixUtils;
 import com.oracle.svm.core.posix.headers.Signal;
 import com.oracle.svm.core.posix.headers.Unistd;
 import com.oracle.svm.hosted.server.NativeImageBuildClient;
-import com.oracle.svm.hosted.server.SubstrateServerMessage.ServerCommand;
 
 final class NativeImageServer extends NativeImage {
 
@@ -129,12 +128,15 @@ final class NativeImageServer extends NativeImage {
             return result;
         }
 
-        private int sendRequest(Consumer<String> out, Consumer<String> err, ServerCommand serverCommand, String... args) {
-            List<String> argList = Arrays.asList(args);
+        private int sendRequest(Consumer<String> out, Consumer<String> err, String serverCommand, String... args) {
+            List<String> command = new ArrayList<>();
+            command.add("-port=" + port);
+            command.add("-command=" + serverCommand);
+            command.addAll(Arrays.asList(args));
             showVerboseMessage(verboseServer, "Sending to server [");
-            showVerboseMessage(verboseServer, argList.stream().collect(Collectors.joining(" \\\n")));
+            showVerboseMessage(verboseServer, command.stream().collect(Collectors.joining(" \\\n")));
             showVerboseMessage(verboseServer, "]");
-            int exitCode = NativeImageBuildClient.sendRequest(serverCommand, String.join(" ", argList), port, out, err);
+            int exitCode = NativeImageBuildClient.run(command.toArray(new String[command.size()]), out, err);
             showVerboseMessage(verboseServer, "Server returns: " + exitCode);
             return exitCode;
         }
@@ -164,7 +166,7 @@ final class NativeImageServer extends NativeImage {
                     } catch (IOException e) {
                         showError("Could not read/write into build-request log file", e);
                     }
-                    int requestStatus = sendRequest(System.out::print, System.err::print, ServerCommand.BUILD_IMAGE, command.toArray(new String[command.size()]));
+                    int requestStatus = sendRequest(System.out::print, System.err::print, "build", command.toArray(new String[command.size()]));
                     if (requestStatus != NativeImageBuildClient.EXIT_SUCCESS) {
                         showError("Processing image build request failed");
                     }
@@ -176,7 +178,7 @@ final class NativeImageServer extends NativeImage {
 
         boolean isAlive() {
             StringBuilder sb = new StringBuilder();
-            boolean alive = sendRequest(sb::append, sb::append, ServerCommand.GET_VERSION) == NativeImageBuildClient.EXIT_SUCCESS;
+            boolean alive = sendRequest(sb::append, sb::append, "version") == NativeImageBuildClient.EXIT_SUCCESS;
             showVerboseMessage(verboseServer, "Server version response: " + sb);
             return alive;
         }
@@ -334,7 +336,7 @@ final class NativeImageServer extends NativeImage {
                                 showWarning("Cannot acquire new server port despite removing " + victim);
                             }
                         } else {
-                            showWarning("Native image server limit exceeded. Use options -server{-list,shutdown[-all]} to fix the problem.");
+                            showWarning("Native image server limit. Use options -server{-list,shutdown}-all to fix the problem.");
                         }
                     }
                     if (serverPort >= 0) {

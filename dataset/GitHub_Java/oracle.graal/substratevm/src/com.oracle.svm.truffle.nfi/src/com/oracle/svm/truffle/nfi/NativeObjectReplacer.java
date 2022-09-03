@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,7 +25,7 @@ package com.oracle.svm.truffle.nfi;
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import java.util.IdentityHashMap;
 import java.util.function.Function;
-import org.graalvm.nativeimage.hosted.Feature.DuringSetupAccess;
+import org.graalvm.nativeimage.Feature.DuringSetupAccess;
 
 /**
  * Fields that contain native pointers can not be part of the image heap, because the native
@@ -38,7 +36,7 @@ public final class NativeObjectReplacer implements Function<Object, Object> {
     private final IdentityHashMap<Class<?>, Object> disallowedClasses;
 
     NativeObjectReplacer(DuringSetupAccess access) {
-        disallowedClasses = new IdentityHashMap<>(16);
+        disallowedClasses = new IdentityHashMap<>(15);
         disallowedClasses.put(access.findClassByName("com.oracle.truffle.nfi.impl.ClosureNativePointer"), Boolean.FALSE);
         disallowedClasses.put(access.findClassByName("com.oracle.truffle.nfi.impl.ClosureNativePointer$NativeDestructor"), Boolean.FALSE);
         disallowedClasses.put(access.findClassByName("com.oracle.truffle.nfi.impl.LibFFILibrary"), Boolean.FALSE);
@@ -47,7 +45,6 @@ public final class NativeObjectReplacer implements Function<Object, Object> {
         disallowedClasses.put(access.findClassByName("com.oracle.truffle.nfi.impl.LibFFIType$ArrayType"), Boolean.FALSE);
         disallowedClasses.put(access.findClassByName("com.oracle.truffle.nfi.impl.LibFFIType$ClosureType"), Boolean.FALSE);
         disallowedClasses.put(access.findClassByName("com.oracle.truffle.nfi.impl.LibFFIType$EnvType"), Boolean.FALSE);
-        disallowedClasses.put(access.findClassByName("com.oracle.truffle.nfi.impl.LibFFIType$NullableType"), Boolean.FALSE);
         disallowedClasses.put(access.findClassByName("com.oracle.truffle.nfi.impl.LibFFIType$ObjectType"), Boolean.FALSE);
         disallowedClasses.put(access.findClassByName("com.oracle.truffle.nfi.impl.LibFFIType$SimpleType"), Boolean.FALSE);
         disallowedClasses.put(access.findClassByName("com.oracle.truffle.nfi.impl.LibFFIType$StringType"), Boolean.FALSE);

@@ -27,7 +27,7 @@ import java.io.OutputStreamWriter;
 
 import com.oracle.shadowed.com.google.gson.Gson;
 
-public class SubstrateServerMessage {
+class SubstrateServerMessage {
     ServerCommand command;
     String payload;
 
@@ -35,8 +35,8 @@ public class SubstrateServerMessage {
         /* Needed for GSON use in native-image */
     }
 
-    SubstrateServerMessage(ServerCommand command, String payload) {
-        this.command = command;
+    SubstrateServerMessage(String command, String payload) {
+        this.command = ServerCommand.valueOf(command);
         this.payload = payload;
     }
 
@@ -47,12 +47,12 @@ public class SubstrateServerMessage {
     }
 
     public enum ServerCommand {
-        GET_VERSION,
-        STOP_SERVER,
-        BUILD_IMAGE,
-        ABORT_BUILD,
-        SEND_STATUS,
-        WRITE_ERR,
-        WRITE_OUT
+        version,  // command to get the current version of the server
+        stop,     // stop server command
+        build,    // build image command
+        abort,    // abort compilation
+        s,        // exit status (short name for efficiency)
+        e,        // standard error (short name for efficiency
+        o         // standard output (short name for efficiency)
     }
 }
