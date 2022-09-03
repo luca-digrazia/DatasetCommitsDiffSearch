@@ -877,14 +877,14 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected void genJsr(int dest) {
-                BciBlock successor = currentBlock.getJsrSuccessor();
+                BciBlock successor = currentBlock.jsrSuccessor;
                 assert successor.startBci == dest : successor.startBci + " != " + dest + " @" + bci();
-                JsrScope scope = currentBlock.getJsrScope();
+                JsrScope scope = currentBlock.jsrScope;
                 int nextBci = getStream().nextBCI();
-                if (!successor.getJsrScope().pop().equals(scope)) {
+                if (!successor.jsrScope.pop().equals(scope)) {
                     throw new JsrNotSupportedBailout("unstructured control flow (internal limitation)");
                 }
-                if (successor.getJsrScope().nextReturnAddress() != nextBci) {
+                if (successor.jsrScope.nextReturnAddress() != nextBci) {
                     throw new JsrNotSupportedBailout("unstructured control flow (internal limitation)");
                 }
                 ConstantNode nextBciNode = getJsrConstant(nextBci);
@@ -894,15 +894,15 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected void genRet(int localIndex) {
-                BciBlock successor = currentBlock.getRetSuccessor();
+                BciBlock successor = currentBlock.retSuccessor;
                 ValueNode local = frameState.loadLocal(localIndex);
-                JsrScope scope = currentBlock.getJsrScope();
+                JsrScope scope = currentBlock.jsrScope;
                 int retAddress = scope.nextReturnAddress();
                 ConstantNode returnBciNode = getJsrConstant(retAddress);
                 LogicNode guard = IntegerEqualsNode.create(local, returnBciNode);
                 guard = currentGraph.unique(guard);
                 append(FixedGuardNode.create(guard, JavaSubroutineMismatch, InvalidateReprofile));
-                if (!successor.getJsrScope().equals(scope.pop())) {
+                if (!successor.jsrScope.equals(scope.pop())) {
                     throw new JsrNotSupportedBailout("unstructured control flow (ret leaves more than one scope)");
                 }
                 appendGoto(createTarget(successor, frameState));
@@ -1324,7 +1324,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     traceState();
                     traceInstruction(bci, opcode, bci == block.startBci);
                     if (bci == entryBCI) {
-                        if (block.getJsrScope() != JsrScope.EMPTY_SCOPE) {
+                        if (block.jsrScope != JsrScope.EMPTY_SCOPE) {
                             throw new BailoutException("OSR into a JSR scope is not supported");
                         }
                         EntryMarkerNode x = append(EntryMarkerNode.create());

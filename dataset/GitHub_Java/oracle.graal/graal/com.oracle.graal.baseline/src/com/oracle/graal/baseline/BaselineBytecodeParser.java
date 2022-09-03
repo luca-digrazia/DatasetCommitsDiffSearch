@@ -60,7 +60,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
         BitSet bitSet;
 
         public BciBlockBitMap(BciBlockMapping blockMap) {
-            bitSet = new BitSet(blockMap.getBlocks().length);
+            bitSet = new BitSet(blockMap.blocks.size());
         }
 
         public boolean get(BciBlock block) {
@@ -104,7 +104,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             liveness = blockMap.liveness;
             blockVisited = new BciBlockBitMap(blockMap);
             // add predecessors
-            for (BciBlock block : blockMap.getBlocks()) {
+            for (BciBlock block : blockMap.blocks) {
                 for (BciBlock successor : block.getSuccessors()) {
                     successor.getPredecessors().add(block);
                 }
@@ -129,8 +129,8 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             BaselineControlFlowGraph cfg = BaselineControlFlowGraph.compute(blockMap);
 
             // create the LIR
-            List<? extends AbstractBlock<?>> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blockMap.getBlocks().length, blockMap.startBlock);
-            List<? extends AbstractBlock<?>> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blockMap.getBlocks().length, blockMap.startBlock);
+            List<? extends AbstractBlock<?>> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blockMap.blocks.size(), blockMap.startBlock);
+            List<? extends AbstractBlock<?>> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blockMap.blocks.size(), blockMap.startBlock);
             LIR lir = new LIR(cfg, linearScanOrder, codeEmittingOrder);
 
             RegisterConfig registerConfig = null;
@@ -147,7 +147,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
 
                     // possibly add all the arguments to slots in the local variable array
 
-                    for (BciBlock block : blockMap.getBlocks()) {
+                    for (BciBlock block : blockMap.blocks) {
                         emitBlock(block);
                     }
 

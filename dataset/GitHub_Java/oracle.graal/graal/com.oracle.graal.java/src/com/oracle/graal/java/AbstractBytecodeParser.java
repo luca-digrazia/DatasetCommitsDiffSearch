@@ -1166,8 +1166,8 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
         for (int i = bci + 1; i < stream.nextBCI(); ++i) {
             sb.append(' ').append(stream.readUByte(i));
         }
-        if (!currentBlock.getJsrScope().isEmpty()) {
-            sb.append(' ').append(currentBlock.getJsrScope());
+        if (!currentBlock.jsrScope.isEmpty()) {
+            sb.append(' ').append(currentBlock.jsrScope);
         }
         Debug.log("%s", sb);
     }
