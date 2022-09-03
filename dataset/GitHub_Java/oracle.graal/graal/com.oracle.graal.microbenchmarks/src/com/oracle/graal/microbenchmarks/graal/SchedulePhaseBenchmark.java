@@ -58,7 +58,6 @@ public class SchedulePhaseBenchmark extends GraalBenchmark {
         return result;
     }
 
-    // Checkstyle: stop method name check
     @MethodSpec(declaringClass = SchedulePhaseBenchmark.class, name = "intersectionSnippet")
     public static class IntersectionState_LATEST_OPTIMAL extends ScheduleState {
         public IntersectionState_LATEST_OPTIMAL() {
@@ -94,5 +93,4 @@ public class SchedulePhaseBenchmark extends GraalBenchmark {
     public void intersection_EARLIEST_OPTIMAL(IntersectionState_EARLIEST_OPTIMAL s) {
         s.schedule.apply(s.graph);
     }
-    // Checkstyle: resume method name check
 }

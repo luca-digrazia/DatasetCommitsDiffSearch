@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,18 @@
  */
 package com.oracle.graal.microbenchmarks.graal.util;
 
-import java.lang.reflect.Method;
-import java.util.List;
+import java.lang.reflect.*;
+import java.util.*;
 
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.java.GraphBuilderPhase;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.java.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class GraalUtil {
 
@@ -127,11 +124,7 @@ public class GraalUtil {
     }
 
     public static StructuredGraph getGraph(GraalState graal, ResolvedJavaMethod javaMethod) {
-        return getGraph(graal, javaMethod, StructuredGraph.USE_PROFILING_INFO);
-    }
-
-    public static StructuredGraph getGraph(GraalState graal, ResolvedJavaMethod javaMethod, boolean useProfilingInfo) {
-        StructuredGraph graph = new StructuredGraph(javaMethod, StructuredGraph.AllowAssumptions.YES, useProfilingInfo);
+        StructuredGraph graph = new StructuredGraph(javaMethod, StructuredGraph.AllowAssumptions.YES);
         PhaseSuite<HighTierContext> graphBuilderSuite = new PhaseSuite<>();
         MetaAccessProvider metaAccess = graal.providers.getMetaAccess();
         graphBuilderSuite.appendPhase(new GraphBuilderPhase(GraphBuilderConfiguration.getDefault(new Plugins(new InvocationPlugins(metaAccess)))));
