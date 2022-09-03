@@ -230,6 +230,8 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> ResolveClassBeforeStaticInvoke = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<Boolean> CanOmitFrame = new OptionValue<>(true);
+    @Option(help = "")
+    public static final OptionValue<Integer> SafepointPollOffset = new OptionValue<>(256);
 
     @Option(help = "")
     public static final OptionValue<Boolean> MemoryAwareScheduling = new OptionValue<>(true);
