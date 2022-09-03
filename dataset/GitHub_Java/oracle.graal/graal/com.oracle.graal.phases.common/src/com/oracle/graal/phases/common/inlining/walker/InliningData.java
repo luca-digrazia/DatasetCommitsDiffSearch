@@ -408,11 +408,10 @@ public class InliningData {
         if (info != null) {
             double invokeProbability = callsiteHolder.invokeProbability(invoke);
             double invokeRelevance = callsiteHolder.invokeRelevance(invoke);
-            Assumptions calleeAssumptions = new Assumptions(parentAssumptions.useOptimisticAssumptions());
-            pushInvocation(info, calleeAssumptions, invokeProbability, invokeRelevance);
+            MethodInvocation calleeInvocation = pushInvocation(info, parentAssumptions, invokeProbability, invokeRelevance);
 
             for (int i = 0; i < info.numberOfMethods(); i++) {
-                Inlineable elem = Inlineable.getInlineableElement(info.methodAt(i), info.invoke(), context.replaceAssumptions(calleeAssumptions), canonicalizer);
+                Inlineable elem = Inlineable.getInlineableElement(info.methodAt(i), info.invoke(), context.replaceAssumptions(calleeInvocation.assumptions()), canonicalizer);
                 info.setInlinableElement(i, elem);
                 if (elem instanceof InlineableGraph) {
                     pushGraph(((InlineableGraph) elem).getGraph(), invokeProbability * info.probabilityAt(i), invokeRelevance * info.relevanceAt(i));
@@ -485,11 +484,12 @@ public class InliningData {
         return invocationQueue.peekFirst();
     }
 
-    private void pushInvocation(InlineInfo info, Assumptions calleeAssumptions, double probability, double relevance) {
-        MethodInvocation methodInvocation = new MethodInvocation(info, calleeAssumptions, probability, relevance);
+    private MethodInvocation pushInvocation(InlineInfo info, Assumptions assumptions, double probability, double relevance) {
+        MethodInvocation methodInvocation = new MethodInvocation(info, new Assumptions(assumptions.useOptimisticAssumptions()), probability, relevance);
         invocationQueue.addFirst(methodInvocation);
         maxGraphs += info.numberOfMethods();
         assert graphQueue.size() <= maxGraphs;
+        return methodInvocation;
     }
 
     private void popInvocation() {
