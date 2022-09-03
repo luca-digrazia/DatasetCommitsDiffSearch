@@ -488,9 +488,10 @@ public class StandardGraphBuilderPlugins {
         for (Class<?> c : new Class<?>[]{Node.class, NodeList.class}) {
             r.register2("get" + c.getSimpleName() + "Unsafe", Node.class, long.class, new InvocationPlugin() {
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode node, ValueNode offset) {
-                    UnsafeLoadNode value = b.add(new UnsafeLoadNode(node, offset, JavaKind.Object, LocationIdentity.any()));
-                    value.setStamp(StampFactory.declared(metaAccess.lookupJavaType(c)));
-                    b.addPush(JavaKind.Object, value);
+                    ValueNode value = b.add(new UnsafeLoadNode(node, offset, JavaKind.Object, LocationIdentity.any()));
+                    boolean exactType = false;
+                    boolean nonNull = false;
+                    b.addPush(JavaKind.Object, new PiNode(value, metaAccess.lookupJavaType(c), exactType, nonNull));
                     return true;
                 }
             });

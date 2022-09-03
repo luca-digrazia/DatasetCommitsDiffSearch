@@ -85,7 +85,7 @@ public class StandardOp {
      */
     public static final class LabelOp extends LIRInstruction {
         public static final LIRInstructionClass<LabelOp> TYPE = LIRInstructionClass.create(LabelOp.class);
-        public static final EnumSet<OperandFlag> incomingFlags = EnumSet.of(REG, STACK);
+        private static final EnumSet<OperandFlag> flags = EnumSet.of(REG, STACK);
 
         /**
          * In the LIR, every register and variable must be defined before it is used. For method
@@ -96,6 +96,8 @@ public class StandardOp {
          * instruction of a block, the registers are defined here in the label.
          */
         @Def({REG, STACK}) private Value[] incomingValues;
+        private int size;
+
         private final Label label;
         private final boolean align;
 
@@ -104,16 +106,18 @@ public class StandardOp {
             this.label = label;
             this.align = align;
             this.incomingValues = Value.NO_VALUES;
+            size = 0;
         }
 
         public void setIncomingValues(Value[] values) {
             assert this.incomingValues.length == 0;
             assert values != null;
             this.incomingValues = values;
+            size = values.length;
         }
 
         public int getIncomingSize() {
-            return incomingValues.length;
+            return size;
         }
 
         public Value getIncomingValue(int idx) {
@@ -123,22 +127,22 @@ public class StandardOp {
 
         public void clearIncomingValues() {
             incomingValues = Value.NO_VALUES;
+            size = 0;
         }
 
         public void addIncomingValues(Value[] values) {
-            if (incomingValues.length == 0) {
-                setIncomingValues(values);
-                return;
+            int t = size + values.length;
+            if (t >= incomingValues.length) {
+                Value[] newArray = new Value[t];
+                System.arraycopy(incomingValues, 0, newArray, 0, size);
+                incomingValues = newArray;
             }
-            int t = incomingValues.length + values.length;
-            Value[] newArray = new Value[t];
-            System.arraycopy(incomingValues, 0, newArray, 0, incomingValues.length);
-            System.arraycopy(values, 0, newArray, incomingValues.length, values.length);
-            incomingValues = newArray;
+            System.arraycopy(values, 0, incomingValues, size, values.length);
+            size = t;
         }
 
         private boolean checkRange(int idx) {
-            return idx < incomingValues.length;
+            return idx < size;
         }
 
         @Override
@@ -162,67 +166,64 @@ public class StandardOp {
 
         public void forEachIncomingValue(InstructionValueProcedure proc) {
             for (int i = 0; i < incomingValues.length; i++) {
-                incomingValues[i] = proc.doValue(this, incomingValues[i], OperandMode.DEF, incomingFlags);
+                incomingValues[i] = proc.doValue(this, incomingValues[i], OperandMode.DEF, flags);
             }
         }
     }
 
     public abstract static class AbstractBlockEndOp extends LIRInstruction implements BlockEndOp {
         public static final LIRInstructionClass<AbstractBlockEndOp> TYPE = LIRInstructionClass.create(AbstractBlockEndOp.class);
-        public static final EnumSet<OperandFlag> outgoingFlags = EnumSet.of(REG, STACK, CONST, OUTGOING);
+        private static final EnumSet<OperandFlag> flags = EnumSet.of(REG, STACK, CONST, OUTGOING);
 
         @Alive({REG, STACK, CONST, OUTGOING}) private Value[] outgoingValues;
+        private int size;
 
         protected AbstractBlockEndOp(LIRInstructionClass<? extends AbstractBlockEndOp> c) {
             super(c);
             this.outgoingValues = Value.NO_VALUES;
+            size = 0;
         }
 
-        @Override
         public void setOutgoingValues(Value[] values) {
             assert this.outgoingValues.length == 0;
             assert values != null;
             this.outgoingValues = values;
+            size = values.length;
         }
 
-        @Override
         public int getOutgoingSize() {
-            return outgoingValues.length;
+            return size;
         }
 
-        @Override
         public Value getOutgoingValue(int idx) {
             assert checkRange(idx);
             return outgoingValues[idx];
         }
 
-        @Override
         public void clearOutgoingValues() {
             outgoingValues = Value.NO_VALUES;
+            size = 0;
         }
 
-        @Override
         public int addOutgoingValues(Value[] values) {
-            if (outgoingValues.length == 0) {
-                setOutgoingValues(values);
-                return values.length;
+            int t = size + values.length;
+            if (t >= outgoingValues.length) {
+                Value[] newArray = new Value[t];
+                System.arraycopy(outgoingValues, 0, newArray, 0, size);
+                outgoingValues = newArray;
             }
-            int t = outgoingValues.length + values.length;
-            Value[] newArray = new Value[t];
-            System.arraycopy(outgoingValues, 0, newArray, 0, outgoingValues.length);
-            System.arraycopy(values, 0, newArray, outgoingValues.length, values.length);
-            outgoingValues = newArray;
+            System.arraycopy(values, 0, outgoingValues, size, values.length);
+            size = t;
             return t;
         }
 
         private boolean checkRange(int idx) {
-            return idx < outgoingValues.length;
+            return idx < size;
         }
 
-        @Override
         public void forEachOutgoingValue(InstructionValueProcedure proc) {
             for (int i = 0; i < outgoingValues.length; i++) {
-                outgoingValues[i] = proc.doValue(this, outgoingValues[i], OperandMode.ALIVE, outgoingFlags);
+                outgoingValues[i] = proc.doValue(this, outgoingValues[i], OperandMode.ALIVE, flags);
             }
         }
     }
