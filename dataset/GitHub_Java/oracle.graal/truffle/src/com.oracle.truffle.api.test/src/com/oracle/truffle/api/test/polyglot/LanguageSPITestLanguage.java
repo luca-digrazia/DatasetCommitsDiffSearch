@@ -52,16 +52,12 @@ public class LanguageSPITestLanguage extends TruffleLanguage<LanguageContext> {
 
     @Override
     protected CallTarget parse(ParsingRequest request) throws Exception {
-        CallTarget target = null;
         if (runinside != null) {
             try {
-                target = runinside.call();
+                return runinside.call();
             } finally {
                 runinside = null;
             }
-        }
-        if (target != null) {
-            return target;
         }
         return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(42));
     }
