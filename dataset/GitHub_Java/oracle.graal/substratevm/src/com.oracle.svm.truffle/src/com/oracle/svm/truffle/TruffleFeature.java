@@ -206,7 +206,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
     private static void initializeTruffleReflectively(ClassLoader imageClassLoader) {
         invokeStaticMethod("com.oracle.truffle.api.vm.LanguageCache", "initializeNativeImageState", Collections.singletonList(ClassLoader.class), imageClassLoader);
         invokeStaticMethod("com.oracle.truffle.api.vm.InstrumentCache", "initializeNativeImageState", Collections.singletonList(ClassLoader.class), imageClassLoader);
-        invokeStaticMethod("com.oracle.truffle.api.impl.TruffleLocator", "initializeNativeImageState", Collections.emptyList());
     }
 
     public static void removeTruffleLanguage(String mimeType) {
@@ -246,7 +245,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         TruffleRuntime runtime = Truffle.getRuntime();
         UserError.guarantee(runtime != null, "TruffleRuntime not available via Truffle.getRuntime()");
         UserError.guarantee(runtime instanceof SubstrateTruffleRuntime || runtime instanceof DefaultTruffleRuntime,
-                        "Unsupported TruffleRuntime " + runtime.getClass().getName() + " (only SubstrateTruffleRuntime or DefaultTruffleRuntime allowed)");
+                        "Unsupported TruffleRuntime " + runtime.getName() + " (only SubstrateTruffleRuntime or DefaultTruffleRuntime allowed)");
 
         if (useTruffleCompiler()) {
             SubstrateTruffleRuntime truffleRuntime = (SubstrateTruffleRuntime) runtime;
@@ -285,7 +284,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         invokeStaticMethod("com.oracle.truffle.api.vm.InstrumentCache", "resetNativeImageState", Collections.emptyList());
         invokeStaticMethod("com.oracle.truffle.api.vm.PolyglotRootNode", "resetNativeImageState", Collections.emptyList());
         invokeStaticMethod("org.graalvm.polyglot.Engine$ImplHolder", "resetPreInitializedEngine", Collections.emptyList());
-        invokeStaticMethod("com.oracle.truffle.api.impl.TruffleLocator", "resetNativeImageState", Collections.emptyList());
+
     }
 
     public static boolean useTruffleCompiler() {
