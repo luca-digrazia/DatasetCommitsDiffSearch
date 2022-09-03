@@ -28,10 +28,9 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.truffle.nodes.*;
-import com.oracle.graal.truffle.nodes.typesystem.*;
 import com.oracle.truffle.api.*;
 
 @ClassSubstitution(CompilerDirectives.class)
@@ -40,11 +39,6 @@ public class CompilerDirectivesSubstitutions {
     @MethodSubstitution
     public static void transferToInterpreter() {
         DeoptimizeNode.deopt(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.UnreachedCode);
-    }
-
-    @MethodSubstitution
-    public static boolean inInterpreter() {
-        return false;
     }
 
     @MethodSubstitution
@@ -64,12 +58,6 @@ public class CompilerDirectivesSubstitutions {
     @MacroSubstitution(macro = BailoutNode.class, isStatic = true)
     public static native void bailout(String reason);
 
-    @MacroSubstitution(macro = TypeCastMacroNode.class, isStatic = true)
-    public static native Object unsafeCast(Object value, Class clazz, Object receiver, Object customType);
-
-    @MacroSubstitution(macro = CustomTypeCheckMacroNode.class, isStatic = true)
-    public static native boolean customTypeCheck(boolean condition, Object value, Object customType);
-
-    @MacroSubstitution(macro = UnsafeCustomizationMacroNode.class, isStatic = true)
-    public static native Object unsafeCustomization(Object receiver, Object customType, Object locationIdentity);
+    @MacroSubstitution(macro = UnsafeCastMacroNode.class, isStatic = true)
+    public static native Object unsafeCast(Object value, Class clazz);
 }
