@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import java.io.*;
 import java.util.function.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
@@ -39,12 +38,9 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements ArithmeticLIRLowerable {
 
-    protected interface SerializableBinaryFunction<T> extends Function<ArithmeticOpTable, BinaryOp<T>>, Serializable {
-    }
+    protected final Function<ArithmeticOpTable, BinaryOp<OP>> getOp;
 
-    protected final SerializableBinaryFunction<OP> getOp;
-
-    public BinaryArithmeticNode(SerializableBinaryFunction<OP> getOp, ValueNode x, ValueNode y) {
+    public BinaryArithmeticNode(Function<ArithmeticOpTable, BinaryOp<OP>> getOp, ValueNode x, ValueNode y) {
         super(getOp.apply(ArithmeticOpTable.forStamp(x.stamp())).foldStamp(x.stamp(), y.stamp()), x, y);
         this.getOp = getOp;
     }
@@ -74,27 +70,27 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
     }
 
     public static AddNode add(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        return graph.unique(new AddNode(v1, v2));
+        return graph.unique(AddNode.create(v1, v2));
     }
 
     public static AddNode add(ValueNode v1, ValueNode v2) {
-        return new AddNode(v1, v2);
+        return AddNode.create(v1, v2);
     }
 
     public static MulNode mul(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        return graph.unique(new MulNode(v1, v2));
+        return graph.unique(MulNode.create(v1, v2));
     }
 
     public static MulNode mul(ValueNode v1, ValueNode v2) {
-        return new MulNode(v1, v2);
+        return MulNode.create(v1, v2);
     }
 
     public static SubNode sub(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        return graph.unique(new SubNode(v1, v2));
+        return graph.unique(SubNode.create(v1, v2));
     }
 
     public static SubNode sub(ValueNode v1, ValueNode v2) {
-        return new SubNode(v1, v2);
+        return SubNode.create(v1, v2);
     }
 
     private enum ReassociateMatch {
@@ -224,11 +220,11 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
         } else if (node instanceof MulNode) {
             return BinaryArithmeticNode.mul(a, AddNode.mul(m1, m2));
         } else if (node instanceof AndNode) {
-            return new AndNode(a, new AndNode(m1, m2));
+            return AndNode.create(a, AndNode.create(m1, m2));
         } else if (node instanceof OrNode) {
-            return new OrNode(a, new OrNode(m1, m2));
+            return OrNode.create(a, OrNode.create(m1, m2));
         } else if (node instanceof XorNode) {
-            return new XorNode(a, new XorNode(m1, m2));
+            return XorNode.create(a, XorNode.create(m1, m2));
         } else {
             throw GraalInternalError.shouldNotReachHere();
         }
