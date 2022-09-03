@@ -84,18 +84,16 @@ public final class FixedGuardNode extends DeoptimizingFixedWithNextNode implemen
     public void simplify(SimplifierTool tool) {
         if (condition instanceof LogicConstantNode) {
             LogicConstantNode c = (LogicConstantNode) condition;
-            if (c.getValue() == negated) {
-                FixedNode next = this.next();
-                if (next != null) {
-                    tool.deleteBranch(next);
-                }
-
+            if (c.getValue() != negated) {
+                this.replaceAtUsages(BeginNode.prevBegin(this));
+                graph().removeFixed(this);
+            } else {
+                FixedWithNextNode predecessor = (FixedWithNextNode) predecessor();
                 DeoptimizeNode deopt = graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, reason));
                 deopt.setDeoptimizationState(getDeoptimizationState());
-                setNext(deopt);
+                tool.deleteBranch(this);
+                predecessor.setNext(deopt);
             }
-            this.replaceAtUsages(BeginNode.prevBegin(this));
-            graph().removeFixed(this);
         }
     }
 
