@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -65,7 +65,7 @@ import com.oracle.graal.nodes.calc.ReinterpretNode;
 import com.oracle.graal.nodes.calc.SignExtendNode;
 import com.oracle.graal.nodes.calc.UnsignedRightShiftNode;
 import com.oracle.graal.nodes.calc.ZeroExtendNode;
-import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.nodes.extended.UnsafeCastNode;
 import com.oracle.graal.nodes.memory.Access;
 import com.oracle.graal.nodes.memory.WriteNode;
 
@@ -112,13 +112,21 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
         }
     }
 
+    protected ValueNode uncast(ValueNode value) {
+        if (value instanceof UnsafeCastNode) {
+            UnsafeCastNode cast = (UnsafeCastNode) value;
+            return cast.getOriginalNode();
+        }
+        return value;
+    }
+
     protected ComplexMatchResult emitCompareBranchMemory(IfNode ifNode, CompareNode compare, ValueNode value, Access access) {
         Condition cond = compare.condition();
         AMD64Kind kind = getMemoryKind(access);
 
         if (value.isConstant()) {
             JavaConstant constant = value.asJavaConstant();
-            if (constant != null && kind == AMD64Kind.QWORD && !constant.getJavaKind().isObject() && !NumUtil.isInt(constant.asLong())) {
+            if (constant != null && kind == AMD64Kind.QWORD && !NumUtil.isInt(constant.asLong())) {
                 // Only imm32 as long
                 return null;
             }
@@ -131,14 +139,21 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
         // emitCompareBranchMemory expects the memory on the right, so mirror the condition if
         // that's not true. It might be mirrored again the actual compare is emitted but that's
         // ok.
-        Condition finalCondition = GraphUtil.unproxify(compare.getX()) == access ? cond.mirror() : cond;
+        Condition finalCondition = uncast(compare.getX()) == access ? cond.mirror() : cond;
         return new ComplexMatchResult() {
             public Value evaluate(NodeLIRBuilder builder) {
                 LabelRef trueLabel = getLIRBlock(ifNode.trueSuccessor());
                 LabelRef falseLabel = getLIRBlock(ifNode.falseSuccessor());
                 boolean unorderedIsTrue = compare.unorderedIsTrue();
                 double trueLabelProbability = ifNode.probability(ifNode.trueSuccessor());
-                Value other = operand(value);
+                Value other;
+                JavaConstant constant = value.asJavaConstant();
+                if (constant != null) {
+                    other = gen.emitJavaConstant(constant);
+                } else {
+                    other = operand(value);
+                }
+
                 AMD64AddressValue address = (AMD64AddressValue) operand(access.getAddress());
                 getLIRGeneratorTool().emitCompareBranchMemory(kind, other, address, getState(access), finalCondition, unorderedIsTrue, trueLabel, falseLabel, trueLabelProbability);
                 return null;
@@ -253,8 +268,6 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(If (FloatLessThan=compare value FloatingRead=access))")
     @MatchRule("(If (PointerEquals=compare value Read=access))")
     @MatchRule("(If (PointerEquals=compare value FloatingRead=access))")
-    @MatchRule("(If (ObjectEquals=compare value Read=access))")
-    @MatchRule("(If (ObjectEquals=compare value FloatingRead=access))")
     public ComplexMatchResult ifCompareMemory(IfNode root, CompareNode compare, ValueNode value, Access access) {
         return emitCompareBranchMemory(root, compare, value, access);
     }
