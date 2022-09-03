@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,32 +26,32 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilation
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompileOnly;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleEnableInfopoints;
 
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.CompilationResult;
 import jdk.vm.ci.code.stack.InspectedFrame;
 import jdk.vm.ci.code.stack.InspectedFrameVisitor;
 import jdk.vm.ci.code.stack.StackIntrospection;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.services.Services;
+import jdk.vm.ci.service.Services;
 
 import com.oracle.graal.api.runtime.GraalRuntime;
-import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.CompilerThreadFactory;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
@@ -86,6 +86,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     protected abstract static class BackgroundCompileQueue implements CompilerThreadFactory.DebugConfigAccess {
+        private final ConcurrentMap<OptimizedCallTarget, Future<?>> compilations;
         private final ExecutorService compileQueue;
 
         protected BackgroundCompileQueue() {
@@ -103,6 +104,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
             }
             selectedProcessors = Math.max(1, selectedProcessors);
             compileQueue = Executors.newFixedThreadPool(selectedProcessors, factory);
+            compilations = new ConcurrentHashMap<>();
         }
     }
 
@@ -242,99 +244,43 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     @TruffleBoundary
     @Override
-    public <T> T iterateFrames(final FrameInstanceVisitor<T> visitor) {
-        return iterateImpl(visitor, 0);
-    }
+    public <T> T iterateFrames(FrameInstanceVisitor<T> visitor) {
+        StackIntrospection stackIntrospection = getStackIntrospection();
 
-    private static final class FrameVisitor<T> implements InspectedFrameVisitor<T> {
+        InspectedFrameVisitor<T> inspectedFrameVisitor = new InspectedFrameVisitor<T>() {
+            private boolean skipNext = false;
 
-        private final FrameInstanceVisitor<T> visitor;
-        private final ResolvedJavaMethod callTargetMethod;
-        private final ResolvedJavaMethod callNodeMethod;
-
-        private GraalFrameInstance next;
-        private boolean nextAvailable;
-        private boolean first = true;
-        private int skipFrames;
-
-        public FrameVisitor(FrameInstanceVisitor<T> visitor, CallMethods methods, int skip) {
-            this.visitor = visitor;
-            this.callTargetMethod = methods.callTargetMethod;
-            this.callNodeMethod = methods.callNodeMethod;
-            this.skipFrames = skip;
-        }
-
-        public final T visitFrame(InspectedFrame frame) {
-            if (nextAvailable) {
-                T result = onNext(frame);
-                if (result != null) {
-                    return result;
-                }
-            }
-            if (frame.isMethod(callTargetMethod)) {
-                nextAvailable = true;
-                if (skipFrames == 0) {
-                    GraalFrameInstance graalFrame = new GraalFrameInstance(first);
-                    graalFrame.setCallTargetFrame(frame);
-                    next = graalFrame;
-                }
-                first = false;
-            }
-            return null;
-        }
-
-        private T onNext(InspectedFrame frame) {
-            try {
-                if (skipFrames == 0) {
-                    if (frame != null && frame.isMethod(callNodeMethod)) {
-                        next.setCallNodeFrame(frame);
-                    }
-                    return visitor.visitFrame(next);
-                } else {
-                    skipFrames--;
+            public T visitFrame(InspectedFrame frame) {
+                if (skipNext) {
+                    assert frame.isMethod(getCallMethods().callTargetMethod[0]);
+                    skipNext = false;
                     return null;
                 }
-            } finally {
-                next = null;
-                nextAvailable = false;
+
+                if (frame.isMethod(getCallMethods().callNodeMethod[0])) {
+                    skipNext = true;
+                    return visitor.visitFrame(new GraalFrameInstance.CallNodeFrame(frame));
+                } else {
+                    assert frame.isMethod(getCallMethods().callTargetMethod[0]);
+                    return visitor.visitFrame(new GraalFrameInstance.CallTargetFrame(frame, false));
+                }
+
             }
-        }
-
-        /* Method to collect the last result. */
-        public T afterVisitation() {
-            if (nextAvailable) {
-                return onNext(null);
-            } else {
-                return null;
-            }
-        }
-
-    }
-
-    private <T> T iterateImpl(FrameInstanceVisitor<T> visitor, final int skip) {
-        CallMethods methods = getCallMethods();
-        FrameVisitor<T> jvmciVisitor = new FrameVisitor<>(visitor, methods, skip);
-        T result = getStackIntrospection().iterateFrames(methods.anyFrameMethod, methods.anyFrameMethod, 0, jvmciVisitor);
-        if (result != null) {
-            return result;
-        } else {
-            return jvmciVisitor.afterVisitation();
-        }
+        };
+        return stackIntrospection.iterateFrames(getCallMethods().anyFrameMethod, getCallMethods().anyFrameMethod, 1, inspectedFrameVisitor);
     }
 
     protected abstract StackIntrospection getStackIntrospection();
 
     @Override
     public FrameInstance getCallerFrame() {
-        return iterateImpl(frame -> {
-            return frame;
-        } , 1);
+        return iterateFrames(frame -> frame);
     }
 
     @TruffleBoundary
     @Override
     public FrameInstance getCurrentFrame() {
-        return iterateImpl(frame -> frame, 0);
+        return getStackIntrospection().iterateFrames(getCallMethods().callTargetMethod, getCallMethods().callTargetMethod, 0, frame -> new GraalFrameInstance.CallTargetFrame(frame, true));
     }
 
     public <T> T getCapability(Class<T> capability) {
@@ -426,17 +372,13 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     public void compile(OptimizedCallTarget optimizedCallTarget, boolean mayBeAsynchronous) {
         BackgroundCompileQueue l = getCompileQueue();
-        final WeakReference<OptimizedCallTarget> weakCallTarget = new WeakReference<>(optimizedCallTarget);
         Future<?> future = l.compileQueue.submit(new Runnable() {
             @Override
             public void run() {
-                OptimizedCallTarget callTarget = weakCallTarget.get();
-                if (callTarget != null) {
-                    doCompile(callTarget);
-                }
+                doCompile(optimizedCallTarget);
             }
         });
-        optimizedCallTarget.setCompilationTask(future);
+        l.compilations.put(optimizedCallTarget, future);
         getCompilationNotify().notifyCompilationQueued(optimizedCallTarget);
 
         if (!mayBeAsynchronous) {
@@ -455,9 +397,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     }
 
     public boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
-        Future<?> codeTask = optimizedCallTarget.getCompilationTask();
+        BackgroundCompileQueue l = getCompileQueue();
+        Future<?> codeTask = l.compilations.get(optimizedCallTarget);
         if (codeTask != null && isCompiling(optimizedCallTarget)) {
-            optimizedCallTarget.setCompilationTask(null);
+            l.compilations.remove(optimizedCallTarget);
             boolean result = codeTask.cancel(true);
             if (result) {
                 optimizedCallTarget.notifyCompilationFinished(false);
@@ -469,7 +412,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     }
 
     public void waitForCompilation(OptimizedCallTarget optimizedCallTarget, long timeout) throws ExecutionException, TimeoutException {
-        Future<?> codeTask = optimizedCallTarget.getCompilationTask();
+        Future<?> codeTask = getCompileQueue().compilations.get(optimizedCallTarget);
         if (codeTask != null && isCompiling(optimizedCallTarget)) {
             try {
                 codeTask.get(timeout, TimeUnit.MILLISECONDS);
@@ -479,25 +422,15 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         }
     }
 
-    @Deprecated
     public Collection<OptimizedCallTarget> getQueuedCallTargets() {
-        return Collections.emptyList();
-    }
-
-    public int getCompilationQueueSize() {
-        ExecutorService executor = getCompileQueue().compileQueue;
-        if (executor instanceof ThreadPoolExecutor) {
-            return ((ThreadPoolExecutor) executor).getQueue().size();
-        } else {
-            return 0;
-        }
+        return getCompileQueue().compilations.keySet().stream().filter(e -> !getCompileQueue().compilations.get(e).isDone()).collect(Collectors.toList());
     }
 
     public boolean isCompiling(OptimizedCallTarget optimizedCallTarget) {
-        Future<?> codeTask = optimizedCallTarget.getCompilationTask();
+        Future<?> codeTask = getCompileQueue().compilations.get(optimizedCallTarget);
         if (codeTask != null) {
             if (codeTask.isCancelled() || codeTask.isDone()) {
-                optimizedCallTarget.setCompilationTask(null);
+                getCompileQueue().compilations.remove(optimizedCallTarget);
                 return false;
             }
             return true;
@@ -518,13 +451,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     protected CallMethods getCallMethods() {
         return callMethods;
-    }
-
-    // cached field access to make it fast in the interpreter
-    private static final boolean PROFILING_ENABLED = TruffleCompilerOptions.TruffleProfilingEnabled.getValue();
-
-    public final boolean isProfilingEnabled() {
-        return PROFILING_ENABLED;
     }
 
     private final class DispatchTruffleCompilationListener implements GraalTruffleCompilationListener {
@@ -598,14 +524,14 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     }
 
     protected static final class CallMethods {
-        public final ResolvedJavaMethod callNodeMethod;
-        public final ResolvedJavaMethod callTargetMethod;
+        public final ResolvedJavaMethod[] callNodeMethod;
+        public final ResolvedJavaMethod[] callTargetMethod;
         public final ResolvedJavaMethod[] anyFrameMethod;
 
         private CallMethods(MetaAccessProvider metaAccess) {
-            this.callNodeMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_NODE_METHOD);
-            this.callTargetMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_TARGET_METHOD);
-            this.anyFrameMethod = new ResolvedJavaMethod[]{callNodeMethod, callTargetMethod};
+            this.callNodeMethod = new ResolvedJavaMethod[]{metaAccess.lookupJavaMethod(GraalFrameInstance.CallNodeFrame.METHOD)};
+            this.callTargetMethod = new ResolvedJavaMethod[]{metaAccess.lookupJavaMethod(GraalFrameInstance.CallTargetFrame.METHOD)};
+            this.anyFrameMethod = new ResolvedJavaMethod[]{callNodeMethod[0], callTargetMethod[0]};
         }
 
         public static CallMethods lookup(MetaAccessProvider metaAccess) {

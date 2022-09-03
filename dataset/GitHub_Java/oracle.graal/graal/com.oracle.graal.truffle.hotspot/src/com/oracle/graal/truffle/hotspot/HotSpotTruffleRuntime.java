@@ -55,7 +55,7 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.runtime.JVMCI;
-import jdk.vm.ci.services.Services;
+import jdk.vm.ci.service.Services;
 
 import com.oracle.graal.api.runtime.GraalRuntime;
 import com.oracle.graal.compiler.target.Backend;
@@ -240,8 +240,8 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     private CompilationResult compileMethod(ResolvedJavaMethod javaMethod) {
         HotSpotProviders providers = getHotSpotProviders();
         SuitesProvider suitesProvider = providers.getSuites();
-        Suites suites = suitesProvider.getDefaultSuites().copy();
-        LIRSuites lirSuites = suitesProvider.getDefaultLIRSuites();
+        Suites suites = suitesProvider.createSuites();
+        LIRSuites lirSuites = suitesProvider.createLIRSuites();
         removeInliningPhase(suites);
         StructuredGraph graph = new StructuredGraph(javaMethod, AllowAssumptions.NO);
 
