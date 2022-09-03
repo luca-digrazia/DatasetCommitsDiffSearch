@@ -34,7 +34,6 @@ public class ExpandLogicPhase extends Phase {
         for (LogicBinaryNode logic : graph.getNodes(LogicBinaryNode.class)) {
             processBinary(logic);
         }
-        assert graph.getNodes(LogicBinaryNode.class).isEmpty();
     }
 
     private static void processBinary(LogicBinaryNode binary) {

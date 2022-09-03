@@ -43,30 +43,7 @@ public class LogicDisjunctionNode extends LogicBinaryNode implements Canonicaliz
         LogicNode x = getX();
         LogicNode y = getY();
         if (x == y) {
-            // @formatter:off
-            //  a ||  a = a
-            //  a || !a = true
-            // !a ||  a = true
-            // !a || !a = !a
-            // @formatter:on
-            if (isXNegated()) {
-                if (isYNegated()) {
-                    // !a || !a = !a
-                    negateUsages();
-                    return x;
-                } else {
-                    // !a || a = true
-                    return LogicConstantNode.tautology(graph());
-                }
-            } else {
-                if (isYNegated()) {
-                    // a || !a = true
-                    return LogicConstantNode.tautology(graph());
-                } else {
-                    // a || a = a
-                    return x;
-                }
-            }
+            return x;
         }
         if (x instanceof LogicConstantNode) {
             if (((LogicConstantNode) x).getValue() ^ isXNegated()) {
