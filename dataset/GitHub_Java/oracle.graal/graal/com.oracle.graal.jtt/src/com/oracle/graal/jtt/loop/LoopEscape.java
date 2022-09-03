@@ -23,13 +23,12 @@
 // Checkstyle: stop
 package com.oracle.graal.jtt.loop;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
 
 /*
  * Test around an object that escapes directly from inside a loop (no virtual phi on the loop)
  */
-public class LoopEscape extends JTTTest {
+public class LoopEscape {
     public static L ll = new L(0, 1, 2);
 
     private static class L {
@@ -72,36 +71,36 @@ public class LoopEscape extends JTTTest {
 
     @Test
     public void run10() throws Throwable {
-        runTest("test1", 0);
+        Assert.assertEquals(555, test1(0));
     }
 
     @Test
     public void run11() throws Throwable {
-        runTest("test1", 1);
+        Assert.assertEquals(556, test1(1));
     }
 
     @Test
     public void run12() throws Throwable {
-        runTest("test1", 2);
+        Assert.assertEquals(447, test1(2));
     }
 
     @Test
     public void run00() throws Throwable {
-        runTest("test0", 0);
+        Assert.assertEquals(555, test0(0));
     }
 
     @Test
     public void run01() throws Throwable {
-        runTest("test0", 1);
+        Assert.assertEquals(446, test0(1));
     }
 
     @Test
     public void run02() throws Throwable {
-        runTest("test0", 2);
+        Assert.assertEquals(437, test0(2));
     }
 
     @Test
     public void run05() throws Throwable {
-        runTest("test0", 5);
+        Assert.assertEquals(410, test0(5));
     }
 }

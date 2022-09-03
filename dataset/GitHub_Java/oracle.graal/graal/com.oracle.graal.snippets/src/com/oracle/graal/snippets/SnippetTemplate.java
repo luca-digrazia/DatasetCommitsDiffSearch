@@ -27,8 +27,6 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.loop.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.debug.*;
@@ -38,14 +36,16 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.snippets.Snippet.ConstantParameter;
+import com.oracle.graal.snippets.Snippet.Constant;
 import com.oracle.graal.snippets.Snippet.Multiple;
 import com.oracle.graal.snippets.Snippet.Parameter;
 import com.oracle.graal.snippets.nodes.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * A snippet template is a graph created by parsing a snippet method and then
- * specialized by binding constants to the snippet's {@link ConstantParameter} parameters.
+ * specialized by binding constants to the snippet's {@link Constant} parameters.
  *
  * Snippet templates can be managed in a {@link Cache}.
  */
@@ -58,22 +58,20 @@ public class SnippetTemplate {
      * @see Cache
      */
     public static class Key implements Iterable<Map.Entry<String, Object>> {
-        public final ResolvedJavaMethod method;
+        public final RiResolvedMethod method;
         private final HashMap<String, Object> map = new HashMap<>();
         private int hash;
 
-        public Key(ResolvedJavaMethod method) {
+        public Key(RiResolvedMethod method) {
             this.method = method;
             this.hash = method.hashCode();
         }
 
         public Key add(String name, Object value) {
+            assert value != null;
             assert !map.containsKey(name);
             map.put(name, value);
-            hash = hash ^ name.hashCode();
-            if (value != null) {
-                hash *= (value.hashCode() + 1);
-            }
+            hash = hash ^ name.hashCode() * (value.hashCode() + 1);
             return this;
         }
 
@@ -106,7 +104,7 @@ public class SnippetTemplate {
 
         @Override
         public String toString() {
-            return CodeUtil.format("%h.%n", method) + map.toString();
+            return CiUtil.format("%h.%n", method) + map.toString();
         }
     }
 
@@ -147,10 +145,10 @@ public class SnippetTemplate {
     public static class Cache {
 
         private final ConcurrentHashMap<SnippetTemplate.Key, SnippetTemplate> templates = new ConcurrentHashMap<>();
-        private final CodeCacheProvider runtime;
+        private final RiRuntime runtime;
 
 
-        public Cache(CodeCacheProvider runtime) {
+        public Cache(RiRuntime runtime) {
             this.runtime = runtime;
         }
 
@@ -177,10 +175,10 @@ public class SnippetTemplate {
     /**
      * Creates a snippet template.
      */
-    public SnippetTemplate(CodeCacheProvider runtime, SnippetTemplate.Key key) {
-        ResolvedJavaMethod method = key.method;
+    public SnippetTemplate(RiRuntime runtime, SnippetTemplate.Key key) {
+        RiResolvedMethod method = key.method;
         assert Modifier.isStatic(method.accessFlags()) : "snippet method must be static: " + method;
-        Signature signature = method.signature();
+        RiSignature signature = method.signature();
 
         // Copy snippet graph, replacing @Constant parameters with given arguments
         StructuredGraph snippetGraph = (StructuredGraph) method.compilerStorage().get(Graph.class);
@@ -192,15 +190,16 @@ public class SnippetTemplate {
         Parameter[] parameterAnnotations = new Parameter[parameterCount];
         ConstantNode[] placeholders = new ConstantNode[parameterCount];
         for (int i = 0; i < parameterCount; i++) {
-            ConstantParameter c = CodeUtil.getParameterAnnotation(ConstantParameter.class, i, method);
+            Constant c = CiUtil.getParameterAnnotation(Constant.class, i, method);
             if (c != null) {
                 String name = c.value();
                 Object arg = key.get(name);
-                Kind kind = signature.argumentKindAt(i);
+                assert arg != null : method + ": requires a constant named " + name;
+                CiKind kind = signature.argumentKindAt(i, false);
                 assert checkConstantArgument(method, signature, i, name, arg, kind);
-                replacements.put(snippetGraph.getLocal(i), ConstantNode.forConstant(Constant.forBoxed(kind, arg), runtime, snippetCopy));
+                replacements.put(snippetGraph.getLocal(i), ConstantNode.forCiConstant(CiConstant.forBoxed(kind, arg), runtime, snippetCopy));
             } else {
-                Parameter p = CodeUtil.getParameterAnnotation(Parameter.class, i, method);
+                Parameter p = CiUtil.getParameterAnnotation(Parameter.class, i, method);
                 assert p != null : method + ": parameter " + i + " must be annotated with either @Constant or @Parameter";
                 String name = p.value();
                 if (p.multiple()) {
@@ -232,7 +231,7 @@ public class SnippetTemplate {
                     Object array = ((Multiple) key.get(p.value())).array;
                     int length = Array.getLength(array);
                     LocalNode[] locals = new LocalNode[length];
-                    Stamp stamp = StampFactory.forKind(runtime.getResolvedJavaType(array.getClass().getComponentType()).kind());
+                    Stamp stamp = StampFactory.forKind(runtime.getType(array.getClass().getComponentType()).kind(false));
                     for (int j = 0; j < length; j++) {
                         assert (parameterCount & 0xFFFF) == parameterCount;
                         int idx = i << 16 | j;
@@ -325,22 +324,22 @@ public class SnippetTemplate {
         return true;
     }
 
-    private static boolean checkConstantArgument(final ResolvedJavaMethod method, Signature signature, int i, String name, Object arg, Kind kind) {
+    private static boolean checkConstantArgument(final RiResolvedMethod method, RiSignature signature, int i, String name, Object arg, CiKind kind) {
         if (kind.isObject()) {
             Class<?> type = signature.argumentTypeAt(i, method.holder()).resolve(method.holder()).toJava();
-            assert arg == null || type.isInstance(arg) :
+            assert type.isInstance(arg) :
                 method + ": wrong value type for " + name + ": expected " + type.getName() + ", got " + arg.getClass().getName();
         } else {
-            assert arg != null && kind.toBoxedJavaClass() == arg.getClass() :
-                method + ": wrong value kind for " + name + ": expected " + kind + ", got " + (arg == null ? "null" : arg.getClass().getSimpleName());
+            assert kind.toBoxedJavaClass() == arg.getClass() :
+                method + ": wrong value kind for " + name + ": expected " + kind + ", got " + arg.getClass().getSimpleName();
         }
         return true;
     }
 
-    private static boolean checkMultipleArgument(final ResolvedJavaMethod method, Signature signature, int i, String name, Object multiple) {
+    private static boolean checkMultipleArgument(final RiResolvedMethod method, RiSignature signature, int i, String name, Object multiple) {
         assert multiple instanceof Multiple;
         Object arg = ((Multiple) multiple).array;
-        ResolvedJavaType type = (ResolvedJavaType) signature.argumentTypeAt(i, method.holder());
+        RiResolvedType type = (RiResolvedType) signature.argumentTypeAt(i, method.holder());
         Class< ? > javaType = type.toJava();
         assert javaType.isArray() : "multiple parameter must be an array type";
         assert javaType.isInstance(arg) : "value for " + name + " is not a " + javaType.getName() + " instance: " + arg;
@@ -373,7 +372,7 @@ public class SnippetTemplate {
      *
      * @return the map that will be used to bind arguments to parameters when inlining this template
      */
-    private IdentityHashMap<Node, Node> bind(StructuredGraph replaceeGraph, CodeCacheProvider runtime, SnippetTemplate.Arguments args) {
+    private IdentityHashMap<Node, Node> bind(StructuredGraph replaceeGraph, RiRuntime runtime, SnippetTemplate.Arguments args) {
         IdentityHashMap<Node, Node> replacements = new IdentityHashMap<>();
 
         for (Map.Entry<String, Object> e : args) {
@@ -385,9 +384,9 @@ public class SnippetTemplate {
                 if (argument instanceof ValueNode) {
                     replacements.put((LocalNode) parameter, (ValueNode) argument);
                 } else {
-                    Kind kind = ((LocalNode) parameter).kind();
-                    Constant constant = Constant.forBoxed(kind, argument);
-                    replacements.put((LocalNode) parameter, ConstantNode.forConstant(constant, runtime, replaceeGraph));
+                    CiKind kind = ((LocalNode) parameter).kind();
+                    CiConstant constant = CiConstant.forBoxed(kind, argument);
+                    replacements.put((LocalNode) parameter, ConstantNode.forCiConstant(constant, runtime, replaceeGraph));
                 }
             } else {
                 assert parameter instanceof LocalNode[];
@@ -399,8 +398,8 @@ public class SnippetTemplate {
                 for (int j = 0; j < length; j++) {
                     LocalNode local = locals[j];
                     assert local != null;
-                    Constant constant = Constant.forBoxed(local.kind(), Array.get(array, j));
-                    ConstantNode element = ConstantNode.forConstant(constant, runtime, replaceeGraph);
+                    CiConstant constant = CiConstant.forBoxed(local.kind(), Array.get(array, j));
+                    ConstantNode element = ConstantNode.forCiConstant(constant, runtime, replaceeGraph);
                     replacements.put(local, element);
                 }
             }
@@ -416,7 +415,7 @@ public class SnippetTemplate {
      * @param anchor the control flow replacee
      * @param args the arguments to be bound to the flattened positional parameters of the snippet
      */
-    public void instantiate(CodeCacheProvider runtime,
+    public void instantiate(RiRuntime runtime,
                     Node replacee,
                     FixedWithNextNode anchor, SnippetTemplate.Arguments args) {
 
@@ -458,10 +457,7 @@ public class SnippetTemplate {
         if (replacee instanceof FixedNode) {
             GraphUtil.killCFG((FixedNode) replacee);
         } else {
-            GraphUtil.killWithUnusedFloatingInputs(replacee);
-        }
-        if (anchor != replacee) {
-            GraphUtil.killCFG(anchor);
+            replacee.safeDelete();
         }
 
         Debug.dump(replaceeGraph, "After lowering %s with %s", replacee, this);
