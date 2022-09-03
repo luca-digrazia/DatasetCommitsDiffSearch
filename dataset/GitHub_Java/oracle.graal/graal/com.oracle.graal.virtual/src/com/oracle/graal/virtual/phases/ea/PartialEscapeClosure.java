@@ -69,8 +69,8 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
         return effects;
     }
 
-    public int getNewVirtualObjectCount() {
-        return tool.getNewVirtualObjectCount();
+    public int getVirtualIdCount() {
+        return tool.getNextVirtualId();
     }
 
     @Override
@@ -210,8 +210,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
         BlockState newState = BlockState.meetAliases(states);
 
         // Iterative processing:
-        // Merging the materialized/virtual state of virtual objects can lead to new
-        // materializations, which can
+        // Merging the materialized/virtual state of virtual objects can lead to new materializations, which can
         // lead to new materializations because of phis, and so on.
 
         boolean materialized;
@@ -550,8 +549,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                     if (endValueObj == null || !endValueObj.isVirtual() || valueObj.virtual != endValueObj.virtual) {
                                         additionalMaterializations.add(valueObj.virtual);
                                     } else {
-                                        // endValue is also virtual and refers to the same virtual
-                                        // object, so we're
+                                        // endValue is also virtual and refers to the same virtual object, so we're
                                         // good.
                                     }
                                 }
@@ -615,8 +613,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                 if (endValueObj == null || !endValueObj.isVirtual() || valueObj.virtual != endValueObj.virtual) {
                                     assert !additionalMaterializations.isEmpty();
                                 } else {
-                                    // endValue is also virtual and refers to the same virtual
-                                    // object, so we're
+                                    // endValue is also virtual and refers to the same virtual object, so we're
                                     // good.
                                 }
                             } else {
@@ -624,8 +621,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                                 (endValueObj == null && valueObj.getMaterializedValue() != endValue)) {
                                     phis.add(new PhiDesc(state.virtual, i));
                                 } else {
-                                    // either endValue has the same materialized value as value or
-                                    // endValue is the
+                                    // either endValue has the same materialized value as value or endValue is the
                                     // same as the materialized value, so we're good.
                                 }
                             }
@@ -654,8 +650,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                     // throw new GraalInternalError("un-materialized object state at %s", loopEnd);
                 } else {
                     if (state.getMaterializedValue() != endState.getMaterializedValue()) {
-                        // throw new
-                        // GraalInternalError("changed materialized value during loop: %s vs %s",
+                        // throw new GraalInternalError("changed materialized value during loop: %s vs %s",
                         // state.materializedValue, endState.materializedValue);
                     }
                 }
