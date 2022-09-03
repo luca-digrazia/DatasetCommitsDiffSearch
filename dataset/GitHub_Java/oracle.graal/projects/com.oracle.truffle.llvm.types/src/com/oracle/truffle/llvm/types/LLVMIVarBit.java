@@ -371,7 +371,7 @@ public abstract class LLVMIVarBit {
         @Override
         @TruffleBoundary
         public LLVMIVarBit leftShift(LLVMIVarBit right) {
-            BigInteger result = bigInt().shiftLeft(right.getIntValue());
+            BigInteger result = new BigInteger(arr).shiftLeft(right.getIntValue());
             return asIVar(getBits(), result);
         }
 
@@ -389,7 +389,7 @@ public abstract class LLVMIVarBit {
             } else {
                 int destPos = newArr.length - bigIntArr.length;
                 System.arraycopy(bigIntArr, 0, newArr, destPos, bigIntArr.length);
-                if (bigIntArr[0] < 0) {
+                if (bigIntArr[0] == -1) {
                     Arrays.fill(newArr, 0, destPos, (byte) -1);
                 }
             }
