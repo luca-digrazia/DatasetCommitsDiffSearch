@@ -56,6 +56,7 @@ public abstract class Buffer {
     public byte[] close(boolean trimmedCopy) {
         byte[] result = trimmedCopy ? Arrays.copyOf(data, position()) : data;
         data = null;
+        position = 0;
         return result;
     }
 
