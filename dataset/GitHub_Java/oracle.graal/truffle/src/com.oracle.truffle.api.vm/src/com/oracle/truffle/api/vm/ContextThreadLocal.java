@@ -24,21 +24,17 @@
  */
 package com.oracle.truffle.api.vm;
 
-import java.lang.ref.WeakReference;
-
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleOptions;
 
 final class ContextThreadLocal extends ThreadLocal<Object> {
 
-    private final Assumption constant = Truffle.getRuntime().createAssumption("constant context");
-    @CompilationFinal private volatile WeakReference<Object> constantContext = new WeakReference<>(null);
-
     private final Assumption singleThread = Truffle.getRuntime().createAssumption("constant context store");
-    private Object firstContext;
+    private PolyglotContextImpl firstContext;
     @CompilationFinal private volatile Thread firstThread;
 
     @Override
@@ -53,11 +49,20 @@ final class ContextThreadLocal extends ThreadLocal<Object> {
         return null;
     }
 
+    public boolean isSet() {
+        if (singleThread.isValid()) {
+            boolean set = firstContext != null;
+            return (TruffleOptions.AOT ? currentThread() : Thread.currentThread()) == firstThread && set;
+        } else {
+            return getTL() != null;
+        }
+    }
+
     @Override
     public Object get() {
         Object context;
         if (singleThread.isValid()) {
-            if (Thread.currentThread() == firstThread) {
+            if ((TruffleOptions.AOT ? currentThread() : Thread.currentThread()) == firstThread) {
                 context = firstContext;
             } else {
                 CompilerDirectives.transferToInterpreter();
@@ -66,34 +71,12 @@ final class ContextThreadLocal extends ThreadLocal<Object> {
         } else {
             context = getTL();
         }
-        if (constant.isValid()) {
-            Object constantC = this.constantContext.get();
-            if (context == constantC) {
-                // did we read an invalid value?
-                if (!constant.isValid()) {
-                    CompilerDirectives.transferToInterpreter();
-                    return getConstantSlowPath(context);
-                }
-                return constantC;
-            } else {
-                CompilerDirectives.transferToInterpreter();
-                return getConstantSlowPath(context);
-            }
-        }
         return context;
     }
 
-    private synchronized Object getConstantSlowPath(Object context) {
-        Object localContext = constantContext.get();
-        if (localContext != context) {
-            if (localContext == null) {
-                constantContext = new WeakReference<>(context);
-            } else {
-                constant.invalidate();
-                constantContext.clear();
-            }
-        }
-        return context;
+    @TruffleBoundary
+    static Thread currentThread() {
+        return Thread.currentThread();
     }
 
     @Override
@@ -104,16 +87,17 @@ final class ContextThreadLocal extends ThreadLocal<Object> {
     Object setReturnParent(Object value) {
         if (singleThread.isValid()) {
             Object prev;
-            if (Thread.currentThread() == firstThread) {
+            if ((TruffleOptions.AOT ? currentThread() : Thread.currentThread()) == firstThread) {
                 prev = this.firstContext;
-                this.firstContext = value;
+                this.firstContext = (PolyglotContextImpl) value;
             } else {
                 CompilerDirectives.transferToInterpreter();
                 prev = setReturnParentSlowPath(value);
             }
             return prev;
+        } else {
+            return setTLReturnParent(value);
         }
-        return setTLReturnParent(value);
     }
 
     private synchronized Object getImplSlowPath() {
@@ -130,7 +114,7 @@ final class ContextThreadLocal extends ThreadLocal<Object> {
             PolyglotThread polyglotThread = ((PolyglotThread) current);
             Object context = polyglotThread.context;
             if (context == null && firstThread == current) {
-                polyglotThread.context = firstContext;
+                context = polyglotThread.context = firstContext;
                 firstContext = null;
                 firstThread = null;
             }
@@ -138,11 +122,6 @@ final class ContextThreadLocal extends ThreadLocal<Object> {
         } else {
             return super.get();
         }
-    }
-
-    @TruffleBoundary
-    private void setTL(Object context) {
-        super.set(context);
     }
 
     @TruffleBoundary
@@ -166,15 +145,13 @@ final class ContextThreadLocal extends ThreadLocal<Object> {
         }
         Thread currentThread = Thread.currentThread();
         Thread storeThread = firstThread;
-        Object prev;
+        Object prev = this.firstContext;
         if (currentThread == storeThread) {
-            prev = this.firstContext;
-            this.firstContext = context;
+            this.firstContext = (PolyglotContextImpl) context;
         } else {
             if (storeThread == null) {
                 this.firstThread = currentThread;
-                prev = this.firstContext;
-                this.firstContext = context;
+                this.firstContext = (PolyglotContextImpl) context;
             } else {
                 singleThread.invalidate();
                 return setTLReturnParent(context);
