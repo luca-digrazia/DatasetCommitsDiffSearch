@@ -171,7 +171,6 @@ public abstract class Node implements Cloneable {
      * @return the new node
      */
     public final <T extends Node> T replace(T newNode, String reason) {
-        CompilerDirectives.transferToInterpreter();
         if (this.getParent() == null) {
             throw new IllegalStateException("This node cannot be replaced, because it does not yet have a parent.");
         }
@@ -197,23 +196,18 @@ public abstract class Node implements Cloneable {
         if (rootNode == null) {
             throw new UnsupportedOperationException("Tree does not have a root node.");
         }
-        int fixCount = rootNode.fixupChildren();
-        assert fixCount != 0 : "sanity check failed: missing @Child[ren] or adoptChild?";
-        // if nothing had to be fixed, rewrite failed due to node not being a proper child.
+        rootNode.fixupChildren();
     }
 
-    private int fixupChildren() {
-        int fixCount = 0;
+    private void fixupChildren() {
         for (Node child : getChildren()) {
             if (child != null) {
                 if (child.parent != this) {
                     child.parent = this;
-                    fixCount++;
                 }
-                fixCount += child.fixupChildren();
+                child.fixupChildren();
             }
         }
-        return fixCount;
     }
 
     /**
