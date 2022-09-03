@@ -30,72 +30,126 @@
 package com.oracle.truffle.llvm.nodes.func;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.func.LLVMNativeConvertNodeFactory.AddressToNativeNodeGen;
 import com.oracle.truffle.llvm.nodes.func.LLVMNativeConvertNodeFactory.FunctionToNativeNodeGen;
+import com.oracle.truffle.llvm.nodes.func.LLVMNativeConvertNodeFactory.I1FromNativeToLLVMNodeGen;
+import com.oracle.truffle.llvm.nodes.func.LLVMNativeConvertNodeFactory.IdNodeGen;
 import com.oracle.truffle.llvm.nodes.func.LLVMNativeConvertNodeFactory.NativeToAddressNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMRuntimeType;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
+import com.oracle.truffle.llvm.runtime.LLVMNativeFunctions.NullPointerNode;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
+import com.oracle.truffle.llvm.runtime.NFIContextExtension;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType.PrimitiveKind;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-abstract class LLVMNativeConvertNode extends Node {
+public abstract class LLVMNativeConvertNode extends LLVMNode {
 
-    public abstract Object executeConvert(VirtualFrame frame, Object arg);
+    public abstract Object executeConvert(Object arg);
 
-    static LLVMNativeConvertNode createToNative(LLVMContext context, Type argType) {
-        switch (argType.getLLVMType().getType()) {
-            case ADDRESS:
-                return AddressToNativeNodeGen.create();
-            case FUNCTION_ADDRESS:
-                return FunctionToNativeNodeGen.create(context);
-            default:
-                return new Id();
-        }
+    protected static boolean checkIsPointer(Node isPointer, TruffleObject object) {
+        return ForeignAccess.sendIsPointer(isPointer, object);
     }
 
-    static LLVMNativeConvertNode createFromNative(LLVMRuntimeType retType) {
-        switch (retType) {
-            case ADDRESS:
-                return NativeToAddressNodeGen.create();
-            default:
-                return new Id();
+    protected static Node createIsPointer() {
+        return Message.IS_POINTER.createNode();
+    }
+
+    protected static Node createAsPointer() {
+        return Message.AS_POINTER.createNode();
+    }
+
+    protected static Node createToNative() {
+        return Message.TO_NATIVE.createNode();
+    }
+
+    public static LLVMNativeConvertNode createToNative(Type argType) {
+        if (Type.isFunctionOrFunctionPointer(argType)) {
+            return FunctionToNativeNodeGen.create();
+        } else if (argType instanceof PointerType) {
+            return AddressToNativeNodeGen.create();
         }
+        return IdNodeGen.create();
+    }
+
+    public static LLVMNativeConvertNode createFromNative(Type retType) {
+        if (retType instanceof PointerType) {
+            return NativeToAddressNodeGen.create();
+        } else if (retType instanceof PrimitiveType && ((PrimitiveType) retType).getPrimitiveKind() == PrimitiveKind.I1) {
+            return I1FromNativeToLLVMNodeGen.create();
+        }
+        return IdNodeGen.create();
     }
 
     protected abstract static class AddressToNative extends LLVMNativeConvertNode {
 
         @Specialization
-        long addressToNative(LLVMAddress address) {
+        protected long addressToNative(LLVMAddress address) {
             return address.getVal();
+        }
+
+        @Specialization
+        protected long addressToNative(LLVMGlobal address,
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
+            return globalAccess.executeWithTarget(address).getVal();
+        }
+
+        @Specialization
+        protected long doLLVMTruffleObject(LLVMTruffleObject truffleObject,
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+            return toNative.executeWithTarget(truffleObject).getVal();
         }
     }
 
     protected abstract static class NativeToAddress extends LLVMNativeConvertNode {
 
         @Specialization
-        LLVMAddress nativeToAddress(long pointer) {
+        protected LLVMAddress nativeToAddress(long pointer) {
             return LLVMAddress.fromLong(pointer);
         }
 
-        @Child private Node unbox = Message.UNBOX.createNode();
-
-        @Specialization
-        LLVMAddress nativeToAddress(TruffleObject pointer) {
+        @SuppressWarnings("unused")
+        @Specialization(guards = "checkIsPointer(isPointer, address)")
+        protected LLVMAddress addressToNative(TruffleObject address,
+                        @Cached("createIsPointer()") Node isPointer,
+                        @Cached("createAsPointer()") Node asPointer) {
             try {
-                return LLVMAddress.fromLong((long) ForeignAccess.sendUnbox(unbox, pointer));
-            } catch (UnsupportedMessageException e) {
+                return LLVMAddress.fromLong(ForeignAccess.sendAsPointer(asPointer, address));
+            } catch (UnsupportedMessageException | ClassCastException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
+                UnsupportedTypeException.raise(new Object[]{address});
+                return LLVMAddress.nullPointer();
+            }
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization(guards = {"!checkIsPointer(isPointer, address)"})
+        protected LLVMAddress addressToNative(TruffleObject address,
+                        @Cached("createIsPointer()") Node isPointer,
+                        @Cached("createToNative()") Node toNative,
+                        @Cached("createAsPointer()") Node asPointer) {
+            try {
+                TruffleObject n = (TruffleObject) ForeignAccess.sendToNative(toNative, address);
+                return LLVMAddress.fromLong(ForeignAccess.sendAsPointer(asPointer, n));
+            } catch (UnsupportedMessageException | ClassCastException e) {
+                CompilerDirectives.transferToInterpreter();
+                UnsupportedTypeException.raise(new Object[]{address});
+                return LLVMAddress.nullPointer();
             }
         }
     }
@@ -103,62 +157,104 @@ abstract class LLVMNativeConvertNode extends Node {
     @SuppressWarnings("unused")
     protected abstract static class FunctionToNative extends LLVMNativeConvertNode {
 
-        private final LLVMContext context;
+        // null pointer
 
-        protected FunctionToNative(LLVMContext context) {
-            this.context = context;
+        @Specialization(guards = {"descriptor.isNullFunction()"})
+        protected TruffleObject doNull(LLVMFunctionDescriptor descriptor,
+                        @Cached("nullPointer()") TruffleObject np) {
+            return np;
         }
 
-        @Specialization(limit = "10", guards = {"function.getFunctionIndex() == cachedFunction.getFunctionIndex()", "cachedFunction.getCallTarget() == null"})
-        protected static TruffleObject doDirect(LLVMFunctionDescriptor function,
+        @Specialization(guards = {"descriptor.getVal() == 0"})
+        protected TruffleObject doNull(LLVMAddress descriptor,
+                        @Cached("nullPointer()") TruffleObject np) {
+            return np;
+        }
+
+        // not null pointer
+
+        @Specialization(limit = "10", guards = {"function == cachedFunction", "!cachedFunction.isNullFunction()", "cachedFunction.isNativeFunction()"})
+        protected static TruffleObject doDirectNative(LLVMFunctionDescriptor function,
                         @Cached("function") LLVMFunctionDescriptor cachedFunction,
-                        @Cached("resolveAsNative(cachedFunction)") TruffleObject cachedNative) {
+                        @Cached("cachedFunction.getNativeFunction()") TruffleObject cachedNative) {
             return cachedNative;
         }
 
-        @Specialization(replaces = "doDirect", guards = "descriptor.getCallTarget() == null")
-        protected TruffleObject doIndirect(LLVMFunctionDescriptor descriptor) {
-            return resolveAsNative(descriptor);
+        @Specialization(replaces = "doDirectNative", guards = {"descriptor.isNativeFunction()", "!descriptor.isNullFunction()"})
+        protected TruffleObject doIndirectNative(LLVMFunctionDescriptor descriptor) {
+            return descriptor.getNativeFunction();
         }
 
-        @Specialization(limit = "10", guards = {"handle.getFunctionIndex() == cachedHandle.getFunctionIndex()"})
-        protected static TruffleObject doDirectHandle(LLVMFunctionHandle handle,
-                        @Cached("handle") LLVMFunctionHandle cachedHandle,
-                        @Cached("resolveAsNative(doLookup(cachedHandle))") TruffleObject cachedNative) {
-            return cachedNative;
+        @Specialization(guards = {"!function.isNullFunction()", "!function.isNativeFunction()"})
+        protected static TruffleObject doDescriptor(LLVMFunctionDescriptor function) {
+            return function;
         }
 
-        @Specialization(replaces = "doDirect")
-        protected TruffleObject doIndirectHandle(LLVMFunctionHandle handle) {
-            return resolveAsNative(doLookup(handle));
+        @Specialization(limit = "10", guards = {"descriptor != null", "handle.getVal() == cachedHandle.getVal()", "!descriptor.isNullFunction()"})
+        protected static TruffleObject doCachedHandle(LLVMAddress handle,
+                        @Cached("handle") LLVMAddress cachedHandle,
+                        @Cached("doLookup(handle)") LLVMFunctionDescriptor descriptor) {
+            if (descriptor.isNativeFunction()) {
+                return descriptor.getNativeFunction();
+            } else {
+                return descriptor;
+            }
         }
 
-        @Specialization(limit = "10", guards = {"descriptor.getFunctionIndex() == cachedDescriptor.getFunctionIndex()", "descriptor.getCallTarget() != null"})
-        protected static TruffleObject doCachedNative(LLVMFunctionDescriptor descriptor,
-                        @Cached("descriptor") LLVMFunctionDescriptor cachedDescriptor) {
-            return cachedDescriptor;
+        @Specialization(limit = "10", guards = {"descriptor == null", "handle.getVal() == cachedHandle.getVal()"})
+        protected static TruffleObject doCachedNative(LLVMAddress handle,
+                        @Cached("handle") LLVMAddress cachedHandle,
+                        @Cached("doLookup(cachedHandle)") LLVMFunctionDescriptor descriptor,
+                        @Cached("getContextReference()") ContextReference<LLVMContext> c) {
+            return handle;
         }
 
-        @Specialization(replaces = "doCachedNative", guards = {"descriptor.getCallTarget() != null"})
-        protected TruffleObject doCachedNative(LLVMFunctionDescriptor descriptor) {
-            return descriptor;
-
+        @Specialization(replaces = {"doCachedHandle", "doCachedNative"}, guards = {"handle.getVal() != 0"})
+        protected TruffleObject doUncachedHandle(LLVMAddress handle) {
+            LLVMFunctionDescriptor descriptor = doLookup(handle);
+            if (descriptor == null) {
+                return handle;
+            } else if (descriptor.isNativeFunction()) {
+                return descriptor.getNativeFunction();
+            } else {
+                return descriptor;
+            }
         }
 
-        protected TruffleObject resolveAsNative(LLVMFunctionDescriptor descriptor) {
-            return context.resolveAsNativeFunction(descriptor);
+        protected LLVMFunctionDescriptor doLookup(LLVMAddress handle) {
+            return getContextReference().get().getFunctionDescriptor(handle);
         }
 
-        protected LLVMFunctionDescriptor doLookup(LLVMFunctionHandle handle) {
-            return context.lookup(handle);
+        @Child private NullPointerNode nullPointer;
+
+        protected TruffleObject nullPointer() {
+            if (nullPointer == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                LLVMContext context = getContextReference().get();
+                NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
+                nullPointer = insert(nfiContextExtension.getNativeSulongFunctions().createNullPointerNode(context));
+            }
+            return nullPointer.getNullPointer();
         }
     }
 
-    private static final class Id extends LLVMNativeConvertNode {
+    protected abstract static class Id extends LLVMNativeConvertNode {
 
-        @Override
-        public Object executeConvert(VirtualFrame frame, Object arg) {
+        @Specialization
+        protected Object doConvert(Object arg) {
             return arg;
+        }
+    }
+
+    abstract static class I1FromNativeToLLVMNode extends LLVMNativeConvertNode {
+        @Specialization
+        protected Object convert(byte value) {
+            return value != 0;
+        }
+
+        @Specialization
+        protected Object convert(boolean value) {
+            return value;
         }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,18 +30,26 @@
 package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.llvm.runtime.interop.LLVMAddressMessageResolutionForeign;
+import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
 
 @ValueType
-public final class LLVMAddress {
+public final class LLVMAddress implements LLVMObjectNativeLibrary.Provider, LLVMInternalTruffleObject {
 
     public static final int WORD_LENGTH_BIT = 64;
-
-    public static final LLVMAddress NULL_POINTER = fromLong(0);
 
     private final long val;
 
     private LLVMAddress(long val) {
         this.val = val;
+    }
+
+    public static LLVMAddress nullPointer() {
+        return new LLVMAddress(0);
     }
 
     public static LLVMAddress fromLong(long val) {
@@ -52,16 +60,8 @@ public final class LLVMAddress {
         return val;
     }
 
-    public LLVMAddress increment(int incr) {
-        return this.increment((long) incr);
-    }
-
     public LLVMAddress increment(long incr) {
         return new LLVMAddress(val + incr);
-    }
-
-    public LLVMAddress decrement(int decr) {
-        return new LLVMAddress(val - decr);
     }
 
     @Override
@@ -79,7 +79,11 @@ public final class LLVMAddress {
     }
 
     public boolean unsignedLessThan(LLVMAddress val2) {
-        return Long.compareUnsigned(val, val2.val) < 0;
+        return unsignedLessThan(val2.val);
+    }
+
+    private boolean unsignedLessThan(long val2) {
+        return Long.compareUnsigned(val, val2) < 0;
     }
 
     public boolean unsignedGreaterEquals(LLVMAddress val2) {
@@ -88,10 +92,6 @@ public final class LLVMAddress {
 
     public boolean unsignedLessEquals(LLVMAddress val2) {
         return Long.compareUnsigned(val, val2.val) <= 0;
-    }
-
-    public static LLVMAddress createUndefinedAddress() {
-        return new LLVMAddress(-1);
     }
 
     @Override
@@ -119,4 +119,40 @@ public final class LLVMAddress {
         return new LLVMAddress(val);
     }
 
+    @Override
+    public LLVMObjectNativeLibrary createLLVMObjectNativeLibrary() {
+        return new LLVMAddressNativeLibrary();
+    }
+
+    private static class LLVMAddressNativeLibrary extends LLVMObjectNativeLibrary {
+
+        @Override
+        public boolean guard(Object obj) {
+            return obj instanceof LLVMAddress;
+        }
+
+        @Override
+        public boolean isPointer(Object obj) {
+            return true;
+        }
+
+        @Override
+        public long asPointer(Object obj) throws InteropException {
+            return ((LLVMAddress) obj).getVal();
+        }
+
+        @Override
+        public LLVMAddress toNative(Object obj) throws InteropException {
+            return (LLVMAddress) obj;
+        }
+    }
+
+    public static boolean isInstance(TruffleObject object) {
+        return object instanceof LLVMAddress;
+    }
+
+    @Override
+    public ForeignAccess getForeignAccess() {
+        return LLVMAddressMessageResolutionForeign.ACCESS;
+    }
 }

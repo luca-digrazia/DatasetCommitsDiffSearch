@@ -38,16 +38,16 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueProvider;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public abstract class LLVMToDebugDeclarationNode extends LLVMNode implements LLVMDebugValueProvider.Builder {
 
@@ -79,7 +79,7 @@ public abstract class LLVMToDebugDeclarationNode extends LLVMNode implements LLV
     }
 
     @Specialization
-    protected LLVMDebugValueProvider fromNativePointer(LLVMNativePointer address,
+    protected LLVMDebugValueProvider fromAddress(LLVMAddress address,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
         return new LLVMAllocationValueProvider(memory, address);
     }
@@ -88,7 +88,7 @@ public abstract class LLVMToDebugDeclarationNode extends LLVMNode implements LLV
     protected LLVMDebugValueProvider fromBoxedPrimitive(LLVMBoxedPrimitive boxedPrimitive,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
         if (boxedPrimitive.getValue() instanceof Long) {
-            return fromNativePointer(LLVMNativePointer.create((long) boxedPrimitive.getValue()), memory);
+            return fromAddress(LLVMAddress.fromLong((long) boxedPrimitive.getValue()), memory);
         } else {
             return unavailable();
         }
@@ -112,7 +112,7 @@ public abstract class LLVMToDebugDeclarationNode extends LLVMNode implements LLV
         try {
             if (ForeignAccess.sendIsPointer(isPointer, obj)) {
                 final long rawAddress = ForeignAccess.sendAsPointer(asPointer, obj);
-                return fromNativePointer(LLVMNativePointer.create(rawAddress), memory);
+                return fromAddress(LLVMAddress.fromLong(rawAddress), memory);
             }
         } catch (UnsupportedMessageException ignored) {
             CompilerDirectives.transferToInterpreter();
@@ -121,7 +121,7 @@ public abstract class LLVMToDebugDeclarationNode extends LLVMNode implements LLV
     }
 
     @Specialization(guards = {"obj.getOffset() == 0", "notLLVM(obj.getObject())"})
-    protected LLVMDebugValueProvider fromManagedPointer(LLVMManagedPointer obj,
+    protected LLVMDebugValueProvider fromLLVMTruffleObject(LLVMTruffleObject obj,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
         return fromTruffleObject(obj.getObject(), memory);
     }
