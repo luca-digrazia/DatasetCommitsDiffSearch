@@ -681,9 +681,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genThrow(int bci) {
         Value exception = frameState.apop();
-        FixedGuard node = new FixedGuard(graph);
-        node.setNode(new IsNonNull(exception, graph));
-        append(node);
+        append(new FixedNullCheck(exception, graph));
 
         Instruction entry = handleException(exception, bci);
         if (entry != null) {
@@ -1262,7 +1260,7 @@ public final class GraphBuilderPhase extends Phase {
             traceInstruction(bci, opcode, blockStart);
             processBytecode(bci, opcode);
 
-            if (IdentifyBlocksPhase.isBlockEnd(lastInstr) || lastInstr.next() != null) {
+            if (Schedule.isBlockEnd(lastInstr) || lastInstr.next() != null) {
                 break;
             }
 

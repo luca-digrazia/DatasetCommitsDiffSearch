@@ -36,28 +36,22 @@ public class VMEntriesNative implements VMEntries, Remote {
 
     // Checkstyle: stop
     @Override
-    public native byte[] RiMethod_code(HotSpotMethodResolved method);
+    public native byte[] RiMethod_code(long vmId);
 
     @Override
-    public native String RiMethod_signature(HotSpotMethodResolved method);
+    public native int RiMethod_maxStackSize(long vmId);
 
     @Override
-    public native RiExceptionHandler[] RiMethod_exceptionHandlers(HotSpotMethodResolved method);
+    public native int RiMethod_maxLocals(long vmId);
 
     @Override
-    public native boolean RiMethod_hasBalancedMonitors(HotSpotMethodResolved method);
+    public native RiType RiMethod_holder(long vmId);
 
     @Override
-    public native RiMethod RiMethod_uniqueConcreteMethod(HotSpotMethodResolved method);
+    public native String RiMethod_signature(long vmId);
 
     @Override
-    public native int RiMethod_invocationCount(HotSpotMethodResolved method);
-
-    @Override
-    public native RiTypeProfile RiMethod_typeProfile(HotSpotMethodResolved method, int bci);
-
-    @Override
-    public native int RiMethod_branchProbability(HotSpotMethodResolved method, int bci);
+    public native int RiMethod_accessFlags(long vmId);
 
     @Override
     public native RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass);
@@ -90,6 +84,9 @@ public class VMEntriesNative implements VMEntries, Remote {
     public native HotSpotVMConfig getConfiguration();
 
     @Override
+    public native RiExceptionHandler[] RiMethod_exceptionHandlers(long vmId);
+
+    @Override
     public native RiMethod RiType_resolveMethodImpl(HotSpotTypeResolved klass, String name, String signature);
 
     @Override
@@ -111,13 +108,16 @@ public class VMEntriesNative implements VMEntries, Remote {
     public native RiType RiType_superType(HotSpotTypeResolved klass);
 
     @Override
-    public native boolean RiType_isInitialized(HotSpotTypeResolved klass);
-
-    @Override
     public native RiType getType(Class<?> javaClass);
 
     @Override
+    public native boolean RiMethod_hasBalancedMonitors(long vmId);
+
+    @Override
     public native void recordBailout(String reason);
+
+    @Override
+    public native RiMethod RiMethod_uniqueConcreteMethod(long vmId);
 
     @Override
     public int getArrayLength(CiConstant array) {
@@ -137,6 +137,15 @@ public class VMEntriesNative implements VMEntries, Remote {
         }
         return getType(o.getClass());
     }
+
+    @Override
+    public native int RiMethod_invocationCount(long vmId);
+
+    @Override
+    public native RiTypeProfile RiMethod_typeProfile(long vmId, int bci);
+
+    @Override
+    public native int RiMethod_branchProbability(long vmId, int bci);
 
     // Checkstyle: resume
 }
