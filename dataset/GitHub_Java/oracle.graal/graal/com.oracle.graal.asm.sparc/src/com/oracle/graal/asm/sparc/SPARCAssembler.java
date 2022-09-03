@@ -458,12 +458,9 @@ public abstract class SPARCAssembler extends AbstractAssembler {
     /**
      * Instruction format for Arithmetic, Logical, Moves, Tcc, Prefetch, and Misc.
      * 
-     * | 10  |   rd   |   op3   |   rs1   | i|     imm_asi   |   rs2   |
-     * | 10  |   rd   |   op3   |   rs1   | i|          simm13         |
-     * | 10  |   rd   |   op3   |   rs1   | i| x|            |   rs2   |
-     * | 10  |   rd   |   op3   |   rs1   | i| x|            | shcnt32 |
-     * | 10  |   rd   |   op3   |   rs1   | i| x|           |  shcnt64 |
-     * |31 30|29    25|24     19|18     14|13|12|11         5|4       0|
+     * | 10  |   rd   |   op3   |   rs1   | i|   imm_asi   |   rs2   |
+     * | 10  |   rd   |   op3   |   rs1   | i|        simm13         |
+     * |31 30|29    25|24     19|18     14|13|12          5|4       0|
      */
     // @formatter:on
     public static class Fmt10 {
@@ -473,7 +470,6 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         private static final int OP3_SHIFT = 19;
         private static final int RS1_SHIFT = 14;
         private static final int I_SHIFT = 13;
-        private static final int X_SHIFT = 12;
         private static final int IMM_ASI_SHIFT = 5;
         private static final int RS2_SHIFT = 0;
         private static final int SIMM13_SHIFT = 0;
@@ -484,7 +480,6 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         private static final int OP3_MASK     = 0b00000001111110000000000000000000;
         private static final int RS1_MASK     = 0b00000000000001111100000000000000;
         private static final int I_MASK       = 0b00000000000000000010000000000000;
-        private static final int X_MASK       = 0b00000000000000000001000000000000;
         private static final int IMM_ASI_MASK = 0b00000000000000000001111111100000;
         private static final int RS2_MASK     = 0b00000000000000000000000000011111;
         private static final int SIMM13_MASK  = 0b00000000000000000001111111111111;
@@ -494,17 +489,15 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         private int op3;
         private int rs1;
         private int i;
-        private int x;
         private int immAsi;
         private int rs2;
         private int simm13;
 
-        private Fmt10(int rd, int op3, int rs1, int i, int x, int immAsi, int rs2, int simm13) {
+        private Fmt10(int rd, int op3, int rs1, int i, int immAsi, int rs2, int simm13) {
             this.rd = rd;
             this.op3 = op3;
             this.rs1 = rs1;
             this.i = i;
-            this.x = x;
             this.immAsi = immAsi;
             this.rs2 = rs2;
             this.simm13 = simm13;
@@ -512,40 +505,26 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         }
 
         public Fmt10(Op3s op3, Register rs1, Register rs2, Register rd) {
-            this(rd.encoding(), op3.getValue(), rs1.encoding(), 0, getXBit(op3), 0, rs2.encoding(), 0);
+            this(rd.encoding(), op3.getValue(), rs1.encoding(), 0, 0, rs2.encoding(), 0);
         }
 
         public Fmt10(Op3s op3, Register rs1, int simm13, Register rd) {
-            this(rd.encoding(), op3.getValue(), rs1.encoding(), 1, getXBit(op3), 0, 0, simm13);
+            this(rd.encoding(), op3.getValue(), rs1.encoding(), 1, 0, 0, simm13);
         }
 
         public Fmt10(Op3s op3) {
-            this(0, op3.getValue(), 0, 0, getXBit(op3), 0, 0, 0);
+            this(0, op3.getValue(), 0, 0, 0, 0, 0);
         }
 
         public Fmt10(Op3s op3, Register rs1, Register rd) {
-            this(rd.encoding(), op3.getValue(), rs1.encoding(), 0, getXBit(op3), 0, 0, 0);
-        }
-
-        /**
-         * Helper method to determine if the instruction needs the X bit set.
-         */
-        private static int getXBit(Op3s op3) {
-            switch (op3) {
-                case Sllx:
-                case Srax:
-                case Srlx:
-                    return 1;
-                default:
-                    return 0;
-            }
+            this(rd.encoding(), op3.getValue(), rs1.encoding(), 0, 0, 0, 0);
         }
 
         private int getInstructionBits() {
             if (i == 0) {
-                return Ops.ArithOp.getValue() << OP_SHIFT | rd << RD_SHIFT | op3 << OP3_SHIFT | rs1 << RS1_SHIFT | i << I_SHIFT | x << X_SHIFT | immAsi << IMM_ASI_SHIFT | rs2 << RS2_SHIFT;
+                return Ops.ArithOp.getValue() << OP_SHIFT | rd << RD_SHIFT | op3 << OP3_SHIFT | rs1 << RS1_SHIFT | i << I_SHIFT | immAsi << IMM_ASI_SHIFT | rs2 << RS2_SHIFT;
             } else {
-                return Ops.ArithOp.getValue() << OP_SHIFT | rd << RD_SHIFT | op3 << OP3_SHIFT | rs1 << RS1_SHIFT | i << I_SHIFT | x << X_SHIFT | ((simm13 << SIMM13_SHIFT) & SIMM13_MASK);
+                return Ops.ArithOp.getValue() << OP_SHIFT | rd << RD_SHIFT | op3 << OP3_SHIFT | rs1 << RS1_SHIFT | i << I_SHIFT | ((simm13 << SIMM13_SHIFT) & SIMM13_MASK);
             }
         }
 
@@ -561,12 +540,11 @@ public abstract class SPARCAssembler extends AbstractAssembler {
             final int op3 = (inst & OP3_MASK) >> OP3_SHIFT;
             final int rs1 = (inst & RS1_MASK) >> RS1_SHIFT;
             final int i = (inst & I_MASK) >> I_SHIFT;
-            final int x = (inst & X_MASK) >> X_SHIFT;
             final int immAsi = (inst & IMM_ASI_MASK) >> IMM_ASI_SHIFT;
             final int rs2 = (inst & RS2_MASK) >> RS2_SHIFT;
             final int simm13 = (inst & SIMM13_MASK) >> SIMM13_SHIFT;
 
-            return new Fmt10(rd, op3, rs1, i, x, immAsi, rs2, simm13);
+            return new Fmt10(rd, op3, rs1, i, immAsi, rs2, simm13);
         }
 
         public void write(SPARCAssembler masm, int pos) {
@@ -584,7 +562,6 @@ public abstract class SPARCAssembler extends AbstractAssembler {
             assert ((op3 << OP3_SHIFT) & OP3_MASK) == (op3 << OP3_SHIFT);
             assert ((rs1 << RS1_SHIFT) & RS1_MASK) == (rs1 << RS1_SHIFT);
             assert ((i << I_SHIFT) & I_MASK) == (i << I_SHIFT);
-            assert ((x << X_SHIFT) & X_MASK) == (x << X_SHIFT);
             assert ((immAsi << IMM_ASI_SHIFT) & IMM_ASI_MASK) == (immAsi << IMM_ASI_SHIFT);
             assert ((rs2 << RS2_SHIFT) & RS2_MASK) == (rs2 << RS2_SHIFT);
             assert isSimm13(simm13);
@@ -734,15 +711,6 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         }
     }
 
-    // @formatter:off
-    /**
-     * Instruction format for Movcc.
-     * 
-     * | 10  |   rd   |   op3   |cc2|   cond  | i|cc1|cc0|      -      |   rs2   |
-     * | 10  |   rd   |   op3   |cc2|   cond  | i|cc1|cc0|        simm11         |
-     * |31 30|29    25|24     19| 18|17     14|13| 12| 11|10          5|4       0|
-     */
-    // @formatter:on
     public static class Fmt10c {
 
         private static final int OP_SHIFT = 30;
@@ -751,8 +719,7 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         private static final int CC2_SHIFT = 18;
         private static final int COND_SHIFT = 14;
         private static final int I_SHIFT = 13;
-        private static final int CC1_SHIFT = 12;
-        private static final int CC0_SHIFT = 11;
+        private static final int CC_SHIFT = 11;
         private static final int RS2_SHIFT = 0;
         private static final int SIMM11_SHIFT = 0;
 
@@ -763,8 +730,7 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         private static final int CC2_MASK    = 0b00000000000001000000000000000000;
         private static final int COND_MASK   = 0b00000000000000111100000000000000;
         private static final int I_MASK      = 0b00000000000000000010000000000000;
-        private static final int CC1_MASK    = 0b00000000000000000001000000000000;
-        private static final int CC0_MASK    = 0b00000000000000000000100000000000;
+        private static final int CC_MASK     = 0b00000000000000000001100000000000;
         private static final int RS2_MASK    = 0b00000000000000000000000000011111;
         private static final int SIMM11_MASK = 0b00000000000000000000011111111111;
         // @formatter:on
@@ -789,33 +755,20 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         }
 
         public Fmt10c(Op3s op3, ConditionFlag cond, CC cc, Register rs2, Register rd) {
-            this(rd.encoding(), op3.getValue(), cond.getValue(), 0, getCC(cc), rs2.encoding(), 0);
+            this(rd.encoding(), op3.getValue(), cond.getValue(), 0, cc.getValue(), rs2.encoding(), 0);
         }
 
         public Fmt10c(Op3s op3, ConditionFlag cond, CC cc, int simm11, Register rd) {
-            this(rd.encoding(), op3.getValue(), cond.getValue(), 1, getCC(cc), 0, simm11);
-        }
-
-        /**
-         * Converts regular CC codes to CC codes used by Movcc instructions.
-         */
-        private static int getCC(CC cc) {
-            switch (cc) {
-                case Icc:
-                case Xcc:
-                    return 0b100 + cc.getValue();
-                default:
-                    return cc.getValue();
-            }
+            this(rd.encoding(), op3.getValue(), cond.getValue(), 1, cc.getValue(), 0, simm11);
         }
 
         private int getInstructionBits() {
             if (i == 0) {
-                return Ops.ArithOp.getValue() << OP_SHIFT | rd << RD_SHIFT | op3 << OP3_SHIFT | ((cc << (CC2_SHIFT - 2)) & CC2_MASK) | cond << COND_SHIFT | i << I_SHIFT |
-                                ((cc << (CC1_SHIFT - 1)) & CC1_MASK) | ((cc << CC0_SHIFT) & CC0_MASK) | rs2 << RS2_SHIFT;
+                return Ops.ArithOp.getValue() << OP_SHIFT | rd << RD_SHIFT | op3 << OP3_SHIFT | ((cc << CC2_SHIFT) & CC2_MASK) | cond << COND_SHIFT | i << I_SHIFT | ((cc << CC_SHIFT) & CC_MASK) |
+                                rs2 << RS2_SHIFT;
             } else {
-                return Ops.ArithOp.getValue() << OP_SHIFT | rd << RD_SHIFT | op3 << OP3_SHIFT | ((cc << (CC2_SHIFT - 2)) & CC2_MASK) | cond << COND_SHIFT | i << I_SHIFT |
-                                ((cc << (CC1_SHIFT - 1)) & CC1_MASK) | ((cc << CC0_SHIFT) & CC0_MASK) | ((simm11 << SIMM11_SHIFT) & SIMM11_MASK);
+                return Ops.ArithOp.getValue() << OP_SHIFT | rd << RD_SHIFT | op3 << OP3_SHIFT | ((cc << CC2_SHIFT) & CC2_MASK) | cond << COND_SHIFT | i << I_SHIFT | ((cc << CC_SHIFT) & CC_MASK) |
+                                ((simm11 << SIMM11_SHIFT) & SIMM11_MASK);
             }
         }
 
@@ -831,7 +784,7 @@ public abstract class SPARCAssembler extends AbstractAssembler {
             final int op3 = (inst & OP3_MASK) >> OP3_SHIFT;
             final int cond = (inst & COND_MASK) >> COND_SHIFT;
             final int i = (inst & I_MASK) >> I_SHIFT;
-            final int cc = (inst & CC2_MASK) >> CC2_SHIFT | (inst & CC1_MASK) >> CC1_SHIFT | (inst & CC0_MASK) >> CC0_SHIFT;
+            final int cc = (inst & CC2_MASK) >> CC2_SHIFT | (inst & CC_MASK) >> CC_SHIFT;
             final int rs2 = (inst & RS2_MASK) >> RS2_SHIFT;
             final int simm11 = (inst & SIMM11_MASK) >> SIMM11_SHIFT;
 
@@ -855,7 +808,7 @@ public abstract class SPARCAssembler extends AbstractAssembler {
             assert ((i << I_SHIFT) & I_MASK) == (i << I_SHIFT);
             // assert cc >= 0 && cc < 0x8;
             assert ((rs2 << RS2_SHIFT) & RS2_MASK) == (rs2 << RS2_SHIFT);
-            assert isSimm11(simm11);
+            // assert isSimm11(simm11);
         }
     }
 
@@ -890,14 +843,7 @@ public abstract class SPARCAssembler extends AbstractAssembler {
     public static final int ImmedTrue = 0x00002000;
 
     public enum Ops {
-        // @formatter:off
-
-        BranchOp(0b00),
-        CallOp(0b01),
-        ArithOp(0b10),
-        LdstOp(0b11);
-
-        // @formatter:on
+        BranchOp(0b00), CallOp(0b01), ArithOp(0b10), LdstOp(0b11);
 
         private final int value;
 
@@ -911,18 +857,7 @@ public abstract class SPARCAssembler extends AbstractAssembler {
     }
 
     public enum Op2s {
-        // @formatter:off
-
-        Illtrap(0b000),
-        Bpr(3),
-        Fb(6),
-        Fbp(5),
-        Br(2),
-        Bp(1),
-        Cb(7),
-        Sethi(0b100);
-
-        // @formatter:on
+        Bpr(3), Fb(6), Fbp(5), Br(2), Bp(1), Cb(7), Sethi(4);
 
         private final int value;
 
@@ -936,8 +871,6 @@ public abstract class SPARCAssembler extends AbstractAssembler {
     }
 
     public enum Op3s {
-        // @formatter:off
-
         Add(0x00, "add"),
         And(0x01, "and"),
         Or(0x02, "or"),
@@ -1010,15 +943,17 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         Casa(0b111100, "casa"),
         Casxa(0b111110, "casxa"),
 
-        Lduw(0b00000, "lduw"),
-        Ldub(0b00001, "ldub"),
-        Lduh(0b00010, "lduh"),
-        Stw(0b000100, "stw"),
-        Stb(0b000101, "stb"),
-        Sth(0b000110, "sth"),
-        Ldsw(0b001000, "ldsw"),
-        Ldsb(0b001001, "ldsb"),
-        Ldsh(0b001010, "ldsh"),
+        Lduw(0x00, "lduw"),
+        Ldub(0x01, "ldub"),
+        Lduh(0x02, "lduh"),
+        Ldd(0x03, "ldd"),
+        Stw(0x04, "stw"),
+        Stb(0x05, "stb"),
+        Sth(0x06, "sth"),
+        Std(0x07, "std"),
+        Ldsw(0x08, "ldsw"),
+        Ldsb(0x09, "ldsb"),
+        Ldsh(0x0A, "ldsh"),
         Ldx(0b001011, "ldx"),
         Stx(0b001110, "stx"),
 
@@ -1030,8 +965,6 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         Stfsr(0x25, "stfsr"),
         Staf(0x26, "staf"),
         Stdf(0x27, "stdf");
-
-        // @formatter:on
 
         private final int value;
         private final String operator;
@@ -1051,18 +984,7 @@ public abstract class SPARCAssembler extends AbstractAssembler {
     }
 
     public enum Op5s {
-        // @formatter:off
-
-        Fmadds(0x1),
-        Fmaddd(0x2),
-        Fmsubs(0x5),
-        Fmsubd(0x6),
-        Fnmsubs(0x9),
-        Fnmsubd(0xA),
-        Fnmadds(0xD),
-        Fnmaddd(0xE);
-
-        // @formatter:on
+        Fmadds(0x1), Fmaddd(0x2), Fmsubs(0x5), Fmsubd(0x6), Fnmsubs(0x9), Fnmsubd(0xA), Fnmadds(0xD), Fnmaddd(0xE);
 
         private final int value;
 
@@ -1076,17 +998,9 @@ public abstract class SPARCAssembler extends AbstractAssembler {
     }
 
     public enum Opfs {
-        // @formatter:off
-
-        Fmovs(0x01, "fmovs"),
-        Fmovd(0x02, "fmovd"),
-        Fmovq(0x03, "fmovq"),
-        Fnegs(0x05, "fnegs"),
-        Fnegd(0x06, "fnegd"),
-        Fnegq(0x07, "fnegq"),
-        Fabss(0x09, "fabss"),
-        Fabsd(0x0A, "fabsd"),
-        Fabsq(0x0B, "fabsq"),
+        Fmovs(0x01, "fmovs"), Fmovd(0x02, "fmovd"), Fmovq(0x03, "fmovq"), Fnegs(0x05, "fnegs"), Fnegd(0x06, "fnegd"), Fnegq(0x07, "fnegq"), Fabss(0x09, "fabss"), Fabsd(0x0A, "fabsd"), Fabsq(
+                        0x0B,
+                        "fabsq"),
 
         // start VIS1
         Edge8cc(0x0, "edge8cc"),
@@ -1215,7 +1129,6 @@ public abstract class SPARCAssembler extends AbstractAssembler {
 
         Fstoi(0xD1, "fstoi"),
         Fdtoi(0xD2, "fdtoi");
-        // @formatter:on
 
         private final int value;
         private final String operator;
@@ -1235,17 +1148,9 @@ public abstract class SPARCAssembler extends AbstractAssembler {
     }
 
     public enum MembarMask {
-        // @formatter:off
-
-        StoreStore(1 << 3, "storestore"),
-        LoadStore(1 << 2, "loadstore"),
-        StoreLoad(1 << 1, "storeload"),
-        LoadLoad(1 << 0, "loadload"),
-        Sync(1 << 6, "sync"),
-        MemIssue(1 << 5, "memissue"),
-        LookAside(1 << 4, "lookaside");
-
-        // @formatter:on
+        StoreStore(1 << 3, "storestore"), LoadStore(1 << 2, "loadstore"), StoreLoad(1 << 1, "storeload"), LoadLoad(1 << 0, "loadload"), Sync(1 << 6, "sync"), MemIssue(1 << 5, "memissue"), LookAside(
+                        1 << 4,
+                        "lookaside");
 
         private final int value;
         private final String operator;
@@ -1265,17 +1170,7 @@ public abstract class SPARCAssembler extends AbstractAssembler {
     }
 
     public enum CC {
-        // @formatter:off
-
-        Icc(0b00, "icc"),
-        Xcc(0b10, "xcc"),
-        Ptrcc(HotSpotGraalRuntime.wordKind() == Kind.Long ? Xcc.getValue() : Icc.getValue(), "ptrcc"),
-        Fcc0(0b00, "fcc0"),
-        Fcc1(0b01, "fcc1"),
-        Fcc2(0b10, "fcc2"),
-        Fcc3(0b11, "fcc3");
-
-        // @formatter:on
+        Icc(0, "icc"), Xcc(2, "xcc"), Ptrcc(HotSpotGraalRuntime.wordKind() == Kind.Long ? Xcc.getValue() : Icc.getValue(), "ptrcc"), Fcc0(0, "fcc0"), Fcc1(1, "fcc1"), Fcc2(2, "fcc2"), Fcc3(3, "fcc3");
 
         private final int value;
         private final String operator;
@@ -1295,9 +1190,8 @@ public abstract class SPARCAssembler extends AbstractAssembler {
     }
 
     public enum ConditionFlag {
-        // @formatter:off
-
         // for FBfcc & FBPfcc instruction
+
         F_Never(0, "f_never"),
         F_NotEqual(1, "f_notEqual"),
         F_NotZero(1, "f_notZero"),
@@ -1339,8 +1233,6 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         Positive(14, "positive"),
         OverflowClear(15, "overflowClear");
 
-        // @formatter:on
-
         private final int value;
         private final String operator;
 
@@ -1359,17 +1251,7 @@ public abstract class SPARCAssembler extends AbstractAssembler {
     }
 
     public enum RCondition {
-        // @formatter:off
-
-        Rc_z(1, "rc_z"),
-        Rc_lez(2, "rc_lez"),
-        Rc_lz(3, "rc_lz"),
-        Rc_nz(5, "rc_nz"),
-        Rc_gz(6, "rc_gz"),
-        Rc_gez(7, "rc_gez"),
-        Rc_last(Rc_gez.getValue(), "rc_last");
-
-        // @formatter:on
+        Rc_z(1, "rc_z"), Rc_lez(2, "rc_lez"), Rc_lz(3, "rc_lz"), Rc_nz(5, "rc_nz"), Rc_gz(6, "rc_gz"), Rc_gez(7, "rc_gez"), Rc_last(Rc_gez.getValue(), "rc_last");
 
         private final int value;
         private final String operator;
@@ -1389,18 +1271,11 @@ public abstract class SPARCAssembler extends AbstractAssembler {
     }
 
     public enum Asi {
-        // @formatter:off
-
-        INVALID(-1),
-        ASI_PRIMARY(0x80),
-        ASI_PRIMARY_NOFAULT(0x82),
-        ASI_PRIMARY_LITTLE(0x88),
+        INVALID(-1), ASI_PRIMARY(0x80), ASI_PRIMARY_NOFAULT(0x82), ASI_PRIMARY_LITTLE(0x88),
         // Block initializing store
         ASI_ST_BLKINIT_PRIMARY(0xE2),
         // Most-Recently-Used (MRU) BIS variant
         ASI_ST_BLKINIT_MRU_PRIMARY(0xF2);
-
-        // @formatter:on
 
         private final int value;
 
@@ -1460,10 +1335,6 @@ public abstract class SPARCAssembler extends AbstractAssembler {
      */
     public static boolean isSimm(long imm, int nbits) {
         return minSimm(nbits) <= imm && imm <= maxSimm(nbits);
-    }
-
-    public static boolean isSimm11(int imm) {
-        return isSimm(imm, 11);
     }
 
     public static boolean isSimm13(int imm) {
@@ -2742,13 +2613,6 @@ public abstract class SPARCAssembler extends AbstractAssembler {
         }
     }
 
-    public static class Illtrap extends Fmt00a {
-
-        public Illtrap(int const22) {
-            super(Op2s.Illtrap, const22, g0);
-        }
-    }
-
     public static class Jmpl extends Fmt10 {
 
         public Jmpl(Register src, int simm13, Register dst) {
@@ -2781,13 +2645,6 @@ public abstract class SPARCAssembler extends AbstractAssembler {
 
         public Ldsh(SPARCAddress src, Register dst) {
             super(Op3s.Ldsh, src, dst);
-        }
-    }
-
-    public static class Lduh extends Fmt11 {
-
-        public Lduh(SPARCAddress src, Register dst) {
-            super(Op3s.Lduh, src, dst);
         }
     }
 
@@ -3064,8 +2921,8 @@ public abstract class SPARCAssembler extends AbstractAssembler {
 
     public static class Sll extends Fmt10 {
 
-        public Sll(Register src1, int shcnt32, Register dst) {
-            super(Op3s.Sll, src1, shcnt32, dst);
+        public Sll(Register src1, int simm13, Register dst) {
+            super(Op3s.Sll, src1, simm13, dst);
         }
 
         public Sll(Register src1, Register src2, Register dst) {
@@ -3075,8 +2932,8 @@ public abstract class SPARCAssembler extends AbstractAssembler {
 
     public static class Sllx extends Fmt10 {
 
-        public Sllx(Register src1, int shcnt64, Register dst) {
-            super(Op3s.Sllx, src1, shcnt64, dst);
+        public Sllx(Register src1, int simm13, Register dst) {
+            super(Op3s.Sllx, src1, simm13, dst);
         }
 
         public Sllx(Register src1, Register src2, Register dst) {
@@ -3086,8 +2943,8 @@ public abstract class SPARCAssembler extends AbstractAssembler {
 
     public static class Sra extends Fmt10 {
 
-        public Sra(Register src1, int shcnt32, Register dst) {
-            super(Op3s.Sra, src1, shcnt32, dst);
+        public Sra(Register src1, int simm13, Register dst) {
+            super(Op3s.Sra, src1, simm13, dst);
         }
 
         public Sra(Register src1, Register src2, Register dst) {
@@ -3097,8 +2954,8 @@ public abstract class SPARCAssembler extends AbstractAssembler {
 
     public static class Srax extends Fmt10 {
 
-        public Srax(Register src1, int shcnt64, Register dst) {
-            super(Op3s.Srax, src1, shcnt64, dst);
+        public Srax(Register src1, int simm13, Register dst) {
+            super(Op3s.Srax, src1, simm13, dst);
         }
 
         public Srax(Register src1, Register src2, Register dst) {
@@ -3108,8 +2965,8 @@ public abstract class SPARCAssembler extends AbstractAssembler {
 
     public static class Srl extends Fmt10 {
 
-        public Srl(Register src1, int shcnt32, Register dst) {
-            super(Op3s.Srl, src1, shcnt32, dst);
+        public Srl(Register src1, int simm13, Register dst) {
+            super(Op3s.Srl, src1, simm13, dst);
         }
 
         public Srl(Register src1, Register src2, Register dst) {
@@ -3119,8 +2976,8 @@ public abstract class SPARCAssembler extends AbstractAssembler {
 
     public static class Srlx extends Fmt10 {
 
-        public Srlx(Register src1, int shcnt64, Register dst) {
-            super(Op3s.Srlx, src1, shcnt64, dst);
+        public Srlx(Register src1, int simm13, Register dst) {
+            super(Op3s.Srlx, src1, simm13, dst);
         }
 
         public Srlx(Register src1, Register src2, Register dst) {

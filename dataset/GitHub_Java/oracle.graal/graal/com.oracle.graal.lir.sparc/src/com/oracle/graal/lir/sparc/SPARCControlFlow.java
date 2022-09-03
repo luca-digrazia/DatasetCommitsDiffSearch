@@ -45,48 +45,39 @@ public class SPARCControlFlow {
 
         protected Condition condition;
         protected LabelRef destination;
-        protected final Kind kind;
 
-        public BranchOp(Condition condition, LabelRef destination, Kind kind) {
+        public BranchOp(Condition condition, LabelRef destination) {
             this.condition = condition;
             this.destination = destination;
-            this.kind = kind;
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
-            assert kind == Kind.Int || kind == Kind.Long || kind == Kind.Object;
-            CC cc = kind == Kind.Int ? CC.Icc : CC.Xcc;
+            // FIXME Using xcc is wrong! It depends on the compare.
             switch (condition) {
                 case EQ:
-                    new Bpe(cc, destination.label()).emit(masm);
+                    new Bpe(CC.Xcc, destination.label()).emit(masm);
                     break;
                 case NE:
-                    new Bpne(cc, destination.label()).emit(masm);
-                    break;
-                case BT:
-                    new Bplu(cc, destination.label()).emit(masm);
+                    new Bpne(CC.Xcc, destination.label()).emit(masm);
                     break;
                 case LT:
-                    new Bpl(cc, destination.label()).emit(masm);
+                    new Bpl(CC.Xcc, destination.label()).emit(masm);
                     break;
                 case BE:
-                    new Bpleu(cc, destination.label()).emit(masm);
+                    new Bpleu(CC.Xcc, destination.label()).emit(masm);
                     break;
                 case LE:
-                    new Bple(cc, destination.label()).emit(masm);
-                    break;
-                case GE:
-                    new Bpge(cc, destination.label()).emit(masm);
+                    new Bple(CC.Xcc, destination.label()).emit(masm);
                     break;
                 case AE:
-                    new Bpgeu(cc, destination.label()).emit(masm);
+                    new Bpgeu(CC.Xcc, destination.label()).emit(masm);
                     break;
                 case GT:
-                    new Bpg(cc, destination.label()).emit(masm);
+                    new Bpg(CC.Xcc, destination.label()).emit(masm);
                     break;
                 case AT:
-                    new Bpgu(cc, destination.label()).emit(masm);
+                    new Bpgu(CC.Xcc, destination.label()).emit(masm);
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
@@ -161,10 +152,8 @@ public class SPARCControlFlow {
         if (isFloat) {
             if (unorderedIsTrue && !trueOnUnordered(condition)) {
                 // cmove(tasm, masm, result, ConditionFlag.Parity, trueValue);
-                throw GraalInternalError.unimplemented();
             } else if (!unorderedIsTrue && trueOnUnordered(condition)) {
                 // cmove(tasm, masm, result, ConditionFlag.Parity, falseValue);
-                throw GraalInternalError.unimplemented();
             }
         }
     }
@@ -177,9 +166,8 @@ public class SPARCControlFlow {
         assert !asRegister(other).equals(asRegister(result)) : "other already overwritten by previous move";
         switch (other.getKind()) {
             case Int:
-                // XXX CC depends on compare
                 new Movcc(cond, CC.Icc, asRegister(other), asRegister(result)).emit(masm);
-                break;
+                throw new InternalError("check instruction");
             case Long:
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -271,6 +259,7 @@ public class SPARCControlFlow {
         }
 
         @Override
+        @SuppressWarnings("unused")
         public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
             if (key.getKind() == Kind.Int) {
                 Register intKey = asIntReg(key);
@@ -281,26 +270,27 @@ public class SPARCControlFlow {
                     long lc = keyConstants[i].asLong();
                     assert NumUtil.isInt(lc);
                     new Cmp(intKey, (int) lc).emit(masm);
-                    new Bpe(CC.Icc, keyTargets[i].label()).emit(masm);
-                    new Nop().emit(masm);  // delay slot
+                    Label l = keyTargets[i].label();
+                    l.addPatchAt(tasm.asm.codeBuffer.position());
+                    new Bpe(CC.Icc, l).emit(masm);
                 }
             } else if (key.getKind() == Kind.Long) {
                 Register longKey = asLongReg(key);
-                Register temp = asLongReg(scratch);
                 for (int i = 0; i < keyConstants.length; i++) {
-                    SPARCMove.move(tasm, masm, temp.asValue(Kind.Long), keyConstants[i]);
-                    new Cmp(longKey, temp).emit(masm);
-                    new Bpe(CC.Xcc, keyTargets[i].label()).emit(masm);
-                    new Nop().emit(masm);  // delay slot
+                    // masm.setp_eq_s64(tasm.asLongConst(keyConstants[i]),
+                    // longKey);
+                    // masm.at();
+                    Label l = keyTargets[i].label();
+                    l.addPatchAt(tasm.asm.codeBuffer.position());
+                    new Bpe(CC.Xcc, l).emit(masm);
                 }
             } else if (key.getKind() == Kind.Object) {
-                Register objectKey = asObjectReg(key);
+                Register intKey = asObjectReg(key);
                 Register temp = asObjectReg(scratch);
                 for (int i = 0; i < keyConstants.length; i++) {
                     SPARCMove.move(tasm, masm, temp.asValue(Kind.Object), keyConstants[i]);
-                    new Cmp(objectKey, temp).emit(masm);
+                    new Cmp(intKey, temp).emit(masm);
                     new Bpe(CC.Ptrcc, keyTargets[i].label()).emit(masm);
-                    new Nop().emit(masm);  // delay slot
                 }
             } else {
                 throw new GraalInternalError("sequential switch only supported for int, long and object");
@@ -308,7 +298,7 @@ public class SPARCControlFlow {
             if (defaultTarget != null) {
                 masm.jmp(defaultTarget.label());
             } else {
-                new Illtrap(0).emit(masm);
+                // masm.hlt();
             }
         }
 
@@ -370,7 +360,7 @@ public class SPARCControlFlow {
                 masm.bind(actualDefaultTarget);
                 // masm.hlt();
             }
-            throw GraalInternalError.unimplemented();
+            throw new InternalError("NYI");
         }
 
         @Override
@@ -454,6 +444,6 @@ public class SPARCControlFlow {
         tasm.compilationResult.addAnnotation(jt);
 
         // SPARC: unimp: tableswitch extract
-        throw GraalInternalError.unimplemented();
+        throw new InternalError("NYI");
     }
 }

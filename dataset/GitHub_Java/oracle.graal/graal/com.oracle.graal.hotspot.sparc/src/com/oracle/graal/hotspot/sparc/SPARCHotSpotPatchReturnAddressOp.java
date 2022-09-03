@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static com.oracle.graal.sparc.SPARC.*;
+import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * Patch the return address of the current frame.
@@ -45,10 +45,10 @@ final class SPARCHotSpotPatchReturnAddressOp extends SPARCLIRInstruction {
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
         // FIXME This is non-trivial. On SPARC we need to flush all register windows first before we
         // can patch the return address (see: frame::patch_pc).
-        // int frameSize = crb.frameMap.frameSize();
+        // int frameSize = tasm.frameMap.frameSize();
         // new Stx(asRegister(address), new SPARCAddress(sp, frameSize));
         new Ldx(new SPARCAddress(g0, 0x123), g0).emit(masm);
     }

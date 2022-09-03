@@ -52,7 +52,9 @@ public class SPARCCall {
 
         @Override
         public boolean destroysCallerSavedRegisters() {
-            return true;
+            // On SPARC we never destroy caller saved registers since they are automatically saved
+            // in the register window.
+            return false;
         }
     }
 
@@ -113,7 +115,9 @@ public class SPARCCall {
 
         @Override
         public boolean destroysCallerSavedRegisters() {
-            return callTarget.destroysRegisters();
+            // On SPARC we never destroy caller saved registers since they are automatically saved
+            // in the register window.
+            return false;
         }
     }
 
@@ -160,7 +164,6 @@ public class SPARCCall {
         tasm.recordDirectCall(before, after, callTarget, info);
         tasm.recordExceptionHandlers(after, info);
         new Nop().emit(masm);  // delay slot
-        masm.ensureUniquePC();
     }
 
     public static void indirectJmp(TargetMethodAssembler tasm, SPARCMacroAssembler masm, Register dst, InvokeTarget target) {
@@ -170,7 +173,6 @@ public class SPARCCall {
         int after = masm.codeBuffer.position();
         tasm.recordIndirectCall(before, after, target, null);
         new Nop().emit(masm);  // delay slot
-        masm.ensureUniquePC();
     }
 
     public static void indirectCall(TargetMethodAssembler tasm, SPARCMacroAssembler masm, Register dst, InvokeTarget callTarget, LIRFrameState info) {
@@ -180,6 +182,5 @@ public class SPARCCall {
         tasm.recordIndirectCall(before, after, callTarget, info);
         tasm.recordExceptionHandlers(after, info);
         new Nop().emit(masm);  // delay slot
-        masm.ensureUniquePC();
     }
 }
