@@ -67,16 +67,9 @@ final class InstrumentationHandler {
     private static final boolean TRACE = Boolean.getBoolean("truffle.instrumentation.trace");
 
     private final Object sourceVM;
-
-    /*
-     * The contract is the following: "sources" and "sourcesList" can only be accessed while
-     * synchronized on "sources". both will only be lazily initialized from "loadedRoots" when the
-     * first sourceBindings is added, by calling lazyInitializeSourcesList(). "sourcesList" will be
-     * null as long as the sources haven't been initialized.
-     */
     private final Map<Source, Void> sources = Collections.synchronizedMap(new WeakHashMap<Source, Void>());
     /* Load order needs to be preserved for sources, thats why we store sources again in a list. */
-    private volatile Collection<Source> sourcesList;
+    private final Collection<Source> sourcesList = new WeakAsyncList<>(16);
 
     private final Collection<RootNode> loadedRoots = new WeakAsyncList<>(256);
     private final Collection<RootNode> executedRoots = new WeakAsyncList<>(64);
@@ -106,29 +99,24 @@ final class InstrumentationHandler {
         if (!AccessorInstrumentHandler.nodesAccess().isInstrumentable(root)) {
             return;
         }
-        Source source = null;
-        synchronized (sources) {
-            if (!sourceBindings.isEmpty()) {
-                // we'll add to the sourcesList, so it needs to be initialized
-                lazyInitializeSourcesList();
-
-                SourceSection sourceSection = root.getSourceSection();
-                if (sourceSection != null) {
-                    // notify sources
-                    source = sourceSection.getSource();
-                    if (!sources.containsKey(source)) {
-                        sources.put(source, null);
-                        sourcesList.add(source);
-                    }
+        SourceSection sourceSection = root.getSourceSection();
+        if (sourceSection != null) {
+            // notify sources
+            Source source = sourceSection.getSource();
+            boolean isNewSource = false;
+            synchronized (sources) {
+                if (!sources.containsKey(source)) {
+                    sources.put(source, null);
+                    sourcesList.add(source);
+                    isNewSource = true;
                 }
             }
-            loadedRoots.add(root);
+            // we don't want to invoke foreign code while we are holding a lock to avoid deadlocks.
+            if (isNewSource) {
+                notifySourceBindingsLoaded(sourceBindings, source);
+            }
         }
-        // we don't want to invoke foreign code while we are holding a lock to avoid
-        // deadlocks.
-        if (source != null) {
-            notifySourceBindingsLoaded(sourceBindings, source);
-        }
+        loadedRoots.add(root);
 
         // fast path no bindings attached
         if (!sourceSectionBindings.isEmpty()) {
@@ -233,9 +221,6 @@ final class InstrumentationHandler {
 
         this.sourceBindings.add(binding);
         if (notifyLoaded) {
-            synchronized (sources) {
-                lazyInitializeSourcesList();
-            }
             for (Source source : sourcesList) {
                 notifySourceBindingLoaded(binding, source);
             }
@@ -246,28 +231,6 @@ final class InstrumentationHandler {
         }
 
         return binding;
-    }
-
-    /**
-     * Initializes sources and sourcesList by populating them from loadedRoots.
-     */
-    private void lazyInitializeSourcesList() {
-        assert Thread.holdsLock(sources);
-        if (sourcesList == null) {
-            // build the sourcesList, we need it now
-            sourcesList = new WeakAsyncList<>(16);
-            for (RootNode root : loadedRoots) {
-                SourceSection sourceSection = root.getSourceSection();
-                if (sourceSection != null) {
-                    // notify sources
-                    Source source = sourceSection.getSource();
-                    if (!sources.containsKey(source)) {
-                        sources.put(source, null);
-                        sourcesList.add(source);
-                    }
-                }
-            }
-        }
     }
 
     private void visitRoots(Collection<RootNode> roots, AbstractNodeVisitor addBindingsVisitor) {
