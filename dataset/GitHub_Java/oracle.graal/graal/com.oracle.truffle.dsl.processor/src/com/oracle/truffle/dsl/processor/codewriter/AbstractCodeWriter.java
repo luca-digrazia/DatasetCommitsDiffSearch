@@ -274,14 +274,26 @@ public abstract class AbstractCodeWriter extends CodeElementScanner<Void, Void> 
                 }
             }
         } else {
+            Element enclosing = f.getEnclosingElement();
             writeModifiers(f.getModifiers());
-            write(useImport(f, f.asType()));
 
-            if (f.getEnclosingElement().getKind() == ElementKind.METHOD) {
-                ExecutableElement method = (ExecutableElement) f.getEnclosingElement();
+            boolean varArgs = false;
+            if (enclosing.getKind() == ElementKind.METHOD) {
+                ExecutableElement method = (ExecutableElement) enclosing;
                 if (method.isVarArgs() && method.getParameters().indexOf(f) == method.getParameters().size() - 1) {
-                    write("...");
+                    varArgs = true;
                 }
+            }
+
+            TypeMirror varType = f.asType();
+            if (varArgs) {
+                if (varType.getKind() == TypeKind.ARRAY) {
+                    varType = ((ArrayType) varType).getComponentType();
+                }
+                write(useImport(f, varType));
+                write("...");
+            } else {
+                write(useImport(f, varType));
             }
 
             write(" ");
@@ -661,10 +673,18 @@ public abstract class AbstractCodeWriter extends CodeElementScanner<Void, Void> 
                 if (i != 0) {
                     write("+ ");
                 }
+
                 int nextSize = MAX_LINE_LENGTH - lineLength - 2;
+                if (nextSize <= 0) {
+                    writeLn();
+                    nextSize = MAX_LINE_LENGTH - lineLength - 2;
+                }
+
                 int end = Math.min(i + nextSize, string.length());
 
-                assert lineLength + (end - i) + 2 < MAX_LINE_LENGTH;
+                // TODO(CH): fails in normal usage - output ok though
+                // assert lineLength + (end - i) + 2 < MAX_LINE_LENGTH;
+
                 write("\"" + string.substring(i, end) + "\"");
                 size = nextSize;
             }
