@@ -40,12 +40,14 @@ import com.oracle.graal.virtual.phases.ea.EffectList.Effect;
 
 public class PartialEscapeAnalysisPhase extends Phase {
 
+    private final TargetDescription target;
     private final MetaAccessProvider runtime;
     private final Assumptions assumptions;
     private CustomCanonicalizer customCanonicalizer;
     private final boolean iterative;
 
-    public PartialEscapeAnalysisPhase(MetaAccessProvider runtime, Assumptions assumptions, boolean iterative) {
+    public PartialEscapeAnalysisPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, boolean iterative) {
+        this.target = target;
         this.runtime = runtime;
         this.assumptions = assumptions;
         this.iterative = iterative;
@@ -90,7 +92,7 @@ public class PartialEscapeAnalysisPhase extends Phase {
                 public Boolean call() {
                     SchedulePhase schedule = new SchedulePhase();
                     schedule.apply(graph, false);
-                    PartialEscapeClosure closure = new PartialEscapeClosure(graph.createNodeBitMap(), schedule, runtime, assumptions);
+                    PartialEscapeClosure closure = new PartialEscapeClosure(graph.createNodeBitMap(), schedule, runtime);
                     ReentrantBlockIterator.apply(closure, schedule.getCFG().getStartBlock(), new BlockState(), null);
 
                     if (closure.getNewVirtualObjectCount() == 0) {
@@ -112,7 +114,7 @@ public class PartialEscapeAnalysisPhase extends Phase {
                         return false;
                     }
                     if (GraalOptions.OptCanonicalizer) {
-                        new CanonicalizerPhase(runtime, assumptions, null, customCanonicalizer).apply(graph);
+                        new CanonicalizerPhase(target, runtime, assumptions, null, customCanonicalizer).apply(graph);
                     }
                     return true;
                 }

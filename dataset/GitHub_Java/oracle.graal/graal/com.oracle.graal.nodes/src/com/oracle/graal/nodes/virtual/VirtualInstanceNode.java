@@ -32,21 +32,14 @@ public class VirtualInstanceNode extends VirtualObjectNode {
 
     private final ResolvedJavaType type;
     private final ResolvedJavaField[] fields;
-    private final HashMap<ResolvedJavaField, Integer> fieldMap;
+    private final HashMap<ResolvedJavaField, Integer> fieldMap = new HashMap<>();
 
     public VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields) {
         this.type = type;
         this.fields = fields;
-        fieldMap = new HashMap<>();
         for (int i = 0; i < fields.length; i++) {
             fieldMap.put(fields[i], i);
         }
-    }
-
-    private VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields, HashMap<ResolvedJavaField, Integer> fieldMap) {
-        this.type = type;
-        this.fields = fields;
-        this.fieldMap = fieldMap;
     }
 
     @Override
@@ -91,10 +84,5 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     public Kind entryKind(int index) {
         assert index >= 0 && index < fields.length;
         return fields[index].getKind();
-    }
-
-    @Override
-    public VirtualInstanceNode duplicate() {
-        return new VirtualInstanceNode(type, fields, fieldMap);
     }
 }

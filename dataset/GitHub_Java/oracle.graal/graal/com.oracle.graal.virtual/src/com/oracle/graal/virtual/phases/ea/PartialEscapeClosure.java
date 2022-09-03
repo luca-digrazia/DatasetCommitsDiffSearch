@@ -26,7 +26,6 @@ import static com.oracle.graal.virtual.phases.ea.PartialEscapeAnalysisPhase.*;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -60,10 +59,10 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
 
     private final VirtualizerToolImpl tool;
 
-    public PartialEscapeClosure(NodeBitMap usages, SchedulePhase schedule, MetaAccessProvider metaAccess, Assumptions assumptions) {
+    public PartialEscapeClosure(NodeBitMap usages, SchedulePhase schedule, MetaAccessProvider metaAccess) {
         this.usages = usages;
         this.schedule = schedule;
-        tool = new VirtualizerToolImpl(effects, usages, metaAccess, assumptions);
+        tool = new VirtualizerToolImpl(effects, usages, metaAccess);
     }
 
     public GraphEffectList getEffects() {
@@ -373,7 +372,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
     }
 
     @Override
-    protected BlockState cloneState(BlockState oldState) {
+    protected BlockState afterSplit(FixedNode node, BlockState oldState) {
         return oldState.cloneState();
     }
 
@@ -457,9 +456,9 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
     }
 
     private void processLoopExit(LoopExitNode exitNode, BlockState initialState, BlockState exitState) {
-        HashMap<VirtualObjectNode, ProxyNode> proxies = new HashMap<>();
+        HashMap<VirtualObjectNode, ValueProxyNode> proxies = new HashMap<>();
 
-        for (ProxyNode proxy : exitNode.proxies()) {
+        for (ValueProxyNode proxy : exitNode.proxies()) {
             ObjectState obj = exitState.getObjectState(proxy.value());
             if (obj != null) {
                 proxies.put(obj.virtual, proxy);
@@ -473,7 +472,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                     ObjectState valueObj = exitState.getObjectState(value);
                     if (valueObj == null) {
                         if ((value instanceof PhiNode && ((PhiNode) value).merge() == exitNode.loopBegin()) || initialObj == null || !initialObj.isVirtual() || initialObj.getEntry(i) != value) {
-                            ProxyNode proxy = new ProxyNode(value, exitNode, PhiType.Value);
+                            ValueProxyNode proxy = new ValueProxyNode(value, exitNode, PhiType.Value);
                             obj.setEntry(i, proxy);
                             effects.addFloatingNode(proxy);
                         }
@@ -481,9 +480,9 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                 }
             } else {
                 if (initialObj == null || initialObj.isVirtual()) {
-                    ProxyNode proxy = proxies.get(obj.virtual);
+                    ValueProxyNode proxy = proxies.get(obj.virtual);
                     if (proxy == null) {
-                        proxy = new ProxyNode(obj.getMaterializedValue(), exitNode, PhiType.Value);
+                        proxy = new ValueProxyNode(obj.getMaterializedValue(), exitNode, PhiType.Value);
                         effects.addFloatingNode(proxy);
                     } else {
                         effects.replaceFirstInput(proxy, proxy.value(), obj.getMaterializedValue());
