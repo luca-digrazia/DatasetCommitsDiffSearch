@@ -22,36 +22,43 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.java.ArrayLengthNode;
+import com.oracle.graal.nodes.spi.ArrayLengthProvider;
+import com.oracle.graal.nodes.util.GraphUtil;
 
 /**
  * A {@link PiNode} that also provides an array length in addition to a more refined stamp. A usage
- * that reads the array length, such as an {@link ArrayLengthNode}, can be canonicalized base on
+ * that reads the array length, such as an {@link ArrayLengthNode}, can be canonicalized based on
  * this information.
  */
+@NodeInfo
 public final class PiArrayNode extends PiNode implements ArrayLengthProvider {
 
-    @Input private ValueNode length;
+    public static final NodeClass<PiArrayNode> TYPE = NodeClass.create(PiArrayNode.class);
+    @Input ValueNode length;
 
     public ValueNode length() {
         return length;
     }
 
     public PiArrayNode(ValueNode object, ValueNode length, Stamp stamp) {
-        super(object, stamp);
+        super(TYPE, object, stamp, null);
         this.length = length;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (!(object() instanceof ArrayLengthProvider) || length() != ((ArrayLengthProvider) object()).length()) {
+    public Node canonical(CanonicalizerTool tool) {
+        if (GraphUtil.arrayLength(object()) != length()) {
             return this;
         }
         return super.canonical(tool);
     }
 
     @NodeIntrinsic
-    public static native <T> T piArrayCast(Object object, int length, @ConstantNodeParameter Stamp stamp);
+    public static native Object piArrayCast(Object object, int length, @ConstantNodeParameter Stamp stamp);
 }

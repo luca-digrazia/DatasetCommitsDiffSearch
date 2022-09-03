@@ -22,6 +22,11 @@
  */
 package com.oracle.graal.nodes;
 
+//JaCoCo Exclude
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.TypeReference;
@@ -42,11 +47,6 @@ import com.oracle.graal.nodes.spi.Virtualizable;
 import com.oracle.graal.nodes.spi.VirtualizerTool;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-
-//JaCoCo Exclude
-
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * A node that changes the type of its input, usually narrowing it. For example, a {@link PiNode}
@@ -71,7 +71,6 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
         super(c, stamp, guard);
         this.object = object;
         this.piStamp = stamp;
-        inferStamp();
     }
 
     public PiNode(ValueNode object, Stamp stamp) {
@@ -79,7 +78,9 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
     }
 
     public PiNode(ValueNode object, Stamp stamp, ValueNode anchor) {
-        this(TYPE, object, stamp, (GuardingNode) anchor);
+        super(TYPE, stamp, (GuardingNode) anchor);
+        this.object = object;
+        this.piStamp = stamp;
     }
 
     public PiNode(ValueNode object, ValueNode anchor) {
@@ -122,6 +123,7 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
             /* The actual stamp has not been set yet. */
             return this;
         }
+        inferStamp();
         ValueNode o = object();
 
         // The pi node does not give any additional information => skip it.
