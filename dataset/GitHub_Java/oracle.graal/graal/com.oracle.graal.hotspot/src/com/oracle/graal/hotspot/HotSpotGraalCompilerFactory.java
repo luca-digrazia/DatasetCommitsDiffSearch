@@ -40,6 +40,7 @@ import jdk.vm.ci.inittimer.InitTimer;
 import jdk.vm.ci.runtime.JVMCICompilerFactory;
 import jdk.vm.ci.runtime.JVMCIRuntime;
 import jdk.vm.ci.services.Services;
+import sun.misc.VM;
 
 import com.oracle.graal.options.GraalJarsOptionDescriptorsProvider;
 import com.oracle.graal.options.Option;
@@ -56,16 +57,11 @@ public abstract class HotSpotGraalCompilerFactory implements JVMCICompilerFactor
     private static final String GRAAL_OPTIONS_FILE_PROPERTY_NAME = "graal.options.file";
 
     /**
-     * The name of the system property specifying the Graal version.
-     */
-    private static final String GRAAL_VERSION_PROPERTY_NAME = "graal.version";
-
-    /**
      * The prefix for system properties that correspond to {@link Option} annotated fields. A field
      * named {@code MyOption} will have its value set from a system property with the name
      * {@code GRAAL_OPTION_PROPERTY_PREFIX + "MyOption"}.
      */
-    public static final String GRAAL_OPTION_PROPERTY_PREFIX = "graal.";
+    public static final String GRAAL_OPTION_PROPERTY_PREFIX = "graal.option.";
 
     /**
      * Gets the system property assignment that would set the current value for a given option.
@@ -104,7 +100,7 @@ public abstract class HotSpotGraalCompilerFactory implements JVMCICompilerFactor
     }
 
     /**
-     * Parses the options in the file denoted by the {@code VM.getSavedProperty(String) saved}
+     * Parses the options in the file denoted by the {@linkplain VM#getSavedProperty(String) saved}
      * system property named {@value HotSpotGraalCompilerFactory#GRAAL_OPTIONS_FILE_PROPERTY_NAME}
      * if the file exists followed by the options encoded in saved system properties whose names
      * start with {@code "graal.option."}. Key/value pairs are parsed from the file denoted by
@@ -139,13 +135,13 @@ public abstract class HotSpotGraalCompilerFactory implements JVMCICompilerFactor
                 }
             }
 
-            Properties savedProps = getSavedProperties(jdk8OrEarlier);
+            Properties savedProps = getSavedProperties();
 
             Map<String, String> optionSettings = new HashMap<>();
             for (Map.Entry<Object, Object> e : savedProps.entrySet()) {
                 String name = (String) e.getKey();
                 if (name.startsWith(GRAAL_OPTION_PROPERTY_PREFIX)) {
-                    if (name.equals(GRAAL_OPTIONS_FILE_PROPERTY_NAME) || name.equals(GRAAL_VERSION_PROPERTY_NAME) || name.equals(PROFILE_OPTIONVALUE_PROPERTY_NAME)) {
+                    if (name.equals(GRAAL_OPTIONS_FILE_PROPERTY_NAME) || name.equals(PROFILE_OPTIONVALUE_PROPERTY_NAME)) {
                         // Ignore well known properties that do not denote an option
                     } else {
                         String value = (String) e.getValue();
@@ -158,11 +154,9 @@ public abstract class HotSpotGraalCompilerFactory implements JVMCICompilerFactor
         }
     }
 
-    private static Properties getSavedProperties(boolean jdk8OrEarlier) {
+    private static Properties getSavedProperties() {
         try {
-            String vmClassName = jdk8OrEarlier ? "sun.misc.VM" : "jdk.internal.misc.VM";
-            Class<?> vmClass = Class.forName(vmClassName);
-            Field savedPropsField = vmClass.getDeclaredField("savedProps");
+            Field savedPropsField = VM.class.getDeclaredField("savedProps");
             savedPropsField.setAccessible(true);
             return (Properties) savedPropsField.get(null);
         } catch (Exception e) {
