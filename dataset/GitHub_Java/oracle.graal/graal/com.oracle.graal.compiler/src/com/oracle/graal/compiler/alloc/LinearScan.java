@@ -1632,7 +1632,7 @@ public final class LinearScan {
      * Visits all intervals for a frame state. The frame state use this information to build the OOP
      * maps.
      */
-    private void markFrameLocations(IntervalWalker iw, LIRInstruction op, LIRFrameState info) {
+    void markFrameLocations(IntervalWalker iw, LIRInstruction op, LIRFrameState info) {
         Debug.log("creating oop map at opId %d", op.id());
 
         // walk before the current operation . intervals that start at
@@ -1693,13 +1693,7 @@ public final class LinearScan {
         return attributes(asRegister(operand)).isCallerSave();
     }
 
-    /**
-     * @param op
-     * @param operand
-     * @param valueMode
-     * @param flags
-     * @see InstructionValueProcedure#doValue(LIRInstruction, Value, OperandMode, EnumSet)
-     */
+    @SuppressWarnings("unused")
     private Value debugInfoProcedure(LIRInstruction op, Value operand, OperandMode valueMode, EnumSet<OperandFlag> flags) {
         int tempOpId = op.id();
         OperandMode mode = OperandMode.USE;
@@ -1742,6 +1736,8 @@ public final class LinearScan {
         boolean hasDead = false;
 
         InstructionValueProcedure assignProc = (op, operand, mode, flags) -> isVariable(operand) ? colorLirOperand((Variable) operand, op.id(), mode) : operand;
+        InstructionStateProcedure stateProc = (op, state) -> computeDebugInfo(iw, op, state);
+
         for (int j = 0; j < numInst; j++) {
             final LIRInstruction op = instructions.get(j);
             if (op == null) { // this can happen when spill-moves are removed in eliminateSpillMoves
@@ -1772,7 +1768,7 @@ public final class LinearScan {
             op.forEachOutput(assignProc);
 
             // compute reference map and debug information
-            op.forEachState((inst, state) -> computeDebugInfo(iw, inst, state));
+            op.forEachState(stateProc);
 
             // remove useless moves
             if (move != null) {
