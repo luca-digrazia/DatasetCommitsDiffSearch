@@ -213,7 +213,7 @@ abstract class ExecuteMethodNode extends Node {
         return new Type[args.length];
     }
 
-    private static void fillArgTypesArray(Object[] args, Type[] cachedArgTypes, SingleMethodDesc selected, boolean varArgs, List<SingleMethodDesc> applicable, boolean strict) {
+    private static void fillArgTypesArray(Object[] args, Type[] cachedArgTypes, SingleMethodDesc selected, boolean varArgs, List<SingleMethodDesc> applicable) {
         if (cachedArgTypes == null) {
             return;
         }
@@ -245,7 +245,7 @@ abstract class ExecuteMethodNode extends Node {
                     }
                 }
 
-                argType = new PrimitiveType(currentTargetType, otherPossibleTypes.toArray(EMPTY_CLASS_ARRAY), strict);
+                argType = new PrimitiveType(currentTargetType, otherPossibleTypes.toArray(EMPTY_CLASS_ARRAY));
             } else if (arg instanceof JavaObject) {
                 argType = new JavaObjectType(((JavaObject) arg).getObjectClass());
             } else {
@@ -477,7 +477,7 @@ abstract class ExecuteMethodNode extends Node {
                 SingleMethodDesc best = candidates.get(0);
 
                 if (cachedArgTypes != null) {
-                    fillArgTypesArray(args, cachedArgTypes, best, varArgs, applicableByArity, strict);
+                    fillArgTypesArray(args, cachedArgTypes, best, varArgs, applicableByArity);
                 }
 
                 return best;
@@ -485,7 +485,7 @@ abstract class ExecuteMethodNode extends Node {
                 SingleMethodDesc best = findMostSpecificOverload(candidates, args, varArgs);
                 if (best != null) {
                     if (cachedArgTypes != null) {
-                        fillArgTypesArray(args, cachedArgTypes, best, varArgs, applicableByArity, strict);
+                        fillArgTypesArray(args, cachedArgTypes, best, varArgs, applicableByArity);
                     }
 
                     return best;
@@ -723,12 +723,10 @@ abstract class ExecuteMethodNode extends Node {
     static class PrimitiveType implements Type {
         final Class<?> targetType;
         @CompilationFinal(dimensions = 1) final Class<?>[] otherTypes;
-        final boolean strict;
 
-        PrimitiveType(Class<?> targetType, Class<?>[] otherTypes, boolean strict) {
+        PrimitiveType(Class<?> targetType, Class<?>[] otherTypes) {
             this.targetType = targetType;
             this.otherTypes = otherTypes;
-            this.strict = strict;
         }
 
         @Override
@@ -766,11 +764,11 @@ abstract class ExecuteMethodNode extends Node {
         @ExplodeLoop
         public boolean test(Object value, ToJavaNode toJavaNode) {
             for (Class<?> otherType : otherTypes) {
-                if (toJavaNode.canConvertToPrimitive(value, otherType, strict)) {
+                if (toJavaNode.canConvertStrict(value, otherType)) {
                     return false;
                 }
             }
-            return toJavaNode.canConvertToPrimitive(value, targetType, strict);
+            return toJavaNode.canConvertStrict(value, targetType);
         }
     }
 }
