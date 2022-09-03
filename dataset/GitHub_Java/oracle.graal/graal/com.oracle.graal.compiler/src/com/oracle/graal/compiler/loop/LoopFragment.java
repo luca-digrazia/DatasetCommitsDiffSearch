@@ -30,7 +30,6 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
-import com.oracle.graal.nodes.VirtualState.*;
 
 
 public abstract class LoopFragment {
@@ -140,7 +139,7 @@ public abstract class LoopFragment {
     }
 
     protected static NodeBitMap computeNodes(Graph graph, Collection<BeginNode> blocks, Collection<BeginNode> earlyExits) {
-        final NodeBitMap nodes = graph.createNodeBitMap(true);
+        NodeBitMap nodes = graph.createNodeBitMap(true);
         for (BeginNode b : blocks) {
             for (Node n : b.getBlockNodes()) {
                 if (n instanceof Invoke) {
@@ -159,12 +158,6 @@ public abstract class LoopFragment {
             FrameState stateAfter = earlyExit.stateAfter();
             if (stateAfter != null) {
                 nodes.mark(stateAfter);
-                stateAfter.applyToVirtual(new VirtualClosure() {
-                    @Override
-                    public void apply(VirtualState node) {
-                        nodes.mark(node);
-                    }
-                });
             }
             nodes.mark(earlyExit);
             for (ValueProxyNode proxy : earlyExit.proxies()) {
@@ -236,10 +229,9 @@ public abstract class LoopFragment {
             merge.setNext(next);
 
             FrameState exitState = earlyExit.stateAfter();
-            FrameState newExitState = newEarlyExit.stateAfter();
             FrameState state = null;
             if (exitState != null) {
-                state = exitState.duplicateWithVirtualState();
+                state = exitState.duplicate();
                 merge.setStateAfter(state);
             }
 
@@ -247,8 +239,8 @@ public abstract class LoopFragment {
                 anchored.replaceFirstInput(earlyExit, merge);
             }
 
-            for (final ValueProxyNode vpn : earlyExit.proxies().snapshot()) {
-                final ValueNode replaceWith;
+            for (ValueProxyNode vpn : earlyExit.proxies().snapshot()) {
+                ValueNode replaceWith;
                 ValueProxyNode newVpn = getDuplicatedNode(vpn);
                 if (newVpn != null) {
                     PhiNode phi = graph.add(vpn.type() == PhiType.Value ? new PhiNode(vpn.kind(), merge) : new PhiNode(vpn.type(), merge));
@@ -259,23 +251,10 @@ public abstract class LoopFragment {
                     replaceWith = vpn.value();
                 }
                 if (state != null) {
-                    state.applyToNonVirtual(new NodeClosure<ValueNode>() {
-                        @Override
-                        public void apply(Node from, ValueNode node) {
-                            if (node == vpn) {
-                                from.replaceFirstInput(vpn, replaceWith);
-                            }
-                        }
-                    });
+                    state.replaceFirstInput(vpn, replaceWith);
                 }
                 for (Node usage : vpn.usages().snapshot()) {
-                    if (!merge.isPhiAtMerge(usage)) {
-                        if (usage instanceof VirtualState) {
-                            VirtualState stateUsage = (VirtualState) usage;
-                            if (exitState.isPartOfThisState(stateUsage) || newExitState.isPartOfThisState(stateUsage)) {
-                                continue;
-                            }
-                        }
+                    if (usage != exitState && !merge.isPhiAtMerge(usage)) {
                         usage.replaceFirstInput(vpn, replaceWith);
                     }
                 }

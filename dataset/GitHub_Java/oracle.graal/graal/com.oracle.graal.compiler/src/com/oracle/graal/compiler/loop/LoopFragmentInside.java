@@ -229,7 +229,7 @@ public class LoopFragmentInside extends LoopFragment {
             FrameState state = loopBegin.stateAfter();
             FrameState duplicateState = null;
             if (state != null) {
-                duplicateState = state.duplicateWithVirtualState();
+                duplicateState = state.duplicate();
                 newExitMerge.setStateAfter(duplicateState);
             }
             for (EndNode end : endsToMerge) {
