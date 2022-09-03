@@ -45,9 +45,6 @@ public class WriteBarrierAdditionPhase extends Phase {
                 addReadNodeBarriers((ReadNode) n, graph);
             } else if (n instanceof WriteNode) {
                 addWriteNodeBarriers((WriteNode) n, graph);
-            } else if (n instanceof LoweredAtomicReadAndWriteNode) {
-                LoweredAtomicReadAndWriteNode loweredAtomicReadAndWriteNode = (LoweredAtomicReadAndWriteNode) n;
-                addAtomicReadWriteNodeBarriers(loweredAtomicReadAndWriteNode, graph);
             } else if (n instanceof LoweredCompareAndSwapNode) {
                 addCASBarriers((LoweredCompareAndSwapNode) n, graph);
             } else if (n instanceof ArrayRangeWriteNode) {
@@ -71,19 +68,19 @@ public class WriteBarrierAdditionPhase extends Phase {
 
     protected static void addG1PreWriteBarrier(FixedAccessNode node, ValueNode object, ValueNode value, LocationNode location, boolean doLoad, boolean nullCheck, StructuredGraph graph) {
         G1PreWriteBarrier preBarrier = graph.add(new G1PreWriteBarrier(object, value, location, doLoad, nullCheck));
-        preBarrier.setStateBefore(node.stateBefore());
+        preBarrier.setDeoptimizationState(node.getDeoptimizationState());
         node.setNullCheck(false);
-        node.setStateBefore(null);
+        node.setDeoptimizationState(null);
         graph.addBeforeFixed(node, preBarrier);
     }
 
     protected void addG1PostWriteBarrier(FixedAccessNode node, ValueNode object, ValueNode value, LocationNode location, boolean precise, StructuredGraph graph) {
-        final boolean alwaysNull = StampTool.isObjectAlwaysNull(value);
+        final boolean alwaysNull = ObjectStamp.isObjectAlwaysNull(value);
         graph.addAfterFixed(node, graph.add(new G1PostWriteBarrier(object, value, location, precise, alwaysNull)));
     }
 
     protected void addSerialPostWriteBarrier(FixedAccessNode node, ValueNode object, ValueNode value, LocationNode location, boolean precise, StructuredGraph graph) {
-        final boolean alwaysNull = StampTool.isObjectAlwaysNull(value);
+        final boolean alwaysNull = ObjectStamp.isObjectAlwaysNull(value);
         final LocationNode loc = (precise ? location : null);
         graph.addAfterFixed(node, graph.add(new SerialWriteBarrier(object, loc, precise, alwaysNull)));
     }
@@ -107,33 +104,6 @@ public class WriteBarrierAdditionPhase extends Phase {
                 addG1PostWriteBarrier(node, node.object(), node.value(), node.location(), false, graph);
             } else {
                 addSerialPostWriteBarrier(node, node.object(), node.value(), node.location(), false, graph);
-            }
-        } else {
-            assert barrierType == BarrierType.NONE;
-        }
-    }
-
-    private void addAtomicReadWriteNodeBarriers(LoweredAtomicReadAndWriteNode loweredAtomicReadAndWriteNode, StructuredGraph graph) {
-        BarrierType barrierType = loweredAtomicReadAndWriteNode.getBarrierType();
-        if (barrierType == BarrierType.PRECISE) {
-            if (useG1GC()) {
-                addG1PreWriteBarrier(loweredAtomicReadAndWriteNode, loweredAtomicReadAndWriteNode.object(), null, loweredAtomicReadAndWriteNode.location(), true,
-                                loweredAtomicReadAndWriteNode.getNullCheck(), graph);
-                addG1PostWriteBarrier(loweredAtomicReadAndWriteNode, loweredAtomicReadAndWriteNode.object(), loweredAtomicReadAndWriteNode.getNewValue(), loweredAtomicReadAndWriteNode.location(),
-                                true, graph);
-            } else {
-                addSerialPostWriteBarrier(loweredAtomicReadAndWriteNode, loweredAtomicReadAndWriteNode.object(), loweredAtomicReadAndWriteNode.getNewValue(), loweredAtomicReadAndWriteNode.location(),
-                                true, graph);
-            }
-        } else if (barrierType == BarrierType.IMPRECISE) {
-            if (useG1GC()) {
-                addG1PreWriteBarrier(loweredAtomicReadAndWriteNode, loweredAtomicReadAndWriteNode.object(), null, loweredAtomicReadAndWriteNode.location(), true,
-                                loweredAtomicReadAndWriteNode.getNullCheck(), graph);
-                addG1PostWriteBarrier(loweredAtomicReadAndWriteNode, loweredAtomicReadAndWriteNode.object(), loweredAtomicReadAndWriteNode.getNewValue(), loweredAtomicReadAndWriteNode.location(),
-                                false, graph);
-            } else {
-                addSerialPostWriteBarrier(loweredAtomicReadAndWriteNode, loweredAtomicReadAndWriteNode.object(), loweredAtomicReadAndWriteNode.getNewValue(), loweredAtomicReadAndWriteNode.location(),
-                                false, graph);
             }
         } else {
             assert barrierType == BarrierType.NONE;

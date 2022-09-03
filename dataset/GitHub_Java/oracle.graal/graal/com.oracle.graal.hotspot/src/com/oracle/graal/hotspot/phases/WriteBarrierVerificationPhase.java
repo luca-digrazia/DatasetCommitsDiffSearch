@@ -71,15 +71,13 @@ public class WriteBarrierVerificationPhase extends Phase {
         Iterator<Node> iterator = frontier.iterator();
         while (iterator.hasNext()) {
             Node currentNode = iterator.next();
-            if (isSafepoint(currentNode)) {
-                throw new AssertionError("Write barrier must be present " + write);
-            }
+            assert !isSafepoint(currentNode) : "Write barrier must be present " + write;
             if (useG1GC()) {
-                if (!(currentNode instanceof G1PostWriteBarrier) || (!validateBarrier((FixedAccessNode) write, (WriteBarrier) currentNode))) {
+                if (!(currentNode instanceof G1PostWriteBarrier) || ((currentNode instanceof G1PostWriteBarrier) && !validateBarrier((FixedAccessNode) write, (WriteBarrier) currentNode))) {
                     expandFrontier(frontier, currentNode);
                 }
             } else {
-                if (!(currentNode instanceof SerialWriteBarrier) || (!validateBarrier((FixedAccessNode) write, (WriteBarrier) currentNode)) ||
+                if (!(currentNode instanceof SerialWriteBarrier) || ((currentNode instanceof SerialWriteBarrier) && !validateBarrier((FixedAccessNode) write, (WriteBarrier) currentNode)) ||
                                 ((currentNode instanceof SerialWriteBarrier) && !validateBarrier((FixedAccessNode) write, (WriteBarrier) currentNode))) {
                     expandFrontier(frontier, currentNode);
                 }
@@ -130,7 +128,7 @@ public class WriteBarrierVerificationPhase extends Phase {
     }
 
     private static boolean validateBarrier(FixedAccessNode write, WriteBarrier barrier) {
-        assert write instanceof WriteNode || write instanceof LoweredCompareAndSwapNode || write instanceof LoweredAtomicReadAndWriteNode : "Node must be of type requiring a write barrier " + write;
+        assert write instanceof WriteNode || write instanceof LoweredCompareAndSwapNode : "Node must be of type requiring a write barrier";
         if ((barrier.getObject() == write.object()) && (!barrier.usePrecise() || (barrier.usePrecise() && barrier.getLocation() == write.location()))) {
             return true;
         }
