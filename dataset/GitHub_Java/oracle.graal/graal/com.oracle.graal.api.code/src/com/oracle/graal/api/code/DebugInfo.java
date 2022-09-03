@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.api.code;
 
+import java.io.*;
+
 /**
  * Represents the debugging information for a particular point of execution. This information
  * includes:
@@ -33,7 +35,9 @@ package com.oracle.graal.api.code;
  * <li>a map from the registers (in the caller's frame) to the slots where they are saved in the
  * current frame</li>
  */
-public class DebugInfo {
+public class DebugInfo implements Serializable {
+
+    private static final long serialVersionUID = -6047206624915812516L;
 
     private final BytecodePosition bytecodePosition;
     private final ReferenceMap referenceMap;

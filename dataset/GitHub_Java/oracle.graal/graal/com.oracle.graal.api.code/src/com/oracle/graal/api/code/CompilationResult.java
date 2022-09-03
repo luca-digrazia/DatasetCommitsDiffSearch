@@ -152,9 +152,9 @@ public class CompilationResult implements Serializable {
             return alignment;
         }
 
-        public abstract int getSize(TargetDescription target);
+        public abstract int getSize(Architecture arch);
 
-        public abstract void emit(TargetDescription target, ByteBuffer buffer);
+        public abstract void emit(Architecture arch, ByteBuffer buffer);
     }
 
     public static final class ConstantData extends Data {
@@ -167,48 +167,48 @@ public class CompilationResult implements Serializable {
         }
 
         @Override
-        public int getSize(TargetDescription target) {
-            return target.getSizeInBytes(constant.getPlatformKind());
+        public int getSize(Architecture arch) {
+            return arch.getSizeInBytes(constant.getPlatformKind());
         }
 
         @Override
-        public void emit(TargetDescription target, ByteBuffer buffer) {
+        public void emit(Architecture arch, ByteBuffer buffer) {
             switch (constant.getKind()) {
                 case Boolean:
-                    assert getSize(target) == 1;
+                    assert getSize(arch) == 1;
                     buffer.put(constant.asBoolean() ? (byte) 1 : (byte) 0);
                     break;
                 case Byte:
-                    assert getSize(target) == 1;
+                    assert getSize(arch) == 1;
                     buffer.put((byte) constant.asInt());
                     break;
                 case Char:
-                    assert getSize(target) == 2;
+                    assert getSize(arch) == 2;
                     buffer.putChar((char) constant.asInt());
                     break;
                 case Short:
-                    assert getSize(target) == 2;
+                    assert getSize(arch) == 2;
                     buffer.putShort((short) constant.asInt());
                     break;
                 case Int:
-                    assert getSize(target) == 4;
+                    assert getSize(arch) == 4;
                     buffer.putInt(constant.asInt());
                     break;
                 case Long:
-                    assert getSize(target) == 8;
+                    assert getSize(arch) == 8;
                     buffer.putLong(constant.asLong());
                     break;
                 case Float:
-                    assert getSize(target) == 4;
+                    assert getSize(arch) == 4;
                     buffer.putFloat(constant.asFloat());
                     break;
                 case Double:
-                    assert getSize(target) == 8;
+                    assert getSize(arch) == 8;
                     buffer.putDouble(constant.asDouble());
                     break;
                 case Object:
                     // placeholder for oop value
-                    for (int i = 0; i < getSize(target); i++) {
+                    for (int i = 0; i < getSize(arch); i++) {
                         buffer.put((byte) 0);
                     }
                     break;
@@ -231,12 +231,12 @@ public class CompilationResult implements Serializable {
         }
 
         @Override
-        public int getSize(TargetDescription target) {
+        public int getSize(Architecture arch) {
             return data.length;
         }
 
         @Override
-        public void emit(TargetDescription target, ByteBuffer buffer) {
+        public void emit(Architecture arch, ByteBuffer buffer) {
             buffer.put(data);
         }
 
@@ -285,14 +285,6 @@ public class CompilationResult implements Serializable {
                 return ((ConstantData) externalData).constant;
             } else {
                 return null;
-            }
-        }
-
-        public int getAlignment() {
-            if (externalData instanceof ConstantData) {
-                return ((ConstantData) externalData).getAlignment();
-            } else {
-                return 0;
             }
         }
 
@@ -464,6 +456,13 @@ public class CompilationResult implements Serializable {
 
     private Assumptions assumptions;
 
+    /**
+     * The leafGraphIds will contain the StructuredGraph.graphId()s of the graphs that were
+     * incorporated into this compilation. These ids are later on used by the runtime system to
+     * evict graphs from the graph cache when deoptimizations occur.
+     */
+    private long[] leafGraphIds;
+
     public CompilationResult() {
         this(null);
     }
@@ -506,6 +505,14 @@ public class CompilationResult implements Serializable {
 
     public Assumptions getAssumptions() {
         return assumptions;
+    }
+
+    public void setLeafGraphIds(long[] leafGraphIds) {
+        this.leafGraphIds = leafGraphIds;
+    }
+
+    public long[] getLeafGraphIds() {
+        return leafGraphIds;
     }
 
     /**
