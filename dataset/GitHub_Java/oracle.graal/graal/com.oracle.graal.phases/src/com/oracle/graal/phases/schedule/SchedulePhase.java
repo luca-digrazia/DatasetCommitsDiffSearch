@@ -23,7 +23,6 @@
 package com.oracle.graal.phases.schedule;
 
 import static com.oracle.graal.api.meta.LocationIdentity.*;
-import static com.oracle.graal.nodes.cfg.ControlFlowGraph.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
@@ -336,7 +335,7 @@ public final class SchedulePhase extends Phase {
 
         @Override
         public void apply(Block newBlock) {
-            this.block = commonDominator(this.block, newBlock);
+            this.block = getCommonDominator(this.block, newBlock);
         }
     }
 
@@ -486,6 +485,16 @@ public final class SchedulePhase extends Phase {
             assignBlockToNode((ScheduledNode) usage, strategy);
         }
         // now true usages are ready
+    }
+
+    private static Block getCommonDominator(Block a, Block b) {
+        if (a == null) {
+            return b;
+        }
+        if (b == null) {
+            return a;
+        }
+        return ControlFlowGraph.commonDominator(a, b);
     }
 
     private void sortNodesWithinBlocks(StructuredGraph graph, SchedulingStrategy strategy) {
