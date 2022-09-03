@@ -86,7 +86,8 @@ public final class If extends BlockEnd {
      * @param isSafepoint {@code true} if this branch should be considered a safepoint
      * @param graph
      */
-    public If(Value x, Condition cond, Value y, Instruction trueSucc, Instruction falseSucc, FrameState stateAfter, Graph graph) {
+    public If(Value x, Condition cond, Value y,
+              BlockBegin trueSucc, BlockBegin falseSucc, FrameState stateAfter, Graph graph) {
         super(CiKind.Illegal, stateAfter, 2, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         assert Util.archKindsEqual(x, y);
         condition = cond;
@@ -116,7 +117,7 @@ public final class If extends BlockEnd {
      * Gets the block corresponding to the true successor.
      * @return the true successor
      */
-    public Instruction trueSuccessor() {
+    public BlockBegin trueSuccessor() {
         return blockSuccessor(0);
     }
 
@@ -124,7 +125,7 @@ public final class If extends BlockEnd {
      * Gets the block corresponding to the false successor.
      * @return the false successor
      */
-    public Instruction falseSuccessor() {
+    public BlockBegin falseSuccessor() {
         return blockSuccessor(1);
     }
 
@@ -133,7 +134,7 @@ public final class If extends BlockEnd {
      * @param istrue {@code true} if the true successor is requested, {@code false} otherwise
      * @return the corresponding successor
      */
-    public Instruction successor(boolean istrue) {
+    public BlockBegin successor(boolean istrue) {
         return blockSuccessor(istrue ? 0 : 1);
     }
 
@@ -141,7 +142,7 @@ public final class If extends BlockEnd {
      * Gets the successor of this instruction for the unordered case.
      * @return the successor for unordered inputs
      */
-    public Instruction unorderedSuccessor() {
+    public BlockBegin unorderedSuccessor() {
         return successor(unorderedIsTrue());
     }
 
@@ -163,8 +164,8 @@ public final class If extends BlockEnd {
     public void swapSuccessors() {
         unorderedIsTrue = !unorderedIsTrue;
         condition = condition.negate();
-        Instruction t = blockSuccessor(0);
-        Instruction f = blockSuccessor(1);
+        BlockBegin t = blockSuccessor(0);
+        BlockBegin f = blockSuccessor(1);
         setBlockSuccessor(0, f);
         setBlockSuccessor(1, t);
     }

@@ -29,7 +29,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.max.asm.*;
 import com.sun.c1x.alloc.*;
 import com.sun.c1x.asm.*;
-import com.sun.c1x.debug.*;
 import com.sun.c1x.gen.*;
 import com.sun.c1x.gen.LIRGenerator.*;
 import com.sun.c1x.graph.*;
@@ -252,10 +251,6 @@ public final class C1XCompilation {
 
             if (C1XOptions.PrintTimers) {
                 C1XTimers.LIR_CREATE.stop();
-            }
-
-            if (C1XOptions.PrintLIR && !TTY.isSuppressed()) {
-                LIRList.printLIR(hir.linearScanOrder());
             }
 
             new LinearScan(this, hir, lirGenerator, frameMap()).allocate();

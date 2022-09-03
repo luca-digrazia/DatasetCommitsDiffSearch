@@ -30,7 +30,7 @@ import com.sun.cri.ci.*;
 /**
  * The {@code Throw} instruction represents a throw of an exception.
  */
-public final class Throw extends BlockEnd implements ExceptionEdgeInstruction {
+public final class Throw extends BlockEnd {
 
     private static final int INPUT_COUNT = 2;
     private static final int INPUT_EXCEPTION = 0;
@@ -88,6 +88,7 @@ public final class Throw extends BlockEnd implements ExceptionEdgeInstruction {
      * Creates a new Throw instruction.
      * @param exception the instruction that generates the exception to throw
      * @param stateAfter the state before the exception is thrown but after the exception object has been popped
+     * @param isSafepoint {@code true} if this instruction is a safepoint instruction
      * @param graph
      */
     public Throw(Value exception, Graph graph) {

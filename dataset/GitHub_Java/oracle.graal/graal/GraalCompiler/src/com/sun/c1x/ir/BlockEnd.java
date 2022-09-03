@@ -59,14 +59,7 @@ public abstract class BlockEnd extends Instruction {
     }
 
     public FrameState setStateAfter(FrameState n) {
-        FrameState oldState = stateAfter();
-        try {
-            return (FrameState) successors().set(super.successorCount() + SUCCESSOR_STATE_AFTER, n);
-        } finally {
-            if (oldState != n && oldState != null) {
-                oldState.delete();
-            }
-        }
+        return (FrameState) successors().set(super.successorCount() + SUCCESSOR_STATE_AFTER, n);
     }
 
     /**
@@ -77,9 +70,8 @@ public abstract class BlockEnd extends Instruction {
         return (BlockBegin) successors().get(super.successorCount() + SUCCESSOR_COUNT + index);
     }
 
-    public Instruction setBlockSuccessor(int index, Instruction n) {
+    public BlockBegin setBlockSuccessor(int index, BlockBegin n) {
         assert index >= 0 && index < blockSuccessorCount;
-        assert n == null || n instanceof BlockBegin : "only BlockBegins, for now... " + n.getClass();
         return (BlockBegin) successors().set(super.successorCount() + SUCCESSOR_COUNT + index, n);
     }
 
@@ -94,7 +86,7 @@ public abstract class BlockEnd extends Instruction {
      * @param isSafepoint {@code true} if this instruction is a safepoint instruction
      * @param successors the list of successor blocks. If {@code null}, a new one will be created.
      */
-    public BlockEnd(CiKind kind, FrameState stateAfter, List<? extends Instruction> blockSuccessors, int inputCount, int successorCount, Graph graph) {
+    public BlockEnd(CiKind kind, FrameState stateAfter, List<BlockBegin> blockSuccessors, int inputCount, int successorCount, Graph graph) {
         this(kind, stateAfter, blockSuccessors.size(), inputCount, successorCount, graph);
         for (int i = 0; i < blockSuccessors.size(); i++) {
             setBlockSuccessor(i, blockSuccessors.get(i));
@@ -167,7 +159,7 @@ public abstract class BlockEnd extends Instruction {
      */
     public void reorderSuccessor(int i, int backEdgeIndex) {
         assert i >= 0 && i < blockSuccessorCount;
-        Instruction successor = blockSuccessor(i);
+        BlockBegin successor = blockSuccessor(i);
         if (successor != null) {
             successors().set(super.successorCount() + SUCCESSOR_COUNT + i, Node.Null);
             successors().set(super.successorCount() + SUCCESSOR_COUNT + i, successor, backEdgeIndex);

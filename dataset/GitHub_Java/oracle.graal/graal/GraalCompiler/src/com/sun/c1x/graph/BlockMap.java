@@ -27,7 +27,6 @@ import static com.sun.cri.bytecode.Bytecodes.*;
 import java.util.*;
 
 import com.sun.c1x.debug.*;
-import com.sun.c1x.ir.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -113,14 +112,11 @@ import com.sun.cri.ri.*;
  * mark all local variables that are stored in the blocks in the list.
  */
 public final class BlockMap {
-    public static class Block {
+    public class Block {
         public int startBci;
         public int endBci;
         public boolean isExceptionEntry;
         public boolean isLoopHeader;
-        public int blockID;
-
-        public Instruction firstInstruction;
 
         private Block[] successors;
         private boolean visited;
@@ -169,18 +165,6 @@ public final class BlockMap {
         iterateOverBytecodes();
         addExceptionEdges();
         computeBlockOrder();
-
-        initializeBlockIds();
-
-        // Discard big arrays so that they can be GCed
-        blockMap = null;
-        canTrap = null;
-    }
-
-    private void initializeBlockIds() {
-        for (int i = 0; i < blocks.size(); i++) {
-            blocks.get(i).blockID = i;
-        }
     }
 
     private void makeExceptionEntries() {
@@ -313,12 +297,16 @@ public final class BlockMap {
                 }
 
                 case WIDE: {
+                    if (canTrap != null) {
+                        canTrap.set(bci);
+                    }
+
                     bci += lengthOf(code, bci);
                     break;
                 }
 
                 default: {
-                    if (canTrap != null && canTrap(opcode)) {
+                    if (canTrap != null) {
                         canTrap.set(bci);
                     }
 

@@ -140,8 +140,12 @@ public class AMD64LIRGenerator extends LIRGenerator {
     }
 
     public boolean livesLonger(Value x, Value y) {
-        // TODO(tw): Estimate which value will live longer.
-        return false;
+        BlockBegin bx = x.block();
+        BlockBegin by = y.block();
+        if (bx == null || by == null) {
+            return false;
+        }
+        return bx.loopDepth() < by.loopDepth();
     }
 
     public void visitArithmeticOpFloat(ArithmeticOp x) {
@@ -504,13 +508,14 @@ public class AMD64LIRGenerator extends LIRGenerator {
         CiValue left = xin.result();
         CiValue right = yin.result();
         lir.cmp(cond, left, right);
+        moveToPhi();
         if (x.x().kind.isFloat() || x.x().kind.isDouble()) {
-            lir.branch(cond, right.kind, getLIRBlock(x.trueSuccessor()), getLIRBlock(x.unorderedSuccessor()));
+            lir.branch(cond, right.kind, x.trueSuccessor(), x.unorderedSuccessor());
         } else {
-            lir.branch(cond, right.kind, getLIRBlock(x.trueSuccessor()));
+            lir.branch(cond, right.kind, x.trueSuccessor());
         }
         assert x.defaultSuccessor() == x.falseSuccessor() : "wrong destination above";
-        lir.jump(getLIRBlock(x.defaultSuccessor()));
+        lir.jump(x.defaultSuccessor());
     }
 
     @Override
@@ -526,9 +531,9 @@ public class AMD64LIRGenerator extends LIRGenerator {
         CiValue result = emitXir(snippet, x, stateFor(x), null, true);
 
         lir.cmp(Condition.EQ, result, CiConstant.TRUE);
-        lir.branch(Condition.EQ, CiKind.Boolean, getLIRBlock(x.catchSuccessor()));
+        lir.branch(Condition.EQ, CiKind.Boolean, x.catchSuccessor());
 
-        lir.jump(getLIRBlock(x.otherSuccessor()));
+        lir.jump(x.otherSuccessor());
     }
 
 }

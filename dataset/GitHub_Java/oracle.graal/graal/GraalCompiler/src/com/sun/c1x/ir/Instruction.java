@@ -22,8 +22,6 @@
  */
 package com.sun.c1x.ir;
 
-import java.util.*;
-
 import com.oracle.graal.graph.*;
 import com.sun.c1x.*;
 import com.sun.c1x.value.*;
@@ -73,6 +71,12 @@ public abstract class Instruction extends Value {
 
     public static final int SYNCHRONIZATION_ENTRY_BCI = -1;
 
+    /**
+     * Index of bytecode that generated this node when appended in a basic block.
+     * Negative values indicate special cases.
+     */
+    private int bci;
+
     private boolean isAppended = false;
 
     /**
@@ -84,6 +88,23 @@ public abstract class Instruction extends Value {
     public Instruction(CiKind kind, int inputCount, int successorCount, Graph graph) {
         super(kind, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
         C1XMetrics.HIRInstructions++;
+    }
+
+    /**
+     * Gets the bytecode index of this instruction.
+     * @return the bytecode index of this instruction
+     */
+    public final int bci() {
+        return bci;
+    }
+
+    /**
+     * Sets the bytecode index of this instruction.
+     * @param bci the new bytecode index for this instruction
+     */
+    public final void setBCI(int bci) {
+        assert bci >= 0 || bci == SYNCHRONIZATION_ENTRY_BCI;
+        this.bci = bci;
     }
 
     /**
@@ -102,23 +123,58 @@ public abstract class Instruction extends Value {
      * @param bci the bytecode index of the next instruction
      * @return the new next instruction
      */
-    public final Instruction appendNext(Instruction next) {
+    public final Instruction appendNext(Instruction next, int bci) {
         setNext(next);
         if (next != null) {
             assert !(this instanceof BlockEnd);
+            next.setBCI(bci);
             next.isAppended = true;
         }
         return next;
     }
 
+    /**
+     * Re-sets the next instruction for this instruction. Note that it is illegal to
+     * set the next field of a phi, block end, or local instruction.
+     * @param next the next instruction
+     * @return the new next instruction
+     */
+    public final Instruction resetNext(Instruction next) {
+        if (next != null) {
+            assert !(this instanceof BlockEnd);
+            setNext(next);
+        }
+        return next;
+    }
+
+    /**
+     * Gets the instruction preceding this instruction in the specified basic block.
+     * Note that instructions do not directly refer to their previous instructions,
+     * and therefore this operation much search from the beginning of the basic
+     * block, thereby requiring time linear in the size of the basic block in the worst
+     * case. Use with caution!
+     * @param block the basic block that contains this instruction
+     * @return the instruction before this instruction in the basic block
+     */
+    public final Instruction prev(BlockBegin block) {
+        Instruction p = null;
+        Instruction q = block;
+        while (q != this) {
+            assert q != null : "this instruction is not in the specified basic block";
+            p = q;
+            q = q.next();
+        }
+        return p;
+    }
+
     @Override
     public BlockBegin block() {
+        // TODO(tw): Make this more efficient.
         Instruction cur = this;
-        while (!(cur instanceof BlockBegin)) {
-            List<Node> preds = cur.predecessors();
-            cur = (Instruction) preds.get(0);
+        while (!(cur instanceof BlockEnd)) {
+            cur = cur.next();
         }
-        return (BlockBegin) cur;
+        return ((BlockEnd) cur).begin();
     }
 
     /**
@@ -144,11 +200,32 @@ public abstract class Instruction extends Value {
     }
 
     /**
+     * Gets the name of this instruction as a string.
+     * @return the name of this instruction
+     */
+    public final String name() {
+        return getClass().getSimpleName();
+    }
+
+    /**
+     * Apply the specified closure to all the values of this instruction, including
+     * input values, state values, and other values.
+     * @param closure the closure to apply
+     */
+    public final void allValuesDo(ValueClosure closure) {
+        inputValuesDo(closure);
+    }
+
+    /**
      * Gets the state after the instruction, if it is recorded. Typically only
      * instances of {@link BlockEnd} have a non-null state after.
      * @return the state after the instruction
      */
     public FrameState stateAfter() {
+        return null;
+    }
+
+    public BlockBegin exceptionEdge() {
         return null;
     }
 }

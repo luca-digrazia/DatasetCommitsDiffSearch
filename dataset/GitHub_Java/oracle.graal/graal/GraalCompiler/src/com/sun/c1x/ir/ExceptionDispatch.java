@@ -64,7 +64,7 @@ public final class ExceptionDispatch extends BlockEnd {
     /**
      * Constructs a new ExceptionDispatch instruction.
      */
-    public ExceptionDispatch(Value exception, Instruction catchSuccessor, Instruction otherSuccessor, ExceptionHandler handler, FrameState stateAfter, Graph graph) {
+    public ExceptionDispatch(Value exception, BlockBegin catchSuccessor, BlockBegin otherSuccessor, ExceptionHandler handler, FrameState stateAfter, Graph graph) {
         super(CiKind.Int, stateAfter, 2, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setException(exception);
         setBlockSuccessor(0, otherSuccessor);
@@ -99,6 +99,17 @@ public final class ExceptionDispatch extends BlockEnd {
      */
     public BlockBegin successor(boolean istrue) {
         return blockSuccessor(istrue ? 1 : 0);
+    }
+
+    /**
+     * Swaps the successor blocks to this if and negates the condition (e.g. == goes to !=)
+     * @see Condition#negate()
+     */
+    public void swapSuccessors() {
+        BlockBegin t = blockSuccessor(0);
+        BlockBegin f = blockSuccessor(1);
+        setBlockSuccessor(0, f);
+        setBlockSuccessor(1, t);
     }
 
     @Override

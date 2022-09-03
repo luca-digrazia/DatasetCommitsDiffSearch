@@ -27,7 +27,6 @@ import java.util.*;
 import com.sun.c1x.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.ir.*;
-import com.sun.c1x.lir.*;
 import com.sun.c1x.observer.*;
 import com.sun.c1x.value.*;
 
@@ -48,14 +47,14 @@ public class IR {
     /**
      * The start block of this IR.
      */
-    public LIRBlock startBlock;
+    public BlockBegin startBlock;
 
     private int maxLocks;
 
     /**
      * The linear-scan ordered list of blocks.
      */
-    private List<LIRBlock> orderedBlocks;
+    private List<BlockBegin> orderedBlocks;
 
     /**
      * Creates a new IR instance for the specified compilation.
@@ -107,43 +106,12 @@ public class IR {
     private void makeLinearScanOrder() {
         if (orderedBlocks == null) {
             CriticalEdgeFinder finder = new CriticalEdgeFinder(this);
-            getHIRStartBlock().iteratePreOrder(finder);
+            startBlock.iteratePreOrder(finder);
             finder.splitCriticalEdges();
-            ComputeLinearScanOrder computeLinearScanOrder = new ComputeLinearScanOrder(compilation.stats.blockCount, getHIRStartBlock());
-            List<BlockBegin> blocks = computeLinearScanOrder.linearScanOrder();
-            orderedBlocks = new ArrayList<LIRBlock>();
-
-            int z = 0;
-            for (BlockBegin bb : blocks) {
-                LIRBlock lirBlock = new LIRBlock(z);
-                bb.setLIRBlock(lirBlock);
-                lirBlock.setLinearScanNumber(bb.linearScanNumber());
-                // TODO(tw): Initialize LIRBlock.linearScanLoopHeader and LIRBlock.linearScanLoopEnd
-                lirBlock.setStateBefore(bb.stateBefore());
-                orderedBlocks.add(lirBlock);
-                ++z;
-            }
-
-            for (BlockBegin bb : blocks) {
-                LIRBlock lirBlock = bb.lirBlock();
-                for (int i = 0; i < bb.numberOfPreds(); ++i) {
-                    lirBlock.blockPredecessors().add(bb.predAt(i).block().lirBlock());
-                }
-
-                for (int i = 0; i < bb.numberOfSux(); ++i) {
-                    lirBlock.blockSuccessors().add(bb.suxAt(i).lirBlock());
-                }
-
-                Instruction first = bb;
-                while (first != null) {
-                    lirBlock.getInstructions().add(first);
-                    first = first.next();
-                }
-            }
-
-            startBlock = getHIRStartBlock().lirBlock();
-            assert startBlock != null;
+            ComputeLinearScanOrder computeLinearScanOrder = new ComputeLinearScanOrder(compilation.stats.blockCount, startBlock);
+            orderedBlocks = computeLinearScanOrder.linearScanOrder();
             compilation.stats.loopCount = computeLinearScanOrder.numLoops();
+            computeLinearScanOrder.printBlocks();
         }
     }
 
@@ -151,7 +119,7 @@ public class IR {
      * Gets the linear scan ordering of blocks as a list.
      * @return the blocks in linear scan order
      */
-    public List<LIRBlock> linearScanOrder() {
+    public List<BlockBegin> linearScanOrder() {
         return orderedBlocks;
     }
 
@@ -160,7 +128,7 @@ public class IR {
             TTY.println("IR for " + compilation.method);
             final InstructionPrinter ip = new InstructionPrinter(TTY.out());
             final BlockPrinter bp = new BlockPrinter(this, ip, cfgOnly);
-            getHIRStartBlock().iteratePreOrder(bp);
+            startBlock.iteratePreOrder(bp);
         }
     }
 
@@ -175,7 +143,7 @@ public class IR {
         }
 
         if (compilation.compiler.isObserved()) {
-            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, phase, getHIRStartBlock(), true, false));
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, phase, startBlock, true, false));
         }
     }
 
@@ -187,7 +155,12 @@ public class IR {
      * @return the new block inserted
      */
     public BlockBegin splitEdge(BlockBegin source, BlockBegin target) {
-        int bci = -2;
+        int bci;
+        if (target.blockPredecessors().size() == 1) {
+            bci = target.bci();
+        } else {
+            bci = source.end().bci();
+        }
 
         int backEdgeIndex = target.predecessors().indexOf(source.end());
 
@@ -196,7 +169,7 @@ public class IR {
 
         // This goto is not a safepoint.
         Goto e = new Goto(target, null, compilation.graph);
-        newSucc.appendNext(e);
+        newSucc.appendNext(e, bci);
         newSucc.setEnd(e);
         e.reorderSuccessor(0, backEdgeIndex);
         // setup states
@@ -250,9 +223,5 @@ public class IR {
      */
     public final int maxLocks() {
         return maxLocks;
-    }
-
-    public BlockBegin getHIRStartBlock() {
-        return (BlockBegin) compilation.graph.root().successors().get(0);
     }
 }
