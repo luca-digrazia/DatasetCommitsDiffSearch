@@ -24,13 +24,55 @@
  */
 package org.graalvm.word;
 
-import org.graalvm.word.impl.WordBoxFactory;
-import org.graalvm.word.impl.WordFactoryOpcode;
-import org.graalvm.word.impl.WordFactoryOperation;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import java.lang.reflect.InvocationTargetException;
 
-public final class WordFactory {
+public abstract class WordFactory {
 
-    private WordFactory() {
+    /**
+     * Links a method to a canonical operation represented by an {@link FactoryOpcode} val.
+     */
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.METHOD)
+    protected @interface FactoryOperation {
+        FactoryOpcode opcode();
+    }
+
+    /**
+     * The canonical {@link FactoryOperation} represented by a method in a word type.
+     */
+    protected enum FactoryOpcode {
+        ZERO,
+        FROM_UNSIGNED,
+        FROM_SIGNED,
+    }
+
+    protected interface BoxFactory {
+        <T extends WordBase> T box(long val);
+    }
+
+    protected static final BoxFactory boxFactory;
+
+    static {
+        try {
+            /*
+             * We know the implementation class, but cannot reference it statically because we need
+             * to break the dependency between the interface and the implementation.
+             */
+            boxFactory = (BoxFactory) Class.forName("org.graalvm.compiler.word.Word$BoxFactoryImpl").getConstructor().newInstance();
+        } catch (ClassNotFoundException | NoSuchMethodException | SecurityException | InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
+            throw new ExceptionInInitializerError("Could not find and initialize the word type factory. The Graal compiler needs to be on the class path to use the word type.");
+        }
+    }
+
+    /**
+     * We allow subclassing, because only subclasses can access the protected inner classes that we
+     * use to mark the operations.
+     */
+    protected WordFactory() {
     }
 
     /**
@@ -39,9 +81,9 @@ public final class WordFactory {
      *
      * @return the constant 0.
      */
-    @WordFactoryOperation(opcode = WordFactoryOpcode.ZERO)
+    @FactoryOperation(opcode = FactoryOpcode.ZERO)
     public static <T extends WordBase> T zero() {
-        return WordBoxFactory.box(0L);
+        return boxFactory.box(0L);
     }
 
     /**
@@ -50,9 +92,9 @@ public final class WordFactory {
      *
      * @return the null pointer.
      */
-    @WordFactoryOperation(opcode = WordFactoryOpcode.ZERO)
+    @FactoryOperation(opcode = FactoryOpcode.ZERO)
     public static <T extends PointerBase> T nullPointer() {
-        return WordBoxFactory.box(0L);
+        return boxFactory.box(0L);
     }
 
     /**
@@ -62,9 +104,9 @@ public final class WordFactory {
      * @param val a 64 bit unsigned value
      * @return the value cast to Word
      */
-    @WordFactoryOperation(opcode = WordFactoryOpcode.FROM_UNSIGNED)
-    public static <T extends UnsignedWord> T unsigned(long val) {
-        return WordBoxFactory.box(val);
+    @FactoryOperation(opcode = FactoryOpcode.FROM_UNSIGNED)
+    public static <T extends Unsigned> T unsigned(long val) {
+        return boxFactory.box(val);
     }
 
     /**
@@ -74,9 +116,9 @@ public final class WordFactory {
      * @param val a 64 bit unsigned value
      * @return the value cast to PointerBase
      */
-    @WordFactoryOperation(opcode = WordFactoryOpcode.FROM_UNSIGNED)
+    @FactoryOperation(opcode = FactoryOpcode.FROM_UNSIGNED)
     public static <T extends PointerBase> T pointer(long val) {
-        return WordBoxFactory.box(val);
+        return boxFactory.box(val);
     }
 
     /**
@@ -86,9 +128,9 @@ public final class WordFactory {
      * @param val a 32 bit unsigned value
      * @return the value cast to Word
      */
-    @WordFactoryOperation(opcode = WordFactoryOpcode.FROM_UNSIGNED)
-    public static <T extends UnsignedWord> T unsigned(int val) {
-        return WordBoxFactory.box(val & 0xffffffffL);
+    @FactoryOperation(opcode = FactoryOpcode.FROM_UNSIGNED)
+    public static <T extends Unsigned> T unsigned(int val) {
+        return boxFactory.box(val & 0xffffffffL);
     }
 
     /**
@@ -98,9 +140,9 @@ public final class WordFactory {
      * @param val a 64 bit signed value
      * @return the value cast to Word
      */
-    @WordFactoryOperation(opcode = WordFactoryOpcode.FROM_SIGNED)
-    public static <T extends SignedWord> T signed(long val) {
-        return WordBoxFactory.box(val);
+    @FactoryOperation(opcode = FactoryOpcode.FROM_SIGNED)
+    public static <T extends Signed> T signed(long val) {
+        return boxFactory.box(val);
     }
 
     /**
@@ -110,8 +152,8 @@ public final class WordFactory {
      * @param val a 32 bit signed value
      * @return the value cast to Word
      */
-    @WordFactoryOperation(opcode = WordFactoryOpcode.FROM_SIGNED)
-    public static <T extends SignedWord> T signed(int val) {
-        return WordBoxFactory.box(val);
+    @FactoryOperation(opcode = FactoryOpcode.FROM_SIGNED)
+    public static <T extends Signed> T signed(int val) {
+        return boxFactory.box(val);
     }
 }

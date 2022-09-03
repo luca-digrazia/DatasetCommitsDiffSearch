@@ -51,12 +51,12 @@ import org.graalvm.compiler.nodes.memory.address.AddressNode.Address;
 import org.graalvm.word.ComparableWord;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.Pointer;
-import org.graalvm.word.SignedWord;
-import org.graalvm.word.UnsignedWord;
+import org.graalvm.word.Signed;
+import org.graalvm.word.Unsigned;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 
-public abstract class Word extends WordFactory implements SignedWord, UnsignedWord, Pointer {
+public abstract class Word extends WordFactory implements Signed, Unsigned, Pointer {
 
     /**
      * Links a method to a canonical operation represented by an {@link Opcode} val.
@@ -166,13 +166,13 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = AddNode.class)
-    public Word add(SignedWord val) {
+    public Word add(Signed val) {
         return add((Word) val);
     }
 
     @Override
     @Operation(node = AddNode.class)
-    public Word add(UnsignedWord val) {
+    public Word add(Unsigned val) {
         return add((Word) val);
     }
 
@@ -189,13 +189,13 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = SubNode.class)
-    public Word subtract(SignedWord val) {
+    public Word subtract(Signed val) {
         return subtract((Word) val);
     }
 
     @Override
     @Operation(node = SubNode.class)
-    public Word subtract(UnsignedWord val) {
+    public Word subtract(Unsigned val) {
         return subtract((Word) val);
     }
 
@@ -212,13 +212,13 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = MulNode.class)
-    public Word multiply(SignedWord val) {
+    public Word multiply(Signed val) {
         return multiply((Word) val);
     }
 
     @Override
     @Operation(node = MulNode.class)
-    public Word multiply(UnsignedWord val) {
+    public Word multiply(Unsigned val) {
         return multiply((Word) val);
     }
 
@@ -235,7 +235,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = SignedDivNode.class)
-    public Word signedDivide(SignedWord val) {
+    public Word signedDivide(Signed val) {
         return signedDivide((Word) val);
     }
 
@@ -252,7 +252,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = UnsignedDivNode.class)
-    public Word unsignedDivide(UnsignedWord val) {
+    public Word unsignedDivide(Unsigned val) {
         return unsignedDivide((Word) val);
     }
 
@@ -269,7 +269,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = SignedRemNode.class)
-    public Word signedRemainder(SignedWord val) {
+    public Word signedRemainder(Signed val) {
         return signedRemainder((Word) val);
     }
 
@@ -286,7 +286,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = UnsignedRemNode.class)
-    public Word unsignedRemainder(UnsignedWord val) {
+    public Word unsignedRemainder(Unsigned val) {
         return unsignedRemainder((Word) val);
     }
 
@@ -303,7 +303,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = LeftShiftNode.class, rightOperandIsInt = true)
-    public Word shiftLeft(UnsignedWord val) {
+    public Word shiftLeft(Unsigned val) {
         return shiftLeft((Word) val);
     }
 
@@ -320,7 +320,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = RightShiftNode.class, rightOperandIsInt = true)
-    public Word signedShiftRight(UnsignedWord val) {
+    public Word signedShiftRight(Unsigned val) {
         return signedShiftRight((Word) val);
     }
 
@@ -337,7 +337,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = UnsignedRightShiftNode.class, rightOperandIsInt = true)
-    public Word unsignedShiftRight(UnsignedWord val) {
+    public Word unsignedShiftRight(Unsigned val) {
         return unsignedShiftRight((Word) val);
     }
 
@@ -354,13 +354,13 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = AndNode.class)
-    public Word and(SignedWord val) {
+    public Word and(Signed val) {
         return and((Word) val);
     }
 
     @Override
     @Operation(node = AndNode.class)
-    public Word and(UnsignedWord val) {
+    public Word and(Unsigned val) {
         return and((Word) val);
     }
 
@@ -377,13 +377,13 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = OrNode.class)
-    public Word or(SignedWord val) {
+    public Word or(Signed val) {
         return or((Word) val);
     }
 
     @Override
     @Operation(node = OrNode.class)
-    public Word or(UnsignedWord val) {
+    public Word or(Unsigned val) {
         return or((Word) val);
     }
 
@@ -400,13 +400,13 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(node = XorNode.class)
-    public Word xor(SignedWord val) {
+    public Word xor(Signed val) {
         return xor((Word) val);
     }
 
     @Override
     @Operation(node = XorNode.class)
-    public Word xor(UnsignedWord val) {
+    public Word xor(Unsigned val) {
         return xor((Word) val);
     }
 
@@ -447,13 +447,13 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.EQ)
-    public boolean equal(SignedWord val) {
+    public boolean equal(Signed val) {
         return equal((Word) val);
     }
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.EQ)
-    public boolean equal(UnsignedWord val) {
+    public boolean equal(Unsigned val) {
         return equal((Word) val);
     }
 
@@ -476,13 +476,13 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.NE)
-    public boolean notEqual(SignedWord val) {
+    public boolean notEqual(Signed val) {
         return notEqual((Word) val);
     }
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.NE)
-    public boolean notEqual(UnsignedWord val) {
+    public boolean notEqual(Unsigned val) {
         return notEqual((Word) val);
     }
 
@@ -499,7 +499,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.LT)
-    public boolean lessThan(SignedWord val) {
+    public boolean lessThan(Signed val) {
         return lessThan((Word) val);
     }
 
@@ -516,7 +516,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.LE)
-    public boolean lessOrEqual(SignedWord val) {
+    public boolean lessOrEqual(Signed val) {
         return lessOrEqual((Word) val);
     }
 
@@ -533,7 +533,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.GT)
-    public boolean greaterThan(SignedWord val) {
+    public boolean greaterThan(Signed val) {
         return greaterThan((Word) val);
     }
 
@@ -550,7 +550,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.GE)
-    public boolean greaterOrEqual(SignedWord val) {
+    public boolean greaterOrEqual(Signed val) {
         return greaterOrEqual((Word) val);
     }
 
@@ -567,7 +567,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.BT)
-    public boolean belowThan(UnsignedWord val) {
+    public boolean belowThan(Unsigned val) {
         return belowThan((Word) val);
     }
 
@@ -584,7 +584,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.BE)
-    public boolean belowOrEqual(UnsignedWord val) {
+    public boolean belowOrEqual(Unsigned val) {
         return belowOrEqual((Word) val);
     }
 
@@ -601,7 +601,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.AT)
-    public boolean aboveThan(UnsignedWord val) {
+    public boolean aboveThan(Unsigned val) {
         return aboveThan((Word) val);
     }
 
@@ -618,7 +618,7 @@ public abstract class Word extends WordFactory implements SignedWord, UnsignedWo
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.AE)
-    public boolean aboveOrEqual(UnsignedWord val) {
+    public boolean aboveOrEqual(Unsigned val) {
         return aboveOrEqual((Word) val);
     }
 
