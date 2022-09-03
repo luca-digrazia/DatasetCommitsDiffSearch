@@ -39,7 +39,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
 
-import com.oracle.truffle.api.debug.Debugger;
+import com.oracle.truffle.api.debug.DebugSupportProvider;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.impl.FindContextNode;
@@ -48,7 +48,7 @@ import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
 import com.oracle.truffle.api.instrument.AdvancedInstrumentRoot;
 import com.oracle.truffle.api.instrument.AdvancedInstrumentRootFactory;
 import com.oracle.truffle.api.instrument.Instrumenter;
-import com.oracle.truffle.api.instrument.SyntaxTag;
+import com.oracle.truffle.api.instrument.ToolSupportProvider;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -61,13 +61,6 @@ import com.oracle.truffle.api.source.Source;
  * virtual machine} - all they will need to do is to include your JAR into their application and all
  * the Truffle goodies (multi-language support, multitenant hosting, debugging, etc.) will be made
  * available to them.
- * <p>
- * The use of {@linkplain Instrumenter Instrument-based services} requires that the language
- * {@linkplain Instrumenter#registerASTProber(com.oracle.truffle.api.instrument.ASTProber) register}
- * an instance of {@link ASTProber} suitable for the language implementation that can be applied to
- * "mark up" each newly created AST with {@link SyntaxTag "tags"} that identify standard syntactic
- * constructs in order to configure tool behavior. See also {@linkplain #createContext(Env)
- * createContext(Env)}.
  *
  * @param <C> internal state of the language associated with every thread that is executing program
  *            {@link #parse(com.oracle.truffle.api.source.Source, com.oracle.truffle.api.nodes.Node, java.lang.String...)
@@ -127,15 +120,6 @@ public abstract class TruffleLanguage<C> {
      * execution context is completely language specific; it is however expected it will contain
      * reference to here-in provided <code>env</code> and adjust itself according to parameters
      * provided by the <code>env</code> object.
-     *
-     * If it is expected that any {@linkplain Instrumenter Instrumentation Services} or tools that
-     * depend on those services (e.g. the {@link Debugger}, then part of the preparation in the new
-     * context is to
-     * {@linkplain Instrumenter#registerASTProber(com.oracle.truffle.api.instrument.ASTProber)
-     * register} a "default" {@link ASTProber} for the language implementation. Instrumentation
-     * requires that this be available to "mark up" each newly created AST with
-     * {@linkplain SyntaxTag "tags"} that identify standard syntactic constructs in order to
-     * configure tool behavior.
      *
      * @param env the environment the language is supposed to operate in
      * @return internal data of the language in given environment
@@ -208,10 +192,25 @@ public abstract class TruffleLanguage<C> {
      */
     protected abstract boolean isObjectOfLanguage(Object object);
 
+    @Deprecated
+    protected abstract ToolSupportProvider getToolSupport();
+
+    @Deprecated
+    protected abstract DebugSupportProvider getDebugSupport();
+
     /**
      * Gets visualization services for language-specific information.
      */
     protected abstract Visualizer getVisualizer();
+
+    /**
+     * Enables AST probing on all subsequently created ASTs (sources parsed).
+     *
+     * @param astProber optional AST prober to enable; the default for the language used if
+     *            {@code null}
+     */
+    @Deprecated
+    protected abstract void enableASTProbing(ASTProber astProber);
 
     /**
      * Returns {@code true} for a node can be "instrumented" by
@@ -219,13 +218,13 @@ public abstract class TruffleLanguage<C> {
      * <p>
      * <b>Note:</b> instrumentation requires a appropriate {@link WrapperNode}
      *
-     * @see WrapperNode
+     * @see Node#createWrapperNode()
      */
     protected abstract boolean isInstrumentable(Node node);
 
     /**
-     * For nodes in this language that are <em>instrumentable</em>, this method returns an
-     * {@linkplain Node AST node} that:
+     * For nodes in this language that are {@linkplain #isInstrumentable() instrumentable}, this
+     * method returns an {@linkplain Node AST node} that:
      * <ol>
      * <li>implements {@link WrapperNode};</li>
      * <li>has the node argument as it's child; and</li>
@@ -235,6 +234,11 @@ public abstract class TruffleLanguage<C> {
      * @return an appropriately typed {@link WrapperNode}
      */
     protected abstract WrapperNode createWrapperNode(Node node);
+
+    /**
+     * Gets the current specification for AST instrumentation for the language.
+     */
+    protected abstract ASTProber getDefaultASTProber();
 
     /**
      * Runs source code in a halted execution context, or at top level.
@@ -478,6 +482,23 @@ public abstract class TruffleLanguage<C> {
         @Override
         protected WrapperNode createWrapperNode(Node node, TruffleLanguage language) {
             return language.createWrapperNode(node);
+        }
+
+        @Override
+        protected ASTProber getDefaultASTProber(TruffleLanguage language) {
+            return language.getDefaultASTProber();
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        protected ToolSupportProvider getToolSupport(TruffleLanguage<?> l) {
+            return l.getToolSupport();
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        protected DebugSupportProvider getDebugSupport(TruffleLanguage<?> l) {
+            return l.getDebugSupport();
         }
     }
 
