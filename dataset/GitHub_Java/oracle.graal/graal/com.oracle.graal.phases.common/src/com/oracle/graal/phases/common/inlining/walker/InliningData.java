@@ -22,18 +22,15 @@
  */
 package com.oracle.graal.phases.common.inlining.walker;
 
+import com.oracle.jvmci.code.BailoutException;
+import com.oracle.jvmci.meta.JavaTypeProfile;
+import com.oracle.jvmci.meta.ResolvedJavaType;
+import com.oracle.jvmci.meta.ResolvedJavaMethod;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-
-import com.oracle.graal.debug.*;
-
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.meta.Assumptions.*;
-
+import com.oracle.jvmci.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -47,6 +44,8 @@ import com.oracle.graal.phases.common.inlining.info.elem.*;
 import com.oracle.graal.phases.common.inlining.policy.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.debug.*;
 
 /**
  * <p>
@@ -216,8 +215,12 @@ public class InliningData {
     }
 
     private InlineInfo getTypeCheckedInlineInfo(Invoke invoke, ResolvedJavaMethod targetMethod) {
-        JavaTypeProfile typeProfile = ((MethodCallTargetNode) invoke.callTarget()).getProfile();
-        if (typeProfile == null) {
+        JavaTypeProfile typeProfile;
+        ValueNode receiver = invoke.callTarget().arguments().get(0);
+        if (receiver instanceof TypeProfileProxyNode) {
+            TypeProfileProxyNode typeProfileProxyNode = (TypeProfileProxyNode) receiver;
+            typeProfile = typeProfileProxyNode.getProfile();
+        } else {
             InliningUtil.logNotInlined(invoke, inliningDepth(), targetMethod, "no type profile exists");
             return null;
         }
@@ -352,7 +355,6 @@ public class InliningData {
         return null;
     }
 
-    @SuppressWarnings("try")
     private void doInline(CallsiteHolderExplorable callerCallsiteHolder, MethodInvocation calleeInvocation) {
         StructuredGraph callerGraph = callerCallsiteHolder.graph();
         InlineInfo calleeInfo = calleeInvocation.callee();
@@ -664,7 +666,6 @@ public class InliningData {
      *
      * @return true iff inlining was actually performed
      */
-    @SuppressWarnings("try")
     public boolean moveForward() {
 
         final MethodInvocation currentInvocation = currentInvocation();
