@@ -531,14 +531,6 @@ public class PolyglotEngine {
         return new Language(en.getValue());
     }
 
-    ContextStore context() {
-        return context;
-    }
-
-    Object[] debugger() {
-        return debugger;
-    }
-
     @SuppressWarnings("try")
     private Object evalImpl(TruffleLanguage<?>[] fillLang, Source s, Language l) throws IOException {
         ContextStore prev = Access.EXEC.executionStarted(context);
@@ -868,10 +860,22 @@ public class PolyglotEngine {
 
         @SuppressWarnings("try")
         private Object executeDirect(Object[] args) throws IOException {
-            if (target == null) {
-                target = SymbolInvokerImpl.createCallTarget(language[0], PolyglotEngine.this, compute == null ? value : compute.get());
+            ContextStore prev = Access.EXEC.executionStarted(context);
+            boolean isDebugger = debugger[0] != null;
+            try {
+                if (isDebugger) {
+                    Access.DEBUG.executionStarted(PolyglotEngine.this, -1, debugger, null);
+                }
+                if (target == null) {
+                    target = SymbolInvokerImpl.createCallTarget(language[0], compute == null ? value : compute.get());
+                }
+                return target.call(args);
+            } finally {
+                Access.EXEC.executionEnded(prev);
+                if (isDebugger) {
+                    Access.DEBUG.executionEnded(PolyglotEngine.this, debugger);
+                }
             }
-            return target.call(args);
         }
 
         private Object waitForSymbol() throws IOException {
@@ -1161,7 +1165,7 @@ public class PolyglotEngine {
         throw new IllegalStateException("Cannot find language " + languageClazz + " among " + langs);
     }
 
-    static class Access {
+    private static class Access {
         static final Accessor.LanguageSupport LANGS = SPIAccessor.langs();
         static final Accessor.InstrumentSupport INSTRUMENT = SPIAccessor.instrumentAccess();
         static final Accessor.ExecSupport EXEC = SPIAccessor.execAccess();
