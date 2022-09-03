@@ -147,9 +147,8 @@ public class Module implements ParserListener {
     protected void createAliasOld(long[] args) {
         Type type = types.get(args[0]);
         int value = (int) args[1];
-        long linkage = args[2];
 
-        generator.createAlias(type, value, linkage);
+        generator.createAlias(type, value);
         symbols.add(type);
     }
 
@@ -169,10 +168,10 @@ public class Module implements ParserListener {
         Type type = new PointerType(types.get(args[i++]));
         boolean isConstant = (args[i++] & 1) == 1;
         int initialiser = (int) args[i++];
-        long linkage = args[i++];
+        i++; // Unused parameter
         int align = (int) args[i++];
 
-        generator.createGlobal(type, isConstant, initialiser, align, linkage);
+        generator.createGlobal(type, isConstant, initialiser, align);
         symbols.add(type);
     }
 }

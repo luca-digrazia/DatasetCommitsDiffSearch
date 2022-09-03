@@ -33,7 +33,7 @@ import java.util.List;
 
 import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import uk.ac.man.cs.llvm.ir.module.records.MetadataRecord;
-import uk.ac.man.cs.llvm.ir.SymbolGenerator;
+import uk.ac.man.cs.llvm.ir.ModuleGenerator;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataBasicType;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataCompileUnit;
@@ -41,7 +41,6 @@ import uk.ac.man.cs.llvm.ir.model.metadata.MetadataCompositeType;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataDerivedType;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataEnumerator;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataFile;
-import uk.ac.man.cs.llvm.ir.model.metadata.MetadataFnNode;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataGlobalVariable;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataLexicalBlock;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataLexicalBlockFile;
@@ -55,7 +54,7 @@ import uk.ac.man.cs.llvm.ir.types.MetadataConstantType;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
 public class MetadataV32 extends Metadata {
-    public MetadataV32(Types types, List<Type> symbols, SymbolGenerator generator) {
+    public MetadataV32(Types types, List<Type> symbols, ModuleGenerator generator) {
         super(types, symbols, generator);
         // it seem's like there is a different offset of the id in LLVM 3.2 and LLVM 3.8
         metadata.setStartIndex(0);
@@ -87,7 +86,7 @@ public class MetadataV32 extends Metadata {
                 break;
 
             case OLD_FN_NODE:
-                createOldFnNode(args);
+                createOldFnNode(); // TODO: implement
                 break;
 
             default:
@@ -199,10 +198,8 @@ public class MetadataV32 extends Metadata {
         }
     }
 
-    protected void createOldFnNode(long[] args) {
-        MetadataArgumentParser parsedArgs = new MetadataArgumentParser(types, symbols, args);
-
-        metadata.add(new MetadataFnNode(asInt32(parsedArgs.next())));
+    protected void createOldFnNode() {
+        // TODO: implement
     }
 
     protected void createDwNode(MetadataArgumentParser args) {

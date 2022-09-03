@@ -82,10 +82,11 @@ public class Function implements ParserListener {
                 return new ValueSymbolTable(generator);
 
             case METADATA:
-                return version.createMetadata(types, symbols, generator); // TODO
+                // return version.createMetadata(types, symbols, generator);
+                return ParserListener.DEFAULT; // TODO
 
             case METADATA_ATTACHMENT:
-                return version.createMetadata(types, symbols, generator); // TODO
+                return ParserListener.DEFAULT; // TODO
 
             default:
                 System.out.printf("ENTER #12-FUNCTION-BLOCK: %s%n", block);
