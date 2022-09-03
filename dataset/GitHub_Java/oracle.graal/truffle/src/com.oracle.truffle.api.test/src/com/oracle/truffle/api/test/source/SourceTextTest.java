@@ -124,9 +124,9 @@ public class SourceTextTest {
         assertEquals(2, emptyLineSource.getLineNumber(1));
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void emptyLineTest2() {
-        assertEquals(1, emptyLineSource.getLineStartOffset(2));
+        assertEquals(2, emptyLineSource.getLineStartOffset(2));
     }
 
     @Test
@@ -134,9 +134,9 @@ public class SourceTextTest {
         assertEquals(1, emptyLineSource.getColumnNumber(1));
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void emptyLineTest4() {
-        assertEquals(0, emptyLineSource.getLineLength(2));
+        emptyLineSource.getLineLength(2);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -251,9 +251,9 @@ public class SourceTextTest {
         assertEquals(1, longSource.getColumnNumber(11));
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void longTextTest3() {
-        assertEquals(11, longSource.getLineStartOffset(4));
+        longSource.getLineStartOffset(4);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -271,9 +271,9 @@ public class SourceTextTest {
         longSource.getColumnNumber(12);
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void longTextTest7() {
-        assertEquals(0, longSource.getLineLength(4));
+        longSource.getLineLength(4);
     }
 
     @Test(expected = IllegalArgumentException.class)
