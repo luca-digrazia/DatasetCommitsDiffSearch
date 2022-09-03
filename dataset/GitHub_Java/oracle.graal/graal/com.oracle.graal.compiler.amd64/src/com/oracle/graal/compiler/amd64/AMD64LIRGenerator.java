@@ -242,10 +242,18 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     public void emitCompareBranch(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueLabel, LabelRef falseLabel, double trueLabelProbability) {
         boolean mirrored = emitCompare(cmpKind, left, right);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
-        if (cmpKind == Kind.Float || cmpKind == Kind.Double) {
-            append(new FloatBranchOp(finalCondition, unorderedIsTrue, trueLabel, falseLabel, trueLabelProbability));
-        } else {
-            append(new BranchOp(finalCondition, trueLabel, falseLabel, trueLabelProbability));
+        switch (left.getKind().getStackKind()) {
+            case Int:
+            case Long:
+            case Object:
+                append(new BranchOp(finalCondition, trueLabel, falseLabel, trueLabelProbability));
+                break;
+            case Float:
+            case Double:
+                append(new FloatBranchOp(finalCondition, unorderedIsTrue, trueLabel, falseLabel, trueLabelProbability));
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere("" + left.getKind());
         }
     }
 
@@ -253,10 +261,18 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
                     double trueLabelProbability) {
         boolean mirrored = emitCompareMemory(cmpKind, left, right, state);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
-        if (cmpKind == Kind.Float || cmpKind == Kind.Double) {
-            append(new FloatBranchOp(finalCondition, unorderedIsTrue, trueLabel, falseLabel, trueLabelProbability));
-        } else {
-            append(new BranchOp(finalCondition, trueLabel, falseLabel, trueLabelProbability));
+        switch (left.getKind().getStackKind()) {
+            case Int:
+            case Long:
+            case Object:
+                append(new BranchOp(finalCondition, trueLabel, falseLabel, trueLabelProbability));
+                break;
+            case Float:
+            case Double:
+                append(new FloatBranchOp(finalCondition, unorderedIsTrue, trueLabel, falseLabel, trueLabelProbability));
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere("" + left.getKind());
         }
     }
 
@@ -277,10 +293,18 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         Condition finalCondition = mirrored ? cond.mirror() : cond;
 
         Variable result = newVariable(trueValue.getKind());
-        if (cmpKind == Kind.Float || cmpKind == Kind.Double) {
-            append(new FloatCondMoveOp(result, finalCondition, unorderedIsTrue, load(trueValue), load(falseValue)));
-        } else {
-            append(new CondMoveOp(result, finalCondition, load(trueValue), loadNonConst(falseValue)));
+        switch (left.getKind().getStackKind()) {
+            case Int:
+            case Long:
+            case Object:
+                append(new CondMoveOp(result, finalCondition, load(trueValue), loadNonConst(falseValue)));
+                break;
+            case Float:
+            case Double:
+                append(new FloatCondMoveOp(result, finalCondition, unorderedIsTrue, load(trueValue), load(falseValue)));
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere("" + left.getKind());
         }
         return result;
     }
@@ -346,13 +370,13 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             emitCompareRegMemoryOp(cmpKind, left, b, state);
             mirrored = false;
         } else {
-            emitCompareMemoryConOp(cmpKind, b, (Constant) a, state);
+            emitCompareMemoryConOp(cmpKind, b, a, state);
             mirrored = true;
         }
         return mirrored;
     }
 
-    protected void emitCompareMemoryConOp(Kind kind, AMD64AddressValue address, Constant value, LIRFrameState state) {
+    protected void emitCompareMemoryConOp(Kind kind, AMD64AddressValue address, Value value, LIRFrameState state) {
         assert kind.getStackKind() == value.getKind().getStackKind();
         switch (kind) {
             case Byte:
@@ -368,10 +392,6 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
                 break;
             case Long:
                 append(new CompareMemoryOp(LCMP, kind, address, value, state));
-                break;
-            case Object:
-                assert value.isNull();
-                append(new CompareMemoryOp(ACMP, kind, address, value, state));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();

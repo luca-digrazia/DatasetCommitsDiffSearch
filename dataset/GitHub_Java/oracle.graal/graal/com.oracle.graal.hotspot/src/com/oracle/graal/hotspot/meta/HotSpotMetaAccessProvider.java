@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,8 +23,6 @@
 package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.compiler.common.UnsafeAccess.*;
-import static com.oracle.graal.hotspot.meta.HotSpotResolvedJavaType.*;
-import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectType.*;
 
 import java.lang.reflect.*;
 
@@ -45,19 +43,19 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
         this.runtime = runtime;
     }
 
-    public HotSpotResolvedJavaType lookupJavaType(Class<?> clazz) {
+    public ResolvedJavaType lookupJavaType(Class<?> clazz) {
         if (clazz == null) {
             throw new IllegalArgumentException("Class parameter was null");
         }
-        return fromClass(clazz);
+        return HotSpotResolvedObjectType.fromClass(clazz);
     }
 
-    public HotSpotResolvedObjectType lookupJavaType(JavaConstant constant) {
+    public ResolvedJavaType lookupJavaType(Constant constant) {
         if (constant.isNull() || !(constant instanceof HotSpotObjectConstant)) {
             return null;
         }
         Object o = HotSpotObjectConstant.asObject(constant);
-        return fromObjectClass(o.getClass());
+        return HotSpotResolvedObjectType.fromClass(o.getClass());
     }
 
     public Signature parseMethodDescriptor(String signature) {
@@ -89,7 +87,7 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
             Class<?> holder = reflectionMethod.getDeclaringClass();
             final int slot = reflectionMethodSlot.getInt(reflectionMethod);
             final long metaspaceMethod = runtime.getCompilerToVM().getMetaspaceMethod(holder, slot);
-            return HotSpotResolvedJavaMethodImpl.fromMetaspace(metaspaceMethod);
+            return HotSpotResolvedJavaMethod.fromMetaspace(metaspaceMethod);
         } catch (IllegalArgumentException | IllegalAccessException e) {
             throw new GraalInternalError(e);
         }
@@ -100,7 +98,7 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
             Class<?> holder = reflectionConstructor.getDeclaringClass();
             final int slot = reflectionConstructorSlot.getInt(reflectionConstructor);
             final long metaspaceMethod = runtime.getCompilerToVM().getMetaspaceMethod(holder, slot);
-            return HotSpotResolvedJavaMethodImpl.fromMetaspace(metaspaceMethod);
+            return HotSpotResolvedJavaMethod.fromMetaspace(metaspaceMethod);
         } catch (IllegalArgumentException | IllegalAccessException e) {
             throw new GraalInternalError(e);
         }
@@ -115,11 +113,11 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
         final int modifiers = reflectionField.getModifiers();
         final long offset = Modifier.isStatic(modifiers) ? unsafe.staticFieldOffset(reflectionField) : unsafe.objectFieldOffset(reflectionField);
 
-        HotSpotResolvedObjectType holder = fromObjectClass(fieldHolder);
-        HotSpotResolvedJavaType type = fromClass(fieldType);
+        ResolvedJavaType holder = HotSpotResolvedObjectType.fromClass(fieldHolder);
+        ResolvedJavaType type = HotSpotResolvedObjectType.fromClass(fieldType);
 
         if (offset != -1) {
-            HotSpotResolvedObjectType resolved = holder;
+            HotSpotResolvedObjectType resolved = (HotSpotResolvedObjectType) holder;
             return resolved.createField(name, type, offset, modifiers);
         } else {
             throw GraalInternalError.shouldNotReachHere("unresolved field " + reflectionField);
@@ -132,31 +130,31 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
     }
 
     @Override
-    public JavaConstant encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason, int debugId) {
+    public Constant encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason, int debugId) {
         HotSpotVMConfig config = runtime.getConfig();
         int actionValue = convertDeoptAction(action);
         int reasonValue = convertDeoptReason(reason);
         int debugValue = debugId & intMaskRight(config.deoptimizationDebugIdBits);
-        JavaConstant c = JavaConstant.forInt(~((debugValue << config.deoptimizationDebugIdShift) | (reasonValue << config.deoptimizationReasonShift) | (actionValue << config.deoptimizationActionShift)));
+        Constant c = Constant.forInt(~((debugValue << config.deoptimizationDebugIdShift) | (reasonValue << config.deoptimizationReasonShift) | (actionValue << config.deoptimizationActionShift)));
         assert c.asInt() < 0;
         return c;
     }
 
-    public DeoptimizationReason decodeDeoptReason(JavaConstant constant) {
+    public DeoptimizationReason decodeDeoptReason(Constant constant) {
         HotSpotVMConfig config = runtime.getConfig();
         int reasonValue = ((~constant.asInt()) >> config.deoptimizationReasonShift) & intMaskRight(config.deoptimizationReasonBits);
         DeoptimizationReason reason = convertDeoptReason(reasonValue);
         return reason;
     }
 
-    public DeoptimizationAction decodeDeoptAction(JavaConstant constant) {
+    public DeoptimizationAction decodeDeoptAction(Constant constant) {
         HotSpotVMConfig config = runtime.getConfig();
         int actionValue = ((~constant.asInt()) >> config.deoptimizationActionShift) & intMaskRight(config.deoptimizationActionBits);
         DeoptimizationAction action = convertDeoptAction(actionValue);
         return action;
     }
 
-    public int decodeDebugId(JavaConstant constant) {
+    public int decodeDebugId(Constant constant) {
         HotSpotVMConfig config = runtime.getConfig();
         return ((~constant.asInt()) >> config.deoptimizationDebugIdShift) & intMaskRight(config.deoptimizationDebugIdBits);
     }
@@ -232,8 +230,6 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
                 return config.deoptReasonLoopLimitCheck;
             case Aliasing:
                 return config.deoptReasonAliasing;
-            case TransferToInterpreter:
-                return config.deoptReasonTransferToInterpreter;
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
@@ -286,16 +282,13 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
         if (reason == config.deoptReasonAliasing) {
             return DeoptimizationReason.Aliasing;
         }
-        if (reason == config.deoptReasonTransferToInterpreter) {
-            return DeoptimizationReason.TransferToInterpreter;
-        }
         throw GraalInternalError.shouldNotReachHere(Integer.toHexString(reason));
     }
 
     @Override
-    public long getMemorySize(JavaConstant constant) {
+    public long getMemorySize(Constant constant) {
         if (constant.getKind() == Kind.Object) {
-            HotSpotResolvedObjectType lookupJavaType = this.lookupJavaType(constant);
+            HotSpotResolvedObjectType lookupJavaType = (HotSpotResolvedObjectType) this.lookupJavaType(constant);
 
             if (lookupJavaType == null) {
                 return 0;

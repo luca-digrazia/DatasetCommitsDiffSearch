@@ -22,18 +22,41 @@
  */
 package com.oracle.graal.hotspot.meta;
 
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
 
-public interface HotSpotMetaspaceConstant extends HotSpotConstant, VMConstant {
+public final class HotSpotMetaspaceConstant extends PrimitiveConstant implements HotSpotConstant {
 
-    boolean isCompressed();
+    private static final long serialVersionUID = 1003463314013122983L;
 
-    Constant compress(CompressEncoding encoding);
+    public static Constant forMetaspaceObject(Kind kind, long primitive, Object metaspaceObject) {
+        return new HotSpotMetaspaceConstant(kind, primitive, metaspaceObject);
+    }
 
-    Constant uncompress(CompressEncoding encoding);
+    public static Object getMetaspaceObject(Constant constant) {
+        return ((HotSpotMetaspaceConstant) constant).metaspaceObject;
+    }
 
-    HotSpotResolvedObjectType asResolvedJavaType();
+    private final Object metaspaceObject;
 
-    Kind getKind();
+    private HotSpotMetaspaceConstant(Kind kind, long primitive, Object metaspaceObject) {
+        super(kind, primitive);
+        this.metaspaceObject = metaspaceObject;
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode() ^ System.identityHashCode(metaspaceObject);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return o == this || (o instanceof HotSpotMetaspaceConstant && super.equals(o) && Objects.equals(metaspaceObject, ((HotSpotMetaspaceConstant) o).metaspaceObject));
+    }
+
+    @Override
+    public String toString() {
+        return super.toString() + "{" + metaspaceObject + "}";
+    }
 }

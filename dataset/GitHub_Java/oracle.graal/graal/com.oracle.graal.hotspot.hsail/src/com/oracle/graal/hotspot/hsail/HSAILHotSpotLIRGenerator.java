@@ -38,8 +38,17 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.hsail.*;
-import com.oracle.graal.lir.hsail.HSAILControlFlow.*;
-import com.oracle.graal.lir.hsail.HSAILMove.*;
+import com.oracle.graal.lir.hsail.HSAILControlFlow.CondMoveOp;
+import com.oracle.graal.lir.hsail.HSAILControlFlow.DeoptimizeOp;
+import com.oracle.graal.lir.hsail.HSAILControlFlow.ForeignCall1ArgOp;
+import com.oracle.graal.lir.hsail.HSAILControlFlow.ForeignCall2ArgOp;
+import com.oracle.graal.lir.hsail.HSAILControlFlow.ForeignCallNoArgOp;
+import com.oracle.graal.lir.hsail.HSAILMove.CompareAndSwapOp;
+import com.oracle.graal.lir.hsail.HSAILMove.LoadOp;
+import com.oracle.graal.lir.hsail.HSAILMove.MoveFromRegOp;
+import com.oracle.graal.lir.hsail.HSAILMove.MoveToRegOp;
+import com.oracle.graal.lir.hsail.HSAILMove.StoreConstantOp;
+import com.oracle.graal.lir.hsail.HSAILMove.StoreOp;
 import com.oracle.graal.phases.util.*;
 
 /**
@@ -84,17 +93,8 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator implements HotSp
     }
 
     @Override
-    public boolean canStoreConstant(Constant c) {
-        return !(c instanceof HotSpotObjectConstant);
-    }
-
-    @Override
-    public boolean canInlineConstant(Constant c) {
-        if (c instanceof HotSpotObjectConstant) {
-            return c.isNull();
-        } else {
-            return super.canInlineConstant(c);
-        }
+    public boolean canStoreConstant(Constant c, boolean isCompressed) {
+        return true;
     }
 
     private static Kind getMemoryKind(PlatformKind kind) {
@@ -117,13 +117,6 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator implements HotSp
         return result;
     }
 
-    public Variable emitLoadAcquire(PlatformKind kind, Value address, LIRFrameState state) {
-        HSAILAddressValue loadAddress = asAddressValue(address);
-        Variable result = newVariable(kind);
-        append(new LoadAcquireOp(getMemoryKind(kind), result, loadAddress, state));
-        return result;
-    }
-
     @Override
     public void emitStore(PlatformKind kind, Value address, Value inputVal, LIRFrameState state) {
         HSAILAddressValue storeAddress = asAddressValue(address);
@@ -132,7 +125,7 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator implements HotSp
             if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(c)) {
                 c = Constant.INT_0;
             }
-            if (canStoreConstant(c)) {
+            if (canStoreConstant(c, false)) {
                 append(new StoreConstantOp(getMemoryKind(kind), storeAddress, c, state));
                 return;
             }
@@ -143,13 +136,6 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator implements HotSp
         } else {
             append(new StoreOp(getMemoryKind(kind), storeAddress, input, state));
         }
-    }
-
-    public void emitStoreRelease(PlatformKind kind, Value address, Value inputVal, LIRFrameState state) {
-        HSAILAddressValue storeAddress = asAddressValue(address);
-        // TODO: handle Constants here
-        Variable input = load(inputVal);
-        append(new StoreReleaseOp(getMemoryKind(kind), storeAddress, input, state));
     }
 
     public Value emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
@@ -243,15 +229,6 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator implements HotSp
         if (dst.getPlatformKind() == NarrowOopStamp.NarrowOop) {
             if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(src)) {
                 return new MoveToRegOp(Kind.Int, dst, Constant.INT_0);
-            } else if (src instanceof HotSpotObjectConstant) {
-                if (HotSpotObjectConstant.isCompressed((Constant) src)) {
-                    Variable uncompressed = newVariable(Kind.Object);
-                    append(new MoveToRegOp(Kind.Object, uncompressed, src));
-                    CompressEncoding oopEncoding = config.getOopEncoding();
-                    return new HSAILMove.CompressPointer(dst, newVariable(Kind.Object), uncompressed, oopEncoding.base, oopEncoding.shift, oopEncoding.alignment, true);
-                } else {
-                    return new MoveToRegOp(Kind.Object, dst, src);
-                }
             } else if (isRegister(src) || isStackSlot(dst)) {
                 return new MoveFromRegOp(Kind.Int, dst, src);
             } else {
@@ -318,11 +295,5 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator implements HotSp
         Variable obj = newVariable(Kind.Object);
         emitMove(obj, address);
         append(new HSAILMove.NullCheckOp(obj, state));
-    }
-
-    public Variable emitWorkItemAbsId() {
-        Variable result = newVariable(Kind.Int);
-        append(new WorkItemAbsIdOp(result));
-        return result;
     }
 }
