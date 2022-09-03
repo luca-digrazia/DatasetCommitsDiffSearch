@@ -114,9 +114,8 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
                     @Override
                     public ValueNode[] fieldState() {
                         ValueNode[] state = new ValueNode[constantLength];
-                        ConstantNode defaultForKind = constantLength == 0 ? null : ConstantNode.defaultForKind(elementType().getKind(), graph());
                         for (int i = 0; i < constantLength; i++) {
-                            state[i] = defaultForKind;
+                            state[i] = ConstantNode.defaultForKind(elementType().getKind(), graph());
                         }
                         return state;
                     }

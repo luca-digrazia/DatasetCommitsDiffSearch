@@ -40,13 +40,11 @@ public class PartialEscapeAnalysisPhase extends Phase {
     private final TargetDescription target;
     private final MetaAccessProvider runtime;
     private final Assumptions assumptions;
-    private final boolean iterative;
 
-    public PartialEscapeAnalysisPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, boolean iterative) {
+    public PartialEscapeAnalysisPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions) {
         this.target = target;
         this.runtime = runtime;
         this.assumptions = assumptions;
-        this.iterative = iterative;
     }
 
     public static final void trace(String format, Object... obj) {
@@ -89,9 +87,6 @@ public class PartialEscapeAnalysisPhase extends Phase {
                     assert noObsoleteNodes(graph, obsoleteNodes);
 
                     new DeadCodeEliminationPhase().apply(graph);
-                    if (!iterative) {
-                        return;
-                    }
                     if (GraalOptions.OptCanonicalizer) {
                         new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
                     }
@@ -162,10 +157,10 @@ public class PartialEscapeAnalysisPhase extends Phase {
         boolean success = true;
         for (Node node : obsoleteNodes) {
             if (flood.isMarked(node)) {
-                error("offending node path:");
+                System.out.println("offending node path:");
                 Node current = node;
                 while (current != null) {
-                    error(current.toString());
+                    System.out.println(current);
                     current = path.get(current);
                     if (current != null && current instanceof FixedNode && !obsoleteNodes.contains(current)) {
                         break;

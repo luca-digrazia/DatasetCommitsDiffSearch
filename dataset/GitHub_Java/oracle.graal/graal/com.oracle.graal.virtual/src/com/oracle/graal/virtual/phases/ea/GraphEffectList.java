@@ -27,16 +27,16 @@ import java.util.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
-import com.oracle.graal.phases.common.*;
 import com.oracle.graal.virtual.nodes.*;
 
 public class GraphEffectList extends EffectList {
 
     /**
-     * Adds the given fixed node to the graph's control flow, before position (so that the original
-     * predecessor of position will then be node's predecessor).
-     * 
+     * Adds the given fixed node to the graph's control flow, before position (so that the original predecessor of
+     * position will then be node's predecessor).
+     *
      * @param node The fixed node to be added to the graph.
      * @param position The fixed node before which the node should be added.
      */
@@ -59,7 +59,7 @@ public class GraphEffectList extends EffectList {
 
     /**
      * Add the given floating node to the graph.
-     * 
+     *
      * @param node The floating node to be added.
      */
     public void addFloatingNode(final FloatingNode node) {
@@ -79,9 +79,8 @@ public class GraphEffectList extends EffectList {
     }
 
     /**
-     * Add the materialization node to the graph's control flow at the given position, and then sets
-     * its values.
-     * 
+     * Add the materialization node to the graph's control flow at the given position, and then sets its values.
+     *
      * @param node The materialization node that should be added.
      * @param position The fixed node before which the materialization node should be added.
      * @param values The values for the materialization node's entries.
@@ -108,7 +107,7 @@ public class GraphEffectList extends EffectList {
 
     /**
      * Adds an value to the given phi node.
-     * 
+     *
      * @param node The phi node to which the value should be added.
      * @param value The value that will be added to the phi node.
      */
@@ -130,7 +129,7 @@ public class GraphEffectList extends EffectList {
 
     /**
      * Sets the phi node's input at the given index to the given value.
-     * 
+     *
      * @param node The phi node whose input should be changed.
      * @param index The index of the phi input to be changed.
      * @param value The new value for the phi input.
@@ -152,13 +151,14 @@ public class GraphEffectList extends EffectList {
     }
 
     /**
-     * Adds a virtual object's state to the given frame state. If the given reusedVirtualObjects set
-     * contains the virtual object then old states for this object will be removed.
-     * 
+     * Adds a virtual object's state to the given frame state. If the given reusedVirtualObjects set contains the
+     * virtual object then old states for this object will be removed.
+     *
      * @param node The frame state to which the state should be added.
      * @param state The virtual object state to add.
+     * @param reusedVirtualObjects A set of all reused virtual objects.
      */
-    public void addVirtualMapping(final FrameState node, final EscapeObjectState state) {
+    public void addVirtualMapping(final FrameState node, final EscapeObjectState state, final HashSet<VirtualObjectNode> reusedVirtualObjects) {
         add(new Effect() {
 
             @Override
@@ -172,7 +172,11 @@ public class GraphEffectList extends EffectList {
                 FrameState stateAfter = node;
                 for (int i = 0; i < stateAfter.virtualObjectMappingCount(); i++) {
                     if (stateAfter.virtualObjectMappingAt(i).object() == state.object()) {
-                        stateAfter.virtualObjectMappings().remove(i);
+                        if (reusedVirtualObjects.contains(state.object())) {
+                            stateAfter.virtualObjectMappings().remove(i);
+                        } else {
+                            throw new GraalInternalError("unexpected duplicate virtual state at: %s for %s", stateAfter, state.object());
+                        }
                     }
                 }
                 stateAfter.addVirtualObjectMapping(graph.add(state));
@@ -187,7 +191,7 @@ public class GraphEffectList extends EffectList {
 
     /**
      * Removes the given fixed node from the control flow and deletes it.
-     * 
+     *
      * @param node The fixed node that should be deleted.
      */
     public void deleteFixedNode(final FixedWithNextNode node) {
@@ -210,14 +214,31 @@ public class GraphEffectList extends EffectList {
     }
 
     /**
-     * Replaces the given node at its usages without deleting it. If the current node is a fixed
-     * node it will be disconnected from the control flow, so that it will be deleted by a
-     * subsequent {@link DeadCodeEliminationPhase}
-     * 
+     * Virtualizes a monitor access by calling its {@link AccessMonitorNode#eliminate()} method.
+     *
+     * @param node The monitor access that should be virtualized.
+     */
+    public void eliminateMonitor(final AccessMonitorNode node) {
+        add(new Effect() {
+
+            @Override
+            public String name() {
+                return "eliminateMonitor";
+            }
+
+            @Override
+            public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
+                assert node.isAlive() && node.object().isAlive() && (node.object() instanceof VirtualObjectNode);
+                node.eliminate();
+            }
+        });
+    }
+
+    /**
+     * Replaces the given node at its usages without deleting it.
+     *
      * @param node The node to be replaced.
-     * @param replacement The node that should replace the original value. If the replacement is a
-     *            non-connected {@link FixedWithNextNode} it will be added to the control flow.
-     * 
+     * @param replacement The node that should replace the original value.
      */
     public void replaceAtUsages(final ValueNode node, final ValueNode replacement) {
         add(new Effect() {
@@ -230,29 +251,19 @@ public class GraphEffectList extends EffectList {
             @Override
             public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
                 assert node.isAlive() && replacement.isAlive();
-                if (replacement instanceof FixedWithNextNode && ((FixedWithNextNode) replacement).next() == null) {
-                    assert node instanceof FixedNode;
-                    graph.addBeforeFixed((FixedNode) node, (FixedWithNextNode) replacement);
-                }
                 node.replaceAtUsages(replacement);
-                if (node instanceof FixedWithNextNode) {
-                    FixedNode next = ((FixedWithNextNode) node).next();
-                    ((FixedWithNextNode) node).setNext(null);
-                    node.replaceAtPredecessor(next);
-                    obsoleteNodes.add(node);
-                }
             }
         });
     }
 
     /**
      * Replaces the first occurrence of oldInput in node with newInput.
-     * 
+     *
      * @param node The node whose input should be changed.
      * @param oldInput The value to look for.
      * @param newInput The value to replace with.
      */
-    public void replaceFirstInput(final Node node, final Node oldInput, final Node newInput) {
+    public void replaceFirstInput(final Node node, final ValueNode oldInput, final ValueNode newInput) {
         add(new Effect() {
 
             @Override
@@ -269,26 +280,6 @@ public class GraphEffectList extends EffectList {
             @Override
             public boolean isVisible() {
                 return !(node instanceof FrameState);
-            }
-        });
-    }
-
-    /**
-     * Performs a custom action.
-     * 
-     * @param action The action that should be performed when the effects are applied.
-     */
-    public void customAction(final Runnable action) {
-        add(new Effect() {
-
-            @Override
-            public String name() {
-                return "customAction";
-            }
-
-            @Override
-            public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
-                action.run();
             }
         });
     }

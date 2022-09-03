@@ -23,35 +23,29 @@
 package com.oracle.graal.virtual.phases.ea;
 
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
- * This class describes the state of a virtual object while iterating over the graph. It describes
- * the fields or array elements (called "entries") and the lock count if the object is still
- * virtual. If the object was materialized, it contains the current materialized value.
+ * This class describes the state of a virtual object while iterating over the graph.
+ * It describes the fields or array elements (called "entries") and the lock count if the object is still virtual.
+ * If the object was materialized, it contains the current materialized value.
  */
-class ObjectState extends Virtualizable.State {
+class ObjectState {
 
     public final VirtualObjectNode virtual;
-
-    private EscapeState state;
     private ValueNode[] entries;
     private ValueNode materializedValue;
     private int lockCount;
 
-    public ObjectState(VirtualObjectNode virtual, ValueNode[] entries, EscapeState state, int lockCount) {
+    public ObjectState(VirtualObjectNode virtual, ValueNode[] entries, int lockCount) {
         this.virtual = virtual;
         this.entries = entries;
-        this.state = state;
         this.lockCount = lockCount;
     }
 
-    public ObjectState(VirtualObjectNode virtual, ValueNode materializedValue, EscapeState state, int lockCount) {
+    public ObjectState(VirtualObjectNode virtual, ValueNode materializedValue, int lockCount) {
         this.virtual = virtual;
         this.materializedValue = materializedValue;
-        this.state = state;
         this.lockCount = lockCount;
     }
 
@@ -60,56 +54,41 @@ class ObjectState extends Virtualizable.State {
         entries = other.entries == null ? null : other.entries.clone();
         materializedValue = other.materializedValue;
         lockCount = other.lockCount;
-        state = other.state;
     }
 
     public ObjectState cloneState() {
         return new ObjectState(this);
     }
 
-    @Override
-    public EscapeState getState() {
-        return state;
-    }
-
-    @Override
-    public VirtualObjectNode getVirtualObject() {
-        return virtual;
-    }
-
     public boolean isVirtual() {
-        return state == EscapeState.Virtual;
+        assert (entries == null) ^ (materializedValue == null);
+        return materializedValue == null;
     }
 
     public ValueNode[] getEntries() {
-        assert isVirtual() && entries != null;
+        assert isVirtual();
         return entries;
     }
 
-    @Override
     public ValueNode getEntry(int index) {
         assert isVirtual();
         return entries[index];
     }
 
-    @Override
     public void setEntry(int index, ValueNode value) {
         assert isVirtual();
         entries[index] = value;
     }
 
-    public void escape(ValueNode materialized, EscapeState newState) {
-        assert state == EscapeState.Virtual || (state == EscapeState.ThreadLocal && newState == EscapeState.Global);
-        state = newState;
-        materializedValue = materialized;
-        entries = null;
+    public ValueNode getMaterializedValue() {
         assert !isVirtual();
+        return materializedValue;
     }
 
-    @Override
-    public ValueNode getMaterializedValue() {
-        assert state == EscapeState.ThreadLocal || state == EscapeState.Global;
-        return materializedValue;
+    public void setMaterializedValue(ValueNode value) {
+        assert isVirtual();
+        materializedValue = value;
+        entries = null;
     }
 
     public void updateMaterializedValue(ValueNode value) {
@@ -117,14 +96,16 @@ class ObjectState extends Virtualizable.State {
         materializedValue = value;
     }
 
-    @Override
     public int getLockCount() {
         return lockCount;
     }
 
-    @Override
-    public void setLockCount(int lockCount) {
-        this.lockCount = lockCount;
+    public void incLockCount() {
+        lockCount++;
+    }
+
+    public void decLockCount() {
+        lockCount--;
     }
 
     @Override

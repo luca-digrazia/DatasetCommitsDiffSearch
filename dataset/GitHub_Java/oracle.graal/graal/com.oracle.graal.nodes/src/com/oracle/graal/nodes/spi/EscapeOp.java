@@ -34,6 +34,4 @@ public abstract class EscapeOp {
 
     public abstract VirtualObjectNode virtualObject(long virtualId);
 
-    public abstract int lockCount();
-
 }

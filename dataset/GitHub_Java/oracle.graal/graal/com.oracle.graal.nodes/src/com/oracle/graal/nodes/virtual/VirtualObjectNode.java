@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.virtual;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -53,8 +52,4 @@ public abstract class VirtualObjectNode extends FloatingNode implements LIRLower
     }
 
     public abstract Object fieldName(int i);
-
-    public void materializeAt(@SuppressWarnings("unused") FixedNode fixed) {
-        // nothing to do in here - this method allows subclasses to respond to materialization
-    }
 }
