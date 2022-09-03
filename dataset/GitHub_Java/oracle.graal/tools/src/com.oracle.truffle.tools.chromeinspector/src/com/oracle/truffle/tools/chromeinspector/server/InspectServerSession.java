@@ -266,10 +266,6 @@ public final class InspectServerSession {
                 debugger.continueToLocation(
                                 Location.create(cmd.getParams().getJSONObject().getJSONObject("location")), postProcessor);
                 break;
-            case "Debugger.restartFrame":
-                json = cmd.getParams().getJSONObject();
-                resultParams = debugger.restartFrame(cmd.getId(), json.optString("callFrameId"), postProcessor);
-                break;
             case "Debugger.setVariableValue":
                 json = cmd.getParams().getJSONObject();
                 debugger.setVariableValue(
@@ -427,11 +423,7 @@ public final class InspectServerSession {
                     if (resultParams == null) {
                         resultMsg = Result.emptyResultToJSONString(cmd.getId());
                     } else {
-                        if (resultParams.getJSONObject() != null) {
-                            resultMsg = new Result(resultParams).toJSONString(cmd.getId());
-                        } else {
-                            resultMsg = null;
-                        }
+                        resultMsg = new Result(resultParams).toJSONString(cmd.getId());
                     }
                 } catch (CommandProcessException cpex) {
                     resultMsg = new ErrorResponse(cmd.getId(), -32601, cpex.getLocalizedMessage()).toJSONString();
@@ -444,11 +436,9 @@ public final class InspectServerSession {
                     }
                     resultMsg = new ErrorResponse(cmd.getId(), -32601, "Processing of '" + cmd.getMethod() + "' has caused " + t.getLocalizedMessage()).toJSONString();
                 }
-                if (resultMsg != null) {
-                    MessageListener listener = messageListener;
-                    if (listener != null) {
-                        listener.sendMessage(resultMsg);
-                    }
+                MessageListener listener = messageListener;
+                if (listener != null) {
+                    listener.sendMessage(resultMsg);
                 }
                 postProcessor.run();
             }

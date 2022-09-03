@@ -42,8 +42,8 @@ import java.util.Map;
 import fi.iki.elonen.NanoHTTPD;
 import fi.iki.elonen.NanoWSD;
 
-import com.oracle.truffle.tools.utils.json.JSONArray;
-import com.oracle.truffle.tools.utils.json.JSONObject;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import com.oracle.truffle.tools.chromeinspector.TruffleDebugger;
 import com.oracle.truffle.tools.chromeinspector.TruffleExecutionContext;
@@ -66,9 +66,8 @@ public final class WebSocketServer extends NanoWSD {
 
     private final String path;
     private final PrintStream log;
-    private final ConnectionWatcher connectionWatcher;
 
-    private WebSocketServer(InetSocketAddress isa, String path, PrintStream log, ConnectionWatcher connectionWatcher) {
+    private WebSocketServer(InetSocketAddress isa, String path, PrintStream log) {
         super(isa.getHostName(), isa.getPort());
         this.path = path;
         this.log = log;
@@ -76,11 +75,10 @@ public final class WebSocketServer extends NanoWSD {
             log.println("New WebSocketServer at " + isa);
             log.flush();
         }
-        this.connectionWatcher = connectionWatcher;
     }
 
     public static WebSocketServer get(InetSocketAddress isa, String path,
-                    TruffleExecutionContext context, boolean debugBrk, ConnectionWatcher connectionWatcher) throws IOException {
+                    TruffleExecutionContext context, boolean debugBrk) throws IOException {
         synchronized (SESSIONS) {
             SESSIONS.put(path, context);
             DEBUG_BRK.put(path, debugBrk);
@@ -102,7 +100,7 @@ public final class WebSocketServer extends NanoWSD {
                         }
                     }
                 }
-                wss = new WebSocketServer(isa, path, traceLog, connectionWatcher);
+                wss = new WebSocketServer(isa, path, traceLog);
                 wss.start(Integer.MAX_VALUE);
             }
         }
@@ -125,7 +123,7 @@ public final class WebSocketServer extends NanoWSD {
                 info.put("description", "GraalVM");
                 info.put("faviconUrl", "https://assets-cdn.github.com/images/icons/emoji/unicode/1f680.png");
                 String ws = getHostname() + ":" + getListeningPort() + path;
-                info.put("devtoolsFrontendUrl", "chrome-devtools://devtools/bundled/js_app.html?ws=" + ws);
+                info.put("devtoolsFrontendUrl", "chrome-devtools://devtools/bundled/inspector.html?experiments=true&v8only=true&ws=" + ws);
                 info.put("id", path.substring(1));
                 info.put("title", "GraalVM");
                 info.put("type", "node");
@@ -157,11 +155,10 @@ public final class WebSocketServer extends NanoWSD {
             log.flush();
         }
         if (context != null) {
-            // Do the initial break for the first time only, do not break on reconnect
-            boolean debugBreak = Boolean.TRUE.equals(DEBUG_BRK.remove(descriptor));
+            boolean debugBreak = DEBUG_BRK.get(descriptor);
             RuntimeDomain runtime = new TruffleRuntime(context);
             DebuggerDomain debugger = new TruffleDebugger(context, debugBreak);
-            ProfilerDomain profiler = new TruffleProfiler(context, connectionWatcher);
+            ProfilerDomain profiler = new TruffleProfiler(context);
             InspectServerSession iss = new InspectServerSession(runtime, debugger, profiler, context);
             return new InspectWebSocket(handshake, iss, log);
         } else {
@@ -215,7 +212,6 @@ public final class WebSocketServer extends NanoWSD {
                 log.println("CLIENT web socket connection opened.");
                 log.flush();
             }
-            connectionWatcher.notifyOpen();
             iss.setMessageListener(new InspectServerSession.MessageListener() {
                 @Override
                 public void sendMessage(String message) {
@@ -241,7 +237,6 @@ public final class WebSocketServer extends NanoWSD {
                 log.println("CLIENT web socket connection closed.");
                 log.flush();
             }
-            connectionWatcher.notifyClosing();
             iss.dispose();
         }
 

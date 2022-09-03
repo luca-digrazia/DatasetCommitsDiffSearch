@@ -29,6 +29,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -42,7 +43,7 @@ public final class ScriptsHandler implements LoadSourceListener {
 
     private final Map<Source, Integer> sourceIDs = new HashMap<>(100);
     private final List<Script> scripts = new ArrayList<>(100);
-    private final List<LoadScriptListener> listeners = new ArrayList<>();
+    private final List<LoadScriptListener> listeners = new LinkedList<>();
 
     public ScriptsHandler() {
     }
@@ -70,27 +71,20 @@ public final class ScriptsHandler implements LoadSourceListener {
     }
 
     void addLoadScriptListener(LoadScriptListener listener) {
+        listeners.add(listener);
         List<Script> scriptsToNotify;
         synchronized (sourceIDs) {
             scriptsToNotify = new ArrayList<>(scripts);
-            listeners.add(listener);
         }
         for (Script scr : scriptsToNotify) {
             listener.loadedScript(scr);
         }
     }
 
-    void removeLoadScriptListener(LoadScriptListener listener) {
-        synchronized (sourceIDs) {
-            listeners.remove(listener);
-        }
-    }
-
-    public int assureLoaded(Source source) {
+    int assureLoaded(Source source) {
         Script scr;
         URI uri = source.getURI();
         int id;
-        LoadScriptListener[] listenersToNotify;
         synchronized (sourceIDs) {
             Integer eid = sourceIDs.get(source);
             if (eid != null) {
@@ -101,9 +95,8 @@ public final class ScriptsHandler implements LoadSourceListener {
             scr = new Script(id, sourceUrl, source);
             sourceIDs.put(source, id);
             scripts.add(scr);
-            listenersToNotify = listeners.toArray(new LoadScriptListener[listeners.size()]);
         }
-        for (LoadScriptListener l : listenersToNotify) {
+        for (LoadScriptListener l : listeners) {
             l.loadedScript(scr);
         }
         return id;
@@ -295,18 +288,6 @@ public final class ScriptsHandler implements LoadSourceListener {
         if (!source.isInternal()) {
             assureLoaded(source);
         }
-    }
-
-    static boolean compareURLs(String url1, String url2) {
-        return stripScheme(url1).equals(stripScheme(url2));
-    }
-
-    private static String stripScheme(String url) {
-        // we can strip the scheme part iff it's "file"
-        if (url.startsWith("file://")) {
-            return url.substring("file://".length());
-        }
-        return url;
     }
 
     interface LoadScriptListener {
