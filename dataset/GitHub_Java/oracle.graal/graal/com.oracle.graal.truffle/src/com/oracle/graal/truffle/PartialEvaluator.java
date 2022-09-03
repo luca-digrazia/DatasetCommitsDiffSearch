@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.truffle;
 
+import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
@@ -76,7 +77,7 @@ public class PartialEvaluator {
     public PartialEvaluator(RuntimeProvider runtime, Providers providers, TruffleCache truffleCache) {
         this.providers = providers;
         CustomCanonicalizer customCanonicalizer = new PartialEvaluatorCanonicalizer(providers.getMetaAccess(), providers.getConstantReflection());
-        this.canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue(), customCanonicalizer);
+        this.canonicalizer = new CanonicalizerPhase(!AOTCompilation.getValue(), customCanonicalizer);
         this.skippedExceptionTypes = TruffleCompilerImpl.getSkippedExceptionTypes(providers.getMetaAccess());
         this.cache = runtime.getGraphCache();
         this.truffleCache = truffleCache;
@@ -87,11 +88,12 @@ public class PartialEvaluator {
         }
     }
 
-    public StructuredGraph createGraph(final OptimizedCallTarget callTarget, final Assumptions assumptions) {
-        try (Scope s = Debug.scope("TruffleTree")) {
-            Debug.dump(callTarget, "truffle tree");
-        } catch (Throwable e) {
-            throw Debug.handle(e);
+    public StructuredGraph createGraph(final OptimizedCallTarget node, final Assumptions assumptions) {
+        if (Dump.getValue() != null && Dump.getValue().contains("Truffle")) {
+            RootNode root = node.getRootNode();
+            if (root != null) {
+                new GraphPrintVisitor().beginGroup("TruffleGraph").beginGraph(node.toString()).visit(root).printToNetwork();
+            }
         }
 
         if (TraceTruffleCompilationDetails.getValue()) {
@@ -108,7 +110,7 @@ public class PartialEvaluator {
 
             // Replace thisNode with constant.
             LocalNode thisNode = graph.getLocal(0);
-            thisNode.replaceAndDelete(ConstantNode.forObject(callTarget, providers.getMetaAccess(), graph));
+            thisNode.replaceAndDelete(ConstantNode.forObject(node, providers.getMetaAccess(), graph));
 
             // Canonicalize / constant propagate.
             PhaseContext baseContext = new PhaseContext(providers, assumptions);
