@@ -59,12 +59,12 @@ public final class OptimizedAssumption extends AbstractAssumption {
 
         public InstalledCode awaitInstalledCode() {
             synchronized (this) {
-                while (installedCode == null) {
-                    try {
+                try {
+                    while (installedCode == null) {
                         this.wait();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
                     }
+                } catch (InterruptedException e) {
+                    throw GraalError.shouldNotReachHere(e);
                 }
                 return installedCode.get();
             }

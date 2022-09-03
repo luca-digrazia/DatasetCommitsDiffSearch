@@ -240,6 +240,9 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
             for (CodeInstallationTask task : tasks) {
                 task.postProcess(installedCode);
             }
+            for (CodeInstallationTask task : tasks) {
+                task.releaseInstallation(installedCode);
+            }
         } catch (Throwable t) {
             installedCode.invalidate();
             throw t;
@@ -315,6 +318,14 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
          */
         @SuppressWarnings("unused")
         public void postProcess(InstalledCode installedCode) {
+        }
+
+        /**
+         * Task to run after all the post-code installation tasks are complete, used to release the
+         * installed code.
+         */
+        @SuppressWarnings("unused")
+        public void releaseInstallation(InstalledCode installedCode) {
         }
 
         /**
