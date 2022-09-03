@@ -79,13 +79,9 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
     protected abstract int getInvalidationBackoff();
 
-    protected OSRRootNode createRootNode(@SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> truffleLanguage, @SuppressWarnings("unused") FrameDescriptor rootFrameDescriptor,
+    protected OSRRootNode createRootNode(@SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> truffleLanguage, FrameDescriptor frameDescriptor,
                     Class<? extends VirtualFrame> clazz) {
-        /*
-         * Use a new frame descriptor, because the frame that this new root node creates is not
-         * used.
-         */
-        return new OSRRootNode(this, truffleLanguage, new FrameDescriptor(), clazz);
+        return new OSRRootNode(this, truffleLanguage, frameDescriptor, clazz);
     }
 
     protected abstract int getThreshold();
@@ -227,7 +223,13 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
     @SuppressWarnings({"rawtypes", "unchecked"})
     private OSRRootNode createRootNodeImpl(RootNode root, Class<? extends VirtualFrame> frameClass) {
         Class truffleLanguage = TruffleLanguage.class;
-        return createRootNode(truffleLanguage, root == null ? null : root.getFrameDescriptor(), frameClass);
+        FrameDescriptor frameDescriptor;
+        if (root != null) {
+            frameDescriptor = root.getFrameDescriptor();
+        } else {
+            frameDescriptor = new FrameDescriptor();
+        }
+        return createRootNode(truffleLanguage, frameDescriptor, frameClass);
     }
 
     private OptimizedCallTarget compileImpl(VirtualFrame frame) {
@@ -377,11 +379,10 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
         }
 
         @Override
-        protected OSRRootNode createRootNode(@SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> truffleLanguage, FrameDescriptor rootFrameDescriptor, Class<? extends VirtualFrame> clazz) {
+        protected OSRRootNode createRootNode(@SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> truffleLanguage, FrameDescriptor frameDescriptor, Class<? extends VirtualFrame> clazz) {
             if (readFrameSlots == null || writtenFrameSlots == null) {
-                return super.createRootNode(truffleLanguage, rootFrameDescriptor, clazz);
+                return super.createRootNode(truffleLanguage, frameDescriptor, clazz);
             } else {
-                FrameDescriptor frameDescriptor = rootFrameDescriptor == null ? new FrameDescriptor() : rootFrameDescriptor;
                 if (previousRoot == null) {
                     previousRoot = new VirtualizingOSRRootNode(this, truffleLanguage, frameDescriptor, clazz, readFrameSlots, writtenFrameSlots);
                 } else {
