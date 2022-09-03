@@ -52,6 +52,7 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
     @CompilationFinal private OptimizedCallTarget splitCallTarget;
 
     private final GraalTruffleRuntime runtime;
+    private boolean needsSplit;
 
     public OptimizedDirectCallNode(GraalTruffleRuntime runtime, OptimizedCallTarget target) {
         super(target);
@@ -188,5 +189,13 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
     public boolean cloneCallTarget() {
         TruffleSplittingStrategy.forceSplitting(this, runtime.getTvmci());
         return true;
+    }
+
+    public void setNeedsSplit(boolean needsSplit) {
+        this.needsSplit = needsSplit;
+    }
+
+    public boolean isNeedsSplit() {
+        return needsSplit;
     }
 }
