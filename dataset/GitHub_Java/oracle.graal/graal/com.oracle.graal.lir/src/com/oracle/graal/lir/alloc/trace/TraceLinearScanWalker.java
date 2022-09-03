@@ -30,7 +30,6 @@ import static jdk.vm.ci.code.ValueUtil.isRegister;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.BitSet;
 import java.util.List;
 
 import jdk.vm.ci.code.BailoutException;
@@ -60,7 +59,6 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
 
     private final int[] usePos;
     private final int[] blockPos;
-    private final BitSet isInMemory;
 
     private List<TraceInterval>[] spillIntervals;
 
@@ -96,14 +94,12 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
         super(allocator, unhandledFixedFirst, unhandledAnyFirst);
 
         moveResolver = allocator.createMoveResolver();
-        int numRegs = allocator.getRegisters().length;
-        spillIntervals = Util.uncheckedCast(new List<?>[numRegs]);
-        for (int i = 0; i < numRegs; i++) {
+        spillIntervals = Util.uncheckedCast(new List<?>[allocator.getRegisters().length]);
+        for (int i = 0; i < allocator.getRegisters().length; i++) {
             spillIntervals[i] = EMPTY_LIST;
         }
-        usePos = new int[numRegs];
-        blockPos = new int[numRegs];
-        isInMemory = new BitSet(numRegs);
+        usePos = new int[allocator.getRegisters().length];
+        blockPos = new int[allocator.getRegisters().length];
     }
 
     private void initUseLists(boolean onlyProcessUsePos) {
@@ -114,7 +110,6 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
             if (!onlyProcessUsePos) {
                 blockPos[i] = Integer.MAX_VALUE;
                 spillIntervals[i].clear();
-                isInMemory.clear(i);
             }
         }
     }
@@ -154,10 +149,6 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
                         spillIntervals[i] = list;
                     }
                     list.add(interval);
-                    // set is in memory flag
-                    if (interval.inMemoryAt(currentPosition)) {
-                        isInMemory.set(i);
-                    }
                 }
             }
         }
@@ -868,55 +859,43 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
                     if (availableReg.equals(ignore)) {
                         // this register must be ignored
                     } else if (usePos[number] > regNeededUntil) {
-                        /*
-                         * If the use position is the same, prefer registers (active intervals)
-                         * where the value is already on the stack.
-                         */
-                        if (reg == null || (usePos[number] > usePos[reg.number]) || (usePos[number] == usePos[reg.number] && (!isInMemory.get(reg.number) && isInMemory.get(number)))) {
+                        if (reg == null || (usePos[number] > usePos[reg.number])) {
                             reg = availableReg;
                         }
                     }
                 }
 
-                if (Debug.isLogEnabled()) {
-                    Debug.log("Register Selected: %s", reg);
-                }
-
                 int regUsePos = (reg == null ? 0 : usePos[reg.number]);
                 if (regUsePos <= firstShouldHaveUsage) {
-                    /* Check if there is another interval that is already in memory. */
-                    if (reg == null || interval.inMemoryAt(currentPosition) || !isInMemory.get(reg.number)) {
-                        if (Debug.isLogEnabled()) {
-                            Debug.log("able to spill current interval. firstUsage(register): %d, usePos: %d", firstUsage, regUsePos);
-                        }
-
-                        if (firstUsage <= interval.from() + 1) {
-                            if (registerPriority.equals(RegisterPriority.LiveAtLoopEnd)) {
-                                /*
-                                 * Tool of last resort: we can not spill the current interval so we
-                                 * try to spill an active interval that has a usage but do not
-                                 * require a register.
-                                 */
-                                Debug.log("retry with register priority must have register");
-                                continue;
-                            }
-                            String description = "cannot spill interval (" + interval + ") that is used in first instruction (possible reason: no register found) firstUsage=" + firstUsage +
-                                            ", interval.from()=" + interval.from() + "; already used candidates: " + Arrays.toString(availableRegs);
-                            /*
-                             * assign a reasonable register and do a bailout in product mode to
-                             * avoid errors
-                             */
-                            allocator.assignSpillSlot(interval);
-                            Debug.dump(allocator.getLIR(), description);
-                            allocator.printIntervals(description);
-                            throw new OutOfRegistersException("LinearScan: no register found", description);
-                        }
-
-                        splitAndSpillInterval(interval);
-                        return;
+                    if (Debug.isLogEnabled()) {
+                        Debug.log("able to spill current interval. firstUsage(register): %d, usePos: %d", firstUsage, regUsePos);
                     }
+
+                    if (firstUsage <= interval.from() + 1) {
+                        if (registerPriority.equals(RegisterPriority.LiveAtLoopEnd)) {
+                            /*
+                             * Tool of last resort: we can not spill the current interval so we try
+                             * to spill an active interval that has a usage but do not require a
+                             * register.
+                             */
+                            Debug.log("retry with register priority must have register");
+                            continue;
+                        }
+                        String description = "cannot spill interval (" + interval + ") that is used in first instruction (possible reason: no register found) firstUsage=" + firstUsage +
+                                        ", interval.from()=" + interval.from() + "; already used candidates: " + Arrays.toString(availableRegs);
+                        /*
+                         * assign a reasonable register and do a bailout in product mode to avoid
+                         * errors
+                         */
+                        allocator.assignSpillSlot(interval);
+                        Debug.dump(allocator.getLIR(), description);
+                        allocator.printIntervals(description);
+                        throw new OutOfRegistersException("LinearScan: no register found", description);
+                    }
+
+                    splitAndSpillInterval(interval);
+                    return;
                 }
-                // common case: break out of the loop
                 break;
             }
 
@@ -947,9 +926,9 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
         try (Indent indent2 = Debug.logAndIndent("state of registers:")) {
             for (Register reg : availableRegs) {
                 int i = reg.number;
-                try (Indent indent3 = Debug.logAndIndent("reg %d: usePos: %d, blockPos: %d, inMemory: %b, intervals: ", i, usePos[i], blockPos[i], isInMemory.get(i))) {
+                try (Indent indent3 = Debug.logAndIndent("reg %d: usePos: %d, blockPos: %d, intervals: ", i, usePos[i], blockPos[i])) {
                     for (int j = 0; j < spillIntervals[i].size(); j++) {
-                        Debug.log("%s", spillIntervals[i].get(j));
+                        Debug.log("%s ", spillIntervals[i].get(j));
                     }
                 }
             }
