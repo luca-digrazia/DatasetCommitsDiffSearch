@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,120 +22,231 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.spi.types.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
+import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
+import static jdk.vm.ci.meta.DeoptimizationReason.ArrayStoreException;
+import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
+import static jdk.vm.ci.meta.DeoptimizationReason.UnreachedCode;
+
+import com.oracle.graal.compiler.common.type.TypeReference;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaTypeProfile;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.TriState;
+
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedGuardNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.LogicConstantNode;
+import com.oracle.graal.nodes.LogicNode;
+import com.oracle.graal.nodes.PiNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.IsNullNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.extended.ValueAnchorNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.ValueProxy;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.type.StampTool;
 
 /**
- * The {@code CheckCastNode} represents a {@link Bytecodes#CHECKCAST}.
- *
- * The {@link #targetClass()} of a CheckCastNode can be null for array store checks!
+ * Implements a type check against a compile-time known type.
  */
-public final class CheckCastNode extends TypeCheckNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType, TypeFeedbackProvider, TypeCanonicalizable {
+@NodeInfo
+public class CheckCastNode extends FixedWithNextNode implements Canonicalizable, Lowerable, Virtualizable, ValueProxy {
 
-    @Input(notDataflow = true) protected final FixedNode anchor;
-    @Data  protected final boolean emitCode;
+    public static final NodeClass<CheckCastNode> TYPE = NodeClass.create(CheckCastNode.class);
+    @Input protected ValueNode object;
+    protected final TypeReference type;
+    protected final JavaTypeProfile profile;
 
-    public FixedNode anchor() {
-        return anchor;
+    /**
+     * Determines the exception thrown by this node if the check fails: {@link ClassCastException}
+     * if false; {@link ArrayStoreException} if true.
+     */
+    protected final boolean forStoreCheck;
+
+    public CheckCastNode(TypeReference type, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck) {
+        this(TYPE, type, object, profile, forStoreCheck);
     }
 
-    public boolean emitCode() {
-        return emitCode;
+    protected CheckCastNode(NodeClass<? extends CheckCastNode> c, TypeReference type, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck) {
+        super(c, StampFactory.object(type).improveWith(object.stamp()));
+        assert object.stamp() instanceof ObjectStamp : object;
+        assert type != null;
+        this.type = type;
+        this.object = object;
+        this.profile = profile;
+        this.forStoreCheck = forStoreCheck;
+    }
+
+    public static ValueNode create(TypeReference type, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck) {
+        ValueNode synonym = findSynonym(type, object);
+        if (synonym != null) {
+            return synonym;
+        }
+        assert object.stamp() instanceof ObjectStamp : object;
+        return new CheckCastNode(type, object, profile, forStoreCheck);
+    }
+
+    public boolean isForStoreCheck() {
+        return forStoreCheck;
     }
 
     /**
-     * Creates a new CheckCast instruction.
+     * Lowers a {@link CheckCastNode}. That is:
      *
-     * @param targetClassInstruction the instruction which produces the class which is being cast to
-     * @param targetClass the class being cast to
-     * @param object the instruction producing the object
+     * <pre>
+     * 1: A a = ...
+     * 2: B b = (B) a;
+     * </pre>
+     *
+     * is lowered to:
+     *
+     * <pre>
+     * 1: A a = ...
+     * 2: B b = guardingPi(a == null || a instanceof B, a, stamp(B))
+     * </pre>
+     *
+     * or if a is known to be non-null:
+     *
+     * <pre>
+     * 1: A a = ...
+     * 2: B b = guardingPi(a instanceof B, a, stamp(B, non-null))
+     * </pre>
+     *
+     * Note: we use {@link Graph#addWithoutUnique} as opposed to {@link Graph#unique} for the new
+     * {@link InstanceOfNode} to maintain the invariant checked by
+     * {@code LoweringPhase.checkUsagesAreScheduled()}.
      */
-    public CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object) {
-        this(anchor, targetClassInstruction, targetClass, object, EMPTY_HINTS, false);
-    }
+    @Override
+    public void lower(LoweringTool tool) {
+        Stamp newStamp = StampFactory.object(type).improveWith(object().stamp());
+        LogicNode condition;
+        LogicNode innerNode = null;
+        ValueNode theValue = object;
+        if (newStamp.isEmpty()) {
+            // This is a check cast that will always fail
+            condition = LogicConstantNode.contradiction(graph());
+            newStamp = StampFactory.object(type);
+        } else if (StampTool.isPointerNonNull(object)) {
+            condition = graph().addWithoutUniqueWithInputs(InstanceOfNode.create(type, object, profile));
+            innerNode = condition;
+        } else {
+            if (profile != null && profile.getNullSeen() == TriState.FALSE) {
+                FixedGuardNode nullCheck = graph().add(new FixedGuardNode(graph().unique(new IsNullNode(object)), UnreachedCode, InvalidateReprofile, JavaConstant.NULL_POINTER, true));
+                PiNode nullGuarded = graph().unique(new PiNode(object, object().stamp().join(StampFactory.objectNonNull()), nullCheck));
+                LogicNode typeTest = graph().addWithoutUniqueWithInputs(InstanceOfNode.create(type, nullGuarded, profile));
+                innerNode = typeTest;
+                graph().addBeforeFixed(this, nullCheck);
+                condition = typeTest;
+                /*
+                 * The PiNode is injecting an extra guard into the type so make sure it's used in
+                 * the GuardingPi, otherwise we can lose the null guard if the InstanceOf is
+                 * optimized away.
+                 */
+                theValue = nullGuarded;
+                newStamp = newStamp.join(StampFactory.objectNonNull());
+                nullCheck.lower(tool);
+            } else {
+                // TODO (ds) replace with probability of null-seen when available
+                double shortCircuitProbability = NOT_FREQUENT_PROBABILITY;
+                LogicNode typeTest = graph().addOrUniqueWithInputs(InstanceOfNode.create(type, object, profile));
+                innerNode = typeTest;
+                condition = LogicNode.or(graph().unique(new IsNullNode(object)), typeTest, shortCircuitProbability);
+            }
+        }
+        GuardingNode guard = tool.createGuard(next(), condition, forStoreCheck ? ArrayStoreException : ClassCastException, InvalidateReprofile);
+        ValueAnchorNode valueAnchor = graph().add(new ValueAnchorNode((ValueNode) guard));
+        PiNode piNode = graph().unique(new PiNode(theValue, newStamp, (ValueNode) guard));
+        this.replaceAtUsages(piNode);
+        graph().replaceFixedWithFixed(this, valueAnchor);
 
-    public CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, boolean emitCode) {
-        this(anchor, targetClassInstruction, targetClass, object, EMPTY_HINTS, false, emitCode);
-    }
-
-    public CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact) {
-        this(anchor, targetClassInstruction, targetClass, object, hints, hintsExact, true);
-    }
-
-    private CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact, boolean emitCode) {
-        super(targetClassInstruction, targetClass, object, hints, hintsExact, targetClass == null ? StampFactory.forKind(CiKind.Object) : StampFactory.declared(targetClass));
-        this.anchor = anchor;
-        this.emitCode = emitCode;
+        if (innerNode instanceof Lowerable) {
+            tool.getLowerer().lower(innerNode, tool);
+        }
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.visitCheckCast(this);
+    public boolean inferStamp() {
+        if (object().stamp() instanceof ObjectStamp) {
+            ObjectStamp castStamp = StampFactory.object(type);
+            return updateStamp(castStamp.improveWith(object().stamp()));
+        }
+        return false;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        RiResolvedType objectDeclaredType = object().declaredType();
-        RiResolvedType targetClass = targetClass();
-        if (objectDeclaredType != null && targetClass != null && objectDeclaredType.isSubtypeOf(targetClass)) {
-            freeAnchor();
-            return object();
-        }
-        CiConstant constant = object().asConstant();
-        if (constant != null) {
-            assert constant.kind == CiKind.Object;
-            if (constant.isNull()) {
-                freeAnchor();
-                return object();
-            }
-        }
-
-        if (tool.assumptions() != null && hints() != null && targetClass() != null) {
-            if (!hintsExact() && hints().length == 1 && hints()[0] == targetClass().uniqueConcreteSubtype()) {
-                tool.assumptions().recordConcreteSubtype(targetClass(), hints()[0]);
-                return graph().unique(new CheckCastNode(anchor, targetClassInstruction(), targetClass(), object(), hints(), true));
-            }
+    public Node canonical(CanonicalizerTool tool) {
+        ValueNode synonym = findSynonym(type, object());
+        if (synonym != null) {
+            return synonym;
         }
         return this;
     }
 
-    // TODO (thomaswue): Find a better way to handle anchors.
-    private void freeAnchor() {
-        ValueAnchorNode anchorUsage = usages().filter(ValueAnchorNode.class).first();
-        if (anchorUsage != null) {
-            anchorUsage.replaceFirstInput(this, null);
+    public static ValueNode findSynonym(TypeReference type, ValueNode object) {
+        ResolvedJavaType objectType = StampTool.typeOrNull(object);
+        if (objectType != null && type.getType().isAssignableFrom(objectType)) {
+            // we don't have to check for null types here because they will also pass the
+            // checkcast.
+            return object;
         }
-    }
 
-    @Override
-    public BooleanNode negate() {
-        throw new Error("A CheckCast does not produce a boolean value, so it should actually not be a subclass of BooleanNode");
-    }
-
-    @Override
-    public void typeFeedback(TypeFeedbackTool tool) {
-        if (targetClass() != null) {
-            tool.addObject(object()).declaredType(targetClass(), false);
-        }
-    }
-
-    @Override
-    public Result canonical(TypeFeedbackTool tool) {
-        ObjectTypeQuery query = tool.queryObject(object());
-        if (query.constantBound(Condition.EQ, CiConstant.NULL_OBJECT)) {
-            return new Result(object(), query);
-        } else if (targetClass() != null) {
-            if (query.declaredType(targetClass())) {
-                return new Result(object(), query);
-            }
+        if (StampTool.isPointerAlwaysNull(object)) {
+            return object;
         }
         return null;
+    }
+
+    public ValueNode object() {
+        return object;
+    }
+
+    /**
+     * Gets the type being cast to.
+     */
+    public TypeReference type() {
+        return type;
+    }
+
+    public JavaTypeProfile profile() {
+        return profile;
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(object);
+        if (tryFold(alias.stamp()) == TriState.TRUE) {
+            tool.replaceWith(alias);
+        }
+    }
+
+    @Override
+    public ValueNode getOriginalNode() {
+        return object;
+    }
+
+    public TriState tryFold(Stamp testStamp) {
+        if (testStamp instanceof ObjectStamp) {
+            ObjectStamp objectStamp = (ObjectStamp) testStamp;
+            ResolvedJavaType objectType = objectStamp.type();
+            if (objectType != null && type.getType().isAssignableFrom(objectType)) {
+                return TriState.TRUE;
+            } else if (objectStamp.alwaysNull()) {
+                return TriState.TRUE;
+            }
+        }
+        return TriState.UNKNOWN;
     }
 }
