@@ -116,7 +116,7 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
         } else {
             return super.forwardEndIndex(pred);
         }
-        throw ValueNodeUtil.shouldNotReachHere("unknown pred : " + pred);
+        throw ValueUtil.shouldNotReachHere("unknown pred : " + pred);
     }
 
     @Override
@@ -131,7 +131,7 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
                 return end;
             }
         }
-        throw ValueNodeUtil.shouldNotReachHere();
+        throw ValueUtil.shouldNotReachHere();
     }
 
     @Override
@@ -154,9 +154,5 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
     @Override
     public void simplify(SimplifierTool tool) {
         // nothing yet
-    }
-
-    public boolean isLoopExit(BeginNode begin) {
-        return begin instanceof LoopExitNode && ((LoopExitNode) begin).loopBegin() == this;
     }
 }

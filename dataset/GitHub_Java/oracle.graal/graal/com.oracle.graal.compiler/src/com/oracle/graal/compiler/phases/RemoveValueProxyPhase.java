@@ -20,44 +20,25 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.nodes;
+package com.oracle.graal.compiler.phases;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.Node.*;
-import com.oracle.graal.nodes.PhiNode.PhiType;
-import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.*;
 
-
-
-public class ValueProxyNode extends FloatingNode implements Node.IterableNodeType, ValueNumberable {
-    @Input(notDataflow = true) private BeginNode proxyPoint;
-    @Input private ValueNode value;
-    @Data private final PhiType type;
-
-    public ValueProxyNode(ValueNode value, BeginNode exit, PhiType type) {
-        super(value.stamp());
-        this.type = type;
-        assert exit != null;
-        this.proxyPoint = exit;
-        this.value = value;
-    }
-
-    public ValueNode value() {
-        return value;
-    }
-
-    public BeginNode proxyPoint() {
-        return proxyPoint;
-    }
-
-    public PhiType type() {
-        return type;
-    }
+public class RemoveValueProxyPhase extends Phase {
 
     @Override
-    public boolean verify() {
-        assert value != null;
-        assert proxyPoint != null;
-        return super.verify();
+    protected void run(StructuredGraph graph) {
+        for (ValueProxyNode vpn : graph.getNodes(ValueProxyNode.class)) {
+            graph.replaceFloating(vpn, vpn.value());
+        }
+        for (LoopExitNode exit : graph.getNodes(LoopExitNode.class)) {
+            FrameState stateAfter = exit.stateAfter();
+            if (stateAfter != null) {
+                exit.setStateAfter(null);
+                if (stateAfter.usages().count() == 0) {
+                    stateAfter.safeDelete();
+                }
+            }
+        }
     }
 }

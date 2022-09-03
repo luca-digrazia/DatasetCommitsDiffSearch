@@ -194,14 +194,6 @@ public final class GraphBuilderPhase extends Phase {
             currentGraph.removeFixed(n);
         }
 
-        // Add safepoints to loop ends
-        if (GraalOptions.GenLoopSafepoints) {
-            for (LoopEndNode loopEnd : currentGraph.getNodes(LoopEndNode.class)) {
-                SafepointNode safepoint = currentGraph.add(new SafepointNode(loopEnd));
-                currentGraph.addBeforeFixed(loopEnd, safepoint);
-            }
-        }
-
         // remove dead FrameStates
         for (Node n : currentGraph.getNodes(FrameState.class)) {
             if (n.usages().size() == 0 && n.predecessor() == null) {
@@ -1218,7 +1210,7 @@ public final class GraphBuilderPhase extends Phase {
         }
     }
 
-    private Target checkLoopExit(FixedNode target, Block targetBlock, FrameStateBuilder state) {
+    private Target checkLoopExit(FixedNode traget, Block targetBlock, FrameStateBuilder state) {
         if (currentBlock != null) {
             long exits = currentBlock.loops & ~targetBlock.loops;
             if (exits != 0) {
@@ -1258,16 +1250,16 @@ public final class GraphBuilderPhase extends Phase {
                         firstLoopExit = loopExit;
                     }
                     lastLoopExit = loopExit;
-                    Debug.log("Target %s (%s) Exits %s, scanning framestates...", targetBlock, target, loop);
+                    Debug.log("Traget %s (%s) Exits %s, scanning framestates...", targetBlock, traget, loop);
                     newState.insertProxies(loopExit, loop.entryState);
                     loopExit.setStateAfter(newState.create(bci));
                 }
 
-                lastLoopExit.setNext(target);
+                lastLoopExit.setNext(traget);
                 return new Target(firstLoopExit, newState);
             }
         }
-        return new Target(target, state);
+        return new Target(traget, state);
     }
 
     private FixedNode createTarget(double probability, Block block, FrameStateBuilder stateAfter) {

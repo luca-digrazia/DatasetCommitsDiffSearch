@@ -68,31 +68,6 @@ public class ControlFlowGraph {
         return reversePostOrder[0];
     }
 
-    public Iterable<Block> postOrder() {
-        return new Iterable<Block>() {
-            @Override
-            public Iterator<Block> iterator() {
-                return new Iterator<Block>() {
-                    private int nextIndex = reversePostOrder.length - 1;
-                    @Override
-                    public boolean hasNext() {
-                        return nextIndex >= 0;
-                    }
-
-                    @Override
-                    public Block next() {
-                        return reversePostOrder[nextIndex--];
-                    }
-
-                    @Override
-                    public void remove() {
-                        throw new UnsupportedOperationException();
-                    }
-                };
-            }
-        };
-    }
-
     public NodeMap<Block> getNodeToBlock() {
         return nodeToBlock;
     }
@@ -329,7 +304,7 @@ public class ControlFlowGraph {
     }
 
     private void computePostdominators() {
-        for (Block block : postOrder()) {
+        for (Block block : reversePostOrder) {
             if (block.isLoopEnd()) {
                 // We do not want the loop header registered as the postdominator of the loop end.
                 continue;

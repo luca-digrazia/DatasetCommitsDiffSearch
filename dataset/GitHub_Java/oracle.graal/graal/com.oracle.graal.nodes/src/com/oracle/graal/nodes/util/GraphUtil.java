@@ -28,14 +28,11 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.graph.iterators.NodePredicates.PositiveTypePredicate;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.virtual.*;
 
 public class GraphUtil {
-
-    private static final PositiveTypePredicate FLOATING = isA(FloatingNode.class).or(CallTargetNode.class).or(FrameState.class).or(VirtualObjectFieldNode.class).or(VirtualObjectNode.class);
 
     public static void killCFG(FixedNode node) {
         assert node.isAlive();
@@ -86,7 +83,7 @@ public class GraphUtil {
     }
 
     public static NodePredicate isFloatingNode() {
-        return FLOATING;
+        return isA(FloatingNode.class).or(CallTargetNode.class).or(FrameState.class).or(VirtualObjectFieldNode.class).or(VirtualObjectNode.class);
     }
 
     public static void propagateKill(Node node) {
@@ -96,7 +93,7 @@ public class GraphUtil {
             // null out remaining usages
             node.replaceAtUsages(null);
             node.replaceAtPredecessors(null);
-            killWithUnusedFloatingInputs(node);
+            killUnusedFloatingInputs(node);
 
             for (Node usage : usagesSnapshot) {
                 if (!usage.isDeleted()) {
@@ -110,13 +107,13 @@ public class GraphUtil {
         }
     }
 
-    public static void killWithUnusedFloatingInputs(Node node) {
+    public static void killUnusedFloatingInputs(Node node) {
         List<Node> floatingInputs = node.inputs().filter(isFloatingNode()).snapshot();
         node.safeDelete();
 
         for (Node in : floatingInputs) {
             if (in.isAlive() && in.usages().isEmpty()) {
-                killWithUnusedFloatingInputs(in);
+                killUnusedFloatingInputs(in);
             }
         }
     }

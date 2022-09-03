@@ -29,7 +29,6 @@ import java.util.concurrent.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.cri.ri.RiType.Representation;
-import com.oracle.max.cri.ri.RiTypeProfile.ProfiledType;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.cri.*;
@@ -52,35 +51,21 @@ public class InliningUtil {
         void recordConcreteMethodAssumption(RiResolvedMethod method, RiResolvedType context, RiResolvedMethod impl);
     }
 
-    public static String methodName(RiResolvedMethod method, Invoke invoke) {
-        if (!Debug.isLogEnabled()) {
-            return null;
-        } else if (invoke != null && invoke.stateAfter() != null) {
-            return methodName(invoke.stateAfter(), invoke.bci()) + ": " + CiUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
+    private static String methodName(RiResolvedMethod method, Invoke invoke) {
+        if (Debug.isLogEnabled()) {
+            if (invoke != null && invoke.stateAfter() != null) {
+                RiMethod parent = invoke.stateAfter().method();
+                return parent.name() + "@" + invoke.bci() + ": " + methodNameAndCodeSize(method);
+            } else {
+                return methodNameAndCodeSize(method);
+            }
         } else {
-            return CiUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
+            return null;
         }
     }
 
-    public static String methodName(InlineInfo info) {
-        if (!Debug.isLogEnabled()) {
-            return null;
-        } else if (info.invoke != null && info.invoke.stateAfter() != null) {
-            return methodName(info.invoke.stateAfter(), info.invoke.bci()) + ": " + info.toString();
-        } else {
-            return info.toString();
-        }
-    }
-
-    private static String methodName(FrameState frameState, int bci) {
-        StringBuilder sb = new StringBuilder();
-        if (frameState.outerFrameState() != null) {
-            sb.append(methodName(frameState.outerFrameState(), frameState.outerFrameState().bci));
-            sb.append("->");
-        }
-        sb.append(CiUtil.format("%h.%n", frameState.method()));
-        sb.append("@").append(bci);
-        return sb.toString();
+    private static String methodNameAndCodeSize(RiResolvedMethod method) {
+        return CiUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
     }
 
     /**
@@ -224,19 +209,21 @@ public class InliningUtil {
      */
     private static class MultiTypeGuardInlineInfo extends InlineInfo {
         public final List<RiResolvedMethod> concretes;
-        public final ProfiledType[] ptypes;
+        public final RiResolvedType[] types;
         public final int[] typesToConcretes;
+        public final double[] typeProbabilities;
         public final double notRecordedTypeProbability;
 
-        public MultiTypeGuardInlineInfo(Invoke invoke, double weight, int level, List<RiResolvedMethod> concretes, ProfiledType[] ptypes,
-                        int[] typesToConcretes, double notRecordedTypeProbability) {
+        public MultiTypeGuardInlineInfo(Invoke invoke, double weight, int level, List<RiResolvedMethod> concretes, RiResolvedType[] types,
+                        int[] typesToConcretes, double[] typeProbabilities, double notRecordedTypeProbability) {
             super(invoke, weight, level);
-            assert concretes.size() > 0 && concretes.size() <= ptypes.length : "must have at least one method but no more than types methods";
-            assert ptypes.length == typesToConcretes.length : "array lengths must match";
+            assert concretes.size() > 0 && concretes.size() <= types.length : "must have at least one method but no more than types methods";
+            assert types.length == typesToConcretes.length && types.length == typeProbabilities.length : "array length must match";
 
             this.concretes = concretes;
-            this.ptypes = ptypes;
+            this.types = types;
             this.typesToConcretes = typesToConcretes;
+            this.typeProbabilities = typeProbabilities;
             this.notRecordedTypeProbability = notRecordedTypeProbability;
         }
 
@@ -304,7 +291,7 @@ public class InliningUtil {
                 for (int j = 0; j < typesToConcretes.length; j++) {
                     if (typesToConcretes[j] == i) {
                         predecessors++;
-                        probability += ptypes[j].probability;
+                        probability += typeProbabilities[j];
                     }
                 }
 
@@ -363,9 +350,9 @@ public class InliningUtil {
             for (int i = 0; i < typesToConcretes.length; i++) {
                 if (typesToConcretes[i] == concreteMethodIndex) {
                     if (commonType == null) {
-                        commonType = ptypes[i].type;
+                        commonType = types[i];
                     } else {
-                        commonType = commonType.leastCommonAncestor(ptypes[i].type);
+                        commonType = commonType.leastCommonAncestor(types[i]);
                     }
                 }
             }
@@ -374,7 +361,7 @@ public class InliningUtil {
         }
 
         private void inlineSingleMethod(StructuredGraph graph, GraalRuntime runtime, InliningCallback callback) {
-            assert concretes.size() == 1 && ptypes.length > 1 && !shouldFallbackToInvoke() && notRecordedTypeProbability == 0;
+            assert concretes.size() == 1 && types.length > 1 && !shouldFallbackToInvoke() && notRecordedTypeProbability == 0;
 
             MergeNode calleeEntryNode = graph.add(new MergeNode());
             calleeEntryNode.setProbability(invoke.probability());
@@ -396,15 +383,15 @@ public class InliningUtil {
         }
 
         private FixedNode createDispatchOnType(StructuredGraph graph, ReadHubNode objectClassNode, BeginNode[] calleeEntryNodes, FixedNode unknownTypeSux) {
-            assert ptypes.length > 1;
+            assert types.length > 1;
 
-            int lastIndex = ptypes.length - 1;
-            double[] branchProbabilities = convertTypeToBranchProbabilities(ptypes, notRecordedTypeProbability);
-            double nodeProbability = ptypes[lastIndex].probability;
-            IfNode nextNode = createTypeCheck(graph, objectClassNode, ptypes[lastIndex].type, calleeEntryNodes[typesToConcretes[lastIndex]], unknownTypeSux, branchProbabilities[lastIndex], invoke.probability() * nodeProbability);
+            int lastIndex = types.length - 1;
+            double[] branchProbabilities = convertTypeToBranchProbabilities(typeProbabilities, notRecordedTypeProbability);
+            double nodeProbability = typeProbabilities[lastIndex];
+            IfNode nextNode = createTypeCheck(graph, objectClassNode, types[lastIndex], calleeEntryNodes[typesToConcretes[lastIndex]], unknownTypeSux, branchProbabilities[lastIndex], invoke.probability() * nodeProbability);
             for (int i = lastIndex - 1; i >= 0; i--) {
-                nodeProbability += ptypes[i].probability;
-                nextNode = createTypeCheck(graph, objectClassNode, ptypes[i].type, calleeEntryNodes[typesToConcretes[i]], nextNode, branchProbabilities[i], invoke.probability() * nodeProbability);
+                nodeProbability += typeProbabilities[i];
+                nextNode = createTypeCheck(graph, objectClassNode, types[i], calleeEntryNodes[typesToConcretes[i]], nextNode, branchProbabilities[i], invoke.probability() * nodeProbability);
             }
 
             return nextNode;
@@ -424,12 +411,12 @@ public class InliningUtil {
             return result;
         }
 
-        private static double[] convertTypeToBranchProbabilities(ProfiledType[] ptypes, double notRecordedTypeProbability) {
-            double[] result = new double[ptypes.length];
+        private static double[] convertTypeToBranchProbabilities(double[] typeProbabilities, double notRecordedTypeProbability) {
+            double[] result = new double[typeProbabilities.length];
             double total = notRecordedTypeProbability;
-            for (int i = ptypes.length - 1; i >= 0; i--) {
-                total += ptypes[i].probability;
-                result[i] = ptypes[i].probability / total;
+            for (int i = typeProbabilities.length - 1; i >= 0; i--) {
+                total += typeProbabilities[i];
+                result[i] = typeProbabilities[i] / total;
             }
             assert total > 0.99 && total < 1.01;
             return result;
@@ -496,7 +483,7 @@ public class InliningUtil {
         @Override
         public String toString() {
             StringBuilder builder = new StringBuilder(shouldFallbackToInvoke() ? "megamorphic" : "polymorphic");
-            builder.append(String.format(", %d methods with %d type checks:", concretes.size(), ptypes.length));
+            builder.append(String.format(", %d methods with %d type checks:", concretes.size(), types.length));
             for (int i = 0; i < concretes.size(); i++) {
                 builder.append(CiUtil.format("  %H.%n(%p):%r", concretes.get(i)));
             }
@@ -611,13 +598,15 @@ public class InliningUtil {
         RiProfilingInfo profilingInfo = parent.profilingInfo();
         RiTypeProfile typeProfile = profilingInfo.getTypeProfile(invoke.bci());
         if (typeProfile != null) {
-            ProfiledType[] ptypes = typeProfile.getTypes();
+            RiResolvedType[] types = typeProfile.getTypes();
+            double[] probabilities = typeProfile.getProbabilities();
 
-            if (ptypes != null && ptypes.length > 0) {
+            if (types != null && probabilities != null && types.length > 0) {
+                assert types.length == probabilities.length : "length must match";
                 double notRecordedTypeProbability = typeProfile.getNotRecordedProbability();
-                if (ptypes.length == 1 && notRecordedTypeProbability == 0) {
+                if (types.length == 1 && notRecordedTypeProbability == 0) {
                     if (optimisticOpts.inlineMonomorphicCalls()) {
-                        RiResolvedType type = ptypes[0].type;
+                        RiResolvedType type = types[0];
                         RiResolvedMethod concrete = type.resolveMethodImpl(targetMethod);
                         if (checkTargetConditions(invoke, concrete, optimisticOpts)) {
                             double weight = callback == null ? 0 : callback.inliningWeight(parent, concrete, invoke);
@@ -643,9 +632,9 @@ public class InliningUtil {
 
                         // determine concrete methods and map type to specific method
                         ArrayList<RiResolvedMethod> concreteMethods = new ArrayList<>();
-                        int[] typesToConcretes = new int[ptypes.length];
-                        for (int i = 0; i < ptypes.length; i++) {
-                            RiResolvedMethod concrete = ptypes[i].type.resolveMethodImpl(targetMethod);
+                        int[] typesToConcretes = new int[types.length];
+                        for (int i = 0; i < types.length; i++) {
+                            RiResolvedMethod concrete = types[i].resolveMethodImpl(targetMethod);
 
                             int index = concreteMethods.indexOf(concrete);
                             if (index < 0) {
@@ -666,7 +655,7 @@ public class InliningUtil {
                         }
 
                         if (canInline) {
-                            return new MultiTypeGuardInlineInfo(invoke, totalWeight, level, concreteMethods, ptypes, typesToConcretes, notRecordedTypeProbability);
+                            return new MultiTypeGuardInlineInfo(invoke, totalWeight, level, concreteMethods, types, typesToConcretes, probabilities, notRecordedTypeProbability);
                         } else {
                             Debug.log("not inlining %s because it is a polymorphic method call and at least one invoked method cannot be inlined", methodName(targetMethod, invoke));
                             return null;

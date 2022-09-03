@@ -24,10 +24,8 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.nodes.spi.*;
 
-public class LoopExitNode extends BeginStateSplitNode {
-
+public class LoopExitNode extends BeginNode {
     @Input(notDataflow = true) private LoopBeginNode loopBegin;
-
     public LoopExitNode(LoopBeginNode loop) {
         assert loop != null;
         loopBegin = loop;
