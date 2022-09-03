@@ -521,7 +521,6 @@ public class LLVMInteropTest {
     }
 
     @Test
-    @Ignore(value = "test semantics not clear")
     public void test040() throws Exception {
         try (Runner runner = new Runner("interop040")) {
             runner.run();
@@ -531,8 +530,8 @@ public class LLVMInteropTest {
         }
     }
 
+    // llvm array to foreign language
     @Test
-    @Ignore(value = "test semantics not clear")
     public void test041() throws Exception {
         try (Runner runner = new Runner("interop041")) {
             runner.run();
