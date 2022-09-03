@@ -51,6 +51,7 @@ import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
 import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.base.vector.LLVMI32VectorNode;
 import com.oracle.truffle.llvm.nodes.base.vector.LLVMVectorNode;
+import com.oracle.truffle.llvm.nodes.control.LLVMIndirectBranchNode;
 import com.oracle.truffle.llvm.nodes.others.LLVMUnreachableNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
@@ -223,19 +224,11 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     public LLVMNode createIndirectBranch(LLVMExpressionNode value, int[] labelTargets) {
-        return LLVMBranchFactory.createIndirectBranch(value, labelTargets);
+        return new LLVMIndirectBranchNode((LLVMAddressNode) value, labelTargets);
     }
 
     public LLVMStatementNode createSwitch(LLVMExpressionNode cond, int defaultLabel, int[] otherLabels, LLVMExpressionNode[] cases, LLVMBaseType llvmType) {
         return LLVMSwitchFactory.createSwitch(cond, defaultLabel, otherLabels, cases, llvmType);
-    }
-
-    public LLVMStatementNode createConditionalBranch(int trueIndex, int falseIndex, LLVMExpressionNode conditionNode) {
-        return LLVMBranchFactory.createConditionalBranch(runtime, trueIndex, falseIndex, conditionNode);
-    }
-
-    public LLVMStatementNode createUnconditionalBranch(int unconditionalIndex) {
-        return LLVMBranchFactory.createUnconditionalBranch(unconditionalIndex);
     }
 
 }
