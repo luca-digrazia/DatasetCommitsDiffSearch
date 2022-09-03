@@ -53,14 +53,6 @@ final class LinearScanWalker extends IntervalWalker {
 
     private MoveResolver moveResolver; // for ordering spill moves
 
-    /**
-     * Only 10% of the lists in {@link #spillIntervals} are actually used. But when they are used,
-     * they can grow quite long. The maximum length observed was 45 (all numbers taken from a
-     * bootstrap run of Graal). Therefore, we initialize {@link #spillIntervals} with this marker
-     * value, and allocate a "real" list only on demand in {@link #setUsePos}.
-     */
-    private static final List<Interval> EMPTY_LIST = new ArrayList<>(0);
-
     // accessors mapped to same functions in class LinearScan
     int blockCount() {
         return allocator.blockCount();
@@ -78,13 +70,16 @@ final class LinearScanWalker extends IntervalWalker {
         super(allocator, unhandledFixedFirst, unhandledAnyFirst);
 
         // If all allocatable registers are caller saved, then no registers are live across a call
-        // site. The register allocator can save time not trying to find a register at a call site.
-        allocator.callKillsRegisters = allocator.frameMap.registerConfig.areAllAllocatableRegistersCallerSaved();
+        // site.
+        // The register allocator can save time not trying to find a register at a call site.
+        HashSet<Register> registers = new HashSet<>(Arrays.asList(allocator.frameMap.registerConfig.getAllocatableRegisters()));
+        registers.removeAll(Arrays.asList(allocator.frameMap.registerConfig.getCallerSaveRegisters()));
+        allocator.callKillsRegisters = registers.size() == 0;
 
         moveResolver = new MoveResolver(allocator);
         spillIntervals = Util.uncheckedCast(new List[allocator.registers.length]);
         for (int i = 0; i < allocator.registers.length; i++) {
-            spillIntervals[i] = EMPTY_LIST;
+            spillIntervals[i] = new ArrayList<>(2);
         }
         usePos = new int[allocator.registers.length];
         blockPos = new int[allocator.registers.length];
@@ -119,12 +114,7 @@ final class LinearScanWalker extends IntervalWalker {
                     this.usePos[i] = usePos;
                 }
                 if (!onlyProcessUsePos) {
-                    List<Interval> list = spillIntervals[i];
-                    if (list == EMPTY_LIST) {
-                        list = new ArrayList<>(2);
-                        spillIntervals[i] = list;
-                    }
-                    list.add(interval);
+                    spillIntervals[i].add(interval);
                 }
             }
         }
@@ -254,7 +244,7 @@ final class LinearScanWalker extends IntervalWalker {
         // numbering of instructions is known.
         // When the block already contains spill moves, the index must be increased until the
         // correct index is reached.
-        List<LIRInstruction> instructions = allocator.ir.lir(opBlock);
+        List<LIRInstruction> instructions = allocator.ir.getLIRforBlock(opBlock);
         int index = (opId - instructions.get(0).id()) >> 1;
         assert instructions.get(index).id() <= opId : "error in calculation";
 

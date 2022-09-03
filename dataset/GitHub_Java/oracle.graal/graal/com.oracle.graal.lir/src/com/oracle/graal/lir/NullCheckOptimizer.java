@@ -24,18 +24,15 @@ package com.oracle.graal.lir;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.StandardOp.ImplicitNullCheck;
 import com.oracle.graal.lir.StandardOp.NullCheck;
-import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodes.cfg.*;
 
 public final class NullCheckOptimizer {
 
-    public static void optimize(TargetDescription target, LIRGenerationResult lirGenRes) {
-        LIR ir = lirGenRes.getLIR();
+    public static void optimize(LIR ir, int implicitNullCheckLimit) {
         List<? extends AbstractBlock<?>> blocks = ir.codeEmittingOrder();
-        NullCheckOptimizer.foldNullChecks(ir, blocks, target.implicitNullCheckLimit);
+        NullCheckOptimizer.foldNullChecks(ir, blocks, implicitNullCheckLimit);
     }
 
     private NullCheckOptimizer() {

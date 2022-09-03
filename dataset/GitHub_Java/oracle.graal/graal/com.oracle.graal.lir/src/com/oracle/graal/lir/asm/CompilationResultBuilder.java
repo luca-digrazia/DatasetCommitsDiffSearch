@@ -27,17 +27,18 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CompilationResult.ConstantData;
 import com.oracle.graal.api.code.CompilationResult.Data;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.nodes.cfg.*;
 
 /**
  * Fills in a {@link CompilationResult} as its code is being assembled.
- *
+ * 
  * @see CompilationResultBuilderFactory
  */
 public class CompilationResultBuilder {
@@ -88,8 +89,8 @@ public class CompilationResultBuilder {
         assert frameContext != null;
     }
 
-    public void setTotalFrameSize(int frameSize) {
-        compilationResult.setTotalFrameSize(frameSize);
+    public void setFrameSize(int frameSize) {
+        compilationResult.setFrameSize(frameSize);
     }
 
     private static final CompilationResult.Mark[] NO_REFS = {};
@@ -156,10 +157,6 @@ public class CompilationResultBuilder {
     }
 
     public void recordInlineDataInCode(Constant data) {
-        recordInlineDataInCode(codeCache.createDataItem(data, 0));
-    }
-
-    public void recordInlineDataInCode(Data data) {
         assert data != null;
         int pos = asm.position();
         Debug.log("Inline data in code: pos = %d, data = %s", pos, data);
@@ -168,7 +165,7 @@ public class CompilationResultBuilder {
 
     public AbstractAddress recordDataReferenceInCode(Constant data, int alignment) {
         assert data != null;
-        return recordDataReferenceInCode(codeCache.createDataItem(data, alignment));
+        return recordDataReferenceInCode(new ConstantData(data, alignment));
     }
 
     public AbstractAddress recordDataReferenceInCode(Data data) {
@@ -264,23 +261,13 @@ public class CompilationResultBuilder {
         return recordDataReferenceInCode((Constant) value, 8);
     }
 
-    public AbstractAddress asByteAddr(Value value) {
-        assert value.getKind().getByteCount() >= Kind.Byte.getByteCount();
-        return asAddress(value);
-    }
-
-    public AbstractAddress asShortAddr(Value value) {
-        assert value.getKind().getByteCount() >= Kind.Short.getByteCount();
-        return asAddress(value);
-    }
-
     public AbstractAddress asIntAddr(Value value) {
-        assert value.getKind().getByteCount() >= Kind.Int.getByteCount();
+        assert value.getKind() == Kind.Int;
         return asAddress(value);
     }
 
     public AbstractAddress asLongAddr(Value value) {
-        assert value.getKind().getByteCount() >= Kind.Long.getByteCount();
+        assert value.getKind() == Kind.Long;
         return asAddress(value);
     }
 
@@ -290,12 +277,12 @@ public class CompilationResultBuilder {
     }
 
     public AbstractAddress asFloatAddr(Value value) {
-        assert value.getKind().getByteCount() >= Kind.Float.getByteCount();
+        assert value.getKind() == Kind.Float;
         return asAddress(value);
     }
 
     public AbstractAddress asDoubleAddr(Value value) {
-        assert value.getKind().getByteCount() >= Kind.Double.getByteCount();
+        assert value.getKind() == Kind.Double;
         return asAddress(value);
     }
 
