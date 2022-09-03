@@ -36,13 +36,13 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "+")
 public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArithmeticNode {
 
-    public static final NodeClass<AddNode> TYPE = NodeClass.create(AddNode.class);
+    public static final NodeClass<AddNode> TYPE = NodeClass.get(AddNode.class);
 
     public AddNode(ValueNode x, ValueNode y) {
         this(TYPE, x, y);
     }
 
-    protected AddNode(NodeClass<? extends AddNode> c, ValueNode x, ValueNode y) {
+    protected AddNode(NodeClass<?> c, ValueNode x, ValueNode y) {
         super(c, ArithmeticOpTable::getAdd, x, y);
     }
 
@@ -103,7 +103,7 @@ public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArit
         } else if (forY instanceof NegateNode) {
             return BinaryArithmeticNode.sub(forX, ((NegateNode) forY).getValue());
         }
-        return this;
+        return this.maybeCommuteInputs();
     }
 
     @Override

@@ -28,9 +28,9 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
-public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerable, Canonicalizable.BinaryCommutative<ValueNode> {
+public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerable, Canonicalizable.Binary<ValueNode> {
 
-    public static final NodeClass<BinaryOpLogicNode> TYPE = NodeClass.create(BinaryOpLogicNode.class);
+    public static final NodeClass<BinaryOpLogicNode> TYPE = NodeClass.get(BinaryOpLogicNode.class);
     @Input protected ValueNode x;
     @Input protected ValueNode y;
 
@@ -42,7 +42,7 @@ public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerabl
         return y;
     }
 
-    public BinaryOpLogicNode(NodeClass<? extends BinaryOpLogicNode> c, ValueNode x, ValueNode y) {
+    public BinaryOpLogicNode(NodeClass<?> c, ValueNode x, ValueNode y) {
         super(c);
         assert x != null && y != null && x.getKind() == y.getKind();
         this.x = x;
@@ -64,7 +64,7 @@ public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerabl
      * inputs by increasing {@link Node#id} and call {@link Graph#findDuplicate(Node)} on the node
      * if it's currently in a graph.
      *
-     * @return the original node or another node with the same inputs, ignoring ordering.
+     * @return the original node or another node with the same input ordering
      */
     @SuppressWarnings("deprecation")
     public LogicNode maybeCommuteInputs() {

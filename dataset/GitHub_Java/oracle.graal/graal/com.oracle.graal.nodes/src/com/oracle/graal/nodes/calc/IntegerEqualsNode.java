@@ -27,15 +27,14 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "==")
-public final class IntegerEqualsNode extends CompareNode implements BinaryCommutative<ValueNode> {
-    public static final NodeClass<IntegerEqualsNode> TYPE = NodeClass.create(IntegerEqualsNode.class);
+public final class IntegerEqualsNode extends CompareNode {
+    public static final NodeClass<IntegerEqualsNode> TYPE = NodeClass.get(IntegerEqualsNode.class);
 
     public IntegerEqualsNode(ValueNode x, ValueNode y) {
         super(TYPE, Condition.EQ, false, x, y);

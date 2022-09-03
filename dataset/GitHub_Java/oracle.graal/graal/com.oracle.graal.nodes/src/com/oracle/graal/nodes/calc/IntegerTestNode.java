@@ -35,7 +35,7 @@ import com.oracle.graal.nodes.*;
  */
 @NodeInfo
 public final class IntegerTestNode extends BinaryOpLogicNode {
-    public static final NodeClass<IntegerTestNode> TYPE = NodeClass.create(IntegerTestNode.class);
+    public static final NodeClass<IntegerTestNode> TYPE = NodeClass.get(IntegerTestNode.class);
 
     public IntegerTestNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y);
@@ -55,11 +55,6 @@ public final class IntegerTestNode extends BinaryOpLogicNode {
                 return LogicConstantNode.contradiction();
             }
         }
-        return this;
-    }
-
-    @Override
-    public boolean isCommutative() {
-        return true;
+        return this.maybeCommuteInputs();
     }
 }

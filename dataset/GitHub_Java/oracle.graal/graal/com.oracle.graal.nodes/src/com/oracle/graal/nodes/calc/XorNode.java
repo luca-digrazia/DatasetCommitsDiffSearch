@@ -25,10 +25,9 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Xor;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -37,9 +36,9 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "^")
-public final class XorNode extends BinaryArithmeticNode<Xor> implements BinaryCommutative<ValueNode> {
+public final class XorNode extends BinaryArithmeticNode<Xor> {
 
-    public static final NodeClass<XorNode> TYPE = NodeClass.create(XorNode.class);
+    public static final NodeClass<XorNode> TYPE = NodeClass.get(XorNode.class);
 
     public XorNode(ValueNode x, ValueNode y) {
         super(TYPE, ArithmeticOpTable::getXor, x, y);
@@ -85,7 +84,7 @@ public final class XorNode extends BinaryArithmeticNode<Xor> implements BinaryCo
             }
             return reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
         }
-        return this;
+        return this.maybeCommuteInputs();
     }
 
     @Override

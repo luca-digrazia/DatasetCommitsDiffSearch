@@ -40,7 +40,7 @@ import com.oracle.graal.nodes.*;
 @NodeInfo
 public abstract class CompareNode extends BinaryOpLogicNode {
 
-    public static final NodeClass<CompareNode> TYPE = NodeClass.create(CompareNode.class);
+    public static final NodeClass<CompareNode> TYPE = NodeClass.get(CompareNode.class);
     protected final Condition condition;
     protected final boolean unorderedIsTrue;
 
@@ -50,7 +50,7 @@ public abstract class CompareNode extends BinaryOpLogicNode {
      * @param x the instruction producing the first input to the instruction
      * @param y the instruction that produces the second input to this instruction
      */
-    protected CompareNode(NodeClass<? extends CompareNode> c, Condition condition, boolean unorderedIsTrue, ValueNode x, ValueNode y) {
+    protected CompareNode(NodeClass<?> c, Condition condition, boolean unorderedIsTrue, ValueNode x, ValueNode y) {
         super(c, x, y);
         this.condition = condition;
         this.unorderedIsTrue = unorderedIsTrue;
@@ -63,11 +63,6 @@ public abstract class CompareNode extends BinaryOpLogicNode {
      */
     public final Condition condition() {
         return condition;
-    }
-
-    @Override
-    public boolean isCommutative() {
-        return condition.isCommutative();
     }
 
     /**
@@ -129,6 +124,9 @@ public abstract class CompareNode extends BinaryOpLogicNode {
             if (convertX.preservesOrder(condition()) && convertY.preservesOrder(condition()) && convertX.getValue().stamp().isCompatible(convertY.getValue().stamp())) {
                 return duplicateModified(convertX.getValue(), convertY.getValue());
             }
+        }
+        if (condition.isCommutative()) {
+            return this.maybeCommuteInputs();
         }
         return this;
     }
