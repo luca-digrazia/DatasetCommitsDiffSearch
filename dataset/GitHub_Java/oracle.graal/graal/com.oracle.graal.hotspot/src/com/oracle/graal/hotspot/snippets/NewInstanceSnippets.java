@@ -24,6 +24,8 @@ package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.hotspot.nodes.RegisterNode.*;
 import static com.oracle.graal.hotspot.snippets.DirectObjectStoreNode.*;
+import static com.oracle.graal.nodes.calc.Condition.*;
+import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 import static com.oracle.graal.nodes.extended.UnsafeLoadNode.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
 import static com.oracle.graal.snippets.nodes.ExplodeLoopNode.*;
@@ -31,7 +33,6 @@ import static com.oracle.max.asm.target.amd64.AMD64.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -54,28 +55,29 @@ import com.oracle.graal.snippets.SnippetTemplate.Key;
 public class NewInstanceSnippets implements SnippetsInterface {
 
     @Snippet
-    public static Word allocate(@ConstantParameter("size") int size) {
+    public static Object allocate(@ConstantParameter("size") int size) {
         Word thread = asWord(register(r15, wordKind()));
         Word top = loadWord(thread, threadTlabTopOffset());
         Word end = loadWord(thread, threadTlabEndOffset());
         Word newTop = top.plus(size);
-        if (newTop.belowOrEqual(end)) {
+        if (newTop.cmp(BE, end)) {
+            Object memory = cast(top, Object.class);
             store(thread, 0, threadTlabTopOffset(), newTop);
-            return top;
+            return memory;
         }
-        return Word.zero();
+        return null;
     }
 
     @Snippet
     public static Object initialize(
-                    @Parameter("memory") Word memory,
+                    @Parameter("memory") Object memory,
                     @Parameter("hub") Object hub,
                     @ConstantParameter("size") int size) {
 
-        if (memory == Word.zero()) {
+        if (memory == null) {
             return NewInstanceStubCall.call(hub);
         }
-        Object instance = memory.toObject();
+        Object instance = cast(memory, Object.class);
         formatInstance(hub, size, instance);
         return verifyOop(instance);
     }
@@ -88,24 +90,18 @@ public class NewInstanceSnippets implements SnippetsInterface {
     }
 
     private static Word asWord(Object object) {
-        return Word.fromObject(object);
+        return cast(object, Word.class);
     }
 
     private static Word loadWord(Object object, int offset) {
-        Object value = loadObject(object, 0, offset, true);
-        return asWord(value);
-    }
-
-    private static Word loadWord(Word address, int offset) {
-        Object value = loadObject(address, 0, offset, true);
-        return asWord(value);
+        return cast(load(object, 0, offset, wordKind()), Word.class);
     }
 
     /**
      * Formats the header of a created instance and zeroes out its body.
      */
     private static void formatInstance(Object hub, int size, Object instance) {
-        Word headerPrototype = loadWord(hub, instanceHeaderPrototypeOffset());
+        Word headerPrototype = cast(load(hub, 0, instanceHeaderPrototypeOffset(), wordKind()), Word.class);
         store(instance, 0, 0, headerPrototype);
         store(instance, 0, hubOffset(), hub);
         explodeLoop();
@@ -163,7 +159,7 @@ public class NewInstanceSnippets implements SnippetsInterface {
             this.useTLAB = useTLAB;
             try {
                 allocate = runtime.getResolvedJavaMethod(NewInstanceSnippets.class.getDeclaredMethod("allocate", int.class));
-                initialize = runtime.getResolvedJavaMethod(NewInstanceSnippets.class.getDeclaredMethod("initialize", Word.class, Object.class, int.class));
+                initialize = runtime.getResolvedJavaMethod(NewInstanceSnippets.class.getDeclaredMethod("initialize", Object.class, Object.class, int.class));
             } catch (NoSuchMethodException e) {
                 throw new GraalInternalError(e);
             }
@@ -204,7 +200,6 @@ public class NewInstanceSnippets implements SnippetsInterface {
             SnippetTemplate template = cache.get(key);
             Debug.log("Lowering fastAllocate in %s: node=%s, template=%s, arguments=%s", graph, tlabAllocateNode, template, arguments);
             template.instantiate(runtime, tlabAllocateNode, tlabAllocateNode, arguments);
-            new DeadCodeEliminationPhase().apply(graph);
         }
 
         @SuppressWarnings("unused")
@@ -222,7 +217,6 @@ public class NewInstanceSnippets implements SnippetsInterface {
             SnippetTemplate template = cache.get(key);
             Debug.log("Lowering initialize in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
             template.instantiate(runtime, initializeNode, initializeNode, arguments);
-            new DeadCodeEliminationPhase().apply(graph);
         }
     }
 }
