@@ -22,49 +22,29 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
-import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static jdk.internal.jvmci.code.CodeUtil.isEven;
-import static jdk.internal.jvmci.code.ValueUtil.asRegister;
-import static jdk.internal.jvmci.code.ValueUtil.asRegisterValue;
-import static jdk.internal.jvmci.code.ValueUtil.isIllegal;
-import static jdk.internal.jvmci.code.ValueUtil.isLegal;
-import static jdk.internal.jvmci.code.ValueUtil.isRegister;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static jdk.internal.jvmci.code.CodeUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.EnumSet;
-import java.util.List;
+import java.util.*;
 
-import jdk.internal.jvmci.code.BailoutException;
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.code.RegisterAttributes;
-import jdk.internal.jvmci.code.RegisterValue;
-import jdk.internal.jvmci.code.StackSlotValue;
-import jdk.internal.jvmci.code.TargetDescription;
-import jdk.internal.jvmci.code.VirtualStackSlot;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.meta.AllocatableValue;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.ValueConsumer;
-import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.alloc.trace.TraceLinearScanAllocationPhase.TraceLinearScanAllocationContext;
-import com.oracle.graal.lir.framemap.FrameMapBuilder;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
+import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
 
 /**
  * An implementation of the linear scan register allocator algorithm described in <a
@@ -714,7 +694,7 @@ final class TraceLinearScan {
          * This is the point to enable debug logging for the whole register allocation.
          */
         try (Indent indent = Debug.logAndIndent("LinearScan allocate")) {
-            TraceLinearScanAllocationContext context = new TraceLinearScanAllocationContext(spillMoveFactory, registerAllocationConfig, traceBuilderResult, this);
+            AllocationContext context = new AllocationContext(spillMoveFactory, registerAllocationConfig);
 
             createLifetimeAnalysisPhase().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
 
@@ -742,26 +722,26 @@ final class TraceLinearScan {
     }
 
     protected TraceLinearScanLifetimeAnalysisPhase createLifetimeAnalysisPhase() {
-        return new TraceLinearScanLifetimeAnalysisPhase();
+        return new TraceLinearScanLifetimeAnalysisPhase(this, traceBuilderResult);
     }
 
     protected TraceLinearScanResolveDataFlowPhase createResolveDataFlowPhase() {
-        return new TraceLinearScanResolveDataFlowPhase();
+        return new TraceLinearScanResolveDataFlowPhase(this, traceBuilderResult);
     }
 
     protected TraceLinearScanEliminateSpillMovePhase createSpillMoveEliminationPhase() {
-        return new TraceLinearScanEliminateSpillMovePhase();
+        return new TraceLinearScanEliminateSpillMovePhase(this);
     }
 
     protected TraceLinearScanAssignLocationsPhase createAssignLocationsPhase() {
-        return new TraceLinearScanAssignLocationsPhase();
+        return new TraceLinearScanAssignLocationsPhase(this, traceBuilderResult);
     }
 
     protected void beforeSpillMoveElimination() {
     }
 
     protected TraceLinearScanRegisterAllocationPhase createRegisterAllocationPhase() {
-        return new TraceLinearScanRegisterAllocationPhase();
+        return new TraceLinearScanRegisterAllocationPhase(this);
     }
 
     @SuppressWarnings("try")
