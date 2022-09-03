@@ -90,11 +90,10 @@ public interface MetaAccessProvider {
      * 
      * @param base the base address from which the value is read
      * @param displacement the displacement within the object in bytes
-     * @param compressedPointer whether this is a read of a compressed or an uncompressed pointer
      * @return the read value encapsulated in a {@link Constant} object, or {@code null} if the
      *         value cannot be read.
      */
-    Constant readUnsafeConstant(Kind kind, Object base, long displacement, boolean compressedPointer);
+    Constant readUnsafeConstant(Kind kind, Object base, long displacement);
 
     /**
      * Determines if a given foreign call is side-effect free. Deoptimization cannot return
