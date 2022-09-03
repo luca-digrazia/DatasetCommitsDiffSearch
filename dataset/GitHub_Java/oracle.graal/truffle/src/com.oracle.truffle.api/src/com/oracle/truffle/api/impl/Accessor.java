@@ -131,8 +131,6 @@ public abstract class Accessor {
         public abstract boolean isJavaFunction(Object object);
 
         public abstract String javaFunctionToString(Object object);
-
-        public abstract Object asStaticClassObject(Class<?> clazz, Object hostLanguageContext);
     }
 
     public abstract static class EngineSupport {
@@ -421,8 +419,6 @@ public abstract class Accessor {
         public abstract org.graalvm.polyglot.SourceSection createSourceSection(Object instrumentEnv, org.graalvm.polyglot.Source source, com.oracle.truffle.api.source.SourceSection ss);
 
         public abstract void patchInstrumentationHandler(Object instrumentationHandler, DispatchOutputStream out, DispatchOutputStream err, InputStream in);
-
-        public abstract boolean isInputValueSlotIdentifier(Object identifier);
 
     }
 
