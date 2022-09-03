@@ -131,7 +131,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  */
 public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
-    private static final Object CACHED_NULL_VALUE = new Object();
+    private static final Object NO_SPECIAL_CALL_TARGET = new Object();
 
     public static class Options {
         @Option(help = "Maximum inlining depth during partial evaluation before reporting an infinite recursion")//
@@ -469,7 +469,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     private final ParameterPlugin parameterPlugin;
     private final NodePlugin[] nodePlugins;
     private final EconomicMap<SpecialCallTargetCacheKey, Object> specialCallTargetCache;
-    private final EconomicMap<ResolvedJavaMethod, Object> invocationPluginCache;
 
     public PEGraphDecoder(Architecture architecture, StructuredGraph graph, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
                     StampProvider stampProvider, OptionValues options, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins, InlineInvokePlugin[] inlineInvokePlugins,
@@ -482,7 +481,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         this.options = options;
         this.nodePlugins = nodePlugins;
         this.specialCallTargetCache = EconomicMap.create(Equivalence.DEFAULT);
-        this.invocationPluginCache = EconomicMap.create(Equivalence.DEFAULT);
     }
 
     protected static LoopExplosionKind loopExplosionKind(ResolvedJavaMethod method, LoopExplosionPlugin loopExplosionPlugin) {
@@ -617,23 +615,23 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             specialCallTarget = MethodCallTargetNode.devirtualizeCall(key.invokeKind, key.targetMethod, key.contextType, graph.getAssumptions(),
                             key.receiverStamp);
             if (specialCallTarget == null) {
-                specialCallTarget = CACHED_NULL_VALUE;
+                specialCallTarget = NO_SPECIAL_CALL_TARGET;
             }
             specialCallTargetCache.put(key, specialCallTarget);
         }
 
-        return specialCallTarget == CACHED_NULL_VALUE ? null : (ResolvedJavaMethod) specialCallTarget;
+        return specialCallTarget == NO_SPECIAL_CALL_TARGET ? null : (ResolvedJavaMethod) specialCallTarget;
     }
 
     protected boolean tryInvocationPlugin(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
-        if (invocationPlugins == null || invocationPlugins.size() == 0) {
+        if (invocationPlugins == null) {
             return false;
         }
 
         Invoke invoke = invokeData.invoke;
 
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
-        InvocationPlugin invocationPlugin = getInvocationPlugin(targetMethod);
+        InvocationPlugin invocationPlugin = invocationPlugins.lookupInvocation(targetMethod);
         if (invocationPlugin == null) {
             return false;
         }
@@ -671,19 +669,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             invokePredecessor.setNext(invoke.asNode());
             return false;
         }
-    }
-
-    private InvocationPlugin getInvocationPlugin(ResolvedJavaMethod targetMethod) {
-        Object invocationPlugin = invocationPluginCache.get(targetMethod);
-        if (invocationPlugin == null) {
-            invocationPlugin = invocationPlugins.lookupInvocation(targetMethod);
-            if (invocationPlugin == null) {
-                invocationPlugin = CACHED_NULL_VALUE;
-            }
-            invocationPluginCache.put(targetMethod, invocationPlugin);
-        }
-
-        return invocationPlugin == CACHED_NULL_VALUE ? null : (InvocationPlugin) invocationPlugin;
     }
 
     protected LoopScope tryInline(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
