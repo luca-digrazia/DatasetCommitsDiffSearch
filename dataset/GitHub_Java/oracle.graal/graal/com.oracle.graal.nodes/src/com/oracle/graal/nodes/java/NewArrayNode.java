@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,128 +22,86 @@
  */
 package com.oracle.graal.nodes.java;
 
-import java.util.*;
+import java.util.Collections;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.spi.types.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.VirtualizableAllocation;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.virtual.VirtualArrayNode;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
- * The {@code NewArrayNode} class is the base of all instructions that allocate arrays.
+ * The {@code NewArrayNode} is used for all array allocations where the element type is know at
+ * compile time.
  */
-public abstract class NewArrayNode extends FixedWithNextNode implements EscapeAnalyzable, TypeFeedbackProvider {
+// JaCoCo Exclude
+@NodeInfo
+public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableAllocation {
 
-    @Input private ValueNode length;
+    public static final NodeClass<NewArrayNode> TYPE = NodeClass.create(NewArrayNode.class);
+    private final ResolvedJavaType elementType;
 
-    public static final int MaximumEscapeAnalysisArrayLength = 32;
-
-    public ValueNode length() {
-        return length;
+    public NewArrayNode(ResolvedJavaType elementType, ValueNode length, boolean fillContents) {
+        this(elementType, length, fillContents, null);
     }
 
-    /**
-     * Constructs a new NewArrayNode.
-     * @param length the node that produces the length for this allocation
-     */
-    protected NewArrayNode(Stamp stamp, ValueNode length) {
-        super(stamp);
-        this.length = length;
+    public NewArrayNode(ResolvedJavaType elementType, ValueNode length, boolean fillContents, FrameState stateBefore) {
+        this(TYPE, elementType, length, fillContents, stateBefore);
     }
 
-    /**
-     * The list of node which produce input for this instruction.
-     */
-    public ValueNode dimension(int index) {
-        assert index == 0;
-        return length();
+    protected NewArrayNode(NodeClass<? extends NewArrayNode> c, ResolvedJavaType elementType, ValueNode length, boolean fillContents, FrameState stateBefore) {
+        super(c, StampFactory.objectNonNull(TypeReference.createExactTrusted(elementType.getArrayClass())), length, fillContents, stateBefore);
+        this.elementType = elementType;
     }
 
-    /**
-     * The rank of the array allocated by this node, i.e. how many array dimensions.
-     */
-    public int dimensionCount() {
-        return 1;
+    @NodeIntrinsic
+    private static native Object newArray(@ConstantNodeParameter Class<?> elementType, int length, @ConstantNodeParameter boolean fillContents);
+
+    public static Object newUninitializedArray(Class<?> elementType, int length) {
+        return newArray(elementType, length, false);
     }
 
     /**
      * Gets the element type of the array.
+     *
      * @return the element type of the array
      */
-    public abstract RiResolvedType elementType();
-
-    @Override
-    public void typeFeedback(TypeFeedbackTool tool) {
-        assert length.kind() == CiKind.Int;
-        tool.addScalar(length).constantBound(Condition.GE, CiConstant.INT_0);
+    public ResolvedJavaType elementType() {
+        return elementType;
     }
 
     @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("exactType", exactType());
-        return properties;
-    }
-
-    public EscapeOp getEscapeOp() {
-        return ESCAPE;
-    }
-
-    private static final EscapeOp ESCAPE = new EscapeOp() {
-
-        @Override
-        public boolean canAnalyze(Node node) {
-            NewArrayNode x = (NewArrayNode) node;
-            CiConstant length = x.dimension(0).asConstant();
-            return length != null && length.asInt() >= 0 && length.asInt() < MaximumEscapeAnalysisArrayLength;
-        }
-
-        @Override
-        public EscapeField[] fields(Node node) {
-            NewArrayNode x = (NewArrayNode) node;
-            int length = x.dimension(0).asConstant().asInt();
-            EscapeField[] fields = new EscapeField[length];
-            for (int i = 0; i < length; i++) {
-                Integer representation = i;
-                fields[i] = new EscapeField("[" + i + "]", representation, ((NewArrayNode) node).elementType());
-            }
-            return fields;
-        }
-
-        @Override
-        public void beforeUpdate(Node node, Node usage) {
-            if (usage instanceof ArrayLengthNode) {
-                ArrayLengthNode x = (ArrayLengthNode) usage;
-                StructuredGraph graph = (StructuredGraph) node.graph();
-                x.replaceAtUsages(((NewArrayNode) node).dimension(0));
-                graph.removeFixed(x);
-            } else {
-                super.beforeUpdate(node, usage);
-            }
-        }
-
-        @Override
-        public int updateState(Node node, Node current, Map<Object, Integer> fieldIndex, ValueNode[] fieldState) {
-            if (current instanceof AccessIndexedNode) {
-                AccessIndexedNode x = (AccessIndexedNode) current;
-                if (GraphUtil.unProxify(x.array()) == node) {
-                    int index = ((AccessIndexedNode) current).index().asConstant().asInt();
-                    if (current instanceof LoadIndexedNode) {
-                        x.replaceAtUsages(fieldState[index]);
-                        ((StructuredGraph) x.graph()).removeFixed(x);
-                    } else if (current instanceof StoreIndexedNode) {
-                        fieldState[index] = ((StoreIndexedNode) x).value();
-                        ((StructuredGraph) x.graph()).removeFixed(x);
-                        return index;
-                    }
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode lengthAlias = tool.getAlias(length());
+        if (lengthAlias.asConstant() != null) {
+            int constantLength = lengthAlias.asJavaConstant().asInt();
+            if (constantLength >= 0 && constantLength < tool.getMaximumEntryCount()) {
+                ValueNode[] state = new ValueNode[constantLength];
+                ConstantNode defaultForKind = constantLength == 0 ? null : defaultElementValue();
+                for (int i = 0; i < constantLength; i++) {
+                    state[i] = defaultForKind;
                 }
+                VirtualObjectNode virtualObject = createVirtualArrayNode(constantLength);
+                tool.createVirtualObject(virtualObject, state, Collections.<MonitorIdNode> emptyList(), false);
+                tool.replaceWithVirtual(virtualObject);
             }
-            return -1;
         }
-    };
+    }
+
+    protected VirtualArrayNode createVirtualArrayNode(int constantLength) {
+        return new VirtualArrayNode(elementType(), constantLength);
+    }
+
+    /* Factored out in a separate method so that subclasses can override it. */
+    protected ConstantNode defaultElementValue() {
+        return ConstantNode.defaultForKind(elementType().getJavaKind(), graph());
+    }
 }
