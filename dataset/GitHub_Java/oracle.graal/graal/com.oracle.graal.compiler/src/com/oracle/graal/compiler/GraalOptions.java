@@ -106,11 +106,10 @@ public final class GraalOptions {
     public static boolean LoopPeeling                        = true;
     public static boolean ReassociateInvariants              = true;
     public static boolean FullUnroll                         = true;
-    public static boolean LoopUnswitch                       = true;
+    public static boolean LoopUnswitch                       = ____;
     public static int     FullUnrollMaxNodes                 = 150;
     public static int     ExactFullUnrollMaxNodes            = 600;
     public static float   MinimumPeelProbability             = 0.35f;
-    public static int     LoopMaxUnswitch                    = 3;
     public static int     LoopUnswitchMaxIncrease            = 50;
     public static int     LoopUnswitchUncertaintyBoost       = 5;
 
