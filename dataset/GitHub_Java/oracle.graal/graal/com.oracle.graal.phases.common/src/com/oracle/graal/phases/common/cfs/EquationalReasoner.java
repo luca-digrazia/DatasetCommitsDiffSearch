@@ -491,19 +491,21 @@ public final class EquationalReasoner {
      *         performed; otherwise the unmodified argument.
      *
      */
-    private FloatingNode baseCaseIsNullNode(IsNullNode isNu) {
-        ValueNode object = isNu.object();
+    private FloatingNode baseCaseIsNullNode(IsNullNode isNull) {
+        ValueNode object = isNull.object();
         if (!FlowUtil.hasLegalObjectStamp(object)) {
-            return isNu;
+            return isNull;
         }
-        if (state.isNull(object)) {
+        ValueNode scrutinee = GraphUtil.unproxify(isNull.object());
+        GuardingNode evidence = state.nonTrivialNullAnchor(scrutinee);
+        if (evidence != null) {
             metricNullCheckRemoved.increment();
             return trueConstant;
-        } else if (state.isNonNull(object)) {
+        } else if (state.isNonNull(scrutinee)) {
             metricNullCheckRemoved.increment();
             return falseConstant;
         }
-        return isNu;
+        return isNull;
     }
 
     /**
