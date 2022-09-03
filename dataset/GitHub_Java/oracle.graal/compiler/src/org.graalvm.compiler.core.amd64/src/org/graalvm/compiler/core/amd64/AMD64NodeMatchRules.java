@@ -280,6 +280,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     }
 
     @MatchRule("(And (Not a) b)")
+    @MatchRule("(And b (Not a))")
     public ComplexMatchResult logicalAndNot(ValueNode a, ValueNode b) {
         if (!supports(CPUFeature.BMI1)) {
             return null;
@@ -288,6 +289,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     }
 
     @MatchRule("(And a (Negate a))")
+    @MatchRule("(And (Negate a) a)")
     public ComplexMatchResult lowestSetIsolatedBit(ValueNode a) {
         if (!supports(CPUFeature.BMI1)) {
             return null;
@@ -296,6 +298,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     }
 
     @MatchRule("(Xor a (Add a b))")
+    @MatchRule("(Xor (Add a b) a)")
     public ComplexMatchResult getMaskUpToLowestSetBit(ValueNode a, ValueNode b) {
         if (!supports(CPUFeature.BMI1)) {
             return null;
@@ -324,6 +327,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     }
 
     @MatchRule("(And a (Add a b))")
+    @MatchRule("(And (Add a b) a)")
     public ComplexMatchResult resetLowestSetBit(ValueNode a, ValueNode b) {
         if (!supports(CPUFeature.BMI1)) {
             return null;
