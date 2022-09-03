@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,91 +24,48 @@
  */
 package org.graalvm.compiler.lir.amd64;
 
-import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
+import static jdk.vm.ci.amd64.AMD64.xmm0;
+import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.registersToValues;
 
-import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
-import org.graalvm.compiler.debug.GraalError;
+import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.lir.LIRInstructionClass;
-import org.graalvm.compiler.lir.Opcode;
-import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
+import org.graalvm.compiler.lir.Variable;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 
+import jdk.vm.ci.amd64.AMD64Kind;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.meta.Value;
 
-public final class AMD64MathIntrinsicUnaryOp extends AMD64LIRInstruction {
-    public static final LIRInstructionClass<AMD64MathIntrinsicUnaryOp> TYPE = LIRInstructionClass.create(AMD64MathIntrinsicUnaryOp.class);
+/**
+ * AMD64MathIntrinsicUnaryOp assumes that the input value is stored at the xmm0 register, and will
+ * emit the output value into the xmm0 register as well.
+ * {@link #emitLIRWrapper(LIRGeneratorTool, Value)} is provided for emitting necessary mov LIRs
+ * before and after this LIR instruction.
+ */
+public abstract class AMD64MathIntrinsicUnaryOp extends AMD64LIRInstruction {
 
-    public enum UnaryIntrinsicOpcode {
-        LOG,
-        LOG10,
-        SIN,
-        COS,
-        TAN,
-        EXP
-    }
-
-    @Opcode private final UnaryIntrinsicOpcode opcode;
-    @Def protected Value result;
+    @Def protected Value output;
     @Use protected Value input;
-    @Temp({REG}) protected Value[] temps;
+    @Temp protected Value[] temps;
 
-    public AMD64MathIntrinsicUnaryOp(LIRGeneratorTool tool, UnaryIntrinsicOpcode opcode, Value result, Value input, Value stackTemp) {
-        super(TYPE);
-        this.opcode = opcode;
-        this.result = result;
-        this.input = input;
-        switch (opcode) {
-            case LOG:
-                temps = AMD64MathLog.temps.clone();
-                break;
-            case LOG10:
-                temps = AMD64MathLog10.temps.clone();
-                break;
-            case SIN:
-                temps = AMD64MathSin.temps.clone();
-                break;
-            case COS:
-                temps = AMD64MathCos.temps.clone();
-                break;
-            case TAN:
-                temps = AMD64MathTan.temps.clone();
-                break;
-            case EXP:
-                temps = AMD64MathExp.temps.clone();
-                break;
-            default:
-                throw GraalError.shouldNotReachHere();
-        }
+    public AMD64MathIntrinsicUnaryOp(LIRInstructionClass<? extends AMD64MathIntrinsicUnaryOp> type, Register... registers) {
+        super(type);
+
+        input = xmm0.asValue(LIRKind.value(AMD64Kind.DOUBLE));
+        output = xmm0.asValue(LIRKind.value(AMD64Kind.DOUBLE));
+
+        temps = registersToValues(registers);
     }
 
-    public AMD64MathIntrinsicUnaryOp(LIRGeneratorTool tool, UnaryIntrinsicOpcode opcode, Value result, Value input) {
-        this(tool, opcode, result, input, Value.ILLEGAL);
-    }
-
-    @Override
-    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-        switch (opcode) {
-            case LOG:
-                new AMD64MathLog().generate(masm, crb, result);
-                break;
-            case LOG10:
-                new AMD64MathLog10().generate(masm, crb, result);
-                break;
-            case SIN:
-                new AMD64MathSin().generate(masm, crb, result);
-                break;
-            case COS:
-                new AMD64MathCos().generate(masm, crb, result);
-                break;
-            case TAN:
-                new AMD64MathTan().generate(masm, crb, result);
-                break;
-            case EXP:
-                new AMD64MathExp().generate(masm, crb, result);
-                break;
-            default:
-                throw GraalError.shouldNotReachHere();
-        }
+    public final Variable emitLIRWrapper(LIRGeneratorTool gen, Value value) {
+        LIRKind kind = LIRKind.combine(value);
+        RegisterValue xmm0Value = xmm0.asValue(kind);
+        gen.emitMove(xmm0Value, value);
+        gen.append(this);
+        Variable result = gen.newVariable(kind);
+        gen.emitMove(result, xmm0Value);
+        return result;
     }
 
 }

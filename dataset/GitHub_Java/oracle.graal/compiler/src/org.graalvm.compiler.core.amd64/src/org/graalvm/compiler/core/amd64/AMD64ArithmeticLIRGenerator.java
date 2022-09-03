@@ -748,7 +748,6 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
         }
     }
 
-    @Override
     public Variable emitRor(Value a, Value b) {
         switch ((AMD64Kind) a.getPlatformKind()) {
             case DWORD:
