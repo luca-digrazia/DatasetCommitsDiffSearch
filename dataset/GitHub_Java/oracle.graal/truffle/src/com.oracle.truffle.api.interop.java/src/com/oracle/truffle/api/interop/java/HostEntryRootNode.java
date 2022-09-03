@@ -74,8 +74,8 @@ abstract class HostEntryRootNode<T> extends ExecutableNode implements Supplier<S
         EngineSupport support = JavaInterop.ACCESSOR.engine();
         if (support == null) {
             return new BiFunction<Object, Object, Object>() {
-                public Object apply(Object context, Object value) {
-                    return asTruffleValue(value, context);
+                public Object apply(Object t, Object u) {
+                    return JavaInterop.asTruffleValue(u);
                 }
             };
         }
@@ -87,18 +87,15 @@ abstract class HostEntryRootNode<T> extends ExecutableNode implements Supplier<S
         if (support == null) {
             // legacy support
             return new BiFunction<Object, Object[], Object[]>() {
-                public Object[] apply(Object context, Object[] values) {
-                    for (int i = 0; i < values.length; i++) {
-                        values[i] = asTruffleValue(values[i], context);
+                public Object[] apply(Object t, Object[] u) {
+                    for (int i = 0; i < u.length; i++) {
+                        u[i] = JavaInterop.asTruffleValue(u[i]);
                     }
-                    return values;
+                    return u;
                 }
             };
         }
         return support.createToGuestValuesNode();
     }
 
-    static Object asTruffleValue(Object obj, Object languageContext) {
-        return JavaInterop.isPrimitive(obj) ? obj : JavaInterop.asTruffleObject(obj, languageContext);
-    }
 }
