@@ -20,29 +20,23 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.lir.phases;
+package org.graalvm.compiler.lir.alloc.lsra;
 
-import static org.graalvm.compiler.core.common.GraalOptions.TraceRA;
+import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
+import org.graalvm.compiler.lir.alloc.RegisterAllocationPhase;
+import org.graalvm.compiler.lir.alloc.lsra.ssa.SSALinearScan;
+import org.graalvm.compiler.lir.gen.LIRGenerationResult;
+import org.graalvm.compiler.lir.gen.LIRGeneratorTool.MoveFactory;
 
-import org.graalvm.compiler.lir.alloc.lsra.LinearScanPhase;
-import org.graalvm.compiler.lir.alloc.trace.TraceRegisterAllocationPhase;
-import org.graalvm.compiler.lir.dfa.LocationMarkerPhase;
-import org.graalvm.compiler.lir.phases.AllocationPhase.AllocationContext;
-import org.graalvm.compiler.lir.stackslotalloc.SimpleStackSlotAllocator;
-import org.graalvm.compiler.options.OptionValues;
+import jdk.vm.ci.code.TargetDescription;
 
-public class EconomyAllocationStage extends LIRPhaseSuite<AllocationContext> {
-    public EconomyAllocationStage(OptionValues options) {
-        if (TraceRA.getValue(options)) {
-            appendPhase(new TraceRegisterAllocationPhase());
-        } else {
-            appendPhase(new LinearScanPhase());
-        }
+public final class LinearScanPhase extends RegisterAllocationPhase {
 
-        // build frame map
-        appendPhase(new SimpleStackSlotAllocator());
-
-        // currently we mark locations only if we do register allocation
-        appendPhase(new LocationMarkerPhase());
+    @Override
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
+        MoveFactory spillMoveFactory = context.spillMoveFactory;
+        RegisterAllocationConfig registerAllocationConfig = context.registerAllocationConfig;
+        final LinearScan allocator = new SSALinearScan(target, lirGenRes, spillMoveFactory, registerAllocationConfig, lirGenRes.getLIR().linearScanOrder(), getNeverSpillConstants());
+        allocator.allocate(target, lirGenRes, context);
     }
 }
