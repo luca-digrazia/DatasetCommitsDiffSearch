@@ -26,7 +26,6 @@ import java.util.Iterator;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 
-import jdk.vm.ci.services.JVMCIPermission;
 import jdk.vm.ci.services.Services;
 
 /**
@@ -45,7 +44,7 @@ public final class GraalServices {
      * Gets an {@link Iterable} of the providers available for a given service.
      *
      * @throws SecurityException if on JDK8 and a security manager is present and it denies
-     *             {@link JVMCIPermission}
+     *             {@code RuntimePermission("jvmci")}
      */
     public static <S> Iterable<S> load(Class<S> service) {
         assert !service.getName().startsWith("jdk.vm.ci") : "JVMCI services must be loaded via " + Services.class.getName();
@@ -60,7 +59,7 @@ public final class GraalServices {
      *            {@code service} is available
      * @return the requested provider if available else {@code null}
      * @throws SecurityException if on JDK8 and a security manager is present and it denies
-     *             {@link JVMCIPermission}
+     *             {@code RuntimePermission("jvmci")}
      */
     public static <S> S loadSingle(Class<S> service, boolean required) {
         assert !service.getName().startsWith("jdk.vm.ci") : "JVMCI services must be loaded via " + Services.class.getName();
