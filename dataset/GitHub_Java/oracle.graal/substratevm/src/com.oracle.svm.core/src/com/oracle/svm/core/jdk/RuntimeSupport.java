@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.graalvm.nativeimage.ImageSingletons;
@@ -34,7 +33,6 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.svm.core.CompilerCommandPlugin;
-import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.util.VMError;
 
 public final class RuntimeSupport {
@@ -71,50 +69,36 @@ public final class RuntimeSupport {
         return ImageSingletons.lookup(RuntimeSupport.class);
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     public void addStartupHook(Runnable hook) {
         if (startupHooks.contains(hook)) {
             throw new IllegalArgumentException("StartupHook previously registered");
         }
+
         startupHooks.add(hook);
     }
 
-    public void executeStartupHooks() {
-        executeHooks(startupHooks);
+    public boolean removeStartupHook(Runnable hook) {
+        return startupHooks.remove(hook);
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
+    public List<Runnable> getStartupHooks() {
+        return new ArrayList<>(startupHooks);
+    }
+
     public void addShutdownHook(Runnable hook) {
         if (shutdownHooks.contains(hook)) {
             throw new IllegalArgumentException("ShutdownHook previously registered");
         }
+
         shutdownHooks.add(hook);
     }
 
-    public void executeShutdownHooks() {
-        executeHooks(shutdownHooks);
+    public boolean removeShutdownHook(Runnable hook) {
+        return shutdownHooks.remove(hook);
     }
 
-    private static void executeHooks(CopyOnWriteArrayList<Runnable> hooks) {
-        /* Iterate a snapshot of the hooks. */
-        final ListIterator<Runnable> hookIterator = hooks.listIterator();
-        final List<Throwable> hookExceptions = new ArrayList<>();
-
-        while (hookIterator.hasNext()) {
-            final Runnable hook = hookIterator.next();
-            try {
-                hook.run();
-            } catch (Throwable ex) {
-                hookExceptions.add(ex);
-            }
-        }
-
-        /* Report all hook exceptions, but do not re-throw. */
-        if (hookExceptions.size() > 0) {
-            for (Throwable ex : hookExceptions) {
-                ex.printStackTrace(Log.logStream());
-            }
-        }
+    public List<Runnable> getShutdownHooks() {
+        return new ArrayList<>(shutdownHooks);
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
