@@ -34,7 +34,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> implements Closeable {
+public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> implements Closeable {
     private static final Charset UTF8 = Charset.forName("UTF-8");
 
     private static final int CONSTANT_POOL_MAX_SIZE = 8000;
@@ -167,13 +167,13 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
 
     protected abstract void findNodeProperties(Node node, Map<String, Object> props, Graph info);
 
-    protected abstract Collection<? extends Node> findBlockNodes(Graph info, Block block);
+    protected abstract Collection<Node> findBlockNodes(Graph info, Block block);
 
     protected abstract int findBlockId(Block sux);
 
-    protected abstract Collection<? extends Block> findBlocks(Graph graph);
+    protected abstract Collection<Block> findBlocks(Graph graph);
 
-    protected abstract Collection<? extends Block> findBlockSuccessors(Block block);
+    protected abstract Collection<Block> findBlockSuccessors(Block block);
 
     protected abstract String formatTitle(Graph graph, int id, String format, Object... args);
 
@@ -439,10 +439,10 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         writeInt(findNodeId(node));
     }
 
-    private void writeBlocks(Collection<? extends Block> blocks, Graph info) throws IOException {
+    private void writeBlocks(Collection<Block> blocks, Graph info) throws IOException {
         if (blocks != null) {
             for (Block block : blocks) {
-                Collection<? extends Node> nodes = findBlockNodes(info, block);
+                Collection<Node> nodes = findBlockNodes(info, block);
                 if (nodes == null) {
                     writeInt(0);
                     return;
@@ -450,13 +450,21 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
             }
             writeInt(blocks.size());
             for (Block block : blocks) {
-                Collection<? extends Node> nodes = findBlockNodes(info, block);
+                Collection<Node> nodes = findBlockNodes(info, block);
+                List<Node> extraNodes = new LinkedList<>();
                 writeInt(findBlockId(block));
-                writeInt(nodes.size());
+                for (Node node : nodes) {
+                    findExtraNodes(node, extraNodes);
+                }
+                extraNodes.removeAll(nodes);
+                writeInt(nodes.size() + extraNodes.size());
                 for (Node node : nodes) {
                     writeInt(findNodeId(node));
                 }
-                final Collection<? extends Block> successors = findBlockSuccessors(block);
+                for (Node node : extraNodes) {
+                    writeInt(findNodeId(node));
+                }
+                final Collection<Block> successors = findBlockSuccessors(block);
                 writeInt(successors.size());
                 for (Block sux : successors) {
                     writeInt(findBlockId(sux));
