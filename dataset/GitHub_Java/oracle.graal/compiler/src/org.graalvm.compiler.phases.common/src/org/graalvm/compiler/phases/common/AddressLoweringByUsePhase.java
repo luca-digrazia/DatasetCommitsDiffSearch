@@ -1,13 +1,11 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2017, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -69,7 +67,7 @@ public class AddressLoweringByUsePhase extends Phase {
             AddressNode lowered;
             if (node instanceof ReadNode) {
                 ReadNode readNode = (ReadNode) node;
-                Stamp stamp = readNode.getAccessStamp();
+                Stamp stamp = readNode.stamp(NodeView.DEFAULT);
                 address = readNode.getAddress();
                 lowered = lowering.lower(readNode, stamp, address);
             } else if (node instanceof JavaReadNode) {
@@ -79,12 +77,12 @@ public class AddressLoweringByUsePhase extends Phase {
                 lowered = lowering.lower(javaReadNode, stamp, address);
             } else if (node instanceof FloatingReadNode) {
                 FloatingReadNode floatingReadNode = (FloatingReadNode) node;
-                Stamp stamp = floatingReadNode.getAccessStamp();
+                Stamp stamp = floatingReadNode.stamp(NodeView.DEFAULT);
                 address = floatingReadNode.getAddress();
                 lowered = lowering.lower(floatingReadNode, stamp, address);
             } else if (node instanceof AbstractWriteNode) {
                 AbstractWriteNode abstractWriteNode = (AbstractWriteNode) node;
-                Stamp stamp = abstractWriteNode.getAccessStamp();
+                Stamp stamp = abstractWriteNode.value().stamp(NodeView.DEFAULT);
                 address = abstractWriteNode.getAddress();
                 lowered = lowering.lower(abstractWriteNode, stamp, address);
             } else if (node instanceof PrefetchAllocateNode) {
