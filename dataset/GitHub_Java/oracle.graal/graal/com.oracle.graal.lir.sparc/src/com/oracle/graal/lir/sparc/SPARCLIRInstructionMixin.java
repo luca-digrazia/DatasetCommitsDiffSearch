@@ -39,18 +39,16 @@ public interface SPARCLIRInstructionMixin {
      * pessimistic estimate of emitted SPARC instructions and emitted bytes into the constant
      * section.
      */
-    class SizeEstimate {
+    public static class SizeEstimate {
         /**
          * Cache the first size definition (with just 0 as constant size).
          */
         private static final SizeEstimate[] cache = new SizeEstimate[5];
-
         static {
             for (int i = 0; i < cache.length; i++) {
                 cache[i] = new SizeEstimate(i, 0);
             }
         }
-
         public final int instructionSize;
         public final int constantSize;
 
@@ -81,7 +79,7 @@ public interface SPARCLIRInstructionMixin {
         }
     }
 
-    class SPARCLIRInstructionMixinStore {
+    public static class SPARCLIRInstructionMixinStore {
         public final SizeEstimate estimate;
         public SPARCDelayedControlTransfer delayedControlTransfer = SPARCDelayedControlTransfer.DUMMY;
 
