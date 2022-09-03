@@ -391,9 +391,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     private void shutdown() {
         getCompilationNotify().notifyShutdown(this);
-        if (TruffleCompilerOptions.TruffleInstrumentBranches.getValue()) {
-            InstrumentBranchesPhase.instrumentation.dumpAccessTable();
-        }
+        InstrumentBranchesPhase.instrumentation.dumpAccessTable();
     }
 
     protected void doCompile(OptimizedCallTarget optimizedCallTarget) {
