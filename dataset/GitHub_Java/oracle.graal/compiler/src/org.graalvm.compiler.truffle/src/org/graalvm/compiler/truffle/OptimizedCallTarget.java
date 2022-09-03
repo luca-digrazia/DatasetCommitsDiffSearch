@@ -28,7 +28,6 @@ import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCallTar
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreFatal;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsArePrinted;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreThrown;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TrufflePerformanceWarningsAreFatal;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -172,7 +171,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     @Override
     public final Object call(Object... args) {
-        getCompilationProfile().profileIndirectCall();
+        getCompilationProfile().profileDirectCall(args);
         return doInvoke(args);
     }
 
@@ -290,9 +289,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             if (task != null) {
                 Future<?> submitted = task.getFuture();
                 if (submitted != null) {
-                    boolean allowBackgroundCompilation = !(TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal) &&
-                                    !TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown));
-                    boolean mayBeAsynchronous = TruffleCompilerOptions.getValue(TruffleBackgroundCompilation) && allowBackgroundCompilation;
+                    boolean mayBeAsynchronous = TruffleCompilerOptions.getValue(TruffleBackgroundCompilation) && !TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown);
                     runtime().finishCompilation(this, submitted, mayBeAsynchronous);
                 }
             }
@@ -377,7 +374,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
              */
             boolean truffleCompilationExceptionsAreFatal = TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreFatal);
             assert TruffleCompilationExceptionsAreFatal.hasBeenSet(TruffleCompilerOptions.getOptions()) || (truffleCompilationExceptionsAreFatal = true) == true;
-            truffleCompilationExceptionsAreFatal = truffleCompilationExceptionsAreFatal || TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal);
 
             if (TruffleCompilerOptions.getValue(TruffleCompilationExceptionsArePrinted) || truffleCompilationExceptionsAreFatal) {
                 printException(t);
