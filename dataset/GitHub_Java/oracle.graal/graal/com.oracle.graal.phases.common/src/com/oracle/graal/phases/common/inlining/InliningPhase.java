@@ -483,7 +483,7 @@ public class InliningPhase extends AbstractInliningPhase {
      */
     static class InliningData {
 
-        private static final GraphInfo DummyGraphInfo = new GraphInfo(null, 1.0, 1.0);
+        private static final GraphInfo DummyGraphInfo = new GraphInfo(null, new LinkedList<Invoke>(), 1.0, 1.0);
 
         /**
          * Call hierarchy from outer most call (i.e., compilation unit) to inner most callee.
@@ -508,7 +508,9 @@ public class InliningPhase extends AbstractInliningPhase {
 
         public void pushGraph(StructuredGraph graph, double probability, double relevance) {
             assert !contains(graph);
-            graphQueue.push(new GraphInfo(graph, probability, relevance));
+            LinkedList<Invoke> invokes = new InliningIterator(graph).apply();
+            assert invokes.size() == count(graph.getInvokes());
+            graphQueue.push(new GraphInfo(graph, invokes, probability, relevance));
             assert graphQueue.size() <= maxGraphs;
         }
 
@@ -616,6 +618,16 @@ public class InliningPhase extends AbstractInliningPhase {
             }
             return false;
         }
+
+        private static int count(Iterable<Invoke> invokes) {
+            int count = 0;
+            Iterator<Invoke> iterator = invokes.iterator();
+            while (iterator.hasNext()) {
+                iterator.next();
+                count++;
+            }
+            return count;
+        }
     }
 
     private static class MethodInvocation {
@@ -697,19 +709,13 @@ public class InliningPhase extends AbstractInliningPhase {
         private final ToDoubleFunction<FixedNode> probabilities;
         private final ComputeInliningRelevance computeInliningRelevance;
 
-        public GraphInfo(StructuredGraph graph, double probability, double relevance) {
+        public GraphInfo(StructuredGraph graph, LinkedList<Invoke> invokes, double probability, double relevance) {
             this.graph = graph;
-            if (graph == null) {
-                this.remainingInvokes = new LinkedList<>();
-            } else {
-                LinkedList<Invoke> invokes = new InliningIterator(graph).apply();
-                assert invokes.size() == count(graph.getInvokes());
-                this.remainingInvokes = invokes;
-            }
+            this.remainingInvokes = invokes;
             this.probability = probability;
             this.relevance = relevance;
 
-            if (graph != null && !remainingInvokes.isEmpty()) {
+            if (graph != null && (graph.hasNode(InvokeNode.class) || graph.hasNode(InvokeWithExceptionNode.class))) {
                 probabilities = new FixedNodeProbabilityCache();
                 computeInliningRelevance = new ComputeInliningRelevance(graph, probabilities);
                 computeProbabilities();
@@ -717,16 +723,6 @@ public class InliningPhase extends AbstractInliningPhase {
                 probabilities = null;
                 computeInliningRelevance = null;
             }
-        }
-
-        private static int count(Iterable<Invoke> invokes) {
-            int count = 0;
-            Iterator<Invoke> iterator = invokes.iterator();
-            while (iterator.hasNext()) {
-                iterator.next();
-                count++;
-            }
-            return count;
         }
 
         /**
