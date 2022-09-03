@@ -36,7 +36,38 @@ import com.oracle.graal.nodes.*;
  */
 public abstract class BasePhase<C> {
 
-    private CharSequence name;
+    /**
+     * Phase name lazily computed from the phase class.
+     */
+    class Name extends LazyName {
+
+        @Override
+        public String createString() {
+            String s = BasePhase.this.getClass().getSimpleName();
+            if (s.endsWith("Phase")) {
+                return s.substring(0, s.length() - "Phase".length());
+            }
+            return s;
+        }
+    }
+
+    /**
+     * Lazily computed debug value name composed of a prefix and a phase's name.
+     */
+    class DebugValueName extends LazyName {
+        final String prefix;
+
+        public DebugValueName(String prefix) {
+            this.prefix = prefix;
+        }
+
+        @Override
+        public String createString() {
+            return prefix + name;
+        }
+    }
+
+    private final CharSequence name;
 
     private final DebugTimer phaseTimer;
     private final DebugMetric phaseMetric;
@@ -49,15 +80,17 @@ public abstract class BasePhase<C> {
     }
 
     protected BasePhase() {
-        phaseTimer = Debug.timer("PhaseTime_%s", getClass());
-        phaseMetric = Debug.metric("PhaseCount_%s", getClass());
+        name = new Name();
+        assert checkName(name.toString());
+        phaseTimer = Debug.timer(new DebugValueName("PhaseTime_"));
+        phaseMetric = Debug.metric(new DebugValueName("PhaseCount_"));
     }
 
     protected BasePhase(String name) {
         assert checkName(name);
         this.name = name;
-        phaseTimer = Debug.timer("PhaseTime_%s", getClass());
-        phaseMetric = Debug.metric("PhaseCount_%s", getClass());
+        phaseTimer = Debug.timer(new DebugValueName("PhaseTime_"));
+        phaseMetric = Debug.metric(new DebugValueName("PhaseCount_"));
     }
 
     protected CharSequence getDetailedName() {
@@ -69,7 +102,7 @@ public abstract class BasePhase<C> {
     }
 
     public final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
-        try (TimerCloseable a = phaseTimer.start(); Scope s = Debug.scope(getClass(), this)) {
+        try (TimerCloseable a = phaseTimer.start(); Scope s = Debug.scope(name, this)) {
             BasePhase.this.run(graph, context);
             phaseMetric.increment();
             if (dumpGraph) {
@@ -82,13 +115,6 @@ public abstract class BasePhase<C> {
     }
 
     public final CharSequence getName() {
-        if (name == null) {
-            String s = BasePhase.this.getClass().getSimpleName();
-            if (s.endsWith("Phase")) {
-                s = s.substring(0, s.length() - "Phase".length());
-            }
-            name = s;
-        }
         return name;
     }
 
