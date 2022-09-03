@@ -37,7 +37,7 @@ public class DelayedFrameMapBuilder implements FrameMapBuilder {
 
     @FunctionalInterface
     public interface FrameMapFactory {
-        FrameMap newFrameMap(RegisterConfig registerConfig);
+        FrameMap newFrameMap(FrameMapBuilder frameMapBuilder);
     }
 
     private final RegisterConfig registerConfig;
@@ -181,7 +181,7 @@ public class DelayedFrameMapBuilder implements FrameMapBuilder {
     }
 
     public FrameMap buildFrameMap(LIRGenerationResult res) {
-        FrameMap frameMap = factory.newFrameMap(registerConfig);
+        FrameMap frameMap = factory.newFrameMap(this);
         HashMap<VirtualStackSlot, StackSlot> mapping = new HashMap<>();
         // fill
         mapStackSlots(frameMap, mapping);
