@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,6 +32,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -423,15 +424,20 @@ public final class BciBlockMapping {
     private BciBlock[] blocks;
     public final ResolvedJavaMethod method;
     public boolean hasJsrBytecodes;
+    public BciBlock startBlock;
 
+    private final BytecodeStream stream;
     private final ExceptionHandler[] exceptionHandlers;
-    private BciBlock startBlock;
+    private BciBlock[] blockMap;
     private BciBlock[] loopHeaders;
 
     private static final int LOOP_HEADER_MAX_CAPACITY = Long.SIZE;
     private static final int LOOP_HEADER_INITIAL_CAPACITY = 4;
 
+    private final boolean doLivenessAnalysis;
+    public LocalLiveness liveness;
     private int blocksNotYetAssignedId;
+    private final boolean consecutiveLoopBlocks;
     public int returnCount;
 
     /**
@@ -439,9 +445,14 @@ public final class BciBlockMapping {
      *
      * @param method the compiler interface method containing the code
      */
-    private BciBlockMapping(ResolvedJavaMethod method) {
+    private BciBlockMapping(ResolvedJavaMethod method, boolean doLivenessAnalysis, boolean consecutiveLoopBlocks) {
+        this.doLivenessAnalysis = doLivenessAnalysis;
+        this.consecutiveLoopBlocks = consecutiveLoopBlocks;
         this.method = method;
         this.exceptionHandlers = method.getExceptionHandlers();
+        this.stream = new BytecodeStream(method.getCode());
+        int codeSize = method.getCodeSize();
+        this.blockMap = new BciBlock[codeSize];
     }
 
     public BciBlock[] getBlocks() {
@@ -455,30 +466,37 @@ public final class BciBlockMapping {
     /**
      * Builds the block map and conservative CFG and numbers blocks.
      */
-    public void build(BytecodeStream stream) {
-        int codeSize = method.getCodeSize();
-        BciBlock[] blockMap = new BciBlock[codeSize];
-        makeExceptionEntries(blockMap);
-        iterateOverBytecodes(blockMap, stream);
+    public void build() {
+        makeExceptionEntries();
+        iterateOverBytecodes();
         if (hasJsrBytecodes) {
             if (!SupportJsrBytecodes.getValue()) {
                 throw new JsrNotSupportedBailout("jsr/ret parsing disabled");
             }
-            createJsrAlternatives(blockMap, blockMap[0]);
+            createJsrAlternatives(blockMap[0]);
         }
         if (Debug.isLogEnabled()) {
-            this.log(blockMap, "Before BlockOrder");
+            this.log("Before BlockOrder");
         }
-        computeBlockOrder(blockMap);
-        fixLoopBits(blockMap);
+        computeBlockOrder();
+        fixLoopBits();
+
+        startBlock = blockMap[0];
 
         assert verify();
 
         // Discard big arrays so that they can be GCed
-        startBlock = blockMap[0];
         blockMap = null;
         if (Debug.isLogEnabled()) {
-            this.log(blockMap, "Before LivenessAnalysis");
+            this.log("Before LivenessAnalysis");
+        }
+        if (doLivenessAnalysis) {
+            try (Scope s = Debug.scope("LivenessAnalysis")) {
+                liveness = method.getMaxLocals() <= 64 ? new SmallLocalLiveness() : new LargeLocalLiveness();
+                liveness.computeLiveness();
+            } catch (Throwable e) {
+                throw Debug.handle(e);
+            }
         }
     }
 
@@ -497,15 +515,15 @@ public final class BciBlockMapping {
         return true;
     }
 
-    private void makeExceptionEntries(BciBlock[] blockMap) {
+    private void makeExceptionEntries() {
         // start basic blocks at all exception handler blocks and mark them as exception entries
         for (ExceptionHandler h : this.exceptionHandlers) {
-            BciBlock xhandler = makeBlock(blockMap, h.getHandlerBCI());
+            BciBlock xhandler = makeBlock(h.getHandlerBCI());
             xhandler.isExceptionEntry = true;
         }
     }
 
-    private void iterateOverBytecodes(BciBlock[] blockMap, BytecodeStream stream) {
+    private void iterateOverBytecodes() {
         // iterate over the bytecodes top to bottom.
         // mark the entrypoints of basic blocks and build lists of successors for
         // all bytecodes that end basic blocks (i.e. goto, ifs, switches, throw, jsr, returns, ret)
@@ -515,9 +533,9 @@ public final class BciBlockMapping {
             int bci = stream.currentBCI();
 
             if (current == null || blockMap[bci] != null) {
-                BciBlock b = makeBlock(blockMap, bci);
+                BciBlock b = makeBlock(bci);
                 if (current != null) {
-                    addSuccessor(blockMap, current.endBci, b);
+                    addSuccessor(current.endBci, b);
                 }
                 current = b;
             }
@@ -537,9 +555,9 @@ public final class BciBlockMapping {
                 }
                 case ATHROW: {
                     current = null;
-                    ExceptionDispatchBlock handler = handleExceptions(blockMap, bci);
+                    ExceptionDispatchBlock handler = handleExceptions(bci);
                     if (handler != null) {
-                        addSuccessor(blockMap, bci, handler);
+                        addSuccessor(bci, handler);
                     }
                     break;
                 }
@@ -560,24 +578,24 @@ public final class BciBlockMapping {
                 case IFNULL:    // fall through
                 case IFNONNULL: {
                     current = null;
-                    addSuccessor(blockMap, bci, makeBlock(blockMap, stream.readBranchDest()));
-                    addSuccessor(blockMap, bci, makeBlock(blockMap, stream.nextBCI()));
+                    addSuccessor(bci, makeBlock(stream.readBranchDest()));
+                    addSuccessor(bci, makeBlock(stream.nextBCI()));
                     break;
                 }
                 case GOTO:
                 case GOTO_W: {
                     current = null;
-                    addSuccessor(blockMap, bci, makeBlock(blockMap, stream.readBranchDest()));
+                    addSuccessor(bci, makeBlock(stream.readBranchDest()));
                     break;
                 }
                 case TABLESWITCH: {
                     current = null;
-                    addSwitchSuccessors(blockMap, bci, new BytecodeTableSwitch(stream, bci));
+                    addSwitchSuccessors(bci, new BytecodeTableSwitch(stream, bci));
                     break;
                 }
                 case LOOKUPSWITCH: {
                     current = null;
-                    addSwitchSuccessors(blockMap, bci, new BytecodeLookupSwitch(stream, bci));
+                    addSwitchSuccessors(bci, new BytecodeLookupSwitch(stream, bci));
                     break;
                 }
                 case JSR:
@@ -587,11 +605,11 @@ public final class BciBlockMapping {
                     if (target == 0) {
                         throw new JsrNotSupportedBailout("jsr target bci 0 not allowed");
                     }
-                    BciBlock b1 = makeBlock(blockMap, target);
+                    BciBlock b1 = makeBlock(target);
                     current.setJsrSuccessor(b1);
                     current.setJsrReturnBci(stream.nextBCI());
                     current = null;
-                    addSuccessor(blockMap, bci, b1);
+                    addSuccessor(bci, b1);
                     break;
                 }
                 case RET: {
@@ -604,11 +622,11 @@ public final class BciBlockMapping {
                 case INVOKESTATIC:
                 case INVOKEVIRTUAL:
                 case INVOKEDYNAMIC: {
-                    ExceptionDispatchBlock handler = handleExceptions(blockMap, bci);
+                    ExceptionDispatchBlock handler = handleExceptions(bci);
                     if (handler != null) {
                         current = null;
-                        addSuccessor(blockMap, bci, makeBlock(blockMap, stream.nextBCI()));
-                        addSuccessor(blockMap, bci, handler);
+                        addSuccessor(bci, makeBlock(stream.nextBCI()));
+                        addSuccessor(bci, handler);
                     }
                     break;
                 }
@@ -630,11 +648,11 @@ public final class BciBlockMapping {
                 case SALOAD:
                 case PUTFIELD:
                 case GETFIELD: {
-                    ExceptionDispatchBlock handler = handleExceptions(blockMap, bci);
+                    ExceptionDispatchBlock handler = handleExceptions(bci);
                     if (handler != null) {
                         current = null;
-                        addSuccessor(blockMap, bci, makeBlock(blockMap, stream.nextBCI()));
-                        addSuccessor(blockMap, bci, handler);
+                        addSuccessor(bci, makeBlock(stream.nextBCI()));
+                        addSuccessor(bci, handler);
                     }
                 }
             }
@@ -642,7 +660,7 @@ public final class BciBlockMapping {
         }
     }
 
-    private BciBlock makeBlock(BciBlock[] blockMap, int startBci) {
+    private BciBlock makeBlock(int startBci) {
         BciBlock oldBlock = blockMap[startBci];
         if (oldBlock == null) {
             BciBlock newBlock = new BciBlock();
@@ -676,7 +694,7 @@ public final class BciBlockMapping {
         }
     }
 
-    private void addSwitchSuccessors(BciBlock[] blockMap, int predBci, BytecodeSwitch bswitch) {
+    private void addSwitchSuccessors(int predBci, BytecodeSwitch bswitch) {
         // adds distinct targets to the successor list
         Collection<Integer> targets = new TreeSet<>();
         for (int i = 0; i < bswitch.numberOfCases(); i++) {
@@ -684,11 +702,11 @@ public final class BciBlockMapping {
         }
         targets.add(bswitch.defaultTarget());
         for (int targetBci : targets) {
-            addSuccessor(blockMap, predBci, makeBlock(blockMap, targetBci));
+            addSuccessor(predBci, makeBlock(targetBci));
         }
     }
 
-    private static void addSuccessor(BciBlock[] blockMap, int predBci, BciBlock sux) {
+    private void addSuccessor(int predBci, BciBlock sux) {
         BciBlock predecessor = blockMap[predBci];
         if (sux.isExceptionEntry) {
             throw new BailoutException("Exception handler can be reached by both normal and exceptional control flow");
@@ -698,7 +716,7 @@ public final class BciBlockMapping {
 
     private final ArrayList<BciBlock> jsrVisited = new ArrayList<>();
 
-    private void createJsrAlternatives(BciBlock[] blockMap, BciBlock block) {
+    private void createJsrAlternatives(BciBlock block) {
         jsrVisited.add(block);
         JsrScope scope = block.getJsrScope();
 
@@ -745,14 +763,14 @@ public final class BciBlockMapping {
         }
         for (BciBlock successor : block.getSuccessors()) {
             if (!jsrVisited.contains(successor)) {
-                createJsrAlternatives(blockMap, successor);
+                createJsrAlternatives(successor);
             }
         }
     }
 
     private HashMap<ExceptionHandler, ExceptionDispatchBlock> initialExceptionDispatch = CollectionsFactory.newMap();
 
-    private ExceptionDispatchBlock handleExceptions(BciBlock[] blockMap, int bci) {
+    private ExceptionDispatchBlock handleExceptions(int bci) {
         ExceptionDispatchBlock lastHandler = null;
 
         for (int i = exceptionHandlers.length - 1; i >= 0; i--) {
@@ -787,14 +805,14 @@ public final class BciBlockMapping {
 
     private boolean loopChanges;
 
-    private void fixLoopBits(BciBlock[] blockMap) {
+    private void fixLoopBits() {
         do {
             loopChanges = false;
             for (BciBlock b : blocks) {
                 b.visited = false;
             }
 
-            long loop = fixLoopBits(blockMap, blockMap[0]);
+            long loop = fixLoopBits(blockMap[0]);
 
             if (loop != 0) {
                 // There is a path from a loop end to the method entry that does not pass the loop
@@ -807,7 +825,7 @@ public final class BciBlockMapping {
         } while (loopChanges);
     }
 
-    private void computeBlockOrder(BciBlock[] blockMap) {
+    private void computeBlockOrder() {
         int maxBlocks = blocksNotYetAssignedId;
         this.blocks = new BciBlock[blocksNotYetAssignedId];
         long loop = computeBlockOrder(blockMap[0]);
@@ -837,7 +855,7 @@ public final class BciBlockMapping {
             if (b != null) {
                 b.setId(next);
                 newBlocks[next++] = b;
-                if (b.isLoopHeader) {
+                if (consecutiveLoopBlocks && b.isLoopHeader) {
                     next = handleLoopHeader(newBlocks, next, i, b);
                 }
             }
@@ -864,7 +882,7 @@ public final class BciBlockMapping {
         return next;
     }
 
-    public void log(BciBlock[] blockMap, String name) {
+    public void log(String name) {
         if (Debug.isLogEnabled()) {
             String n = System.lineSeparator();
             StringBuilder sb = new StringBuilder(Debug.currentScope()).append("BlockMap ").append(name).append(" :");
@@ -1000,7 +1018,7 @@ public final class BciBlockMapping {
         return loops;
     }
 
-    private long fixLoopBits(BciBlock[] blockMap, BciBlock block) {
+    private long fixLoopBits(BciBlock block) {
         if (block.visited) {
             // Return cached loop information for this block.
             if (block.isLoopHeader) {
@@ -1014,7 +1032,7 @@ public final class BciBlockMapping {
         long loops = block.loops;
         for (BciBlock successor : block.getSuccessors()) {
             // Recursively process successors.
-            loops |= fixLoopBits(blockMap, successor);
+            loops |= fixLoopBits(successor);
         }
         if (block.loops != loops) {
             loopChanges = true;
@@ -1029,9 +1047,241 @@ public final class BciBlockMapping {
         return loops;
     }
 
-    public static BciBlockMapping create(BytecodeStream stream, ResolvedJavaMethod method) {
-        BciBlockMapping map = new BciBlockMapping(method);
-        map.build(stream);
+    /**
+     * Encapsulates the liveness calculation, so that subclasses for locals &le; 64 and locals &gt;
+     * 64 can be implemented.
+     */
+    public abstract class LocalLiveness {
+
+        private void computeLiveness() {
+            for (BciBlock block : blocks) {
+                computeLocalLiveness(block);
+            }
+
+            boolean changed;
+            int iteration = 0;
+            do {
+                Debug.log("Iteration %d", iteration);
+                changed = false;
+                for (int i = blocks.length - 1; i >= 0; i--) {
+                    BciBlock block = blocks[i];
+                    int blockID = block.getId();
+                    // log statements in IFs because debugLiveX creates a new String
+                    if (Debug.isLogEnabled()) {
+                        Debug.logv("  start B%d  [%d, %d]  in: %s  out: %s  gen: %s  kill: %s", block.getId(), block.startBci, block.endBci, debugLiveIn(blockID), debugLiveOut(blockID),
+                                        debugLiveGen(blockID), debugLiveKill(blockID));
+                    }
+
+                    boolean blockChanged = (iteration == 0);
+                    if (block.getSuccessorCount() > 0) {
+                        int oldCardinality = liveOutCardinality(blockID);
+                        for (BciBlock sux : block.getSuccessors()) {
+                            if (Debug.isLogEnabled()) {
+                                Debug.log("    Successor B%d: %s", sux.getId(), debugLiveIn(sux.getId()));
+                            }
+                            propagateLiveness(blockID, sux.getId());
+                        }
+                        blockChanged |= (oldCardinality != liveOutCardinality(blockID));
+                    }
+
+                    if (blockChanged) {
+                        updateLiveness(blockID);
+                        if (Debug.isLogEnabled()) {
+                            Debug.logv("  end   B%d  [%d, %d]  in: %s  out: %s  gen: %s  kill: %s", block.getId(), block.startBci, block.endBci, debugLiveIn(blockID), debugLiveOut(blockID),
+                                            debugLiveGen(blockID), debugLiveKill(blockID));
+                        }
+                    }
+                    changed |= blockChanged;
+                }
+                iteration++;
+            } while (changed);
+        }
+
+        /**
+         * Returns whether the local is live at the beginning of the given block.
+         */
+        public abstract boolean localIsLiveIn(BciBlock block, int local);
+
+        /**
+         * Returns whether the local is set in the given loop.
+         */
+        public abstract boolean localIsChangedInLoop(int loopId, int local);
+
+        /**
+         * Returns whether the local is live at the end of the given block.
+         */
+        public abstract boolean localIsLiveOut(BciBlock block, int local);
+
+        /**
+         * Returns a string representation of the liveIn values of the given block.
+         */
+        protected abstract String debugLiveIn(int blockID);
+
+        /**
+         * Returns a string representation of the liveOut values of the given block.
+         */
+        protected abstract String debugLiveOut(int blockID);
+
+        /**
+         * Returns a string representation of the liveGen values of the given block.
+         */
+        protected abstract String debugLiveGen(int blockID);
+
+        /**
+         * Returns a string representation of the liveKill values of the given block.
+         */
+        protected abstract String debugLiveKill(int blockID);
+
+        /**
+         * Returns the number of live locals at the end of the given block.
+         */
+        protected abstract int liveOutCardinality(int blockID);
+
+        /**
+         * Adds all locals the are in the liveIn of the successor to the liveOut of the block.
+         */
+        protected abstract void propagateLiveness(int blockID, int successorID);
+
+        /**
+         * Calculates a new liveIn for the given block from liveOut, liveKill and liveGen.
+         */
+        protected abstract void updateLiveness(int blockID);
+
+        /**
+         * Adds the local to liveGen if it wasn't already killed in this block.
+         */
+        protected abstract void loadOne(int blockID, int local);
+
+        /**
+         * Add this local to liveKill if it wasn't already generated in this block.
+         */
+        protected abstract void storeOne(int blockID, int local);
+
+        private void computeLocalLiveness(BciBlock block) {
+            if (block.startBci < 0 || block.endBci < 0) {
+                return;
+            }
+            int blockID = block.getId();
+            int localIndex;
+            stream.setBCI(block.startBci);
+            while (stream.currentBCI() <= block.endBci) {
+                switch (stream.currentBC()) {
+                    case LLOAD:
+                    case DLOAD:
+                        loadTwo(blockID, stream.readLocalIndex());
+                        break;
+                    case LLOAD_0:
+                    case DLOAD_0:
+                        loadTwo(blockID, 0);
+                        break;
+                    case LLOAD_1:
+                    case DLOAD_1:
+                        loadTwo(blockID, 1);
+                        break;
+                    case LLOAD_2:
+                    case DLOAD_2:
+                        loadTwo(blockID, 2);
+                        break;
+                    case LLOAD_3:
+                    case DLOAD_3:
+                        loadTwo(blockID, 3);
+                        break;
+                    case IINC:
+                        localIndex = stream.readLocalIndex();
+                        loadOne(blockID, localIndex);
+                        storeOne(blockID, localIndex);
+                        break;
+                    case ILOAD:
+                    case FLOAD:
+                    case ALOAD:
+                    case RET:
+                        loadOne(blockID, stream.readLocalIndex());
+                        break;
+                    case ILOAD_0:
+                    case FLOAD_0:
+                    case ALOAD_0:
+                        loadOne(blockID, 0);
+                        break;
+                    case ILOAD_1:
+                    case FLOAD_1:
+                    case ALOAD_1:
+                        loadOne(blockID, 1);
+                        break;
+                    case ILOAD_2:
+                    case FLOAD_2:
+                    case ALOAD_2:
+                        loadOne(blockID, 2);
+                        break;
+                    case ILOAD_3:
+                    case FLOAD_3:
+                    case ALOAD_3:
+                        loadOne(blockID, 3);
+                        break;
+
+                    case LSTORE:
+                    case DSTORE:
+                        storeTwo(blockID, stream.readLocalIndex());
+                        break;
+                    case LSTORE_0:
+                    case DSTORE_0:
+                        storeTwo(blockID, 0);
+                        break;
+                    case LSTORE_1:
+                    case DSTORE_1:
+                        storeTwo(blockID, 1);
+                        break;
+                    case LSTORE_2:
+                    case DSTORE_2:
+                        storeTwo(blockID, 2);
+                        break;
+                    case LSTORE_3:
+                    case DSTORE_3:
+                        storeTwo(blockID, 3);
+                        break;
+                    case ISTORE:
+                    case FSTORE:
+                    case ASTORE:
+                        storeOne(blockID, stream.readLocalIndex());
+                        break;
+                    case ISTORE_0:
+                    case FSTORE_0:
+                    case ASTORE_0:
+                        storeOne(blockID, 0);
+                        break;
+                    case ISTORE_1:
+                    case FSTORE_1:
+                    case ASTORE_1:
+                        storeOne(blockID, 1);
+                        break;
+                    case ISTORE_2:
+                    case FSTORE_2:
+                    case ASTORE_2:
+                        storeOne(blockID, 2);
+                        break;
+                    case ISTORE_3:
+                    case FSTORE_3:
+                    case ASTORE_3:
+                        storeOne(blockID, 3);
+                        break;
+                }
+                stream.next();
+            }
+        }
+
+        private void loadTwo(int blockID, int local) {
+            loadOne(blockID, local);
+            loadOne(blockID, local + 1);
+        }
+
+        private void storeTwo(int blockID, int local) {
+            storeOne(blockID, local);
+            storeOne(blockID, local + 1);
+        }
+    }
+
+    public static BciBlockMapping create(ResolvedJavaMethod method, boolean doLivenessAnalysis, boolean consecutiveLoopBlocks) {
+        BciBlockMapping map = new BciBlockMapping(method, doLivenessAnalysis, consecutiveLoopBlocks);
+        map.build();
         if (Debug.isDumpEnabled()) {
             Debug.dump(map, method.format("After block building %f %R %H.%n(%P)"));
         }
@@ -1039,15 +1289,228 @@ public final class BciBlockMapping {
         return map;
     }
 
+    public final class SmallLocalLiveness extends LocalLiveness {
+        /*
+         * local n is represented by the bit accessible as (1 << n)
+         */
+
+        private final long[] localsLiveIn;
+        private final long[] localsLiveOut;
+        private final long[] localsLiveGen;
+        private final long[] localsLiveKill;
+        private final long[] localsChangedInLoop;
+
+        public SmallLocalLiveness() {
+            int blockSize = blocks.length;
+            localsLiveIn = new long[blockSize];
+            localsLiveOut = new long[blockSize];
+            localsLiveGen = new long[blockSize];
+            localsLiveKill = new long[blockSize];
+            localsChangedInLoop = new long[BciBlockMapping.this.nextLoop];
+        }
+
+        private String debugString(long value) {
+            StringBuilder str = new StringBuilder("{");
+            long current = value;
+            for (int i = 0; i < method.getMaxLocals(); i++) {
+                if ((current & 1L) == 1L) {
+                    if (str.length() > 1) {
+                        str.append(", ");
+                    }
+                    str.append(i);
+                }
+                current >>= 1;
+            }
+            return str.append('}').toString();
+        }
+
+        @Override
+        protected String debugLiveIn(int blockID) {
+            return debugString(localsLiveIn[blockID]);
+        }
+
+        @Override
+        protected String debugLiveOut(int blockID) {
+            return debugString(localsLiveOut[blockID]);
+        }
+
+        @Override
+        protected String debugLiveGen(int blockID) {
+            return debugString(localsLiveGen[blockID]);
+        }
+
+        @Override
+        protected String debugLiveKill(int blockID) {
+            return debugString(localsLiveKill[blockID]);
+        }
+
+        @Override
+        protected int liveOutCardinality(int blockID) {
+            return Long.bitCount(localsLiveOut[blockID]);
+        }
+
+        @Override
+        protected void propagateLiveness(int blockID, int successorID) {
+            localsLiveOut[blockID] |= localsLiveIn[successorID];
+        }
+
+        @Override
+        protected void updateLiveness(int blockID) {
+            localsLiveIn[blockID] = (localsLiveOut[blockID] & ~localsLiveKill[blockID]) | localsLiveGen[blockID];
+        }
+
+        @Override
+        protected void loadOne(int blockID, int local) {
+            long bit = 1L << local;
+            if ((localsLiveKill[blockID] & bit) == 0L) {
+                localsLiveGen[blockID] |= bit;
+            }
+        }
+
+        @Override
+        protected void storeOne(int blockID, int local) {
+            long bit = 1L << local;
+            if ((localsLiveGen[blockID] & bit) == 0L) {
+                localsLiveKill[blockID] |= bit;
+            }
+
+            BciBlock block = blocks[blockID];
+            long tmp = block.loops;
+            int pos = 0;
+            while (tmp != 0) {
+                if ((tmp & 1L) == 1L) {
+                    this.localsChangedInLoop[pos] |= bit;
+                }
+                tmp >>= 1;
+                ++pos;
+            }
+        }
+
+        @Override
+        public boolean localIsLiveIn(BciBlock block, int local) {
+            int blockID = block.getId();
+            return blockID >= Integer.MAX_VALUE ? false : (localsLiveIn[blockID] & (1L << local)) != 0L;
+        }
+
+        @Override
+        public boolean localIsLiveOut(BciBlock block, int local) {
+            int blockID = block.getId();
+            return blockID >= Integer.MAX_VALUE ? false : (localsLiveOut[blockID] & (1L << local)) != 0L;
+        }
+
+        @Override
+        public boolean localIsChangedInLoop(int loopId, int local) {
+            return (localsChangedInLoop[loopId] & (1L << local)) != 0L;
+        }
+    }
+
+    public final class LargeLocalLiveness extends LocalLiveness {
+        private BitSet[] localsLiveIn;
+        private BitSet[] localsLiveOut;
+        private BitSet[] localsLiveGen;
+        private BitSet[] localsLiveKill;
+        private BitSet[] localsChangedInLoop;
+
+        public LargeLocalLiveness() {
+            int blocksSize = blocks.length;
+            localsLiveIn = new BitSet[blocksSize];
+            localsLiveOut = new BitSet[blocksSize];
+            localsLiveGen = new BitSet[blocksSize];
+            localsLiveKill = new BitSet[blocksSize];
+            int maxLocals = method.getMaxLocals();
+            for (int i = 0; i < blocksSize; i++) {
+                localsLiveIn[i] = new BitSet(maxLocals);
+                localsLiveOut[i] = new BitSet(maxLocals);
+                localsLiveGen[i] = new BitSet(maxLocals);
+                localsLiveKill[i] = new BitSet(maxLocals);
+            }
+            localsChangedInLoop = new BitSet[nextLoop];
+            for (int i = 0; i < nextLoop; ++i) {
+                localsChangedInLoop[i] = new BitSet(maxLocals);
+            }
+        }
+
+        @Override
+        protected String debugLiveIn(int blockID) {
+            return localsLiveIn[blockID].toString();
+        }
+
+        @Override
+        protected String debugLiveOut(int blockID) {
+            return localsLiveOut[blockID].toString();
+        }
+
+        @Override
+        protected String debugLiveGen(int blockID) {
+            return localsLiveGen[blockID].toString();
+        }
+
+        @Override
+        protected String debugLiveKill(int blockID) {
+            return localsLiveKill[blockID].toString();
+        }
+
+        @Override
+        protected int liveOutCardinality(int blockID) {
+            return localsLiveOut[blockID].cardinality();
+        }
+
+        @Override
+        protected void propagateLiveness(int blockID, int successorID) {
+            localsLiveOut[blockID].or(localsLiveIn[successorID]);
+        }
+
+        @Override
+        protected void updateLiveness(int blockID) {
+            BitSet liveIn = localsLiveIn[blockID];
+            liveIn.clear();
+            liveIn.or(localsLiveOut[blockID]);
+            liveIn.andNot(localsLiveKill[blockID]);
+            liveIn.or(localsLiveGen[blockID]);
+        }
+
+        @Override
+        protected void loadOne(int blockID, int local) {
+            if (!localsLiveKill[blockID].get(local)) {
+                localsLiveGen[blockID].set(local);
+            }
+        }
+
+        @Override
+        protected void storeOne(int blockID, int local) {
+            if (!localsLiveGen[blockID].get(local)) {
+                localsLiveKill[blockID].set(local);
+            }
+
+            BciBlock block = blocks[blockID];
+            long tmp = block.loops;
+            int pos = 0;
+            while (tmp != 0) {
+                if ((tmp & 1L) == 1L) {
+                    this.localsChangedInLoop[pos].set(local);
+                }
+                tmp >>= 1;
+                ++pos;
+            }
+        }
+
+        @Override
+        public boolean localIsLiveIn(BciBlock block, int local) {
+            return block.getId() >= Integer.MAX_VALUE ? true : localsLiveIn[block.getId()].get(local);
+        }
+
+        @Override
+        public boolean localIsLiveOut(BciBlock block, int local) {
+            return block.getId() >= Integer.MAX_VALUE ? true : localsLiveOut[block.getId()].get(local);
+        }
+
+        @Override
+        public boolean localIsChangedInLoop(int loopId, int local) {
+            return localsChangedInLoop[loopId].get(local);
+        }
+    }
+
     public BciBlock[] getLoopHeaders() {
         return loopHeaders;
-    }
-
-    public BciBlock getStartBlock() {
-        return startBlock;
-    }
-
-    public int getLoopCount() {
-        return nextLoop;
     }
 }
