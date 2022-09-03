@@ -43,7 +43,7 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
-import org.graalvm.compiler.phases.graph.FixedNodeRelativeFrequencyCache;
+import org.graalvm.compiler.phases.graph.FixedNodeProbabilityCache;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -66,7 +66,7 @@ public class InlineableGraph implements Inlineable {
 
     private final StructuredGraph graph;
 
-    private FixedNodeRelativeFrequencyCache probabilites = new FixedNodeRelativeFrequencyCache();
+    private FixedNodeProbabilityCache probabilites = new FixedNodeProbabilityCache();
 
     public InlineableGraph(final ResolvedJavaMethod method, final Invoke invoke, final HighTierContext context, CanonicalizerPhase canonicalizer, boolean trackNodeSourcePosition) {
         StructuredGraph original = InliningUtil.getIntrinsicGraph(context.getReplacements(), method, invoke.bci(), trackNodeSourcePosition, null);
