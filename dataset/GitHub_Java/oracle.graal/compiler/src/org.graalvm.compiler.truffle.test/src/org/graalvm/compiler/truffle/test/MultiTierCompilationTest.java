@@ -24,80 +24,93 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.RootNode;
 import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.GraalCompilerDirectives;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions;
+import org.graalvm.compiler.truffle.test.nodes.AbstractTestNode;
+import org.graalvm.compiler.truffle.test.nodes.RootTestNode;
 import org.junit.Assert;
 import org.junit.Test;
 
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompilationThreshold;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.overrideOptions;
 
 public class MultiTierCompilationTest extends PartialEvaluationTest {
-    public static class MultiTierCalleeNode extends RootNode {
-        protected MultiTierCalleeNode() {
-            super(null);
-        }
-
+    public static class FirstTierCalleeNode extends AbstractTestNode {
         @Override
-        public Object execute(VirtualFrame frame) {
-            if (CompilerDirectives.inInterpreter()) {
-                return "callee:interpreter";
+        public int execute(VirtualFrame frame) {
+            if (!CompilerDirectives.inInterpreter()) {
+                throw new RuntimeException("Callee not in interpreter.");
             }
-            boundary();
-            if (GraalCompilerDirectives.inFirstTier()) {
-                return "callee:first-tier";
-            }
-            return "callee:inlined";
+            return 7;
         }
     }
 
-    private static class MultiTierRootNode extends RootNode {
+    public static class FirstTierRootNode extends AbstractTestNode {
         @Child private DirectCallNode callNode;
 
-        MultiTierRootNode(CallTarget target) {
-            super(null);
+        public FirstTierRootNode() {
+            RootCallTarget target = Truffle.getRuntime().createCallTarget(new RootTestNode(new FrameDescriptor(), "callee", new FirstTierCalleeNode()));
             this.callNode = Truffle.getRuntime().createDirectCallNode(target);
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            if (CompilerDirectives.inInterpreter()) {
-                return "root:interpreter";
+        public int execute(VirtualFrame frame) {
+            if (!GraalCompilerDirectives.inFirstTier() || CompilerDirectives.inInterpreter()) {
+                throw new RuntimeException("Callee not compiled in first tier.");
             }
-            boundary();
-            return callNode.call(frame.getArguments());
+            return (int) callNode.call(new Object[0]);
         }
     }
 
-    @CompilerDirectives.TruffleBoundary
-    private static void boundary() {
+    public static class SecondTierCalleeNode extends AbstractTestNode {
+        @Override
+        public int execute(VirtualFrame frame) {
+            if (GraalCompilerDirectives.inFirstTier() || CompilerDirectives.inInterpreter()) {
+                throw new RuntimeException("Callee not compiled in second tier.");
+            }
+            return 7;
+        }
+    }
+
+    public static class SecondTierRootNode extends AbstractTestNode {
+        @Child private DirectCallNode callNode;
+
+        public SecondTierRootNode() {
+            RootCallTarget target = Truffle.getRuntime().createCallTarget(new RootTestNode(new FrameDescriptor(), "callee", new SecondTierCalleeNode()));
+            this.callNode = Truffle.getRuntime().createDirectCallNode(target);
+        }
+
+        @Override
+        public int execute(VirtualFrame frame) {
+            if (GraalCompilerDirectives.inFirstTier() || CompilerDirectives.inInterpreter()) {
+                throw new RuntimeException("Callee not compiled in second tier.");
+            }
+            return (int) callNode.call(new Object[0]);
+        }
     }
 
     @SuppressWarnings("try")
     @Test
     public void testCompilationTiers() {
-        final int firstTierCompilationThreshold = PolyglotCompilerOptions.FirstTierCompilationThreshold.getDefaultValue();
-        final int compilationThreshold = TruffleCompilerOptions.getValue(TruffleCompilationThreshold);
-        OptimizedCallTarget calleeTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(new MultiTierCalleeNode());
-        OptimizedCallTarget multiTierTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(new MultiTierRootNode(calleeTarget));
-        try (TruffleCompilerOptions.TruffleOptionsOverrideScope scope = overrideOptions(TruffleCompilerOptions.TruffleBackgroundCompilation, false, TruffleCompilerOptions.TruffleMultiTier, true,
-                        TruffleCompilerOptions.TruffleSplitting, false)) {
-            for (int i = 0; i < firstTierCompilationThreshold; i++) {
-                multiTierTarget.call();
-            }
-            Assert.assertEquals("callee:interpreter", multiTierTarget.call());
-            for (int i = 0; i < compilationThreshold; i++) {
-                multiTierTarget.call();
-            }
-            Assert.assertEquals("callee:inlined", multiTierTarget.call());
+        FirstTierRootNode firstTierNode = new FirstTierRootNode();
+        OptimizedCallTarget firstTierTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(new RootTestNode(new FrameDescriptor(), "firstTierCompilation", firstTierNode));
+        SecondTierRootNode secondTierNode = new SecondTierRootNode();
+        OptimizedCallTarget secondTierTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(new RootTestNode(new FrameDescriptor(), "secondTierCompilation", secondTierNode));
+        try (TruffleCompilerOptions.TruffleOptionsOverrideScope scope = overrideOptions(TruffleCompilerOptions.TruffleBackgroundCompilation, false)) {
+            // Assert.assertTrue(firstTierTarget.compile(false));
+            // firstTierTarget.call(new Object[0]);
+            Assert.assertTrue(secondTierTarget.compile(true));
+            secondTierTarget.call(new Object[0]);
         }
+    }
+
+    @Test
+    public void testCompilation() {
     }
 }
