@@ -131,19 +131,17 @@ public class IdentityFunctionTest {
     @Test
     public void testIdentityFunction() {
         Assume.assumeThat(testRun, TEST_RESULT_MATCHER);
-        boolean success = false;
+        Value result = null;
         try {
             try {
 
-                final Value result = testRun.getSnippet().getExecutableValue().execute(testRun.getActualParameters().toArray());
+                result = testRun.getSnippet().getExecutableValue().execute(testRun.getActualParameters().toArray());
                 TestUtil.validateResult(testRun, result, null);
-                success = true;
             } catch (PolyglotException pe) {
                 TestUtil.validateResult(testRun, null, pe);
-                success = true;
             }
         } finally {
-            TEST_RESULT_MATCHER.accept(new AbstractMap.SimpleImmutableEntry<>(testRun, success));
+            TEST_RESULT_MATCHER.accept(new AbstractMap.SimpleImmutableEntry<>(testRun, result != null));
         }
     }
 }
