@@ -29,8 +29,6 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.MapCursor;
 import org.graalvm.compiler.options.OptionKey;
 
-import com.oracle.svm.core.option.SubstrateOptionsParser;
-
 public interface HostedOptionProvider {
     EconomicMap<OptionKey<?>, Object> getHostedValues();
 
@@ -38,8 +36,8 @@ public interface HostedOptionProvider {
 
     default List<String> getAppliedArguments() {
         List<String> result = new ArrayList<>();
-        HostedOptionProviderHelper.addArguments(result, SubstrateOptionsParser.HOSTED_OPTION_PREFIX, getHostedValues());
-        HostedOptionProviderHelper.addArguments(result, SubstrateOptionsParser.RUNTIME_OPTION_PREFIX, getRuntimeValues());
+        HostedOptionProviderHelper.addArguments(result, HostedOptionParser.HOSTED_OPTION_PREFIX, getHostedValues());
+        HostedOptionProviderHelper.addArguments(result, HostedOptionParser.RUNTIME_OPTION_PREFIX, getRuntimeValues());
         return result;
     }
 }
