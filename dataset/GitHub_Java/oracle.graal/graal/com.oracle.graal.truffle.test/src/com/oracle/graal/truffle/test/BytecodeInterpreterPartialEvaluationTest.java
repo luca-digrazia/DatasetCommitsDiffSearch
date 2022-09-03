@@ -582,7 +582,6 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
     }
 
     @Test
-    @SuppressWarnings("try")
     public void simpleSwitchProgram() {
         byte[] bytecodes = new byte[]{
         /* 0: */Bytecode.CONST,
