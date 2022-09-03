@@ -59,33 +59,20 @@ public final class NamedLocationIdentity implements LocationIdentity {
     }
 
     /**
-     * Creates a named unique location identity for read and write operations against mutable
-     * memory.
+     * Creates a named unique location identity for read and write operations.
      *
      * @param name the name of the new location identity
      */
-    public static NamedLocationIdentity mutable(String name) {
+    public static NamedLocationIdentity create(String name) {
         return create(name, false);
-    }
-
-    /**
-     * Creates a named unique location identity for read operations against immutable memory.
-     * Immutable memory will never have a visible write in the graph, which is more restictive than
-     * Java final.
-     *
-     * @param name the name of the new location identity
-     */
-    public static NamedLocationIdentity immutable(String name) {
-        return create(name, true);
     }
 
     /**
      * Creates a named unique location identity for read and write operations.
      *
      * @param name the name of the new location identity
-     * @param immutable true if the location is immutable
      */
-    private static NamedLocationIdentity create(String name, boolean immutable) {
+    public static NamedLocationIdentity create(String name, boolean immutable) {
         return DB.register(new NamedLocationIdentity(name, immutable));
     }
 
@@ -136,7 +123,7 @@ public final class NamedLocationIdentity implements LocationIdentity {
     private static EnumMap<Kind, LocationIdentity> initArrayLocations() {
         EnumMap<Kind, LocationIdentity> result = new EnumMap<>(Kind.class);
         for (Kind kind : Kind.values()) {
-            result.put(kind, NamedLocationIdentity.mutable("Array: " + kind.getJavaName()));
+            result.put(kind, NamedLocationIdentity.create("Array: " + kind.getJavaName()));
         }
         return result;
     }

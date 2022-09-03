@@ -34,17 +34,17 @@ public interface LocationIdentity {
      * analysis of memory accesses. A read from this location cannot be moved or coalesced with
      * other reads because its interaction with other reads is not known.
      */
-    LocationIdentity ANY_LOCATION = NamedLocationIdentity.mutable("ANY_LOCATION");
+    LocationIdentity ANY_LOCATION = NamedLocationIdentity.create("ANY_LOCATION", false);
 
     /**
      * Denotes the location of a value that is guaranteed to be unchanging.
      */
-    LocationIdentity FINAL_LOCATION = NamedLocationIdentity.immutable("FINAL_LOCATION");
+    LocationIdentity FINAL_LOCATION = NamedLocationIdentity.create("FINAL_LOCATION", true);
 
     /**
      * Denotes the location of the length field of a Java array.
      */
-    LocationIdentity ARRAY_LENGTH_LOCATION = NamedLocationIdentity.immutable("[].length");
+    LocationIdentity ARRAY_LENGTH_LOCATION = NamedLocationIdentity.create("[].length", true);
 
     /**
      * Denotes a location is unchanging in all cases. Not that this is different than the Java
