@@ -24,6 +24,7 @@ package org.graalvm.compiler.truffle.runtime;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.dsl.Introspection;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeClass;
@@ -34,7 +35,6 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugDumpHandler;
 import org.graalvm.compiler.debug.DebugOptions;
 import org.graalvm.compiler.options.OptionValues;
-
 import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.graphio.GraphBlocks;
 import org.graalvm.graphio.GraphOutput;
@@ -93,7 +93,7 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
         final RootCallTarget callTarget = truffleTreeDump.callTarget;
         if (callTarget.getRootNode() != null && callTarget instanceof OptimizedCallTarget) {
             AST ast = new AST(callTarget);
-            final GraphOutput<AST, ?> astOutput = debug.buildOutput(GraphOutput.newBuilder(AST_DUMP_STRUCTURE).blocks(AST_DUMP_STRUCTURE));
+            final GraphOutput<AST, ?> astOutput = debug.buildOutput(GraphOutput.newBuilder(AST_DUMP_STRUCTURE).blocks(AST_DUMP_STRUCTURE).protocolVersion(6, 0));
 
             astOutput.beginGroup(ast, "AST", "AST", null, 0, DebugContext.addVersionProperties(null));
 
@@ -108,7 +108,7 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
             astOutput.close();
 
             CallTree callTree = new CallTree(truffleTreeDump.callTarget, null);
-            final GraphOutput<CallTree, ?> callTreeOutput = debug.buildOutput(GraphOutput.newBuilder(CALL_GRAPH_DUMP_STRUCTURE).blocks(CALL_GRAPH_DUMP_STRUCTURE));
+            final GraphOutput<CallTree, ?> callTreeOutput = debug.buildOutput(GraphOutput.newBuilder(CALL_GRAPH_DUMP_STRUCTURE).blocks(CALL_GRAPH_DUMP_STRUCTURE).protocolVersion(6, 0));
             callTreeOutput.beginGroup(null, "Call Tree", "Call Tree", null, 0, DebugContext.addVersionProperties(null));
             callTreeOutput.print(callTree, null, 0, AFTER_PROFILING);
             if (inlining.countInlinedCalls() > 0) {
@@ -339,20 +339,39 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
         ASTNode(Node source, int id) {
             this.source = source;
             this.id = id;
+            setNewClass();
+
+            setBasicProperties(properties, source);
+            readNodeProperties(this, source);
+            copyDebugProperties(this, source);
+
+        }
+
+        private static void setBasicProperties(Map<String, ? super Object> properties, Node source) {
             String className = className(source.getClass());
             properties.put("label", dropNodeSuffix(className));
+            properties.put("cost", source.getCost());
             NodeInfo nodeInfo = source.getClass().getAnnotation(NodeInfo.class);
-            setNewClass();
             if (nodeInfo != null) {
-                properties.put("cost", nodeInfo.cost());
                 if (!nodeInfo.shortName().isEmpty()) {
                     properties.put("shortName", nodeInfo.shortName());
                 }
             }
-
-            readNodeProperties(this, source);
-            copyDebugProperties(this, source);
-
+            if (Introspection.isIntrospectable(source)) {
+                final List<Introspection.SpecializationInfo> specializations = Introspection.getSpecializations(source);
+                for (Introspection.SpecializationInfo specialization : specializations) {
+                    final String methodName = specialization.getMethodName();
+                    properties.put(methodName + ".isActive", specialization.isActive());
+                    properties.put(methodName + ".isExcluded", specialization.isExcluded());
+                    properties.put(methodName + ".instances", specialization.getInstances());
+                    for (int i = 0; i < specialization.getInstances(); i++) {
+                        final List<Object> cachedData = specialization.getCachedData(i);
+                        for (Object o : cachedData) {
+                            properties.put(methodName + "-cachedData[" + i + "]", o);
+                        }
+                    }
+                }
+            }
         }
 
         static String className(Class<?> clazz) {
@@ -455,7 +474,7 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
 
         @Override
         public Object nodeClassType(ASTNodeClass nodeClass) {
-            return nodeClass.getClass();
+            return nodeClass.node.source.getClass();
         }
 
         @Override
@@ -526,6 +545,7 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
             root = makeCallTreeNode(target);
             inlined.nodes.add(root);
             root.properties.put("label", target.toString());
+            root.properties.putAll(((OptimizedCallTarget) target).getDebugProperties(null));
             build(target, root, inlining, this);
         }
 
@@ -560,7 +580,7 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
                         } else {
                             callTreeNode.properties.put("inlined", "false");
                             if (decision != null) {
-                                callTreeNode.properties.putAll(decision.getProfile().getDebugProperties());
+                                callTreeNode.properties.putAll(decision.getTarget().getDebugProperties(decision));
                             }
                             graph.notInlined.nodes.add(callTreeNode);
                         }
@@ -584,10 +604,32 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
         List<CallTreeEdge> edges = new ArrayList<>();
         final int id;
         final Map<String, ? super Object> properties = new HashMap<>();
+        final CallTreeClass c = new CallTreeClass();
 
         CallTreeNode(CallTarget source, int id) {
             this.source = source;
             this.id = id;
+        }
+
+        class CallTreeClass {
+            CallTreeNode getNode() {
+                return CallTreeNode.this;
+            }
+
+            @Override
+            public boolean equals(Object obj) {
+                if (!(obj instanceof CallTreeClass)) {
+                    return false;
+                }
+                CallTreeClass other = (CallTreeClass) obj;
+                return other.getNode() == CallTreeNode.this;
+            }
+
+            @Override
+            public int hashCode() {
+                return CallTreeNode.this.hashCode();
+            }
+
         }
     }
 
@@ -611,7 +653,7 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
     }
 
     static class CallTreeDumpStructure implements
-                    GraphStructure<CallTree, CallTreeNode, CallTreeNode, List<CallTreeEdge>>,
+                    GraphStructure<CallTree, CallTreeNode, CallTreeNode.CallTreeClass, List<CallTreeEdge>>,
                     GraphBlocks<CallTree, CallTreeBlock, CallTreeNode> {
 
         @Override
@@ -650,33 +692,33 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
         }
 
         @Override
-        public CallTreeNode nodeClass(Object obj) {
-            return obj instanceof CallTreeNode ? (CallTreeNode) obj : null;
+        public CallTreeNode.CallTreeClass nodeClass(Object obj) {
+            return obj instanceof CallTreeNode.CallTreeClass ? (CallTreeNode.CallTreeClass) obj : null;
         }
 
         @Override
-        public CallTreeNode classForNode(CallTreeNode node) {
-            return node;
+        public CallTreeNode.CallTreeClass classForNode(CallTreeNode node) {
+            return node.c;
         }
 
         @Override
-        public String nameTemplate(CallTreeNode nodeClass) {
+        public String nameTemplate(CallTreeNode.CallTreeClass nodeClass) {
             return "{p#label}";
         }
 
         @Override
-        public Object nodeClassType(CallTreeNode nodeClass) {
-            return nodeClass.source.getClass();
+        public Object nodeClassType(CallTreeNode.CallTreeClass nodeClass) {
+            return nodeClass.getNode().source.getClass();
         }
 
         @Override
-        public List<CallTreeEdge> portInputs(CallTreeNode nodeClass) {
+        public List<CallTreeEdge> portInputs(CallTreeNode.CallTreeClass nodeClass) {
             return Collections.emptyList();
         }
 
         @Override
-        public List<CallTreeEdge> portOutputs(CallTreeNode nodeClass) {
-            return nodeClass.edges;
+        public List<CallTreeEdge> portOutputs(CallTreeNode.CallTreeClass nodeClass) {
+            return nodeClass.getNode().edges;
         }
 
         @Override
