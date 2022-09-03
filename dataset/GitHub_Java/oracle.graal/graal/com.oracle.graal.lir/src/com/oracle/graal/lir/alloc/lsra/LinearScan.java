@@ -31,8 +31,8 @@ import java.util.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 import jdk.internal.jvmci.meta.*;
 import jdk.internal.jvmci.options.*;
 
@@ -115,7 +115,7 @@ class LinearScan {
     final List<? extends AbstractBlockBase<?>> sortedBlocks;
 
     /** @see #intervals() */
-    protected Interval[] intervals;
+    private Interval[] intervals;
 
     /**
      * The number of valid entries in {@link #intervals}.
