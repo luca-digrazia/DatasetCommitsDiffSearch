@@ -33,7 +33,6 @@ import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.*;
 import com.oracle.graal.word.*;
@@ -43,7 +42,7 @@ import com.oracle.graal.word.*;
  */
 public class PointerTest extends GraalCompilerTest implements Snippets {
 
-    private static final LocationIdentity ID = LocationNode.createLocation("ID");
+    private static final Object ID = new Object();
     private static final Kind[] KINDS = new Kind[]{Kind.Byte, Kind.Char, Kind.Short, Kind.Int, Kind.Long, Kind.Float, Kind.Double, Kind.Object};
     private final TargetDescription target;
     private final ReplacementsImpl installer;
@@ -103,7 +102,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
         }
     }
 
-    private void assertRead(StructuredGraph graph, Kind kind, boolean indexConvert, LocationIdentity locationIdentity) {
+    private void assertRead(StructuredGraph graph, Kind kind, boolean indexConvert, Object locationIdentity) {
         ReadNode read = (ReadNode) graph.start().next();
         Assert.assertEquals(kind.getStackKind(), read.kind());
 
@@ -128,7 +127,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
         Assert.assertEquals(read, ret.result());
     }
 
-    private void assertWrite(StructuredGraph graph, Kind kind, boolean indexConvert, LocationIdentity locationIdentity) {
+    private void assertWrite(StructuredGraph graph, Kind kind, boolean indexConvert, Object locationIdentity) {
         WriteNode write = (WriteNode) graph.start().next();
         Assert.assertEquals(graph.getLocal(2), write.value());
         Assert.assertEquals(Kind.Void, write.kind());

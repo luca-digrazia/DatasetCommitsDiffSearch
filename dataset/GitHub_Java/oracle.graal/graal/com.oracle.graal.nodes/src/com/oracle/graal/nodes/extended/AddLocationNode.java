@@ -64,7 +64,7 @@ public final class AddLocationNode extends LocationNode implements Canonicalizab
     }
 
     @Override
-    public LocationIdentity getLocationIdentity() {
+    public Object getLocationIdentity() {
         return getX().getLocationIdentity();
     }
 
