@@ -39,12 +39,11 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
 @GenerateWrapper
 public abstract class LLVMConditionalBranchNode extends LLVMControlFlowNode implements InstrumentableNode {
 
-    public static LLVMConditionalBranchNode create(int trueSuccessor, int falseSuccessor, LLVMStatementNode truePhi, LLVMStatementNode falsePhi, LLVMExpressionNode condition,
+    public static LLVMConditionalBranchNode create(int trueSuccessor, int falseSuccessor, LLVMExpressionNode truePhi, LLVMExpressionNode falsePhi, LLVMExpressionNode condition,
                     LLVMSourceLocation sourceSection) {
         return new LLVMConditionalBranchNodeImpl(trueSuccessor, falseSuccessor, truePhi, falsePhi, condition, sourceSection);
     }
@@ -79,12 +78,12 @@ public abstract class LLVMConditionalBranchNode extends LLVMControlFlowNode impl
     private static final class LLVMConditionalBranchNodeImpl extends LLVMConditionalBranchNode {
 
         @Child private LLVMExpressionNode condition;
-        @Child private LLVMStatementNode truePhi;
-        @Child private LLVMStatementNode falsePhi;
+        @Child private LLVMExpressionNode truePhi;
+        @Child private LLVMExpressionNode falsePhi;
         private final int trueSuccessor;
         private final int falseSuccessor;
 
-        private LLVMConditionalBranchNodeImpl(int trueSuccessor, int falseSuccessor, LLVMStatementNode truePhi, LLVMStatementNode falsePhi, LLVMExpressionNode condition,
+        private LLVMConditionalBranchNodeImpl(int trueSuccessor, int falseSuccessor, LLVMExpressionNode truePhi, LLVMExpressionNode falsePhi, LLVMExpressionNode condition,
                         LLVMSourceLocation sourceSection) {
             super(sourceSection);
             this.trueSuccessor = trueSuccessor;
@@ -100,7 +99,7 @@ public abstract class LLVMConditionalBranchNode extends LLVMControlFlowNode impl
         }
 
         @Override
-        public LLVMStatementNode getPhiNode(int successorIndex) {
+        public LLVMExpressionNode getPhiNode(int successorIndex) {
             CompilerAsserts.partialEvaluationConstant(successorIndex);
             if (successorIndex == TRUE_SUCCESSOR) {
                 return truePhi;
