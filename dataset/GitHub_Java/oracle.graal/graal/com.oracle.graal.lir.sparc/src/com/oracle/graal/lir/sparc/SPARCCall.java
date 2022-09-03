@@ -32,6 +32,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.nodes.spi.*;
 
 public class SPARCCall {
 
@@ -52,9 +53,7 @@ public class SPARCCall {
 
         @Override
         public boolean destroysCallerSavedRegisters() {
-            // On SPARC we never destroy caller saved registers since they are automatically saved
-            // in the register window.
-            return false;
+            return true;
         }
     }
 
@@ -115,9 +114,7 @@ public class SPARCCall {
 
         @Override
         public boolean destroysCallerSavedRegisters() {
-            // On SPARC we never destroy caller saved registers since they are automatically saved
-            // in the register window.
-            return false;
+            return callTarget.destroysRegisters();
         }
     }
 
@@ -137,13 +134,16 @@ public class SPARCCall {
     @Opcode("FAR_FOREIGN_CALL")
     public static class DirectFarForeignCallOp extends ForeignCallOp {
 
-        public DirectFarForeignCallOp(ForeignCallLinkage callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
+        @Temp({REG}) protected AllocatableValue callTemp;
+
+        public DirectFarForeignCallOp(LIRGeneratorTool gen, ForeignCallLinkage callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
             super(callTarget, result, parameters, temps, state);
+            callTemp = gen.newVariable(Kind.Long);
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
-            directCall(tasm, masm, callTarget, o7, false, state);
+            directCall(tasm, masm, callTarget, ((RegisterValue) callTemp).getRegister(), false, state);
         }
     }
 
@@ -156,13 +156,14 @@ public class SPARCCall {
             // offset might not fit a 30-bit displacement, generate an
             // indirect call with a 64-bit immediate
             new Sethix(0L, scratch, true).emit(masm);
-            new Jmpl(scratch, 0, o7).emit(masm);
+            new Jmpl(scratch, 0, r15).emit(masm);
         } else {
             new Call(0).emit(masm);
         }
         int after = masm.codeBuffer.position();
         tasm.recordDirectCall(before, after, callTarget, info);
         tasm.recordExceptionHandlers(after, info);
+// masm.ensureUniquePC();
         new Nop().emit(masm);  // delay slot
     }
 
@@ -172,15 +173,17 @@ public class SPARCCall {
         new Jmp(new SPARCAddress(dst, 0)).emit(masm);
         int after = masm.codeBuffer.position();
         tasm.recordIndirectCall(before, after, target, null);
+// masm.ensureUniquePC();
         new Nop().emit(masm);  // delay slot
     }
 
     public static void indirectCall(TargetMethodAssembler tasm, SPARCMacroAssembler masm, Register dst, InvokeTarget callTarget, LIRFrameState info) {
         int before = masm.codeBuffer.position();
-        new Jmpl(dst, 0, o7).emit(masm);
+        new Jmpl(dst, 0, r15).emit(masm);
         int after = masm.codeBuffer.position();
         tasm.recordIndirectCall(before, after, callTarget, info);
         tasm.recordExceptionHandlers(after, info);
+// masm.ensureUniquePC();
         new Nop().emit(masm);  // delay slot
     }
 }
