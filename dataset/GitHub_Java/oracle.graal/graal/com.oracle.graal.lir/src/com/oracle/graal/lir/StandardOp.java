@@ -27,14 +27,13 @@ import static com.oracle.graal.lir.LIRValueUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.framemap.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * A collection of machine-independent LIR operations, as well as interfaces to be implemented for
@@ -224,7 +223,7 @@ public class StandardOp {
     }
 
     /**
-     * An operation that takes one input and stores it in a stack slot as well as to an ordinary
+     * An operation that takes one input and stores it in a stack slot as well as on an ordinary
      * variable.
      */
     public interface StackStoreOp {
@@ -263,12 +262,6 @@ public class StandardOp {
             List<LIRInstruction> instructions = lir.getLIRforBlock(block);
             assert instructions.get(index).equals(this) : String.format("Replacing the wrong instruction: %s instead of %s", instructions.get(index), this);
             instructions.set(index, replacement);
-        }
-
-        public void remove(LIR lir) {
-            List<LIRInstruction> instructions = lir.getLIRforBlock(block);
-            assert instructions.get(index).equals(this) : String.format("Removing the wrong instruction: %s instead of %s", instructions.get(index), this);
-            instructions.remove(index);
         }
 
         @Override
