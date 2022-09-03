@@ -29,6 +29,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.Lowerable.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 
@@ -83,8 +84,8 @@ public class ReadAfterCheckCastTest extends GraphScheduleTest {
             // structure changes significantly
             public void run() {
                 StructuredGraph graph = parse(snippet);
-                PhaseContext context = new PhaseContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), new Assumptions(false), replacements);
-                new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, context);
+                PhaseContext context = new PhaseContext(runtime(), new Assumptions(false), replacements);
+                new LoweringPhase(LoweringType.BEFORE_GUARDS).apply(graph, context);
                 new FloatingReadPhase().apply(graph);
                 new EliminatePartiallyRedundantGuardsPhase(true, false).apply(graph);
                 new ReadEliminationPhase().apply(graph);

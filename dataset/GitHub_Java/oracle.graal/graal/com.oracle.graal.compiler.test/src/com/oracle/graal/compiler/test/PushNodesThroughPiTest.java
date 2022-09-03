@@ -47,18 +47,12 @@ public class PushNodesThroughPiTest extends GraalCompilerTest {
         public long y = 10;
     }
 
-    public static class C extends B {
-
-        public long z = 5;
-    }
-
     public static long test1Snippet(A a) {
-        C c = (C) a;
-        long ret = c.x; // this can be pushed before the checkcast
-        ret += c.y; // not allowed to push
-        ret += c.z; // not allowed to push
+        B b = (B) a;
+        long ret = b.x; // this can be moved before the checkcast
+        ret += b.y;
         // the null-check should be canonicalized with the null-check of the checkcast
-        ret += c != null ? 100 : 200;
+        ret += b != null ? 100 : 200;
         return ret;
     }
 
@@ -70,20 +64,24 @@ public class PushNodesThroughPiTest extends GraalCompilerTest {
             public void run() {
                 StructuredGraph graph = compileTestSnippet(snippet);
 
+                int counter = 0;
                 for (ReadNode rn : graph.getNodes().filter(ReadNode.class)) {
                     if (rn.location() instanceof ConstantLocationNode && rn.object().stamp() instanceof ObjectStamp) {
                         long disp = ((ConstantLocationNode) rn.location()).getDisplacement();
-                        ResolvedJavaType receiverType = ObjectStamp.typeOrNull(rn.object());
+                        ResolvedJavaType receiverType = rn.object().objectStamp().type();
                         ResolvedJavaField field = receiverType.findInstanceFieldWithOffset(disp);
 
-                        assert field != null : "Node " + rn + " tries to access a field which doesn't exists for this type";
-                        if (field.getName().equals("x")) {
-                            Assert.assertTrue(rn.object() instanceof LocalNode);
-                        } else {
-                            Assert.assertTrue(rn.object().toString(), rn.object() instanceof PiNode);
+                        if (field != null) {
+                            if (field.getName().equals("x")) {
+                                Assert.assertTrue(rn.object() instanceof LocalNode);
+                            } else {
+                                Assert.assertTrue(rn.object().toString(), rn.object() instanceof PiNode);
+                            }
+                            counter++;
                         }
                     }
                 }
+                Assert.assertEquals(2, counter);
 
                 Assert.assertTrue(graph.getNodes().filter(IsNullNode.class).count() == 1);
             }

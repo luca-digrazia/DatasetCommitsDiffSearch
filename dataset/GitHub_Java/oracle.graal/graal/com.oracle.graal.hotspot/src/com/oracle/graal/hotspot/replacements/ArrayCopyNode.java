@@ -30,9 +30,7 @@ import com.oracle.graal.graph.Node.IterableNodeType;
 import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
-import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.nodes.*;
@@ -64,13 +62,13 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
     }
 
     private StructuredGraph selectSnippet(LoweringTool tool, Replacements replacements) {
-        ResolvedJavaType srcType = ObjectStamp.typeOrNull(getSource().stamp());
-        ResolvedJavaType destType = ObjectStamp.typeOrNull(getDestination().stamp());
+        ResolvedJavaType srcType = getSource().objectStamp().type();
+        ResolvedJavaType destType = getDestination().objectStamp().type();
 
         if (srcType == null || !srcType.isArray() || destType == null || !destType.isArray()) {
             return null;
         }
-        if (!destType.getComponentType().isAssignableFrom(srcType.getComponentType()) || !ObjectStamp.isExactType(getDestination().stamp())) {
+        if (!destType.getComponentType().isAssignableFrom(srcType.getComponentType()) || !getDestination().objectStamp().isExactType()) {
             return null;
         }
         Kind componentKind = srcType.getComponentType().getKind();
@@ -106,7 +104,7 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
         } else {
             assert snippetGraph != null : "ArrayCopySnippets should be installed";
 
-            if (getLength().isConstant() && getLength().asConstant().asInt() <= GraalOptions.MaximumEscapeAnalysisArrayLength.getValue()) {
+            if (getLength().isConstant()) {
                 snippetGraph = snippetGraph.copy();
                 unrollFixedLengthLoop(snippetGraph, getLength().asConstant().asInt(), tool);
             }
@@ -128,10 +126,10 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
                     if (state.getState() == EscapeState.Virtual) {
                         type = state.getVirtualObject().type();
                     } else {
-                        type = ObjectStamp.typeOrNull(state.getMaterializedValue());
+                        type = state.getMaterializedValue().objectStamp().type();
                     }
                 } else {
-                    type = ObjectStamp.typeOrNull(entry);
+                    type = entry.objectStamp().type();
                 }
                 if (type == null || !destComponentType.isAssignableFrom(type)) {
                     return false;
