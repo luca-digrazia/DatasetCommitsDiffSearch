@@ -90,18 +90,14 @@ public class CompilationPolicy {
 
     public boolean compileOrInline() {
         if (invokeCounter <= 0 && loopAndInvokeCounter <= 0) {
-            if (TruffleUseTimeForCompilationDecision.getValue()) {
-                long timestamp = System.currentTimeMillis();
-                if ((timestamp - prevTimestamp) < TruffleCompilationDecisionTime.getValue()) {
-                    return true;
-                }
-                this.invokeCounter = initialInvokeCounter;
-                this.loopAndInvokeCounter = compilationThreshold;
-                this.originalInvokeCounter = compilationThreshold;
-                this.prevTimestamp = timestamp;
-            } else {
+            long timestamp = System.currentTimeMillis();
+            if ((timestamp - prevTimestamp) < 100) {
                 return true;
             }
+            this.invokeCounter = initialInvokeCounter;
+            this.loopAndInvokeCounter = compilationThreshold;
+            this.originalInvokeCounter = compilationThreshold;
+            this.prevTimestamp = timestamp;
         }
         return false;
     }
