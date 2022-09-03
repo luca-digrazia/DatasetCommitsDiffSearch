@@ -87,20 +87,10 @@ public final class LLVMNativeMemory extends LLVMMemory {
     private LLVMNativeMemory() {
     }
 
-    /**
-     * Checks for pointers that are in the negative range or below 1mb, to detect common invalid
-     * addresses before they cause a segmentation fault.
-     */
-    private static boolean checkPointer(long ptr) {
-        assert ptr > 0x100000 : "trying to access invalid address: " + ptr + " 0x" + Long.toHexString(ptr);
-        return true;
-    }
-
     @Override
     @Deprecated
     @SuppressWarnings("deprecation")
     public void memset(LLVMNativePointer address, long size, byte value) {
-        assert size == 0 || checkPointer(address.asNative());
         try {
             unsafe.setMemory(address.asNative(), size, value);
         } catch (Throwable e) {
@@ -114,7 +104,6 @@ public final class LLVMNativeMemory extends LLVMMemory {
     @Deprecated
     @SuppressWarnings("deprecation")
     public void copyMemory(long sourceAddress, long targetAddress, long length) {
-        assert length == 0 || checkPointer(sourceAddress) && checkPointer(targetAddress);
         unsafe.copyMemory(sourceAddress, targetAddress, length);
     }
 
@@ -182,7 +171,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public boolean getI1(long ptr) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         return unsafe.getByte(ptr) != 0;
     }
 
@@ -193,7 +182,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public byte getI8(long ptr) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         return unsafe.getByte(ptr);
     }
 
@@ -204,7 +193,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public short getI16(long ptr) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         return unsafe.getShort(ptr);
     }
 
@@ -215,7 +204,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public int getI32(long ptr) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         return unsafe.getInt(ptr);
     }
 
@@ -242,7 +231,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public long getI64(long ptr) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         return unsafe.getLong(ptr);
     }
 
@@ -253,7 +242,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public float getFloat(long ptr) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         return unsafe.getFloat(ptr);
     }
 
@@ -264,7 +253,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public double getDouble(long ptr) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         return unsafe.getDouble(ptr);
     }
 
@@ -286,7 +275,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public LLVMNativePointer getPointer(long ptr) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         return LLVMNativePointer.create(unsafe.getAddress(ptr));
     }
 
@@ -297,7 +286,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public void putI1(long ptr, boolean value) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         unsafe.putByte(ptr, (byte) (value ? 1 : 0));
     }
 
@@ -308,7 +297,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public void putI8(long ptr, byte value) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         unsafe.putByte(ptr, value);
     }
 
@@ -319,7 +308,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public void putI16(long ptr, short value) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         unsafe.putShort(ptr, value);
     }
 
@@ -330,7 +319,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public void putI32(long ptr, int value) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         unsafe.putInt(ptr, value);
     }
 
@@ -341,7 +330,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public void putI64(long ptr, long value) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         unsafe.putLong(ptr, value);
     }
 
@@ -376,7 +365,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public void putFloat(long ptr, float value) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         unsafe.putFloat(ptr, value);
     }
 
@@ -387,7 +376,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public void putDouble(long ptr, double value) {
-        assert checkPointer(ptr);
+        assert ptr != 0;
         unsafe.putDouble(ptr, value);
     }
 
@@ -424,7 +413,6 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public CMPXCHGI32 compareAndSwapI32(LLVMNativePointer p, int comparisonValue, int newValue) {
-        assert checkPointer(p.asNative());
         while (true) {
             boolean b = unsafe.compareAndSwapInt(null, p.asNative(), comparisonValue, newValue);
             if (CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, b)) {
@@ -442,7 +430,6 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public CMPXCHGI64 compareAndSwapI64(LLVMNativePointer p, long comparisonValue, long newValue) {
-        assert checkPointer(p.asNative());
         while (true) {
             boolean b = unsafe.compareAndSwapLong(null, p.asNative(), comparisonValue, newValue);
             if (CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, b)) {
@@ -478,7 +465,6 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public CMPXCHGI8 compareAndSwapI8(LLVMNativePointer p, byte comparisonValue, byte newValue) {
-        assert checkPointer(p.asNative());
         int byteIndex = getI8Index(p.asNative());
         long address = alignToI32(p.asNative());
         while (true) {
@@ -513,7 +499,6 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public CMPXCHGI16 compareAndSwapI16(LLVMNativePointer p, short comparisonValue, short newValue) {
-        assert checkPointer(p.asNative());
         int idx = getI16Index(p.asNative());
         long address = alignToI32(p.asNative());
         while (true) {
@@ -535,25 +520,21 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public long getAndSetI64(LLVMNativePointer address, long value) {
-        assert checkPointer(address.asNative());
         return unsafe.getAndSetLong(null, address.asNative(), value);
     }
 
     @Override
     public long getAndAddI64(LLVMNativePointer address, long value) {
-        assert checkPointer(address.asNative());
         return unsafe.getAndAddLong(null, address.asNative(), value);
     }
 
     @Override
     public long getAndSubI64(LLVMNativePointer address, long value) {
-        assert checkPointer(address.asNative());
         return unsafe.getAndAddLong(null, address.asNative(), -value);
     }
 
     @Override
     public long getAndOpI64(LLVMNativePointer address, long value, LongBinaryOperator f) {
-        assert checkPointer(address.asNative());
         long addr = address.asNative();
         long old;
         long nevv;
@@ -566,25 +547,21 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public int getAndSetI32(LLVMNativePointer address, int value) {
-        assert checkPointer(address.asNative());
         return unsafe.getAndSetInt(null, address.asNative(), value);
     }
 
     @Override
     public int getAndAddI32(LLVMNativePointer address, int value) {
-        assert checkPointer(address.asNative());
         return unsafe.getAndAddInt(null, address.asNative(), value);
     }
 
     @Override
     public int getAndSubI32(LLVMNativePointer address, int value) {
-        assert checkPointer(address.asNative());
         return unsafe.getAndAddInt(null, address.asNative(), -value);
     }
 
     @Override
     public int getAndOpI32(LLVMNativePointer address, int value, IntBinaryOperator f) {
-        assert checkPointer(address.asNative());
         long addr = address.asNative();
         int old;
         int nevv;
