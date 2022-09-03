@@ -129,9 +129,9 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
                 assert checkedStamp.nonNull() != inputStamp.nonNull();
                 // The only difference makes the null-ness of the value => simplify the check.
                 if (checkedStamp.nonNull()) {
-                    return LogicNegationNode.create(IsNullNode.create(object));
+                    return LogicNegationNode.create(new IsNullNode(object));
                 } else {
-                    return IsNullNode.create(object);
+                    return new IsNullNode(object);
                 }
             }
         }

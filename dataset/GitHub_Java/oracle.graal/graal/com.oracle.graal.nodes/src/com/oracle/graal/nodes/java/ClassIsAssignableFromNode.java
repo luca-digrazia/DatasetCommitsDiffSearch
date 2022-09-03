@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,44 +22,45 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_30;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_30;
+
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.BinaryOpLogicNode;
+import com.oracle.graal.nodes.LogicConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.TriState;
 
 /**
  * The {@code ClassIsAssignableFromNode} represents a type check against {@link Class} instead of
  * against instances. This is used, for instance, to intrinsify
  * {@link Class#isAssignableFrom(Class)} .
  */
-@NodeInfo
-public final class ClassIsAssignableFromNode extends LogicNode implements Canonicalizable.Binary<ValueNode>, Lowerable {
-    @Input ValueNode thisClass;
-    @Input ValueNode otherClass;
+@NodeInfo(cycles = CYCLES_30, size = SIZE_30)
+public final class ClassIsAssignableFromNode extends BinaryOpLogicNode implements Canonicalizable.Binary<ValueNode>, Lowerable {
+
+    public static final NodeClass<ClassIsAssignableFromNode> TYPE = NodeClass.create(ClassIsAssignableFromNode.class);
 
     public ClassIsAssignableFromNode(ValueNode thisClass, ValueNode otherClass) {
-        this.thisClass = thisClass;
-        this.otherClass = otherClass;
+        super(TYPE, thisClass, otherClass);
     }
 
     public Object getThisClass() {
-        return thisClass;
+        return getX();
     }
 
     public Object getOtherClass() {
-        return otherClass;
-    }
-
-    @Override
-    public ValueNode getX() {
-        return thisClass;
-    }
-
-    @Override
-    public ValueNode getY() {
-        return otherClass;
+        return getY();
     }
 
     @Override
@@ -78,6 +79,21 @@ public final class ClassIsAssignableFromNode extends LogicNode implements Canoni
     @Override
     public void lower(LoweringTool tool) {
         tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
+    public Stamp getSucceedingStampForX(boolean negated) {
+        return null;
+    }
+
+    @Override
+    public Stamp getSucceedingStampForY(boolean negated) {
+        return null;
+    }
+
+    @Override
+    public TriState tryFold(Stamp xStamp, Stamp yStamp) {
+        return TriState.UNKNOWN;
     }
 
 }

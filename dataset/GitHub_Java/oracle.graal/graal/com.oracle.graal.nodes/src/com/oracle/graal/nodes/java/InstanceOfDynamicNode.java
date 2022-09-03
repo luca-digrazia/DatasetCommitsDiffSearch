@@ -90,7 +90,7 @@ public class InstanceOfDynamicNode extends BinaryOpLogicNode implements Canonica
             if (t != null) {
                 if (t.isPrimitive()) {
                     if (allowNull) {
-                        return IsNullNode.create(forObject);
+                        return new IsNullNode(forObject);
                     } else {
                         return LogicConstantNode.contradiction();
                     }
