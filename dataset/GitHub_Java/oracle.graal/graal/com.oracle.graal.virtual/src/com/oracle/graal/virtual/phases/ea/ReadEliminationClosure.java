@@ -288,26 +288,21 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
 
         private void mergeReadCachePhi(PhiNode phi, CacheEntry<?> identifier, List<ReadEliminationBlockState> states) {
             ValueNode[] values = new ValueNode[states.size()];
-            values[0] = states.get(0).getCacheEntry(identifier.duplicateWithObject(getPhiValueAt(phi, 0)));
-            if (values[0] != null) {
-                for (int i = 1; i < states.size(); i++) {
-                    ValueNode value = states.get(i).getCacheEntry(identifier.duplicateWithObject(getPhiValueAt(phi, i)));
-                    // e.g. unsafe loads / stores with same identity and different access kinds see
-                    // mergeReadCache(states)
-                    if (value == null || !values[i - 1].stamp().isCompatible(value.stamp())) {
-                        return;
-                    }
-                    values[i] = value;
+            for (int i = 0; i < states.size(); i++) {
+                ValueNode value = states.get(i).getCacheEntry(identifier.duplicateWithObject(getPhiValueAt(phi, i)));
+                if (value == null) {
+                    return;
                 }
-
-                CacheEntry<?> newIdentifier = identifier.duplicateWithObject(phi);
-                PhiNode phiNode = getCachedPhi(newIdentifier, values[0].stamp().unrestricted());
-                mergeEffects.addFloatingNode(phiNode, "mergeReadCachePhi");
-                for (int i = 0; i < values.length; i++) {
-                    setPhiInput(phiNode, i, values[i]);
-                }
-                newState.addCacheEntry(newIdentifier, phiNode);
+                values[i] = value;
             }
+
+            CacheEntry<?> newIdentifier = identifier.duplicateWithObject(phi);
+            PhiNode phiNode = getCachedPhi(newIdentifier, values[0].stamp().unrestricted());
+            mergeEffects.addFloatingNode(phiNode, "mergeReadCachePhi");
+            for (int i = 0; i < values.length; i++) {
+                setPhiInput(phiNode, i, values[i]);
+            }
+            newState.addCacheEntry(newIdentifier, phiNode);
         }
     }
 }
