@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,18 +20,20 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.max.graal.nodes.java;
+package com.oracle.max.graal.nodes.extended;
 
 import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
 
 /**
- * This node is used to perform the finalizer registration at the end of the java.lang.Object constructor.
+ * The ValueAnchor instruction keeps non-CFG (floating) nodes above a certain point in the graph.
  */
-public final class RegisterFinalizerNode extends AbstractStateSplit implements Canonicalizable, LIRLowerable {
+
+public final class ValueAnchorNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType {
 
     @Input private ValueNode object;
 
@@ -39,41 +41,33 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements C
         return object;
     }
 
-    public RegisterFinalizerNode(ValueNode object) {
+    public ValueAnchorNode(ValueNode object) {
         super(StampFactory.illegal());
         this.object = object;
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.emitCallToRuntime(CiRuntimeCall.RegisterFinalizer, true, gen.operand(object()));
+        // Nothing to emit, since this is node is used for structural purposes only.
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        RiResolvedType declaredType = object.declaredType();
-        RiResolvedType exactType = object.exactType();
-        if (exactType == null && declaredType != null) {
-            exactType = declaredType.exactType();
+        if (object == null) {
+            return null;
         }
-
-        boolean needsCheck = true;
-        if (exactType != null) {
-            // we have an exact type
-            needsCheck = exactType.hasFinalizer();
-        } else {
-            // if either the declared type of receiver or the holder can be assumed to have no finalizers
-            if (declaredType != null && !declaredType.hasFinalizableSubclass()) {
-                if (tool.assumptions() != null && tool.assumptions().recordNoFinalizableSubclassAssumption(declaredType)) {
-                    needsCheck = false;
+        if (object instanceof ConstantNode) {
+            return null;
+        }
+        if (object instanceof IntegerDivNode || object instanceof IntegerRemNode) {
+            if (((ArithmeticNode) object).y().isConstant()) {
+                CiConstant  constant = ((ArithmeticNode) object).y().asConstant();
+                assert constant.kind == object.kind() : constant.kind + " != " + object.kind();
+                if (constant.asLong() != 0) {
+                    return null;
                 }
             }
         }
-
-        if (!needsCheck) {
-            return null;
-        }
-
         return this;
     }
 }

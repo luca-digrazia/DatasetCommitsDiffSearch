@@ -37,7 +37,6 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
 
     @Input private final MethodCallTargetNode callTarget;
     private final int bci;
-    private boolean useForInlining;
 
     /**
      * Constructs a new Invoke instruction.
@@ -51,20 +50,10 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
         super(callTarget.returnStamp());
         this.callTarget = callTarget;
         this.bci = bci;
-        this.useForInlining = true;
     }
 
     public MethodCallTargetNode callTarget() {
         return callTarget;
-    }
-
-    public boolean useForInlining() {
-        return useForInlining;
-    }
-
-    @Override
-    public void setUseForInlining(boolean value) {
-        this.useForInlining = value;
     }
 
     @Override

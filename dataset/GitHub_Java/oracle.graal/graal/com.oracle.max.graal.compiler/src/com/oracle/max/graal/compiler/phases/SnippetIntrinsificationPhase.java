@@ -169,33 +169,36 @@ public class SnippetIntrinsificationPhase extends Phase {
     public void cleanUpReturnCheckCast(Node newInstance) {
         if (newInstance instanceof ValueNode && ((ValueNode) newInstance).kind() != CiKind.Object) {
             StructuredGraph graph = (StructuredGraph) newInstance.graph();
-            for (CheckCastNode checkCastNode : newInstance.usages().filter(CheckCastNode.class).snapshot()) {
-                for (Node checkCastUsage : checkCastNode.usages().snapshot()) {
-                    if (checkCastUsage instanceof ValueAnchorNode) {
-                        ValueAnchorNode valueAnchorNode = (ValueAnchorNode) checkCastUsage;
-                        graph.removeFixed(valueAnchorNode);
-                    } else if (checkCastUsage instanceof MethodCallTargetNode) {
-                        MethodCallTargetNode checkCastCallTarget = (MethodCallTargetNode) checkCastUsage;
-                        assert pool.isUnboxingMethod(checkCastCallTarget.targetMethod());
-                        Invoke invokeNode = checkCastCallTarget.invoke();
-                        invokeNode.node().replaceAtUsages(newInstance);
-                        if (invokeNode instanceof InvokeWithExceptionNode) {
-                            // Destroy exception edge & clear stateAfter.
-                            InvokeWithExceptionNode invokeWithExceptionNode = (InvokeWithExceptionNode) invokeNode;
+            for (Node usage : newInstance.usages().snapshot()) {
+                if (usage instanceof CheckCastNode) {
+                    CheckCastNode checkCastNode = (CheckCastNode) usage;
+                    for (Node checkCastUsage : checkCastNode.usages().snapshot()) {
+                        if (checkCastUsage instanceof ValueAnchorNode) {
+                            ValueAnchorNode valueAnchorNode = (ValueAnchorNode) checkCastUsage;
+                            graph.removeFixed(valueAnchorNode);
+                        } else if (checkCastUsage instanceof MethodCallTargetNode) {
+                            MethodCallTargetNode checkCastCallTarget = (MethodCallTargetNode) checkCastUsage;
+                            assert pool.isUnboxingMethod(checkCastCallTarget.targetMethod());
+                            Invoke invokeNode = checkCastCallTarget.invoke();
+                            invokeNode.node().replaceAtUsages(newInstance);
+                            if (invokeNode instanceof InvokeWithExceptionNode) {
+                                // Destroy exception edge & clear stateAfter.
+                                InvokeWithExceptionNode invokeWithExceptionNode = (InvokeWithExceptionNode) invokeNode;
 
-                            invokeWithExceptionNode.killExceptionEdge();
-                            graph.removeSplit(invokeWithExceptionNode, InvokeWithExceptionNode.NORMAL_EDGE);
+                                invokeWithExceptionNode.killExceptionEdge();
+                                graph.removeSplit(invokeWithExceptionNode, InvokeWithExceptionNode.NORMAL_EDGE);
+                            } else {
+                                graph.removeFixed((InvokeNode) invokeNode);
+                            }
+                            checkCastCallTarget.safeDelete();
+                        } else if (checkCastUsage instanceof FrameState) {
+                            checkCastUsage.replaceFirstInput(checkCastNode, null);
                         } else {
-                            graph.removeFixed((InvokeNode) invokeNode);
+                            assert false : "unexpected checkcast usage: " + checkCastUsage;
                         }
-                        checkCastCallTarget.safeDelete();
-                    } else if (checkCastUsage instanceof FrameState) {
-                        checkCastUsage.replaceFirstInput(checkCastNode, null);
-                    } else {
-                        assert false : "unexpected checkcast usage: " + checkCastUsage;
                     }
+                    checkCastNode.safeDelete();
                 }
-                checkCastNode.safeDelete();
             }
         }
     }
