@@ -284,6 +284,7 @@ public class EspressoRootNode extends RootNode {
         return getMethod().getDeclaringClass().getName() +
                         "." + getMethod().getName() +
                         " " + getMethod().getSignature().toString();
+
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -297,6 +298,10 @@ public class EspressoRootNode extends RootNode {
         FrameSlot[] slots = getFrameDescriptor().getSlots().toArray(new FrameSlot[0]);
         locals = Arrays.copyOf(slots, slots.length - 1);
         stackSlot = slots[slots.length - 1];
+    }
+
+    public InterpreterToVM getVm() {
+        return vm;
     }
 
     public MethodInfo getMethod() {
@@ -321,6 +326,7 @@ public class EspressoRootNode extends RootNode {
         int curBCI = 0;
 
         // slots = locals... + stack
+
         final OperandStack stack = new OperandStack(method.getMaxStackSize());
         frame.setObject(stackSlot, stack);
 
@@ -463,28 +469,28 @@ public class EspressoRootNode extends RootNode {
                         stack.pushObject(frame.getObject(locals[3]));
                         break;
                     case IALOAD:
-                        stack.pushInt(vm.getArrayInt(stack.popInt(), nullCheck(stack.popObject())));
+                        stack.pushInt(vm.getArrayInt(stack.popInt(), stack.popObject()));
                         break;
                     case LALOAD:
-                        stack.pushLong(vm.getArrayLong(stack.popInt(), nullCheck(stack.popObject())));
+                        stack.pushLong(vm.getArrayLong(stack.popInt(), stack.popObject()));
                         break;
                     case FALOAD:
-                        stack.pushFloat(vm.getArrayFloat(stack.popInt(), nullCheck(stack.popObject())));
+                        stack.pushFloat(vm.getArrayFloat(stack.popInt(), stack.popObject()));
                         break;
                     case DALOAD:
-                        stack.pushDouble(vm.getArrayDouble(stack.popInt(), nullCheck(stack.popObject())));
+                        stack.pushDouble(vm.getArrayDouble(stack.popInt(), stack.popObject()));
                         break;
                     case AALOAD:
-                        stack.pushObject(vm.getArrayObject(stack.popInt(), nullCheck(stack.popObject())));
+                        stack.pushObject(vm.getArrayObject(stack.popInt(), stack.popObject()));
                         break;
                     case BALOAD:
-                        stack.pushInt(vm.getArrayByte(stack.popInt(), nullCheck(stack.popObject())));
+                        stack.pushInt(vm.getArrayByte(stack.popInt(), stack.popObject()));
                         break;
                     case CALOAD:
-                        stack.pushInt(vm.getArrayChar(stack.popInt(), nullCheck(stack.popObject())));
+                        stack.pushInt(vm.getArrayChar(stack.popInt(), stack.popObject()));
                         break;
                     case SALOAD:
-                        stack.pushInt(vm.getArrayShort(stack.popInt(), nullCheck(stack.popObject())));
+                        stack.pushInt(vm.getArrayShort(stack.popInt(), stack.popObject()));
                         break;
                     case ISTORE:
                         frame.setInt(locals[bs.readLocalIndex(curBCI)], stack.popInt());
@@ -562,28 +568,28 @@ public class EspressoRootNode extends RootNode {
                         frame.setObject(locals[3], stack.popObject());
                         break;
                     case IASTORE:
-                        vm.setArrayInt(stack.popInt(), stack.popInt(), nullCheck(stack.popObject()));
+                        vm.setArrayInt(stack.popInt(), stack.popInt(), stack.popObject());
                         break;
                     case LASTORE:
-                        vm.setArrayLong(stack.popLong(), stack.popInt(), nullCheck(stack.popObject()));
+                        vm.setArrayLong(stack.popLong(), stack.popInt(), stack.popObject());
                         break;
                     case FASTORE:
-                        vm.setArrayFloat(stack.popFloat(), stack.popInt(), nullCheck(stack.popObject()));
+                        vm.setArrayFloat(stack.popFloat(), stack.popInt(), stack.popObject());
                         break;
                     case DASTORE:
-                        vm.setArrayDouble(stack.popDouble(), stack.popInt(), nullCheck(stack.popObject()));
+                        vm.setArrayDouble(stack.popDouble(), stack.popInt(), stack.popObject());
                         break;
                     case AASTORE:
-                        vm.setArrayObject(stack.popObject(), stack.popInt(), nullCheck(stack.popObject()));
+                        vm.setArrayObject(stack.popObject(), stack.popInt(), stack.popObject());
                         break;
                     case BASTORE:
-                        vm.setArrayByte((byte) stack.popInt(), stack.popInt(), nullCheck(stack.popObject()));
+                        vm.setArrayByte((byte) stack.popInt(), stack.popInt(), stack.popObject());
                         break;
                     case CASTORE:
-                        vm.setArrayChar((char) stack.popInt(), stack.popInt(), nullCheck(stack.popObject()));
+                        vm.setArrayChar((char) stack.popInt(), stack.popInt(), stack.popObject());
                         break;
                     case SASTORE:
-                        vm.setArrayShort((short) stack.popInt(), stack.popInt(), nullCheck(stack.popObject()));
+                        vm.setArrayShort((short) stack.popInt(), stack.popInt(), stack.popObject());
                         break;
                     case POP:
                         stack.popVoid(1);
@@ -649,10 +655,10 @@ public class EspressoRootNode extends RootNode {
                         stack.pushDouble(stack.popDouble() * stack.popDouble());
                         break;
                     case IDIV:
-                        stack.pushInt(divInt(checkNonZero(stack.popInt()), stack.popInt()));
+                        stack.pushInt(divInt(stack.popInt(), stack.popInt()));
                         break;
                     case LDIV:
-                        stack.pushLong(divLong(checkNonZero(stack.popLong()), stack.popLong()));
+                        stack.pushLong(divLong(stack.popLong(), stack.popLong()));
                         break;
                     case FDIV:
                         stack.pushFloat(divFloat(stack.popFloat(), stack.popFloat()));
@@ -661,10 +667,10 @@ public class EspressoRootNode extends RootNode {
                         stack.pushDouble(divDouble(stack.popDouble(), stack.popDouble()));
                         break;
                     case IREM:
-                        stack.pushInt(remInt(checkNonZero(stack.popInt()), stack.popInt()));
+                        stack.pushInt(remInt(stack.popInt(), stack.popInt()));
                         break;
                     case LREM:
-                        stack.pushLong(remLong(checkNonZero(stack.popLong()), stack.popLong()));
+                        stack.pushLong(remLong(stack.popLong(), stack.popLong()));
                         break;
                     case FREM:
                         stack.pushFloat(remFloat(stack.popFloat(), stack.popFloat()));
@@ -937,7 +943,7 @@ public class EspressoRootNode extends RootNode {
                         break;
                     case ATHROW:
                         CompilerDirectives.transferToInterpreter();
-                        throw new EspressoException((StaticObject) nullCheck(stack.popObject()));
+                        throw new EspressoException((StaticObject) stack.popObject());
                     case CHECKCAST:
                         // TODO(peterssen): Implement check cast for arrays and primitive arrays.
                         stack.pushObject(checkCast(stack.popObject(), resolveType(bs.currentBC(curBCI), bs.readCPI(curBCI))));
@@ -947,10 +953,10 @@ public class EspressoRootNode extends RootNode {
                                         instanceOf(stack.popObject(), resolveType(bs.currentBC(curBCI), bs.readCPI(curBCI))) ? 1 : 0);
                         break;
                     case MONITORENTER:
-                        vm.monitorEnter(nullCheck(stack.popObject()));
+                        vm.monitorEnter(stack.popObject());
                         break;
                     case MONITOREXIT:
-                        vm.monitorExit(nullCheck(stack.popObject()));
+                        vm.monitorExit(stack.popObject());
                         break;
                     case WIDE:
                         // should not get here ByteCodeStream.currentBC() should never return this
@@ -987,33 +993,16 @@ public class EspressoRootNode extends RootNode {
                 CompilerDirectives.transferToInterpreter();
                 ExceptionHandler handler = resolveExceptionHandlers(bs.currentBCI(curBCI), e.getException());
                 if (handler != null) {
-                    stack.clear();
                     stack.pushObject(e.getException());
                     curBCI = handler.getHandlerBCI();
                     continue loop; // skip bs.next()
                 } else {
                     throw e;
                 }
-            } catch (ArrayIndexOutOfBoundsException | StackOverflowError e) {
-                // TODO(peterssen): Handle VM errors like SOE or OutOfMemoryError avoiding allocations and calls.
+            } catch (Throwable e) {
                 CompilerDirectives.transferToInterpreter();
-                Meta meta = EspressoLanguage.getCurrentContext().getMeta();
-                StaticObject ex;
-                if (e instanceof StackOverflowError) {
-                    ex = meta.STACK_OVERFLOW_ERROR.allocateInstance();
-                    meta(ex).method("<init>", void.class).invokeDirect();
-                } else {
-                    ex = meta.createEx(ArrayIndexOutOfBoundsException.class);
-                }
-                ExceptionHandler handler = resolveExceptionHandlers(bs.currentBCI(curBCI), ex);
-                if (handler != null) {
-                    stack.clear();
-                    stack.pushObject(ex);
-                    curBCI = handler.getHandlerBCI();
-                    continue loop; // skip bs.next()
-                } else {
-                    throw new EspressoException(ex);
-                }
+                // TODO(peterssen): Shape-shift into GUEST exception.
+                throw e;
             }
             curBCI = bs.next(curBCI);
         }
@@ -1084,8 +1073,7 @@ public class EspressoRootNode extends RootNode {
                     break;
                 case Void:
                 case Illegal:
-                    CompilerDirectives.transferToInterpreter();
-                    throw EspressoError.shouldNotReachHere();
+                    EspressoError.shouldNotReachHere();
             }
             n += expectedkind.getSlotCount();
         }
@@ -1093,6 +1081,7 @@ public class EspressoRootNode extends RootNode {
 
     private void invokeInterface(OperandStack stack, MethodInfo method) {
         resolveAndInvoke(stack, method);
+        // invoke(stack, method, null);
     }
 
     private void invokeSpecial(OperandStack stack, MethodInfo method) {
@@ -1168,7 +1157,7 @@ public class EspressoRootNode extends RootNode {
 
     @CompilerDirectives.TruffleBoundary
     private StaticObject allocateArray(Klass componentType, int length) {
-        assert !componentType.isPrimitive();
+        // assert !componentType.isPrimitive();
         return vm.newArray(componentType, length);
     }
 
@@ -1383,20 +1372,6 @@ public class EspressoRootNode extends RootNode {
             throw meta.throwEx(NullPointerException.class);
         }
         return value;
-    }
-
-    private static int checkNonZero(int value) {
-        if (value != 0) {
-            return value;
-        }
-        throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArithmeticException.class, "/ by zero");
-    }
-
-    private static long checkNonZero(long value) {
-        if (value != 0L) {
-            return value;
-        }
-        throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArithmeticException.class, "/ by zero");
     }
 
     // endregion
