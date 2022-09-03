@@ -29,15 +29,14 @@ import com.oracle.truffle.api.object.TypedLocation;
 import com.oracle.truffle.api.utilities.JSONHelper;
 import com.oracle.truffle.api.utilities.JSONHelper.JSONArrayBuilder;
 import com.oracle.truffle.api.utilities.JSONHelper.JSONObjectBuilder;
+import com.oracle.truffle.object.DebugShapeVisitor;
 import com.oracle.truffle.object.Locations;
 import com.oracle.truffle.object.Transition;
 import com.oracle.truffle.object.Transition.PropertyTransition;
 import java.util.Map;
 import java.util.Map.Entry;
 
-@SuppressWarnings("deprecation")
-@Deprecated
-public class JSONShapeVisitor extends com.oracle.truffle.object.DebugShapeVisitor<JSONObjectBuilder> {
+public class JSONShapeVisitor extends DebugShapeVisitor<JSONObjectBuilder> {
     @Override
     public JSONObjectBuilder visitShape(Shape shape, Map<? extends Transition, ? extends Shape> transitions) {
         JSONObjectBuilder sb = JSONHelper.object();

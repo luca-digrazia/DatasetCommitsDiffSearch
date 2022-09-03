@@ -326,7 +326,7 @@ public abstract class ShapeImpl extends Shape {
     @TruffleBoundary
     @Override
     public ShapeImpl defineProperty(Object key, Object value, int flags, LocationFactory locationFactory) {
-        return layout.getStrategy().defineProperty(this, key, value, flags, locationFactory);
+        return layout.getStrategy().defineProperty(this, key, value, flags, locationFactory).getShape();
     }
 
     protected ShapeImpl cloneRoot(ShapeImpl from, Object newSharedData) {
