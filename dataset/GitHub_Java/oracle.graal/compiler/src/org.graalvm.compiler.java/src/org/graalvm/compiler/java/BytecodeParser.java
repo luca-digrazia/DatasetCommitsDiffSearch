@@ -4195,6 +4195,7 @@ public class BytecodeParser implements GraphBuilderContext {
             handleIllegalNewInstance(resolvedType);
             return;
         }
+
         maybeEagerlyInitialize(resolvedType);
 
         ClassInitializationPlugin classInitializationPlugin = graphBuilderConfig.getPlugins().getClassInitializationPlugin();
@@ -4502,12 +4503,17 @@ public class BytecodeParser implements GraphBuilderContext {
          * Javac does not allow use of "$assertionsDisabled" for a field name but Eclipse does, in
          * which case a suffix is added to the generated field.
          */
-        if ((parsingIntrinsic() || graphBuilderConfig.omitAssertions()) && resolvedField.isSynthetic() && resolvedField.getName().startsWith("$assertionsDisabled")) {
-            frameState.push(field.getJavaKind(), ConstantNode.forBoolean(true, graph));
-            return;
+        if (resolvedField.isSynthetic() && resolvedField.getName().startsWith("$assertionsDisabled")) {
+            if (parsingIntrinsic()) {
+                throw new BytecodeParserError("Assert statement at %s is silently disabled in the intrinsic context. Consider using ReplacementsUtil.runtimeAssert(..)", method.format("%H.%n(%p)"));
+            } else if (graphBuilderConfig.omitAssertions()) {
+                frameState.push(field.getJavaKind(), ConstantNode.forBoolean(true, graph));
+                return;
+            }
         }
 
         ResolvedJavaType holder = resolvedField.getDeclaringClass();
+        maybeEagerlyInitialize(holder);
         ClassInitializationPlugin classInitializationPlugin = this.graphBuilderConfig.getPlugins().getClassInitializationPlugin();
         if (classInitializationPlugin != null) {
             classInitializationPlugin.apply(this, holder, this::createCurrentFrameState);
@@ -4543,20 +4549,16 @@ public class BytecodeParser implements GraphBuilderContext {
     private ResolvedJavaField resolveStaticFieldAccess(JavaField field, ValueNode value) {
         if (field instanceof ResolvedJavaField) {
             ResolvedJavaField resolvedField = (ResolvedJavaField) field;
-            ResolvedJavaType resolvedType = resolvedField.getDeclaringClass();
-            maybeEagerlyInitialize(resolvedType);
-
-            if (resolvedType.isInitialized() || graphBuilderConfig.getPlugins().getClassInitializationPlugin() != null) {
+            if (resolvedField.getDeclaringClass().isInitialized() || graphBuilderConfig.getPlugins().getClassInitializationPlugin() != null) {
                 return resolvedField;
             }
-
             /*
              * Static fields have initialization semantics but may be safely accessed under certain
              * conditions while the class is being initialized. Executing in the clinit or init of
-             * subclasses (but not implementers) of the field holder are sure to be running in a
-             * context where the access is safe.
+             * classes which are subtypes of the field holder are sure to be running in a context
+             * where the access is safe.
              */
-            if (!resolvedType.isInterface() && resolvedType.isAssignableFrom(method.getDeclaringClass())) {
+            if (resolvedField.getDeclaringClass().isAssignableFrom(method.getDeclaringClass())) {
                 if (method.isClassInitializer() || method.isConstructor()) {
                     return resolvedField;
                 }
@@ -4590,6 +4592,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
         ClassInitializationPlugin classInitializationPlugin = this.graphBuilderConfig.getPlugins().getClassInitializationPlugin();
         ResolvedJavaType holder = resolvedField.getDeclaringClass();
+        maybeEagerlyInitialize(holder);
         if (classInitializationPlugin != null) {
             Supplier<FrameState> stateBefore = () -> {
                 JavaKind[] pushedSlotKinds = {field.getJavaKind()};
