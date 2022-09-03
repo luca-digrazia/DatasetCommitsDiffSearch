@@ -59,15 +59,7 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         FLOAT_VECTOR,
         DOUBLE_VECTOR,
         VOID,
-        ILLEGAL,
-        I1_POINTER,
-        I8_POINTER,
-        I16_POINTER,
-        I32_POINTER,
-        I64_POINTER,
-        HALF_POINTER,
-        FLOAT_POINTER,
-        DOUBLE_POINTER;
+        ILLEGAL;
     }
 
     private final String functionName;
