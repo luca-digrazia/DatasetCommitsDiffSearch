@@ -27,14 +27,14 @@ import static com.oracle.graal.lir.LIRValueUtil.*;
 
 import java.util.*;
 
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
+
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.framemap.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
 
 /**
  * A collection of machine-independent LIR operations, as well as interfaces to be implemented for
@@ -47,15 +47,6 @@ public class StandardOp {
      * must be the last operation in the block.
      */
     public interface BlockEndOp {
-        void setOutgoingValues(Value[] values);
-
-        int getOutgoingSize();
-
-        Value getOutgoingValue(int idx);
-
-        int addOutgoingValues(Value[] values);
-
-        void clearOutgoingValues();
     }
 
     public interface NullCheck {
@@ -83,7 +74,6 @@ public class StandardOp {
          * instruction of a block, the registers are defined here in the label.
          */
         @Def({REG, STACK}) private Value[] incomingValues;
-        private int size;
 
         private final Label label;
         private final boolean align;
@@ -93,43 +83,24 @@ public class StandardOp {
             this.label = label;
             this.align = align;
             this.incomingValues = Value.NO_VALUES;
-            size = 0;
         }
 
         public void setIncomingValues(Value[] values) {
-            assert this.incomingValues.length == 0;
+            assert incomingValues.length == 0;
             assert values != null;
-            this.incomingValues = values;
-            size = values.length;
+            incomingValues = values;
         }
 
         public int getIncomingSize() {
-            return size;
+            return incomingValues.length;
         }
 
         public Value getIncomingValue(int idx) {
-            assert checkRange(idx);
             return incomingValues[idx];
         }
 
         public void clearIncomingValues() {
             incomingValues = Value.NO_VALUES;
-            size = 0;
-        }
-
-        public void addIncomingValues(Value[] values) {
-            int t = size + values.length;
-            if (t >= incomingValues.length) {
-                Value[] newArray = new Value[t];
-                System.arraycopy(incomingValues, 0, newArray, 0, size);
-                incomingValues = newArray;
-            }
-            System.arraycopy(values, 0, incomingValues, size, values.length);
-            size = t;
-        }
-
-        private boolean checkRange(int idx) {
-            return idx < size;
         }
 
         @Override
@@ -152,61 +123,13 @@ public class StandardOp {
         }
     }
 
-    public abstract static class AbstractBlockEndOp extends LIRInstruction implements BlockEndOp {
-        public static final LIRInstructionClass<AbstractBlockEndOp> TYPE = LIRInstructionClass.create(AbstractBlockEndOp.class);
-
-        @Alive({REG, STACK, CONST}) private Value[] outgoingValues;
-        private int size;
-
-        protected AbstractBlockEndOp(LIRInstructionClass<? extends AbstractBlockEndOp> c) {
-            super(c);
-            this.outgoingValues = Value.NO_VALUES;
-            size = 0;
-        }
-
-        public void setOutgoingValues(Value[] values) {
-            assert this.outgoingValues.length == 0;
-            assert values != null;
-            this.outgoingValues = values;
-            size = values.length;
-        }
-
-        public int getOutgoingSize() {
-            return size;
-        }
-
-        public Value getOutgoingValue(int idx) {
-            assert checkRange(idx);
-            return outgoingValues[idx];
-        }
-
-        public void clearOutgoingValues() {
-            outgoingValues = Value.NO_VALUES;
-            size = 0;
-        }
-
-        public int addOutgoingValues(Value[] values) {
-            int t = size + values.length;
-            if (t >= outgoingValues.length) {
-                Value[] newArray = new Value[t];
-                System.arraycopy(outgoingValues, 0, newArray, 0, size);
-                outgoingValues = newArray;
-            }
-            System.arraycopy(values, 0, outgoingValues, size, values.length);
-            size = t;
-            return t;
-        }
-
-        private boolean checkRange(int idx) {
-            return idx < size;
-        }
-    }
-
     /**
      * LIR operation that is an unconditional jump to a {@link #destination()}.
      */
-    public static class JumpOp extends AbstractBlockEndOp {
+    public static class JumpOp extends LIRInstruction implements BlockEndOp {
         public static final LIRInstructionClass<JumpOp> TYPE = LIRInstructionClass.create(JumpOp.class);
+
+        @Alive({REG, STACK, CONST}) private Value[] outgoingValues;
 
         private final LabelRef destination;
 
@@ -217,6 +140,25 @@ public class StandardOp {
         protected JumpOp(LIRInstructionClass<? extends JumpOp> c, LabelRef destination) {
             super(c);
             this.destination = destination;
+            this.outgoingValues = Value.NO_VALUES;
+        }
+
+        public void setOutgoingValues(Value[] values) {
+            assert outgoingValues.length == 0;
+            assert values != null;
+            outgoingValues = values;
+        }
+
+        public int getOutgoingSize() {
+            return outgoingValues.length;
+        }
+
+        public Value getOutgoingValue(int idx) {
+            return outgoingValues[idx];
+        }
+
+        public void clearOutgoingValues() {
+            outgoingValues = Value.NO_VALUES;
         }
 
         @Override
