@@ -52,13 +52,16 @@ public abstract class Backend {
 
     public abstract LIRGenerator newLIRGenerator(StructuredGraph graph, FrameMap frameMap, ResolvedJavaMethod method, LIR lir);
 
-    public abstract TargetMethodAssembler newAssembler(LIRGenerator lirGen, CompilationResult compilationResult);
+    public abstract TargetMethodAssembler newAssembler(FrameMap frameMap, LIR lir);
 
     /**
      * Emits the code for a given method. This includes any architecture/runtime specific
      * prefix/suffix. A prefix typically contains the code for setting up the frame, spilling
      * callee-save registers, stack overflow checking, handling multiple entry points etc. A suffix
      * may contain out-of-line stubs and method end guard instructions.
+     * 
+     * @param method the method associated with {@code lir}
+     * @param lir the LIR of {@code method}
      */
-    public abstract void emitCode(TargetMethodAssembler tasm, ResolvedJavaMethod method, LIRGenerator lirGen);
+    public abstract void emitCode(TargetMethodAssembler tasm, ResolvedJavaMethod method, LIR lir);
 }

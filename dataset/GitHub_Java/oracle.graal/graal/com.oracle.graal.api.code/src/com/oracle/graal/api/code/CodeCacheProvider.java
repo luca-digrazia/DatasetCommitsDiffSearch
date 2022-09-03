@@ -37,10 +37,12 @@ public interface CodeCacheProvider extends MetaAccessProvider {
      * 
      * @param method a method to which the executable code is begin added
      * @param compResult the compilation result to be added
+     * @param info the object into which details of the installed code will be written. Ignored if
+     *            null, otherwise the info is written to index 0 of this array.
      * @return a reference to the compiled and ready-to-run code or null if the code installation
      *         failed
      */
-    InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult);
+    InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, CodeInfo[] info);
 
     /**
      * Returns the size in bytes for locking information on the stack.
@@ -48,16 +50,13 @@ public interface CodeCacheProvider extends MetaAccessProvider {
     int getSizeOfLockData();
 
     /**
-     * Returns a disassembly of some compiled code.
+     * Returns a disassembly of the given installed code.
      * 
-     * @param compResult some compiled code
-     * @param installedCode the result of installing the code in {@code compResult} or null if the
-     *            code has not yet been installed
-     * 
+     * @param code the code that should be disassembled
      * @return a disassembly. This will be of length 0 if the runtime does not support
      *         disassembling.
      */
-    String disassemble(CompilationResult compResult, InstalledCode installedCode);
+    String disassemble(CodeInfo code, CompilationResult tm);
 
     /**
      * Gets the register configuration to use when compiling a given method.

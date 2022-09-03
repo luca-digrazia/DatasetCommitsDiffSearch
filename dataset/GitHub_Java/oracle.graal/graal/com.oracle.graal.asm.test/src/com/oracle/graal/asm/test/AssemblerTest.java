@@ -34,7 +34,6 @@ import com.oracle.graal.test.*;
 
 public abstract class AssemblerTest extends GraalTest {
 
-    private final MetaAccessProvider metaAccess;
     protected final CodeCacheProvider codeCache;
 
     public interface CodeGenTest {
@@ -43,41 +42,25 @@ public abstract class AssemblerTest extends GraalTest {
     }
 
     public AssemblerTest() {
-        this.metaAccess = Graal.getRequiredCapability(MetaAccessProvider.class);
         this.codeCache = Graal.getRequiredCapability(CodeCacheProvider.class);
     }
 
-    public MetaAccessProvider getMetaAccess() {
-        return metaAccess;
-    }
-
     protected InstalledCode assembleMethod(Method m, CodeGenTest test) {
-        ResolvedJavaMethod method = getMetaAccess().lookupJavaMethod(m);
-        RegisterConfig registerConfig = codeCache.getRegisterConfig();
+        ResolvedJavaMethod method = codeCache.lookupJavaMethod(m);
+        RegisterConfig registerConfig = codeCache.lookupRegisterConfig();
         CallingConvention cc = CodeUtil.getCallingConvention(codeCache, CallingConvention.Type.JavaCallee, method, false);
 
         CompilationResult compResult = new CompilationResult();
         Buffer codeBuffer = test.generateCode(compResult, codeCache.getTarget(), registerConfig, cc);
         compResult.setTargetCode(codeBuffer.close(true), codeBuffer.position());
 
-        InstalledCode code = codeCache.addMethod(method, compResult);
-
-        DisassemblerProvider dis = Graal.getRuntime().getCapability(DisassemblerProvider.class);
-        if (dis != null) {
-            String disasm = dis.disassemble(code);
-            Assert.assertTrue(code.toString(), disasm == null || disasm.length() > 0);
-        }
-        return code;
+        return codeCache.addMethod(method, compResult, null);
     }
 
     protected Object runTest(String methodName, CodeGenTest test, Object... args) {
         Method method = getMethod(methodName);
         InstalledCode code = assembleMethod(method, test);
-        try {
-            return code.executeVarargs(args);
-        } catch (InvalidInstalledCodeException e) {
-            throw new RuntimeException(e);
-        }
+        return code.executeVarargs(args);
     }
 
     protected void assertReturn(String methodName, CodeGenTest test, Object expected, Object... args) {
