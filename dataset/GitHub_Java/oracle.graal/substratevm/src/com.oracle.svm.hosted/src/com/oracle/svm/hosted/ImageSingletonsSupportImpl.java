@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -36,22 +34,17 @@ public final class ImageSingletonsSupportImpl extends ImageSingletonsSupport {
 
     @Override
     public <T> void add(Class<T> key, T value) {
-        HostedManagement.getAndAssertExists().doAdd(key, value);
+        HostedManagement.get().doAdd(key, value);
     }
 
     @Override
     public <T> T lookup(Class<T> key) {
-        return HostedManagement.getAndAssertExists().doLookup(key);
+        return HostedManagement.get().doLookup(key);
     }
 
     @Override
     public boolean contains(Class<?> key) {
-        HostedManagement hm = HostedManagement.get();
-        if (hm == null) {
-            return false;
-        } else {
-            return hm.doContains(key);
-        }
+        return HostedManagement.get().doContains(key);
     }
 
     /**
@@ -73,14 +66,10 @@ public final class ImageSingletonsSupportImpl extends ImageSingletonsSupport {
          */
         private static final ThreadLocal<HostedManagement> hostedVMConfig = new ThreadLocal<>();
 
-        public static HostedManagement getAndAssertExists() {
-            HostedManagement result = get();
+        public static HostedManagement get() {
+            HostedManagement result = hostedVMConfig.get();
             assert result != null;
             return result;
-        }
-
-        public static HostedManagement get() {
-            return hostedVMConfig.get();
         }
 
         public static void installInThread(HostedManagement vmConfig) {
@@ -102,13 +91,13 @@ public final class ImageSingletonsSupportImpl extends ImageSingletonsSupport {
         <T> void doAdd(Class<T> key, T value) {
             checkKey(key);
             if (value == null) {
-                throw UserError.abort("ImageSingletons do not allow null value for key %s", key.getTypeName());
+                throw UserError.abort("ImageSingletons do not allow null value for key " + key.getTypeName());
             }
 
             Object prevValue = configObjects.putIfAbsent(key, value);
 
             if (prevValue != null) {
-                throw UserError.abort("ImageSingletons.add must not overwrite existing key %s%nExisting value: %s%nNew value: %s", key.getTypeName(), prevValue, value);
+                throw UserError.abort("ImageSingletons.add must not overwrite existing key " + key.getTypeName() + "\nExisting value: " + prevValue + "\nNew value: " + value);
             }
         }
 
@@ -116,7 +105,7 @@ public final class ImageSingletonsSupportImpl extends ImageSingletonsSupport {
             checkKey(key);
             Object result = configObjects.get(key);
             if (result == null) {
-                throw UserError.abort("ImageSingletons do not contain key %s", key.getTypeName());
+                throw UserError.abort("ImageSingletons do not contain key " + key.getTypeName());
             }
             return key.cast(result);
         }
