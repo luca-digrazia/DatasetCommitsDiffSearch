@@ -24,6 +24,7 @@
  */
 package com.oracle.truffle.api.source;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -34,8 +35,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.spi.FileTypeDetector;
 import java.util.Objects;
 
@@ -534,23 +533,21 @@ public abstract class Source {
         fileCacheEnabled = enabled;
     }
 
-    static String read(File file) throws IOException {
-        return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
-    }
-
     static String read(Reader reader) throws IOException {
+        final BufferedReader bufferedReader = new BufferedReader(reader);
         final StringBuilder builder = new StringBuilder();
         final char[] buffer = new char[1024];
+
         try {
             while (true) {
-                final int n = reader.read(buffer);
+                final int n = bufferedReader.read(buffer);
                 if (n == -1) {
                     break;
                 }
                 builder.append(buffer, 0, n);
             }
         } finally {
-            reader.close();
+            bufferedReader.close();
         }
         return builder.toString();
     }
@@ -785,6 +782,7 @@ public abstract class Source {
         clearTextMap();
     }
 
+    /* Deprecation note: "identifier" deprecated, replace with #createSection(int, int, int, int) */
     /**
      * Creates a representation of a contiguous region of text in the source.
      * <p>
@@ -800,8 +798,7 @@ public abstract class Source {
      * @param length the number of characters in the section
      * @return newly created object representing the specified region
      * @since 0.8 or earlier
-     * @deprecated "identifier" being removed from SourceSection, use #createSection(int, int, int,
-     *             int)
+     * @deprecated
      */
     @Deprecated
     public final SourceSection createSection(String identifier, int startLine, int startColumn, int charIndex, int length) {
@@ -856,7 +853,7 @@ public abstract class Source {
      * @throws IllegalArgumentException if arguments are outside the text of the source
      * @throws IllegalStateException if the source is one of the "null" instances
      * @since 0.8 or earlier
-     * @deprecated "identifier" being removed from SourceSection, use #createSection(int, int, int)
+     * @deprecated
      */
     @Deprecated
     public final SourceSection createSection(String identifier, int startLine, int startColumn, int length) {
@@ -914,7 +911,7 @@ public abstract class Source {
      *             source
      * @throws IllegalStateException if the source is one of the "null" instances
      * @since 0.8 or earlier
-     * @deprecated "identifier" being removed from SourceSection, use #createSection(int, int)
+     * @deprecated
      */
     @Deprecated
     public final SourceSection createSection(String identifier, int charIndex, int length) throws IllegalArgumentException {
