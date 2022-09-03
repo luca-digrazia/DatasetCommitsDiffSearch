@@ -172,7 +172,7 @@ import com.oracle.truffle.llvm.nodes.memory.literal.LLVMI64ArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.literal.LLVMI8ArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.literal.LLVMStructArrayLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.load.LLVM80BitFloatLoadNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.load.LLVMDirectLoadNode.LLVMGlobalDirectLoadNode;
+import com.oracle.truffle.llvm.nodes.memory.load.LLVMDirectLoadNode.LLVMGlobalVariableDirectLoadNode;
 import com.oracle.truffle.llvm.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVM80BitFloatDirectLoadNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMAddressDirectLoadNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMFunctionDirectLoadNodeGen;
@@ -359,12 +359,16 @@ import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
+import com.oracle.truffle.llvm.runtime.NativeAllocator;
+import com.oracle.truffle.llvm.runtime.NativeResolver;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueProvider;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateStringNode;
+import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStackAllocationNode;
@@ -1214,8 +1218,8 @@ public class BasicNodeFactory implements NodeFactory {
         } else if (type instanceof PointerType) {
             if (value instanceof LLVMAddress) {
                 return new LLVMAddressLiteralNode((LLVMAddress) value);
-            } else if (value instanceof LLVMGlobal) {
-                return new LLVMAccessGlobalVariableStorageNode((LLVMGlobal) value);
+            } else if (value instanceof LLVMGlobalVariable) {
+                return new LLVMAccessGlobalVariableStorageNode((LLVMGlobalVariable) value);
             } else if (value instanceof LLVMTruffleObject) {
                 return new LLVMTruffleObjectLiteralNode((LLVMTruffleObject) value);
             } else {
@@ -1495,28 +1499,35 @@ public class BasicNodeFactory implements NodeFactory {
         final String name = globalVariable.getName();
 
         LLVMContext context = runtime.getContext();
+        NFIContextExtension nfiExtension = context.getContextExtension(NFIContextExtension.class);
+        final NativeResolver nativeResolver = () -> LLVMAddress.fromLong(nfiExtension.getNativeHandle(context, name));
 
-        final LLVMGlobal descriptor;
+        final LLVMGlobalVariable descriptor = LLVMGlobalVariable.create(name, nativeResolver, resolvedType);
 
-        if (globalVariable.getInitialiser() == 0 && Linkage.isExtern(globalVariable.getLinkage())) {
-            NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
-            return LLVMGlobal.external(context, globalVariable, name, resolvedType, LLVMAddress.fromLong(nfiContextExtension.getNativeHandle(context, name)));
-        } else {
-            descriptor = LLVMGlobal.internal(context, globalVariable, name, resolvedType);
+        if ((globalVariable.getInitialiser() > 0 || !Linkage.isExtern(globalVariable.getLinkage())) && descriptor.isUninitialized()) {
             runtime.addDestructor(new LLVMExpressionNode() {
 
-                private final LLVMGlobal global = descriptor;
-                private final LLVMContext c = context;
+                private final LLVMGlobalVariable global = descriptor;
+
+                @Child private LLVMGlobalVariableAccess access = createGlobalAccess();
 
                 @Override
                 public Object executeGeneric(VirtualFrame frame) {
-                    LLVMGlobal.free(c, global);
+                    access.destroy(global);
                     return null;
                 }
             });
-            return descriptor;
+            descriptor.declareInSulong(new NativeAllocator() {
+                private final int byteSize = runtime.getContext().getByteSize(resolvedType);
+
+                @Override
+                public LLVMAddress allocate() {
+                    return LLVMHeap.allocateMemory(byteSize);
+                }
+            });
         }
 
+        return descriptor;
     }
 
     @Override
@@ -1798,6 +1809,7 @@ public class BasicNodeFactory implements NodeFactory {
             default:
                 throw new IllegalStateException("Missing LLVM builtin: " + declaration.getName());
         }
+
     }
 
     private static int getOverflowFieldOffset(LLVMParserRuntime runtime, FunctionDeclaration declaration) {
@@ -2054,7 +2066,7 @@ public class BasicNodeFactory implements NodeFactory {
             load = LLVMStructDirectLoadNodeGen.create();
         } else if (resultType instanceof PointerType) {
             if (loadTarget instanceof LLVMAccessGlobalVariableStorageNode) {
-                return new LLVMGlobalDirectLoadNode(((LLVMAccessGlobalVariableStorageNode) loadTarget).getDescriptor());
+                return new LLVMGlobalVariableDirectLoadNode(((LLVMAccessGlobalVariableStorageNode) loadTarget).getDescriptor());
             } else {
                 load = LLVMAddressDirectLoadNodeGen.create();
             }
@@ -2114,4 +2126,5 @@ public class BasicNodeFactory implements NodeFactory {
         }
         return LLVMStoreExpressionNodeGen.create(source, store, pointerNode, valueNode);
     }
+
 }

@@ -80,7 +80,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
         return getExceptionType;
     }
 
-    @Child private LLVMToNativeNode toNative = LLVMToNativeNode.toNative();
+    @Child private LLVMToNativeNode toNative = createToNativeNode();
 
     @Override
     public Object executeGeneric(VirtualFrame frame) {
@@ -126,6 +126,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException();
         }
+
     }
 
     public static final class LandingpadCatchEntryNode extends LandingpadEntryNode {
@@ -217,6 +218,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
             }
             return false;
         }
+
     }
 
     private static LLVMToNativeNode[] getForceLLVMAddressNodes(int size) {
