@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,9 +30,9 @@ import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_POW;
 import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_SIN;
 import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_TAN;
 import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT;
+import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT_WITH_ORIGINAL_KEY;
 import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT_BLOCK;
 import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT_BLOCK_WITH_ORIGINAL_KEY;
-import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT_WITH_ORIGINAL_KEY;
 import static com.oracle.graal.hotspot.HotSpotBackend.ENCRYPT;
 import static com.oracle.graal.hotspot.HotSpotBackend.ENCRYPT_BLOCK;
 import static com.oracle.graal.hotspot.HotSpotBackend.EXCEPTION_HANDLER;
@@ -54,7 +54,6 @@ import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.SAFE
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.STACK_INSPECTABLE_LEAF;
 import static com.oracle.graal.hotspot.HotSpotHostBackend.DEOPTIMIZATION_HANDLER;
 import static com.oracle.graal.hotspot.HotSpotHostBackend.UNCOMMON_TRAP_HANDLER;
-import static com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider.RuntimeCalls.CREATE_ARRAY_STORE_EXCEPTION;
 import static com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider.RuntimeCalls.CREATE_NULL_POINTER_EXCEPTION;
 import static com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider.RuntimeCalls.CREATE_OUT_OF_BOUNDS_EXCEPTION;
 import static com.oracle.graal.hotspot.replacements.AssertionSnippets.ASSERTION_VM_MESSAGE_C;
@@ -82,29 +81,11 @@ import static com.oracle.graal.nodes.java.ForeignCallDescriptors.REGISTER_FINALI
 import static com.oracle.graal.replacements.Log.LOG_OBJECT;
 import static com.oracle.graal.replacements.Log.LOG_PRIMITIVE;
 import static com.oracle.graal.replacements.Log.LOG_PRINTF;
-import static jdk.vm.ci.hotspot.HotSpotCallingConventionType.NativeCall;
+import static jdk.vm.ci.code.CallingConvention.Type.NativeCall;
 
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
-
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
-import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
-import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
-import com.oracle.graal.hotspot.stubs.ArrayStoreExceptionStub;
-import com.oracle.graal.hotspot.stubs.CreateExceptionStub;
-import com.oracle.graal.hotspot.stubs.ExceptionHandlerStub;
-import com.oracle.graal.hotspot.stubs.NewArrayStub;
-import com.oracle.graal.hotspot.stubs.NewInstanceStub;
-import com.oracle.graal.hotspot.stubs.NullPointerExceptionStub;
-import com.oracle.graal.hotspot.stubs.OutOfBoundsExceptionStub;
-import com.oracle.graal.hotspot.stubs.Stub;
-import com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub;
-import com.oracle.graal.hotspot.stubs.VerifyOopStub;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.word.Word;
-import com.oracle.graal.word.WordTypes;
 
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.common.JVMCIError;
@@ -114,14 +95,26 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.LocationIdentity;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
+import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
+import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
+import com.oracle.graal.hotspot.stubs.ExceptionHandlerStub;
+import com.oracle.graal.hotspot.stubs.NewArrayStub;
+import com.oracle.graal.hotspot.stubs.NewInstanceStub;
+import com.oracle.graal.hotspot.stubs.Stub;
+import com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub;
+import com.oracle.graal.hotspot.stubs.VerifyOopStub;
+import com.oracle.graal.nodes.NamedLocationIdentity;
+import com.oracle.graal.word.Word;
+
 /**
  * HotSpot implementation of {@link ForeignCallsProvider}.
  */
 public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCallsProviderImpl {
 
-    public HotSpotHostForeignCallsProvider(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, CodeCacheProvider codeCache,
-                    WordTypes wordTypes) {
-        super(jvmciRuntime, runtime, metaAccess, codeCache, wordTypes);
+    public HotSpotHostForeignCallsProvider(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, CodeCacheProvider codeCache) {
+        super(jvmciRuntime, runtime, metaAccess, codeCache);
     }
 
     protected static void link(Stub stub) {
@@ -255,8 +248,6 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
          */
         registerForeignCall(UNPACK_FRAMES, c.deoptimizationUnpackFrames, NativeCall, DESTROYS_REGISTERS, LEAF, NOT_REEXECUTABLE, any());
 
-        CreateExceptionStub.registerForeignCalls(c, this);
-
         /*
          * This message call is registered twice, where the second one must only be used for calls
          * that do not return, i.e., that exit the VM.
@@ -269,12 +260,11 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         link(new ExceptionHandlerStub(providers, foreignCalls.get(EXCEPTION_HANDLER)));
         link(new UnwindExceptionToCallerStub(providers, registerStubCall(UNWIND_EXCEPTION_TO_CALLER, NOT_REEXECUTABLE, SAFEPOINT, any())));
         link(new VerifyOopStub(providers, registerStubCall(VERIFY_OOP, REEXECUTABLE, LEAF_NOFP, NO_LOCATIONS)));
-        link(new ArrayStoreExceptionStub(providers, registerStubCall(CREATE_ARRAY_STORE_EXCEPTION, REEXECUTABLE, SAFEPOINT, any())));
-        link(new NullPointerExceptionStub(providers, registerStubCall(CREATE_NULL_POINTER_EXCEPTION, REEXECUTABLE, SAFEPOINT, any())));
-        link(new OutOfBoundsExceptionStub(providers, registerStubCall(CREATE_OUT_OF_BOUNDS_EXCEPTION, REEXECUTABLE, SAFEPOINT, any())));
 
         linkForeignCall(providers, IDENTITY_HASHCODE, c.identityHashCodeAddress, PREPEND_THREAD, SAFEPOINT, NOT_REEXECUTABLE, MARK_WORD_LOCATION);
         linkForeignCall(providers, REGISTER_FINALIZER, c.registerFinalizerAddress, PREPEND_THREAD, SAFEPOINT, NOT_REEXECUTABLE, any());
+        linkForeignCall(providers, CREATE_NULL_POINTER_EXCEPTION, c.createNullPointerExceptionAddress, PREPEND_THREAD, SAFEPOINT, REEXECUTABLE, any());
+        linkForeignCall(providers, CREATE_OUT_OF_BOUNDS_EXCEPTION, c.createOutOfBoundsExceptionAddress, PREPEND_THREAD, SAFEPOINT, REEXECUTABLE, any());
         linkForeignCall(providers, MONITORENTER, c.monitorenterAddress, PREPEND_THREAD, SAFEPOINT, NOT_REEXECUTABLE, any());
         linkForeignCall(providers, MONITOREXIT, c.monitorexitAddress, PREPEND_THREAD, STACK_INSPECTABLE_LEAF, NOT_REEXECUTABLE, any());
         linkForeignCall(providers, NEW_MULTI_ARRAY, c.newMultiArrayAddress, PREPEND_THREAD, SAFEPOINT, REEXECUTABLE, INIT_LOCATION, TLAB_TOP_LOCATION, TLAB_END_LOCATION);

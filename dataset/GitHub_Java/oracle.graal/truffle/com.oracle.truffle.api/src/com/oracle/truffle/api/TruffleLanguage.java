@@ -31,8 +31,10 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.WeakHashMap;
 
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.SuspendedEvent;
@@ -71,6 +73,8 @@ import com.oracle.truffle.api.source.Source;
  */
 @SuppressWarnings("javadoc")
 public abstract class TruffleLanguage<C> {
+    private final Map<Source, CallTarget> compiled = Collections.synchronizedMap(new WeakHashMap<Source, CallTarget>());
+
     /**
      * Constructor to be called by subclasses.
      */
@@ -158,10 +162,8 @@ public abstract class TruffleLanguage<C> {
 
     /**
      * Parses the provided source and generates appropriate AST. The parsing should execute no user
-     * code, it should only create the {@link Node} tree to represent the source. If the provided
-     * source does not correspond naturally to a call target, the returned call target should create
-     * and if necessary initialize the corresponding language entity and return it. The parsing may
-     * be performed in a context (specified as another {@link Node}) or without context. The
+     * code, it should only create the {@link Node} tree to represent the source. The parsing may be
+     * performed in a context (specified as another {@link Node}) or without context. The
      * {@code argumentNames} may contain symbolic names for actual parameters of the call to the
      * returned value. The result should be a call target with method
      * {@link CallTarget#call(java.lang.Object...)} that accepts as many arguments as were provided
@@ -197,7 +199,6 @@ public abstract class TruffleLanguage<C> {
      * asks all known languages for <code>onlyExplicit</code> symbols and only when none is found,
      * it does one more round with <code>onlyExplicit</code> set to <code>false</code>.
      *
-     * @param context context to locate the global symbol in
      * @param globalName the name of the global symbol to find
      * @param onlyExplicit should the language seek for implicitly exported object or only consider
      *            the explicitly exported ones?
@@ -213,7 +214,6 @@ public abstract class TruffleLanguage<C> {
      * language) but technically it can be one of Java primitive wrappers ({@link Integer},
      * {@link Double}, {@link Short}, etc.).
      *
-     * @param context context to find the language global in
      * @return the global object or <code>null</code> if the language does not support such concept
      */
     protected abstract Object getLanguageGlobal(C context);
@@ -361,16 +361,14 @@ public abstract class TruffleLanguage<C> {
         private final OutputStream err;
         private final OutputStream out;
         private final Instrumenter instrumenter;
-        private final String[] arguments;
 
-        Env(Object vm, TruffleLanguage<?> lang, OutputStream out, OutputStream err, InputStream in, Instrumenter instrumenter, String[] arguments) {
+        Env(Object vm, TruffleLanguage<?> lang, OutputStream out, OutputStream err, InputStream in, Instrumenter instrumenter) {
             this.vm = vm;
             this.in = in;
             this.err = err;
             this.out = out;
             this.lang = lang;
             this.instrumenter = instrumenter;
-            this.arguments = arguments;
             this.langCtx = new LangCtx<>(lang, this);
         }
 
@@ -439,13 +437,6 @@ public abstract class TruffleLanguage<C> {
         public Instrumenter instrumenter() {
             return instrumenter;
         }
-
-        /**
-         * @return arguments used to create the polyglot engine
-         */
-        public String[] getArguments() {
-            return arguments;
-        }
     }
 
     private static final AccessAPI API = new AccessAPI();
@@ -453,8 +444,8 @@ public abstract class TruffleLanguage<C> {
     @SuppressWarnings("rawtypes")
     private static final class AccessAPI extends Accessor {
         @Override
-        protected Env attachEnv(Object vm, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Instrumenter instrumenter, String[] arguments) {
-            Env env = new Env(vm, language, stdOut, stdErr, stdIn, instrumenter, arguments);
+        protected Env attachEnv(Object vm, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Instrumenter instrumenter) {
+            Env env = new Env(vm, language, stdOut, stdErr, stdIn, instrumenter);
             return env;
         }
 
@@ -469,14 +460,14 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        protected Object eval(TruffleLanguage<?> language, Source source, Map<Source, CallTarget> cache) throws IOException {
-            CallTarget target = cache.get(source);
+        protected Object eval(TruffleLanguage<?> language, Source source) throws IOException {
+            CallTarget target = language.compiled.get(source);
             if (target == null) {
                 target = language.parse(source, null);
                 if (target == null) {
                     throw new IOException("Parsing has not produced a CallTarget for " + source);
                 }
-                cache.put(source, target);
+                language.compiled.put(source, target);
             }
             try {
                 return target.call();

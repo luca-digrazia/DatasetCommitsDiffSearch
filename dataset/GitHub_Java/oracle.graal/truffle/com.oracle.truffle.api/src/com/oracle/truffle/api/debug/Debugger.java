@@ -154,7 +154,7 @@ public final class Debugger {
      * @throws IOException if the breakpoint can not be set.
      */
     @TruffleBoundary
-    public Breakpoint setLineBreakpoint(int ignoreCount, LineLocation lineLocation, boolean oneShot) throws IOException {
+    public LineBreakpoint setLineBreakpoint(int ignoreCount, LineLocation lineLocation, boolean oneShot) throws IOException {
         return lineBreaks.create(ignoreCount, lineLocation, oneShot);
     }
 
@@ -167,7 +167,7 @@ public final class Debugger {
      * @throws IOException if the breakpoint already set
      */
     @TruffleBoundary
-    public Breakpoint setTagBreakpoint(int ignoreCount, SyntaxTag tag, boolean oneShot) throws IOException {
+    public TagBreakpoint setTagBreakpoint(int ignoreCount, SyntaxTag tag, boolean oneShot) throws IOException {
         return tagBreaks.create(ignoreCount, tag, oneShot);
     }
 
@@ -680,11 +680,8 @@ public final class Debugger {
          */
         private MaterializedFrame haltedFrame;
 
-        /**
-         * Subset of the Truffle stack corresponding to the current execution, not including the
-         * current frame.
-         */
-        private List<FrameInstance> contextStack;
+        /** Subset of the Truffle stack corresponding to the current execution. */
+        private List<FrameDebugDescription> contextStack;
 
         private DebugExecutionContext(Source executionSource, DebugExecutionContext previousContext) {
             this(executionSource, previousContext, -1);
@@ -762,10 +759,11 @@ public final class Debugger {
             final List<String> recentWarnings = new ArrayList<>(warnings);
             warnings.clear();
 
-            final List<FrameInstance> frames = new ArrayList<>();
+            final List<FrameDebugDescription> frames = new ArrayList<>();
             // Map the Truffle stack for this execution, ignore nested executions
             // Ignore frames for which no CallNode is available.
-            // The top/current/0 frame is not produced by the iterator; reported separately
+            // The top/current/0 frame is not produced by the iterator.
+            frames.add(new FrameDebugDescription(0, haltedNode, haltedFrame));
             Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<FrameInstance>() {
                 int stackIndex = 1;
                 int frameIndex = 1;
@@ -776,8 +774,8 @@ public final class Debugger {
                         final Node callNode = frameInstance.getCallNode();
                         if (callNode != null) {
                             final SourceSection sourceSection = callNode.getEncapsulatingSourceSection();
-                            if (sourceSection != null && !sourceSection.getIdentifier().equals("<unknown>")) {
-                                frames.add(frameInstance);
+                            if (sourceSection != null && sourceSection.getIdentifier() != SourceSection.UNKNOWN) {
+                                frames.add(new FrameDebugDescription(frameIndex, frameInstance));
                                 frameIndex++;
                             } else if (TRACE) {
                                 if (callNode != null) {
@@ -785,7 +783,7 @@ public final class Debugger {
                                 } else {
                                     contextTrace("HIDDEN frame added");
                                 }
-                                frames.add(frameInstance);
+                                frames.add(new FrameDebugDescription(frameIndex, frameInstance));
                                 frameIndex++;
                             }
                         } else if (TRACE) {
@@ -794,7 +792,7 @@ public final class Debugger {
                             } else {
                                 contextTrace("HIDDEN frame added");
                             }
-                            frames.add(frameInstance);
+                            frames.add(new FrameDebugDescription(frameIndex, frameInstance));
                             frameIndex++;
                         }
                         stackIndex++;
@@ -815,7 +813,7 @@ public final class Debugger {
 
             try {
                 // Pass control to the debug client with current execution suspended
-                ACCESSOR.dispatchEvent(vm, new SuspendedEvent(Debugger.this, haltedNode, haltedFrame, contextStack, recentWarnings));
+                ACCESSOR.dispatchEvent(vm, new SuspendedEvent(Debugger.this, contextStack, recentWarnings));
                 // Debug client finished normally, execution resumes
                 // Presume that the client has set a new strategy (or default to Continue)
                 running = true;
