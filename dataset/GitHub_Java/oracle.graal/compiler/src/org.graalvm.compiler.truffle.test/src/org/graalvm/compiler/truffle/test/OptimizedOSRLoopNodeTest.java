@@ -73,7 +73,8 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
     private static final int OSR_THRESHOLD = TruffleCompilerOptions.getValue(TruffleOSRCompilationThreshold);
     private static final int OSR_INVALIDATION_REPROFILE = TruffleCompilerOptions.getValue(TruffleInvalidationReprofileCount);
 
-    @DataPoint public static final OSRLoopFactory CONFIGURED = (repeating, readFrameSlots, writtenFrameSlots) -> OptimizedOSRLoopNode.createOSRLoop(repeating, OSR_THRESHOLD,
+    @DataPoint public static final OSRLoopFactory CONFIGURED = (repeating, readFrameSlots,
+                    writtenFrameSlots) -> OptimizedOSRLoopNode.createOSRLoop(repeating, OSR_THRESHOLD,
                     OSR_INVALIDATION_REPROFILE, readFrameSlots, writtenFrameSlots);
 
     @DataPoint public static final OSRLoopFactory DEFAULT = (repeating, readFrameSlots,
@@ -617,7 +618,7 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
     private static class TestRootNodeWithReplacement extends TestRootNode {
         @Child OptimizedOSRLoopNode toReplace;
 
-        TestRootNodeWithReplacement(OSRLoopFactory factory, TestRepeatingNode repeating) {
+        public TestRootNodeWithReplacement(OSRLoopFactory factory, TestRepeatingNode repeating) {
             super(factory, repeating);
             toReplace = factory.createOSRLoop(repeating, new FrameSlot[]{param1, param2}, new FrameSlot[]{param1, param2});
         }
