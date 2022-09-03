@@ -75,9 +75,4 @@ public class VirtualInstanceNode extends VirtualObjectNode {
         Integer index = fieldMap.get(field);
         return index == null ? -1 : index;
     }
-
-    @Override
-    public int fieldIndexForOffset(long constantOffset) {
-        return fieldIndex(type.findFieldWithOffset(constantOffset));
-    }
 }

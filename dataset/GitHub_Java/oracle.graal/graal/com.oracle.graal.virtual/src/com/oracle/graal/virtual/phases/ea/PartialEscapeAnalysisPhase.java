@@ -33,7 +33,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.common.CanonicalizerPhase.*;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.virtual.phases.ea.EffectList.Effect;
@@ -43,7 +42,6 @@ public class PartialEscapeAnalysisPhase extends Phase {
     private final TargetDescription target;
     private final MetaAccessProvider runtime;
     private final Assumptions assumptions;
-    private CustomCanonicalizer customCanonicalizer;
     private final boolean iterative;
 
     public PartialEscapeAnalysisPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, boolean iterative) {
@@ -51,10 +49,6 @@ public class PartialEscapeAnalysisPhase extends Phase {
         this.runtime = runtime;
         this.assumptions = assumptions;
         this.iterative = iterative;
-    }
-
-    public void setCustomCanonicalizer(CustomCanonicalizer customCanonicalizer) {
-        this.customCanonicalizer = customCanonicalizer;
     }
 
     public static final void trace(String format, Object... obj) {
@@ -114,7 +108,7 @@ public class PartialEscapeAnalysisPhase extends Phase {
                         return false;
                     }
                     if (GraalOptions.OptCanonicalizer) {
-                        new CanonicalizerPhase(target, runtime, assumptions, null, customCanonicalizer).apply(graph);
+                        new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
                     }
                     return true;
                 }
