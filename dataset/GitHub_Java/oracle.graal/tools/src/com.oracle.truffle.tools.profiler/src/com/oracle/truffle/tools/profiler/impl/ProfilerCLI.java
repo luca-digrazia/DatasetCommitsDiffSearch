@@ -283,10 +283,6 @@ abstract class ProfilerCLI {
             }
             out.print("]");
         }
-
-        public void printKeyValue(String key, boolean value) {
-            out.print("\"" + key + "\":" + value + "");
-        }
     }
 
     static class SourceLocation {
