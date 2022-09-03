@@ -63,8 +63,8 @@ public class InspectorMessageTransportTest {
                     "toClient({\"result\":{},\"id\":7})",
                     "toClient({\"result\":{},\"id\":8})",
                     "toClient({\"result\":{},\"id\":20})",
-                    "toClient({\"result\":{},\"id\":28})",
                     "toClient({\"method\":\"Runtime.executionContextCreated\"",
+                    "toClient({\"result\":{},\"id\":28})",
                     "toClient({\"method\":\"Debugger.paused\",",
                     "toBackend({\"id\":100,\"method\":\"Debugger.resume\"})",
                     "toClient({\"result\":{},\"id\":100})",
@@ -109,9 +109,7 @@ public class InspectorMessageTransportTest {
         endpoint.onClose(session);
         Assert.assertEquals(session.messages.toString(), MESSAGES.length, session.messages.size());
         for (int i = 0; i < MESSAGES.length; i++) {
-            if (!session.messages.get(i).startsWith(MESSAGES[i])) {
-                Assert.assertTrue("i = " + i + ", Expected start with '" + MESSAGES[i] + "', got: '" + session.messages.get(i) + "'", false);
-            }
+            Assert.assertTrue(session.messages.get(i), session.messages.get(i).startsWith(MESSAGES[i]));
         }
     }
 
