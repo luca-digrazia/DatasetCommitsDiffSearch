@@ -22,38 +22,21 @@
  */
 package com.oracle.graal.lir.amd64.phases;
 
-import static com.oracle.graal.lir.phases.LIRPhase.Options.LIROptimization;
+import static com.oracle.graal.lir.phases.LIRPhase.Options.*;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.RedundantMoveElimination;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.AMD64Move.AMD64MultiStackMove;
 import com.oracle.graal.lir.amd64.AMD64Move.AMD64StackMove;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase;
-import com.oracle.graal.options.NestedBooleanOptionValue;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.phases.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.options.*;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Value;
-
-/**
- * Replaces sequential {@link AMD64StackMove}s of the same type with a single
- * {@link AMD64MultiStackMove} to avoid storing/restoring the scratch register multiple times.
- *
- * Note: this phase must be inserted <b>after</b> {@link RedundantMoveElimination} phase because
- * {@link AMD64MultiStackMove} are not probably detected.
- */
 public class StackMoveOptimizationPhase extends PostAllocationOptimizationPhase {
     public static class Options {
         // @formatter:off
@@ -62,11 +45,11 @@ public class StackMoveOptimizationPhase extends PostAllocationOptimizationPhase 
         // @formatter:on
     }
 
-    private static final DebugCounter eliminatedBackup = Debug.counter("StackMoveOptimizer[EliminatedScratchBackupRestore]");
+    private static final DebugMetric eliminatedBackup = Debug.metric("StackMoveOptimizer[EliminatedScratchBackupRestore]");
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
-                    PostAllocationOptimizationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
+                    BenchmarkCounterFactory counterFactory) {
         LIR lir = lirGenRes.getLIR();
         for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
             List<LIRInstruction> instructions = lir.getLIRforBlock(block);
@@ -81,7 +64,7 @@ public class StackMoveOptimizationPhase extends PostAllocationOptimizationPhase 
         private Register reg = null;
         private List<AllocatableValue> dst;
         private List<Value> src;
-        private AllocatableValue slot;
+        private StackSlotValue slot;
         private boolean removed = false;
 
         public void process(List<LIRInstruction> instructions) {
