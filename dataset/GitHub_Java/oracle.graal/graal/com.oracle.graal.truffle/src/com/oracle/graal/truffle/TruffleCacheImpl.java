@@ -106,7 +106,7 @@ public class TruffleCacheImpl implements TruffleCache {
 
     public StructuredGraph lookup(ResolvedJavaMethod method, NodeInputList<ValueNode> arguments, Assumptions assumptions, CanonicalizerPhase canonicalizer) {
 
-        if (method.getAnnotation(CompilerDirectives.TruffleBoundary.class) != null) {
+        if (method.getAnnotation(CompilerDirectives.SlowPath.class) != null) {
             return null;
         }
 
@@ -289,7 +289,7 @@ public class TruffleCacheImpl implements TruffleCache {
         if (inlineGraph == this.markerGraph) {
             // Can happen for recursive calls.
             throw GraphUtil.approxSourceException(methodCallTargetNode, new IllegalStateException("Found illegal recursive call to " + methodCallTargetNode.targetMethod() +
-                            ", must annotate such calls with @TruffleBoundary!"));
+                            ", must annotate such calls with @CompilerDirectives.SlowPath!"));
         }
         Invoke invoke = methodCallTargetNode.invoke();
         InliningUtil.inline(invoke, inlineGraph, true, null);
@@ -316,7 +316,7 @@ public class TruffleCacheImpl implements TruffleCache {
     protected boolean shouldInline(MethodCallTargetNode methodCallTargetNode) {
         boolean result = (methodCallTargetNode.invokeKind() == InvokeKind.Special || methodCallTargetNode.invokeKind() == InvokeKind.Static) && methodCallTargetNode.targetMethod().canBeInlined() &&
                         !methodCallTargetNode.targetMethod().isNative() && methodCallTargetNode.targetMethod().getAnnotation(ExplodeLoop.class) == null &&
-                        methodCallTargetNode.targetMethod().getAnnotation(CompilerDirectives.TruffleBoundary.class) == null &&
+                        methodCallTargetNode.targetMethod().getAnnotation(CompilerDirectives.SlowPath.class) == null &&
                         !methodCallTargetNode.targetMethod().getDeclaringClass().equals(stringBuilderClass);
         return result;
     }
