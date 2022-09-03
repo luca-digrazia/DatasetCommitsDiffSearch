@@ -32,18 +32,13 @@ import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import javax.management.Attribute;
 import javax.management.AttributeList;
-import javax.management.AttributeNotFoundException;
-import javax.management.InvalidAttributeValueException;
 import javax.management.MBeanAttributeInfo;
 import javax.management.MBeanInfo;
 import javax.management.MBeanOperationInfo;
@@ -56,7 +51,6 @@ import org.graalvm.compiler.api.test.Graal;
 import org.graalvm.compiler.hotspot.HotSpotGraalManagementRegistration;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntime;
 import org.graalvm.compiler.options.EnumOptionKey;
-import org.graalvm.compiler.options.NestedBooleanOptionKey;
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionKey;
@@ -68,7 +62,7 @@ import org.junit.Test;
 
 public class HotSpotGraalManagementTest {
 
-    private static final boolean DEBUG = Boolean.getBoolean(HotSpotGraalManagementTest.class.getSimpleName() + ".debug");
+    private static final boolean DEBUG = Boolean.getBoolean(HotSpotGraalManagementTest.class.getSimpleName() + ".DEBUG");
 
     public HotSpotGraalManagementTest() {
         try {
@@ -162,7 +156,7 @@ public class HotSpotGraalManagementTest {
          * Tests changing the value of {@code option} via the management interface to a) a new legal
          * value and b) an illegal value.
          */
-        static void testOption(MBeanInfo mbeanInfo,
+        private static void testOption(MBeanInfo mbeanInfo,
                         ObjectName mbeanName,
                         MBeanServer server,
                         HotSpotGraalRuntime runtime,
@@ -179,85 +173,54 @@ public class HotSpotGraalManagementTest {
             MBeanAttributeInfo attrInfo = findAttributeInfo(name, mbeanInfo);
             assertNotNull("Attribute not found for option " + name, attrInfo);
 
-            String expectAttributeValue = stringValue(currentValue, option.getOptionValueType() == String.class);
+            Object expectAttributeValue = currentValue;
+            if (optionKey instanceof EnumOptionKey) {
+                expectAttributeValue = String.valueOf(currentValue);
+            } else if (currentValue == null) {
+                expectAttributeValue = "null";
+            }
             Object actualAttributeValue = server.getAttribute(mbeanName, name);
             assertEquals(expectAttributeValue, actualAttributeValue);
 
-            Map<String, String> legalValues = new HashMap<>();
-            List<String> illegalValues = new ArrayList<>();
+            Object newValue = null;
+            Object illegalValue = "illegalValue";
             if (optionKey instanceof EnumOptionKey) {
                 EnumOptionKey<?> enumOptionKey = (EnumOptionKey<?>) optionKey;
                 for (Object obj : enumOptionKey.getAllValues()) {
                     if (obj != currentValue) {
-                        legalValues.put(obj.toString(), obj.toString());
+                        newValue = obj;
                     }
                 }
-                illegalValues.add(String.valueOf(42));
             } else if (optionType == Boolean.class) {
-                Object defaultValue;
-                if (optionKey instanceof NestedBooleanOptionKey) {
-                    NestedBooleanOptionKey nbok = (NestedBooleanOptionKey) optionKey;
-                    defaultValue = nbok.getMasterOption().getValue(runtime.getOptions());
-                } else {
-                    defaultValue = optionKey.getDefaultValue();
-                }
-                legalValues.put("", unquotedStringValue(defaultValue));
-                illegalValues.add(String.valueOf(42));
-                illegalValues.add("true");
-                illegalValues.add("false");
+                newValue = currentValue == null ? Boolean.TRUE : !((boolean) currentValue);
             } else if (optionType == String.class) {
-                legalValues.put("", quotedStringValue(optionKey.getDefaultValue()));
-                legalValues.put("\"" + currentValue + "Prime\"", "\"" + currentValue + "Prime\"");
-                legalValues.put("\"quoted string\"", "\"quoted string\"");
-                illegalValues.add("\"unbalanced quotes");
-                illegalValues.add("\"");
-                illegalValues.add("non quoted string");
+                newValue = currentValue + "Prime";
+                illegalValue = Integer.valueOf(42);
             } else if (optionType == Float.class) {
-                legalValues.put("", unquotedStringValue(optionKey.getDefaultValue()));
-                String value = unquotedStringValue(currentValue == null ? 33F : ((float) currentValue) + 11F);
-                legalValues.put(value, value);
-                illegalValues.add("string");
+                newValue = currentValue == null ? 33F : ((float) currentValue) + 11F;
             } else if (optionType == Double.class) {
-                legalValues.put("", unquotedStringValue(optionKey.getDefaultValue()));
-                String value = unquotedStringValue(currentValue == null ? 33D : ((double) currentValue) + 11D);
-                legalValues.put(value, value);
-                illegalValues.add("string");
+                newValue = currentValue == null ? 33D : ((double) currentValue) + 11D;
             } else if (optionType == Integer.class) {
-                legalValues.put("", unquotedStringValue(optionKey.getDefaultValue()));
-                String value = unquotedStringValue(currentValue == null ? 33 : ((int) currentValue) + 11);
-                legalValues.put(value, value);
-                illegalValues.add("42.42");
-                illegalValues.add("string");
+                newValue = currentValue == null ? 33 : ((int) currentValue) + 11;
             } else if (optionType == Long.class) {
-                legalValues.put("", unquotedStringValue(optionKey.getDefaultValue()));
-                String value = unquotedStringValue(currentValue == null ? 33L : ((long) currentValue) + 11L);
-                legalValues.put(value, value);
-                illegalValues.add("42.42");
-                illegalValues.add("string");
+                newValue = currentValue == null ? 33L : ((long) currentValue) + 11L;
             }
 
-            Attribute originalAttributeValue = new Attribute(name, expectAttributeValue);
+            if (DEBUG) {
+                System.out.printf("Changing %s from %s to %s%n", name, currentValue, newValue);
+            }
+            Attribute newAttributeValue = new Attribute(name, newValue);
+            newValues.add(newAttributeValue);
+            server.setAttribute(mbeanName, newAttributeValue);
+            Attribute originalAttributeValue = new Attribute(name, currentValue);
             try {
-                for (Map.Entry<String, String> e : legalValues.entrySet()) {
-                    String legalValue = e.getKey();
-                    if (DEBUG) {
-                        System.out.printf("Changing %s from %s to %s%n", name, currentValue, legalValue);
-                    }
-                    Attribute newAttributeValue = new Attribute(name, legalValue);
-                    newValues.add(newAttributeValue);
-                    server.setAttribute(mbeanName, newAttributeValue);
-                    Object actual = optionKey.getValue(runtime.getOptions());
-                    actual = server.getAttribute(mbeanName, name);
-                    String expectValue = e.getValue();
-                    if (option.getOptionValueType() == String.class && expectValue == null) {
-                        expectValue = "";
-                    } else if (option.getOptionKey() instanceof NestedBooleanOptionKey && null == expectValue) {
-                        NestedBooleanOptionKey nbok = (NestedBooleanOptionKey) option.getOptionKey();
-                        expectValue = String.valueOf(nbok.getValue(runtime.getOptions()));
-                        actual = server.getAttribute(mbeanName, name);
-                    }
-                    assertEquals(expectValue, actual);
+                Object actual = optionKey.getValue(runtime.getOptions());
+                assertEquals(newValue, actual);
+                actual = server.getAttribute(mbeanName, name);
+                if (optionKey instanceof EnumOptionKey) {
+                    newValue = String.valueOf(newValue);
                 }
+                assertEquals(newValue, actual);
             } finally {
                 if (DEBUG) {
                     System.out.printf("Resetting %s to %s%n", name, currentValue);
@@ -267,29 +230,18 @@ public class HotSpotGraalManagementTest {
             }
 
             try {
-                for (Object illegalValue : illegalValues) {
-                    if (DEBUG) {
-                        System.out.printf("Changing %s from %s to illegal value %s%n", name, currentValue, illegalValue);
-                    }
-                    server.setAttribute(mbeanName, new Attribute(name, illegalValue));
-                    Assert.fail("Expected setting " + name + " to " + illegalValue + " to fail");
+                if (DEBUG) {
+                    System.out.printf("Changing %s from %s to illegal value %s%n", name, currentValue, illegalValue);
                 }
-            } catch (InvalidAttributeValueException e) {
+                server.setAttribute(mbeanName, new Attribute(name, illegalValue));
+                Assert.fail("Expected setting " + name + " to " + illegalValue + " to fail");
+            } catch (Exception e) {
                 // Expected
             } finally {
                 if (DEBUG) {
                     System.out.printf("Resetting %s to %s%n", name, currentValue);
                 }
                 server.setAttribute(mbeanName, originalAttributeValue);
-            }
-
-            try {
-
-                String unknownOptionName = "definitely not an option name";
-                server.setAttribute(mbeanName, new Attribute(unknownOptionName, ""));
-                Assert.fail("Expected setting option with name \"" + unknownOptionName + "\" to fail");
-            } catch (AttributeNotFoundException e) {
-                // Expected
             }
         }
 
@@ -303,28 +255,6 @@ public class HotSpotGraalManagementTest {
             }
             return null;
         }
-    }
-
-    private static String quotedStringValue(Object optionValue) {
-        return stringValue(optionValue, true);
-    }
-
-    private static String unquotedStringValue(Object optionValue) {
-        return stringValue(optionValue, false);
-    }
-
-    private static String stringValue(Object optionValue, boolean withQuoting) {
-        if (optionValue == null) {
-            return "";
-        }
-        if (withQuoting) {
-            return "\"" + optionValue + "\"";
-        }
-        return String.valueOf(optionValue);
-    }
-
-    private static String quoted(Object s) {
-        return "\"" + s + "\"";
     }
 
     @Test
@@ -367,7 +297,7 @@ public class HotSpotGraalManagementTest {
         Object originalShowDumpFiles = server.getAttribute(mbeanName, showDumpFiles.getName());
         final File tmpDir = new File(HotSpotGraalManagementTest.class.getSimpleName() + "_" + System.currentTimeMillis()).getAbsoluteFile();
 
-        server.setAttribute(mbeanName, new Attribute(dumpPath.getName(), quoted(tmpDir)));
+        server.setAttribute(mbeanName, new Attribute(dumpPath.getName(), tmpDir.toString()));
         // Force output to a file even if there's a running IGV instance available.
         server.setAttribute(mbeanName, new Attribute(printGraphFile.getName(), true));
         server.setAttribute(mbeanName, new Attribute(showDumpFiles.getName(), false));
