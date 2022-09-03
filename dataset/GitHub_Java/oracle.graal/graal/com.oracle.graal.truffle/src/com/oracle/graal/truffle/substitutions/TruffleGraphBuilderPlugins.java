@@ -26,16 +26,16 @@ import static java.lang.Character.toUpperCase;
 
 import java.util.concurrent.Callable;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.Constant;
+import jdk.internal.jvmci.meta.ConstantReflectionProvider;
+import jdk.internal.jvmci.meta.DeoptimizationAction;
+import jdk.internal.jvmci.meta.DeoptimizationReason;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.ResolvedJavaType;
 
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.common.calc.Condition;
@@ -98,7 +98,7 @@ public class TruffleGraphBuilderPlugins {
         registerExactMathPlugins(plugins);
         registerCompilerDirectivesPlugins(plugins, canDelayIntrinsification);
         registerCompilerAssertsPlugins(plugins, canDelayIntrinsification);
-        registerOptimizedCallTargetPlugins(metaAccess, plugins, canDelayIntrinsification);
+        registerOptimizedCallTargetPlugins(metaAccess, plugins);
 
         if (TruffleCompilerOptions.TruffleUseFrameWithoutBoxing.getValue()) {
             registerFrameWithoutBoxingPlugins(plugins, canDelayIntrinsification);
@@ -336,7 +336,7 @@ public class TruffleGraphBuilderPlugins {
         });
     }
 
-    public static void registerOptimizedCallTargetPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins, boolean canDelayIntrinsification) {
+    public static void registerOptimizedCallTargetPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
         Registration r = new Registration(plugins, OptimizedCallTarget.class);
         r.register2("createFrame", FrameDescriptor.class, Object[].class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode descriptor, ValueNode args) {
@@ -351,7 +351,6 @@ public class TruffleGraphBuilderPlugins {
                 return true;
             }
         });
-        registerUnsafeCast(r, canDelayIntrinsification);
     }
 
     public static void registerFrameWithoutBoxingPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification) {
