@@ -26,7 +26,7 @@ import static com.oracle.max.cri.ci.CiCallingConvention.Type.*;
 import static com.oracle.max.cri.ci.CiValue.*;
 import static com.oracle.max.cri.ci.CiValueUtil.*;
 import static com.oracle.max.cri.util.MemoryBarriers.*;
-import static com.oracle.max.graal.lir.ValueUtil.*;
+import static com.oracle.max.graal.alloc.util.ValueUtil.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -46,12 +46,12 @@ import com.oracle.max.cri.xir.CiXirAssembler.XirTemp;
 import com.oracle.max.cri.xir.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.cfg.*;
+import com.oracle.max.graal.compiler.lir.*;
+import com.oracle.max.graal.compiler.lir.StandardOp.ParametersOp;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.lir.*;
-import com.oracle.max.graal.lir.StandardOp.*;
-import com.oracle.max.graal.lir.cfg.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
 import com.oracle.max.graal.nodes.PhiNode.PhiType;
@@ -130,9 +130,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     /**
      * Mapping from blocks to the lock state at the end of the block, indexed by the id number of the block.
      */
-    private BlockMap<LockScope> blockLocks;
-
-    private BlockMap<FrameState> blockLastState;
+    private LockScope[] blockLocks;
 
     /**
      * The list of currently locked monitors.
@@ -151,13 +149,20 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         this.xir = xir;
         this.xirSupport = new XirSupport();
         this.debugInfoBuilder = new DebugInfoBuilder(nodeOperands);
-        this.blockLocks = new BlockMap<>(lir.cfg);
-        this.blockLastState = new BlockMap<>(lir.cfg);
+        this.blockLocks = new LockScope[lir.linearScanOrder().size()];
     }
 
     @Override
     public CiTarget target() {
         return target;
+    }
+
+    private LockScope locksFor(Block block) {
+        return blockLocks[block.getId()];
+    }
+
+    private void setLocksFor(Block block, LockScope locks) {
+        blockLocks[block.getId()] = locks;
     }
 
     /**
@@ -191,7 +196,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             case Double:
                 return new Variable(stackKind, lir.nextVariable(), CiRegister.RegisterFlag.FPU);
             default:
-                throw GraalInternalError.shouldNotReachHere();
+                throw Util.shouldNotReachHere();
         }
     }
 
@@ -295,21 +300,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         assert block.lir == null : "LIR list already computed for this block";
         block.lir = new ArrayList<>();
 
-        if (GraalOptions.AllocSSA && block.getBeginNode() instanceof MergeNode) {
-            assert phiValues.isEmpty();
-            MergeNode merge = (MergeNode) block.getBeginNode();
-            for (PhiNode phi : merge.phis()) {
-                if (phi.type() == PhiType.Value) {
-                    CiValue phiValue = newVariable(phi.kind());
-                    setResult(phi, phiValue);
-                    phiValues.add(phiValue);
-                }
-            }
-            append(new PhiLabelOp(new Label(), block.align, phiValues.toArray(new CiValue[phiValues.size()])));
-            phiValues.clear();
-        } else {
-            append(new LabelOp(new Label(), block.align));
-        }
+        emitLabel(new Label(), block.align);
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
             TTY.println("BEGIN Generating LIR for block B" + block.getId());
@@ -317,7 +308,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
         curLocks = null;
         for (Block pred : block.getPredecessors()) {
-            LockScope predLocks = blockLocks.get(pred);
+            LockScope predLocks = locksFor(pred);
             if (curLocks == null) {
                 curLocks = predLocks;
             } else if (curLocks != predLocks && (!pred.isLoopEnd() || predLocks != null)) {
@@ -335,8 +326,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
             for (Block pred : block.getPredecessors()) {
                 if (fs == null) {
-                    fs = blockLastState.get(pred);
-                } else if (fs != blockLastState.get(pred)) {
+                    fs = pred.lastState;
+                } else if (fs != pred.lastState) {
                     fs = null;
                     break;
                 }
@@ -352,6 +343,10 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                 }
             }
             lastState = fs;
+        }
+
+        if (GraalOptions.AllocSSA && block.getBeginNode() instanceof MergeNode) {
+            block.phis = new LIRPhiMapping(block, this);
         }
 
         List<Node> nodes = lir.nodesFor(block);
@@ -411,8 +406,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             TTY.println("END Generating LIR for block B" + block.getId());
         }
 
-        blockLocks.put(currentBlock, curLocks);
-        blockLastState.put(block, lastState);
+        setLocksFor(currentBlock, curLocks);
+        block.lastState = lastState;
         currentBlock = null;
 
         if (GraalOptions.PrintIRWithLIR) {
@@ -670,64 +665,26 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public void visitMerge(MergeNode x) {
+        if (x.next() instanceof LoopBeginNode) {
+            moveToPhi((LoopBeginNode) x.next(), x);
+        }
     }
 
     @Override
     public void visitEndNode(EndNode end) {
+        assert end.merge() != null;
         moveToPhi(end.merge(), end);
+        emitJump(getLIRBlock(end.merge()), null);
     }
 
     @Override
     public void visitLoopEnd(LoopEndNode x) {
+        moveToPhi(x.loopBegin(), x);
         if (GraalOptions.GenLoopSafepoints && x.hasSafepointPolling()) {
             emitSafepointPoll(x);
         }
-        moveToPhi(x.loopBegin(), x);
+        emitJump(getLIRBlock(x.loopBegin()), null);
     }
-
-    private ArrayList<CiValue> phiValues = new ArrayList<>();
-
-    private void moveToPhi(MergeNode merge, FixedNode pred) {
-        if (GraalOptions.AllocSSA) {
-            assert phiValues.isEmpty();
-            for (PhiNode phi : merge.phis()) {
-                if (phi.type() == PhiType.Value) {
-                    phiValues.add(operand(phi.valueAt(pred)));
-                }
-            }
-            append(new PhiJumpOp(getLIRBlock(merge), phiValues.toArray(new CiValue[phiValues.size()])));
-            phiValues.clear();
-            return;
-        }
-
-        if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
-            TTY.println("MOVE TO PHI from " + pred + " to " + merge);
-        }
-        PhiResolver resolver = new PhiResolver(this);
-        for (PhiNode phi : merge.phis()) {
-            if (phi.type() == PhiType.Value) {
-                ValueNode curVal = phi.valueAt(pred);
-                resolver.move(operand(curVal), operandForPhi(phi));
-            }
-        }
-        resolver.dispose();
-
-        append(new JumpOp(getLIRBlock(merge), null));
-    }
-
-    private CiValue operandForPhi(PhiNode phi) {
-        assert phi.type() == PhiType.Value : "wrong phi type: " + phi;
-        CiValue result = operand(phi);
-        if (result == null) {
-            // allocate a variable for this phi
-            Variable newOperand = newVariable(phi.kind());
-            setResult(phi, newOperand);
-            return newOperand;
-        } else {
-            return result;
-        }
-    }
-
 
     public void emitSafepointPoll(FixedNode x) {
         if (!lastState.method().noSafepointPolls()) {
@@ -744,7 +701,9 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public void emitGuardCheck(BooleanNode comp) {
-        if (comp instanceof NullCheckNode && !((NullCheckNode) comp).expectedNull) {
+        if (comp instanceof IsTypeNode) {
+            emitTypeGuard((IsTypeNode) comp);
+        } else if (comp instanceof NullCheckNode && !((NullCheckNode) comp).expectedNull) {
             emitNullCheckGuard((NullCheckNode) comp);
         } else if (comp instanceof ConstantNode && comp.asConstant().asBoolean()) {
             // True constant, nothing to emit.
@@ -758,6 +717,15 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     protected abstract void emitNullCheckGuard(NullCheckNode node);
 
+    private void emitTypeGuard(IsTypeNode node) {
+        load(operand(node.object()));
+        LIRDebugInfo info = state();
+        XirArgument clazz = toXirArgument(node.type().getEncoding(Representation.ObjectHub));
+        XirSnippet typeCheck = xir.genTypeCheck(site(node), toXirArgument(node.object()), clazz, node.type());
+        emitXir(typeCheck, node, info, false);
+    }
+
+
     public void emitBranch(BooleanNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
         if (node instanceof NullCheckNode) {
             emitNullCheckBranch((NullCheckNode) node, trueSuccessor, falseSuccessor, info);
@@ -767,10 +735,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             emitInstanceOfBranch((InstanceOfNode) node, trueSuccessor, falseSuccessor, info);
         } else if (node instanceof ConstantNode) {
             emitConstantBranch(((ConstantNode) node).asConstant().asBoolean(), trueSuccessor, falseSuccessor, info);
-        } else if (node instanceof IsTypeNode) {
-            emitTypeBranch((IsTypeNode) node, trueSuccessor, falseSuccessor, info);
         } else {
-            throw GraalInternalError.unimplemented(node.toString());
+            throw Util.unimplemented(node.toString());
         }
     }
 
@@ -795,20 +761,11 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         emitXir(snippet, x, info, null, false, x.negated() ? falseSuccessor : trueSuccessor, x.negated() ? trueSuccessor : falseSuccessor);
     }
 
+
     public void emitConstantBranch(boolean value, LabelRef trueSuccessorBlock, LabelRef falseSuccessorBlock, LIRDebugInfo info) {
         LabelRef block = value ? trueSuccessorBlock : falseSuccessorBlock;
         if (block != null) {
             emitJump(block, info);
-        }
-    }
-
-    public void emitTypeBranch(IsTypeNode x, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
-        XirArgument thisClass = toXirArgument(x.objectClass());
-        XirArgument otherClass = toXirArgument(x.type().getEncoding(Representation.ObjectHub));
-        XirSnippet snippet = xir.genTypeBranch(site(x), thisClass, otherClass, x.type());
-        emitXir(snippet, x, info, null, false, trueSuccessor, falseSuccessor);
-        if (trueSuccessor != null) {
-            emitJump(trueSuccessor, null);
         }
     }
 
@@ -820,6 +777,9 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     public Variable emitConditional(BooleanNode node, CiValue trueValue, CiValue falseValue) {
+        assert trueValue instanceof CiConstant && (trueValue.kind.stackKind() == CiKind.Int || trueValue.kind == CiKind.Long);
+        assert falseValue instanceof CiConstant && (falseValue.kind.stackKind() == CiKind.Int || trueValue.kind == CiKind.Long);
+
         if (node instanceof NullCheckNode) {
             return emitNullCheckConditional((NullCheckNode) node, trueValue, falseValue);
         } else if (node instanceof CompareNode) {
@@ -829,7 +789,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         } else if (node instanceof ConstantNode) {
             return emitConstantConditional(((ConstantNode) node).asConstant().asBoolean(), trueValue, falseValue);
         } else {
-            throw GraalInternalError.unimplemented(node.toString());
+            throw Util.unimplemented(node.toString());
         }
     }
 
@@ -961,7 +921,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             } else if (isStackSlot(value)) {
                 return CiStackSlot.get(value.kind.stackKind(), asStackSlot(value).rawOffset(), asStackSlot(value).rawAddFrameSize());
             } else {
-                throw GraalInternalError.shouldNotReachHere();
+                throw Util.shouldNotReachHere();
             }
         }
         return value;
@@ -985,7 +945,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                 argList.add(operand);
 
             } else {
-                throw GraalInternalError.shouldNotReachHere("I thought we no longer have null entries for two-slot types...");
+                throw Util.shouldNotReachHere("I thought we no longer have null entries for two-slot types...");
             }
         }
         return argList;
@@ -1167,6 +1127,40 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
 
+
+    private void moveToPhi(MergeNode merge, FixedNode pred) {
+        if (GraalOptions.AllocSSA) {
+            return;
+        }
+
+        if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
+            TTY.println("MOVE TO PHI from " + pred + " to " + merge);
+        }
+        PhiResolver resolver = new PhiResolver(this);
+        for (PhiNode phi : merge.phis()) {
+            if (phi.type() == PhiType.Value) {
+                ValueNode curVal = phi.valueAt(pred);
+                resolver.move(operand(curVal), operandForPhi(phi));
+            }
+        }
+        resolver.dispose();
+    }
+
+    private CiValue operandForPhi(PhiNode phi) {
+        assert phi.type() == PhiType.Value : "wrong phi type: " + phi;
+        CiValue result = operand(phi);
+        if (result == null) {
+            // allocate a variable for this phi
+            Variable newOperand = newVariable(phi.kind());
+            setResult(phi, newOperand);
+            return newOperand;
+        } else {
+            return result;
+        }
+    }
+
+
+
     protected XirArgument toXirArgument(CiValue v) {
         if (v == null) {
             return null;
@@ -1191,7 +1185,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         } else if (op instanceof XirTemp) {
             return newVariable(op.kind);
         } else {
-            GraalInternalError.shouldNotReachHere();
+            Util.shouldNotReachHere();
             return null;
         }
     }

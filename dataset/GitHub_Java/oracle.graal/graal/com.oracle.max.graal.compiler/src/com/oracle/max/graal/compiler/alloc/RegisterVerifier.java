@@ -29,11 +29,10 @@ import java.util.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.cfg.*;
+import com.oracle.max.graal.compiler.lir.*;
+import com.oracle.max.graal.compiler.lir.LIRInstruction.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.lir.*;
-import com.oracle.max.graal.lir.LIRInstruction.*;
-import com.oracle.max.graal.lir.cfg.*;
 
 /**
  */
@@ -198,7 +197,7 @@ final class RegisterVerifier {
     static boolean checkState(Interval[] inputState, CiValue reg, Interval interval) {
         if (reg != null && isRegister(reg)) {
             if (inputState[asRegister(reg).number] != interval) {
-                throw new GraalInternalError("!! Error in register allocation: register %s does not contain interval %s but interval %s", reg, interval.operand, inputState[asRegister(reg).number]);
+                throw new CiBailout("!! Error in register allocation: register " + reg + " does not contain interval " + interval.operand + " but interval " + inputState[asRegister(reg).number]);
             }
         }
         return true;

@@ -32,37 +32,36 @@ import com.oracle.max.cri.ci.CiRegister.RegisterFlag;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.alloc.util.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.cfg.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandFlag;
 import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandMode;
 import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
 import com.oracle.max.graal.compiler.lir.LIRPhiMapping.PhiValueProcedure;
-import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.debug.*;
 
 public class LinearScanAllocator {
-    private final GraalContext context;
     private final LIR lir;
     private final FrameMap frameMap;
 
     private final DataFlowAnalysis dataFlow;
 
-    public LinearScanAllocator(GraalContext context, LIR lir, FrameMap frameMap) {
-        this.context = context;
+    public LinearScanAllocator(LIR lir, FrameMap frameMap) {
         this.lir = lir;
         this.frameMap = frameMap;
 
-        this.dataFlow = new DataFlowAnalysis(context, lir, frameMap.registerConfig);
+        this.dataFlow = new DataFlowAnalysis(lir, frameMap.registerConfig);
         this.blockBeginLocations = new LocationMap[lir.linearScanOrder().size()];
         this.blockEndLocations = new LocationMap[lir.linearScanOrder().size()];
-        this.moveResolver = new MoveResolverImpl(frameMap);
+        this.moveResolver = new MoveResolverImpl(lir, frameMap);
 
         this.variableLastUse = new int[lir.numVariables()];
     }
 
     private class MoveResolverImpl extends MoveResolver {
-        public MoveResolverImpl(FrameMap frameMap) {
-            super(frameMap);
+        public MoveResolverImpl(LIR lir, FrameMap frameMap) {
+            super(lir, frameMap);
         }
 
         @Override
@@ -86,12 +85,12 @@ public class LinearScanAllocator {
         }
 
         @Override
-        protected LocationMap locationsForBlockBegin(LIRBlock block) {
+        protected LocationMap locationsForBlockBegin(Block block) {
             return beginLocationsFor(block);
         }
 
         @Override
-        protected LocationMap locationsForBlockEnd(LIRBlock block) {
+        protected LocationMap locationsForBlockEnd(Block block) {
             return endLocationsFor(block);
         }
     }
@@ -102,7 +101,7 @@ public class LinearScanAllocator {
         }
 
         @Override
-        protected LocationMap locationsForBlockEnd(LIRBlock block) {
+        protected LocationMap locationsForBlockEnd(Block block) {
             return endLocationsFor(block);
         }
     }
@@ -120,19 +119,19 @@ public class LinearScanAllocator {
     private final LocationMap[] blockBeginLocations;
 
     private LocationMap beginLocationsFor(Block block) {
-        return blockBeginLocations[block.blockID()];
+        return blockBeginLocations[block.getId()];
     }
     private void setBeginLocationsFor(Block block, LocationMap locations) {
-        blockBeginLocations[block.blockID()] = locations;
+        blockBeginLocations[block.getId()] = locations;
     }
 
     private final LocationMap[] blockEndLocations;
 
     private LocationMap endLocationsFor(Block block) {
-        return blockEndLocations[block.blockID()];
+        return blockEndLocations[block.getId()];
     }
     private void setEndLocationsFor(Block block, LocationMap locations) {
-        blockEndLocations[block.blockID()] = locations;
+        blockEndLocations[block.getId()] = locations;
     }
 
     private final int[] variableLastUse;
@@ -151,7 +150,7 @@ public class LinearScanAllocator {
     private CiValue[] curOutRegisterState;
     private BitSet curLiveIn;
     private int curOpId;
-    private LIRBlock curPhiBlock;
+    private Block curPhiBlock;
 
     private LocationMap canonicalSpillLocations;
 
@@ -159,22 +158,23 @@ public class LinearScanAllocator {
         assert LIRVerifier.verify(true, lir, frameMap);
 
         dataFlow.execute();
+        IntervalPrinter.printBeforeAllocation("Before register allocation", lir, frameMap.registerConfig, dataFlow);
+
         allocate();
 
-        context.observable.fireCompilationEvent("After linear scan allocation", lir);
+        IntervalPrinter.printAfterAllocation("After linear scan allocation", lir, frameMap.registerConfig, dataFlow, blockEndLocations);
 
         ResolveDataFlow resolveDataFlow = new ResolveDataFlowImpl(lir, moveResolver, dataFlow);
         resolveDataFlow.execute();
-
         frameMap.finish();
 
-        context.observable.fireCompilationEvent("After resolve data flow", lir);
+        IntervalPrinter.printAfterAllocation("After resolve data flow", lir, frameMap.registerConfig, dataFlow, blockEndLocations);
         assert RegisterVerifier.verify(lir, frameMap);
 
         AssignRegisters assignRegisters = new AssignRegistersImpl(lir, frameMap);
         assignRegisters.execute();
 
-        context.observable.fireCompilationEvent("After register asignment", lir);
+        Debug.dump(lir, "After register asignment");
         assert LIRVerifier.verify(false, lir, frameMap);
     }
 
@@ -191,12 +191,12 @@ public class LinearScanAllocator {
         canonicalSpillLocations = new LocationMap(lir.numVariables());
         curInRegisterState = new CiValue[maxRegisterNum()];
         curOutRegisterState = new CiValue[maxRegisterNum()];
-        for (LIRBlock block : lir.linearScanOrder()) {
-            assert trace("start block %s  loop %d depth %d", block, block.loopIndex(), block.loopDepth());
+        for (Block block : lir.linearScanOrder()) {
+            assert trace("start block %s %s", block, block.getLoop());
 
             Arrays.fill(curOutRegisterState, null);
-            if (block.dominator() != null) {
-                LocationMap dominatorState = endLocationsFor(block.dominator());
+            if (block.getDominator() != null) {
+                LocationMap dominatorState = endLocationsFor(block.getDominator());
                 curLocations = new LocationMap(dominatorState);
                 // Clear out all variables that are not live at the begin of this block
                 curLiveIn = dataFlow.liveIn(block);
@@ -210,7 +210,7 @@ public class LinearScanAllocator {
             if (block.phis != null) {
                 assert trace("  phis");
                 curPhiBlock = block;
-                curOpId = block.firstLirInstructionId();
+                curOpId = block.getFirstLirInstructionId();
                 block.phis.forEachOutput(defProc);
                 curOpId = -1;
                 curPhiBlock = null;
@@ -218,8 +218,8 @@ public class LinearScanAllocator {
 
             setBeginLocationsFor(block, new LocationMap(curLocations));
 
-            for (int opIdx = 0; opIdx < block.lir().size(); opIdx++) {
-                LIRInstruction op = block.lir().get(opIdx);
+            for (int opIdx = 0; opIdx < block.lir.size(); opIdx++) {
+                LIRInstruction op = block.lir.get(opIdx);
                 curOpId = op.id();
                 assert trace("  op %d %s", op.id(), op);
 
@@ -234,7 +234,7 @@ public class LinearScanAllocator {
                 op.forEachInput(recordUseProc);
                 op.forEachAlive(recordUseProc);
 
-                moveResolver.init(block.lir(), opIdx);
+                moveResolver.init(block.lir, opIdx);
                 // Process Alive before Input because they are more restricted and the same variable can be Alive and Input.
                 op.forEachAlive(useProc);
                 op.forEachInput(useProc);
@@ -263,11 +263,11 @@ public class LinearScanAllocator {
                 curOpId = -1;
             }
 
-            for (LIRBlock sux : block.getLIRSuccessors()) {
+            for (Block sux : block.getSuccessors()) {
                 if (sux.phis != null) {
                     assert trace("  phis of successor %s", sux);
                     System.arraycopy(curOutRegisterState, 0, curInRegisterState, 0, curOutRegisterState.length);
-                    curOpId = block.lastLirInstructionId() + 1;
+                    curOpId = block.getLastLirInstructionId() + 1;
                     sux.phis.forEachInput(block, useProc);
                     curOpId = -1;
                 }
@@ -463,6 +463,9 @@ public class LinearScanAllocator {
         }
 
         if (bestSpillCandidate == null) {
+            if (curPhiBlock != null) {
+                return selectSpillSlot(variable, mode);
+            }
             // This should not happen as long as all LIR instructions have fulfillable register constraints. But be safe in product mode and bail out.
             assert false;
             throw new CiBailout("No register available");
@@ -554,7 +557,7 @@ public class LinearScanAllocator {
         return loc;
     }
 
-    private boolean checkInputState(final LIRBlock block) {
+    private boolean checkInputState(final Block block) {
         final BitSet liveState = new BitSet();
         curLocations.forEachLocation(new ValueProcedure() {
             @Override

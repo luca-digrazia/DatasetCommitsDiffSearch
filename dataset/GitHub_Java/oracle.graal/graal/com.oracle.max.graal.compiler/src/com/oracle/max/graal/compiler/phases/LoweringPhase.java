@@ -23,9 +23,9 @@
 package com.oracle.max.graal.compiler.phases;
 
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.cri.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.lir.cfg.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.spi.*;
 
@@ -39,11 +39,13 @@ public class LoweringPhase extends Phase {
 
     @Override
     protected void run(final StructuredGraph graph) {
-        ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, false, true, true);
+        final IdentifyBlocksPhase s = new IdentifyBlocksPhase(false);
+        s.apply(graph);
+        s.calculateAlwaysReachedBlock();
 
         NodeBitMap processed = graph.createNodeBitMap();
         NodeBitMap activeGuards = graph.createNodeBitMap();
-        processBlock(cfg.getStartBlock(), activeGuards, processed, null);
+        processBlock(s.getStartBlock(), activeGuards, processed, null);
 
         processed.negate();
         final CiLoweringTool loweringTool = new CiLoweringTool() {
@@ -60,7 +62,7 @@ public class LoweringPhase extends Phase {
 
             @Override
             public Node createGuard(Node condition) {
-                // TODO (thomaswue): Docuemnt why this must not be called on floating nodes.
+                // TODO(tw): Explain why this must not be called on floating nodes.
                 throw new UnsupportedOperationException();
             }
         };
@@ -76,21 +78,21 @@ public class LoweringPhase extends Phase {
 
         FixedNode anchor = parentAnchor;
         if (anchor == null) {
-            anchor = block.getBeginNode();
+            anchor = block.createAnchor();
         }
         process(block, activeGuards, processed, anchor);
 
         // Process always reached block first.
-        Block alwaysReachedBlock = block.getPostdominator();
-        if (alwaysReachedBlock != null && alwaysReachedBlock.getDominator() == block) {
-            assert alwaysReachedBlock.getDominator() == block;
+        Block alwaysReachedBlock = block.alwaysReachedBlock();
+        if (alwaysReachedBlock != null && alwaysReachedBlock.dominator() == block) {
+            assert alwaysReachedBlock.dominator() == block;
             processBlock(alwaysReachedBlock, activeGuards, processed, anchor);
         }
 
         // Now go for the other dominators.
         for (Block dominated : block.getDominated()) {
             if (dominated != alwaysReachedBlock) {
-                assert dominated.getDominator() == block;
+                assert dominated.dominator() == block;
                 processBlock(dominated, activeGuards, processed, null);
             }
         }
@@ -134,7 +136,7 @@ public class LoweringPhase extends Phase {
         };
 
         // Lower the instructions of this block.
-        for (Node node : b.getNodes()) {
+        for (final Node node : b.getInstructions()) {
             processed.mark(node);
             if (node instanceof Lowerable) {
                 ((Lowerable) node).lower(loweringTool);

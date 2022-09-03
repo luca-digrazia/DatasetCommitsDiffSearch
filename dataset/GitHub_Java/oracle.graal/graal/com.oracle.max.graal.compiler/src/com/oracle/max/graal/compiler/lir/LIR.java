@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,9 +24,11 @@ package com.oracle.max.graal.compiler.lir;
 
 import java.util.*;
 
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.asm.*;
+import com.oracle.max.graal.compiler.cfg.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 
@@ -36,22 +38,23 @@ import com.oracle.max.graal.graph.*;
  */
 public class LIR {
 
+    public final ControlFlowGraph cfg;
+
     /**
-     * The start block of this LIR.
+     * The nodes for the blocks.
+     * TODO: This should go away, we want all nodes connected with a next-pointer.
      */
-    private final LIRBlock startBlock;
+    private final BlockMap<List<Node>> nodesFor;
 
     /**
      * The linear-scan ordered list of blocks.
      */
-    private final List<LIRBlock> linearScanOrder;
+    private final List<Block> linearScanOrder;
 
     /**
      * The order in which the code is emitted.
      */
-    private final List<LIRBlock> codeEmittingOrder;
-
-    private final NodeMap<LIRBlock> valueToBlock;
+    private final List<Block> codeEmittingOrder;
 
 
     public final List<SlowPath> slowPaths;
@@ -63,6 +66,14 @@ public class LIR {
      */
     public SlowPath methodEndMarker;
 
+    private int numVariables;
+
+    public SpillMoveFactory spillMoveFactory;
+
+    public interface SpillMoveFactory {
+        LIRInstruction createMove(CiValue result, CiValue input);
+        LIRInstruction createExchange(CiValue input1, CiValue input2);
+    }
 
     public interface SlowPath {
         void emitCode(TargetMethodAssembler tasm);
@@ -70,76 +81,76 @@ public class LIR {
 
     /**
      * Creates a new LIR instance for the specified compilation.
+     * @param numLoops number of loops
      * @param compilation the compilation
      */
-    public LIR(LIRBlock startBlock, List<LIRBlock> linearScanOrder, List<LIRBlock> codeEmittingOrder, NodeMap<LIRBlock> valueToBlock) {
+    public LIR(ControlFlowGraph cfg, BlockMap<List<Node>> nodesFor, List<Block> linearScanOrder, List<Block> codeEmittingOrder) {
+        this.cfg = cfg;
+        this.nodesFor = nodesFor;
         this.codeEmittingOrder = codeEmittingOrder;
         this.linearScanOrder = linearScanOrder;
-        this.startBlock = startBlock;
-        this.valueToBlock = valueToBlock;
 
-        slowPaths = new ArrayList<SlowPath>();
-        deoptimizationStubs = new ArrayList<SlowPath>();
+        slowPaths = new ArrayList<>();
+        deoptimizationStubs = new ArrayList<>();
+    }
+
+    public List<Node> nodesFor(Block block) {
+        return nodesFor.get(block);
     }
 
     /**
      * Gets the linear scan ordering of blocks as a list.
      * @return the blocks in linear scan order
      */
-    public List<LIRBlock> linearScanOrder() {
+    public List<Block> linearScanOrder() {
         return linearScanOrder;
     }
 
-    public List<LIRBlock> codeEmittingOrder() {
+    public List<Block> codeEmittingOrder() {
         return codeEmittingOrder;
     }
 
-    public LIRBlock startBlock() {
-        return startBlock;
+    public int numVariables() {
+        return numVariables;
     }
 
-    public NodeMap<LIRBlock> valueToBlock() {
-        return valueToBlock;
+    public int nextVariable() {
+        return numVariables++;
     }
-
 
     public void emitCode(TargetMethodAssembler tasm) {
         if (GraalOptions.PrintLIR && !TTY.isSuppressed()) {
             printLIR(codeEmittingOrder());
         }
 
-        for (LIRBlock b : codeEmittingOrder()) {
+        for (Block b : codeEmittingOrder()) {
             emitBlock(tasm, b);
         }
 
         // generate code for slow cases
         for (SlowPath sp : slowPaths) {
-            sp.emitCode(tasm);
+            emitSlowPath(tasm, sp);
         }
         // generate deoptimization stubs
         for (SlowPath sp : deoptimizationStubs) {
-            sp.emitCode(tasm);
+            emitSlowPath(tasm, sp);
         }
         // generate traps at the end of the method
-        methodEndMarker.emitCode(tasm);
+        emitSlowPath(tasm, methodEndMarker);
     }
 
-    private void emitBlock(TargetMethodAssembler tasm, LIRBlock block) {
+    private void emitBlock(TargetMethodAssembler tasm, Block block) {
         if (GraalOptions.PrintLIRWithAssembly) {
-            block.printWithoutPhis(TTY.out());
+            TTY.println(block.toString());
         }
 
         if (GraalOptions.CommentedAssembly) {
-            String st = String.format(" block B%d", block.blockID());
-            tasm.blockComment(st);
+            tasm.blockComment(String.format("block B%d %s", block.getId(), block.getLoop()));
         }
 
-        for (LIRInstruction op : block.lir()) {
+        for (LIRInstruction op : block.lir) {
             if (GraalOptions.CommentedAssembly) {
-                // Only print out branches
-                if (op.code instanceof LIRBranch) {
-                    tasm.blockComment(op.toStringWithIdPrefix());
-                }
+                tasm.blockComment(String.format("%d %s", op.id(), op));
             }
             if (GraalOptions.PrintLIRWithAssembly && !TTY.isSuppressed()) {
                 // print out the LIR operation followed by the resulting assembly
@@ -155,7 +166,7 @@ public class LIR {
         }
     }
 
-    private void emitOp(TargetMethodAssembler tasm, LIRInstruction op) {
+    private static void emitOp(TargetMethodAssembler tasm, LIRInstruction op) {
         try {
             try {
                 op.emitCode(tasm);
@@ -169,12 +180,19 @@ public class LIR {
         }
     }
 
+    private static void emitSlowPath(TargetMethodAssembler tasm, SlowPath sp) {
+        if (GraalOptions.CommentedAssembly) {
+            tasm.blockComment(String.format("slow case %s", sp.getClass().getName()));
+        }
+        sp.emitCode(tasm);
+    }
+
     private int lastDecodeStart;
 
     private void printAssembly(TargetMethodAssembler tasm) {
         byte[] currentBytes = tasm.asm.codeBuffer.copyData(lastDecodeStart, tasm.asm.codeBuffer.position());
         if (currentBytes.length > 0) {
-            String disasm = tasm.compilation.compiler.runtime.disassemble(currentBytes, lastDecodeStart);
+            String disasm = tasm.runtime.disassemble(currentBytes, lastDecodeStart);
             if (disasm.length() != 0) {
                 TTY.println(disasm);
             } else {
@@ -186,9 +204,9 @@ public class LIR {
     }
 
 
-    public static void printBlock(LIRBlock x) {
+    public static void printBlock(Block x) {
         // print block id
-        TTY.print("B%d ", x.blockID());
+        TTY.print("B%d ", x.getId());
 
         // print flags
         if (x.isLoopHeader()) {
@@ -205,31 +223,31 @@ public class LIR {
         if (x.numberOfPreds() > 0) {
             TTY.print("preds: ");
             for (int i = 0; i < x.numberOfPreds(); i++) {
-                TTY.print("B%d ", x.predAt(i).blockID());
+                TTY.print("B%d ", x.predAt(i).getId());
             }
         }
 
         if (x.numberOfSux() > 0) {
             TTY.print("sux: ");
             for (int i = 0; i < x.numberOfSux(); i++) {
-                TTY.print("B%d ", x.suxAt(i).blockID());
+                TTY.print("B%d ", x.suxAt(i).getId());
             }
         }
 
         TTY.println();
     }
 
-    public static void printLIR(List<LIRBlock> blocks) {
+    public static void printLIR(List<Block> blocks) {
         if (TTY.isSuppressed()) {
             return;
         }
         TTY.println("LIR:");
         int i;
         for (i = 0; i < blocks.size(); i++) {
-            LIRBlock bb = blocks.get(i);
+            Block bb = blocks.get(i);
             printBlock(bb);
             TTY.println("__id_Instruction___________________________________________");
-            for (LIRInstruction op : bb.lir()) {
+            for (LIRInstruction op : bb.lir) {
                 TTY.println(op.toStringWithIdPrefix());
                 TTY.println();
             }
