@@ -401,9 +401,7 @@ public final class LLVM80BitFloat {
                 return expDifference;
             }
         } else {
-            if (isZero() && val.isZero()) {
-                return 0;
-            } else if (getSign()) {
+            if (getSign()) {
                 return -1;
             } else {
                 return 1;
