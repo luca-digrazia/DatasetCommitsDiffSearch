@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,7 +29,6 @@ import static com.oracle.graal.graph.UnsafeAccess.UNSAFE;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.RetentionPolicy;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -44,7 +43,6 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
-import jdk.vm.ci.code.BytecodePosition;
 import sun.misc.Unsafe;
 
 import com.oracle.graal.compiler.common.CollectionsFactory;
@@ -163,11 +161,7 @@ public abstract class Node implements Cloneable, Formattable {
      * annotated method can be replaced with an instance of the node class denoted by
      * {@link #value()}. For this reason, the signature of the annotated method must match the
      * signature (excluding a prefix of {@linkplain InjectedNodeParameter injected} parameters) of a
-     * constructor in the node class.
-     * <p>
-     * If the node class has a static method {@code intrinsify} with a matching signature plus a
-     * {@code GraphBuilderContext} as first argument, this method is called instead of creating the
-     * node.
+     * factory method named {@code "create"} in the node class.
      */
     @java.lang.annotation.Retention(RetentionPolicy.RUNTIME)
     @java.lang.annotation.Target(ElementType.METHOD)
@@ -199,13 +193,6 @@ public abstract class Node implements Cloneable, Formattable {
      * successors}.
      */
     public interface ValueNumberable {
-    }
-
-    /**
-     * Marker interface for nodes that contains other nodes. When the inputs to this node changes,
-     * users of this node should also be placed on the work list for canonicalization.
-     */
-    public interface IndirectCanonicalization {
     }
 
     private Graph graph;
@@ -569,90 +556,6 @@ public abstract class Node implements Cloneable, Formattable {
         });
     }
 
-    /**
-     * Per node information tracking extra context for a node. Can be used to track the original
-     * source of a node (e.g., method and bytecode position) or any other piece of information. It's
-     * typed as {@link Object} because not all information to track is under our control so
-     * requiring a particular interface would require wrapping the object, adding overhead. It's
-     * also possible to capture multiple different types of information so the value may be an
-     * {@code Object[]} when multiple objects have been captured.
-     */
-    Object nodeContext;
-
-    /**
-     * @return the uninterpreted context for this node
-     */
-    public Object getRawNodeContext() {
-        return nodeContext;
-    }
-
-    /**
-     * Gets the context information of exact type {@code theClass} stored by this node or null if it
-     * doesn't exist.
-     *
-     * @param theClass the exact type of the context being requested
-     * @return a context of exact type {@code theClass} or {@code null}
-     */
-    @SuppressWarnings("unchecked")
-    public <T> T getNodeContext(Class<T> theClass) {
-        if (nodeContext == null) {
-            return null;
-        }
-        if (nodeContext.getClass() == theClass) {
-            return (T) nodeContext;
-        }
-        if (nodeContext instanceof Object[]) {
-            for (Object info : (Object[]) nodeContext) {
-                if (info.getClass() == theClass) {
-                    return (T) info;
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Replaces the entire current context with {@code context}.
-     */
-    public void setNodeContext(Object context) {
-        nodeContext = context;
-    }
-
-    /**
-     * Adds some given context to this node. Existing context of the same exact type as
-     * {@code newContext} will be replaced by the latter. All other context will be merged with the
-     * existing context.
-     */
-    public void updateNodeContext(Object newContext) {
-        // This is the common case with a single type of information captured
-        if (nodeContext == null || nodeContext.getClass() == newContext.getClass()) {
-            nodeContext = newContext;
-            return;
-        }
-        if (newContext instanceof Object[]) {
-            for (Object context : (Object[]) newContext) {
-                updateNodeContext(context);
-            }
-            return;
-        }
-        if (nodeContext instanceof Object[]) {
-            Object[] contextArray = (Object[]) nodeContext;
-            for (int i = 0; i < contextArray.length; i++) {
-                if (contextArray[i].getClass() == newContext.getClass()) {
-                    contextArray[i] = newContext;
-                    return;
-                }
-            }
-            contextArray = Arrays.copyOf(contextArray, contextArray.length + 1);
-            contextArray[contextArray.length - 1] = newContext;
-        } else {
-            Object[] contextArray = new Object[2];
-            contextArray[0] = nodeContext;
-            contextArray[1] = newContext;
-            nodeContext = contextArray;
-        }
-    }
-
     public final NodeClass<? extends Node> getNodeClass() {
         return nodeClass;
     }
@@ -949,9 +852,6 @@ public abstract class Node implements Cloneable, Formattable {
         if (into != null && useIntoLeafNodeCache) {
             into.putNodeIntoCache(newNode);
         }
-        if (graph != null && into != null) {
-            newNode.nodeContext = nodeContext;
-        }
         newNode.afterClone(this);
         return newNode;
     }
@@ -1086,10 +986,6 @@ public abstract class Node implements Cloneable, Formattable {
         Fields properties = getNodeClass().getData();
         for (int i = 0; i < properties.getCount(); i++) {
             map.put(properties.getName(i), properties.get(this, i));
-        }
-        BytecodePosition pos = getNodeContext(BytecodePosition.class);
-        if (pos != null) {
-            map.put("debugPosition", pos);
         }
         return map;
     }
