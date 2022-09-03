@@ -42,8 +42,15 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         }
     };
 
+    public static final ThreadLocal<Long> withinCompilation = new ThreadLocal<Long>() {
+        @Override
+        protected Long initialValue() {
+            return 0L;
+        }
+    };
+
+
     private volatile boolean cancelled;
-    private volatile boolean inProgress;
 
     private final HotSpotGraalRuntime graalRuntime;
     private final PhasePlan plan;
@@ -52,12 +59,13 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
     private final int entryBCI;
     private final int id;
     private final int priority;
+    private final Runnable callback;
 
-    public static CompilationTask create(HotSpotGraalRuntime graalRuntime, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id, int priority) {
-        return new CompilationTask(graalRuntime, plan, optimisticOpts, method, entryBCI, id, priority);
+    public static CompilationTask create(HotSpotGraalRuntime graalRuntime, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id, int priority, Runnable callback) {
+        return new CompilationTask(graalRuntime, plan, optimisticOpts, method, entryBCI, id, priority, callback);
     }
 
-    private CompilationTask(HotSpotGraalRuntime graalRuntime, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id, int priority) {
+    private CompilationTask(HotSpotGraalRuntime graalRuntime, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id, int priority, Runnable callback) {
         this.graalRuntime = graalRuntime;
         this.plan = plan;
         this.method = method;
@@ -65,26 +73,19 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         this.entryBCI = entryBCI;
         this.id = id;
         this.priority = priority;
+        this.callback = callback;
     }
 
-    public ResolvedJavaMethod getMethod() {
+    public ResolvedJavaMethod method() {
         return method;
     }
 
-    public int getPriority() {
+    public int priority() {
         return priority;
     }
 
     public void cancel() {
         cancelled = true;
-    }
-
-    public boolean isInProgress() {
-        return inProgress;
-    }
-
-    public int getEntryBCI() {
-        return entryBCI;
     }
 
     public void run() {
@@ -93,7 +94,6 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
             if (cancelled) {
                 return;
             }
-            inProgress = true;
             if (GraalOptions.DynamicCompilePriority) {
                 int threadPriority = priority < GraalOptions.SlowQueueCutoff ? Thread.NORM_PRIORITY : Thread.MIN_PRIORITY;
                 if (Thread.currentThread().getPriority() != threadPriority) {
@@ -105,36 +105,35 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                 method.setCurrentTask(null);
             }
         } finally {
-            inProgress = false;
             withinEnqueue.set(Boolean.TRUE);
         }
     }
 
     public void runCompilation() {
+        withinCompilation.set(withinCompilation.get() + 1);
         CompilationStatistics stats = CompilationStatistics.create(method);
         try {
             final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
             if (printCompilation) {
-                TTY.println(String.format("%-6d Graal %-70s %-45s %-50s %s...", id, method.getDeclaringClass().getName(), method.getName(), method.getSignature(), entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI ? "" : "(OSR) "));
+                TTY.println(String.format("%-6d Graal %-70s %-45s %-50s ...", id, method.getDeclaringClass().getName(), method.getName(), method.getSignature()));
             }
 
             CompilationResult result = null;
             TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
-            long start = System.currentTimeMillis();
             try {
                 result = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true), new Callable<CompilationResult>() {
 
                     @Override
                     public CompilationResult call() throws Exception {
                         graalRuntime.evictDeoptedGraphs();
-                        StructuredGraph graph = new StructuredGraph(method, entryBCI);
+                        StructuredGraph graph = new StructuredGraph(method, -1);
                         return graalRuntime.getCompiler().compileMethod(method, graph, graalRuntime.getCache(), plan, optimisticOpts);
                     }
                 });
             } finally {
                 filter.remove();
                 if (printCompilation) {
-                    TTY.println(String.format("%-6d Graal %-70s %-45s %-50s | %4dms %5dB", id, "", "", "", System.currentTimeMillis() - start, (result != null ? result.getTargetCodeSize() : -1)));
+                    TTY.println(String.format("%-6d Graal %-70s %-45s %-50s | %4dnodes %5dB", id, "", "", "", 0, (result != null ? result.getTargetCodeSize() : -1)));
                 }
             }
 
@@ -156,6 +155,10 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
             }
         }
         stats.finish(method);
+        if (callback != null) {
+            callback.run();
+        }
+        withinCompilation.set(withinCompilation.get() - 1);
     }
 
     private void installMethod(final CompilationResult tm) {

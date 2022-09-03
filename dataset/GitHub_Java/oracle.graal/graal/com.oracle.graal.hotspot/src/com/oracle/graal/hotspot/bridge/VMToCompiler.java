@@ -33,7 +33,7 @@ import com.oracle.graal.hotspot.meta.*;
  */
 public interface VMToCompiler {
 
-    boolean compileMethod(long metaspaceMethod, HotSpotResolvedJavaType holder, int entryBCI, boolean blocking, int priority) throws Throwable;
+    boolean compileMethod(HotSpotResolvedJavaMethod method, int entryBCI, boolean blocking, int priority) throws Throwable;
 
     void shutdownCompiler() throws Throwable;
 
@@ -43,34 +43,15 @@ public interface VMToCompiler {
 
     PrintStream log();
 
-    JavaMethod createUnresolvedJavaMethod(String name, String signature, JavaType holder);
+    JavaMethod createJavaMethod(String name, String signature, JavaType holder);
 
-    JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags, boolean internal);
+    Signature createSignature(String signature);
 
-    ResolvedJavaMethod createResolvedJavaMethod(JavaType holder, long metaspaceMethod);
+    JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags);
 
     JavaType createPrimitiveJavaType(int basicType);
 
-    JavaType createUnresolvedJavaType(String name);
-
-    /**
-     * Creates a resolved Java type.
-     *
-     * @param metaspaceKlass the metaspace Klass object for the type
-     * @param name the {@linkplain JavaType#getName() name} of the type
-     * @param simpleName a simple, unqualified name for the type
-     * @param javaMirror the {@link Class} mirror
-     * @param hasFinalizableSubclass specifies if the type has a finalizable subtype
-     * @param sizeOrSpecies the size of an instance of the type, or {@link HotSpotResolvedJavaType#INTERFACE_SPECIES_VALUE} or {@link HotSpotResolvedJavaType#ARRAY_SPECIES_VALUE}
-     * @return the resolved type associated with {@code javaMirror} which may not be the type instantiated by this call
-     *         in the case of another thread racing to create the same type
-     */
-    ResolvedJavaType createResolvedJavaType(long metaspaceKlass,
-                    String name,
-                    String simpleName,
-                    Class javaMirror,
-                    boolean hasFinalizableSubclass,
-                    int sizeOrSpecies);
+    JavaType createJavaType(String name);
 
     Constant createConstant(Kind kind, long value);
 

@@ -22,16 +22,12 @@
  */
 package com.oracle.graal.hotspot.phases;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.*;
+import com.oracle.graal.api.code.RuntimeCall.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.*;
 import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -46,26 +42,24 @@ public class OnStackReplacementPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        if (graph.getEntryBCI() == StructuredGraph.INVOCATION_ENTRY_BCI) {
-            // This happens during inlining in a OSR method, because the same phase plan will be used.
-            return;
-        }
         Debug.dump(graph, "OnStackReplacement initial");
         EntryMarkerNode osr;
         do {
             NodeIterable<EntryMarkerNode> osrNodes = graph.getNodes(EntryMarkerNode.class);
             osr = osrNodes.first();
             if (osr == null) {
+                System.out.println("no OnStackReplacementNode generated");
                 throw new BailoutException("no OnStackReplacementNode generated");
             }
             if (osrNodes.count() > 1) {
                 throw new GraalInternalError("multiple OnStackReplacementNodes generated");
             }
             if (osr.stateAfter().locksSize() != 0) {
+                System.out.println("osr with locks not supported");
                 throw new BailoutException("osr with locks not supported");
             }
             if (osr.stateAfter().stackSize() != 0) {
-                throw new BailoutException("osr with stack entries not supported: " + osr.stateAfter().toString(Verbosity.Debugger));
+                throw new GraalInternalError("osr with stack entries not supported");
             }
             LoopEx osrLoop = null;
             LoopsData loops = new LoopsData(graph);
@@ -92,7 +86,7 @@ public class OnStackReplacementPhase extends Phase {
         } while (true);
 
 
-        LocalNode buffer = graph.unique(new LocalNode(0, StampFactory.forKind(wordKind())));
+        LocalNode buffer = graph.unique(new LocalNode(0, StampFactory.forKind(Kind.Long)));
         RuntimeCallNode migrationEnd = graph.add(new RuntimeCallNode(OSR_MIGRATION_END, buffer));
         FrameState osrState = osr.stateAfter();
         migrationEnd.setStateAfter(osrState);
