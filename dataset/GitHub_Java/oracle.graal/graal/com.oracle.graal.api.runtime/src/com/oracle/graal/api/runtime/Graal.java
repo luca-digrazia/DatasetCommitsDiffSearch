@@ -52,8 +52,6 @@ public class Graal {
         } catch (UnsatisfiedLinkError e) {
             runtime = new InvalidGraalRuntime();
         }
-
-        Reflection.registerFieldsToFilter(Graal.class, "runtime");
     }
 
     @CallerSensitive
