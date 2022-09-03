@@ -106,14 +106,13 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                     Assumption.class, "nodeRewritingAssumption");
     private volatile OptimizedDirectCallNode callSiteForSplit;
     @CompilationFinal private volatile String nameCache;
-    private final int uninitializedNodeCount;
 
     public OptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode) {
         assert sourceCallTarget == null || sourceCallTarget.sourceCallTarget == null : "Cannot create a clone of a cloned CallTarget";
         this.sourceCallTarget = sourceCallTarget;
         this.speculationLog = sourceCallTarget != null ? sourceCallTarget.getSpeculationLog() : null;
         this.rootNode = rootNode;
-        uninitializedNodeCount = NodeUtil.adoptAllChildrenAndCount(this.rootNode);
+        this.rootNode.adoptChildren();
     }
 
     public Assumption getNodeRewritingAssumption() {
@@ -608,10 +607,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     public OptimizedDirectCallNode getCallSiteForSplit() {
         return callSiteForSplit;
-    }
-
-    int getUninitializedNodeCount() {
-        return uninitializedNodeCount;
     }
 
     private static final class NonTrivialNodeCountVisitor implements NodeVisitor {

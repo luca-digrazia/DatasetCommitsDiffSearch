@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,7 +22,9 @@
  */
 package org.graalvm.compiler.nodes;
 
-import org.graalvm.collections.UnmodifiableEconomicSet;
+import java.util.List;
+
+import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.graph.NodeClass;
 
 import jdk.vm.ci.meta.Assumptions;
@@ -43,9 +43,9 @@ public final class EncodedGraph {
     private final Object[] objects;
     private final NodeClass<?>[] types;
     private final Assumptions assumptions;
-    private final UnmodifiableEconomicSet<ResolvedJavaMethod> inlinedMethods;
+    private final List<ResolvedJavaMethod> inlinedMethods;
     private final boolean trackNodeSourcePosition;
-    private final UnmodifiableEconomicSet<ResolvedJavaField> fields;
+    private final EconomicSet<ResolvedJavaField> fields;
     private final boolean hasUnsafeAccess;
 
     /**
@@ -59,8 +59,8 @@ public final class EncodedGraph {
                         sourceGraph.trackNodeSourcePosition());
     }
 
-    public EncodedGraph(byte[] encoding, int startOffset, Object[] objects, NodeClass<?>[] types, Assumptions assumptions, UnmodifiableEconomicSet<ResolvedJavaMethod> inlinedMethods,
-                    UnmodifiableEconomicSet<ResolvedJavaField> fields, boolean hasUnsafeAccess, boolean trackNodeSourcePosition) {
+    public EncodedGraph(byte[] encoding, int startOffset, Object[] objects, NodeClass<?>[] types, Assumptions assumptions, List<ResolvedJavaMethod> inlinedMethods,
+                    EconomicSet<ResolvedJavaField> fields, boolean hasUnsafeAccess, boolean trackNodeSourcePosition) {
         this.encoding = encoding;
         this.startOffset = startOffset;
         this.objects = objects;
@@ -92,7 +92,7 @@ public final class EncodedGraph {
         return assumptions;
     }
 
-    public UnmodifiableEconomicSet<ResolvedJavaMethod> getInlinedMethods() {
+    public List<ResolvedJavaMethod> getInlinedMethods() {
         return inlinedMethods;
     }
 
@@ -100,7 +100,7 @@ public final class EncodedGraph {
         return trackNodeSourcePosition;
     }
 
-    public UnmodifiableEconomicSet<ResolvedJavaField> getFields() {
+    public EconomicSet<ResolvedJavaField> getFields() {
         return fields;
     }
 
