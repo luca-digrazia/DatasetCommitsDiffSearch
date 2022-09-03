@@ -24,6 +24,8 @@ package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 
+import java.util.function.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.hotspot.*;
@@ -32,51 +34,31 @@ import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.java.GraphBuilderConfiguration.DebugInfoMode;
 import com.oracle.graal.java.GraphBuilderPlugins.InlineInvokePlugin;
-import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.options.*;
-import com.oracle.graal.options.DerivedOptionValue.OptionSupplier;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
 /**
  * HotSpot implementation of {@link SuitesProvider}.
  */
-public class HotSpotSuitesProvider implements SuitesProvider {
+public class HotSpotSuitesProvider implements SuitesProvider, Supplier<Suites> {
 
     protected final DerivedOptionValue<Suites> defaultSuites;
     protected final PhaseSuite<HighTierContext> defaultGraphBuilderSuite;
-    private final DerivedOptionValue<LowLevelSuites> defaultLowLevelSuites;
     protected final HotSpotGraalRuntimeProvider runtime;
-
-    private class SuitesSupplier implements OptionSupplier<Suites> {
-
-        private static final long serialVersionUID = -3444304453553320390L;
-
-        public Suites get() {
-            return createSuites();
-        }
-
-    }
-
-    private class LowLevelSuitesSupplier implements OptionSupplier<LowLevelSuites> {
-
-        private static final long serialVersionUID = -1558586374095874299L;
-
-        public LowLevelSuites get() {
-            return createLowLevelSuites();
-        }
-
-    }
 
     public HotSpotSuitesProvider(HotSpotGraalRuntimeProvider runtime) {
         this.runtime = runtime;
         this.defaultGraphBuilderSuite = createGraphBuilderSuite();
-        this.defaultSuites = new DerivedOptionValue<>(new SuitesSupplier());
-        this.defaultLowLevelSuites = new DerivedOptionValue<>(new LowLevelSuitesSupplier());
+        this.defaultSuites = new DerivedOptionValue<>(this);
     }
 
     public Suites getDefaultSuites() {
         return defaultSuites.getValue();
+    }
+
+    public Suites get() {
+        return createSuites();
     }
 
     public PhaseSuite<HighTierContext> getDefaultGraphBuilderSuite() {
@@ -133,14 +115,6 @@ public class HotSpotSuitesProvider implements SuitesProvider {
             return newGbs;
         }
         return gbs;
-    }
-
-    public LowLevelSuites getDefaultLowLevelSuites() {
-        return defaultLowLevelSuites.getValue();
-    }
-
-    public LowLevelSuites createLowLevelSuites() {
-        return Suites.createDefaultLowLevelSuites();
     }
 
 }

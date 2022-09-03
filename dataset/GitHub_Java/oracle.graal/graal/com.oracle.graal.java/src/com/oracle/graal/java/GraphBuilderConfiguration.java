@@ -39,7 +39,6 @@ public class GraphBuilderConfiguration {
     private GraphBuilderPlugins.LoadFieldPlugin loadFieldPlugin;
     private GraphBuilderPlugins.ParameterPlugin parameterPlugin;
     private GraphBuilderPlugins.InlineInvokePlugin inlineInvokePlugin;
-    private GraphBuilderPlugins.LoopExplosionPlugin loopExplosionPlugin;
 
     public static enum DebugInfoMode {
         SafePointsOnly,
@@ -167,13 +166,5 @@ public class GraphBuilderConfiguration {
 
     public void setInlineInvokePlugin(GraphBuilderPlugins.InlineInvokePlugin inlineInvokePlugin) {
         this.inlineInvokePlugin = inlineInvokePlugin;
-    }
-
-    public GraphBuilderPlugins.LoopExplosionPlugin getLoopExplosionPlugin() {
-        return loopExplosionPlugin;
-    }
-
-    public void setLoopExplosionPlugin(GraphBuilderPlugins.LoopExplosionPlugin loopExplosionPlugin) {
-        this.loopExplosionPlugin = loopExplosionPlugin;
     }
 }
