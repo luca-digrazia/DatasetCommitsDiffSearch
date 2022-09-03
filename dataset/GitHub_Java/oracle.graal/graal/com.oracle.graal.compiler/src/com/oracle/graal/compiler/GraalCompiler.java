@@ -22,12 +22,6 @@
  */
 package com.oracle.graal.compiler;
 
-import com.oracle.jvmci.code.CompilationResult;
-import com.oracle.jvmci.code.TargetDescription;
-import com.oracle.jvmci.code.RegisterConfig;
-import com.oracle.jvmci.code.CallingConvention;
-import com.oracle.jvmci.meta.*;
-
 import static com.oracle.graal.compiler.GraalCompiler.Options.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.*;
@@ -35,12 +29,16 @@ import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionalit
 
 import java.util.*;
 
-import com.oracle.jvmci.code.CompilationResult.ConstantReference;
-import com.oracle.jvmci.code.CompilationResult.DataPatch;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CompilationResult.ConstantReference;
+import com.oracle.graal.api.code.CompilationResult.DataPatch;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.LIRGenerationPhase.LIRGenerationContext;
 import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.alloc.lsra.*;
 import com.oracle.graal.lir.asm.*;
@@ -53,15 +51,13 @@ import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase.PreAllocationO
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.options.OptionValue.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
-import com.oracle.jvmci.options.*;
-import com.oracle.jvmci.options.OptionValue.OverrideScope;
 
 /**
  * Static methods for orchestrating the compilation of a {@linkplain StructuredGraph graph}.
@@ -227,7 +223,7 @@ public class GraalCompiler {
 
     public static <T extends CompilationResult> void emitBackEnd(StructuredGraph graph, Object stub, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Backend backend,
                     TargetDescription target, T compilationResult, CompilationResultBuilderFactory factory, SchedulePhase schedule, RegisterConfig registerConfig, LIRSuites lirSuites) {
-        try (Scope s = Debug.scope("BackEnd", schedule); DebugCloseable a = BackEnd.start()) {
+        try (Scope s = Debug.scope("BackEnd"); DebugCloseable a = BackEnd.start()) {
             // Repeatedly run the LIR code generation pass to improve statistical profiling results.
             for (int i = 0; i < EmitLIRRepeatCount.getValue(); i++) {
                 SchedulePhase dummySchedule = new SchedulePhase();
@@ -297,14 +293,10 @@ public class GraalCompiler {
 
             // LIR generation
             LIRGenerationContext context = new LIRGenerationContext(lirGen, nodeLirGen, graph, schedule);
-            try (Scope s = Debug.scope("LIRGeneration", nodeLirGen, lir)) {
-                new LIRGenerationPhase().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
+            new LIRGenerationPhase().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
 
             try (Scope s = Debug.scope("LIRStages", nodeLirGen, lir)) {
-                return emitLowLevel(target, codeEmittingOrder, linearScanOrder, lirGenRes, lirGen, lirSuites, backend.newRegisterAllocationConfig(registerConfig));
+                return emitLowLevel(target, codeEmittingOrder, linearScanOrder, lirGenRes, lirGen, lirSuites);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
@@ -314,11 +306,11 @@ public class GraalCompiler {
     }
 
     public static <T extends AbstractBlockBase<T>> LIRGenerationResult emitLowLevel(TargetDescription target, List<T> codeEmittingOrder, List<T> linearScanOrder, LIRGenerationResult lirGenRes,
-                    LIRGeneratorTool lirGen, LIRSuites lirSuites, RegisterAllocationConfig registerAllocationConfig) {
+                    LIRGeneratorTool lirGen, LIRSuites lirSuites) {
         PreAllocationOptimizationContext preAllocOptContext = new PreAllocationOptimizationContext(lirGen);
         lirSuites.getPreAllocationOptimizationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, preAllocOptContext);
 
-        AllocationContext allocContext = new AllocationContext(lirGen.getSpillMoveFactory(), registerAllocationConfig);
+        AllocationContext allocContext = new AllocationContext(lirGen.getSpillMoveFactory());
         lirSuites.getAllocationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, allocContext);
 
         PostAllocationOptimizationContext postAllocOptContext = new PostAllocationOptimizationContext(lirGen);
@@ -363,6 +355,10 @@ public class GraalCompiler {
                 Debug.metric("InfopointsEmitted").add(compilationResult.getInfopoints().size());
                 Debug.metric("DataPatches").add(ldp.size());
                 Debug.metric("ExceptionHandlersEmitted").add(compilationResult.getExceptionHandlers().size());
+            }
+
+            if (Debug.isLogEnabled()) {
+                Debug.log("%s", backend.getProviders().getCodeCache().disassemble(compilationResult, null));
             }
 
             Debug.dump(compilationResult, "After code generation");
