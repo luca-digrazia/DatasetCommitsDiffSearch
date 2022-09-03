@@ -193,7 +193,7 @@ public abstract class GraalCompilerTest extends GraalTest {
              */
             iter = ret.getHighTier().findPhase(CanonicalizerPhase.class);
         }
-        iter.add(new Phase() {
+        iter.add(new Phase("ComputeLoopFrequenciesPhase") {
 
             @Override
             protected void run(StructuredGraph graph) {
@@ -204,13 +204,8 @@ public abstract class GraalCompilerTest extends GraalTest {
             public float codeSizeIncrease() {
                 return NodeSize.IGNORE_SIZE_CONTRACT_FACTOR;
             }
-
-            @Override
-            protected CharSequence createName() {
-                return "ComputeLoopFrequenciesPhase";
-            }
         });
-        ret.getHighTier().appendPhase(new Phase() {
+        ret.getHighTier().appendPhase(new Phase("CheckGraphPhase") {
 
             @Override
             protected void run(StructuredGraph graph) {
@@ -221,13 +216,8 @@ public abstract class GraalCompilerTest extends GraalTest {
             public float codeSizeIncrease() {
                 return NodeSize.IGNORE_SIZE_CONTRACT_FACTOR;
             }
-
-            @Override
-            protected CharSequence createName() {
-                return "CheckGraphPhase";
-            }
         });
-        ret.getMidTier().appendPhase(new Phase() {
+        ret.getMidTier().appendPhase(new Phase("CheckGraphPhase") {
 
             @Override
             protected void run(StructuredGraph graph) {
@@ -239,12 +229,8 @@ public abstract class GraalCompilerTest extends GraalTest {
                 return NodeSize.IGNORE_SIZE_CONTRACT_FACTOR;
             }
 
-            @Override
-            protected CharSequence createName() {
-                return "CheckGraphPhase";
-            }
         });
-        ret.getLowTier().appendPhase(new Phase() {
+        ret.getLowTier().appendPhase(new Phase("CheckGraphPhase") {
 
             @Override
             protected void run(StructuredGraph graph) {
@@ -254,11 +240,6 @@ public abstract class GraalCompilerTest extends GraalTest {
             @Override
             public float codeSizeIncrease() {
                 return NodeSize.IGNORE_SIZE_CONTRACT_FACTOR;
-            }
-
-            @Override
-            protected CharSequence createName() {
-                return "CheckGraphPhase";
             }
         });
         return ret;
