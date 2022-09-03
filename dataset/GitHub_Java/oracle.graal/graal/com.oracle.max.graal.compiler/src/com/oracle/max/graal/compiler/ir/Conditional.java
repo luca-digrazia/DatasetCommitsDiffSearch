@@ -87,6 +87,14 @@ public class Conditional extends Binary {
     }
 
     @Override
+    public boolean valueEqual(Node i) {
+        if (i instanceof Conditional) {
+            return super.valueEqual(i);
+        }
+        return false;
+    }
+
+    @Override
     public void print(LogStream out) {
         out.print(x()).
         print(' ').
