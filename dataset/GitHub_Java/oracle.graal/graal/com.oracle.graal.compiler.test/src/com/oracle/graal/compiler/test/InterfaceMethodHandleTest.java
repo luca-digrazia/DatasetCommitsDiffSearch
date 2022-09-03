@@ -26,10 +26,6 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 
-import org.junit.Test;
-
-import com.oracle.graal.code.CompilationResult;
-
 import jdk.internal.org.objectweb.asm.ClassWriter;
 import jdk.internal.org.objectweb.asm.Label;
 import jdk.internal.org.objectweb.asm.MethodVisitor;
@@ -37,6 +33,10 @@ import jdk.internal.org.objectweb.asm.Opcodes;
 import jdk.vm.ci.code.CompiledCode;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+
+import org.junit.Test;
+
+import com.oracle.graal.code.CompilationResult;
 
 public final class InterfaceMethodHandleTest extends GraalCompilerTest implements Opcodes {
     private static final MethodHandle INTERFACE_HANDLE_M;
@@ -49,12 +49,10 @@ public final class InterfaceMethodHandleTest extends GraalCompilerTest implement
     }
 
     static class A implements I {
-        @Override
         public int m() {
             return 0;
         }
 
-        @Override
         public int m2(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
             return 1;
         }
@@ -62,12 +60,10 @@ public final class InterfaceMethodHandleTest extends GraalCompilerTest implement
     }
 
     static class M2Thrower implements I {
-        @Override
         public int m() {
             return 0;
         }
 
-        @Override
         public int m2(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
             throw new InternalError();
         }
@@ -191,7 +187,7 @@ public final class InterfaceMethodHandleTest extends GraalCompilerTest implement
         return cw.toByteArray();
     }
 
-    public static class AsmLoader extends ExportingClassLoader {
+    public static class AsmLoader extends ClassLoader {
         Class<?> loaded;
 
         public AsmLoader(ClassLoader parent) {
