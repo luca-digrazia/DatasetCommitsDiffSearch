@@ -888,114 +888,40 @@ public final class SchedulePhase extends Phase {
         return true;
     }
 
-    private static class SortState {
-        private Block block;
-        private NodeBitMap visited;
-        private NodeBitMap beforeLastLocation;
-        private List<ScheduledNode> sortedInstructions;
-        private List<FloatingReadNode> reads;
-
-        SortState(Block block, NodeBitMap visited, NodeBitMap beforeLastLocation, List<ScheduledNode> sortedInstructions) {
-            this.block = block;
-            this.visited = visited;
-            this.beforeLastLocation = beforeLastLocation;
-            this.sortedInstructions = sortedInstructions;
-            this.reads = null;
-        }
-
-        public Block currentBlock() {
-            return block;
-        }
-
-        void markVisited(Node n) {
-            visited.mark(n);
-        }
-
-        boolean isVisited(Node n) {
-            return visited.isMarked(n);
-        }
-
-        void markBeforeLastLocation(FloatingReadNode n) {
-            beforeLastLocation.mark(n);
-        }
-
-        void clearBeforeLastLocation(FloatingReadNode frn) {
-            beforeLastLocation.clear(frn);
-        }
-
-        boolean isBeforeLastLocation(FloatingReadNode n) {
-            return beforeLastLocation.isMarked(n);
-        }
-
-        void addRead(FloatingReadNode n) {
-            if (reads == null) {
-                reads = new ArrayList<>();
-            }
-            reads.add(n);
-        }
-
-        int readsSize() {
-            if (reads == null) {
-                return 0;
-            }
-            return reads.size();
-        }
-
-        void removeRead(ScheduledNode i) {
-            assert reads != null;
-            reads.remove(i);
-        }
-
-        List<FloatingReadNode> readsSnapshot() {
-            assert reads != null;
-            return new ArrayList<>(reads);
-        }
-
-        List<ScheduledNode> getSortedInstructions() {
-            return sortedInstructions;
-        }
-
-        boolean containsInstruction(ScheduledNode i) {
-            return sortedInstructions.contains(i);
-        }
-
-        void addInstruction(ScheduledNode i) {
-            sortedInstructions.add(i);
-        }
-    }
-
     /**
      * Sorts the nodes within a block by adding the nodes to a list in a post-order iteration over
      * all inputs. This means that a node is added to the list after all its inputs have been
      * processed.
      */
     private List<ScheduledNode> sortNodesWithinBlockLatest(Block b, NodeBitMap visited, NodeBitMap beforeLastLocation) {
-        SortState state = new SortState(b, visited, beforeLastLocation, new ArrayList<>(blockToNodesMap.get(b).size() + 2));
         List<ScheduledNode> instructions = blockToNodesMap.get(b);
+        List<ScheduledNode> sortedInstructions = new ArrayList<>(blockToNodesMap.get(b).size() + 2);
+        List<FloatingReadNode> reads = null;
 
         if (memsched == MemoryScheduling.OPTIMAL) {
             for (ScheduledNode i : instructions) {
                 if (i instanceof FloatingReadNode) {
                     FloatingReadNode frn = (FloatingReadNode) i;
                     if (frn.location().getLocationIdentity() != FINAL_LOCATION) {
-                        state.addRead(frn);
+                        if (reads == null) {
+                            reads = new ArrayList<>();
+                        }
+                        reads.add(frn);
                         if (nodesFor(b).contains(frn.getLastLocationAccess())) {
-                            assert !state.isBeforeLastLocation(frn);
-                            state.markBeforeLastLocation(frn);
+                            assert !beforeLastLocation.isMarked(frn);
+                            beforeLastLocation.mark(frn);
                         }
                     }
                 }
             }
         }
-
         for (ScheduledNode i : instructions) {
-            addToLatestSorting(i, state);
+            addToLatestSorting(b, i, sortedInstructions, visited, reads, beforeLastLocation);
         }
-        assert state.readsSize() == 0 : "not all reads are scheduled";
+        assert reads == null || reads.size() == 0 : "not all reads are scheduled";
 
         // Make sure that last node gets really last (i.e. when a frame state successor hangs off
         // it).
-        List<ScheduledNode> sortedInstructions = state.getSortedInstructions();
         Node lastSorted = sortedInstructions.get(sortedInstructions.size() - 1);
         if (lastSorted != b.getEndNode()) {
             int idx = sortedInstructions.indexOf(b.getEndNode());
@@ -1021,39 +947,40 @@ public final class SchedulePhase extends Phase {
         return sortedInstructions;
     }
 
-    private void processKillLocation(Node node, LocationIdentity identity, SortState state) {
-        for (FloatingReadNode frn : state.readsSnapshot()) {
+    private void processKillLocation(Block b, Node node, LocationIdentity identity, List<ScheduledNode> sortedInstructions, NodeBitMap visited, List<FloatingReadNode> reads,
+                    NodeBitMap beforeLastLocation) {
+        for (FloatingReadNode frn : new ArrayList<>(reads)) {
             LocationIdentity readLocation = frn.location().getLocationIdentity();
             assert readLocation != FINAL_LOCATION;
             if (frn.getLastLocationAccess() == node) {
                 assert identity == ANY_LOCATION || readLocation == identity : "location doesn't match: " + readLocation + ", " + identity;
-                state.clearBeforeLastLocation(frn);
-            } else if (!state.isBeforeLastLocation(frn) && (readLocation == identity || (node != getCFG().graph.start() && ANY_LOCATION == identity))) {
-                state.removeRead(frn);
-                addToLatestSorting(frn, state);
+                beforeLastLocation.clear(frn);
+            } else if (!beforeLastLocation.isMarked(frn) && (readLocation == identity || (node != getCFG().graph.start() && ANY_LOCATION == identity))) {
+                reads.remove(frn);
+                addToLatestSorting(b, frn, sortedInstructions, visited, reads, beforeLastLocation);
             }
         }
     }
 
-    private void addUnscheduledToLatestSorting(VirtualState state, SortState sortState) {
+    private void addUnscheduledToLatestSorting(Block b, VirtualState state, List<ScheduledNode> sortedInstructions, NodeBitMap visited, List<FloatingReadNode> reads, NodeBitMap beforeLastLocation) {
         if (state != null) {
             // UnscheduledNodes should never be marked as visited.
-            if (sortState.isVisited(state)) {
+            if (visited.isMarked(state)) {
                 throw new SchedulingError();
             }
 
             for (Node input : state.inputs()) {
                 if (input instanceof VirtualState) {
-                    addUnscheduledToLatestSorting((VirtualState) input, sortState);
+                    addUnscheduledToLatestSorting(b, (VirtualState) input, sortedInstructions, visited, reads, beforeLastLocation);
                 } else {
-                    addToLatestSorting((ScheduledNode) input, sortState);
+                    addToLatestSorting(b, (ScheduledNode) input, sortedInstructions, visited, reads, beforeLastLocation);
                 }
             }
         }
     }
 
-    private void addToLatestSorting(ScheduledNode i, SortState state) {
-        if (i == null || state.isVisited(i) || cfg.getNodeToBlock().get(i) != state.currentBlock() || i instanceof PhiNode) {
+    private void addToLatestSorting(Block b, ScheduledNode i, List<ScheduledNode> sortedInstructions, NodeBitMap visited, List<FloatingReadNode> reads, NodeBitMap beforeLastLocation) {
+        if (i == null || visited.isMarked(i) || cfg.getNodeToBlock().get(i) != b || i instanceof PhiNode) {
             return;
         }
 
@@ -1064,45 +991,45 @@ public final class SchedulePhase extends Phase {
 
         if (i instanceof LoopExitNode) {
             for (ProxyNode proxy : ((LoopExitNode) i).proxies()) {
-                addToLatestSorting(proxy, state);
+                addToLatestSorting(b, proxy, sortedInstructions, visited, reads, beforeLastLocation);
             }
         }
 
         for (Node input : i.inputs()) {
             if (input instanceof FrameState) {
                 if (input != stateAfter) {
-                    addUnscheduledToLatestSorting((FrameState) input, state);
+                    addUnscheduledToLatestSorting(b, (FrameState) input, sortedInstructions, visited, reads, beforeLastLocation);
                 }
             } else {
                 if (!(i instanceof ProxyNode && input instanceof LoopExitNode)) {
-                    addToLatestSorting((ScheduledNode) input, state);
+                    addToLatestSorting(b, (ScheduledNode) input, sortedInstructions, visited, reads, beforeLastLocation);
                 }
             }
         }
 
-        if (memsched == MemoryScheduling.OPTIMAL && state.readsSize() != 0) {
+        if (memsched == MemoryScheduling.OPTIMAL && reads != null) {
             if (i instanceof MemoryCheckpoint.Single) {
                 LocationIdentity identity = ((MemoryCheckpoint.Single) i).getLocationIdentity();
-                processKillLocation(i, identity, state);
+                processKillLocation(b, i, identity, sortedInstructions, visited, reads, beforeLastLocation);
             } else if (i instanceof MemoryCheckpoint.Multi) {
                 for (LocationIdentity identity : ((MemoryCheckpoint.Multi) i).getLocationIdentities()) {
-                    processKillLocation(i, identity, state);
+                    processKillLocation(b, i, identity, sortedInstructions, visited, reads, beforeLastLocation);
                 }
             }
             assert MemoryCheckpoint.TypeAssertion.correctType(i);
         }
 
-        addToLatestSorting((ScheduledNode) i.predecessor(), state);
-        state.markVisited(i);
-        addUnscheduledToLatestSorting(stateAfter, state);
+        addToLatestSorting(b, (ScheduledNode) i.predecessor(), sortedInstructions, visited, reads, beforeLastLocation);
+        visited.mark(i);
+        addUnscheduledToLatestSorting(b, stateAfter, sortedInstructions, visited, reads, beforeLastLocation);
 
         // Now predecessors and inputs are scheduled => we can add this node.
-        if (!state.containsInstruction(i)) {
-            state.addInstruction(i);
+        if (!sortedInstructions.contains(i)) {
+            sortedInstructions.add(i);
         }
 
-        if (state.readsSize() != 0 && i instanceof FloatingReadNode) {
-            state.removeRead(i);
+        if (i instanceof FloatingReadNode) {
+            reads.remove(i);
         }
     }
 
