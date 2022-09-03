@@ -33,7 +33,6 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * Manages a set of {@link InvocationPlugin}s.
@@ -41,24 +40,14 @@ import com.oracle.graal.nodes.type.*;
 public class InvocationPlugins {
 
     /**
-     * Access to the receiver in an {@link InvocationPlugin} for a non-static method. The class
-     * literal for this interface must be used with
+     * Sentinel class for use with
      * {@link InvocationPlugins#register(InvocationPlugin, Class, String, Class...)} to denote the
-     * receiver argument for such a non-static method.
+     * receiver argument for a non-static method.
      */
-    public interface Receiver {
-        /**
-         * Gets the receiver value, null checking it first if necessary.
-         *
-         * @return the receiver value with a {@linkplain StampTool#isPointerNonNull(ValueNode)
-         *         non-null} stamp
-         */
-        ValueNode get();
-
-        /**
-         * Determines if the receiver is constant.
-         */
-        boolean isConstant();
+    public static final class Receiver {
+        private Receiver() {
+            throw GraalInternalError.shouldNotReachHere();
+        }
     }
 
     /**
@@ -213,6 +202,7 @@ public class InvocationPlugins {
 
     protected final MetaAccessProvider metaAccess;
     private final List<MethodInfo> registrations;
+    private final Thread registrationThread;
 
     /**
      * The minimum {@linkplain InvocationPluginIdHolder#getInvocationPluginId() id} for a method
@@ -232,9 +222,10 @@ public class InvocationPlugins {
      */
     private InvocationPlugins parent;
 
-    private InvocationPlugins(InvocationPlugins parent, MetaAccessProvider metaAccess) {
+    private InvocationPlugins(InvocationPlugins parent, MetaAccessProvider metaAccess, int estimatePluginCount) {
+        this.registrationThread = Thread.currentThread();
         this.metaAccess = metaAccess;
-        this.registrations = new ArrayList<>(INITIAL_PLUGIN_CAPACITY);
+        this.registrations = new ArrayList<>(estimatePluginCount);
         InvocationPlugins p = parent;
         // Only adopt a non-empty parent
         while (p != null && p.size() == 0) {
@@ -243,17 +234,21 @@ public class InvocationPlugins {
         this.parent = p;
     }
 
-    private static final int INITIAL_PLUGIN_CAPACITY = 64;
+    private static final int DEFAULT_ESTIMATE_PLUGIN_COUNT = 16;
 
     /**
      * Creates a set of invocation plugins with a non-null {@linkplain #getParent() parent}.
      */
     public InvocationPlugins(InvocationPlugins parent) {
-        this(parent, parent.metaAccess);
+        this(parent, parent.metaAccess, DEFAULT_ESTIMATE_PLUGIN_COUNT);
     }
 
     public InvocationPlugins(MetaAccessProvider metaAccess) {
-        this(null, metaAccess);
+        this(metaAccess, DEFAULT_ESTIMATE_PLUGIN_COUNT);
+    }
+
+    public InvocationPlugins(MetaAccessProvider metaAccess, int estimatePluginCount) {
+        this(null, metaAccess, estimatePluginCount);
     }
 
     /**
@@ -261,6 +256,7 @@ public class InvocationPlugins {
      * registered for {@code method}.
      */
     public void register(InvocationPlugin plugin, Class<?> declaringClass, String name, Class<?>... argumentTypes) {
+        assert Thread.currentThread() == registrationThread : "invocation plugin registration must be single threaded";
         MethodInfo methodInfo = new MethodInfo(plugin, declaringClass, name, argumentTypes);
         assert Checker.check(this, methodInfo, plugin);
         assert plugins == null : "invocation plugin registration is closed";
@@ -352,12 +348,11 @@ public class InvocationPlugins {
                     Class<?>[] sig = method.getParameterTypes();
                     assert sig[0] == GraphBuilderContext.class;
                     assert sig[1] == ResolvedJavaMethod.class;
-                    assert sig[2] == Receiver.class;
-                    assert Arrays.asList(Arrays.copyOfRange(sig, 3, sig.length)).stream().allMatch(c -> c == ValueNode.class);
-                    while (sigs.size() < sig.length - 2) {
+                    assert Arrays.asList(Arrays.copyOfRange(sig, 2, sig.length)).stream().allMatch(c -> c == ValueNode.class);
+                    while (sigs.size() < sig.length - 1) {
                         sigs.add(null);
                     }
-                    sigs.set(sig.length - 3, sig);
+                    sigs.set(sig.length - 2, sig);
                 }
             }
             assert sigs.indexOf(null) == -1 : format("need to add an apply() method to %s that takes %d %s arguments ", InvocationPlugin.class.getName(), sigs.indexOf(null),
@@ -371,7 +366,7 @@ public class InvocationPlugins {
                 assert !p.registrations.contains(method) : "a plugin is already registered for " + method;
                 p = p.parent;
             }
-            int arguments = method.isStatic ? method.argumentTypes.length : method.argumentTypes.length - 1;
+            int arguments = method.argumentTypes.length;
             assert arguments < SIGS.length : format("need to extend %s to support method with %d arguments: %s", InvocationPlugin.class.getSimpleName(), arguments, method);
             for (Method m : plugin.getClass().getDeclaredMethods()) {
                 if (m.getName().equals("apply")) {

@@ -22,17 +22,17 @@
  */
 package com.oracle.graal.hotspot.phases;
 
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
 /**
- * Checks for {@link #isIllegalObjectConstant(ConstantNode) illegal} object constants in a graph
+ * Checks for {@link #isLegalObjectConstant(ConstantNode) illegal} object constants in a graph
  * processed for AOT compilation.
  *
  * @see LoadJavaMirrorWithKlassPhase
@@ -42,19 +42,19 @@ public class AheadOfTimeVerificationPhase extends VerifyPhase<PhaseContext> {
     @Override
     protected boolean verify(StructuredGraph graph, PhaseContext context) {
         for (ConstantNode node : getConstantNodes(graph)) {
-            if (isIllegalObjectConstant(node)) {
+            if (isLegalObjectConstant(node)) {
                 throw new VerificationError("illegal object constant: " + node);
             }
         }
         return true;
     }
 
-    public static boolean isIllegalObjectConstant(ConstantNode node) {
+    public static boolean isLegalObjectConstant(ConstantNode node) {
         return isObject(node) && !isNullReference(node) && !isInternedString(node) && !isDirectMethodHandle(node) && !isBoundMethodHandle(node);
     }
 
     private static boolean isObject(ConstantNode node) {
-        return node.getStackKind() == Kind.Object;
+        return node.getKind() == Kind.Object;
     }
 
     private static boolean isNullReference(ConstantNode node) {
