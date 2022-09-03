@@ -45,7 +45,6 @@ import org.graalvm.options.OptionCategory;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.Value;
 
 public class LLVMLauncher extends AbstractLanguageLauncher {
 
@@ -194,11 +193,7 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
     protected int execute(Context.Builder contextBuilder) {
         contextBuilder.arguments(getLanguageId(), programArgs);
         try (Context context = contextBuilder.build()) {
-            Value library = context.eval(Source.newBuilder(getLanguageId(), file).build());
-            if (!library.canExecute()) {
-                throw abort("no main function found");
-            }
-            int status = library.execute().asInt();
+            int status = context.eval(Source.newBuilder(getLanguageId(), file).build()).asInt();
             if (printResult) {
                 System.out.println("Result: " + status);
             }
