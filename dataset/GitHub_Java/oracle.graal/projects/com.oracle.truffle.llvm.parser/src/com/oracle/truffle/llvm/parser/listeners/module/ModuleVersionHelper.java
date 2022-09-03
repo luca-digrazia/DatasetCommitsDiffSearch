@@ -35,35 +35,20 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 
 public abstract class ModuleVersionHelper {
 
-    public abstract void createFunction(Module m, long[] args);
+    public abstract Type getGlobalType(Module m, long typeIndex);
 
-    public abstract void createGlobalVariable(Module m, long[] args);
+    public abstract FunctionType getFunctionType(Module m, long typeIndex);
 
     public static final class ModuleV32 extends ModuleVersionHelper {
 
         @Override
-        public void createFunction(Module m, long[] args) {
-            FunctionType type = (FunctionType) ((PointerType) m.types.get(args[0])).getPointeeType();
-            boolean isPrototype = args[2] != 0;
-
-            m.generator.createFunction(type, isPrototype);
-            m.symbols.add(type);
-            if (!isPrototype) {
-                m.functions.add(type);
-            }
+        public Type getGlobalType(Module m, long typeIndex) {
+            return m.types.get(typeIndex);
         }
 
         @Override
-        public void createGlobalVariable(Module m, long[] args) {
-            int i = 0;
-            Type type = m.types.get(args[i++]);
-            boolean isConstant = (args[i++] & 1) == 1;
-            int initialiser = (int) args[i++];
-            long linkage = args[i++];
-            int align = (int) args[i];
-
-            m.generator.createGlobal(type, isConstant, initialiser, align, linkage);
-            m.symbols.add(type);
+        public FunctionType getFunctionType(Module m, long typeIndex) {
+            return (FunctionType) ((PointerType) m.types.get(typeIndex)).getPointeeType();
         }
 
     }
@@ -71,28 +56,13 @@ public abstract class ModuleVersionHelper {
     public static final class ModuleV38 extends ModuleVersionHelper {
 
         @Override
-        public void createFunction(Module m, long[] args) {
-            FunctionType type = (FunctionType) m.types.get(args[0]);
-            boolean isPrototype = args[2] != 0;
-
-            m.generator.createFunction(type, isPrototype);
-            m.symbols.add(type);
-            if (!isPrototype) {
-                m.functions.add(type);
-            }
+        public Type getGlobalType(Module m, long typeIndex) {
+            return new PointerType(m.types.get(typeIndex));
         }
 
         @Override
-        public void createGlobalVariable(Module m, long[] args) {
-            int i = 0;
-            Type type = new PointerType(m.types.get(args[i++]));
-            boolean isConstant = (args[i++] & 1) == 1;
-            int initialiser = (int) args[i++];
-            long linkage = args[i++];
-            int align = (int) args[i];
-
-            m.generator.createGlobal(type, isConstant, initialiser, align, linkage);
-            m.symbols.add(type);
+        public FunctionType getFunctionType(Module m, long typeIndex) {
+            return (FunctionType) m.types.get(typeIndex);
         }
 
     }
