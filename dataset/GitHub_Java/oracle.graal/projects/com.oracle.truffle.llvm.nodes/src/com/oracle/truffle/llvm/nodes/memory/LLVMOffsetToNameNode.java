@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.nodes.memory;
 
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.memory.LLVMOffsetToNameNodeGen.FindMemberNodeGen;
@@ -51,14 +52,14 @@ public abstract class LLVMOffsetToNameNode extends Node {
     public abstract Object execute(LLVMSourceType type, long offset);
 
     @Specialization(guards = "type == cachedType")
-    Object doCached(@SuppressWarnings("unused") LLVMSourceType type, long offset,
+    protected Object doCached(@SuppressWarnings("unused") LLVMSourceType type, long offset,
                     @Cached("type") LLVMSourceType cachedType,
                     @Cached("createFindMember()") FindMemberNode findMember) {
         return findMember.execute(cachedType, offset, elementAccessSize);
     }
 
     @Specialization(replaces = "doCached")
-    Object doGeneric(LLVMSourceType type, long offset,
+    protected Object doGeneric(LLVMSourceType type, long offset,
                     @Cached("createFindMember()") FindMemberNode findMember) {
         return findMember.execute(type, offset, elementAccessSize);
     }
@@ -69,6 +70,7 @@ public abstract class LLVMOffsetToNameNode extends Node {
 
     abstract static class FindMemberNode extends Node {
 
+        public static final String UNKNOWN_MEMBER = "<UNKNOWN>";
         final boolean dereferencedPointer;
 
         FindMemberNode(boolean dereferencedPointer) {
@@ -86,47 +88,52 @@ public abstract class LLVMOffsetToNameNode extends Node {
         }
 
         static boolean noTypeInfo(LLVMSourceType type) {
-            return type == null || type == LLVMSourceType.UNKNOWN_TYPE;
+            return type == null || type == LLVMSourceType.UNKNOWN || type == LLVMSourceType.VOID || type == LLVMSourceType.UNSUPPORTED;
         }
 
         @Specialization(guards = "noTypeInfo(type)")
-        int doNull(@SuppressWarnings("unused") LLVMSourceType type, long offset, int elementSize) {
+        protected int doNull(@SuppressWarnings("unused") LLVMSourceType type, long offset, int elementSize) {
             // if we have no type info, the best we can do is assume it's an indexed access
             return doArray(null, offset, elementSize);
         }
 
         @Specialization(guards = "!dereferencedPointer")
-        Object doPointer(LLVMSourcePointerType type, long offset, int elementSize,
+        protected Object doPointer(LLVMSourcePointerType type, long offset, int elementSize,
                         @Cached("createDereferencedPointer()") FindMemberNode findMember) {
             return findMember.execute(type.getBaseType(), offset, elementSize);
         }
 
         @Specialization
-        Object doDecorator(LLVMSourceDecoratorType type, long offset, int elementSize,
+        protected Object doDecorator(LLVMSourceDecoratorType type, long offset, int elementSize,
                         @Cached("create()") FindMemberNode findMember) {
             return findMember.execute(type.getBaseType(), offset, elementSize);
         }
 
-        @Specialization(guards = "!dereferencedPointer")
-        int doArray(@SuppressWarnings("unused") LLVMSourceArrayLikeType type, long offset, int elementSize) {
+        @Specialization
+        protected int doArray(@SuppressWarnings("unused") LLVMSourceArrayLikeType type, long offset, int elementSize) {
+            /*
+             * Here we don't care whether dereferencedPointer is true or false. A pointer to an
+             * array is the same as a flat multi-dimensional array, which is the same as a
+             * one-dimensional array.
+             */
             return (int) (offset / elementSize);
         }
 
         @Specialization(guards = "dereferencedPointer || offset == 0")
-        int doBasic(@SuppressWarnings("unused") LLVMSourceBasicType type, long offset, int elementSize) {
+        protected int doBasic(@SuppressWarnings("unused") LLVMSourceBasicType type, long offset, int elementSize) {
             // pointer to basic type: this is the same as an array access
             return doArray(null, offset, elementSize);
         }
 
         @Specialization(guards = "dereferencedPointer")
-        int doPointerToPointer(@SuppressWarnings("unused") LLVMSourcePointerType type, long offset, int elementSize) {
+        protected int doPointerToPointer(@SuppressWarnings("unused") LLVMSourcePointerType type, long offset, int elementSize) {
             // pointer to pointer is same as array of pointer
             return doArray(null, offset, elementSize);
         }
 
         @Specialization(guards = {"type == cachedType", "offset == cachedOffset"})
         @SuppressWarnings("unused")
-        String doStructCached(LLVMSourceStructLikeType type, long offset, int elementSize,
+        protected String doStructCached(LLVMSourceStructLikeType type, long offset, int elementSize,
                         @Cached("type") LLVMSourceStructLikeType cachedType,
                         @Cached("offset") long cachedOffset,
                         @Cached("doStruct(cachedType, cachedOffset, elementSize)") String cachedResult) {
@@ -134,8 +141,14 @@ public abstract class LLVMOffsetToNameNode extends Node {
         }
 
         @Specialization(replaces = "doStructCached")
-        String doStruct(LLVMSourceStructLikeType type, long offset, @SuppressWarnings("unused") int elementSize) {
+        protected String doStruct(LLVMSourceStructLikeType type, long offset, @SuppressWarnings("unused") int elementSize) {
             return type.getElementNameByOffset(offset * Byte.SIZE);
+        }
+
+        @Fallback
+        @SuppressWarnings("unused")
+        Object doFallback(LLVMSourceType type, long offset, int elementSize) {
+            return UNKNOWN_MEMBER;
         }
     }
 }
