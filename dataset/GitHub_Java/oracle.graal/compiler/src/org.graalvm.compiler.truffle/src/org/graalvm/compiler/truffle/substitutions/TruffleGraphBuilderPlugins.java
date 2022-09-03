@@ -34,13 +34,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
+import org.graalvm.api.word.LocationIdentity;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.core.common.type.TypeReference;
-import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
@@ -96,7 +97,6 @@ import org.graalvm.compiler.truffle.nodes.frame.NewFrameNode;
 import org.graalvm.compiler.truffle.nodes.frame.VirtualFrameGetNode;
 import org.graalvm.compiler.truffle.nodes.frame.VirtualFrameIsNode;
 import org.graalvm.compiler.truffle.nodes.frame.VirtualFrameSetNode;
-import org.graalvm.word.LocationIdentity;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -367,7 +367,7 @@ public class TruffleGraphBuilderPlugins {
                         }
                         sb.append(")");
                     }
-                    value.getDebug().dump(DebugContext.VERBOSE_LEVEL, value.graph(), "Graph before bailout at node %s", sb);
+                    Debug.dump(Debug.VERBOSE_LEVEL, value.graph(), "Graph before bailout at node %s", sb);
                     throw b.bailout("Partial evaluation did not reduce value to a constant, is a regular compiler node: " + sb);
                 }
             }
@@ -393,7 +393,7 @@ public class TruffleGraphBuilderPlugins {
         });
     }
 
-    public static void registerOptimizedCallTargetPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification) {
+    public static void registerOptimizedCallTargetPlugins(InvocationPlugins plugins, SnippetReflectionProvider snippetReflection, boolean canDelayIntrinsification) {
         Registration r = new Registration(plugins, OptimizedCallTarget.class);
         r.register2("createFrame", FrameDescriptor.class, Object[].class, new InvocationPlugin() {
             @Override
@@ -401,13 +401,14 @@ public class TruffleGraphBuilderPlugins {
                 if (canDelayIntrinsification) {
                     return false;
                 }
-                if (!descriptor.isJavaConstant()) {
+                if (!descriptor.isConstant()) {
                     throw b.bailout("Parameter 'descriptor' is not a compile-time constant");
                 }
+                FrameDescriptor constantDescriptor = snippetReflection.asObject(FrameDescriptor.class, descriptor.asJavaConstant());
 
                 ValueNode nonNullArguments = b.add(PiNode.create(args, StampFactory.objectNonNull(StampTool.typeReferenceOrNull(args))));
                 Class<?> frameClass = TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing) ? FrameWithoutBoxing.class : FrameWithBoxing.class;
-                NewFrameNode newFrame = new NewFrameNode(new KnownTruffleFields(b.getMetaAccess()), b.getMetaAccess(), b.getGraph(), b.getMetaAccess().lookupJavaType(frameClass), descriptor,
+                NewFrameNode newFrame = new NewFrameNode(b.getMetaAccess(), snippetReflection, b.getGraph(), b.getMetaAccess().lookupJavaType(frameClass), constantDescriptor, descriptor,
                                 nonNullArguments);
                 b.addPush(JavaKind.Object, newFrame);
                 return true;
@@ -721,17 +722,16 @@ public class TruffleGraphBuilderPlugins {
             return;
         }
         StructuredGraph graph = location.graph();
-        DebugContext debug = access.getDebug();
-        try (DebugContext.Scope s = debug.scope("TrufflePerformanceWarnings", graph)) {
-            TruffleDebugJavaMethod truffleMethod = debug.contextLookup(TruffleDebugJavaMethod.class);
+        try (Debug.Scope s = Debug.scope("TrufflePerformanceWarnings", graph)) {
+            TruffleDebugJavaMethod truffleMethod = Debug.contextLookup(TruffleDebugJavaMethod.class);
             String callTargetName = truffleMethod != null ? truffleMethod.getName() : "";
             Map<String, Object> properties = new LinkedHashMap<>();
             properties.put("location", location);
             properties.put("method", targetMethod.format("%h.%n"));
             PartialEvaluator.PerformanceInformationHandler.logPerformanceWarning(callTargetName, Collections.singletonList(access), "location argument not PE-constant", properties);
-            debug.dump(DebugContext.VERBOSE_LEVEL, graph, "perf warn: location argument not PE-constant: %s", location);
+            Debug.dump(Debug.VERBOSE_LEVEL, graph, "perf warn: location argument not PE-constant: %s", location);
         } catch (Throwable t) {
-            debug.handle(t);
+            Debug.handle(t);
         }
     }
 }
