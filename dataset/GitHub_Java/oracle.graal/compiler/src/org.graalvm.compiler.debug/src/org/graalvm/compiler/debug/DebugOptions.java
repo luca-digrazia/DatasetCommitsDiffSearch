@@ -195,12 +195,11 @@ public class DebugOptions {
         } else {
             dumpDir = Paths.get(DumpPath.getValue(options), String.valueOf(UniquePathUtilities.getGlobalTimeStamp()));
         }
-        dumpDir = dumpDir.toAbsolutePath();
         if (!Files.exists(dumpDir)) {
             synchronized (DebugConfigImpl.class) {
                 if (!Files.exists(dumpDir)) {
                     Files.createDirectories(dumpDir);
-                    TTY.println("Dumping debug output in %s", dumpDir.toString());
+                    TTY.println("Dumping debug output in %s", dumpDir.toAbsolutePath().toString());
                 }
             }
         }

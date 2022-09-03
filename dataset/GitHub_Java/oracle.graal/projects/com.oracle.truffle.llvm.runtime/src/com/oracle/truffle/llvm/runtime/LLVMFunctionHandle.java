@@ -32,17 +32,45 @@ package com.oracle.truffle.llvm.runtime;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
 
 @ValueType
-public final class LLVMFunctionHandle extends LLVMFunction {
+public final class LLVMFunctionHandle implements LLVMFunction {
 
-    private final int functionIndex;
+    private final long functionIndex;
 
-    public LLVMFunctionHandle(LLVMContext context, int functionIndex) {
-        super(context);
+    private LLVMFunctionHandle(long functionIndex) {
         this.functionIndex = functionIndex;
     }
 
+    public static LLVMFunctionHandle createHandle(long value) {
+        return new LLVMFunctionHandle(value);
+    }
+
+    public static LLVMFunctionHandle nullPointer() {
+        return new LLVMFunctionHandle(LLVMFunction.tagSulongFunctionPointer(0));
+    }
+
     @Override
-    public int getFunctionIndex() {
+    public long getFunctionPointer() {
         return functionIndex;
+    }
+
+    public boolean isSulong() {
+        return LLVMFunction.isSulongFunctionPointer(functionIndex);
+    }
+
+    public boolean isExternNative() {
+        return LLVMFunction.isExternNativeFunctionPointer(functionIndex);
+    }
+
+    public int getSulongFunctionIndex() {
+        return LLVMFunction.getSulongFunctionIndex(functionIndex);
+    }
+
+    @Override
+    public boolean isNullFunction() {
+        if (LLVMFunction.isSulongFunctionPointer(functionIndex)) {
+            return LLVMFunction.getSulongFunctionIndex(functionIndex) == 0;
+        } else {
+            return functionIndex == 0;
+        }
     }
 }

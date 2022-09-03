@@ -36,16 +36,18 @@ import java.util.Map;
 
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalAlias;
-import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalConstant;
-import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
-import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
+import com.oracle.truffle.llvm.parser.model.globals.GlobalAlias;
+import com.oracle.truffle.llvm.parser.model.globals.GlobalConstant;
+import com.oracle.truffle.llvm.parser.model.globals.GlobalValueSymbol;
+import com.oracle.truffle.llvm.parser.model.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.parser.model.SymbolImpl;
+import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 
 final class LLVMModelVisitor implements ModelVisitor {
-    private final Map<GlobalAlias, SymbolImpl> aliases;
+    private final Map<GlobalAlias, Symbol> aliases;
     private final List<GlobalValueSymbol> globals;
     private final List<FunctionDefinition> functions;
 
@@ -55,7 +57,7 @@ final class LLVMModelVisitor implements ModelVisitor {
         this.functions = new ArrayList<>();
     }
 
-    public Map<GlobalAlias, SymbolImpl> getAliases() {
+    public Map<GlobalAlias, Symbol> getAliases() {
         return aliases;
     }
 
@@ -88,6 +90,10 @@ final class LLVMModelVisitor implements ModelVisitor {
 
     @Override
     public void visit(FunctionDefinition method) {
+        String methodName = method.getName();
+        if (!LLVMLogger.TARGET_NONE.equals(LLVMOptions.DEBUG.printMetadata())) {
+            method.getMetadata().print(LLVMLogger.print(LLVMOptions.DEBUG.printMetadata()), methodName);
+        }
         functions.add(method);
     }
 

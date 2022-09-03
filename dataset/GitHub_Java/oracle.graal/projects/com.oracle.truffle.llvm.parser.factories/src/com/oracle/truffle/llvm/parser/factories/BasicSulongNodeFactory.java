@@ -48,6 +48,7 @@ import com.oracle.truffle.llvm.nodes.control.LLVMBrUnconditionalNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMConditionalBranchNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMDispatchBasicBlockNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMIndirectBranchNode;
+import com.oracle.truffle.llvm.nodes.control.LLVMIndirectBranchNode.LLVMBasicBranchAddressNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMRetNodeFactory.LLVMVoidReturnNodeGen;
 import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI16SwitchNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI32SwitchNode;
@@ -286,7 +287,7 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
 
     @Override
     public LLVMControlFlowNode createIndirectBranch(LLVMParserRuntime runtime, LLVMExpressionNode value, int[] labelTargets, LLVMExpressionNode[] phiWrites, SourceSection source) {
-        return LLVMIndirectBranchNode.create(new LLVMIndirectBranchNode.LLVMBasicBranchAddressNode(value), labelTargets, phiWrites, source);
+        return new LLVMIndirectBranchNode(new LLVMBasicBranchAddressNode(value), labelTargets, phiWrites, source);
     }
 
     @Override
@@ -313,12 +314,12 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     @Override
     public LLVMControlFlowNode createConditionalBranch(LLVMParserRuntime runtime, int trueIndex, int falseIndex, LLVMExpressionNode conditionNode, LLVMExpressionNode truePhiWriteNodes,
                     LLVMExpressionNode falsePhiWriteNodes, SourceSection sourceSection) {
-        return LLVMConditionalBranchNode.create(trueIndex, falseIndex, truePhiWriteNodes, falsePhiWriteNodes, conditionNode, sourceSection);
+        return new LLVMConditionalBranchNode(trueIndex, falseIndex, truePhiWriteNodes, falsePhiWriteNodes, conditionNode, sourceSection);
     }
 
     @Override
     public LLVMControlFlowNode createUnconditionalBranch(LLVMParserRuntime runtime, int unconditionalIndex, LLVMExpressionNode phiWrites, SourceSection source) {
-        return LLVMBrUnconditionalNode.create(unconditionalIndex, phiWrites, source);
+        return new LLVMBrUnconditionalNode(unconditionalIndex, phiWrites, source);
     }
 
     @Override

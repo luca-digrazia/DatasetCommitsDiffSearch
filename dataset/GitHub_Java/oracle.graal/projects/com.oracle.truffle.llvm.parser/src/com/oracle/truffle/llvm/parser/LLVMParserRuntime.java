@@ -46,7 +46,7 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.parser.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.datalayout.DataLayoutConverter.DataSpecConverterImpl;
-import com.oracle.truffle.llvm.parser.metadata.DebugInformation;
+import com.oracle.truffle.llvm.parser.metadata.SourceSectionGenerator;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
@@ -63,11 +63,12 @@ import com.oracle.truffle.llvm.parser.util.Pair;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.LLVMScope;
 import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
+import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -93,6 +94,10 @@ public final class LLVMParserRuntime {
         LLVMLabelList labels = parserResult.getLabels();
         TargetDataLayout layout = model.getTargetDataLayout();
         assert layout != null;
+
+        if (!LLVMLogger.TARGET_NONE.equals(LLVMOptions.DEBUG.printMetadata())) {
+            model.getMetadata().print(LLVMLogger.print(LLVMOptions.DEBUG.printMetadata()));
+        }
 
         LLVMModelVisitor module = new LLVMModelVisitor();
         model.accept(module);
@@ -135,8 +140,8 @@ public final class LLVMParserRuntime {
     private final SulongNodeFactory nodeFactory;
     private final Map<GlobalAlias, Symbol> aliases;
     private final List<LLVMExpressionNode> deallocations;
+    private final SourceSectionGenerator sourceSectionGenerator;
     private final LLVMScope scope;
-    private final DebugInformation debugInformation;
 
     private LLVMParserRuntime(Source source, LLVMLanguage language, LLVMContext context, StackAllocation stack, DataSpecConverterImpl targetDataLayout, SulongNodeFactory nodeFactory,
                     Map<GlobalAlias, Symbol> aliases) {
@@ -148,8 +153,8 @@ public final class LLVMParserRuntime {
         this.language = language;
         this.aliases = aliases;
         this.deallocations = new ArrayList<>();
+        this.sourceSectionGenerator = new SourceSectionGenerator();
         this.scope = LLVMScope.createFileScope(context);
-        this.debugInformation = DebugInformation.generate();
     }
 
     private void initializeFunctions(LLVMPhiManager phiManager, LLVMLabelList labels, List<FunctionDefinition> functions) {
@@ -157,9 +162,9 @@ public final class LLVMParserRuntime {
             String functionName = function.getName();
             LLVMFunctionDescriptor functionDescriptor = scope.lookupOrCreateFunction(context, functionName, !Linkage.isFileLocal(function.getLinkage()),
                             index -> LLVMFunctionDescriptor.createDescriptor(context, functionName, function.getType(), index));
-            LazyToTruffleConverterImpl lazyConverter = new LazyToTruffleConverterImpl(this, context, nodeFactory, function, source, stack.getFrame(functionName), phiManager.getPhiMap(functionName),
+            LazyToTruffleConverterImpl lazyConverter = new LazyToTruffleConverterImpl(this, nodeFactory, function, source, stack.getFrame(functionName), phiManager.getPhiMap(functionName),
                             labels.labels(functionName));
-            if (!context.getEnv().getOptions().get(SulongEngineOption.LAZY_PARSING)) {
+            if (!LLVMOptions.ENGINE.lazyParsing()) {
                 lazyConverter.convert();
             }
             functionDescriptor.declareInSulong(lazyConverter);
@@ -346,28 +351,11 @@ public final class LLVMParserRuntime {
         return scope;
     }
 
-    /**
-     * Get the {@link SourceSection} for the given function. This will refer to the original
-     * sourcefile if the bitcode file was compiled with debug information, otherwise the referenced
-     * {@link Source} will contain a simple String identifying the LLVM IR function. This also
-     * parses the SourceSections for the instructions contained in the function.
-     *
-     * @param function The function to get the source for
-     * @return the corresponding {@link SourceSection} or {@code null}
-     */
     SourceSection getSourceSection(FunctionDefinition function) {
-        return debugInformation.parseAndGetDebugInfo(function, source);
+        return sourceSectionGenerator.getOrDefault(function, source);
     }
 
-    /**
-     * Get the {@link SourceSection} for the given instruction if debug information is available.
-     * {@link LLVMParserRuntime#getSourceSection(FunctionDefinition)} needs to be called on the
-     * containing {@link FunctionDefinition} prior to this call for this to work.
-     *
-     * @param instruction The instruction to get the source for
-     * @return the corresponding {@link SourceSection} or {@code null}
-     */
     SourceSection getSourceSection(Instruction instruction) {
-        return debugInformation.getDebugInfo(instruction);
+        return sourceSectionGenerator.getOrDefault(instruction);
     }
 }

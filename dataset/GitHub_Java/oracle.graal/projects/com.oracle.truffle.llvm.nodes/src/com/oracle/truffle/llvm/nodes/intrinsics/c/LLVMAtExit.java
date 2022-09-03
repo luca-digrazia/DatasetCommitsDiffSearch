@@ -45,7 +45,7 @@ public abstract class LLVMAtExit extends LLVMIntrinsic {
     @TruffleBoundary
     public long doInt(LLVMFunctionHandle func) {
 
-        LLVMContext context = getContextReference().get();
+        LLVMContext context = getContext();
         LLVMFunctionDescriptor desc = context.getFunctionDescriptor(func);
         context.registerAtExitFunction(desc);
 

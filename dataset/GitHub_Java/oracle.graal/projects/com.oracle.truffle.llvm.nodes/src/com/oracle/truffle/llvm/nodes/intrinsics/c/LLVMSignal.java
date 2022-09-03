@@ -52,6 +52,7 @@ import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.LLVMThread;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
@@ -62,17 +63,22 @@ import sun.misc.SignalHandler;
 public abstract class LLVMSignal extends LLVMExpressionNode {
 
     @Specialization
-    public LLVMFunction doSignal(int signal, LLVMFunction handler, @Cached("getContext()") LLVMContext context) {
+    public LLVMFunction doSignal(int signal, LLVMFunctionDescriptor handler, @Cached("getContext()") LLVMContext context) {
         return setSignalHandler(context, signal, handler);
     }
 
-    private static LLVMFunction setSignalHandler(LLVMContext context, int signalId, LLVMFunction function) {
+    @Specialization
+    public LLVMFunction doSignal(int signal, LLVMFunctionHandle handler, @Cached("getContext()") LLVMContext context) {
+        return setSignalHandler(context, signal, context.getFunctionDescriptor(handler));
+    }
+
+    private static LLVMFunction setSignalHandler(LLVMContext context, int signalId, LLVMFunctionDescriptor function) {
         try {
             Signals decodedSignal = Signals.decode(signalId);
             return setSignalHandler(context, decodedSignal.signal(), function);
         } catch (NoSuchElementException e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            System.err.println(e.getMessage());
+            LLVMLogger.error(e.getMessage());
             return context.getSigErr();
         }
     }
@@ -87,7 +93,7 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
     }
 
     @TruffleBoundary
-    private static LLVMFunction setSignalHandler(LLVMContext context, Signal signal, LLVMFunction function) {
+    private static LLVMFunction setSignalHandler(LLVMContext context, Signal signal, LLVMFunctionDescriptor function) {
         int signalId = signal.getNumber();
         LLVMFunction returnFunction = context.getSigDfl();
 
@@ -112,7 +118,7 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
                 registeredSignals.put(signalId, newSignalHandler);
             }
         } catch (IllegalArgumentException e) {
-            System.err.println("could not register signal with id " + signalId + " (" + signal + ")");
+            LLVMLogger.error("could not register signal with id " + signalId + " (" + signal + ")");
             return context.getSigErr();
         }
 
@@ -136,32 +142,32 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
 
         private final Signal signal;
         private final LLVMContext context;
-        private final LLVMFunction handler;
+        private final LLVMFunctionDescriptor handler;
 
         private final Lock lock = new ReentrantLock();
         private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
         @TruffleBoundary
-        private LLVMSignalHandler(LLVMContext context, Signal signal, LLVMFunction function) throws IllegalArgumentException {
+        private LLVMSignalHandler(LLVMContext context, Signal signal, LLVMFunctionDescriptor function) throws IllegalArgumentException {
             this.signal = signal;
+            this.handler = function;
             this.context = context;
 
             lock.lock();
             try {
-                if (function.getFunctionPointer() == context.getSigDfl().getFunctionPointer()) {
-                    this.handler = function;
+                if (function.equals(context.getSigDfl())) {
                     Signal.handle(signal, SignalHandler.SIG_DFL);
-                } else if (function.getFunctionPointer() == context.getSigIgn().getFunctionPointer()) {
-                    this.handler = function;
+                    isRunning.set(true);
+                    context.registerThread(this);
+                    return;
+                } else if (function.equals(context.getSigIgn())) {
                     Signal.handle(signal, SignalHandler.SIG_IGN);
-                } else {
-                    if (function instanceof LLVMFunctionDescriptor) {
-                        this.handler = function;
-                    } else {
-                        this.handler = context.getFunctionDescriptor((LLVMFunctionHandle) function);
-                    }
-                    Signal.handle(signal, this);
+                    isRunning.set(true);
+                    context.registerThread(this);
+                    return;
                 }
+
+                Signal.handle(signal, this);
 
                 isRunning.set(true);
                 context.registerThread(this);
@@ -196,7 +202,7 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
         public void handle(Signal arg0) {
             try {
                 if (!globalSignalHandlerLock.tryLock(HANDLE_MAX_WAITING_TIME, TimeUnit.MILLISECONDS)) {
-                    System.err.println("could not execute signal handler. Sulong can currently only execute one signal at once!");
+                    LLVMLogger.error("could not execute signal handler. Sulong can currently only execute one signal at once!");
                     return;
                 }
             } catch (InterruptedException e) {
@@ -206,7 +212,7 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
             try {
                 if (isRunning.get()) {
                     try {
-                        ForeignAccess.sendExecute(Message.createExecute(1).createNode(), (LLVMFunctionDescriptor) handler, signal.getNumber());
+                        ForeignAccess.sendExecute(Message.createExecute(1).createNode(), handler, signal.getNumber());
                     } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                         throw new AssertionError(e);
                     }

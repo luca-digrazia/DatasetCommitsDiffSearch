@@ -29,8 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,27 +42,19 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.runtime.NativeLookup.UnsupportedNativeTypeException;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
-import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
+import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class LLVMContext {
-
-    private final List<Path> libraryPaths = new ArrayList<>();
-    private final List<Path> bitcodeLibraries = new ArrayList<>();
 
     private final List<RootCallTarget> globalVarInits = new ArrayList<>();
     private final List<RootCallTarget> globalVarDeallocs = new ArrayList<>();
@@ -74,10 +64,11 @@ public final class LLVMContext {
     private final List<LLVMThread> runningThreads = new ArrayList<>();
     private final NativeLookup nativeLookup;
     private final LLVMNativeFunctions nativeFunctions;
-    private final LLVMThreadingStack threadingStack;
+    private final LLVMThreadingStack threadingStack = new LLVMThreadingStack();
     private Object[] mainArguments;
     private Source mainSourceFile;
-    private boolean bcLibrariesLoaded;
+    private boolean parseOnly;
+    private boolean haveLoadedDynamicBitcodeLibraries;
     private NativeIntrinsicProvider nativeIntrinsicsFactory;
     private final LinkedList<LLVMAddress> caughtExceptionStack = new LinkedList<>();
     private final LinkedList<DestructorStackElement> destructorStack = new LinkedList<>();
@@ -86,9 +77,8 @@ public final class LLVMContext {
     private final IdentityHashMap<TruffleObject, LLVMAddress> toNative;
     private final HashMap<LLVMAddress, TruffleObject> toManaged;
 
-    private final Env env;
     private final LLVMScope globalScope;
-    private final LLVMFunctionPointerRegistry functionPointerRegistry;
+    private final LLVMFunctionIndexRegistry functionIndexRegistry;
     private final LLVMTypeRegistry typeRegistry;
 
     // #define SIG_DFL ((__sighandler_t) 0) /* Default action. */
@@ -118,25 +108,21 @@ public final class LLVMContext {
         }
     }
 
-    private static final class LLVMFunctionPointerRegistry {
+    private static final class LLVMFunctionIndexRegistry {
         private int currentFunctionIndex = 0;
-        private final HashMap<LLVMAddress, LLVMFunctionDescriptor> functionDescriptors = new HashMap<>();
+        private final List<LLVMFunctionDescriptor> functionDescriptors = new ArrayList<>();
 
-        synchronized LLVMFunctionDescriptor getDescriptor(LLVMFunctionHandle handle) {
-            return functionDescriptors.get(LLVMAddress.fromLong(handle.getFunctionPointer()));
+        LLVMFunctionDescriptor getDescriptor(LLVMFunctionHandle handle) {
+            return functionDescriptors.get(handle.getSulongFunctionIndex());
         }
 
-        synchronized void register(LLVMAddress pointer, LLVMFunctionDescriptor desc) {
-            functionDescriptors.put(pointer, desc);
-        }
+        LLVMFunctionDescriptor create(FunctionFactory factory) {
+            LLVMFunctionDescriptor function = factory.create(currentFunctionIndex++);
+            functionDescriptors.add(function);
 
-        synchronized LLVMFunctionDescriptor create(FunctionFactory factory) {
-            LLVMFunctionDescriptor fn = factory.create(currentFunctionIndex++);
-            if (fn.isNullFunction()) {
-                assert !functionDescriptors.containsKey(LLVMAddress.nullPointer());
-                functionDescriptors.put(LLVMAddress.nullPointer(), fn);
-            }
-            return fn;
+            assert LLVMFunction.getSulongFunctionIndex(function.getFunctionPointer()) == currentFunctionIndex - 1;
+            assert functionDescriptors.get(currentFunctionIndex - 1) == function;
+            return function;
         }
 
     }
@@ -174,94 +160,18 @@ public final class LLVMContext {
     }
 
     public LLVMContext(Env env) {
-        this.env = env;
-        this.nativeLookup = env.getOptions().get(SulongEngineOption.DISABLE_NFI) ? null : new NativeLookup(env);
-        this.nativeCallStatistics = SulongEngineOption.isTrue(env.getOptions().get(SulongEngineOption.NATIVE_CALL_STATS)) ? new HashMap<>() : null;
-        this.threadingStack = new LLVMThreadingStack(env.getOptions().get(SulongEngineOption.STACK_SIZE_KB));
+        this.nativeLookup = LLVMOptions.ENGINE.disableNativeInterface() ? null : new NativeLookup(env);
+        this.nativeCallStatistics = !LLVMLogger.TARGET_NONE.equals(LLVMOptions.DEBUG.printNativeCallStatistics()) ? new HashMap<>() : null;
+        this.nativeFunctions = new LLVMNativeFunctionsImpl(nativeLookup);
         this.sigDfl = LLVMFunctionHandle.createHandle(0);
         this.sigIgn = LLVMFunctionHandle.createHandle(1);
-        this.sigErr = LLVMFunctionHandle.createHandle(-1);
+        this.sigErr = LLVMFunctionHandle.createHandle((-1) & LLVMFunction.LOWER_MASK);
         this.toNative = new IdentityHashMap<>();
         this.toManaged = new HashMap<>();
         this.handlesLock = new Object();
-        this.functionPointerRegistry = new LLVMFunctionPointerRegistry();
+        this.functionIndexRegistry = new LLVMFunctionIndexRegistry();
         this.typeRegistry = new LLVMTypeRegistry();
         this.globalScope = LLVMScope.createGlobalScope(this);
-
-        Object mainArgs = env.getConfig().get(LLVMLanguage.MAIN_ARGS_KEY);
-        this.mainArguments = mainArgs == null ? env.getApplicationArguments() : (Object[]) mainArgs;
-
-        addLibraryPaths(SulongEngineOption.getPolyglotOptionSearchPaths(env));
-        if (nativeLookup != null) {
-            List<String> nativeLibraries = SulongEngineOption.getPolyglotOptionNativeLibraries(env);
-            nativeLookup.addLibrary(findLibrary("libsulong." + SulongEngineOption.getNativeLibrarySuffix()));
-            nativeLookup.addLibraries(nativeLibraries.stream().map(l -> findLibrary(l)).collect(Collectors.toList()));
-        }
-        addBitcodeLibrary("libsulong.bc");
-        this.nativeFunctions = new LLVMNativeFunctionsImpl(nativeLookup);
-    }
-
-    public void addBitcodeLibrary(String l) {
-        CompilerAsserts.neverPartOfCompilation();
-        Path p = findLibrary(l);
-        if (!bitcodeLibraries.contains(p)) {
-            if (!p.toFile().exists()) {
-                throw new LinkageError(String.format("Library \"%s\" does not exist.", p.toString()));
-            }
-            bitcodeLibraries.add(p);
-        }
-    }
-
-    public List<Path> getBitcodeLibraries() {
-        return bitcodeLibraries;
-    }
-
-    public void addNativeLibraries(List<String> libraries) {
-        if (nativeLookup == null) {
-            return;
-        }
-        nativeLookup.addLibraries(libraries.stream().map(l -> findLibrary(l)).collect(Collectors.toList()));
-    }
-
-    public void addLibraryPaths(List<String> paths) {
-        for (String p : paths) {
-            addLibraryPath(p);
-        }
-    }
-
-    public void addLibraryPath(String p) {
-        Path path = Paths.get(p);
-        if (!path.toFile().exists()) {
-            System.err.println(String.format("Library Path \"%s\" does not exist.", path.toString()));
-        } else {
-            if (!libraryPaths.contains(path)) {
-                libraryPaths.add(path);
-            }
-        }
-    }
-
-    private Path findLibrary(String lib) {
-        Path libPath = Paths.get(lib);
-        if (libPath.isAbsolute()) {
-            if (libPath.toFile().exists()) {
-                return libPath;
-            } else {
-                throw new LinkageError(String.format("Library \"%s\" does not exist.", lib));
-            }
-        }
-
-        for (Path p : libraryPaths) {
-            Path absPath = Paths.get(p.toString(), lib);
-            if (absPath.toFile().exists()) {
-                return absPath;
-            }
-        }
-
-        return Paths.get(lib);
-    }
-
-    public Env getEnv() {
-        return env;
     }
 
     public LLVMScope getGlobalScope() {
@@ -284,42 +194,14 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public LLVMFunctionDescriptor getFunctionDescriptor(LLVMFunctionHandle handle) {
-        return functionPointerRegistry.getDescriptor(handle);
+    public synchronized LLVMFunctionDescriptor getFunctionDescriptor(LLVMFunctionHandle handle) {
+        assert handle.isSulong();
+        return functionIndexRegistry.getDescriptor(handle);
     }
 
     @TruffleBoundary
-    public LLVMFunctionDescriptor createFunctionDescriptor(FunctionFactory factory) {
-        return functionPointerRegistry.create(factory);
-    }
-
-    @TruffleBoundary
-    public TruffleObject createNativeWrapper(LLVMFunctionDescriptor descriptor) {
-        TruffleObject wrapper = null;
-        LLVMAddress pointer = null;
-
-        if (nativeLookup != null) {
-            try {
-                String signature = getNativeSignature(descriptor.getType(), 0);
-                TruffleObject createNativeWrapper = nativeLookup.getNativeFunction("@createNativeWrapper", String.format("(env, %s):object", signature));
-                try {
-                    wrapper = (TruffleObject) ForeignAccess.sendExecute(Message.createExecute(1).createNode(), createNativeWrapper, descriptor);
-                    pointer = LLVMAddress.fromLong(ForeignAccess.sendAsPointer(Message.AS_POINTER.createNode(), wrapper));
-                } catch (InteropException ex) {
-                    throw new AssertionError(ex);
-                }
-            } catch (UnsupportedNativeTypeException ex) {
-                // ignore, fall back to tagged id
-            }
-        }
-
-        if (wrapper == null) {
-            pointer = LLVMAddress.fromLong(LLVMFunction.tagSulongFunctionPointer(descriptor.getFunctionId()));
-            wrapper = new LLVMTruffleAddress(pointer, descriptor.getType(), this);
-        }
-
-        functionPointerRegistry.register(pointer, descriptor);
-        return wrapper;
+    public synchronized LLVMFunctionDescriptor createFunctionDescriptor(FunctionFactory factory) {
+        return functionIndexRegistry.create(factory);
     }
 
     public void setNativeIntrinsicsFactory(NativeIntrinsicProvider nativeIntrinsicsFactory) {
@@ -421,7 +303,7 @@ public final class LLVMContext {
     }
 
     public void addLibraryToNativeLookup(String library) {
-        nativeLookup.addLibrary(findLibrary(library));
+        nativeLookup.addLibraryToNativeLookup(library);
     }
 
     public LLVMThreadingStack getThreadingStack() {
@@ -517,12 +399,20 @@ public final class LLVMContext {
         return Collections.unmodifiableList(runningThreads);
     }
 
-    public boolean bcLibrariesLoaded() {
-        return bcLibrariesLoaded;
+    public void setParseOnly(boolean parseOnly) {
+        this.parseOnly = parseOnly;
     }
 
-    public void setBcLibrariesLoaded() {
-        bcLibrariesLoaded = true;
+    public boolean isParseOnly() {
+        return parseOnly;
+    }
+
+    public boolean haveLoadedDynamicBitcodeLibraries() {
+        return haveLoadedDynamicBitcodeLibraries;
+    }
+
+    public void setHaveLoadedDynamicBitcodeLibraries() {
+        haveLoadedDynamicBitcodeLibraries = true;
     }
 
     public interface FunctionFactory {
@@ -533,7 +423,7 @@ public final class LLVMContext {
         return nativeLookup;
     }
 
-    public static String getNativeSignature(FunctionType type, int skipArguments) throws UnsupportedNativeTypeException {
+    public static String getNativeSignature(FunctionType type, int skipArguments) {
         return NativeLookup.prepareSignature(type, skipArguments);
     }
 

@@ -154,11 +154,6 @@ public final class FunctionDefinition implements Constant, FunctionGenerator, Va
         return paramAttr.getReturnAttributesGroup();
     }
 
-    public AttributesGroup getParameterAttributesGroup(int idx) {
-        CompilerAsserts.neverPartOfCompilation();
-        return paramAttr.getParameterAttributesGroup(idx);
-    }
-
     @Override
     public void createParameter(Type t) {
         final int index = parameters.size();
