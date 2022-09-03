@@ -31,69 +31,69 @@ package com.oracle.truffle.llvm.nodes.asm;
 
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64UpdateFlagsNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.api.frame.VirtualFrame;
 
-@NodeChild("valueNode")
-public abstract class LLVMAMD64IncNode extends LLVMExpressionNode {
+@NodeChild(value = "valueNode")
+public abstract class LLVMAMD64DecNode extends LLVMExpressionNode {
     @Child LLVMAMD64UpdateFlagsNode flags;
 
-    public LLVMAMD64IncNode(LLVMAMD64UpdateFlagsNode flags) {
+    public LLVMAMD64DecNode(LLVMAMD64UpdateFlagsNode flags) {
         this.flags = flags;
     }
 
-    public abstract static class LLVMAMD64IncbNode extends LLVMAMD64IncNode {
-        public LLVMAMD64IncbNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64DecbNode extends LLVMAMD64DecNode {
+        public LLVMAMD64DecbNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
         protected byte executeI16(VirtualFrame frame, byte value) {
-            byte result = (byte) (value + 1);
-            boolean of = result == Byte.MAX_VALUE;
+            byte result = (byte) (value - 1);
+            boolean of = value == Byte.MIN_VALUE;
             flags.execute(frame, of, result);
             return result;
         }
     }
 
-    public abstract static class LLVMAMD64IncwNode extends LLVMAMD64IncNode {
-        public LLVMAMD64IncwNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64DecwNode extends LLVMAMD64DecNode {
+        public LLVMAMD64DecwNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
         protected short executeI16(VirtualFrame frame, short value) {
-            short result = (short) (value + 1);
-            boolean of = result == Short.MAX_VALUE;
+            short result = (short) (value - 1);
+            boolean of = value == Short.MIN_VALUE;
             flags.execute(frame, of, result);
             return result;
         }
     }
 
-    public abstract static class LLVMAMD64InclNode extends LLVMAMD64IncNode {
-        public LLVMAMD64InclNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64DeclNode extends LLVMAMD64DecNode {
+        public LLVMAMD64DeclNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
         protected int executeI32(VirtualFrame frame, int value) {
-            int result = value + 1;
-            boolean of = result == Integer.MAX_VALUE;
+            int result = value - 1;
+            boolean of = value == Integer.MIN_VALUE;
             flags.execute(frame, of, result);
             return result;
         }
     }
 
-    public abstract static class LLVMAMD64IncqNode extends LLVMAMD64IncNode {
-        public LLVMAMD64IncqNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64DecqNode extends LLVMAMD64DecNode {
+        public LLVMAMD64DecqNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
         protected long executeI64(VirtualFrame frame, long value) {
-            long result = value + 1;
-            boolean of = result == Long.MAX_VALUE;
+            long result = value - 1;
+            boolean of = value == Long.MIN_VALUE;
             flags.execute(frame, of, result);
             return result;
         }

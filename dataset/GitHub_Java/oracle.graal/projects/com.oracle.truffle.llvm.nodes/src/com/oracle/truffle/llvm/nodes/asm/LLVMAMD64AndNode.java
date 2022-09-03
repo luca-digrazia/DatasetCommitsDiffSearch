@@ -37,69 +37,61 @@ import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64UpdateFlagsNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChildren({@NodeChild("left"), @NodeChild("right")})
-public abstract class LLVMAMD64AddNode extends LLVMExpressionNode {
+public abstract class LLVMAMD64AndNode extends LLVMExpressionNode {
     @Child LLVMAMD64UpdateFlagsNode flags;
 
-    private LLVMAMD64AddNode(LLVMAMD64UpdateFlagsNode flags) {
+    private LLVMAMD64AndNode(LLVMAMD64UpdateFlagsNode flags) {
         this.flags = flags;
     }
 
-    public abstract static class LLVMAMD64AddbNode extends LLVMAMD64AddNode {
-        public LLVMAMD64AddbNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64AndbNode extends LLVMAMD64AndNode {
+        public LLVMAMD64AndbNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
         protected byte executeI16(VirtualFrame frame, byte left, byte right) {
-            byte result = (byte) (left + right);
-            boolean overflow = (result < 0 && left > 0 && right > 0) || (result > 0 && left < 0 && right < 0);
-            boolean carry = ((left < 0 || right < 0) && result > 0) || (left < 0 && right < 0);
-            flags.execute(frame, overflow, carry, result);
+            byte result = (byte) (left & right);
+            flags.execute(frame, result);
             return result;
         }
     }
 
-    public abstract static class LLVMAMD64AddwNode extends LLVMAMD64AddNode {
-        public LLVMAMD64AddwNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64AndwNode extends LLVMAMD64AndNode {
+        public LLVMAMD64AndwNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
         protected short executeI16(VirtualFrame frame, short left, short right) {
-            short result = (short) (left + right);
-            boolean overflow = (result < 0 && left > 0 && right > 0) || (result > 0 && left < 0 && right < 0);
-            boolean carry = ((left < 0 || right < 0) && result > 0) || (left < 0 && right < 0);
-            flags.execute(frame, overflow, carry, result);
+            short result = (short) (left & right);
+            flags.execute(frame, result);
             return result;
         }
     }
 
-    public abstract static class LLVMAMD64AddlNode extends LLVMAMD64AddNode {
-        public LLVMAMD64AddlNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64AndlNode extends LLVMAMD64AndNode {
+        public LLVMAMD64AndlNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
         protected int executeI32(VirtualFrame frame, int left, int right) {
-            int result = left + right;
-            boolean overflow = (result < 0 && left > 0 && right > 0) || (result > 0 && left < 0 && right < 0);
-            boolean carry = ((left < 0 || right < 0) && result > 0) || (left < 0 && right < 0);
-            flags.execute(frame, overflow, carry, result);
+            int result = left & right;
+            flags.execute(frame, result);
             return result;
         }
     }
 
-    public abstract static class LLVMAMD64AddqNode extends LLVMAMD64AddNode {
-        public LLVMAMD64AddqNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64AndqNode extends LLVMAMD64AndNode {
+        public LLVMAMD64AndqNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
         protected long executeI64(VirtualFrame frame, long left, long right) {
-            long result = left + right;
-            boolean overflow = (result < 0 && left > 0 && right > 0) || (result > 0 && left < 0 && right < 0);
-            boolean carry = ((left < 0 || right < 0) && result > 0) || (left < 0 && right < 0);
-            flags.execute(frame, overflow, carry, result);
+            long result = left & right;
+            flags.execute(frame, result);
             return result;
         }
     }

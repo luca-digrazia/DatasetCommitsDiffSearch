@@ -27,34 +27,25 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.nodes.asm;
+package com.oracle.truffle.llvm.nodes.asm.support;
 
-import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeChildren;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64Flags;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-
-public abstract class LLVMAMD64LoadFlags extends LLVMExpressionNode {
-    @NodeChildren({@NodeChild(value = "cf", type = LLVMExpressionNode.class), @NodeChild(value = "pf", type = LLVMExpressionNode.class), @NodeChild(value = "zf", type = LLVMExpressionNode.class),
-                    @NodeChild(value = "sf", type = LLVMExpressionNode.class)})
-    public abstract static class LLVMAMD64LahfNode extends LLVMAMD64LoadFlags {
-        @Specialization
-        protected byte executeI8(boolean cf, boolean pf, boolean zf, boolean sf) {
-            byte flags = 0;
-            if (cf) {
-                flags |= (byte) (1 << LLVMAMD64Flags.CF);
-            }
-            if (pf) {
-                flags |= (byte) (1 << LLVMAMD64Flags.PF);
-            }
-            if (zf) {
-                flags |= (byte) (1 << LLVMAMD64Flags.ZF);
-            }
-            if (sf) {
-                flags |= (byte) (1 << LLVMAMD64Flags.SF);
-            }
-            return flags;
-        }
-    }
+public abstract class LLVMAMD64Flags {
+    // complete IA32/EMT64 manual, p77
+    public static final long CF = 0;
+    public static final long PF = 2;
+    public static final long AF = 4;
+    public static final long ZF = 6;
+    public static final long SF = 7;
+    public static final long TF = 8;
+    public static final long IF = 9;
+    public static final long DF = 10;
+    public static final long OF = 11;
+    // public static final long IOPL = 12 | 13;
+    public static final long NT = 14;
+    public static final long RF = 16;
+    public static final long VM = 17;
+    public static final long AC = 18;
+    public static final long VIF = 19;
+    public static final long VIP = 20;
+    public static final long ID = 21;
 }

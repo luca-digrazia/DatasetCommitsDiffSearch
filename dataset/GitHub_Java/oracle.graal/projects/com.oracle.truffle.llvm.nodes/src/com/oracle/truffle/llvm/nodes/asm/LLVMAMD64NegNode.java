@@ -30,76 +30,75 @@
 package com.oracle.truffle.llvm.nodes.asm;
 
 import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64UpdateFlagsNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@NodeChildren({@NodeChild("left"), @NodeChild("right")})
-public abstract class LLVMAMD64AddNode extends LLVMExpressionNode {
+@NodeChild("valueNode")
+public abstract class LLVMAMD64NegNode extends LLVMExpressionNode {
     @Child LLVMAMD64UpdateFlagsNode flags;
 
-    private LLVMAMD64AddNode(LLVMAMD64UpdateFlagsNode flags) {
+    public LLVMAMD64NegNode(LLVMAMD64UpdateFlagsNode flags) {
         this.flags = flags;
     }
 
-    public abstract static class LLVMAMD64AddbNode extends LLVMAMD64AddNode {
-        public LLVMAMD64AddbNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64NegbNode extends LLVMAMD64NegNode {
+        public LLVMAMD64NegbNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
-        protected byte executeI16(VirtualFrame frame, byte left, byte right) {
-            byte result = (byte) (left + right);
-            boolean overflow = (result < 0 && left > 0 && right > 0) || (result > 0 && left < 0 && right < 0);
-            boolean carry = ((left < 0 || right < 0) && result > 0) || (left < 0 && right < 0);
-            flags.execute(frame, overflow, carry, result);
+        protected byte executeI16(VirtualFrame frame, byte value) {
+            byte result = (byte) -value;
+            boolean cf = value != 0;
+            boolean of = false;
+            flags.execute(frame, cf, of, result);
             return result;
         }
     }
 
-    public abstract static class LLVMAMD64AddwNode extends LLVMAMD64AddNode {
-        public LLVMAMD64AddwNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64NegwNode extends LLVMAMD64NegNode {
+        public LLVMAMD64NegwNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
-        protected short executeI16(VirtualFrame frame, short left, short right) {
-            short result = (short) (left + right);
-            boolean overflow = (result < 0 && left > 0 && right > 0) || (result > 0 && left < 0 && right < 0);
-            boolean carry = ((left < 0 || right < 0) && result > 0) || (left < 0 && right < 0);
-            flags.execute(frame, overflow, carry, result);
+        protected short executeI16(VirtualFrame frame, short value) {
+            short result = (short) -value;
+            boolean cf = value != 0;
+            boolean of = false;
+            flags.execute(frame, cf, of, result);
             return result;
         }
     }
 
-    public abstract static class LLVMAMD64AddlNode extends LLVMAMD64AddNode {
-        public LLVMAMD64AddlNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64NeglNode extends LLVMAMD64NegNode {
+        public LLVMAMD64NeglNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
-        protected int executeI32(VirtualFrame frame, int left, int right) {
-            int result = left + right;
-            boolean overflow = (result < 0 && left > 0 && right > 0) || (result > 0 && left < 0 && right < 0);
-            boolean carry = ((left < 0 || right < 0) && result > 0) || (left < 0 && right < 0);
-            flags.execute(frame, overflow, carry, result);
+        protected int executeI32(VirtualFrame frame, int value) {
+            int result = -value;
+            boolean cf = value != 0;
+            boolean of = false;
+            flags.execute(frame, cf, of, result);
             return result;
         }
     }
 
-    public abstract static class LLVMAMD64AddqNode extends LLVMAMD64AddNode {
-        public LLVMAMD64AddqNode(LLVMAMD64UpdateFlagsNode flags) {
+    public abstract static class LLVMAMD64NegqNode extends LLVMAMD64NegNode {
+        public LLVMAMD64NegqNode(LLVMAMD64UpdateFlagsNode flags) {
             super(flags);
         }
 
         @Specialization
-        protected long executeI64(VirtualFrame frame, long left, long right) {
-            long result = left + right;
-            boolean overflow = (result < 0 && left > 0 && right > 0) || (result > 0 && left < 0 && right < 0);
-            boolean carry = ((left < 0 || right < 0) && result > 0) || (left < 0 && right < 0);
-            flags.execute(frame, overflow, carry, result);
+        protected long executeI64(VirtualFrame frame, long value) {
+            long result = -value;
+            boolean cf = value != 0;
+            boolean of = false;
+            flags.execute(frame, cf, of, result);
             return result;
         }
     }
