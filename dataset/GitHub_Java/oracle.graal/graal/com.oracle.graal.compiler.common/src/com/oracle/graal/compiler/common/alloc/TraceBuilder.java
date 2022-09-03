@@ -150,7 +150,7 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
     }
 
     private boolean verify(ArrayList<List<T>> traces) {
-        assert verifyAllBlocksScheduled(traces, blocked.length) : "Not all blocks assigned to traces!";
+        assert traces.stream().flatMap(l -> l.stream()).distinct().count() == blocked.length : "Not all blocks assigned to traces!";
         for (List<T> trace : traces) {
             T last = null;
             for (T current : trace) {
@@ -159,16 +159,6 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
             }
         }
         return true;
-    }
-
-    private static <T extends AbstractBlockBase<T>> boolean verifyAllBlocksScheduled(ArrayList<List<T>> traces, int expectedLength) {
-        BitSet handled = new BitSet(expectedLength);
-        for (List<T> trace : traces) {
-            for (T block : trace) {
-                handled.set(block.getId());
-            }
-        }
-        return handled.cardinality() == expectedLength;
     }
 
     protected ArrayList<List<T>> buildTraces(T startBlock) {
@@ -191,7 +181,7 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
      */
     @SuppressWarnings("try")
     private List<T> startTrace(T block, int traceNumber) {
-        assert checkPredecessorsProcessed(block);
+        assert block.getPredecessors().stream().allMatch(this::processed) : "Predecessor unscheduled: " + block.getPredecessors().stream().filter(this::processed).findFirst().get();
         ArrayList<T> trace = new ArrayList<>();
         int blockNumber = 0;
         try (Indent i = Debug.logAndIndent("StartTrace: " + block)) {
@@ -205,18 +195,6 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
             }
         }
         return trace;
-    }
-
-    private boolean checkPredecessorsProcessed(T block) {
-        List<T> predecessors = block.getPredecessors();
-        for (T pred : predecessors) {
-            if (!processed(pred)) {
-                assert false : "Predecessor unscheduled: " + pred;
-                return false;
-            }
-
-        }
-        return true;
     }
 
     /**
