@@ -28,21 +28,20 @@ import static jdk.vm.ci.amd64.AMD64.rax;
 import static jdk.vm.ci.amd64.AMD64.rbx;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static jdk.vm.ci.common.JVMCIError.unimplemented;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Value;
 
 import com.oracle.graal.asm.amd64.AMD64Address;
 import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.hotspot.HotSpotCounterOp;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Value;
 
 @Opcode("BenchMarkCounter")
 public class AMD64HotSpotCounterOp extends HotSpotCounterOp {
@@ -50,12 +49,12 @@ public class AMD64HotSpotCounterOp extends HotSpotCounterOp {
 
     @Alive({OperandFlag.STACK, OperandFlag.UNINITIALIZED}) private AllocatableValue backupSlot;
 
-    public AMD64HotSpotCounterOp(String name, String group, Value increment, HotSpotRegistersProvider registers, GraalHotSpotVMConfig config, AllocatableValue backupSlot) {
+    public AMD64HotSpotCounterOp(String name, String group, Value increment, HotSpotRegistersProvider registers, HotSpotVMConfig config, AllocatableValue backupSlot) {
         super(TYPE, name, group, increment, registers, config);
         this.backupSlot = backupSlot;
     }
 
-    public AMD64HotSpotCounterOp(String[] names, String[] groups, Value[] increments, HotSpotRegistersProvider registers, GraalHotSpotVMConfig config, AllocatableValue backupSlot) {
+    public AMD64HotSpotCounterOp(String[] names, String[] groups, Value[] increments, HotSpotRegistersProvider registers, HotSpotVMConfig config, AllocatableValue backupSlot) {
         super(TYPE, names, groups, increments, registers, config);
         this.backupSlot = backupSlot;
     }
@@ -76,7 +75,7 @@ public class AMD64HotSpotCounterOp extends HotSpotCounterOp {
             // In this case rax and rbx are used as increment. Either we implement a third register
             // or we implement a spillover the value from rax to rbx or vice versa during
             // emitIncrement().
-            throw GraalError.unimplemented("RAX and RBX are increment registers at the same time, spilling over the scratch register is not supported right now");
+            throw unimplemented("RAX and RBX are increment registers a the same time, spilling over the scratch register is not supported right now");
         }
 
         // address for counters array
