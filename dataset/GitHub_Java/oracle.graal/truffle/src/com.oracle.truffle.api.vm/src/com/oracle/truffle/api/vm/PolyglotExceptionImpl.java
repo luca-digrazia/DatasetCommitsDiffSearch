@@ -31,7 +31,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.PolyglotException;
@@ -39,15 +41,15 @@ import org.graalvm.polyglot.PolyglotException.StackFrame;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractExceptionImpl;
 
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleStackTraceElement;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.vm.PolyglotImpl.VMObject;
 
-final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObject {
+@SuppressWarnings("deprecation")
+final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.oracle.truffle.api.vm.PolyglotImpl.VMObject {
 
     private static final String CAUSE_CAPTION = "Caused by host exception: ";
 
@@ -55,6 +57,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
 
     PolyglotException api;
 
+    final PolyglotContextImpl context;
     final PolyglotEngineImpl engine;
     final Throwable exception;
     final List<TruffleStackTraceElement> guestFrames;
@@ -64,7 +67,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
 
     private final SourceSection sourceLocation;
     private final boolean internal;
-    private final boolean timeout;
+    private final boolean cancelled;
     private final boolean exit;
     private final boolean incompleteSource;
     private final boolean syntaxError;
@@ -72,56 +75,85 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
     private final Value guestObject;
     private final String message;
 
-    PolyglotExceptionImpl(PolyglotLanguageContextImpl languageContext, Throwable original) {
-        super(languageContext.getImpl());
-        this.engine = languageContext.getEngine();
+    // Exception coming from a language
+    PolyglotExceptionImpl(PolyglotLanguageContext languageContext, Throwable original) {
+        this(languageContext.getImpl(), languageContext.getEngine(), languageContext, original);
+    }
+
+    // Exception coming from an instrument
+    PolyglotExceptionImpl(PolyglotEngineImpl engine, Throwable original) {
+        this(engine.impl, engine, null, original);
+    }
+
+    private PolyglotExceptionImpl(AbstractPolyglotImpl impl, PolyglotEngineImpl engine, PolyglotLanguageContext languageContext, Throwable original) {
+        super(impl);
+        Objects.requireNonNull(engine);
+        this.engine = engine;
+        this.context = (languageContext != null) ? languageContext.context : null;
         this.exception = original;
         this.guestFrames = TruffleStackTraceElement.getStackTrace(original);
 
         if (exception instanceof TruffleException) {
             TruffleException truffleException = (TruffleException) exception;
             this.internal = truffleException.isInternalError();
-            this.timeout = truffleException.isTimeout();
+            this.cancelled = truffleException.isCancelled();
             this.syntaxError = truffleException.isSyntaxError();
             this.incompleteSource = truffleException.isIncompleteSource();
             this.exit = truffleException.isExit();
-            this.exitStatus = truffleException.getExitStatus();
+            this.exitStatus = this.exit ? truffleException.getExitStatus() : 0;
 
-            Node location = truffleException.getLocation();
-            com.oracle.truffle.api.source.SourceSection section = null;
-            if (location != null) {
-                section = location.getEncapsulatingSourceSection();
-            }
+            com.oracle.truffle.api.source.SourceSection section = truffleException.getSourceLocation();
             if (section != null) {
-                Source source = getAPIAccess().newSource(section.getSource());
+                Objects.requireNonNull(languageContext, "Source location can not be accepted without language context.");
+                com.oracle.truffle.api.source.Source truffleSource = section.getSource();
+                String language = truffleSource.getLanguage();
+                PolyglotLanguageContext sourceContext = languageContext.context.findLanguageContext(language, truffleSource.getMimeType(), false);
+                if (language == null && sourceContext != null) {
+                    language = sourceContext.language.getId();
+                }
+                Source source = getAPIAccess().newSource(language, truffleSource);
                 this.sourceLocation = getAPIAccess().newSourceSection(source, section);
             } else {
                 this.sourceLocation = null;
             }
             Object exceptionObject = ((TruffleException) exception).getExceptionObject();
             if (exceptionObject != null) {
+                Objects.requireNonNull(languageContext, "Exception object can not be accepted without language context.");
                 this.guestObject = languageContext.toHostValue(exceptionObject);
             } else {
-                this.guestObject = languageContext.context.getHostContext().nullValue;
+                if (languageContext != null) {
+                    this.guestObject = languageContext.context.getHostContext().nullValue;
+                } else {
+                    this.guestObject = null;
+                }
             }
         } else {
+            this.cancelled = false;
             this.internal = true;
-            this.timeout = false;
             this.syntaxError = false;
             this.incompleteSource = false;
             this.exit = false;
             this.exitStatus = 0;
             this.sourceLocation = null;
-            this.guestObject = languageContext.context.getHostContext().nullValue;
+            if (languageContext != null) {
+                this.guestObject = languageContext.context.getHostContext().nullValue;
+            } else {
+                this.guestObject = null;
+            }
         }
-
-        if (!getGuestObject().isNull() && !isInternalError()) {
-            this.message = getGuestObject().toString();
-        } else if (isHostException()) {
+        if (isHostException()) {
             this.message = asHostException().getMessage();
         } else {
-            this.message = exception.getMessage();
+            if (internal) {
+                this.message = exception.toString();
+            } else {
+                this.message = exception.getMessage();
+            }
         }
+
+        // late materialization of host frames. only needed if polyglot exceptions cross the
+        // host boundary.
+        VMAccessor.LANGUAGE.materializeHostFrames(original);
     }
 
     @Override
@@ -141,6 +173,12 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
 
     @Override
     public Throwable asHostException() {
+        if (!(exception instanceof HostException)) {
+            throw new PolyglotUnsupportedException(
+                            String.format("Unsupported operation %s.%s. You can ensure that the operation is supported using %s.%s.",
+                                            PolyglotException.class.getSimpleName(), "asHostException()",
+                                            PolyglotException.class.getSimpleName(), "isHostException()"));
+        }
         return ((HostException) exception).getOriginal();
     }
 
@@ -180,6 +218,10 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
             // Print cause, if any
             if (isHostException()) {
                 s.println(CAUSE_CAPTION + asHostException());
+            }
+            if (isInternalError()) {
+                s.println("Original Internal Error: ");
+                s.printStackTrace(exception);
             }
         }
     }
@@ -239,8 +281,8 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
     }
 
     @Override
-    public boolean isTimeout() {
-        return timeout;
+    public boolean isCancelled() {
+        return cancelled;
     }
 
     @Override
@@ -278,6 +320,8 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
 
         /** Prints the specified string as a line on this StreamOrWriter. */
         abstract void println(Object o);
+
+        abstract void printStackTrace(Throwable t);
     }
 
     private static class WrappedPrintStream extends PrintStreamOrWriter {
@@ -295,6 +339,11 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
         @Override
         void println(Object o) {
             printStream.println(o);
+        }
+
+        @Override
+        void printStackTrace(Throwable t) {
+            t.printStackTrace(printStream);
         }
     }
 
@@ -314,16 +363,30 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
         void println(Object o) {
             printWriter.println(o);
         }
+
+        @Override
+        void printStackTrace(Throwable t) {
+            t.printStackTrace(printWriter);
+        }
     }
 
     private static class StackFrameIterator implements Iterator<StackFrame> {
 
-        private static final String POLYGLOT_PACKAGE = Engine.class.getPackage().getName();
-        private static final String PROXY_PACKAGE = PolyglotProxyImpl.class.getName();
+        private static final String POLYGLOT_PACKAGE = Engine.class.getName().substring(0, Engine.class.getName().lastIndexOf('.') + 1);
+        private static final String PROXY_PACKAGE = PolyglotProxy.class.getName();
+        private static final String JAVA_INTEROP_PACKAGE = com.oracle.truffle.api.interop.java.JavaInterop.class.getName().substring(0,
+                        com.oracle.truffle.api.interop.java.JavaInterop.class.getName().lastIndexOf('.') + 1);
+        private static final String[] JAVA_INTEROP_HOST_TO_GUEST = {
+                        JAVA_INTEROP_PACKAGE + "TruffleMap",
+                        JAVA_INTEROP_PACKAGE + "TruffleList",
+                        JAVA_INTEROP_PACKAGE + "TruffleFunction",
+                        JAVA_INTEROP_PACKAGE + "FunctionProxyHandler",
+                        JAVA_INTEROP_PACKAGE + "ObjectProxyHandler"
+        };
 
         final PolyglotExceptionImpl impl;
         final Iterator<TruffleStackTraceElement> guestFrames;
-        final Iterator<StackTraceElement> hostFrames;
+        final ListIterator<StackTraceElement> hostFrames;
         /*
          * Initial host frames are skipped if the error is a regular non-internal guest language
          * error.
@@ -332,18 +395,26 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
 
         boolean inHostLanguage;
         boolean firstGuestFrame = true;
-        PolyglotExceptionFrameImpl fetchedNext;
+        PolyglotExceptionFrame fetchedNext;
 
         StackFrameIterator(PolyglotExceptionImpl impl) {
             this.impl = impl;
             this.apiAccess = impl.getAPIAccess();
 
             Throwable cause = impl.exception;
-            while (cause.getCause() != null && (cause.getCause() instanceof HostException || cause.getCause().getStackTrace().length > 0)) {
+            while (cause.getCause() != null && cause.getStackTrace().length == 0) {
                 cause = cause.getCause();
             }
+            StackTraceElement[] hostStack;
+            if (VMAccessor.LANGUAGE.isTruffleStackTrace(cause)) {
+                hostStack = VMAccessor.LANGUAGE.getInternalStackTraceElements(cause);
+            } else if (cause.getStackTrace().length == 0) {
+                hostStack = impl.exception.getStackTrace();
+            } else {
+                hostStack = cause.getStackTrace();
+            }
             this.guestFrames = impl.guestFrames == null ? Collections.<TruffleStackTraceElement> emptyList().iterator() : impl.guestFrames.iterator();
-            this.hostFrames = Arrays.asList(cause.getStackTrace()).iterator();
+            this.hostFrames = Arrays.asList(hostStack).listIterator();
             // we always start in some host stack frame
             this.inHostLanguage = impl.isHostException() || impl.isInternalError();
         }
@@ -353,15 +424,15 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
         }
 
         public StackFrame next() {
-            PolyglotExceptionFrameImpl next = fetchNext();
+            PolyglotExceptionFrame next = fetchNext();
             if (next == null) {
                 throw new NoSuchElementException();
             }
             fetchedNext = null;
-            return apiAccess.newPolyglotStackTraceElement(next);
+            return apiAccess.newPolyglotStackTraceElement(impl.api, next);
         }
 
-        PolyglotExceptionFrameImpl fetchNext() {
+        PolyglotExceptionFrame fetchNext() {
             if (fetchedNext != null) {
                 return fetchedNext;
             }
@@ -372,19 +443,29 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
                 // bottom.
                 if (inHostLanguage) {
                     if (isGuestToHost(element)) {
+                        assert !isHostToGuest(element);
                         inHostLanguage = false;
                     }
                 } else {
                     if (isHostToGuest(element)) {
                         inHostLanguage = true;
+
+                        // skip extra host-to-guest frames
+                        while (hostFrames.hasNext()) {
+                            StackTraceElement next = hostFrames.next();
+                            if (isHostToGuest(next)) {
+                                traceStackTraceElement(element);
+                                element = next;
+                                continue;
+                            } else {
+                                hostFrames.previous();
+                                break;
+                            }
+                        }
                     }
                 }
 
-                if (TRACE_STACK_TRACE_WALKING) {
-                    PrintStream out = System.out;
-                    out.printf("host: %5s, guestToHost: %5s, hostToGuest: %5s, guestCall: %5s, -- %s %n", inHostLanguage, isGuestToHost(element), isHostToGuest(element), isGuestCall(element),
-                                    element);
-                }
+                traceStackTraceElement(element);
 
                 if (isGuestCall(element)) {
                     inHostLanguage = false;
@@ -393,7 +474,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
                     if (guestFrames.hasNext()) {
                         guestFrame = guestFrames.next();
                     }
-                    PolyglotExceptionFrameImpl frame = PolyglotExceptionFrameImpl.createGuest(impl, guestFrame, firstGuestFrame);
+                    PolyglotExceptionFrame frame = PolyglotExceptionFrame.createGuest(impl, guestFrame, firstGuestFrame);
                     firstGuestFrame = false;
                     if (frame != null) {
                         fetchedNext = frame;
@@ -401,7 +482,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
                     }
                 } else if (inHostLanguage) {
                     // construct host frame
-                    fetchedNext = (PolyglotExceptionFrameImpl.createHost(impl, element));
+                    fetchedNext = (PolyglotExceptionFrame.createHost(impl, element));
                     return fetchedNext;
                 } else {
                     // skip stack frame that is part of guest language stack
@@ -411,7 +492,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
             // consume guest frames
             if (guestFrames.hasNext()) {
                 TruffleStackTraceElement guestFrame = guestFrames.next();
-                PolyglotExceptionFrameImpl frame = PolyglotExceptionFrameImpl.createGuest(impl, guestFrame, firstGuestFrame);
+                PolyglotExceptionFrame frame = PolyglotExceptionFrame.createGuest(impl, guestFrame, firstGuestFrame);
                 firstGuestFrame = false;
                 if (frame != null) {
                     fetchedNext = frame;
@@ -422,25 +503,43 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
             return null;
         }
 
+        static boolean isLazyStackTraceElement(StackTraceElement element) {
+            return element == null;
+        }
+
         static boolean isGuestCall(StackTraceElement element) {
-            return VMAccessor.SPI.isGuestCallStackElement(element);
+            return isLazyStackTraceElement(element) || VMAccessor.SPI.isGuestCallStackElement(element);
         }
 
         static boolean isHostToGuest(StackTraceElement element) {
-            String polyglotPackageName = POLYGLOT_PACKAGE;
-            if (element.getClassName().startsWith(polyglotPackageName)) {
-                int index = element.getClassName().lastIndexOf('.');
-                if (index == polyglotPackageName.length()) {
-                    return true;
+            if (isLazyStackTraceElement(element)) {
+                return false;
+            }
+            if (element.getClassName().startsWith(POLYGLOT_PACKAGE) && element.getClassName().indexOf('.', POLYGLOT_PACKAGE.length()) < 0) {
+                return true;
+            } else if (element.getClassName().startsWith(JAVA_INTEROP_PACKAGE)) {
+                for (String hostToGuestClassName : JAVA_INTEROP_HOST_TO_GUEST) {
+                    if (element.getClassName().equals(hostToGuestClassName)) {
+                        return true;
+                    }
                 }
             }
             return false;
         }
 
         static boolean isGuestToHost(StackTraceElement element) {
-            return element.getClassName().startsWith(PROXY_PACKAGE);
+            if (isLazyStackTraceElement(element)) {
+                return false;
+            }
+            return element.getClassName().startsWith(PROXY_PACKAGE) || element.getClassName().startsWith(JAVA_INTEROP_PACKAGE);
         }
 
+        private void traceStackTraceElement(StackTraceElement element) {
+            if (TRACE_STACK_TRACE_WALKING) {
+                PrintStream out = System.out;
+                out.printf("host: %5s, guestToHost: %5s, hostToGuest: %5s, guestCall: %5s, -- %s %n", inHostLanguage, isGuestToHost(element), isHostToGuest(element), isGuestCall(element), element);
+            }
+        }
     }
 
 }
