@@ -22,15 +22,13 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.meta.HotSpotRuntime.*;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
@@ -700,14 +698,5 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static long gcTotalCollectionsAddress() {
         return config().gcTotalCollectionsAddress;
-    }
-
-    @Fold
-    public static long referentOffset() {
-        try {
-            return unsafe.objectFieldOffset(java.lang.ref.Reference.class.getDeclaredField("referent"));
-        } catch (Exception e) {
-            throw new GraalInternalError(e);
-        }
     }
 }
