@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.interop.ForeignAccess;
@@ -74,8 +75,6 @@ public final class NativeLookup {
                 TruffleObject lib = loadLibrary(env, library);
                 handles.add(lib);
             } catch (UnsatisfiedLinkError e) {
-                LLVMLogger.unconditionalInfo(library + " not found!\n" + e.getMessage());
-                e.printStackTrace(System.err);
             }
         }
         return handles;
@@ -175,7 +174,7 @@ public final class NativeLookup {
         try {
             TruffleObject symbol = (TruffleObject) ForeignAccess.sendRead(Message.READ.createNode(),
                             libraryHandle, name);
-            if (symbol != null && 0 != ForeignAccess.sendAsPointer(Message.AS_POINTER.createNode(), symbol)) {
+            if (symbol != null && 0 != (long) ForeignAccess.sendUnbox(Message.UNBOX.createNode(), symbol)) {
                 return symbol;
             } else {
                 return null;
@@ -203,7 +202,7 @@ public final class NativeLookup {
         return symbol;
     }
 
-    public TruffleObject getNativeDataObject(String name) {
+    TruffleObject getNativeDataObject(String name) {
         CompilerAsserts.neverPartOfCompilation();
         return getNativeDataObject(libraryHandles, defaultLibrary, name);
     }
@@ -252,6 +251,24 @@ public final class NativeLookup {
         sb.append(":");
         sb.append(nativeRet);
         return sb.toString();
+    }
+
+    TruffleObject resolveAsNative(LLVMFunctionDescriptor descriptor) {
+        assert descriptor.getCallTarget() == null;
+        TruffleObject symbol = descriptor.getNativeSymbol();
+        if (symbol == null) {
+            CompilerDirectives.transferToInterpreter();
+            if (descriptor.isNullFunction()) {
+                symbol = new LLVMTruffleNull();
+            } else {
+                symbol = getNativeFunction(descriptor.getName());
+            }
+            if (symbol == null) {
+                throw new RuntimeException("could not resolve external symbol " + descriptor.getName());
+            }
+            descriptor.setNativeSymbol(symbol);
+        }
+        return symbol;
     }
 
     void addLibraryToNativeLookup(String library) {
