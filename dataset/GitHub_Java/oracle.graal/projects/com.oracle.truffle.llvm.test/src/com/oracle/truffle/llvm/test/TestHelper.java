@@ -34,14 +34,18 @@ import java.io.FileFilter;
 import java.io.FilenameFilter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.llvm.runtime.LLVMOptions;
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOption;
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import com.oracle.truffle.llvm.tools.Clang;
 import com.oracle.truffle.llvm.tools.Clang.ClangOptions;
 import com.oracle.truffle.llvm.tools.GCC;
 import com.oracle.truffle.llvm.tools.LLC;
+import com.oracle.truffle.llvm.tools.LLVMAssembler;
 import com.oracle.truffle.llvm.tools.ProgrammingLanguage;
 import com.oracle.truffle.llvm.tools.util.PathUtil;
 import com.oracle.truffle.llvm.tools.util.ProcessUtil;
@@ -56,7 +60,7 @@ public class TestHelper {
      * @param folder the root folder
      * @return list of collected files matching the extension
      */
-    static List<File> collectFilesWithExtension(File folder, final ProgrammingLanguage... languages) {
+    public static List<File> collectFilesWithExtension(File folder, final ProgrammingLanguage... languages) {
         if (!folder.isDirectory()) {
             throw new IllegalArgumentException(folder.getAbsolutePath() + " is not a folder!");
         }
@@ -65,6 +69,7 @@ public class TestHelper {
         }
         File[] files = folder.listFiles(new FilenameFilter() {
 
+            @Override
             public boolean accept(File dir, String name) {
                 File fileWithDir = new File(dir, name);
                 for (ProgrammingLanguage lang : languages) {
@@ -78,6 +83,7 @@ public class TestHelper {
 
         File[] subDirectories = folder.listFiles(new FileFilter() {
 
+            @Override
             public boolean accept(File pathname) {
                 return pathname.isDirectory() && !pathname.getName().endsWith(LLVMPaths.IGNORE_FOLDER_NAME);
             }
@@ -91,33 +97,51 @@ public class TestHelper {
         return collected;
     }
 
-    static TestCaseFiles compileToLLVMIRWithClang(File toBeCompiled, File destinationFile, File expectedFile) {
-        return compileToLLVMIRWithClang(toBeCompiled, destinationFile, expectedFile, ClangOptions.builder());
+    public static TestCaseFiles compileToLLVMIRWithClang(File toBeCompiled, File destinationFile, File expectedFile, Set<TestCaseFlag> flags) {
+        return compileToLLVMIRWithClang(toBeCompiled, destinationFile, expectedFile, flags, ClangOptions.builder());
     }
 
-    static TestCaseFiles compileToLLVMIRWithClang(File toBeCompiled, File destinationFile, File expectedFile, ClangOptions builder) {
+    public static TestCaseFiles compileToLLVMIRWithClang(File toBeCompiled, File destinationFile, File expectedFile, Set<TestCaseFlag> flags, ClangOptions builder) {
         Clang.compileToLLVMIR(toBeCompiled, destinationFile, builder);
-        return TestCaseFiles.createFromCompiledFile(toBeCompiled, destinationFile, expectedFile);
+        return TestCaseFiles.createFromCompiledFile(toBeCompiled, destinationFile, expectedFile, flags);
     }
 
-    static TestCaseFiles compileToLLVMIRWithClang(File toBeCompiled, File destinationFile) {
+    public static TestCaseFiles compileToLLVMIRWithClang(File toBeCompiled, File destinationFile) {
         Clang.compileToLLVMIR(toBeCompiled, destinationFile, ClangOptions.builder());
-        return TestCaseFiles.createFromCompiledFile(toBeCompiled, destinationFile);
+        return TestCaseFiles.createFromCompiledFile(toBeCompiled, destinationFile, Collections.emptySet());
     }
 
-    public static TestCaseFiles compileToLLVMIRWithClang(File toBeCompiled, File destinationFile, ClangOptions builder) {
+    public static TestCaseFiles compileToLLVMIRWithClang(File toBeCompiled, File destinationFile, Set<TestCaseFlag> flags, ClangOptions builder) {
         Clang.compileToLLVMIR(toBeCompiled, destinationFile, builder);
-        return TestCaseFiles.createFromCompiledFile(toBeCompiled, destinationFile);
+        return TestCaseFiles.createFromCompiledFile(toBeCompiled, destinationFile, flags);
     }
 
     public static TestCaseFiles compileToLLVMIRWithGCC(File toBeCompiled, File destinationFile) {
         GCC.compileToLLVMIR(toBeCompiled, destinationFile);
-        return TestCaseFiles.createFromCompiledFile(toBeCompiled, destinationFile);
+        return TestCaseFiles.createFromCompiledFile(toBeCompiled, destinationFile, Collections.emptySet());
     }
 
-    static File getTempLLFile(File toBeCompiled, String optionName) {
+    public static TestCaseFiles compileToLLVMIRWithGCC(File toBeCompiled, File destinationFile, Set<TestCaseFlag> flags) {
+        GCC.compileToLLVMIR(toBeCompiled, destinationFile);
+        return TestCaseFiles.createFromCompiledFile(toBeCompiled, destinationFile, flags);
+    }
+
+    public static TestCaseFiles compileLLVMIRToLLVMBC(TestCaseFiles caseFile) {
+        File llvmBinaryCodeFile = TestHelper.getTempBCFile(caseFile.getBitCodeFile());
+        LLVMAssembler.assembleToBitcodeFile(caseFile.getBitCodeFile(), llvmBinaryCodeFile);
+        return TestCaseFiles.createFromCompiledFile(caseFile.getOriginalFile(), llvmBinaryCodeFile, caseFile.getExpectedResult(), caseFile.getFlags());
+    }
+
+    public static File getTempLLFile(File toBeCompiled, String optionName) {
         String absolutePathToFileName = absolutePathToFileName(toBeCompiled);
         String outputFileName = PathUtil.replaceExtension(absolutePathToFileName, "." + optionName + Constants.TMP_EXTENSION + Constants.LLVM_BITFILE_EXTENSION);
+        File destinationFile = new File(LLVMPaths.TEMP_DIRECTORY, outputFileName);
+        return destinationFile;
+    }
+
+    public static File getTempBCFile(File toBeCompiled) {
+        String absolutePathToFileName = absolutePathToFileName(toBeCompiled);
+        String outputFileName = PathUtil.replaceExtension(absolutePathToFileName, "." + Constants.TMP_EXTENSION + Constants.LLVM_BINARYFILE_EXTENSION);
         File destinationFile = new File(LLVMPaths.TEMP_DIRECTORY, outputFileName);
         return destinationFile;
     }
@@ -136,14 +160,32 @@ public class TestHelper {
      *
      * @param bitcodeFile the bitcode file to be compiled
      */
-    static ProcessResult executeLLVMBinary(File bitcodeFile) {
+    public static ProcessResult executeLLVMBinary(File bitcodeFile) {
+        return executeLLVMBinary(bitcodeFile, null);
+    }
+
+    /**
+     * Executes the bitcode file that is beforehand compiled by the native LLVM compiler.
+     *
+     * @param bitcodeFile the bitcode file to be compiled
+     * @param args the arguments to the main function of the executable
+     */
+    public static ProcessResult executeLLVMBinary(File bitcodeFile, Object[] args) {
         try {
             File objectFile = File.createTempFile(absolutePathToFileName(bitcodeFile), ".o");
+            objectFile.deleteOnExit();
             File executable = File.createTempFile(absolutePathToFileName(bitcodeFile), ".out");
+            executable.deleteOnExit();
             LLC.compileBitCodeToObjectFile(bitcodeFile, objectFile);
             GCC.compileObjectToMachineCode(objectFile, executable);
-            String command = executable.getAbsolutePath();
-            return ProcessUtil.executeNativeCommand(command);
+            StringBuilder commandBuilder = new StringBuilder(executable.getAbsolutePath());
+            if (args != null) {
+                for (int i = 0; i < args.length; i++) {
+                    commandBuilder.append(" ");
+                    commandBuilder.append(args[i]);
+                }
+            }
+            return ProcessUtil.executeNativeCommand(commandBuilder.toString());
         } catch (Exception e) {
             throw new AssertionError(e);
         }
@@ -154,12 +196,13 @@ public class TestHelper {
             String javaHome = System.getProperty("java.home");
             String javaBin = javaHome + File.separator + "bin" + File.separator + "java";
             String classpath = System.getProperty("java.class.path");
+            String jvmciClasspath = System.getProperty("jvmci.class.path.append");
             String className = RemoteLLVMTester.class.getCanonicalName();
-            String bootClassPath = LLVMOptions.getRemoteTestBootClassPath();
-            String debugOption = asOption(LLVMOptions.Property.DEBUG.getKey(), "false");
-            String projectRootOption = asOption(LLVMOptions.Property.PROJECT_ROOT.getKey(), LLVMOptions.getProjectRoot());
+            String bootClassPath = LLVMBaseOptionFacade.getRemoteTestBootClassPath();
+            String debugOption = asOption(LLVMBaseOption.DEBUG.getKey(), "false");
+            String projectRootOption = asOption(LLVMBaseOption.PROJECT_ROOT.getKey(), LLVMBaseOptionFacade.getProjectRoot());
             String options = debugOption + " " + projectRootOption;
-            String command = javaBin + " -cp " + classpath + " " + bootClassPath + " " + options + " " + className;
+            String command = javaBin + " -cp " + classpath + " " + bootClassPath + " -Djvmci.class.path.append=" + jvmciClasspath + " " + options + " " + className;
             Process process = Runtime.getRuntime().exec(command);
             return process;
         } catch (Exception e) {
@@ -186,7 +229,7 @@ public class TestHelper {
         return files;
     }
 
-    static void removeFilesTestCases(List<TestCaseFiles[]> collectedSpecificationFiles, List<TestCaseFiles[]> filesRecursively) {
+    public static void removeFilesTestCases(List<TestCaseFiles[]> collectedSpecificationFiles, List<TestCaseFiles[]> filesRecursively) {
         for (TestCaseFiles[] alreadyCanExecute : collectedSpecificationFiles) {
             for (TestCaseFiles[] allFilesFile : filesRecursively) {
                 if (alreadyCanExecute[0].getOriginalFile().equals(allFilesFile[0].getOriginalFile())) {
@@ -200,7 +243,7 @@ public class TestHelper {
         }
     }
 
-    static void removeFilesFromTestCases(List<File> excludedFiles, List<TestCaseFiles[]> filesRecursively) {
+    public static void removeFilesFromTestCases(List<File> excludedFiles, List<TestCaseFiles[]> filesRecursively) {
         for (File excludedFile : excludedFiles) {
             List<TestCaseFiles[]> filesToRemove = new ArrayList<>();
             for (TestCaseFiles[] allFilesFile : filesRecursively) {
@@ -212,6 +255,11 @@ public class TestHelper {
                 filesRecursively.remove(remove);
             }
         }
+    }
+
+    public static ProcessResult executeSourceAsBinary(TestCaseFiles tuple) {
+        File exe = Clang.compileToExecutable(tuple.getOriginalFile(), ClangOptions.builder());
+        return ProcessUtil.executeNativeCommand(exe.getAbsolutePath());
     }
 
 }
