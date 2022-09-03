@@ -43,12 +43,16 @@ import static com.oracle.graal.nodes.extended.BranchProbabilityNode.NOT_LIKELY_P
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.OptimizedTypeCheckViolated;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.TriState;
 
-import com.oracle.graal.api.replacements.Snippet;
-import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.api.replacements.Snippet.VarargsParameter;
 import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.nodes.SnippetAnchorNode;
 import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
@@ -67,26 +71,21 @@ import com.oracle.graal.nodes.java.InstanceOfDynamicNode;
 import com.oracle.graal.nodes.java.InstanceOfNode;
 import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.replacements.InstanceOfSnippetsTemplates;
+import com.oracle.graal.replacements.Snippet;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.replacements.Snippet.VarargsParameter;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 import com.oracle.graal.replacements.Snippets;
 import com.oracle.graal.replacements.nodes.ExplodeLoopNode;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.TriState;
-
 /**
  * Snippets used for implementing the type test of an instanceof instruction. Since instanceof is a
  * floating node, it is lowered separately for each of its usages.
  *
- * The type tests implemented are described in the paper
- * <a href="http://dl.acm.org/citation.cfm?id=583821"> Fast subtype checking in the HotSpot JVM</a>
- * by Cliff Click and John Rose.
+ * The type tests implemented are described in the paper <a
+ * href="http://dl.acm.org/citation.cfm?id=583821"> Fast subtype checking in the HotSpot JVM</a> by
+ * Cliff Click and John Rose.
  */
 public class InstanceOfSnippets implements Snippets {
 
@@ -310,7 +309,7 @@ public class InstanceOfSnippets implements Snippets {
                 args.add("falseValue", replacer.falseValue);
                 return args;
             } else {
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
             }
         }
     }
