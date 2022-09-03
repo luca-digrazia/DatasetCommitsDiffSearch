@@ -28,7 +28,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
@@ -62,7 +61,7 @@ public class EscapeAnalysisTest extends EATestBase {
 
     @Test
     public void test3() {
-        testEscapeAnalysis("test3Snippet", Constant.NULL_OBJECT, false);
+        testEscapeAnalysis("test3Snippet", Constant.forObject(null), false);
     }
 
     public static Object test3Snippet() {
@@ -257,7 +256,7 @@ public class EscapeAnalysisTest extends EATestBase {
 
     @Test
     public void testCheckCast() {
-        testEscapeAnalysis("testCheckCastSnippet", getSnippetReflection().forObject(TestClassObject.class), false);
+        testEscapeAnalysis("testCheckCastSnippet", Constant.forObject(TestClassObject.class), false);
     }
 
     public Object testCheckCastSnippet() {
@@ -279,7 +278,7 @@ public class EscapeAnalysisTest extends EATestBase {
 
     @SuppressWarnings("unused")
     public static void testNewNodeSnippet() {
-        new IntegerAddNode(new IntegerStamp(32, false, Integer.MIN_VALUE, Integer.MAX_VALUE, 0, 0xFFFFFFFF), null, null);
+        new IntegerAddNode(Kind.Int, null, null);
     }
 
     /**
