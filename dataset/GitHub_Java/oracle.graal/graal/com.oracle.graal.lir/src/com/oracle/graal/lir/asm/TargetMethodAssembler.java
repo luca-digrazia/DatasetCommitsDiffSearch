@@ -32,6 +32,7 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIR.Code;
 
 public class TargetMethodAssembler {
 
