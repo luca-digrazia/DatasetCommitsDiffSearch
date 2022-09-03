@@ -378,10 +378,6 @@ public final class CompileTheWorld {
         if (c.dontCompileHugeMethods && javaMethod.getCodeSize() > c.hugeMethodLimit) {
             return false;
         }
-        // Allow use of -XX:CompileCommand=dontinline to exclude problematic methods
-        if (!javaMethod.canBeInlined()) {
-            return false;
-        }
         // Skip @Snippets for now
         if (javaMethod.getAnnotation(Snippet.class) != null) {
             return false;
