@@ -24,8 +24,6 @@ package com.oracle.graal.replacements;
 
 import static com.oracle.graal.debug.GraalError.unimplemented;
 import static com.oracle.graal.java.BytecodeParserOptions.DumpDuringGraphBuilding;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -357,7 +355,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
     }
 
-    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    @NodeInfo
     static class ExceptionPlaceholderNode extends ValueNode {
         public static final NodeClass<ExceptionPlaceholderNode> TYPE = NodeClass.create(ExceptionPlaceholderNode.class);
 
