@@ -29,93 +29,108 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.cast.LLVMTo80BitFloatingNodeFactory.LLVMDoubleToLLVM80BitFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMTo80BitFloatingNodeFactory.LLVMFloatToLLVM80BitFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMTo80BitFloatingNodeFactory.LLVMI32ToLLVM80BitFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMTo80BitFloatingNodeFactory.LLVMI32ToLLVM80BitFloatUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMTo80BitFloatingNodeFactory.LLVMI64ToLLVM80BitFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMTo80BitFloatingNodeFactory.LLVMI64ToLLVM80BitFloatUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMTo80BitFloatingNodeFactory.LLVMI8ToLLVM80BitFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToAddressNodeFactory.LLVMFunctionToAddressNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToAddressNodeFactory.LLVMI64ToAddressNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVM80BitFloatToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVMFloatToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVMI16ToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVMI16ToDoubleZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVMI1ToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVMI32ToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVMI32ToDoubleUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVMI64ToDoubleBitNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVMI64ToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVMI64ToDoubleUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVMI8ToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeFactory.LLVMI8ToDoubleZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeFactory.LLVM80BitFloatToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeFactory.LLVMDoubleToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeFactory.LLVMI16ToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeFactory.LLVMI16ToFloatZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeFactory.LLVMI32ToFloatBitNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeFactory.LLVMI32ToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeFactory.LLVMI32ToFloatUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeFactory.LLVMI64ToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeFactory.LLVMI64ToFloatUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeFactory.LLVMI8ToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeFactory.LLVMI8ToFloatZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFunctionNodeFactory.LLVMAddressToFunctionNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToFunctionNodeFactory.LLVMI64ToFunctionNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeFactory.LLVMDoubleToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeFactory.LLVMFloatToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeFactory.LLVMI1ToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeFactory.LLVMI1ToI16ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeFactory.LLVMI32ToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeFactory.LLVMI64ToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeFactory.LLVMI8ToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeFactory.LLVMI8ToI16ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI1NodeFactory.LLVMI16ToI1NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI1NodeFactory.LLVMI32ToI1NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI1NodeFactory.LLVMI64ToI1NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI1NodeFactory.LLVMI8ToI1NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVM80BitFloatToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMAddressToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMDoubleToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMDoubleToUnsignedI32NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMFloatToI32BitNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMFloatToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMFunctionToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMI16ToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMI16ToI32ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMI1ToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMI1ToI32ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMI64ToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMI8ToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMI8ToI32ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMIVarBitToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeFactory.LLVMIVarBitToI32ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI64NodeFactory.LLVMAnyToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI64NodeFactory.LLVMDoubleToI64BitCastNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI64NodeFactory.LLVMToI64ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeFactory.LLVM80BitFloatToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeFactory.LLVMAddressToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeFactory.LLVMDoubleToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeFactory.LLVMFloatToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeFactory.LLVMI16ToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeFactory.LLVMI1ToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeFactory.LLVMI1ToI8ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeFactory.LLVMI32ToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeFactory.LLVMI64ToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeFactory.LLVMIVarToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeFactory.LLVMI16ToIVarNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeFactory.LLVMI32ToIVarNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeFactory.LLVMI32ToIVarZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeFactory.LLVMI64ToIVarNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeFactory.LLVMI8ToIVarNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeFactory.LLVMIVarToIVarNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMVectorToVectorNodeFactory;
-import com.oracle.truffle.llvm.parser.api.instructions.LLVMConversionType;
-import com.oracle.truffle.llvm.runtime.types.IntegerType;
-import com.oracle.truffle.llvm.runtime.types.LLVMBaseType;
-import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
+import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVM80BitFloatNode;
+import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMDoubleNode;
+import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMFloatNode;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI16Node;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI1Node;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMIVarBitNode;
+import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMFloatVectorNode;
+import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI32VectorNode;
+import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI8VectorNode;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMDoubleToLLVM80BitFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMFloatToLLVM80BitFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMI32ToLLVM80BitFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMI32ToLLVM80BitFloatUnsignedNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMI64ToLLVM80BitFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMI64ToLLVM80BitFloatUnsignedNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMI8ToLLVM80BitFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToAddressNodeFactory.LLVMFunctionToAddressNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToAddressNodeFactory.LLVMI64ToAddressNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVM80BitFloatToDoubleNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMFloatToDoubleNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI16ToDoubleNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI16ToDoubleZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI32ToDoubleNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI32ToDoubleUnsignedNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI64ToDoubleBitNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI64ToDoubleNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI64ToDoubleUnsignedNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI8ToDoubleNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI8ToDoubleZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVM80BitFloatToFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMDoubleToFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI16ToFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI16ToFloatZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI32ToFloatBitNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI32ToFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI32ToFloatUnsignedNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI64ToFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI64ToFloatUnsignedNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI8ToFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI8ToFloatZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFunctionNodeFactory.LLVMAddressToFunctionNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFunctionNodeFactory.LLVMI64ToFunctionNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMDoubleToI16NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMFloatToI16NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI1ToI16NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI1ToI16ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI32ToI16NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI64ToI16NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI8ToI16NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI8ToI16ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI1NodeFactory.LLVMI16ToI1NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI1NodeFactory.LLVMI32ToI1NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI1NodeFactory.LLVMI64ToI1NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI1NodeFactory.LLVMI8ToI1NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVM80BitFloatToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMAddressToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMDoubleToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMDoubleToUnsignedI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMFloatToI32BitNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMFloatToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMFunctionToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI16ToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI16ToI32ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI1ToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI1ToI32ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI64ToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI8ToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI8ToI32ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMIVarBitToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMIVarBitToI32ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMAnyToI64NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMDoubleToI64BitCastNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMToI64ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVM80BitFloatToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMAddressToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMDoubleToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMFloatToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMI16ToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMI1ToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMI1ToI8ZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMI32ToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMI64ToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMIVarToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8VectorNodeFactory.LLVMI32VectorToI8VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI16ToIVarNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI32ToIVarNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI32ToIVarZeroExtNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI64ToIVarNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI8ToIVarNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMIVarToIVarNodeGen;
+import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.llvm.parser.base.model.types.IntegerType;
+import com.oracle.truffle.llvm.parser.base.model.types.Type;
+import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
+import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
+import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 
 public final class LLVMCastsFactory {
 
@@ -169,52 +184,64 @@ public final class LLVMCastsFactory {
     private static LLVMExpressionNode cast(LLVMCastsFactory factory, LLVMBaseType fromType, LLVMExpressionNode fromNode) {
         switch (fromType) {
             case I1:
-                return factory.castFromI1(fromNode);
+                return factory.castFromI1((LLVMI1Node) fromNode);
             case I8:
-                return factory.castFromI8(fromNode);
+                return factory.castFromI8((LLVMI8Node) fromNode);
             case I16:
-                return factory.castFromI16(fromNode);
+                return factory.castFromI16((LLVMI16Node) fromNode);
             case I32:
-                return factory.castFromI32(fromNode);
+                return factory.castFromI32((LLVMI32Node) fromNode);
             case I_VAR_BITWIDTH:
-                return factory.castFromIVar(fromNode);
+                return factory.castFromIVar((LLVMIVarBitNode) fromNode);
             case I64:
-                return factory.castFromI64(fromNode);
+                return factory.castFromI64((LLVMI64Node) fromNode);
             case FLOAT:
-                return factory.castFromFloat(fromNode);
+                return factory.castFromFloat((LLVMFloatNode) fromNode);
             case DOUBLE:
-                return factory.castFromDouble(fromNode);
+                return factory.castFromDouble((LLVMDoubleNode) fromNode);
             case X86_FP80:
-                return factory.castFrom80BitFloat(fromNode);
+                return factory.castFrom80BitFloat((LLVM80BitFloatNode) fromNode);
             case ADDRESS:
-                return factory.castFromPointer(fromNode);
+                return factory.castFromPointer((LLVMAddressNode) fromNode);
             case FUNCTION_ADDRESS:
-                return factory.castFromFunctionPointer(fromNode);
+                return factory.castFromFunctionPointer((LLVMFunctionNode) fromNode);
             case FLOAT_VECTOR:
-            case I32_VECTOR:
-            case I8_VECTOR:
-            case I128_VECTOR:
-            case I16_VECTOR:
-            case I1_VECTOR:
-            case I64_VECTOR:
-            case ADDRESS_VECTOR:
-            case DOUBLE_VECTOR:
-                return factory.castVector(fromNode);
+                return factory.castFromFloatVector((LLVMFloatVectorNode) fromNode);
             default:
-                throw new AssertionError(fromType + " ==> " + factory.targetType);
+                throw new AssertionError(fromType);
         }
     }
 
-    private LLVMExpressionNode castVector(LLVMExpressionNode fromNode) {
+    private LLVMExpressionNode castFromFloatVector(LLVMFloatVectorNode fromNode) {
         switch (targetType) {
-            case I8_VECTOR:
-                return LLVMVectorToVectorNodeFactory.LLVMAnyVectorToI8VectorNodeGen.create(fromNode);
+            case I64:
+                return LLVMAnyToI64NodeGen.create(fromNode);
             default:
                 throw new AssertionError(targetType + " " + conv);
         }
     }
 
-    private LLVMExpressionNode castFromIVar(LLVMExpressionNode fromNode) {
+    public static LLVMExpressionNode castVector(LLVMBaseType fromType, LLVMExpressionNode fromNode, LLVMAddressNode target, LLVMBaseType targetType, LLVMConversionType conv) {
+        if (fromNode == null || targetType == null || fromType == null || conv == null) {
+            throw new AssertionError();
+        }
+        LLVMCastsFactory factory = new LLVMCastsFactory(targetType, conv, 0);
+        switch (fromType) {
+            case I8_VECTOR:
+                return factory.castFromI8Vector(target, (LLVMI8VectorNode) fromNode);
+            case I32_VECTOR:
+                return factory.castFromI32Vector(target, (LLVMI32VectorNode) fromNode);
+            case I1_VECTOR:
+            case I16_VECTOR:
+            case I64_VECTOR:
+            case FLOAT_VECTOR:
+            case DOUBLE_VECTOR:
+            default:
+                throw new LLVMUnsupportedException(UnsupportedReason.VECTOR_CAST);
+        }
+    }
+
+    private LLVMExpressionNode castFromIVar(LLVMIVarBitNode fromNode) {
         if (hasJavaCastSemantics()) {
             switch (targetType) {
                 case I8:
@@ -240,7 +267,7 @@ public final class LLVMCastsFactory {
         }
     }
 
-    private LLVMExpressionNode castFrom80BitFloat(LLVMExpressionNode fromNode) {
+    private LLVMExpressionNode castFrom80BitFloat(LLVM80BitFloatNode fromNode) {
         if (targetType == LLVMBaseType.X86_FP80) {
             return fromNode;
         }
@@ -260,7 +287,29 @@ public final class LLVMCastsFactory {
         }
     }
 
-    private LLVMExpressionNode castFromFunctionPointer(LLVMExpressionNode fromNode) {
+    private LLVMExpressionNode castFromI8Vector(@SuppressWarnings("unused") LLVMAddressNode target, LLVMI8VectorNode fromNode) {
+        if (targetType == LLVMBaseType.I8_VECTOR) {
+            return fromNode;
+        }
+        switch (targetType) {
+            default:
+                throw new LLVMUnsupportedException(UnsupportedReason.VECTOR_CAST);
+        }
+    }
+
+    private LLVMExpressionNode castFromI32Vector(LLVMAddressNode target, LLVMI32VectorNode fromNode) {
+        if (targetType == LLVMBaseType.I32_VECTOR) {
+            return fromNode;
+        }
+        switch (targetType) {
+            case I8_VECTOR:
+                return LLVMI32VectorToI8VectorNodeGen.create(target, fromNode);
+            default:
+                throw new LLVMUnsupportedException(UnsupportedReason.VECTOR_CAST);
+        }
+    }
+
+    private LLVMExpressionNode castFromFunctionPointer(LLVMFunctionNode fromNode) {
         if (targetType == LLVMBaseType.FUNCTION_ADDRESS) {
             return fromNode;
         }
@@ -278,7 +327,7 @@ public final class LLVMCastsFactory {
         }
     }
 
-    private LLVMExpressionNode castFromFloat(LLVMExpressionNode fromNode) {
+    private LLVMExpressionNode castFromFloat(LLVMFloatNode fromNode) {
         if (targetType == LLVMBaseType.FLOAT) {
             return fromNode;
         }
@@ -311,7 +360,7 @@ public final class LLVMCastsFactory {
         }
     }
 
-    private LLVMExpressionNode castFromI16(LLVMExpressionNode fromNode) {
+    private LLVMExpressionNode castFromI16(LLVMI16Node fromNode) {
         if (targetType == LLVMBaseType.I16) {
             return fromNode;
         }
@@ -357,7 +406,7 @@ public final class LLVMCastsFactory {
         return conv == LLVMConversionType.SIGN_EXTENSION || conv == LLVMConversionType.TRUNC;
     }
 
-    private LLVMExpressionNode castFromPointer(LLVMExpressionNode fromNode) {
+    private LLVMExpressionNode castFromPointer(LLVMAddressNode fromNode) {
         if (targetType == LLVMBaseType.ADDRESS) {
             return fromNode;
         }
@@ -382,7 +431,7 @@ public final class LLVMCastsFactory {
         throw new AssertionError(targetType + " " + conv);
     }
 
-    private LLVMExpressionNode castFromI64(LLVMExpressionNode fromNode) {
+    private LLVMExpressionNode castFromI64(LLVMI64Node fromNode) {
         if (targetType == LLVMBaseType.I64) {
             return fromNode;
         }
@@ -435,7 +484,7 @@ public final class LLVMCastsFactory {
         throw new AssertionError(targetType + " " + conv);
     }
 
-    private LLVMExpressionNode castFromI8(LLVMExpressionNode fromNode) {
+    private LLVMExpressionNode castFromI8(LLVMI8Node fromNode) {
         if (targetType == LLVMBaseType.I8) {
             return fromNode;
         }
@@ -479,7 +528,7 @@ public final class LLVMCastsFactory {
         throw new AssertionError(targetType + " " + conv);
     }
 
-    private LLVMExpressionNode castFromDouble(LLVMExpressionNode fromNode) {
+    private LLVMExpressionNode castFromDouble(LLVMDoubleNode fromNode) {
         if (targetType == LLVMBaseType.DOUBLE) {
             return fromNode;
         }
@@ -526,7 +575,7 @@ public final class LLVMCastsFactory {
         throw new AssertionError(targetType + " " + conv);
     }
 
-    private LLVMExpressionNode castFromI32(LLVMExpressionNode fromNode) {
+    private LLVMExpressionNode castFromI32(LLVMI32Node fromNode) {
         if (targetType == LLVMBaseType.I32) {
             return fromNode;
         }
@@ -577,7 +626,7 @@ public final class LLVMCastsFactory {
         throw new AssertionError(targetType + " " + conv);
     }
 
-    private LLVMExpressionNode castFromI1(LLVMExpressionNode fromNode) {
+    private LLVMExpressionNode castFromI1(LLVMI1Node fromNode) {
         if (targetType == LLVMBaseType.I1) {
             return fromNode;
         }
@@ -604,8 +653,6 @@ public final class LLVMCastsFactory {
                     return LLVMI1ToI32ZeroExtNodeGen.create(fromNode);
                 case I64:
                     return LLVMToI64ZeroExtNodeGen.create(fromNode);
-                case DOUBLE:
-                    return LLVMI1ToDoubleNodeGen.create(fromNode);
                 default:
                     throw new AssertionError(targetType + " " + conv);
             }

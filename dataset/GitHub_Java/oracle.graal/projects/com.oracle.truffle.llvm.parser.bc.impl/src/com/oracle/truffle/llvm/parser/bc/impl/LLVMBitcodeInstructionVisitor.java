@@ -60,6 +60,7 @@ import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAddressGetElementPtrNodeFac
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstructionFactory.LLVMI32AllocaInstructionNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstructionFactory.LLVMI64AllocaInstructionNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMUnreachableNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMPhiManager.Phi;
 import com.oracle.truffle.llvm.parser.bc.impl.nodes.LLVMNodeGenerator;
@@ -611,7 +612,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
 
     @Override
     public void visit(UnreachableInstruction ui) {
-        method.addTerminatingInstruction((LLVMTerminatorNode) factoryFacade.createUnreachableNode(), block.getBlockIndex(), block.getName());
+        method.addTerminatingInstruction(new LLVMUnreachableNode(), block.getBlockIndex(), block.getName());
     }
 
     @Override
