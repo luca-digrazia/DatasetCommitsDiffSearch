@@ -36,7 +36,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
 
 final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory {
@@ -141,12 +140,12 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
     static class WrappingRoot extends RootNode {
 
         private final PolyglotEngine engine;
-        @Child private DirectCallNode messageCallNode;
+        private final CallTarget messageTarget;
 
         WrappingRoot(PolyglotEngine engine, Message foreignMessage) {
             super(TruffleLanguage.class, null, null);
             this.engine = engine;
-            this.messageCallNode = DirectCallNode.create(PolyglotRootNode.createSend(engine, foreignMessage));
+            this.messageTarget = PolyglotRootNode.createSend(engine, foreignMessage);
         }
 
         @Override
@@ -159,7 +158,7 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
             System.arraycopy(oldArguments, 1, arguments, 1, oldArguments.length - 1);
             Object res;
             if (engine.executor() == null) {
-                res = messageCallNode.call(arguments);
+                res = messageTarget.call(arguments);
             } else {
                 res = invokeOnExecutor(arguments);
             }
@@ -172,7 +171,7 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
                 @SuppressWarnings("try")
                 @Override
                 protected Object compute() {
-                    return messageCallNode.call(arguments);
+                    return messageTarget.call(arguments);
                 }
             };
             compute.perform();
