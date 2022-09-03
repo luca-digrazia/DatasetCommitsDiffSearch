@@ -47,15 +47,13 @@ public class ReflectionGetCallerClassNode extends MacroNode implements Canonical
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         ConstantNode callerClassNode = getCallerClassNode(tool.getRuntime());
 
         if (callerClassNode != null) {
             graph().replaceFixedWithFloating(this, callerClassNode);
         } else {
-            InvokeNode invoke = createInvoke();
-            graph().replaceFixedWithFixed(this, invoke);
-            invoke.lower(tool);
+            graph().replaceFixedWithFixed(this, createInvoke());
         }
     }
 
