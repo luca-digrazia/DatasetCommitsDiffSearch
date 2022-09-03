@@ -92,18 +92,10 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     /*
      * Used from testing using reflection. Its invalid to call it anywhere else than testing. Used
-     * in ContextLookupCompilationTest and EngineAPITest.
+     * in ContextLookupCompilationTest.
      */
     static void resetSingleContextState() {
         singleContextState = new SingleContextState();
-    }
-
-    /*
-     * Used from testing using reflection. Its invalid to call it anywhere else than testing. Used
-     * in EngineAPITest.
-     */
-    static boolean isSingleContextAssumptionValid() {
-        return singleContextState.singleContextAssumption.isValid();
     }
 
     private static final Object NO_ENTER = new Object();
