@@ -29,9 +29,21 @@
  */
 package com.oracle.truffle.llvm.nodes.impl.base;
 
+import java.util.Arrays;
+
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 
 /**
  * This node represents a basic block in LLVM. The node contains both sequential statements which do
@@ -42,27 +54,72 @@ import com.oracle.truffle.llvm.nodes.base.LLVMNode;
  */
 public class LLVMBasicBlockNode extends LLVMNode {
 
+    private static final String FORMAT_STRING = "basic block %s (#statements: %s, successors: %s)";
     public static final int DEFAULT_SUCCESSOR = 0;
+
+    private static final boolean TRACE = LLVMBaseOptionFacade.traceExecutionEnabled();
 
     @Children private final LLVMNode[] statements;
     @Child private LLVMTerminatorNode termInstruction;
+
+    @CompilationFinal(dimensions = 1) private final long[] successorCount;
+    @CompilationFinal private long totalExecutionCount = 0;
+    private final int blockId;
+    private final String blockName;
+
+    private final BranchProfile controlFlowExceptionProfile = BranchProfile.create();
+
+    @CompilationFinal private SourceSection sourceSection;
 
     @Override
     public void executeVoid(VirtualFrame frame) {
         executeGetSuccessorIndex(frame);
     }
 
-    public LLVMBasicBlockNode(LLVMNode[] statements, LLVMTerminatorNode termInstruction) {
+    public LLVMBasicBlockNode(LLVMNode[] statements, LLVMTerminatorNode termInstruction, int blockId, String blockName) {
         this.statements = statements;
         this.termInstruction = termInstruction;
+        this.blockId = blockId;
+        this.blockName = blockName;
+        successorCount = new long[termInstruction.getSuccessors().length];
     }
 
     @ExplodeLoop
     public int executeGetSuccessorIndex(VirtualFrame frame) {
         for (LLVMNode statement : statements) {
-            statement.executeVoid(frame);
+            try {
+                if (TRACE) {
+                    trace(statement);
+                }
+                statement.executeVoid(frame);
+            } catch (ControlFlowException e) {
+                controlFlowExceptionProfile.enter();
+                throw e;
+            } catch (RuntimeException e) {
+                CompilerDirectives.transferToInterpreter();
+                SourceSection exceptionSourceSection = statement.getEncapsulatingSourceSection();
+                if (exceptionSourceSection == null) {
+                    throw e;
+                } else {
+                    String message = String.format("LLVM error in %s in %s - %s", statement.getSourceDescription(),
+                                    exceptionSourceSection.getSource() != null ? exceptionSourceSection.getSource().getName() : "<unknow>", e.getMessage());
+                    throw new RuntimeException(message, e);
+                }
+            }
         }
         return termInstruction.executeGetSuccessorIndex(frame);
+    }
+
+    @TruffleBoundary
+    private static void trace(LLVMNode statement) {
+        LLVMLogger.unconditionalInfo(String.format("[sulong] %s in %s", statement.getSourceDescription(), statement.getEncapsulatingSourceSection().getSource().getName()));
+    }
+
+    private void incrementCountAtIndex(int successorIndex) {
+        if (totalExecutionCount != Long.MAX_VALUE) {
+            totalExecutionCount++;
+            successorCount[successorIndex]++;
+        }
     }
 
     /**
@@ -74,4 +131,55 @@ public class LLVMBasicBlockNode extends LLVMNode {
     public int[] getSuccessors() {
         return termInstruction.getSuccessors();
     }
+
+    /**
+     * Gets the branch probability of the given successor.
+     *
+     * @param successorIndex
+     * @return the probability between 0 and 1
+     */
+    public double getBranchProbability(int successorIndex) {
+        double successorBranchProbability;
+        long succCount = successorCount[successorIndex];
+        if (succCount == 0) {
+            successorBranchProbability = 0;
+        } else {
+            successorBranchProbability = (double) succCount / totalExecutionCount;
+        }
+        return successorBranchProbability;
+    }
+
+    public void increaseBranchProbabilityDeoptIfZero(int successorIndex) {
+        if (successorCount[successorIndex] == 0) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+        }
+        if (CompilerDirectives.inInterpreter()) {
+            incrementCountAtIndex(successorIndex);
+        }
+    }
+
+    @Override
+    public String getSourceDescription() {
+        LLVMFunctionStartNode functionStartNode = NodeUtil.findParent(this, LLVMFunctionStartNode.class);
+        assert functionStartNode != null : getParent().getClass();
+        if (blockId == 0) {
+            return String.format("first basic block in function %s", functionStartNode.getFunctionName());
+        } else {
+            return String.format("basic block %s in function %s", blockName, functionStartNode.getFunctionName());
+        }
+    }
+
+    @Override
+    public String toString() {
+        return String.format(FORMAT_STRING, blockId, statements.length, Arrays.toString(termInstruction.getSuccessors()));
+    }
+
+    public int getBlockId() {
+        return blockId;
+    }
+
+    public String getBlockName() {
+        return blockName;
+    }
+
 }

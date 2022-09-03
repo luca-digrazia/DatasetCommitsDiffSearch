@@ -29,13 +29,18 @@
  */
 package com.oracle.truffle.llvm.nodes.impl.vars;
 
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMBasicBlockNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVM80BitFloatNode;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMDoubleNode;
@@ -46,15 +51,30 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMIVarBitNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
 
 @NodeField(name = "slot", type = FrameSlot.class)
 public abstract class LLVMWriteNode extends LLVMNode {
 
+    @CompilationFinal private SourceSection sourceSection;
+
     protected abstract FrameSlot getSlot();
+
+    @Override
+    public String getSourceDescription() {
+        LLVMBasicBlockNode basicBlock = NodeUtil.findParent(this, LLVMBasicBlockNode.class);
+        assert basicBlock != null : getParent().getClass();
+        LLVMFunctionStartNode functionStartNode = NodeUtil.findParent(basicBlock, LLVMFunctionStartNode.class);
+        assert functionStartNode != null : basicBlock.getParent().getClass();
+        if (basicBlock.getBlockId() == 0) {
+            return String.format("assignment of %s in first basic block in function %s", getSlot().getIdentifier(), functionStartNode.getFunctionName());
+        } else {
+            return String.format("assignment of %s in basic block %s in function %s", getSlot().getIdentifier(), basicBlock.getBlockName(), functionStartNode.getFunctionName());
+        }
+    }
 
     @NodeChild(value = "valueNode", type = LLVMI1Node.class)
     public abstract static class LLVMWriteI1Node extends LLVMWriteNode {
@@ -145,21 +165,25 @@ public abstract class LLVMWriteNode extends LLVMNode {
         }
     }
 
-    @NodeChild(value = "valueNode", type = LLVMAddressNode.class)
+    @NodeChild(value = "valueNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMWriteAddressNode extends LLVMWriteNode {
 
         @Specialization
-        protected void writeAddress(VirtualFrame frame, LLVMAddress value) {
+        protected void writeObject(VirtualFrame frame, Object value) {
             frame.setObject(getSlot(), value);
         }
-
     }
 
     @NodeChild(value = "valueNode", type = LLVMFunctionNode.class)
     public abstract static class LLVMWriteFunctionNode extends LLVMWriteNode {
 
         @Specialization
-        protected void writeAddress(VirtualFrame frame, LLVMFunction value) {
+        protected void writeAddress(VirtualFrame frame, LLVMFunctionDescriptor value) {
+            frame.setObject(getSlot(), value);
+        }
+
+        @Specialization
+        protected void writeTruffleObject(VirtualFrame frame, TruffleObject value) {
             frame.setObject(getSlot(), value);
         }
 
