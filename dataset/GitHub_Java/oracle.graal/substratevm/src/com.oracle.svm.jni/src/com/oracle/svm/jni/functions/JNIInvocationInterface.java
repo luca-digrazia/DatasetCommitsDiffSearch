@@ -28,8 +28,6 @@ import static com.oracle.svm.jni.nativeapi.JNIVersion.JNI_VERSION_1_4;
 import static com.oracle.svm.jni.nativeapi.JNIVersion.JNI_VERSION_1_6;
 import static com.oracle.svm.jni.nativeapi.JNIVersion.JNI_VERSION_1_8;
 
-import java.io.CharConversionException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import org.graalvm.compiler.word.Word;
@@ -44,7 +42,6 @@ import org.graalvm.nativeimage.c.type.WordPointer;
 import org.graalvm.word.Pointer;
 
 import com.oracle.svm.core.MonitorSupport;
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.c.function.CEntryPointActions;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
@@ -52,9 +49,6 @@ import com.oracle.svm.core.c.function.CEntryPointSetup.EnterCreateIsolatePrologu
 import com.oracle.svm.core.c.function.CEntryPointSetup.LeaveDetachThreadEpilogue;
 import com.oracle.svm.core.option.RuntimeOptionParser;
 import com.oracle.svm.core.properties.RuntimePropertyParser;
-import com.oracle.svm.core.thread.JavaThreads;
-import com.oracle.svm.core.util.Utf8;
-import com.oracle.svm.jni.JNIObjectHandles;
 import com.oracle.svm.jni.JNIThreadLocalEnvironment;
 import com.oracle.svm.jni.JNIThreadOwnedMonitors;
 import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIJavaVMEnterAttachThreadPrologue;
@@ -63,11 +57,9 @@ import com.oracle.svm.jni.hosted.JNIFeature;
 import com.oracle.svm.jni.nativeapi.JNIEnvironmentPointer;
 import com.oracle.svm.jni.nativeapi.JNIErrors;
 import com.oracle.svm.jni.nativeapi.JNIJavaVM;
-import com.oracle.svm.jni.nativeapi.JNIJavaVMAttachArgs;
 import com.oracle.svm.jni.nativeapi.JNIJavaVMInitArgs;
 import com.oracle.svm.jni.nativeapi.JNIJavaVMOption;
 import com.oracle.svm.jni.nativeapi.JNIJavaVMPointer;
-import com.oracle.svm.jni.nativeapi.JNIVersion;
 
 /**
  * Implementation of the JNI invocation API for interacting with a Java VM without having an
@@ -153,8 +145,8 @@ final class JNIInvocationInterface {
      */
     @CEntryPoint
     @CEntryPointOptions(prologue = JNIJavaVMEnterAttachThreadPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
-    static int AttachCurrentThread(JNIJavaVM vm, JNIEnvironmentPointer penv, JNIJavaVMAttachArgs args) {
-        return Support.attachCurrentThread(vm, penv, args, false);
+    static int AttachCurrentThread(JNIJavaVM vm, JNIEnvironmentPointer penv, WordPointer targs) {
+        return Support.attachCurrentThread(vm, penv, false);
     }
 
     /*
@@ -162,8 +154,8 @@ final class JNIInvocationInterface {
      */
     @CEntryPoint
     @CEntryPointOptions(prologue = JNIJavaVMEnterAttachThreadPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
-    static int AttachCurrentThreadAsDaemon(JNIJavaVM vm, JNIEnvironmentPointer penv, JNIJavaVMAttachArgs args) {
-        return Support.attachCurrentThread(vm, penv, args, true);
+    static int AttachCurrentThreadAsDaemon(JNIJavaVM vm, JNIEnvironmentPointer penv, WordPointer targs) {
+        return Support.attachCurrentThread(vm, penv, true);
     }
 
     /*
@@ -219,32 +211,14 @@ final class JNIInvocationInterface {
             }
         }
 
-        static int attachCurrentThread(JNIJavaVM vm, JNIEnvironmentPointer penv, JNIJavaVMAttachArgs args, boolean asDaemon) {
+        static int attachCurrentThread(JNIJavaVM vm, JNIEnvironmentPointer penv, boolean daemon) {
             if (vm.equal(JNIFunctionTables.singleton().getGlobalJavaVM())) {
                 if (!JNIThreadLocalEnvironment.isInitialized()) {
                     JNIThreadLocalEnvironment.initialize();
                 }
                 penv.write(JNIThreadLocalEnvironment.getAddress());
-                ThreadGroup group = null;
-                String name = null;
-                if (args.isNonNull() && args.getVersion() != JNIVersion.JNI_VERSION_1_1()) {
-                    group = JNIObjectHandles.getObject(args.getGroup());
-                    if (args.getName().isNonNull()) {
-                        ByteBuffer buffer = SubstrateUtil.wrapAsByteBuffer(args.getName(), Integer.MAX_VALUE);
-                        try {
-                            name = Utf8.utf8ToString(true, buffer);
-                        } catch (CharConversionException ignore) {
-                        }
-                    }
-                }
-                JavaThreads.singleton().assignJavaThread(name, group, asDaemon);
-                /*
-                 * Ignore if a Thread object has already been assigned: "If the thread has already
-                 * been attached via either AttachCurrentThread or AttachCurrentThreadAsDaemon, this
-                 * routine simply sets the value pointed to by penv to the JNIEnv of the current
-                 * thread. In this case neither AttachCurrentThread nor this routine have any effect
-                 * on the daemon status of the thread."
-                 */
+                // FIXME: setting daemon status after a thread has been attached is not supported
+                // right now.
                 return JNIErrors.JNI_OK();
             }
             return JNIErrors.JNI_ERR();
