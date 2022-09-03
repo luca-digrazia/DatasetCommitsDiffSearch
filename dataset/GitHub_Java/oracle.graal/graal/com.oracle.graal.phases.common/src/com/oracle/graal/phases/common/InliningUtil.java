@@ -456,7 +456,7 @@ public class InliningUtil {
                 FixedNode exceptionSux = exceptionEdge.next();
                 graph.addBeforeFixed(exceptionSux, exceptionMerge);
                 exceptionObjectPhi = graph.unique(new PhiNode(Kind.Object, exceptionMerge));
-                exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicateModified(invoke.stateAfter().bci, true, Kind.Object, exceptionObjectPhi));
+                exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicateModified(invoke.stateAfter().bci, true, Kind.Void, exceptionObjectPhi));
             }
 
             // create one separate block for each invoked method
@@ -1095,7 +1095,6 @@ public class InliningUtil {
 
         FrameState outerFrameState = null;
         double invokeProbability = invoke.node().probability();
-        int callerLockDepth = stateAfter.nestedLockDepth();
         for (Node node : duplicates.values()) {
             if (GraalOptions.ProbabilityAnalysis) {
                 if (node instanceof FixedNode) {
@@ -1138,10 +1137,6 @@ public class InliningUtil {
                         frameState.setOuterFrameState(outerFrameState);
                     }
                 }
-            }
-            if (callerLockDepth != 0 && node instanceof MonitorReference) {
-                MonitorReference monitor = (MonitorReference) node;
-                monitor.setLockDepth(monitor.getLockDepth() + callerLockDepth);
             }
         }
 
