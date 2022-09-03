@@ -1113,22 +1113,12 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             }
         }
 
-        private CodeTree truffleBooleanOption(CodeTreeBuilder parent, String name) {
-            CodeTreeBuilder builder = parent.create();
-            builder.staticReference(getContext().getTruffleTypes().getTruffleOptions(), name);
-            return builder.getRoot();
-        }
-
         private Element createInfoMessage(NodeData node) {
             CodeExecutableElement method = new CodeExecutableElement(modifiers(PROTECTED, STATIC), getContext().getType(String.class), "createInfo0");
             method.addParameter(new CodeVariableElement(getContext().getType(String.class), "message"));
             addInternalValueParameters(method, node.getGenericSpecialization(), false, false);
 
             CodeTreeBuilder builder = method.createBuilder();
-
-            builder.startIf().tree(truffleBooleanOption(builder, TruffleTypes.OPTION_DETAILED_REWRITE_REASONS)).end();
-            builder.startBlock();
-
             builder.startStatement().string("StringBuilder builder = new StringBuilder(message)").end();
             builder.startStatement().startCall("builder", "append").doubleQuote(" (").end().end();
 
@@ -1169,12 +1159,8 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             }
 
             builder.startStatement().startCall("builder", "append").doubleQuote(")").end().end();
-            builder.startReturn().string("builder.toString()").end();
 
-            builder.end();
-            builder.startElseBlock();
-            builder.startReturn().string("message").end();
-            builder.end();
+            builder.startReturn().string("builder.toString()").end();
 
             return method;
         }
