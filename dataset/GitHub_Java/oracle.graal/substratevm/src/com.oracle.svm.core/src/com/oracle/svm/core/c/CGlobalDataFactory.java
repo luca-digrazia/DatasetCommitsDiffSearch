@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,8 +27,6 @@ import java.nio.ByteOrder;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordBase;
 
@@ -42,12 +38,7 @@ import com.oracle.svm.core.util.Utf8;
  * outside of the heap, or for creating references to symbols. The {@linkplain CGlobalData returned
  * objects} can be used to access the data by address at runtime. In order for the data to be
  * actually allocated in the native image, it must be reachable during the static analysis.
- * <p>
- * All method of this class can only be used at native image build time, and not at run time. It is
- * not possible to extend the data section of an executable or define new symbols in an executable
- * at run time.
  */
-@Platforms(Platform.HOSTED_ONLY.class)
 public final class CGlobalDataFactory {
     /**
      * Create a reference to the symbol with the specified name. Calling {@link CGlobalData#get()}
@@ -117,10 +108,8 @@ public final class CGlobalDataFactory {
      * name for the allocated word.
      */
     public static <T extends PointerBase> CGlobalData<T> createWord(WordBase initialValue, String symbolName) {
-        Supplier<byte[]> supplier = () -> {
-            assert ConfigurationValues.getTarget().wordSize == Long.BYTES;
-            return ByteBuffer.allocate(Long.BYTES).order(ByteOrder.nativeOrder()).putLong(initialValue.rawValue()).array();
-        };
+        assert ConfigurationValues.getTarget().wordSize == Long.BYTES;
+        Supplier<byte[]> supplier = () -> ByteBuffer.allocate(Long.BYTES).order(ByteOrder.nativeOrder()).putLong(initialValue.rawValue()).array();
         return new CGlobalDataImpl<>(symbolName, supplier);
     }
 

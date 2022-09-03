@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,10 +27,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.word.Word;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
-import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.c.CGlobalData;
@@ -58,7 +56,7 @@ public final class CFunctionLinkages {
         }
         return nameToFunction.computeIfAbsent(linkageName(method), symbolName -> {
             CGlobalData<CFunctionPointer> linkage = CGlobalDataFactory.forSymbol(symbolName);
-            return CGlobalDataFeature.singleton().registerAsAccessedOrGet(linkage);
+            return CGlobalDataFeature.singleton().registerAsAccessed(linkage);
         });
     }
 
