@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,29 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.nodes.*;
 
 /**
  * {@link MacroNode Macro node} for {@link Class#getClassLoader0()}.
  *
- * @see ClassSubstitutions#getClassLoader0(Class)
+ * @see HotSpotClassSubstitutions#getClassLoader0(Class)
  */
 @SuppressWarnings("javadoc")
-public class ClassGetClassLoader0Node extends MacroNode implements Canonicalizable {
+@NodeInfo
+public final class ClassGetClassLoader0Node extends MacroStateSplitNode implements Canonicalizable {
+
+    public static final NodeClass<ClassGetClassLoader0Node> TYPE = NodeClass.create(ClassGetClassLoader0Node.class);
 
     public ClassGetClassLoader0Node(Invoke invoke) {
-        super(invoke);
+        super(TYPE, invoke);
     }
 
     private ValueNode getJavaClass() {
@@ -48,15 +54,11 @@ public class ClassGetClassLoader0Node extends MacroNode implements Canonicalizab
     @Override
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
-        if (javaClass.isConstant()) {
-            Class<?> c = (Class<?>) HotSpotObjectConstant.asObject(javaClass.asConstant());
-            if (c != null) {
-                /*
-                 * This is an intrinsic for getClassLoader0, which occurs after any security checks.
-                 * We can't call that directly so just call getClassLoader.
-                 */
-                ClassLoader classLoader = c.getClassLoader();
-                return ConstantNode.forConstant(HotSpotObjectConstant.forObject(classLoader), tool.getMetaAccess());
+        if (javaClass.isConstant() && !GraalOptions.ImmutableCode.getValue()) {
+            HotSpotObjectConstant c = (HotSpotObjectConstant) javaClass.asConstant();
+            JavaConstant classLoader = c.getClassLoader();
+            if (classLoader != null) {
+                return ConstantNode.forConstant(classLoader, tool.getMetaAccess());
             }
         }
         return this;
