@@ -28,9 +28,11 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.oracle.graal.bytecode.BytecodeDisassembler;
 import com.oracle.graal.code.CompilationResult;
@@ -139,13 +141,6 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         if (cfgPrinter == null) {
             cfgFile = getCFGPath().toFile();
             try {
-                /*
-                 * Initializing a debug environment multiple times by calling
-                 * DebugEnvironment#initialize will create new CFGPrinterObserver objects that refer
-                 * to the same file path. This means the CFG file may be overridden by another
-                 * instance. Appending to an existing CFG file is not an option as the writing
-                 * happens buffered.
-                 */
                 OutputStream out = new BufferedOutputStream(new FileOutputStream(cfgFile));
                 cfgPrinter = new CFGPrinter(out);
             } catch (FileNotFoundException e) {
@@ -183,8 +178,8 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             if (object instanceof BciBlockMapping) {
                 BciBlockMapping blockMap = (BciBlockMapping) object;
                 cfgPrinter.printCFG(message, blockMap);
-                if (blockMap.code.getCode() != null) {
-                    cfgPrinter.printBytecodes(new BytecodeDisassembler(false).disassemble(blockMap.code));
+                if (blockMap.method.getCode() != null) {
+                    cfgPrinter.printBytecodes(new BytecodeDisassembler(false).disassemble(blockMap.method));
                 }
 
             } else if (object instanceof LIR) {
@@ -239,8 +234,14 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         }
     }
 
+    private static long timestamp;
+    private static final AtomicInteger uniqueId = new AtomicInteger();
+
     private static Path getCFGPath() {
-        return Options.PrintCFGFileName.getPath();
+        if (timestamp == 0) {
+            timestamp = System.currentTimeMillis();
+        }
+        return Paths.get(Options.DumpPath.getValue(), "compilations-" + timestamp + "_" + uniqueId.incrementAndGet() + ".cfg");
     }
 
     /** Lazy initialization to delay service lookup until disassembler is actually needed. */
