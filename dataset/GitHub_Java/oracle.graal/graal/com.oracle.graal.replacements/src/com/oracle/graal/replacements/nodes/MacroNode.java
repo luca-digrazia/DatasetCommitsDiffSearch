@@ -80,7 +80,7 @@ public class MacroNode extends AbstractStateSplit implements Lowerable {
 
     private InvokeNode replaceWithInvoke() {
         InvokeNode invoke = createInvoke();
-        graph().replaceFixedWithFixed(this, invoke);
+        ((StructuredGraph) graph()).replaceFixedWithFixed(this, invoke);
         return invoke;
     }
 
