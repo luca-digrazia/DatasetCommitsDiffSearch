@@ -215,9 +215,9 @@ public class EngineBenchmark extends TruffleBenchmark {
 
     }
 
-    static class BenchmarkContext {
+    private static class BenchmarkContext {
 
-        final Env env;
+        private final Env env;
         final BenchmarkObject object = new BenchmarkObject();
 
         BenchmarkContext(Env env) {
@@ -242,7 +242,6 @@ public class EngineBenchmark extends TruffleBenchmark {
     }
 
     @MessageResolution(receiverType = BenchmarkObject.class)
-    @SuppressWarnings("unused")
     static class BenchmarkObjectMR {
 
         @Resolve(message = "READ")
