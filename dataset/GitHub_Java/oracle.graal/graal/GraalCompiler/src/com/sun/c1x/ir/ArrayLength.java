@@ -56,7 +56,7 @@ public final class ArrayLength extends AccessArray {
     }
 
     @Override
-    public boolean valueEqual(Node i) {
+    public boolean valueEqual(Instruction i) {
         if (i instanceof ArrayLength) {
             ArrayLength o = (ArrayLength) i;
             return array() == o.array();

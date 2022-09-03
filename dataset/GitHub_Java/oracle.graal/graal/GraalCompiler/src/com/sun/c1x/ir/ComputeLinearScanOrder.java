@@ -30,6 +30,10 @@ import com.sun.c1x.debug.*;
 import com.sun.c1x.util.*;
 import com.sun.cri.ci.*;
 
+/**
+ * @author Thomas Wuerthinger
+ *
+ */
 public final class ComputeLinearScanOrder {
 
     private final int maxBlockId; // the highest blockId of a block
@@ -126,6 +130,7 @@ public final class ComputeLinearScanOrder {
         }
 
         computeOrder(startBlock);
+        computeDominators();
 
         printBlocks();
         assert verify();
@@ -143,6 +148,7 @@ public final class ComputeLinearScanOrder {
         if (C1XOptions.TraceLinearScanLevel >= 3) {
             TTY.println("Counting edges for block B%d%s", cur.blockID, parent == null ? "" : " coming from B" + parent.blockID);
         }
+        assert cur.dominator() == null : "dominator already initialized";
 
         if (isActive(cur)) {
             if (C1XOptions.TraceLinearScanLevel >= 3) {
@@ -229,8 +235,8 @@ public final class ComputeLinearScanOrder {
             if (C1XOptions.TraceLinearScanLevel >= 3) {
                 TTY.println("Processing loop from B%d to B%d (loop %d):", loopStart.blockID, loopEnd.blockID, loopIdx);
             }
-            assert loopEnd.isLinearScanLoopEnd() : "loop end flag must be set";
-            assert loopStart.isLinearScanLoopHeader() : "loop header flag must be set";
+            assert loopEnd.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd) : "loop end flag must be set";
+            assert loopStart.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader) : "loop header flag must be set";
             assert loopIdx >= 0 && loopIdx < numLoops : "loop index not set";
             assert workList.isEmpty() : "work list must be empty before processing";
 
@@ -248,7 +254,7 @@ public final class ComputeLinearScanOrder {
                 // recursive processing of all predecessors ends when start block of loop is reached
                 if (cur != loopStart) {
                     for (int j = cur.numberOfPreds() - 1; j >= 0; j--) {
-                        BlockBegin pred = cur.predAt(j).begin();
+                        BlockBegin pred = cur.predAt(j);
 
                         if (!isBlockInLoop(loopIdx, pred)) {
                             // this predecessor has not been processed yet, so add it to work list
@@ -327,6 +333,45 @@ public final class ComputeLinearScanOrder {
         } while (!workList.isEmpty());
     }
 
+    private BlockBegin commonDominator(BlockBegin a, BlockBegin b) {
+        assert a != null && b != null : "must have input blocks";
+
+        dominatorBlocks.clearAll();
+        while (a != null) {
+            dominatorBlocks.set(a.blockID);
+            assert a.dominator() != null || a == linearScanOrder.get(0) : "dominator must be initialized";
+            a = a.dominator();
+        }
+        while (b != null && !dominatorBlocks.get(b.blockID)) {
+            assert b.dominator() != null || b == linearScanOrder.get(0) : "dominator must be initialized";
+            b = b.dominator();
+        }
+
+        assert b != null : "could not find dominator";
+        return b;
+    }
+
+    private void computeDominator(BlockBegin cur, BlockBegin parent) {
+        if (cur.dominator() == null) {
+            if (C1XOptions.TraceLinearScanLevel >= 4) {
+                TTY.println("DOM: initializing dominator of B%d to B%d", cur.blockID, parent.blockID);
+            }
+            if (cur.isExceptionEntry()) {
+                assert parent.dominator() != null;
+                cur.setDominator(parent.dominator());
+            } else {
+                cur.setDominator(parent);
+            }
+
+        } else if (!(cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader) && parent.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd))) {
+            if (C1XOptions.TraceLinearScanLevel >= 4) {
+                TTY.println("DOM: computing dominator of B%d: common dominator of B%d and B%d is B%d", cur.blockID, parent.blockID, cur.dominator().blockID, commonDominator(cur.dominator(), parent).blockID);
+            }
+            assert cur.numberOfPreds() > 1 : "";
+            cur.setDominator(commonDominator(cur.dominator(), parent));
+        }
+    }
+
     private int computeWeight(BlockBegin cur) {
         BlockBegin singleSux = null;
         if (cur.numberOfSux() == 1) {
@@ -341,14 +386,14 @@ public final class ComputeLinearScanOrder {
         // this is necessary for the (very rare) case that two successive blocks have
         // the same loop depth, but a different loop index (can happen for endless loops
         // with exception handlers)
-        if (!cur.isLinearScanLoopHeader()) {
+        if (!cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader)) {
             weight |= (1 << curBit);
         }
         curBit--;
 
         // loop end blocks (blocks that end with a backward branch) are added
         // after all other blocks of the loop.
-        if (!cur.isLinearScanLoopEnd()) {
+        if (!cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd)) {
             weight |= (1 << curBit);
         }
         curBit--;
@@ -453,12 +498,18 @@ public final class ComputeLinearScanOrder {
 
         // the start block is always the first block in the linear scan order
         linearScanOrder = new ArrayList<BlockBegin>(numBlocks);
+        appendBlock(startBlock);
+
+        assert startBlock.end() instanceof Base : "start block must end with Base-instruction";
+        BlockBegin stdEntry = ((Base) startBlock.end()).standardEntry();
+
+        computeDominator(stdEntry, startBlock);
 
         // start processing with standard entry block
         assert workList.isEmpty() : "list must be empty before processing";
 
-        if (readyForProcessing(startBlock)) {
-            sortIntoWorkList(startBlock);
+        if (readyForProcessing(stdEntry)) {
+            sortIntoWorkList(stdEntry);
         } else {
             throw new CiBailout("the stdEntry must be ready for processing (otherwise, the method has no start block)");
         }
@@ -472,6 +523,7 @@ public final class ComputeLinearScanOrder {
             // changed loop order to get "intuitive" order of if- and else-blocks
             for (i = 0; i < numSux; i++) {
                 BlockBegin sux = cur.suxAt(i);
+                computeDominator(sux, cur);
                 if (readyForProcessing(sux)) {
                     sortIntoWorkList(sux);
                 }
@@ -479,11 +531,67 @@ public final class ComputeLinearScanOrder {
             numSux = cur.numberOfExceptionHandlers();
             for (i = 0; i < numSux; i++) {
                 BlockBegin sux = cur.exceptionHandlerAt(i);
+                computeDominator(sux, cur);
                 if (readyForProcessing(sux)) {
                     sortIntoWorkList(sux);
                 }
             }
         } while (workList.size() > 0);
+    }
+
+    private boolean computeDominatorsIter() {
+        boolean changed = false;
+        int numBlocks = linearScanOrder.size();
+
+        assert linearScanOrder.get(0).dominator() == null : "must not have dominator";
+        assert linearScanOrder.get(0).numberOfPreds() == 0 : "must not have predecessors";
+        for (int i = 1; i < numBlocks; i++) {
+            BlockBegin block = linearScanOrder.get(i);
+
+            assert block.numberOfPreds() > 0;
+            BlockBegin dominator = block.predAt(0);
+            if (block.isExceptionEntry()) {
+                dominator = dominator.dominator();
+            }
+
+            int numPreds = block.numberOfPreds();
+            for (int j = 1; j < numPreds; j++) {
+                BlockBegin curPred = block.predAt(j);
+                if (block.isExceptionEntry()) {
+                    curPred = curPred.dominator();
+                }
+                dominator = commonDominator(dominator, curPred);
+            }
+
+            if (dominator != block.dominator()) {
+                if (C1XOptions.TraceLinearScanLevel >= 4) {
+                    TTY.println("DOM: updating dominator of B%d from B%d to B%d", block.blockID, block.dominator().blockID, dominator.blockID);
+                }
+                block.setDominator(dominator);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private void computeDominators() {
+        if (C1XOptions.TraceLinearScanLevel >= 3) {
+            TTY.println("----- computing dominators (iterative computation required: %b)", iterativeDominators);
+        }
+
+        // iterative computation of dominators is only required for methods with non-natural loops
+        // and OSR-methods. For all other methods : the dominators computed when generating the
+        // linear scan block order are correct.
+        if (iterativeDominators) {
+            do {
+                if (C1XOptions.TraceLinearScanLevel >= 1) {
+                    TTY.println("DOM: next iteration of fix-point calculation");
+                }
+            } while (computeDominatorsIter());
+        }
+
+        // check that dominators are correct
+        assert !computeDominatorsIter() : "fix point not reached";
     }
 
     public void printBlocks() {
@@ -505,13 +613,19 @@ public final class ComputeLinearScanOrder {
 
                 TTY.print(cur.isExceptionEntry() ? " ex" : "   ");
                 TTY.print(cur.isCriticalEdgeSplit() ? " ce" : "   ");
-                TTY.print(cur.isLinearScanLoopHeader() ? " lh" : "   ");
-                TTY.print(cur.isLinearScanLoopEnd() ? " le" : "   ");
+                TTY.print(cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader) ? " lh" : "   ");
+                TTY.print(cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd) ? " le" : "   ");
+
+                if (cur.dominator() != null) {
+                    TTY.print("    dom: B%d ", cur.dominator().blockID);
+                } else {
+                    TTY.print("    dom: null ");
+                }
 
                 if (cur.numberOfPreds() > 0) {
                     TTY.print("    preds: ");
                     for (int j = 0; j < cur.numberOfPreds(); j++) {
-                        BlockBegin pred = cur.predAt(j).begin();
+                        BlockBegin pred = cur.predAt(j);
                         TTY.print("B%d ", pred.blockID);
                     }
                 }
@@ -562,16 +676,25 @@ public final class ComputeLinearScanOrder {
                 }
             }
 
-            for (BlockEnd pred : cur.blockPredecessors()) {
-                BlockBegin begin = pred.begin();
-                assert begin.linearScanNumber() >= 0 && begin.linearScanNumber() == linearScanOrder.indexOf(begin) : "incorrect linearScanNumber";
+            for (BlockBegin pred : cur.blockPredecessors()) {
+                assert pred.linearScanNumber() >= 0 && pred.linearScanNumber() == linearScanOrder.indexOf(pred) : "incorrect linearScanNumber";
                 if (!cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader)) {
-                    assert cur.linearScanNumber() > begin.linearScanNumber() : "invalid order";
+                    assert cur.linearScanNumber() > pred.linearScanNumber() : "invalid order";
                 }
-                if (cur.loopDepth() == begin.loopDepth()) {
-                    assert cur.loopIndex() == begin.loopIndex() || cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader) : "successing blocks with same loop depth must have same loop index";
+                if (cur.loopDepth() == pred.loopDepth()) {
+                    assert cur.loopIndex() == pred.loopIndex() || cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader) : "successing blocks with same loop depth must have same loop index";
                 }
+
+                assert cur.dominator().linearScanNumber() <= pred.linearScanNumber() : "dominator must be before predecessors";
             }
+
+            // check dominator
+            if (i == 0) {
+                assert cur.dominator() == null : "first block has no dominator";
+            } else {
+                assert cur.dominator() != null : "all but first block must have dominator";
+            }
+            assert cur.numberOfPreds() != 1 || cur.dominator() == cur.predAt(0) || cur.isExceptionEntry() : "Single predecessor must also be dominator";
         }
 
         // check that all loops are continuous

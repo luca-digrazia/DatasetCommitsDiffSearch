@@ -24,7 +24,6 @@ package com.sun.c1x.ir;
 
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
@@ -45,9 +44,8 @@ public final class LoadField extends AccessField {
      * @param graph
      * @param isLoaded indicates if the class is loaded
      */
-    public LoadField(Value object, RiField field, FrameState stateBefore, Graph graph) {
+    public LoadField(Value object, RiField field, Graph graph) {
         super(field.kind().stackKind(), object, field, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-        this.setStateBefore(stateBefore);
     }
 
     /**
@@ -74,6 +72,24 @@ public final class LoadField extends AccessField {
     @Override
     public void accept(ValueVisitor v) {
         v.visitLoadField(this);
+    }
+
+    /**
+     * Gets a constant value to which this load can be reduced.
+     *
+     * @return {@code null} if this load cannot be reduced to a constant
+     */
+    public CiConstant constantValue() {
+        if (isStatic()) {
+            return field.constantValue(null);
+        } else if (object().isConstant()) {
+            CiConstant cons = field.constantValue(object().asConstant());
+            if (cons != null) {
+                return cons;
+            }
+            return cons;
+        }
+        return null;
     }
 
     @Override
