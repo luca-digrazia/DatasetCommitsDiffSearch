@@ -63,10 +63,7 @@ import com.oracle.truffle.api.nodes.*;
  */
 public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
-    public static TruffleRuntime makeInstance() {
-        if (GraalTruffleRuntime.alternateRuntime != null) {
-            return GraalTruffleRuntime.alternateRuntime;
-        }
+    public static HotSpotTruffleRuntime makeInstance() {
         return new HotSpotTruffleRuntime();
     }
 
@@ -119,13 +116,12 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     private RootCallTarget createCallTargetImpl(OptimizedCallTarget source, RootNode rootNode) {
         CompilationPolicy compilationPolicy;
         if (acceptForCompilation(rootNode)) {
-            compilationPolicy = new CounterAndTimeBasedCompilationPolicy();
+            compilationPolicy = new CounterBasedCompilationPolicy();
         } else {
             compilationPolicy = new InterpreterOnlyCompilationPolicy();
         }
         OptimizedCallTarget target = new OptimizedCallTarget(source, rootNode, this, compilationPolicy, new HotSpotSpeculationLog());
         callTargets.put(target, null);
-
         return target;
     }
 
