@@ -83,7 +83,7 @@ public abstract class BinaryNode extends FloatingNode {
         }
     }
 
-    public static BinaryNode add(StructuredGraph graph, ValueNode x, ValueNode y) {
+    public static BinaryNode add(ValueNode x, ValueNode y) {
         assert x.kind() == y.kind();
         switch (x.kind()) {
             case Byte:
@@ -91,7 +91,7 @@ public abstract class BinaryNode extends FloatingNode {
             case Short:
             case Int:
             case Long:
-                return IntegerArithmeticNode.add(graph, x, y);
+                return IntegerArithmeticNode.add(x, y);
             case Float:
             case Double:
                 return x.graph().unique(new FloatAddNode(x.kind(), x, y, false));
@@ -100,7 +100,7 @@ public abstract class BinaryNode extends FloatingNode {
         }
     }
 
-    public static BinaryNode sub(StructuredGraph graph, ValueNode x, ValueNode y) {
+    public static BinaryNode sub(ValueNode x, ValueNode y) {
         assert x.kind() == y.kind();
         switch (x.kind()) {
             case Byte:
@@ -108,7 +108,7 @@ public abstract class BinaryNode extends FloatingNode {
             case Short:
             case Int:
             case Long:
-                return IntegerArithmeticNode.sub(graph, x, y);
+                return IntegerArithmeticNode.sub(x, y);
             case Float:
             case Double:
                 return x.graph().unique(new FloatSubNode(x.kind(), x, y, false));
@@ -117,7 +117,7 @@ public abstract class BinaryNode extends FloatingNode {
         }
     }
 
-    public static BinaryNode mul(StructuredGraph graph, ValueNode x, ValueNode y) {
+    public static BinaryNode mul(ValueNode x, ValueNode y) {
         assert x.kind() == y.kind();
         switch (x.kind()) {
             case Byte:
@@ -125,7 +125,7 @@ public abstract class BinaryNode extends FloatingNode {
             case Short:
             case Int:
             case Long:
-                return IntegerArithmeticNode.mul(graph, x, y);
+                return IntegerArithmeticNode.mul(x, y);
             case Float:
             case Double:
                 return x.graph().unique(new FloatMulNode(x.kind(), x, y, false));
@@ -168,10 +168,9 @@ public abstract class BinaryNode extends FloatingNode {
     //@formatter:on
     /**
      * Tries to re-associate values which satisfy the criterion. For example with a constantness
-     * criterion: {@code (a + 2) + 1 => a + (1 + 2)}
-     * <p>
-     * This method accepts only {@linkplain #canTryReassociate(BinaryNode) reassociable} operations
-     * such as +, -, *, &, | and ^
+     * criterion : (a + 2) + 1 => a + (1 + 2)<br>
+     * This method accepts only reassociable operations (see
+     * {@linkplain #canTryReassociate(BinaryNode)}) such as +, -, *, &, | and ^
      */
     public static BinaryNode reassociate(BinaryNode node, NodePredicate criterion) {
         assert canTryReassociate(node);
@@ -218,29 +217,28 @@ public abstract class BinaryNode extends FloatingNode {
         ValueNode a = match2.getOtherValue(other);
         if (node instanceof IntegerAddNode || node instanceof IntegerSubNode) {
             BinaryNode associated;
-            StructuredGraph graph = node.graph();
             if (invertM1) {
-                associated = IntegerArithmeticNode.sub(graph, m2, m1);
+                associated = IntegerArithmeticNode.sub(m2, m1);
             } else if (invertM2) {
-                associated = IntegerArithmeticNode.sub(graph, m1, m2);
+                associated = IntegerArithmeticNode.sub(m1, m2);
             } else {
-                associated = IntegerArithmeticNode.add(graph, m1, m2);
+                associated = IntegerArithmeticNode.add(m1, m2);
             }
             if (invertA) {
-                return IntegerArithmeticNode.sub(graph, associated, a);
+                return IntegerArithmeticNode.sub(associated, a);
             }
             if (aSub) {
-                return IntegerArithmeticNode.sub(graph, a, associated);
+                return IntegerArithmeticNode.sub(a, associated);
             }
-            return IntegerArithmeticNode.add(graph, a, associated);
+            return IntegerArithmeticNode.add(a, associated);
         } else if (node instanceof IntegerMulNode) {
-            return IntegerArithmeticNode.mul(node.graph(), a, IntegerAddNode.mul(node.graph(), m1, m2));
+            return IntegerArithmeticNode.mul(a, IntegerAddNode.mul(m1, m2));
         } else if (node instanceof AndNode) {
-            return BitLogicNode.and(node.graph(), a, BitLogicNode.and(node.graph(), m1, m2));
+            return BitLogicNode.and(a, BitLogicNode.and(m1, m2));
         } else if (node instanceof OrNode) {
-            return BitLogicNode.or(node.graph(), a, BitLogicNode.or(node.graph(), m1, m2));
+            return BitLogicNode.or(a, BitLogicNode.or(m1, m2));
         } else if (node instanceof XorNode) {
-            return BitLogicNode.xor(node.graph(), a, BitLogicNode.xor(node.graph(), m1, m2));
+            return BitLogicNode.xor(a, BitLogicNode.xor(m1, m2));
         } else {
             throw GraalInternalError.shouldNotReachHere();
         }
