@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,29 +27,30 @@ import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
 import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static jdk.vm.ci.code.ValueUtil.asAllocatableValue;
-import static jdk.vm.ci.code.ValueUtil.isAllocatableValue;
-import static jdk.vm.ci.code.ValueUtil.isLegal;
+import static jdk.internal.jvmci.code.ValueUtil.asAllocatableValue;
+import static jdk.internal.jvmci.code.ValueUtil.isAllocatableValue;
+import static jdk.internal.jvmci.code.ValueUtil.isLegal;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterAttributes;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.code.site.InfopointReason;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.CodeCacheProvider;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.RegisterAttributes;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.meta.Constant;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.PlatformKind;
+import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.options.Option;
+import jdk.internal.jvmci.options.OptionType;
+import jdk.internal.jvmci.options.OptionValue;
 
 import com.oracle.graal.asm.Label;
 import com.oracle.graal.compiler.common.calc.Condition;
@@ -65,15 +66,11 @@ import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LIRVerifier;
 import com.oracle.graal.lir.LabelRef;
-import com.oracle.graal.lir.SimpleInfopointOp;
 import com.oracle.graal.lir.StandardOp;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.SwitchStrategy;
 import com.oracle.graal.lir.Variable;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
@@ -92,48 +89,17 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     private final LIRKindTool lirKindTool;
 
     private final CodeGenProviders providers;
+    private final CallingConvention cc;
 
     private AbstractBlockBase<?> currentBlock;
 
     private LIRGenerationResult res;
 
-    protected final ArithmeticLIRGenerator arithmeticLIRGen;
-    private final MoveFactory moveFactory;
-
-    public LIRGenerator(LIRKindTool lirKindTool, ArithmeticLIRGenerator arithmeticLIRGen, MoveFactory moveFactory, CodeGenProviders providers, LIRGenerationResult res) {
+    public LIRGenerator(LIRKindTool lirKindTool, CodeGenProviders providers, CallingConvention cc, LIRGenerationResult res) {
         this.lirKindTool = lirKindTool;
-        this.arithmeticLIRGen = arithmeticLIRGen;
         this.res = res;
         this.providers = providers;
-
-        assert arithmeticLIRGen.lirGen == null;
-        arithmeticLIRGen.lirGen = this;
-        this.moveFactory = moveFactory;
-    }
-
-    @Override
-    public ArithmeticLIRGeneratorTool getArithmetic() {
-        return arithmeticLIRGen;
-    }
-
-    @Override
-    public MoveFactory getMoveFactory() {
-        return moveFactory;
-    }
-
-    private MoveFactory spillMoveFactory;
-
-    public MoveFactory getSpillMoveFactory() {
-        if (spillMoveFactory == null) {
-            boolean verify = false;
-            assert (verify = true) == true;
-            if (verify) {
-                spillMoveFactory = new VerifyingMoveFactory(moveFactory);
-            } else {
-                spillMoveFactory = moveFactory;
-            }
-        }
-        return spillMoveFactory;
+        this.cc = cc;
     }
 
     @Override
@@ -160,7 +126,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         return providers.getForeignCalls();
     }
 
-    public LIRKindTool getLIRKindTool() {
+    protected LIRKindTool getLIRKindTool() {
         return lirKindTool;
     }
 
@@ -183,18 +149,8 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     }
 
     @Override
-    public void emitMove(AllocatableValue dst, Value src) {
-        append(moveFactory.createMove(dst, src));
-    }
-
-    @Override
-    public void emitMoveConstant(AllocatableValue dst, Constant src) {
-        append(moveFactory.createLoad(dst, src));
-    }
-
-    @Override
     public Value emitConstant(LIRKind kind, Constant constant) {
-        if (constant instanceof JavaConstant && moveFactory.canInlineConstant((JavaConstant) constant)) {
+        if (constant instanceof JavaConstant && canInlineConstant((JavaConstant) constant)) {
             return new ConstantValue(toRegisterKind(kind), constant);
         } else {
             return emitLoadConstant(kind, constant);
@@ -230,8 +186,18 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         return (Variable) value;
     }
 
+    /**
+     * Checks whether the supplied constant can be used without loading it into a register for most
+     * operations, i.e., for commonly used arithmetic, logical, and comparison operations.
+     *
+     * @param c The constant to check.
+     * @return True if the constant can be used directly, false if the constant needs to be in a
+     *         register.
+     */
+    protected abstract boolean canInlineConstant(JavaConstant c);
+
     public Value loadNonConst(Value value) {
-        if (isJavaConstant(value) && !moveFactory.canInlineConstant(asJavaConstant(value))) {
+        if (isJavaConstant(value) && !canInlineConstant(asJavaConstant(value))) {
             return emitMove(value);
         }
         return value;
@@ -258,26 +224,13 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         return reg.asValue(lirKind);
     }
 
-    BytecodePosition currentInfo;
-
-    public void setInfo(BytecodePosition position) {
-        currentInfo = position;
-    }
-
     public <I extends LIRInstruction> I append(I op) {
         if (Options.PrintIRWithLIR.getValue() && !TTY.isSuppressed()) {
             TTY.println(op.toStringWithIdPrefix());
             TTY.println();
         }
         assert LIRVerifier.verify(op);
-        List<LIRInstruction> lirForBlock = res.getLIR().getLIRforBlock(getCurrentBlock());
-        if (op instanceof SimpleInfopointOp) {
-            currentInfo = null;
-        } else if (currentInfo != null) {
-            lirForBlock.add(new SimpleInfopointOp(InfopointReason.BYTECODE_POSITION, currentInfo));
-            currentInfo = null;
-        }
-        lirForBlock.add(op);
+        res.getLIR().getLIRforBlock(getCurrentBlock()).add(op);
         return op;
     }
 
@@ -427,6 +380,10 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     protected abstract void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key);
 
+    public CallingConvention getCallingConvention() {
+        return cc;
+    }
+
     @Override
     public void beforeRegisterAllocation() {
     }
@@ -434,7 +391,31 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     /**
      * Gets a garbage value for a given kind.
      */
-    protected abstract JavaConstant zapValueForKind(PlatformKind kind);
+    protected JavaConstant zapValueForKind(PlatformKind kind) {
+        long dead = 0xDEADDEADDEADDEADL;
+        switch ((JavaKind) kind) {
+            case Boolean:
+                return JavaConstant.FALSE;
+            case Byte:
+                return JavaConstant.forByte((byte) dead);
+            case Char:
+                return JavaConstant.forChar((char) dead);
+            case Short:
+                return JavaConstant.forShort((short) dead);
+            case Int:
+                return JavaConstant.forInt((int) dead);
+            case Double:
+                return JavaConstant.forDouble(Double.longBitsToDouble(dead));
+            case Float:
+                return JavaConstant.forFloat(Float.intBitsToFloat((int) dead));
+            case Long:
+                return JavaConstant.forLong(dead);
+            case Object:
+                return JavaConstant.NULL_POINTER;
+            default:
+                throw new IllegalArgumentException(kind.toString());
+        }
+    }
 
     public LIRKind getLIRKind(Stamp stamp) {
         return stamp.getLIRKind(lirKindTool);
@@ -447,6 +428,15 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
             return LIRKind.reference(target().arch.getWordKind());
         } else {
             return LIRKind.unknownReference(target().arch.getWordKind());
+        }
+    }
+
+    public LIRKind toRegisterKind(LIRKind kind) {
+        JavaKind stackKind = ((JavaKind) kind.getPlatformKind()).getStackKind();
+        if (stackKind != kind.getPlatformKind()) {
+            return kind.changeType(stackKind);
+        } else {
+            return kind;
         }
     }
 
@@ -468,5 +458,95 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     public LIRInstruction createMultiBenchmarkCounter(String[] names, String[] groups, Value[] increments) {
         throw JVMCIError.unimplemented();
+    }
+
+    // automatic derived reference handling
+
+    protected boolean isNumericInteger(PlatformKind kind) {
+        return ((JavaKind) kind).isNumericInteger();
+    }
+
+    protected abstract Variable emitAdd(LIRKind resultKind, Value a, Value b, boolean setFlags);
+
+    public final Variable emitAdd(Value aVal, Value bVal, boolean setFlags) {
+        LIRKind resultKind;
+        Value a = aVal;
+        Value b = bVal;
+
+        if (isNumericInteger(a.getPlatformKind())) {
+            LIRKind aKind = a.getLIRKind();
+            LIRKind bKind = b.getLIRKind();
+            assert a.getPlatformKind() == b.getPlatformKind();
+
+            if (aKind.isUnknownReference()) {
+                resultKind = aKind;
+            } else if (bKind.isUnknownReference()) {
+                resultKind = bKind;
+            } else if (aKind.isValue() && bKind.isValue()) {
+                resultKind = aKind;
+            } else if (aKind.isValue()) {
+                if (bKind.isDerivedReference()) {
+                    resultKind = bKind;
+                } else {
+                    AllocatableValue allocatable = asAllocatable(b);
+                    resultKind = bKind.makeDerivedReference(allocatable);
+                    b = allocatable;
+                }
+            } else if (bKind.isValue()) {
+                if (aKind.isDerivedReference()) {
+                    resultKind = aKind;
+                } else {
+                    AllocatableValue allocatable = asAllocatable(a);
+                    resultKind = aKind.makeDerivedReference(allocatable);
+                    a = allocatable;
+                }
+            } else {
+                resultKind = aKind.makeUnknownReference();
+            }
+        } else {
+            resultKind = LIRKind.combine(a, b);
+        }
+
+        return emitAdd(resultKind, a, b, setFlags);
+    }
+
+    protected abstract Variable emitSub(LIRKind resultKind, Value a, Value b, boolean setFlags);
+
+    public final Variable emitSub(Value aVal, Value bVal, boolean setFlags) {
+        LIRKind resultKind;
+        Value a = aVal;
+        Value b = bVal;
+
+        if (isNumericInteger(a.getPlatformKind())) {
+            LIRKind aKind = a.getLIRKind();
+            LIRKind bKind = b.getLIRKind();
+            assert a.getPlatformKind() == b.getPlatformKind();
+
+            if (aKind.isUnknownReference()) {
+                resultKind = aKind;
+            } else if (bKind.isUnknownReference()) {
+                resultKind = bKind;
+            }
+
+            if (aKind.isValue() && bKind.isValue()) {
+                resultKind = aKind;
+            } else if (bKind.isValue()) {
+                if (aKind.isDerivedReference()) {
+                    resultKind = aKind;
+                } else {
+                    AllocatableValue allocatable = asAllocatable(a);
+                    resultKind = aKind.makeDerivedReference(allocatable);
+                    a = allocatable;
+                }
+            } else if (aKind.isDerivedReference() && bKind.isDerivedReference() && aKind.getDerivedReferenceBase().equals(bKind.getDerivedReferenceBase())) {
+                resultKind = LIRKind.value(a.getPlatformKind());
+            } else {
+                resultKind = aKind.makeUnknownReference();
+            }
+        } else {
+            resultKind = LIRKind.combine(a, b);
+        }
+
+        return emitSub(resultKind, a, b, setFlags);
     }
 }
