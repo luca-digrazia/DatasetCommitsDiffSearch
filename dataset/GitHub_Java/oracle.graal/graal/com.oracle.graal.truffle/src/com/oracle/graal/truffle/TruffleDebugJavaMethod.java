@@ -59,7 +59,7 @@ public class TruffleDebugJavaMethod implements JavaMethod {
 
         @Override
         public boolean equals(Object obj) {
-            return obj instanceof TruffleDebugJavaMethod;
+            return obj.getClass() == getClass();
         }
 
         @Override
