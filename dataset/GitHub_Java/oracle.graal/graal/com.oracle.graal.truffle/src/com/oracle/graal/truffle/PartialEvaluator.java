@@ -347,7 +347,7 @@ public class PartialEvaluator {
                         AllowAssumptions.from(graph.getAssumptions() != null), architecture) {
             @Override
             protected GraphBuilderPhase.Instance createGraphBuilderPhaseInstance(IntrinsicContext initialIntrinsicContext) {
-                return new GraphBuilderPhase.Instance(providers.getMetaAccess(),
+                return new DefaultTruffleCompiler.TruffleGraphBuilderPhase.Instance(providers.getMetaAccess(),
                                 providers.getStampProvider(), providers.getConstantReflection(), graphBuilderConfig,
                                 optimisticOpts, initialIntrinsicContext);
             }
@@ -385,8 +385,7 @@ public class PartialEvaluator {
         InvocationPlugins invocationPlugins = newConfig.getPlugins().getInvocationPlugins();
         registerTruffleInvocationPlugins(invocationPlugins, canDelayIntrinsification);
         invocationPlugins.closeRegistration();
-        boolean mustInstrumentBranches = TruffleCompilerOptions.TruffleInstrumentBranches.getValue();
-        return newConfig.withNodeSourcePosition(newConfig.trackNodeSourcePosition() || mustInstrumentBranches);
+        return newConfig;
     }
 
     protected void registerTruffleInvocationPlugins(InvocationPlugins invocationPlugins, boolean canDelayIntrinsification) {

@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.truffle.nodes.frame;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaKind;
 
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.NodeClass;
@@ -38,11 +39,7 @@ import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 import com.oracle.graal.truffle.FrameWithoutBoxing;
 import com.oracle.truffle.api.frame.FrameSlot;
 
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public final class VirtualFrameGetNode extends VirtualFrameAccessorNode implements Virtualizable {
     public static final NodeClass<VirtualFrameGetNode> TYPE = NodeClass.create(VirtualFrameGetNode.class);
 

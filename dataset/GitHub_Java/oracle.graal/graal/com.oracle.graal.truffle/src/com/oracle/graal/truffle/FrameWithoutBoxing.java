@@ -22,186 +22,251 @@
  */
 package com.oracle.graal.truffle;
 
-import java.util.*;
+import java.lang.reflect.Field;
+import java.util.Arrays;
 
-import sun.misc.*;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.frame.FrameSlotTypeException;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.frame.*;
+import sun.misc.Unsafe;
 
 /**
  * More efficient implementation of the Truffle frame that has no safety checks for frame accesses
  * and therefore is much faster. Should not be used during debugging as potential misuses of the
  * frame object would show up very late and would be hard to identify.
  */
-public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame, PackedFrame {
-
-    private static final Unsafe unsafe = Unsafe.getUnsafe();
-
+public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame {
     private final FrameDescriptor descriptor;
-    private final PackedFrame caller;
-    private final Arguments arguments;
+    private final Object[] arguments;
     private Object[] locals;
     private long[] primitiveLocals;
     private byte[] tags;
+    public static final byte OBJECT_TAG = 0;
+    public static final byte ILLEGAL_TAG = 1;
+    public static final byte LONG_TAG = 2;
+    public static final byte INT_TAG = 3;
+    public static final byte DOUBLE_TAG = 4;
+    public static final byte FLOAT_TAG = 5;
+    public static final byte BOOLEAN_TAG = 6;
+    public static final byte BYTE_TAG = 7;
 
-    public FrameWithoutBoxing(FrameDescriptor descriptor, PackedFrame caller, Arguments arguments) {
+    static {
+        assert OBJECT_TAG == FrameSlotKind.Object.tag;
+        assert ILLEGAL_TAG == FrameSlotKind.Illegal.tag;
+        assert LONG_TAG == FrameSlotKind.Long.tag;
+        assert INT_TAG == FrameSlotKind.Int.tag;
+        assert DOUBLE_TAG == FrameSlotKind.Double.tag;
+        assert FLOAT_TAG == FrameSlotKind.Float.tag;
+        assert BOOLEAN_TAG == FrameSlotKind.Boolean.tag;
+        assert BYTE_TAG == FrameSlotKind.Byte.tag;
+    }
+
+    public FrameWithoutBoxing(FrameDescriptor descriptor, Object[] arguments) {
         this.descriptor = descriptor;
-        this.caller = caller;
         this.arguments = arguments;
-        this.locals = new Object[descriptor.getSize()];
-        this.primitiveLocals = new long[descriptor.getSize()];
-        this.tags = new byte[descriptor.getSize()];
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T extends Arguments> T getArguments(Class<T> clazz) {
-        return (T) unsafeCast(arguments, clazz);
-    }
-
-    private static Object unsafeCast(Object value, @SuppressWarnings("unused") Class clazz) {
-        return value;
+        int size = descriptor.getSize();
+        this.locals = new Object[size];
+        Object defaultValue = descriptor.getDefaultValue();
+        if (defaultValue != null) {
+            Arrays.fill(locals, defaultValue);
+        }
+        this.primitiveLocals = new long[size];
+        this.tags = new byte[size];
     }
 
     @Override
-    public PackedFrame getCaller() {
-        return caller;
-    }
-
-    @Override
-    public PackedFrame pack() {
-        return this;
+    public Object[] getArguments() {
+        return unsafeCast(arguments, Object[].class, true, true);
     }
 
     @Override
     public MaterializedFrame materialize() {
-        return this;
-    }
-
-    @Override
-    public VirtualFrame unpack() {
+        ((GraalTruffleRuntime) Truffle.getRuntime()).markFrameMaterializeCalled(descriptor);
         return this;
     }
 
     @Override
     public Object getObject(FrameSlot slot) throws FrameSlotTypeException {
-        verifyGet(slot, FrameSlotKind.Object);
-        return getObjectUnsafe(slot);
+        int slotIndex = slot.getIndex();
+        boolean condition = verifyGet(slotIndex, OBJECT_TAG);
+        return getObjectUnsafe(slotIndex, slot, condition);
     }
 
-    private Object getObjectUnsafe(FrameSlot slot) {
-        return unsafe.getObject(locals, (long) slot.getIndex() * Unsafe.ARRAY_OBJECT_INDEX_SCALE + Unsafe.ARRAY_OBJECT_BASE_OFFSET);
+    private Object[] getLocals() {
+        return unsafeCast(locals, Object[].class, true, true);
+    }
+
+    private long[] getPrimitiveLocals() {
+        return unsafeCast(this.primitiveLocals, long[].class, true, true);
+    }
+
+    byte[] getTags() {
+        return unsafeCast(tags, byte[].class, true, true);
+    }
+
+    Object getObjectUnsafe(int slotIndex, FrameSlot slot, boolean condition) {
+        return unsafeGetObject(getLocals(), Unsafe.ARRAY_OBJECT_BASE_OFFSET + slotIndex * (long) Unsafe.ARRAY_OBJECT_INDEX_SCALE, condition, slot);
     }
 
     @Override
-    public void setObject(FrameSlot slot, Object value) throws FrameSlotTypeException {
-        verifySet(slot, FrameSlotKind.Object);
-        setObjectUnsafe(slot, value);
+    public void setObject(FrameSlot slot, Object value) {
+        int slotIndex = slot.getIndex();
+        verifySet(slotIndex, OBJECT_TAG);
+        setObjectUnsafe(slotIndex, slot, value);
     }
 
-    private void setObjectUnsafe(FrameSlot slot, Object value) {
-        unsafe.putObject(locals, (long) slot.getIndex() * Unsafe.ARRAY_OBJECT_INDEX_SCALE + Unsafe.ARRAY_OBJECT_BASE_OFFSET, value);
+    private void setObjectUnsafe(int slotIndex, FrameSlot slot, Object value) {
+        unsafePutObject(getLocals(), Unsafe.ARRAY_OBJECT_BASE_OFFSET + slotIndex * (long) Unsafe.ARRAY_OBJECT_INDEX_SCALE, value, slot);
+    }
+
+    @Override
+    public byte getByte(FrameSlot slot) throws FrameSlotTypeException {
+        int slotIndex = slot.getIndex();
+        boolean condition = verifyGet(slotIndex, BYTE_TAG);
+        return getByteUnsafe(slotIndex, slot, condition);
+    }
+
+    byte getByteUnsafe(int slotIndex, FrameSlot slot, boolean condition) {
+        long offset = getPrimitiveOffset(slotIndex);
+        return (byte) unsafeGetInt(getPrimitiveLocals(), offset, condition, slot);
+    }
+
+    @Override
+    public void setByte(FrameSlot slot, byte value) {
+        int slotIndex = slot.getIndex();
+        verifySet(slotIndex, BYTE_TAG);
+        setByteUnsafe(slotIndex, slot, value);
+    }
+
+    private void setByteUnsafe(int slotIndex, FrameSlot slot, byte value) {
+        long offset = getPrimitiveOffset(slotIndex);
+        unsafePutInt(getPrimitiveLocals(), offset, value, slot);
     }
 
     @Override
     public boolean getBoolean(FrameSlot slot) throws FrameSlotTypeException {
-        verifyGet(slot, FrameSlotKind.Boolean);
-        return getBooleanUnsafe(slot);
+        int slotIndex = slot.getIndex();
+        boolean condition = verifyGet(slotIndex, BOOLEAN_TAG);
+        return getBooleanUnsafe(slotIndex, slot, condition);
     }
 
-    private boolean getBooleanUnsafe(FrameSlot slot) {
-        return unsafe.getBoolean(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET);
+    boolean getBooleanUnsafe(int slotIndex, FrameSlot slot, boolean condition) {
+        long offset = getPrimitiveOffset(slotIndex);
+        return unsafeGetInt(getPrimitiveLocals(), offset, condition, slot) != 0;
     }
 
     @Override
-    public void setBoolean(FrameSlot slot, boolean value) throws FrameSlotTypeException {
-        verifySet(slot, FrameSlotKind.Boolean);
-        setBooleanUnsafe(slot, value);
+    public void setBoolean(FrameSlot slot, boolean value) {
+        int slotIndex = slot.getIndex();
+        verifySet(slotIndex, BOOLEAN_TAG);
+        setBooleanUnsafe(slotIndex, slot, value);
     }
 
-    private void setBooleanUnsafe(FrameSlot slot, boolean value) {
-        unsafe.putBoolean(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value);
+    private void setBooleanUnsafe(int slotIndex, FrameSlot slot, boolean value) {
+        long offset = getPrimitiveOffset(slotIndex);
+        unsafePutInt(getPrimitiveLocals(), offset, value ? 1 : 0, slot);
     }
 
     @Override
     public float getFloat(FrameSlot slot) throws FrameSlotTypeException {
-        verifyGet(slot, FrameSlotKind.Float);
-        return getFloatUnsafe(slot);
+        int slotIndex = slot.getIndex();
+        boolean condition = verifyGet(slotIndex, FLOAT_TAG);
+        return getFloatUnsafe(slotIndex, slot, condition);
     }
 
-    private float getFloatUnsafe(FrameSlot slot) {
-        return unsafe.getFloat(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET);
+    float getFloatUnsafe(int slotIndex, FrameSlot slot, boolean condition) {
+        long offset = getPrimitiveOffset(slotIndex);
+        return unsafeGetFloat(getPrimitiveLocals(), offset, condition, slot);
     }
 
     @Override
-    public void setFloat(FrameSlot slot, float value) throws FrameSlotTypeException {
-        verifySet(slot, FrameSlotKind.Float);
-        setFloatUnsafe(slot, value);
+    public void setFloat(FrameSlot slot, float value) {
+        int slotIndex = slot.getIndex();
+        verifySet(slotIndex, FLOAT_TAG);
+        setFloatUnsafe(slotIndex, slot, value);
     }
 
-    private void setFloatUnsafe(FrameSlot slot, float value) {
-        unsafe.putFloat(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value);
+    private void setFloatUnsafe(int slotIndex, FrameSlot slot, float value) {
+        long offset = getPrimitiveOffset(slotIndex);
+        unsafePutFloat(getPrimitiveLocals(), offset, value, slot);
     }
 
     @Override
     public long getLong(FrameSlot slot) throws FrameSlotTypeException {
-        verifyGet(slot, FrameSlotKind.Long);
-        return getLongUnsafe(slot);
+        int slotIndex = slot.getIndex();
+        boolean condition = verifyGet(slotIndex, LONG_TAG);
+        return getLongUnsafe(slotIndex, slot, condition);
     }
 
-    private long getLongUnsafe(FrameSlot slot) {
-        return unsafe.getLong(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET);
+    long getLongUnsafe(int slotIndex, FrameSlot slot, boolean condition) {
+        long offset = getPrimitiveOffset(slotIndex);
+        return unsafeGetLong(getPrimitiveLocals(), offset, condition, slot);
     }
 
     @Override
-    public void setLong(FrameSlot slot, long value) throws FrameSlotTypeException {
-        verifySet(slot, FrameSlotKind.Long);
-        setLongUnsafe(slot, value);
+    public void setLong(FrameSlot slot, long value) {
+        int slotIndex = slot.getIndex();
+        verifySet(slotIndex, LONG_TAG);
+        setLongUnsafe(slotIndex, slot, value);
     }
 
-    private void setLongUnsafe(FrameSlot slot, long value) {
-        unsafe.putLong(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value);
+    private void setLongUnsafe(int slotIndex, FrameSlot slot, long value) {
+        long offset = getPrimitiveOffset(slotIndex);
+        unsafePutLong(getPrimitiveLocals(), offset, value, slot);
     }
 
     @Override
     public int getInt(FrameSlot slot) throws FrameSlotTypeException {
-        verifyGet(slot, FrameSlotKind.Int);
-        return getIntUnsafe(slot);
+        int slotIndex = slot.getIndex();
+        boolean condition = verifyGet(slotIndex, INT_TAG);
+        return getIntUnsafe(slotIndex, slot, condition);
     }
 
-    private int getIntUnsafe(FrameSlot slot) {
-        return unsafe.getInt(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET);
+    int getIntUnsafe(int slotIndex, FrameSlot slot, boolean condition) {
+        long offset = getPrimitiveOffset(slotIndex);
+        return unsafeGetInt(getPrimitiveLocals(), offset, condition, slot);
     }
 
     @Override
-    public void setInt(FrameSlot slot, int value) throws FrameSlotTypeException {
-        verifySet(slot, FrameSlotKind.Int);
-        setIntUnsafe(slot, value);
+    public void setInt(FrameSlot slot, int value) {
+        int slotIndex = slot.getIndex();
+        verifySet(slotIndex, INT_TAG);
+        setIntUnsafe(slotIndex, slot, value);
     }
 
-    private void setIntUnsafe(FrameSlot slot, int value) {
-        unsafe.putInt(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value);
+    private void setIntUnsafe(int slotIndex, FrameSlot slot, int value) {
+        long offset = getPrimitiveOffset(slotIndex);
+        unsafePutInt(getPrimitiveLocals(), offset, value, slot);
     }
 
     @Override
     public double getDouble(FrameSlot slot) throws FrameSlotTypeException {
-        verifyGet(slot, FrameSlotKind.Double);
-        return getDoubleUnsafe(slot);
+        int slotIndex = slot.getIndex();
+        boolean condition = verifyGet(slotIndex, DOUBLE_TAG);
+        return getDoubleUnsafe(slotIndex, slot, condition);
     }
 
-    private double getDoubleUnsafe(FrameSlot slot) {
-        return unsafe.getDouble(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET);
+    double getDoubleUnsafe(int slotIndex, FrameSlot slot, boolean condition) {
+        long offset = getPrimitiveOffset(slotIndex);
+        return unsafeGetDouble(getPrimitiveLocals(), offset, condition, slot);
     }
 
     @Override
-    public void setDouble(FrameSlot slot, double value) throws FrameSlotTypeException {
-        verifySet(slot, FrameSlotKind.Double);
-        setDoubleUnsafe(slot, value);
+    public void setDouble(FrameSlot slot, double value) {
+        int slotIndex = slot.getIndex();
+        verifySet(slotIndex, DOUBLE_TAG);
+        setDoubleUnsafe(slotIndex, slot, value);
     }
 
-    private void setDoubleUnsafe(FrameSlot slot, double value) {
-        unsafe.putDouble(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value);
+    private void setDoubleUnsafe(int slotIndex, FrameSlot slot, double value) {
+        long offset = getPrimitiveOffset(slotIndex);
+        unsafePutDouble(getPrimitiveLocals(), offset, value, slot);
     }
 
     @Override
@@ -209,80 +274,199 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         return this.descriptor;
     }
 
-    private void verifySet(FrameSlot slot, FrameSlotKind accessKind) throws FrameSlotTypeException {
-        FrameSlotKind slotKind = slot.getKind();
-        if (slotKind != accessKind) {
-            if (slotKind == FrameSlotKind.Illegal) {
-                slot.setKind(accessKind);
-            } else {
-                throw new FrameSlotTypeException();
-            }
-        }
-        int slotIndex = slot.getIndex();
-        if (slotIndex >= tags.length) {
-            resize();
-        }
-        tags[slotIndex] = (byte) accessKind.ordinal();
+    private void verifySet(int slotIndex, byte tag) {
+        checkSlotIndex(slotIndex);
+        getTags()[slotIndex] = tag;
     }
 
-    private void verifyGet(FrameSlot slot, FrameSlotKind accessKind) throws FrameSlotTypeException {
-        FrameSlotKind slotKind = slot.getKind();
-        if (slotKind != accessKind) {
-            if (slotKind == FrameSlotKind.Illegal && accessKind == FrameSlotKind.Object) {
-                slot.setKind(FrameSlotKind.Object);
-                this.setObject(slot, descriptor.getTypeConversion().getDefaultValue());
-            } else {
-                throw new FrameSlotTypeException();
+    private boolean verifyGet(int slotIndex, byte tag) throws FrameSlotTypeException {
+        checkSlotIndex(slotIndex);
+        boolean condition = getTags()[slotIndex] == tag;
+        if (!condition) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            throw new FrameSlotTypeException();
+        }
+        return condition;
+    }
+
+    private void checkSlotIndex(int slotIndex) {
+        if (CompilerDirectives.inInterpreter() && slotIndex >= getTags().length) {
+            if (!resize()) {
+                throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slotIndex));
             }
         }
-        int slotIndex = slot.getIndex();
-        if (slotIndex >= tags.length) {
-            resize();
-        }
-        if (tags[slotIndex] != accessKind.ordinal()) {
-            descriptor.getTypeConversion().updateFrameSlot(this, slot, getValue(slot));
-            if (tags[slotIndex] != accessKind.ordinal()) {
-                throw new FrameSlotTypeException();
-            }
-        }
+    }
+
+    private static long getPrimitiveOffset(int slotIndex) {
+        return Unsafe.ARRAY_LONG_BASE_OFFSET + slotIndex * (long) Unsafe.ARRAY_LONG_INDEX_SCALE;
     }
 
     @Override
     public Object getValue(FrameSlot slot) {
-        int index = slot.getIndex();
-        if (index >= tags.length) {
-            assert index >= 0 && index < descriptor.getSize();
-            return descriptor.getTypeConversion().getDefaultValue();
+        int slotIndex = slot.getIndex();
+        if (CompilerDirectives.inInterpreter() && slotIndex >= getTags().length) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            resize();
         }
-        byte tag = tags[index];
-        if (tag == FrameSlotKind.Illegal.ordinal()) {
-            return descriptor.getTypeConversion().getDefaultValue();
-        } else if (tag == FrameSlotKind.Boolean.ordinal()) {
-            return getBooleanUnsafe(slot);
-        } else if (tag == FrameSlotKind.Int.ordinal()) {
-            return getIntUnsafe(slot);
-        } else if (tag == FrameSlotKind.Double.ordinal()) {
-            return getDoubleUnsafe(slot);
-        } else if (tag == FrameSlotKind.Long.ordinal()) {
-            return getLongUnsafe(slot);
-        } else if (tag == FrameSlotKind.Float.ordinal()) {
-            return getFloatUnsafe(slot);
-        } else {
-            return getObjectUnsafe(slot);
+        byte tag = getTags()[slotIndex];
+        boolean condition = (tag == BOOLEAN_TAG);
+        if (condition) {
+            return getBooleanUnsafe(slotIndex, slot, condition);
         }
+        condition = (tag == BYTE_TAG);
+        if (condition) {
+            return getByteUnsafe(slotIndex, slot, condition);
+        }
+        condition = (tag == INT_TAG);
+        if (condition) {
+            return getIntUnsafe(slotIndex, slot, condition);
+        }
+        condition = (tag == DOUBLE_TAG);
+        if (condition) {
+            return getDoubleUnsafe(slotIndex, slot, condition);
+        }
+        condition = (tag == LONG_TAG);
+        if (condition) {
+            return getLongUnsafe(slotIndex, slot, condition);
+        }
+        condition = (tag == FLOAT_TAG);
+        if (condition) {
+            return getFloatUnsafe(slotIndex, slot, condition);
+        }
+        condition = tag == OBJECT_TAG;
+        assert condition;
+        return getObjectUnsafe(slotIndex, slot, condition);
+
     }
 
-    private void resize() {
+    private boolean resize() {
+        int oldSize = tags.length;
         int newSize = descriptor.getSize();
-        if (newSize > tags.length) {
+        if (newSize > oldSize) {
             locals = Arrays.copyOf(locals, newSize);
+            Arrays.fill(locals, oldSize, newSize, descriptor.getDefaultValue());
             primitiveLocals = Arrays.copyOf(primitiveLocals, newSize);
             tags = Arrays.copyOf(tags, newSize);
+            return true;
         }
+        return false;
+    }
+
+    byte getTag(FrameSlot slot) {
+        int slotIndex = slot.getIndex();
+        byte[] cachedTags = getTags();
+        if (slotIndex < cachedTags.length) {
+            return cachedTags[slotIndex];
+        }
+
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        resize();
+        return getTags()[slotIndex];
     }
 
     @Override
-    public boolean isInitialized(FrameSlot slot) {
-        return !(this.tags[slot.getIndex()] == FrameSlotKind.Illegal.ordinal());
+    public boolean isObject(FrameSlot slot) {
+        return getTag(slot) == OBJECT_TAG;
+    }
+
+    @Override
+    public boolean isByte(FrameSlot slot) {
+        return getTag(slot) == BYTE_TAG;
+    }
+
+    @Override
+    public boolean isBoolean(FrameSlot slot) {
+        return getTag(slot) == BOOLEAN_TAG;
+    }
+
+    @Override
+    public boolean isInt(FrameSlot slot) {
+        return getTag(slot) == INT_TAG;
+    }
+
+    @Override
+    public boolean isLong(FrameSlot slot) {
+        return getTag(slot) == LONG_TAG;
+    }
+
+    @Override
+    public boolean isFloat(FrameSlot slot) {
+        return getTag(slot) == FLOAT_TAG;
+    }
+
+    @Override
+    public boolean isDouble(FrameSlot slot) {
+        return getTag(slot) == DOUBLE_TAG;
+    }
+
+    @SuppressWarnings({"unchecked", "unused"})
+    private static <T> T unsafeCast(Object value, Class<T> type, boolean condition, boolean nonNull) {
+        return (T) value;
+    }
+
+    @SuppressWarnings("unused")
+    private static int unsafeGetInt(Object receiver, long offset, boolean condition, Object locationIdentity) {
+        return UNSAFE.getInt(receiver, offset);
+    }
+
+    @SuppressWarnings("unused")
+    private static long unsafeGetLong(Object receiver, long offset, boolean condition, Object locationIdentity) {
+        return UNSAFE.getLong(receiver, offset);
+    }
+
+    @SuppressWarnings("unused")
+    private static float unsafeGetFloat(Object receiver, long offset, boolean condition, Object locationIdentity) {
+        return UNSAFE.getFloat(receiver, offset);
+    }
+
+    @SuppressWarnings("unused")
+    private static double unsafeGetDouble(Object receiver, long offset, boolean condition, Object locationIdentity) {
+        return UNSAFE.getDouble(receiver, offset);
+    }
+
+    @SuppressWarnings("unused")
+    private static Object unsafeGetObject(Object receiver, long offset, boolean condition, Object locationIdentity) {
+        return UNSAFE.getObject(receiver, offset);
+    }
+
+    @SuppressWarnings("unused")
+    private static void unsafePutInt(Object receiver, long offset, int value, Object locationIdentity) {
+        UNSAFE.putInt(receiver, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    private static void unsafePutLong(Object receiver, long offset, long value, Object locationIdentity) {
+        UNSAFE.putLong(receiver, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    private static void unsafePutFloat(Object receiver, long offset, float value, Object locationIdentity) {
+        UNSAFE.putFloat(receiver, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    private static void unsafePutDouble(Object receiver, long offset, double value, Object locationIdentity) {
+        UNSAFE.putDouble(receiver, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    private static void unsafePutObject(Object receiver, long offset, Object value, Object locationIdentity) {
+        UNSAFE.putObject(receiver, offset, value);
+    }
+
+    private static final Unsafe UNSAFE = getUnsafe();
+
+    private static Unsafe getUnsafe() {
+        try {
+            return Unsafe.getUnsafe();
+        } catch (SecurityException e) {
+        }
+        try {
+            Field theUnsafeInstance = Unsafe.class.getDeclaredField("theUnsafe");
+            theUnsafeInstance.setAccessible(true);
+            return (Unsafe) theUnsafeInstance.get(Unsafe.class);
+        } catch (Exception e) {
+            throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e);
+        }
     }
 }

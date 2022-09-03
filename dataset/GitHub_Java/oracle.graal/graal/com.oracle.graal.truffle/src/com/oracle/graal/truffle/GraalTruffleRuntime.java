@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.ServiceLoader;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -47,7 +46,6 @@ import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.CompilerThreadFactory;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.serviceprovider.GraalServices;
@@ -80,12 +78,12 @@ import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.object.LayoutFactory;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.stack.InspectedFrame;
 import jdk.vm.ci.code.stack.InspectedFrameVisitor;
 import jdk.vm.ci.code.stack.StackIntrospection;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.SpeculationLog;
@@ -146,7 +144,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     public <T> T getRequiredGraalCapability(Class<T> clazz) {
         T ret = graalRuntime.get().getCapability(clazz);
         if (ret == null) {
-            throw new GraalError("The VM does not expose the required Graal capability %s.", clazz.getName());
+            throw new JVMCIError("The VM does not expose the required Graal capability %s.", clazz.getName());
         }
         return ret;
     }
@@ -352,10 +350,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     @Override
     public <T> T getCapability(Class<T> capability) {
-        if (capability == TVMCI.class) {
+        if (capability.isAssignableFrom(TVMCI.class)) {
             return capability.cast(tvmci);
-        } else if (capability == LayoutFactory.class) {
-            return capability.cast(loadObjectLayoutFactory());
         }
         return null;
     }
@@ -552,20 +548,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     @Override
     public final boolean isProfilingEnabled() {
         return PROFILING_ENABLED;
-    }
-
-    private static Object loadObjectLayoutFactory() {
-        LayoutFactory bestLayoutFactory = null;
-        ServiceLoader<LayoutFactory> serviceLoader = ServiceLoader.load(LayoutFactory.class, GraalTruffleRuntime.class.getClassLoader());
-        for (LayoutFactory currentLayoutFactory : serviceLoader) {
-            if (bestLayoutFactory == null) {
-                bestLayoutFactory = currentLayoutFactory;
-            } else if (currentLayoutFactory.getPriority() >= bestLayoutFactory.getPriority()) {
-                assert currentLayoutFactory.getPriority() != bestLayoutFactory.getPriority();
-                bestLayoutFactory = currentLayoutFactory;
-            }
-        }
-        return bestLayoutFactory;
     }
 
     private final class DispatchTruffleCompilationListener implements GraalTruffleCompilationListener {
