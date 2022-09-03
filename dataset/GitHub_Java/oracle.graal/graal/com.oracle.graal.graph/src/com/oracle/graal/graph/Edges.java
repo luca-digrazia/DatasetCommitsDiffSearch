@@ -160,7 +160,6 @@ public abstract class Edges extends Fields {
      * @param toNode the node to which the edges should be copied.
      */
     public void copy(Node fromNode, Node toNode) {
-        assert fromNode != toNode;
         assert fromNode.getNodeClass().getClazz() == toNode.getNodeClass().getClazz();
         int index = 0;
         while (index < getDirectCount()) {
@@ -169,12 +168,12 @@ public abstract class Edges extends Fields {
         }
         while (index < getCount()) {
             NodeList<Node> list = getNodeList(toNode, index);
-            NodeList<Node> fromList = getNodeList(fromNode, index);
-            if (list == null || list == fromList) {
+            if (list == null) {
+                NodeList<Node> fromList = getNodeList(fromNode, index);
                 list = type == Edges.Type.Inputs ? new NodeInputList<>(toNode, fromList) : new NodeSuccessorList<>(toNode, fromList);
                 initializeList(toNode, index, list);
             } else {
-                list.copy(fromList);
+                list.copy(getNodeList(fromNode, index));
             }
             index++;
         }
