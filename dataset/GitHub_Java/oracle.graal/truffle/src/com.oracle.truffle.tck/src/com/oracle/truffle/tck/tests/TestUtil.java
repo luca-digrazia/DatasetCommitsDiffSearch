@@ -55,12 +55,7 @@ final class TestUtil {
     static Set<? extends String> getRequiredLanguages(final TestContext context) {
         return filterLanguages(
                         context,
-                        LANGUAGE == null ? null : new Predicate<String>() {
-                            @Override
-                            public boolean test(String lang) {
-                                return LANGUAGE.equals(lang);
-                            }
-                        });
+                        LANGUAGE == null ? null : (lang) -> LANGUAGE.equals(lang));
     }
 
     static Set<? extends String> getRequiredValueLanguages(final TestContext context) {
@@ -68,12 +63,7 @@ final class TestUtil {
         if (VALUES != null) {
             final Set<String> requiredValues = new HashSet<>();
             Collections.addAll(requiredValues, VALUES.split(","));
-            predicate = new Predicate<String>() {
-                @Override
-                public boolean test(String lang) {
-                    return requiredValues.contains(lang);
-                }
-            };
+            predicate = (lang) -> requiredValues.contains(lang);
         } else {
             predicate = null;
         }
@@ -93,18 +83,10 @@ final class TestUtil {
         for (String opLanguage : requiredLanguages) {
             for (Snippet operator : snippetsProvider.apply(opLanguage)) {
                 for (String parLanguage : requiredValueLanguages) {
-                    final Collection<Pair<String, ? extends Snippet>> valueConstructors = new HashSet<>();
-                    for (Snippet snippet : valuesProvider.apply(parLanguage)) {
-                        valueConstructors.add(Pair.of(parLanguage, snippet));
-                    }
+                    final Collection<Pair<String, ? extends Snippet>> valueConstructors = valuesProvider.apply(parLanguage).stream().map((vc) -> Pair.of(parLanguage, vc)).collect(
+                                    Collectors.toSet());
                     final List<List<Pair<String, ? extends Snippet>>> applicableParams = findApplicableParameters(operator, valueConstructors);
-                    boolean canBeInvoked = true;
-                    for (List<Pair<String, ? extends Snippet>> param : applicableParams) {
-                        canBeInvoked &= !param.isEmpty();
-                        if (!canBeInvoked) {
-                            break;
-                        }
-                    }
+                    final boolean canBeInvoked = applicableParams.stream().map((l) -> !l.isEmpty()).reduce(true, (a, b) -> a && b);
                     if (canBeInvoked) {
                         computeAllPermutations(Pair.of(opLanguage, operator), applicableParams, testRuns);
                     }
