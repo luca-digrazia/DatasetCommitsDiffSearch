@@ -28,6 +28,7 @@ import static org.junit.Assert.*;
 
 import org.junit.*;
 
+import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
@@ -303,6 +304,7 @@ public class ConditionalEliminationTest extends GraalCompilerTest {
         new FloatingReadPhase().apply(graph);
         new ConditionalEliminationPhase(getMetaAccess()).apply(graph);
         canonicalizer.apply(graph, context);
+        DebugScope.forceDump(graph, "dup guards");
 
         assertEquals(1, graph.getNodes().filter(GuardNode.class).count());
     }
