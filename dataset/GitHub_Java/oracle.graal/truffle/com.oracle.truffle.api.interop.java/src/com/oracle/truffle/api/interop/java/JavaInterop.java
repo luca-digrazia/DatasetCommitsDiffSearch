@@ -335,29 +335,21 @@ public final class JavaInterop {
             }
 
             if (message == null) {
-                Object ret;
-                try {
-                    List<Object> callArgs = new ArrayList<>(args.length);
-                    callArgs.add(name);
-                    callArgs.addAll(Arrays.asList(args));
-                    ret = message(Message.createInvoke(callArgs.size()), obj, callArgs.toArray());
-                } catch (IllegalArgumentException ex) {
-                    val = message(Message.READ, obj, name);
-                    if (isPrimitive(val)) {
-                        return val;
-                    }
-                    TruffleObject attr = (TruffleObject) val;
-                    if (Boolean.FALSE.equals(message(Message.IS_EXECUTABLE, attr))) {
-                        if (args.length == 0) {
-                            return toJava(attr, method);
-                        }
-                        throw new IllegalStateException(attr + " cannot be invoked with " + args.length + " parameters");
-                    }
-                    List<Object> callArgs = new ArrayList<>(args.length + 1);
-                    // callArgs.add(attr);
-                    callArgs.addAll(Arrays.asList(args));
-                    ret = message(Message.createExecute(callArgs.size()), attr, callArgs.toArray());
+                val = message(Message.READ, obj, name);
+                if (isPrimitive(val)) {
+                    return val;
                 }
+                TruffleObject attr = (TruffleObject) val;
+                if (Boolean.FALSE.equals(message(Message.IS_EXECUTABLE, attr))) {
+                    if (args.length == 0) {
+                        return toJava(attr, method);
+                    }
+                    throw new IllegalStateException(attr + " cannot be invoked with " + args.length + " parameters");
+                }
+                List<Object> callArgs = new ArrayList<>(args.length + 1);
+                // callArgs.add(attr);
+                callArgs.addAll(Arrays.asList(args));
+                Object ret = message(Message.createExecute(callArgs.size()), attr, callArgs.toArray());
                 return toJava(ret, method);
             }
             throw new IllegalStateException("Unknown message: " + message);
