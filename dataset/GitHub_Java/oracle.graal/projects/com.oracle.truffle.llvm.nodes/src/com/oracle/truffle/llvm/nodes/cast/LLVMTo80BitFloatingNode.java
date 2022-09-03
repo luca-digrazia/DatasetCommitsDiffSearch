@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,97 +31,148 @@ package com.oracle.truffle.llvm.nodes.cast;
 
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVM80BitFloatNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
-public abstract class LLVMTo80BitFloatingNode extends LLVM80BitFloatNode {
+public abstract class LLVMTo80BitFloatingNode extends LLVMExpressionNode {
 
-    @NodeChild(value = "fromNode", type = LLVMI8Node.class)
-    public abstract static class LLVMI8ToLLVM80BitFloatNode extends LLVMTo80BitFloatingNode {
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
+    public abstract static class LLVMSignedCastToLLVM80BitFloatNode extends LLVMTo80BitFloatingNode {
 
         @Specialization
-        public LLVM80BitFloat execute80BitFloat(byte from) {
+        protected LLVM80BitFloat do80BitFloat(byte from) {
             return LLVM80BitFloat.fromByte(from);
         }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI8Node.class)
-    public abstract static class LLVMI8ToLLVM80BitFloatZeroExtNode extends LLVMTo80BitFloatingNode {
 
         @Specialization
-        public LLVM80BitFloat execute80BitFloat(byte from) {
-            return LLVM80BitFloat.fromUnsignedByte(from);
-        }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI16Node.class)
-    public abstract static class LLVMI16ToLLVM80BitFloatNode extends LLVMTo80BitFloatingNode {
-
-        @Specialization
-        public LLVM80BitFloat executeLLVM80BitFloatNode(short from) {
+        protected LLVM80BitFloat doLLVM80BitFloatNode(short from) {
             return LLVM80BitFloat.fromShort(from);
         }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI32Node.class)
-    public abstract static class LLVMI32ToLLVM80BitFloatNode extends LLVMTo80BitFloatingNode {
 
         @Specialization
-        public LLVM80BitFloat executeLLVM80BitFloatNode(int from) {
+        protected LLVM80BitFloat doLLVM80BitFloatNode(int from) {
             return LLVM80BitFloat.fromInt(from);
         }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI32Node.class)
-    public abstract static class LLVMI32ToLLVM80BitFloatUnsignedNode extends LLVMTo80BitFloatingNode {
 
         @Specialization
-        public LLVM80BitFloat executeLLVM80BitFloatNode(int from) {
-            return LLVM80BitFloat.fromUnsignedInt(from);
-        }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI64Node.class)
-    public abstract static class LLVMI64ToLLVM80BitFloatNode extends LLVMTo80BitFloatingNode {
-
-        @Specialization
-        public LLVM80BitFloat executeLLVM80BitFloatNode(long from) {
+        protected LLVM80BitFloat doLLVM80BitFloatNode(long from) {
             return LLVM80BitFloat.fromLong(from);
         }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI64Node.class)
-    public abstract static class LLVMI64ToLLVM80BitFloatUnsignedNode extends LLVMTo80BitFloatingNode {
 
         @Specialization
-        public LLVM80BitFloat executeLLVM80BitFloatNode(long from) {
-            return LLVM80BitFloat.fromUnsignedLong(from);
+        protected LLVM80BitFloat doLLVM80BitFloatNode(float from) {
+            return LLVM80BitFloat.fromFloat(from);
         }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMFloatNode.class)
-    public abstract static class LLVMFloatToLLVM80BitFloatNode extends LLVMTo80BitFloatingNode {
 
         @Specialization
-        public LLVM80BitFloat executeLLVM80BitFloatNode(float from) {
-            // TODO implement
-            throw new AssertionError(from);
-        }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMDoubleNode.class)
-    public abstract static class LLVMDoubleToLLVM80BitFloatNode extends LLVMTo80BitFloatingNode {
-
-        @Specialization
-        public LLVM80BitFloat executeLLVM80BitFloatNode(double from) {
+        protected LLVM80BitFloat doLLVM80BitFloatNode(double from) {
             return LLVM80BitFloat.fromDouble(from);
         }
+
+        @Specialization
+        protected LLVM80BitFloat doLLVM80BitFloatNode(LLVM80BitFloat from) {
+            return from;
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doLLVM80BitFloatNode(LLVMIVarBit from) {
+            return LLVM80BitFloat.fromBytesBigEndian(from.getBytes());
+        }
     }
 
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
+    public abstract static class LLVMUnsignedCastToLLVM80BitFloatNode extends LLVMTo80BitFloatingNode {
+
+        @Specialization
+        protected LLVM80BitFloat do80BitFloat(byte from) {
+            return LLVM80BitFloat.fromUnsignedByte(from);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doLLVM80BitFloatNode(int from) {
+            return LLVM80BitFloat.fromUnsignedInt(from);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doLLVM80BitFloatNode(long from) {
+            return LLVM80BitFloat.fromUnsignedLong(from);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doLLVM80BitFloatNode(float from) {
+            return LLVM80BitFloat.fromFloat(from);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doLLVM80BitFloatNode(double from) {
+            return LLVM80BitFloat.fromDouble(from);
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doLLVM80BitFloatNode(LLVM80BitFloat from) {
+            return from;
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doLLVM80BitFloatNode(LLVMIVarBit from) {
+            return LLVM80BitFloat.fromBytesBigEndian(from.getBytes());
+        }
+    }
+
+    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
+    public abstract static class LLVMBitcastToLLVM80BitFloatNode extends LLVMTo80BitFloatingNode {
+
+        @Specialization
+        protected LLVM80BitFloat doLLVM80BitFloatNode(LLVM80BitFloat from) {
+            return from;
+        }
+
+        @Specialization
+        protected LLVM80BitFloat doIVarBit(LLVMIVarBit from) {
+            return LLVM80BitFloat.fromBytesBigEndian(from.getBytes());
+        }
+
+        @Specialization
+        @ExplodeLoop
+        protected LLVM80BitFloat doI1Vector(LLVMI1Vector from) {
+            assert from.getLength() == LLVM80BitFloat.BIT_WIDTH : "invalid vector size";
+            byte[] result = new byte[LLVM80BitFloat.BYTE_WIDTH];
+            for (int i = 0; i < LLVM80BitFloat.BYTE_WIDTH; i++) {
+                byte value = 0;
+                for (int j = 0; j < Byte.SIZE; j++) {
+                    value |= (from.getValue(i * Byte.SIZE + j) ? 1L : 0L) << j;
+                }
+                result[i] = value;
+            }
+            return LLVM80BitFloat.fromBytes(result);
+        }
+
+        @Specialization
+        @ExplodeLoop
+        protected LLVM80BitFloat doI8Vector(LLVMI8Vector from) {
+            assert from.getLength() == LLVM80BitFloat.BIT_WIDTH / Byte.SIZE : "invalid vector size";
+            byte[] values = new byte[LLVM80BitFloat.BYTE_WIDTH];
+            for (int i = 0; i < LLVM80BitFloat.BYTE_WIDTH; i++) {
+                values[i] = from.getValue(i);
+            }
+            return LLVM80BitFloat.fromBytes(values);
+        }
+
+        @Specialization
+        @ExplodeLoop
+        protected LLVM80BitFloat doI16Vector(LLVMI16Vector from) {
+            assert from.getLength() == LLVM80BitFloat.BIT_WIDTH / Short.SIZE : "invalid vector size";
+            byte[] values = new byte[LLVM80BitFloat.BYTE_WIDTH];
+            for (int i = 0; i < LLVM80BitFloat.BIT_WIDTH / Short.SIZE; i++) {
+                values[i * 2] = (byte) (from.getValue(i) & 0xFF);
+                values[i * 2 + 1] = (byte) ((from.getValue(i) >>> 8) & 0xFF);
+            }
+            return LLVM80BitFloat.fromBytes(values);
+        }
+    }
 }

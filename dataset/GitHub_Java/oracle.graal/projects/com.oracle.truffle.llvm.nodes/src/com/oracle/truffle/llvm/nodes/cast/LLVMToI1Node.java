@@ -30,11 +30,10 @@
 package com.oracle.truffle.llvm.nodes.cast;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
@@ -51,18 +50,19 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToI1Node extends LLVMExpressionNode {
 
+    @Child private Node isNull = Message.IS_NULL.createNode();
+    @Child private Node isBoxed = Message.IS_BOXED.createNode();
+    @Child private Node unbox = Message.UNBOX.createNode();
+    @Child private ForeignToLLVM toBool = ForeignToLLVM.create(ForeignToLLVMType.I1);
+
     @Specialization
-    protected boolean doManaged(LLVMManagedPointer from,
-                    @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM,
-                    @Cached("createIsNull()") Node isNull,
-                    @Cached("createIsBoxed()") Node isBoxed,
-                    @Cached("createUnbox()") Node unbox) {
+    protected boolean doManaged(LLVMManagedPointer from) {
         TruffleObject base = from.getObject();
         if (ForeignAccess.sendIsNull(isNull, base)) {
             return (from.getOffset() & 1) != 0;
         } else if (ForeignAccess.sendIsBoxed(isBoxed, base)) {
             try {
-                boolean ptr = (boolean) toLLVM.executeWithTarget(ForeignAccess.sendUnbox(unbox, base));
+                boolean ptr = (boolean) toBool.executeWithTarget(ForeignAccess.sendUnbox(unbox, base));
                 return ptr ^ ((from.getOffset() & 1) != 0);
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
@@ -74,19 +74,13 @@ public abstract class LLVMToI1Node extends LLVMExpressionNode {
     }
 
     @Specialization
-    protected boolean doLLVMBoxedPrimitive(LLVMBoxedPrimitive from,
-                    @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM) {
-        return (boolean) toLLVM.executeWithTarget(from.getValue());
+    protected boolean doLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
+        return (boolean) toBool.executeWithTarget(from.getValue());
     }
 
     @Specialization
     protected boolean doNativePointer(LLVMNativePointer from) {
         return (from.asNative() & 1L) != 0;
-    }
-
-    @TruffleBoundary
-    protected ForeignToLLVM createForeignToLLVM() {
-        return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I1);
     }
 
     public abstract static class LLVMSignedCastToI1Node extends LLVMToI1Node {

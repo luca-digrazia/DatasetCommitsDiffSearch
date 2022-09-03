@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.cast;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -52,6 +51,8 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToI32Node extends LLVMExpressionNode {
 
+    @Child private ForeignToLLVM convert = ForeignToLLVM.create(ForeignToLLVMType.I32);
+
     @Specialization
     protected int doManaged(LLVMManagedPointer from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
@@ -59,19 +60,13 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
     }
 
     @Specialization
-    protected int doLLVMBoxedPrimitive(LLVMBoxedPrimitive from,
-                    @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM) {
-        return (int) toLLVM.executeWithTarget(from.getValue());
+    protected int doLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
+        return (int) convert.executeWithTarget(from.getValue());
     }
 
     @Specialization
     protected int doNativePointer(LLVMNativePointer from) {
         return (int) from.asNative();
-    }
-
-    @TruffleBoundary
-    protected ForeignToLLVM createForeignToLLVM() {
-        return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I32);
     }
 
     public abstract static class LLVMSignedCastToI32Node extends LLVMToI32Node {

@@ -80,6 +80,7 @@ public abstract class LLVMX86_ConversionNode {
         @Specialization
         @ExplodeLoop
         protected int doIntrinsic(LLVMI8Vector vector) {
+
             if (vector.getLength() != 16) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError("expected a <16 x i8> vector");
@@ -93,18 +94,6 @@ public abstract class LLVMX86_ConversionNode {
 
             return result;
         }
-    }
 
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMX86_Movmskpd extends LLVMBuiltin {
-
-        @Specialization
-        protected int doIntrinsic(LLVMDoubleVector vector) {
-            if (vector.getLength() != 2) {
-                CompilerDirectives.transferToInterpreter();
-                throw new AssertionError("expected a <2 x double> vector");
-            }
-            return ((vector.getValue(0) < 0 ? 1 : 0) << 1) | (vector.getValue(1) < 0 ? 1 : 0);
-        }
     }
 }
