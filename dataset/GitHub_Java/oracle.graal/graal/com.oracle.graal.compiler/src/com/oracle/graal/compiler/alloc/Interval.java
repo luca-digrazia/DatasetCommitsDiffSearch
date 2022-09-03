@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,17 @@
  */
 package com.oracle.graal.compiler.alloc;
 
-import static com.oracle.graal.alloc.util.LocationUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.lir.LIRValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.criutils.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.util.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.util.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 
 /**
@@ -43,8 +44,10 @@ public final class Interval {
      * A pair of intervals.
      */
     static final class Pair {
+
         public final Interval first;
         public final Interval second;
+
         public Pair(Interval first, Interval second) {
             this.first = first;
             this.second = second;
@@ -66,9 +69,15 @@ public final class Interval {
          */
         public Interval any;
 
-        public RegisterBindingLists(Interval fixed, Interval any) {
+        /**
+         * List of intervals whose binding is currently {@link RegisterBinding#Stack}.
+         */
+        public Interval stack;
+
+        public RegisterBindingLists(Interval fixed, Interval any, Interval stack) {
             this.fixed = fixed;
             this.any = any;
+            this.stack = stack;
         }
 
         /**
@@ -78,31 +87,41 @@ public final class Interval {
          * @return the list of intervals whose binding is {@code binding}
          */
         public Interval get(RegisterBinding binding) {
-            if (binding == RegisterBinding.Any) {
-                return any;
+            switch (binding) {
+                case Any:
+                    return any;
+                case Fixed:
+                    return fixed;
+                case Stack:
+                    return stack;
             }
-            assert binding == RegisterBinding.Fixed;
-            return fixed;
+            throw GraalInternalError.shouldNotReachHere();
         }
 
         /**
          * Sets the list for a specified binding.
          *
          * @param binding specifies the list to be replaced
-         * @param a list of intervals whose binding is {@code binding}
+         * @param list a list of intervals whose binding is {@code binding}
          */
         public void set(RegisterBinding binding, Interval list) {
             assert list != null;
-            if (binding == RegisterBinding.Any) {
-                any = list;
-            } else {
-                assert binding == RegisterBinding.Fixed;
-                fixed = list;
+            switch (binding) {
+                case Any:
+                    any = list;
+                    break;
+                case Fixed:
+                    fixed = list;
+                    break;
+                case Stack:
+                    stack = list;
+                    break;
             }
         }
 
         /**
-         * Adds an interval to a list sorted by {@linkplain Interval#currentFrom() current from} positions.
+         * Adds an interval to a list sorted by {@linkplain Interval#currentFrom() current from}
+         * positions.
          *
          * @param binding specifies the list to be updated
          * @param interval the interval to add
@@ -155,7 +174,7 @@ public final class Interval {
          * Removes an interval from a list.
          *
          * @param binding specifies the list to be updated
-         * @param interval the interval to remove
+         * @param i the interval to remove
          */
         public void remove(RegisterBinding binding, Interval i) {
             Interval list = get(binding);
@@ -175,12 +194,11 @@ public final class Interval {
     }
 
     /**
-     * Constants denoting the register usage priority for an interval.
-     * The constants are declared in increasing order of priority are
-     * are used to optimize spilling when multiple overlapping intervals
-     * compete for limited registers.
+     * Constants denoting the register usage priority for an interval. The constants are declared in
+     * increasing order of priority are are used to optimize spilling when multiple overlapping
+     * intervals compete for limited registers.
      */
-    enum RegisterPriority {
+    public enum RegisterPriority {
         /**
          * No special reason for an interval to be allocated a register.
          */
@@ -219,8 +237,8 @@ public final class Interval {
     }
 
     /**
-     * Constants denoting whether an interval is bound to a specific register. This models
-     * platform dependencies on register usage for certain instructions.
+     * Constants denoting whether an interval is bound to a specific register. This models platform
+     * dependencies on register usage for certain instructions.
      */
     enum RegisterBinding {
         /**
@@ -231,7 +249,12 @@ public final class Interval {
         /**
          * Interval has no specific register requirements.
          */
-        Any;
+        Any,
+
+        /**
+         * Interval is bound to a stack slot.
+         */
+        Stack;
 
         public static final RegisterBinding[] VALUES = values();
     }
@@ -247,7 +270,8 @@ public final class Interval {
         Unhandled,
 
         /**
-         * An interval that {@linkplain Interval#covers covers} {@code position} and has an assigned register.
+         * An interval that {@linkplain Interval#covers covers} {@code position} and has an assigned
+         * register.
          */
         Active,
 
@@ -274,8 +298,8 @@ public final class Interval {
 
         /**
          * One definition has already been found. Two consecutive definitions are treated as one
-         * (e.g. a consecutive move and add because of two-operand LIR form).
-         * The position of this definition is given by {@link Interval#spillDefinitionPos()}.
+         * (e.g. a consecutive move and add because of two-operand LIR form). The position of this
+         * definition is given by {@link Interval#spillDefinitionPos()}.
          */
         NoSpillStore,
 
@@ -285,8 +309,14 @@ public final class Interval {
         OneSpillStore,
 
         /**
-         * The interval should be stored immediately after its definition to prevent
-         * multiple redundant stores.
+         * The interval is spilled multiple times or is spilled in a loop. Place the store somewhere
+         * on the dominator path between the definition and the usages.
+         */
+        SpillInDominator,
+
+        /**
+         * The interval should be stored immediately after its definition to prevent multiple
+         * redundant stores.
          */
         StoreAtDefinition,
 
@@ -296,19 +326,20 @@ public final class Interval {
         StartInMemory,
 
         /**
-         * The interval has more than one definition (e.g. resulting from phi moves), so stores
-         * to memory are not optimized.
+         * The interval has more than one definition (e.g. resulting from phi moves), so stores to
+         * memory are not optimized.
          */
         NoOptimization
     }
 
     /**
-     * List of use positions. Each entry in the list records the use position and register
-     * priority associated with the use position. The entries in the list are in descending
-     * order of use position.
+     * List of use positions. Each entry in the list records the use position and register priority
+     * associated with the use position. The entries in the list are in descending order of use
+     * position.
      *
      */
     public static final class UsePosList {
+
         private IntList list;
 
         /**
@@ -325,12 +356,13 @@ public final class Interval {
         }
 
         /**
-         * Splits this list around a given position. All entries in this list with a use position greater or equal than
-         * {@code splitPos} are removed from this list and added to the returned list.
+         * Splits this list around a given position. All entries in this list with a use position
+         * greater or equal than {@code splitPos} are removed from this list and added to the
+         * returned list.
          *
          * @param splitPos the position for the split
-         * @return a use position list containing all entries removed from this list that have a use position greater or equal
-         *         than {@code splitPos}
+         * @return a use position list containing all entries removed from this list that have a use
+         *         position greater or equal than {@code splitPos}
          */
         public UsePosList splitAt(int splitPos) {
             int i = size() - 1;
@@ -400,33 +432,36 @@ public final class Interval {
     }
 
     /**
-     * The {@linkplain RegisterValue register} or {@linkplain Variable variable} for this interval prior to register allocation.
+     * The {@linkplain RegisterValue register} or {@linkplain Variable variable} for this interval
+     * prior to register allocation.
      */
-    public final Value operand;
+    public final AllocatableValue operand;
 
     /**
-     * The {@linkplain OperandPool#operandNumber(Value) operand number} for this interval's {@linkplain #operand operand}.
+     * The operand number for this interval's {@linkplain #operand operand}.
      */
     public final int operandNumber;
 
     /**
-     * The {@linkplain RegisterValue register}, {@linkplain StackSlot spill slot} or {@linkplain Address address} assigned to this interval.
+     * The {@linkplain RegisterValue register} or {@linkplain StackSlot spill slot} assigned to this
+     * interval. In case of a spilled interval which is re-materialized this is
+     * {@link Value#ILLEGAL}.
      */
-    private Value location;
+    private AllocatableValue location;
 
     /**
      * The stack slot to which all splits of this interval are spilled if necessary.
      */
-    private StackSlot spillSlot;
+    private StackSlotValue spillSlot;
 
     /**
      * The kind of this interval.
-     * Only valid if this is a {@linkplain #xxisVariable() variable}.
      */
-    private Kind kind;
+    private LIRKind kind;
 
     /**
-     * The head of the list of ranges describing this interval. This list is sorted by {@linkplain LIRInstruction#id instruction ids}.
+     * The head of the list of ranges describing this interval. This list is sorted by
+     * {@linkplain LIRInstruction#id instruction ids}.
      */
     private Range first;
 
@@ -453,12 +488,14 @@ public final class Interval {
     private int cachedTo; // cached value: to of last range (-1: not cached)
 
     /**
-     * The interval from which this one is derived. If this is a {@linkplain #isSplitParent() split parent}, it points to itself.
+     * The interval from which this one is derived. If this is a {@linkplain #isSplitParent() split
+     * parent}, it points to itself.
      */
     private Interval splitParent;
 
     /**
-     * List of all intervals that are split off from this interval. This is only used if this is a {@linkplain #isSplitParent() split parent}.
+     * List of all intervals that are split off from this interval. This is only used if this is a
+     * {@linkplain #isSplitParent() split parent}.
      */
     private List<Interval> splitChildren = Collections.emptyList();
 
@@ -468,7 +505,8 @@ public final class Interval {
     private Interval currentSplitChild;
 
     /**
-     * Specifies if move is inserted between currentSplitChild and this interval when interval gets active the first time.
+     * Specifies if move is inserted between currentSplitChild and this interval when interval gets
+     * active the first time.
      */
     private boolean insertMoveWhenActivated;
 
@@ -487,37 +525,50 @@ public final class Interval {
      */
     private Interval locationHint;
 
-    void assignLocation(Value newLocation) {
+    /**
+     * The value with which a spilled child interval can be re-materialized. Currently this must be
+     * a Constant.
+     */
+    private JavaConstant materializedValue;
+
+    /**
+     * The number of times {@link #addMaterializationValue(JavaConstant)} is called.
+     */
+    private int numMaterializationValuesAdded;
+
+    void assignLocation(AllocatableValue newLocation) {
         if (isRegister(newLocation)) {
             assert this.location == null : "cannot re-assign location for " + this;
-            if (newLocation.kind == Kind.Illegal && kind != Kind.Illegal) {
+            if (newLocation.getLIRKind().equals(LIRKind.Illegal) && !kind.equals(LIRKind.Illegal)) {
                 this.location = asRegister(newLocation).asValue(kind);
                 return;
             }
+        } else if (isIllegal(newLocation)) {
+            assert canMaterialize();
         } else {
-            assert this.location == null || isRegister(this.location) : "cannot re-assign location for " + this;
-            assert isStackSlot(newLocation);
-            assert newLocation.kind != Kind.Illegal;
-            assert newLocation.kind == this.kind;
+            assert this.location == null || isRegister(this.location) || (isVirtualStackSlot(this.location) && isStackSlot(newLocation)) : "cannot re-assign location for " + this;
+            assert isStackSlotValue(newLocation);
+            assert !newLocation.getLIRKind().equals(LIRKind.Illegal);
+            assert newLocation.getLIRKind().equals(this.kind);
         }
         this.location = newLocation;
     }
 
     /**
-     * Gets the {@linkplain RegisterValue register}, {@linkplain StackSlot spill slot} or {@linkplain Address address} assigned to this interval.
+     * Gets the {@linkplain RegisterValue register} or {@linkplain StackSlot spill slot} assigned to
+     * this interval.
      */
-    public Value location() {
+    public AllocatableValue location() {
         return location;
     }
 
-    public Kind kind() {
+    public LIRKind kind() {
         assert !isRegister(operand) : "cannot access type for fixed interval";
         return kind;
     }
 
-    void setKind(Kind kind) {
-        assert isRegister(operand) || this.kind() == Kind.Illegal || this.kind() == kind : "overwriting existing type";
-        assert kind == kind.stackKind() || kind == Kind.Short : "these kinds should have int type registers";
+    void setKind(LIRKind kind) {
+        assert isRegister(operand) || this.kind().equals(LIRKind.Illegal) || this.kind().equals(kind) : "overwriting existing type";
         this.kind = kind;
     }
 
@@ -564,12 +615,12 @@ public final class Interval {
     /**
      * Gets the canonical spill slot for this interval.
      */
-    StackSlot spillSlot() {
+    StackSlotValue spillSlot() {
         return splitParent().spillSlot;
     }
 
-    void setSpillSlot(StackSlot slot) {
-        assert splitParent().spillSlot == null : "connot overwrite existing spill slot";
+    void setSpillSlot(StackSlotValue slot) {
+        assert splitParent().spillSlot == null || (isVirtualStackSlot(splitParent().spillSlot) && isStackSlot(slot)) : "connot overwrite existing spill slot";
         splitParent().spillSlot = slot;
     }
 
@@ -604,13 +655,14 @@ public final class Interval {
     }
 
     void setSpillDefinitionPos(int pos) {
-        assert spillDefinitionPos() == -1 : "cannot set the position twice";
+        assert spillState() == SpillState.SpillInDominator || spillDefinitionPos() == -1 : "cannot set the position twice";
         splitParent().spillDefinitionPos = pos;
     }
 
     // returns true if this interval has a shadow copy on the stack that is always correct
     boolean alwaysInMemory() {
-        return splitParent().spillState == SpillState.StoreAtDefinition || splitParent().spillState == SpillState.StartInMemory;
+        return (splitParent().spillState == SpillState.SpillInDominator || splitParent().spillState == SpillState.StoreAtDefinition || splitParent().spillState == SpillState.StartInMemory) &&
+                        !canMaterialize();
     }
 
     void removeFirstUsePos() {
@@ -659,9 +711,9 @@ public final class Interval {
     /**
      * Sentinel interval to denote the end of an interval list.
      */
-    static final Interval EndMarker = new Interval(Value.IllegalValue, -1);
+    static final Interval EndMarker = new Interval(Value.ILLEGAL, -1);
 
-    Interval(Value operand, int operandNumber) {
+    Interval(AllocatableValue operand, int operandNumber) {
         assert operand != null;
         this.operand = operand;
         this.operandNumber = operandNumber;
@@ -670,7 +722,7 @@ public final class Interval {
         } else {
             assert isIllegal(operand) || isVariable(operand);
         }
-        this.kind = Kind.Illegal;
+        this.kind = LIRKind.Illegal;
         this.first = Range.EndMarker;
         this.usePosList = new UsePosList(4);
         this.current = Range.EndMarker;
@@ -680,6 +732,34 @@ public final class Interval {
         this.spillDefinitionPos = -1;
         splitParent = this;
         currentSplitChild = this;
+    }
+
+    /**
+     * Sets the value which is used for re-materialization.
+     */
+    void addMaterializationValue(JavaConstant value) {
+        if (numMaterializationValuesAdded == 0) {
+            materializedValue = value;
+        } else {
+            // Interval is defined on multiple places -> no materialization is possible.
+            materializedValue = null;
+        }
+        numMaterializationValuesAdded++;
+    }
+
+    /**
+     * Returns true if this interval can be re-materialized when spilled. This means that no
+     * spill-moves are needed. Instead of restore-moves the {@link #materializedValue} is restored.
+     */
+    public boolean canMaterialize() {
+        return getMaterializedValue() != null;
+    }
+
+    /**
+     * Returns a value which can be moved to a register instead of a restore-move from stack.
+     */
+    public JavaConstant getMaterializedValue() {
+        return splitParent().materializedValue;
     }
 
     int calcTo() {
@@ -701,13 +781,13 @@ public final class Interval {
                 Interval i1 = splitChildren.get(i);
 
                 assert i1.splitParent() == this : "not a split child of this interval";
-                assert i1.kind()  == kind() : "must be equal for all split children";
-                assert i1.spillSlot() == spillSlot() : "must be equal for all split children";
+                assert i1.kind().equals(kind()) : "must be equal for all split children";
+                assert (i1.spillSlot() == null && spillSlot == null) || i1.spillSlot().equals(spillSlot()) : "must be equal for all split children";
 
                 for (int j = i + 1; j < splitChildren.size(); j++) {
                     Interval i2 = splitChildren.get(j);
 
-                    assert i1.operand != i2.operand : "same register number";
+                    assert !i1.operand.equals(i2.operand) : "same register number";
 
                     if (i1.from() < i2.from()) {
                         assert i1.to() <= i2.from() && i1.to() < i2.to() : "intervals overlapping";
@@ -760,14 +840,15 @@ public final class Interval {
             int len = splitChildren.size();
 
             // in outputMode, the end of the interval (opId == cur.to()) is not valid
-            int toOffset = (mode == LIRInstruction.OperandMode.Output ? 0 : 1);
+            int toOffset = (mode == LIRInstruction.OperandMode.DEF ? 0 : 1);
 
             int i;
             for (i = 0; i < len; i++) {
                 Interval cur = splitChildren.get(i);
                 if (cur.from() <= opId && opId < cur.to() + toOffset) {
                     if (i > 0) {
-                        // exchange current split child to start of list (faster access for next call)
+                        // exchange current split child to start of list (faster access for next
+                        // call)
                         Util.atPutGrow(splitChildren, i, splitChildren.get(0), null);
                         Util.atPutGrow(splitChildren, 0, cur, null);
                     }
@@ -807,6 +888,32 @@ public final class Interval {
         }
         assert result.covers(opId, mode) : "opId not covered by interval";
         return true;
+    }
+
+    // returns the interval that covers the given opId or null if there is none
+    Interval getIntervalCoveringOpId(int opId) {
+        assert opId >= 0 : "invalid opId";
+        assert opId < to() : "can only look into the past";
+
+        if (opId >= from()) {
+            return this;
+        }
+
+        Interval parent = splitParent();
+        Interval result = null;
+
+        assert !parent.splitChildren.isEmpty() : "no split children available";
+        int len = parent.splitChildren.size();
+
+        for (int i = len - 1; i >= 0; i--) {
+            Interval cur = parent.splitChildren.get(i);
+            if (cur.from() <= opId && opId < cur.to()) {
+                assert result == null : "covered by multiple split children " + result + " and " + cur;
+                result = cur;
+            }
+        }
+
+        return result;
     }
 
     // returns the last split child that ends before the given opId
@@ -852,12 +959,24 @@ public final class Interval {
         }
     }
 
+    private RegisterPriority adaptPriority(RegisterPriority priority) {
+        /*
+         * In case of re-materialized values we require that use-operands are registers, because we
+         * don't have the value in a stack location. (Note that ShouldHaveRegister means that the
+         * operand can also be a StackSlot).
+         */
+        if (priority == RegisterPriority.ShouldHaveRegister && canMaterialize()) {
+            return RegisterPriority.MustHaveRegister;
+        }
+        return priority;
+    }
+
     // Note: use positions are sorted descending . first use has highest index
     int firstUsage(RegisterPriority minRegisterPriority) {
         assert isVariable(operand) : "cannot access use positions for fixed intervals";
 
         for (int i = usePosList.size() - 1; i >= 0; --i) {
-            RegisterPriority registerPriority = usePosList.registerPriority(i);
+            RegisterPriority registerPriority = adaptPriority(usePosList.registerPriority(i));
             if (registerPriority.greaterEqual(minRegisterPriority)) {
                 return usePosList.usePos(i);
             }
@@ -870,7 +989,7 @@ public final class Interval {
 
         for (int i = usePosList.size() - 1; i >= 0; --i) {
             int usePos = usePosList.usePos(i);
-            if (usePos >= from && usePosList.registerPriority(i).greaterEqual(minRegisterPriority)) {
+            if (usePos >= from && adaptPriority(usePosList.registerPriority(i)).greaterEqual(minRegisterPriority)) {
                 return usePos;
             }
         }
@@ -882,7 +1001,7 @@ public final class Interval {
 
         for (int i = usePosList.size() - 1; i >= 0; --i) {
             int usePos = usePosList.usePos(i);
-            if (usePos >= from && usePosList.registerPriority(i) == exactRegisterPriority) {
+            if (usePos >= from && adaptPriority(usePosList.registerPriority(i)) == exactRegisterPriority) {
                 return usePos;
             }
         }
@@ -898,7 +1017,7 @@ public final class Interval {
             if (usePos > from) {
                 return prev;
             }
-            if (usePosList.registerPriority(i).greaterEqual(minRegisterPriority)) {
+            if (adaptPriority(usePosList.registerPriority(i)).greaterEqual(minRegisterPriority)) {
                 prev = usePos;
             }
         }
@@ -906,11 +1025,11 @@ public final class Interval {
     }
 
     void addUsePos(int pos, RegisterPriority registerPriority) {
-        assert covers(pos, LIRInstruction.OperandMode.Input) : "use position not covered by live range";
+        assert covers(pos, LIRInstruction.OperandMode.USE) : "use position not covered by live range";
 
         // do not add use positions for precolored intervals because they are never used
         if (registerPriority != RegisterPriority.None && isVariable(operand)) {
-            if (GraalOptions.DetailedAsserts) {
+            if (DetailedAsserts.getValue()) {
                 for (int i = 0; i < usePosList.size(); i++) {
                     assert pos <= usePosList.usePos(i) : "already added a use-position with lower position";
                     if (i > 0) {
@@ -970,14 +1089,14 @@ public final class Interval {
     }
 
     /**
-     * Splits this interval at a specified position and returns the remainder as a new <i>child</i> interval
-     * of this interval's {@linkplain #splitParent() parent} interval.
+     * Splits this interval at a specified position and returns the remainder as a new <i>child</i>
+     * interval of this interval's {@linkplain #splitParent() parent} interval.
      * <p>
-     * When an interval is split, a bi-directional link is established between the original <i>parent</i>
-     * interval and the <i>children</i> intervals that are split off this interval.
-     * When a split child is split again, the new created interval is a direct child
-     * of the original parent. That is, there is no tree of split children stored, just a flat list.
-     * All split children are spilled to the same {@linkplain #spillSlot spill slot}.
+     * When an interval is split, a bi-directional link is established between the original
+     * <i>parent</i> interval and the <i>children</i> intervals that are split off this interval.
+     * When a split child is split again, the new created interval is a direct child of the original
+     * parent. That is, there is no tree of split children stored, just a flat list. All split
+     * children are spilled to the same {@linkplain #spillSlot spill slot}.
      *
      * @param splitPos the position at which to split this interval
      * @param allocator the register allocator context
@@ -1014,7 +1133,7 @@ public final class Interval {
         // split list of use positions
         result.usePosList = usePosList.splitAt(splitPos);
 
-        if (GraalOptions.DetailedAsserts) {
+        if (DetailedAsserts.getValue()) {
             for (int i = 0; i < usePosList.size(); i++) {
                 assert usePosList.usePos(i) < splitPos;
             }
@@ -1026,10 +1145,11 @@ public final class Interval {
     }
 
     /**
-     * Splits this interval at a specified position and returns
-     * the head as a new interval (this interval is the tail).
+     * Splits this interval at a specified position and returns the head as a new interval (this
+     * interval is the tail).
      *
-     * Currently, only the first range can be split, and the new interval must not have split positions
+     * Currently, only the first range can be split, and the new interval must not have split
+     * positions
      */
     Interval splitFromStart(int splitPos, LinearScan allocator) {
         assert isVariable(operand) : "cannot split fixed intervals";
@@ -1064,7 +1184,7 @@ public final class Interval {
         if (cur != Range.EndMarker) {
             assert cur.to != cur.next.from : "ranges not separated";
 
-            if (mode == LIRInstruction.OperandMode.Output) {
+            if (mode == LIRInstruction.OperandMode.DEF) {
                 return cur.from <= opId && opId < cur.to;
             } else {
                 return cur.from <= opId && opId <= cur.to;
@@ -1112,7 +1232,9 @@ public final class Interval {
         String to = "?";
         if (first != null && first != Range.EndMarker) {
             from = String.valueOf(from());
-            to = String.valueOf(to());
+            // to() may cache a computed value, modifying the current object, which is a bad idea
+            // for a printing function. Compute it directly instead.
+            to = String.valueOf(calcTo());
         }
         String locationString = this.location == null ? "" : "@" + this.location;
         return operandNumber + ":" + operand + (isRegister(operand) ? "" : locationString) + "[" + from + "," + to + "]";
@@ -1168,6 +1290,14 @@ public final class Interval {
             buf.append(usePosList.usePos(i)).append(':').append(usePosList.registerPriority(i));
             prev = usePosList.usePos(i);
         }
-        return buf.append("} spill-state{").append(spillState()).append("}").toString();
+        buf.append("} spill-state{").append(spillState()).append("}");
+        if (canMaterialize()) {
+            buf.append(" (remat:").append(getMaterializedValue().toString()).append(")");
+        }
+        return buf.toString();
+    }
+
+    List<Interval> getSplitChildren() {
+        return Collections.unmodifiableList(splitChildren);
     }
 }
