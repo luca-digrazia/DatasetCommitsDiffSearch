@@ -63,6 +63,7 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
 
 import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.service.ServiceProvider;
 
 import com.oracle.graal.compiler.gen.NodeMatchRules;
 import com.oracle.graal.compiler.match.ComplexMatchResult;
@@ -74,7 +75,6 @@ import com.oracle.graal.compiler.match.MatchableNode;
 import com.oracle.graal.compiler.match.MatchableNodes;
 import com.oracle.graal.graph.Position;
 import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.serviceprovider.ServiceProvider;
 
 /**
  * Processes classes annotated with {@link MatchRule}. A {@link MatchStatementSet} service is
@@ -619,7 +619,7 @@ public class MatchProcessor extends AbstractProcessor {
         private final String matchPattern;
         private final MethodInvokerItem invoker;
 
-        MatchRuleItem(String matchPattern, MethodInvokerItem invoker) {
+        public MatchRuleItem(String matchPattern, MethodInvokerItem invoker) {
             this.matchPattern = matchPattern;
             this.invoker = invoker;
         }
@@ -675,7 +675,7 @@ public class MatchProcessor extends AbstractProcessor {
          */
         Set<String> requiredPackages = new HashSet<>();
 
-        MatchRuleDescriptor(TypeElement topDeclaringType) {
+        public MatchRuleDescriptor(TypeElement topDeclaringType) {
             this.topDeclaringType = topDeclaringType;
         }
     }
