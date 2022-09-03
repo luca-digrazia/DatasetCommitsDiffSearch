@@ -108,6 +108,7 @@ public class Merge extends StateSplit {
             }
             hasSucc = true;
         }
+
         return builder.toString();
     }
 

@@ -22,19 +22,17 @@
  */
 package com.oracle.max.graal.graph;
 
-import java.util.Collection;
-import java.util.Iterator;
+import com.sun.cri.ci.CiBitMap;
 
 
+public final class NodeBitMap {
 
-public final class NodeBitMap implements Iterable<Node>{
-
-    private final BitMap bitMap;
+    private final CiBitMap bitMap;
     private final Graph graph;
 
-    public NodeBitMap(Graph graph) {
+    NodeBitMap(Graph graph) {
         this.graph = graph;
-        bitMap = new BitMap(graph.nodeIdCount());
+        bitMap = new CiBitMap(graph.nextId);
     }
 
     public Graph graph() {
@@ -47,19 +45,6 @@ public final class NodeBitMap implements Iterable<Node>{
 
     public void setUnion(NodeBitMap other) {
         bitMap.setUnion(other.bitMap);
-    }
-
-    public void negate() {
-        grow();
-        bitMap.negate();
-    }
-
-    public boolean isNotNewMarked(Node node) {
-        return !isNew(node) && isMarked(node);
-    }
-
-    public boolean isNotNewNotMarked(Node node) {
-        return !isNew(node) && !isMarked(node);
     }
 
     public boolean isMarked(Node node) {
@@ -80,7 +65,7 @@ public final class NodeBitMap implements Iterable<Node>{
         check(node);
         bitMap.clear(node.id());
     }
-
+    
     public void clearAll() {
         bitMap.clearAll();
     }
@@ -89,75 +74,14 @@ public final class NodeBitMap implements Iterable<Node>{
         bitMap.grow(node.id() + 1);
     }
 
-    public void grow() {
-        bitMap.grow(graph.nodeIdCount());
-    }
-
     private void check(Node node) {
-        assert node.graph() == graph : "this node is not part of the graph";
+        assert node.graph == graph : "this node is not part of the graph";
         assert !isNew(node) : "this node (" + node.id() + ") was added to the graph after creating the node bitmap (" + bitMap.length() + ")";
-        assert node.isAlive() : "node " + node + " is deleted!";
+        assert !node.isDeleted() : "node " + node + " is deleted!";
     }
 
     @Override
     public String toString() {
         return bitMap.toBinaryString(-1);
-    }
-
-    public <T extends Node> void markAll(Collection<T> nodes) {
-        for (Node node : nodes) {
-            mark(node);
-        }
-    }
-
-    private static class MarkedNodeIterator implements Iterator<Node> {
-        private final NodeBitMap visited;
-        private Iterator<Node> nodes;
-        private Node nextNode;
-
-        public MarkedNodeIterator(NodeBitMap visited, Iterator<Node> nodes) {
-            this.visited = visited;
-            this.nodes = nodes;
-            forward();
-        }
-
-        private void forward() {
-            do {
-                if (!nodes.hasNext()) {
-                    nextNode = null;
-                    return;
-                }
-                nextNode = nodes.next();
-                if (visited.isNew(nextNode)) {
-                    nextNode = null;
-                    return;
-                }
-            } while (!visited.isMarked(nextNode));
-        }
-
-        @Override
-        public boolean hasNext() {
-            return nextNode != null;
-        }
-
-        @Override
-        public Node next() {
-            try {
-                return nextNode;
-            } finally {
-                forward();
-            }
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
-        }
-
-    }
-
-    @Override
-    public Iterator<Node> iterator() {
-        return new MarkedNodeIterator(NodeBitMap.this, graph().getNodes().iterator());
     }
 }
