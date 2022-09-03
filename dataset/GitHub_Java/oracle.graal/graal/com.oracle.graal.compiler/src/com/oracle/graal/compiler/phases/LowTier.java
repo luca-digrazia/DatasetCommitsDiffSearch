@@ -22,44 +22,23 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 
 public class LowTier extends PhaseSuite<LowTierContext> {
 
-    static class Options {
-
-        // @formatter:off
-        @Option(help = "")
-        public static final OptionValue<Boolean> ProfileCompiledMethods = new OptionValue<>(false);
-        // @formatter:on
-
-    }
-
     public LowTier() {
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue());
-
-        if (Options.ProfileCompiledMethods.getValue()) {
-            appendPhase(new ProfileCompiledMethodsPhase());
-        }
 
         appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.LOW_TIER));
 
         appendPhase(new RemoveValueProxyPhase());
 
         appendPhase(new ExpandLogicPhase());
-
-        /* Cleanup IsNull checks resulting from MID_TIER/LOW_TIER lowering and ExpandLogic phase. */
-        if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
-            appendPhase(new IterativeConditionalEliminationPhase(canonicalizer));
-            /* Canonicalizer may create some new ShortCircuitOrNodes so clean them up. */
-            appendPhase(new ExpandLogicPhase());
-        }
 
         appendPhase(new UseTrappingNullChecksPhase());
 

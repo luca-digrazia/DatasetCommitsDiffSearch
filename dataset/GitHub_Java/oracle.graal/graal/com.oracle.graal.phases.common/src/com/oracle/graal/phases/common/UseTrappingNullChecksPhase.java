@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.phases.common;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
@@ -47,12 +46,6 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
     }
 
     private static void tryUseTrappingNullCheck(DeoptimizeNode deopt) {
-        if (deopt.reason() != DeoptimizationReason.NullCheckException) {
-            return;
-        }
-        if (deopt.getSpeculation() != null && deopt.getSpeculation() != Constant.NULL_OBJECT) {
-            return;
-        }
         Node predecessor = deopt.predecessor();
         Node branch = null;
         while (predecessor instanceof AbstractBeginNode) {
