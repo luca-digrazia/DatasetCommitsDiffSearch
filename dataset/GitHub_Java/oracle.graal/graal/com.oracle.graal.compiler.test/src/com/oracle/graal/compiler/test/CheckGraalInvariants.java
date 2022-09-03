@@ -121,10 +121,9 @@ public class CheckGraalInvariants {
                             } catch (LinkageError e) {
                                 // suppress linkages errors resulting from eager resolution
                             } catch (Throwable e) {
-                                StringWriter sw = new StringWriter();
-                                e.printStackTrace(new PrintWriter(sw));
-                                errors.add(String.format("Error while checking %s:%n%s", methodName, sw));
+                                throw new AssertionError("Error while checking " + methodName, e);
                             }
+
                         }
                     }
                 }

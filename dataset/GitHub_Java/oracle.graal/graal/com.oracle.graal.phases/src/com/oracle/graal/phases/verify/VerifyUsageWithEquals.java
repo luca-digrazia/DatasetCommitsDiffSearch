@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,6 @@
 package com.oracle.graal.phases.verify;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.type.*;
@@ -31,30 +30,24 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
 /**
- * For certain types, object identity should not be used for object equality check. This phase
- * checks the correct usage of the given type. Equality checks with == or != (except null checks)
- * results in an {@link AssertionError}.
+ * For certain types object identity should not be used for object equality check. This phase checks
+ * the correct usage of the given type. Equality checks with == or != (except null checks) results
+ * in an {@link AssertionError}.
  */
 public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
 
-    /**
-     * The type of values that must not use identity for testing object equality.
-     */
-    private final Class<?> restrictedClass;
+    private final Class<?> klass;
 
     public VerifyUsageWithEquals(Class<?> klass) {
-        this.restrictedClass = klass;
+        this.klass = klass;
     }
 
-    /**
-     * Determines whether the type of {@code node} is assignable to the {@link #restrictedClass}.
-     */
-    private boolean isAssignableToRestrictedType(ValueNode node, MetaAccessProvider metaAccess) {
+    private boolean isAssignableType(ValueNode node, MetaAccessProvider metaAccess) {
         if (node.stamp() instanceof ObjectStamp) {
-            ResolvedJavaType restrictedType = metaAccess.lookupJavaType(restrictedClass);
-            ResolvedJavaType nodeType = StampTool.typeOrNull(node);
+            ResolvedJavaType valueType = metaAccess.lookupJavaType(klass);
+            ResolvedJavaType nodeType = ObjectStamp.typeOrNull(node);
 
-            if (nodeType != null && restrictedType.isAssignableFrom(nodeType)) {
+            if (nodeType != null && valueType.isAssignableFrom(nodeType)) {
                 return true;
             }
         }
@@ -62,23 +55,19 @@ public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
     }
 
     private static boolean isNullConstant(ValueNode node) {
-        return node.isConstant() && node.isNullConstant();
+        return node.isConstant() && node.asConstant().isNull();
     }
 
-    /**
-     * Checks whether the type of {@code x} is assignable to the restricted type and that {@code y}
-     * is not a null constant.
-     */
-    private boolean isIllegalUsage(ValueNode x, ValueNode y, MetaAccessProvider metaAccess) {
-        return isAssignableToRestrictedType(x, metaAccess) && !isNullConstant(y);
+    private boolean checkUsage(ValueNode x, ValueNode y, MetaAccessProvider metaAccess) {
+        return isAssignableType(x, metaAccess) && !isNullConstant(y);
     }
 
     @Override
     protected boolean verify(StructuredGraph graph, PhaseContext context) {
         for (ObjectEqualsNode cn : graph.getNodes().filter(ObjectEqualsNode.class)) {
             // bail out if we compare an object of type klass with == or != (except null checks)
-            if (isIllegalUsage(cn.getX(), cn.getY(), context.getMetaAccess()) || isIllegalUsage(cn.getY(), cn.getX(), context.getMetaAccess())) {
-                throw new VerificationError("Verification of " + restrictedClass.getName() + " usage failed: Comparing " + cn.getX() + " and " + cn.getY() + " in " + graph.method() +
+            if (checkUsage(cn.x(), cn.y(), context.getMetaAccess()) && checkUsage(cn.y(), cn.x(), context.getMetaAccess())) {
+                throw new VerificationError("Verification of " + klass.getName() + " usage failed: Comparing " + cn.x() + " and " + cn.y() + " in " + graph.method() +
                                 " must use .equals() for object equality, not '==' or '!='");
             }
         }
