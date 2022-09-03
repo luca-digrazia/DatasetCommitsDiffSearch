@@ -76,7 +76,7 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
      * Reads a word value from a given address.
      */
     public static long unsafeReadWord(long address) {
-        if (wordKind == Kind.Long) {
+        if (wordKind.isLong()) {
             return unsafe.getLong(address);
         }
         return unsafe.getInt(address);

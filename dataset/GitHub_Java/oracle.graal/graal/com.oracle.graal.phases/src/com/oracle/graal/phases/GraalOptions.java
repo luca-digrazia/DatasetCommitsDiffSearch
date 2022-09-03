@@ -82,6 +82,7 @@ public final class GraalOptions {
 
     // profiling information
     public static int     DeoptsToDisableOptimisticOptimization = 40;
+    public static boolean PrintDisabledOptimisticOptimizations = true;
     public static int     MatureExecutionsBranch             = 1;
     public static int     MatureExecutionsPerSwitchCase      = 1;
     public static int     MatureExecutionsTypeProfile        = 1;
@@ -170,7 +171,6 @@ public final class GraalOptions {
     public static boolean GenAssertionCode                   = ____;
     public static boolean AlignCallsForPatching              = true;
     public static boolean ResolveClassBeforeStaticInvoke     = true;
-    public static boolean CanOmitFrame                       = true;
 
     // Translating tableswitch instructions
     public static int     MinimumJumpTableSize               = 5;
