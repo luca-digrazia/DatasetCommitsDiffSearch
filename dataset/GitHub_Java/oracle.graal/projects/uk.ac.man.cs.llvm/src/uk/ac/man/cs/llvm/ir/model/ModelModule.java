@@ -38,21 +38,24 @@ import uk.ac.man.cs.llvm.ir.ModuleGenerator;
 
 import uk.ac.man.cs.llvm.ir.model.constants.BigIntegerConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.BinaryOperationConstant;
-import uk.ac.man.cs.llvm.ir.model.constants.BlockAddressConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.CastConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.CompareConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.Constant;
+import uk.ac.man.cs.llvm.ir.model.constants.DeferredBlockAddressConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.FloatingPointConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.GetElementPointerConstant;
-import uk.ac.man.cs.llvm.ir.model.constants.InlineAsmConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.NullConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.StringConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.UndefinedConstant;
+import uk.ac.man.cs.llvm.ir.model.enums.BinaryOperator;
+import uk.ac.man.cs.llvm.ir.model.enums.CastOperator;
+import uk.ac.man.cs.llvm.ir.model.enums.CompareOperator;
 import uk.ac.man.cs.llvm.ir.types.FloatingPointType;
 import uk.ac.man.cs.llvm.ir.types.FunctionType;
 import uk.ac.man.cs.llvm.ir.types.IntegerType;
 import uk.ac.man.cs.llvm.ir.types.Type;
+import uk.ac.man.cs.llvm.ir.types.VectorType;
 
 public final class ModelModule implements ModuleGenerator {
 
@@ -96,22 +99,31 @@ public final class ModelModule implements ModuleGenerator {
 
     @Override
     public void createBinaryOperationExpression(Type type, int opcode, int lhs, int rhs) {
-        symbols.addSymbol(BinaryOperationConstant.fromSymbols(symbols, type, opcode, lhs, rhs));
+        boolean isFloatingPoint = type instanceof FloatingPointType || (type instanceof VectorType && ((VectorType) type).getElementType() instanceof FloatingPointType);
+        BinaryOperator operator = BinaryOperator.decode(opcode, isFloatingPoint);
+        symbols.addSymbol(BinaryOperationConstant.fromSymbols(symbols, type, operator, lhs, rhs));
     }
 
     @Override
     public void createBlockAddress(Type type, int function, int block) {
-        symbols.addSymbol(BlockAddressConstant.fromSymbols(symbols, type, function, block));
+        symbols.addSymbol(new DeferredBlockAddressConstant(
+                        type,
+                        symbols.getSymbol(function),
+                        block));
     }
 
     @Override
     public void createCastExpression(Type type, int opcode, int value) {
-        symbols.addSymbol(CastConstant.fromSymbols(symbols, type, opcode, value));
+        CastConstant cast = new CastConstant(type, CastOperator.decode(opcode));
+
+        cast.setValue(symbols.getSymbol(value, cast));
+
+        symbols.addSymbol(cast);
     }
 
     @Override
     public void createCompareExpression(Type type, int opcode, int lhs, int rhs) {
-        symbols.addSymbol(CompareConstant.fromSymbols(symbols, type, opcode, lhs, rhs));
+        symbols.addSymbol(CompareConstant.fromSymbols(symbols, type, CompareOperator.decode(opcode), lhs, rhs));
     }
 
     @Override
@@ -136,12 +148,14 @@ public final class ModelModule implements ModuleGenerator {
 
     @Override
     public void createGetElementPointerExpression(Type type, int pointer, int[] indices, boolean isInbounds) {
-        symbols.addSymbol(GetElementPointerConstant.fromSymbols(symbols, type, pointer, indices, isInbounds));
-    }
+        GetElementPointerConstant gep = new GetElementPointerConstant(type, isInbounds);
 
-    @Override
-    public void createInlineASM(Type type, long[] args) {
-        symbols.addSymbol(InlineAsmConstant.generate(type, args));
+        gep.setBasePointer(symbols.getSymbol(pointer, gep));
+        for (int index : indices) {
+            gep.addIndex(symbols.getSymbol(index, gep));
+        }
+
+        symbols.addSymbol(gep);
     }
 
     @Override
