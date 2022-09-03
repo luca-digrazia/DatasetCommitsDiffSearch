@@ -36,8 +36,6 @@ final class ContextStoreProfile {
 
     private final Assumption dynamicStoreAssumption = Truffle.getRuntime().createAssumption("constant context store");
     private final Assumption constantStoreAssumption = Truffle.getRuntime().createAssumption("dynamic context store");
-    private final Assumption seenDynamicStore = Truffle.getRuntime().createAssumption("constant context store");
-    private final Assumption seenThreadLocalStore = Truffle.getRuntime().createAssumption("constant context store");
 
     @CompilationFinal private ContextStore constantStore;
 
@@ -69,24 +67,14 @@ final class ContextStoreProfile {
     void enter(ContextStore store) {
         assert store != null;
         // fast path
-        if (constantStoreAssumption.isValid() && constantStore == store) {
+        if (constantStore == store && constantStoreAssumption.isValid()) {
             return;
-        }
-
-        if (seenDynamicStore.isValid()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            seenDynamicStore.invalidate();
         }
 
         // fast path single thread
-        if (dynamicStoreAssumption.isValid() && Thread.currentThread() == singleThread && dynamicStore != UNINTIALIZED_STORE) {
+        if (Thread.currentThread() == singleThread && dynamicStore != UNINTIALIZED_STORE && dynamicStoreAssumption.isValid()) {
             dynamicStore = store;
             return;
-        }
-
-        if (seenThreadLocalStore.isValid()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            seenThreadLocalStore.invalidate();
         }
 
         // fast path multiple threads
@@ -94,18 +82,13 @@ final class ContextStoreProfile {
         if (tlstore != null) {
             ContextStore currentstore = getThreadLocalStore(tlstore);
             if (currentstore != store) {
-                setThreadLocalStore(tlstore, store);
+                tlstore.set(store);
             }
             return;
         }
 
         // everything else
         slowPathProfile(store);
-    }
-
-    @TruffleBoundary
-    private static void setThreadLocalStore(ThreadLocal<ContextStore> tlstore, ContextStore store) {
-        tlstore.set(store);
     }
 
     @TruffleBoundary

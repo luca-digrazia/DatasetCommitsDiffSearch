@@ -47,7 +47,6 @@ import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.ConvertDeoptimizeToGuardPhase;
 import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
-import com.oracle.graal.phases.common.IncrementalCanonicalizerPhase;
 import com.oracle.graal.phases.common.IterativeConditionalEliminationPhase;
 import com.oracle.graal.phases.common.LoweringPhase;
 import com.oracle.graal.phases.common.RemoveValueProxyPhase;
@@ -87,7 +86,7 @@ public class HighTier extends PhaseSuite<HighTierContext> {
         }
 
         if (OptConvertDeoptsToGuards.getValue()) {
-            appendPhase(new IncrementalCanonicalizerPhase<>(canonicalizer, new ConvertDeoptimizeToGuardPhase()));
+            appendPhase(new ConvertDeoptimizeToGuardPhase());
         }
 
         LoopPolicies loopPolicies = createLoopPolicies();
