@@ -27,9 +27,18 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Queue;
 
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.code.VirtualObject;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.JavaValue;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
-import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.lir.ConstantValue;
 import com.oracle.graal.lir.LIRFrameState;
@@ -45,15 +54,6 @@ import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 import com.oracle.graal.virtual.nodes.MaterializedObjectState;
 import com.oracle.graal.virtual.nodes.VirtualObjectState;
 
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.code.VirtualObject;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.JavaValue;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Value;
-
 /**
  * Builds {@link LIRFrameState}s from {@link FrameState}s.
  */
@@ -64,9 +64,6 @@ public class DebugInfoBuilder {
     public DebugInfoBuilder(NodeValueMap nodeValueMap) {
         this.nodeValueMap = nodeValueMap;
     }
-
-    private static final JavaValue[] NO_JAVA_VALUES = {};
-    private static final JavaKind[] NO_JAVA_KINDS = {};
 
     protected final Map<VirtualObjectNode, VirtualObject> virtualObjects = Node.newMap();
     protected final Map<VirtualObjectNode, EscapeObjectState> objectStates = Node.newIdentityMap();
@@ -103,21 +100,13 @@ public class DebugInfoBuilder {
                 VirtualObject vobjValue = virtualObjects.get(vobjNode);
                 assert vobjValue.getValues() == null;
 
-                JavaValue[] values;
-                JavaKind[] slotKinds;
-                int entryCount = vobjNode.entryCount();
-                if (entryCount == 0) {
-                    values = NO_JAVA_VALUES;
-                    slotKinds = NO_JAVA_KINDS;
-                } else {
-                    values = new JavaValue[entryCount];
-                    slotKinds = new JavaKind[entryCount];
-                }
+                JavaValue[] values = new JavaValue[vobjNode.entryCount()];
+                JavaKind[] slotKinds = new JavaKind[vobjNode.entryCount()];
                 if (values.length > 0) {
                     VirtualObjectState currentField = (VirtualObjectState) objectStates.get(vobjNode);
                     assert currentField != null;
                     int pos = 0;
-                    for (int i = 0; i < entryCount; i++) {
+                    for (int i = 0; i < vobjNode.entryCount(); i++) {
                         if (!currentField.values().get(i).isConstant() || currentField.values().get(i).asJavaConstant().getJavaKind() != JavaKind.Illegal) {
                             ValueNode value = currentField.values().get(i);
                             values[pos] = toJavaValue(value);
@@ -128,7 +117,7 @@ public class DebugInfoBuilder {
                                             currentField.values().get(i - 1);
                         }
                     }
-                    if (pos != entryCount) {
+                    if (pos != vobjNode.entryCount()) {
                         values = Arrays.copyOf(values, pos);
                         slotKinds = Arrays.copyOf(slotKinds, pos);
                     }
@@ -213,11 +202,8 @@ public class DebugInfoBuilder {
             int numStack = state.stackSize();
             int numLocks = state.locksSize();
 
-            int numValues = numLocals + numStack + numLocks;
-            int numKinds = numLocals + numStack;
-
-            JavaValue[] values = numValues == 0 ? NO_JAVA_VALUES : new JavaValue[numValues];
-            JavaKind[] slotKinds = numKinds == 0 ? NO_JAVA_KINDS : new JavaKind[numKinds];
+            JavaValue[] values = new JavaValue[numLocals + numStack + numLocks];
+            JavaKind[] slotKinds = new JavaKind[numLocals + numStack];
             computeLocals(state, numLocals, values, slotKinds);
             computeStack(state, numLocals, numStack, values, slotKinds);
             computeLocks(state, values);
@@ -227,7 +213,7 @@ public class DebugInfoBuilder {
                 caller = computeFrameForState(state.outerFrameState());
             }
             return new BytecodeFrame(caller, state.method(), state.bci, state.rethrowException(), state.duringCall(), values, slotKinds, numLocals, numStack, numLocks);
-        } catch (GraalError e) {
+        } catch (JVMCIError e) {
             throw e.addContext("FrameState: ", state);
         }
     }
@@ -258,10 +244,10 @@ public class DebugInfoBuilder {
         return toJavaValue(state.lockAt(i));
     }
 
-    private static final DebugCounter STATE_VIRTUAL_OBJECTS = Debug.counter("StateVirtualObjects");
-    private static final DebugCounter STATE_ILLEGALS = Debug.counter("StateIllegals");
-    private static final DebugCounter STATE_VARIABLES = Debug.counter("StateVariables");
-    private static final DebugCounter STATE_CONSTANTS = Debug.counter("StateConstants");
+    private static final DebugMetric STATE_VIRTUAL_OBJECTS = Debug.metric("StateVirtualObjects");
+    private static final DebugMetric STATE_ILLEGALS = Debug.metric("StateIllegals");
+    private static final DebugMetric STATE_VARIABLES = Debug.metric("StateVariables");
+    private static final DebugMetric STATE_CONSTANTS = Debug.metric("StateConstants");
 
     private static JavaKind toSlotKind(ValueNode value) {
         if (value == null) {
@@ -278,7 +264,7 @@ public class DebugInfoBuilder {
                 EscapeObjectState state = objectStates.get(obj);
                 if (state == null && obj.entryCount() > 0) {
                     // null states occur for objects with 0 fields
-                    throw new GraalError("no mapping found for virtual object %s", obj);
+                    throw new JVMCIError("no mapping found for virtual object %s", obj);
                 }
                 if (state instanceof MaterializedObjectState) {
                     return toJavaValue(((MaterializedObjectState) state).materializedValue());
@@ -316,7 +302,7 @@ public class DebugInfoBuilder {
                     return Value.ILLEGAL;
                 }
             }
-        } catch (GraalError e) {
+        } catch (JVMCIError e) {
             throw e.addContext("toValue: ", value);
         }
     }
