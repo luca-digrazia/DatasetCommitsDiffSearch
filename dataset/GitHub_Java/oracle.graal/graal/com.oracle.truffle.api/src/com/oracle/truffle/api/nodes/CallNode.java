@@ -38,7 +38,7 @@ import com.oracle.truffle.api.frame.*;
  * Please note: This class is not intended to be subclassed by guest language implementations.
  *
  * @see TruffleRuntime#createCallNode(CallTarget)
- * @see #inline()
+ * @see #forceInlining()
  * @see #split()
  */
 public abstract class CallNode extends Node {
@@ -77,19 +77,29 @@ public abstract class CallNode extends Node {
     public abstract boolean isInlinable();
 
     /**
-     * Returns <code>true</code> if the {@link CallTarget} in this {@link CallNode} is inlined. A
-     * {@link CallNode} can either be inlined manually by invoking {@link #inline()} or by the
-     * runtime system which may at any point decide to inline.
+     * Returns <code>true</code> if the {@link CallTarget} is forced to be inlined. A
+     * {@link CallNode} can either be inlined manually by invoking {@link #forceInlining()} or by
+     * the runtime system which may at any point decide to inline.
      *
      * @return true if this method was inlined else false.
      */
-    public abstract boolean isInlined();
+    public abstract boolean isInliningForced();
 
     /**
      * Enforces the runtime system to inline the {@link CallTarget} at this call site. If the
      * runtime system does not support inlining or it is already inlined this method has no effect.
+     * The runtime system may decide to not inline calls which were forced to inline.
      */
-    public abstract void inline();
+    public abstract void forceInlining();
+
+    /**
+     * Returns true if the runtime system has decided to inline this call-site. If the
+     * {@link CallNode} was forced to inline then this does not necessarily mean that the
+     * {@link CallNode} is really going to be inlined. This depends on whether or not the runtime
+     * system supports inlining. The runtime system may also decide to not inline calls which were
+     * forced to inline.
+     */
+    public abstract boolean isInlined();
 
     /**
      * Returns <code>true</code> if this {@link CallNode} can be split. A {@link CallNode} can only
