@@ -150,7 +150,7 @@ public class JVMCIInfopointErrorTest extends GraalCompilerTest {
         codeCache.addCode(method, compiledCode, null, null);
     }
 
-    @Test(expected = Error.class)
+    @Test(expected = JVMCIError.class)
     public void testInvalidShortOop() {
         test((tool, state, safepoint) -> {
             PlatformKind kind = tool.target().arch.getPlatformKind(JavaKind.Short);
@@ -163,7 +163,7 @@ public class JVMCIInfopointErrorTest extends GraalCompilerTest {
         });
     }
 
-    @Test(expected = Error.class)
+    @Test(expected = JVMCIError.class)
     public void testInvalidShortDerivedOop() {
         test((tool, state, safepoint) -> {
             Variable baseOop = tool.newVariable(LIRKind.fromJavaKind(tool.target().arch, JavaKind.Object));
