@@ -45,7 +45,7 @@ import jdk.vm.ci.code.TargetDescription;
  * Inserts a {@link DiagnosticLIRGeneratorTool#createZapRegisters ZapRegistersOp} after
  * {@link ZapRegistersAfterInstruction}.
  */
-public final class HotSpotZapRegistersPhase extends PostAllocationOptimizationPhase {
+public class HotSpotZapRegistersPhase extends PostAllocationOptimizationPhase {
 
     @Override
     protected void run(TargetDescription target, LIRGenerationResult lirGenRes, PostAllocationOptimizationContext context) {
@@ -56,7 +56,7 @@ public final class HotSpotZapRegistersPhase extends PostAllocationOptimizationPh
         }
     }
 
-    private static void processLIR(DiagnosticLIRGeneratorTool diagnosticLirGenTool, HotSpotLIRGenerationResult res, LIR lir) {
+    private void processLIR(DiagnosticLIRGeneratorTool diagnosticLirGenTool, HotSpotLIRGenerationResult res, LIR lir) {
         LIRInsertionBuffer buffer = new LIRInsertionBuffer();
         for (AbstractBlockBase<?> block : lir.codeEmittingOrder()) {
             if (block != null) {
@@ -66,21 +66,19 @@ public final class HotSpotZapRegistersPhase extends PostAllocationOptimizationPh
     }
 
     @SuppressWarnings("try")
-    private static void processBlock(DiagnosticLIRGeneratorTool diagnosticLirGenTool, HotSpotLIRGenerationResult res, LIR lir, LIRInsertionBuffer buffer, AbstractBlockBase<?> block) {
+    private void processBlock(DiagnosticLIRGeneratorTool diagnosticLirGenTool, HotSpotLIRGenerationResult res, LIR lir, LIRInsertionBuffer buffer, AbstractBlockBase<?> block) {
         try (Indent indent = Debug.logAndIndent("Process block %s", block)) {
             ArrayList<LIRInstruction> instructions = lir.getLIRforBlock(block);
             buffer.init(instructions);
             for (int index = 0; index < instructions.size(); index++) {
                 LIRInstruction inst = instructions.get(index);
-                if (inst instanceof ZapRegistersAfterInstruction) {
-                    LIRFrameState state = getLIRState(inst);
-                    if (state != null) {
-                        SaveRegistersOp zap = diagnosticLirGenTool.createZapRegisters();
-                        SaveRegistersOp old = res.getCalleeSaveInfo().put(state, zap);
-                        assert old == null : "Already another SaveRegisterOp registered! " + old;
-                        buffer.append(index + 1, (LIRInstruction) zap);
-                        Debug.log("Insert ZapRegister after %s", inst);
-                    }
+                LIRFrameState state = zapRegistersAfterInstruction(inst);
+                if (state != null) {
+                    SaveRegistersOp zap = diagnosticLirGenTool.createZapRegisters();
+                    SaveRegistersOp old = res.getCalleeSaveInfo().put(state, zap);
+                    assert old == null : "Already another SaveRegisterOp registered! " + old;
+                    buffer.append(index + 1, (LIRInstruction) zap);
+                    Debug.log("Insert ZapRegister after %s", inst);
                 }
             }
             buffer.finish();
@@ -88,16 +86,17 @@ public final class HotSpotZapRegistersPhase extends PostAllocationOptimizationPh
     }
 
     /**
-     * Returns the {@link LIRFrameState} of an instruction.
+     * Returns a {@link LIRFrameState} if the registers should be zapped after the instruction.
      */
-    private static LIRFrameState getLIRState(LIRInstruction inst) {
-        final LIRFrameState[] lirState = {null};
-        inst.forEachState(state -> {
-            assert lirState[0] == null : "Multiple states: " + inst;
-            lirState[0] = state;
-        });
-        assert lirState[0] != null : "No state: " + inst;
-        return lirState[0];
+    protected LIRFrameState zapRegistersAfterInstruction(LIRInstruction inst) {
+        if (inst instanceof ZapRegistersAfterInstruction) {
+            final LIRFrameState[] lirState = {null};
+            inst.forEachState(state -> {
+                lirState[0] = state;
+            });
+            return lirState[0];
+        }
+        return null;
     }
 
 }
