@@ -82,13 +82,12 @@ public abstract class SnippetStub extends Stub implements Snippets {
     protected abstract Arguments makeArguments(SnippetInfo stub);
 
     @Override
-    public ResolvedJavaMethod getInstalledCodeOwner() {
+    public ResolvedJavaMethod getInstallationMethod() {
         return snippet.info.getMethod();
     }
 
     @Override
     public String toString() {
-        ResolvedJavaMethod method = getInstalledCodeOwner();
-        return "Stub<" + (method != null ? format("%h.%n", method) : linkage) + ">";
+        return format("%h.%n", getInstallationMethod());
     }
 }
