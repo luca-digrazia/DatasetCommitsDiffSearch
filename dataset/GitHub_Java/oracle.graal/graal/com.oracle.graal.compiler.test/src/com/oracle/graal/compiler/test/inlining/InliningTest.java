@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,14 +41,8 @@ public class InliningTest extends GraalCompilerTest {
 
     @Test
     public void testInvokeStaticInlining() {
-        assertInlined(getGraph("invokeStaticSnippet", false));
-        assertInlined(getGraph("invokeStaticOnInstanceSnippet", false));
-    }
-
-    @Test
-    public void testInvokeStaticInliningIP() {
-        assertInlineInfopoints(assertInlined(getGraph("invokeStaticSnippet", true)));
-        assertInlineInfopoints(assertInlined(getGraph("invokeStaticOnInstanceSnippet", true)));
+        assertInlined(getGraph("invokeStaticSnippet"));
+        assertInlined(getGraph("invokeStaticOnInstanceSnippet"));
     }
 
     @SuppressWarnings("all")
@@ -63,16 +57,9 @@ public class InliningTest extends GraalCompilerTest {
 
     @Test
     public void testStaticBindableInlining() {
-        assertInlined(getGraph("invokeConstructorSnippet", false));
-        assertInlined(getGraph("invokeFinalMethodSnippet", false));
-        assertInlined(getGraph("invokeMethodOnFinalClassSnippet", false));
-    }
-
-    @Test
-    public void testStaticBindableInliningIP() {
-        assertInlineInfopoints(assertInlined(getGraph("invokeConstructorSnippet", true)));
-        assertInlineInfopoints(assertInlined(getGraph("invokeFinalMethodSnippet", true)));
-        assertInlineInfopoints(assertInlined(getGraph("invokeMethodOnFinalClassSnippet", true)));
+        assertInlined(getGraph("invokeConstructorSnippet"));
+        assertInlined(getGraph("invokeFinalMethodSnippet"));
+        assertInlined(getGraph("invokeMethodOnFinalClassSnippet"));
     }
 
     @SuppressWarnings("all")
@@ -94,28 +81,14 @@ public class InliningTest extends GraalCompilerTest {
 
     @Test
     public void testClassHierarchyAnalysis() {
-        assertInlined(getGraph("invokeLeafClassMethodSnippet", false));
-        assertInlined(getGraph("invokeConcreteMethodSnippet", false));
-        assertInlined(getGraph("invokeSingleImplementorInterfaceSnippet", false));
-        // assertInlined(getGraph("invokeConcreteInterfaceMethodSnippet", false));
+        assertInlined(getGraph("invokeLeafClassMethodSnippet"));
+        assertInlined(getGraph("invokeConcreteMethodSnippet"));
+        assertInlined(getGraph("invokeSingleImplementorInterfaceSnippet"));
+        // assertInlined(getGraph("invokeConcreteInterfaceMethodSnippet"));
 
-        assertNotInlined(getGraph("invokeOverriddenPublicMethodSnippet", false));
-        assertNotInlined(getGraph("invokeOverriddenProtectedMethodSnippet", false));
-        assertNotInlined(getGraph("invokeOverriddenInterfaceMethodSnippet", false));
-    }
-
-    @Test
-    public void testClassHierarchyAnalysisIP() {
-        assertInlineInfopoints(assertInlined(getGraph("invokeLeafClassMethodSnippet", true)));
-        assertInlineInfopoints(assertInlined(getGraph("invokeConcreteMethodSnippet", true)));
-        assertInlineInfopoints(assertInlined(getGraph("invokeSingleImplementorInterfaceSnippet", true)));
-        //@formatter:off
-        // assertInlineInfopoints(assertInlined(getGraph("invokeConcreteInterfaceMethodSnippet", true)));
-        //@formatter:on
-
-        assertNoInlineInfopoints(assertNotInlined(getGraph("invokeOverriddenPublicMethodSnippet", true)));
-        assertNoInlineInfopoints(assertNotInlined(getGraph("invokeOverriddenProtectedMethodSnippet", true)));
-        assertNoInlineInfopoints(assertNotInlined(getGraph("invokeOverriddenInterfaceMethodSnippet", true)));
+        assertNotInlined(getGraph("invokeOverriddenPublicMethodSnippet"));
+        assertNotInlined(getGraph("invokeOverriddenProtectedMethodSnippet"));
+        assertNotInlined(getGraph("invokeOverriddenInterfaceMethodSnippet"));
     }
 
     @SuppressWarnings("all")
@@ -153,17 +126,17 @@ public class InliningTest extends GraalCompilerTest {
         return superClass.protectedOverriddenMethod();
     }
 
-    private StructuredGraph getGraph(final String snippet, final boolean eagerInfopointMode) {
+    private StructuredGraph getGraph(final String snippet) {
         return Debug.scope("InliningTest", new DebugDumpScope(snippet), new Callable<StructuredGraph>() {
 
             @Override
             public StructuredGraph call() {
                 StructuredGraph graph = parse(snippet);
-                PhasePlan phasePlan = getDefaultPhasePlan(eagerInfopointMode);
+                PhasePlan phasePlan = getDefaultPhasePlan();
                 Assumptions assumptions = new Assumptions(true);
                 new ComputeProbabilityPhase().apply(graph);
                 Debug.dump(graph, "Graph");
-                new InliningPhase(runtime(), null, replacements, assumptions, null, phasePlan, OptimisticOptimizations.ALL).apply(graph);
+                new InliningPhase(runtime(), null, assumptions, null, phasePlan, OptimisticOptimizations.ALL).apply(graph);
                 Debug.dump(graph, "Graph");
                 new CanonicalizerPhase(runtime(), assumptions).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
@@ -196,31 +169,6 @@ public class InliningTest extends GraalCompilerTest {
             }
         }
         fail("Graph does not contain a node of class " + clazz.getName());
-        return graph;
-    }
-
-    private static StructuredGraph assertInlineInfopoints(StructuredGraph graph) {
-        int start = 0;
-        int end = 0;
-        for (InfopointNode ipn : graph.getNodes(InfopointNode.class)) {
-            if (ipn.reason == InfopointReason.METHOD_START) {
-                ++start;
-            } else if (ipn.reason == InfopointReason.METHOD_END) {
-                ++end;
-            }
-        }
-        if (start < 1 || end < 1) {
-            fail(String.format("Graph does not contain required inline infopoints: %d starts, %d ends.", start, end));
-        }
-        return graph;
-    }
-
-    private static StructuredGraph assertNoInlineInfopoints(StructuredGraph graph) {
-        for (InfopointNode ipn : graph.getNodes(InfopointNode.class)) {
-            if (ipn.reason == InfopointReason.METHOD_START || ipn.reason == InfopointReason.METHOD_END) {
-                fail("Graph contains inline infopoints.");
-            }
-        }
         return graph;
     }
 

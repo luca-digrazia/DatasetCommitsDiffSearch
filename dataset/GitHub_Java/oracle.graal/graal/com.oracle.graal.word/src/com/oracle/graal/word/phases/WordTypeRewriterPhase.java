@@ -177,11 +177,6 @@ public class WordTypeRewriterPhase extends Phase {
                         replace(invoke, graph.unique(new UnsafeCastNode(arguments.get(0), StampFactory.forKind(wordKind))));
                         break;
 
-                    case FROM_ARRAY:
-                        assert arguments.size() == 2;
-                        replace(invoke, graph.unique(new ReadArrayElementAddressNode(arguments.get(0), arguments.get(1), StampFactory.forKind(wordKind))));
-                        break;
-
                     case TO_OBJECT:
                         assert arguments.size() == 1;
                         replace(invoke, graph.unique(new UnsafeCastNode(arguments.get(0), invoke.node().stamp())));
@@ -265,7 +260,7 @@ public class WordTypeRewriterPhase extends Phase {
     }
 
     private static ValueNode readOp(StructuredGraph graph, ValueNode base, ValueNode offset, Invoke invoke, Object locationIdentity) {
-        IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, invoke.node().kind(), 0, offset, graph, false);
+        IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, invoke.node().kind(), 0, offset, graph, 1);
         ReadNode read = graph.add(new ReadNode(base, location, invoke.node().stamp()));
         graph.addBeforeFixed(invoke.node(), read);
         // The read must not float outside its block otherwise it may float above an explicit zero
@@ -275,7 +270,7 @@ public class WordTypeRewriterPhase extends Phase {
     }
 
     private static ValueNode writeOp(StructuredGraph graph, ValueNode base, ValueNode offset, ValueNode value, Invoke invoke, Object locationIdentity) {
-        IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, value.kind(), 0, offset, graph, false);
+        IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, value.kind(), 0, offset, graph, 1);
         WriteNode write = graph.add(new WriteNode(base, value, location));
         graph.addBeforeFixed(invoke.node(), write);
         return write;

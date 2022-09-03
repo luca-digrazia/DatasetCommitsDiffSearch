@@ -28,7 +28,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 
 public class ReassociateAndCanonicalTest extends GraalCompilerTest {
 
@@ -242,12 +241,12 @@ public class ReassociateAndCanonicalTest extends GraalCompilerTest {
         return (2 - rnd) - 1;
     }
 
-    private <T extends Node & IterableNodeType> void test(String test, String ref) {
+    private <T extends Node & Node.IterableNodeType> void test(String test, String ref) {
         StructuredGraph testGraph = parse(test);
         Assumptions assumptions = new Assumptions(false);
-        new CanonicalizerPhase(true).apply(testGraph, new PhaseContext(runtime(), assumptions, replacements));
+        new CanonicalizerPhase(runtime(), assumptions).apply(testGraph);
         StructuredGraph refGraph = parse(ref);
-        new CanonicalizerPhase(true).apply(refGraph, new PhaseContext(runtime(), assumptions, replacements));
+        new CanonicalizerPhase(runtime(), assumptions).apply(refGraph);
         assertEquals(testGraph, refGraph);
     }
 }

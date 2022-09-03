@@ -28,7 +28,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * In the following tests, the scalar type system of the compiler should be complete enough to see
@@ -167,9 +166,9 @@ public class ScalarTypeSystemTest extends GraalCompilerTest {
         StructuredGraph graph = parse(snippet);
         Debug.dump(graph, "Graph");
         Assumptions assumptions = new Assumptions(false);
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), assumptions, replacements));
-        new ConditionalEliminationPhase(getMetaAccess()).apply(graph);
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), assumptions, replacements));
+        new CanonicalizerPhase(runtime(), assumptions).apply(graph);
+        new ConditionalEliminationPhase(runtime()).apply(graph);
+        new CanonicalizerPhase(runtime(), assumptions).apply(graph);
         StructuredGraph referenceGraph = parse(referenceSnippet);
         assertEquals(referenceGraph, graph);
     }

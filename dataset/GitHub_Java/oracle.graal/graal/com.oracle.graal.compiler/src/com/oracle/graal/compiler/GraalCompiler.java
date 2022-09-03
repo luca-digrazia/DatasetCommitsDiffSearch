@@ -48,6 +48,11 @@ import com.oracle.graal.virtual.phases.ea.*;
 public class GraalCompiler {
 
     /**
+     * The target that this compiler has been configured for.
+     */
+    public final TargetDescription target;
+
+    /**
      * The runtime that this compiler has been configured for.
      */
     public final GraalCodeCacheProvider runtime;
@@ -57,13 +62,13 @@ public class GraalCompiler {
      */
     public final Backend backend;
 
-    public GraalCompiler(GraalCodeCacheProvider runtime, Backend backend) {
+    public GraalCompiler(GraalCodeCacheProvider runtime, TargetDescription target, Backend backend) {
         this.runtime = runtime;
+        this.target = target;
         this.backend = backend;
     }
 
-    public CompilationResult compileMethod(final TargetDescription target, final ResolvedJavaMethod method, final StructuredGraph graph, final GraphCache cache, final PhasePlan plan,
-                    final OptimisticOptimizations optimisticOpts) {
+    public CompilationResult compileMethod(final ResolvedJavaMethod method, final StructuredGraph graph, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts) {
         assert (method.getModifiers() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
 
         return Debug.scope("GraalCompiler", new Object[]{graph, method, this}, new Callable<CompilationResult>() {
@@ -73,7 +78,7 @@ public class GraalCompiler {
                 final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
 
                     public LIR call() {
-                        return emitHIR(target, graph, assumptions, cache, plan, optimisticOpts);
+                        return emitHIR(graph, assumptions, cache, plan, optimisticOpts);
                     }
                 });
                 final FrameMap frameMap = Debug.scope("BackEnd", lir, new Callable<FrameMap>() {
@@ -105,10 +110,8 @@ public class GraalCompiler {
 
     /**
      * Builds the graph, optimizes it.
-     * 
-     * @param target
      */
-    public LIR emitHIR(TargetDescription target, StructuredGraph graph, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
+    public LIR emitHIR(StructuredGraph graph, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
 
         if (graph.start().next() == null) {
             plan.runPhases(PhasePosition.AFTER_PARSING, graph);

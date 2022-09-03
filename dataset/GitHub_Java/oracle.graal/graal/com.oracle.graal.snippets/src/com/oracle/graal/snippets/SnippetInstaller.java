@@ -89,7 +89,7 @@ public class SnippetInstaller {
                 }
                 ResolvedJavaMethod snippet = runtime.lookupJavaMethod(method);
                 assert snippet.getCompilerStorage().get(Graph.class) == null : method;
-                StructuredGraph graph = makeGraph(snippet, inliningPolicy(snippet));
+                StructuredGraph graph = makeGraph(snippet, inliningPolicy(snippet), false);
                 // System.out.println("snippet: " + graph);
                 snippet.getCompilerStorage().put(Graph.class, graph);
             }
@@ -152,8 +152,9 @@ public class SnippetInstaller {
         substitute = runtime.lookupJavaMethod(substituteMethod);
         original = runtime.lookupJavaMethod(originalMethod);
         try {
-            Debug.log("substitution: " + MetaUtil.format("%H.%n(%p)", original) + " --> " + MetaUtil.format("%H.%n(%p)", substitute));
-            StructuredGraph graph = makeGraph(substitute, inliningPolicy(substitute));
+            // System.out.println("substitution: " + MetaUtil.format("%H.%n(%p)", original) +
+            // " --> " + MetaUtil.format("%H.%n(%p)", substitute));
+            StructuredGraph graph = makeGraph(substitute, inliningPolicy(substitute), true);
             Object oldValue = original.getCompilerStorage().put(Graph.class, graph);
             assert oldValue == null;
         } finally {
@@ -191,18 +192,21 @@ public class SnippetInstaller {
         }
     }
 
-    public StructuredGraph makeGraph(final ResolvedJavaMethod method, final SnippetInliningPolicy policy) {
+    public StructuredGraph makeGraph(final ResolvedJavaMethod method, final SnippetInliningPolicy policy, final boolean isSubstitution) {
         return Debug.scope("BuildSnippetGraph", new Object[]{method}, new Callable<StructuredGraph>() {
 
             @Override
             public StructuredGraph call() throws Exception {
                 StructuredGraph graph = parseGraph(method, policy);
 
-                new SnippetIntrinsificationPhase(runtime, pool).apply(graph);
-                assert SnippetTemplate.hasConstantParameter(method) || SnippetIntrinsificationVerificationPhase.verify(graph);
+                new SnippetIntrinsificationPhase(runtime, pool, SnippetTemplate.hasConstantParameter(method)).apply(graph);
 
-                new SnippetFrameStateCleanupPhase().apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
+                if (isSubstitution && !substituteCallsOriginal) {
+                    // TODO (ds) remove the constraint of only processing substitutions
+                    // once issues with the arraycopy snippets have been resolved
+                    new SnippetFrameStateCleanupPhase().apply(graph);
+                    new DeadCodeEliminationPhase().apply(graph);
+                }
 
                 new InsertStateAfterPlaceholderPhase().apply(graph);
 
@@ -217,6 +221,7 @@ public class SnippetInstaller {
         StructuredGraph graph = graphCache.get(method);
         if (graph == null) {
             graph = buildGraph(method, policy == null ? inliningPolicy(method) : policy);
+            // System.out.println("built " + graph);
             graphCache.put(method, graph);
         }
         return graph;
@@ -233,7 +238,7 @@ public class SnippetInstaller {
 
         new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
 
-        new SnippetIntrinsificationPhase(runtime, pool).apply(graph);
+        new SnippetIntrinsificationPhase(runtime, pool, true).apply(graph);
 
         for (Invoke invoke : graph.getInvokes()) {
             MethodCallTargetNode callTarget = invoke.methodCallTarget();
@@ -242,6 +247,10 @@ public class SnippetInstaller {
                 final StructuredGraph originalGraph = new StructuredGraph(original);
                 new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(originalGraph);
                 InliningUtil.inline(invoke, originalGraph, true);
+
+                // TODO the inlined frame states still show the call from the substitute to the
+                // original.
+                // If this poses a problem, a phase should added to fix up these frame states.
 
                 Debug.dump(graph, "after inlining %s", callee);
                 if (GraalOptions.OptCanonicalizer) {
@@ -261,7 +270,7 @@ public class SnippetInstaller {
             }
         }
 
-        new SnippetIntrinsificationPhase(runtime, pool).apply(graph);
+        new SnippetIntrinsificationPhase(runtime, pool, true).apply(graph);
 
         new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
 

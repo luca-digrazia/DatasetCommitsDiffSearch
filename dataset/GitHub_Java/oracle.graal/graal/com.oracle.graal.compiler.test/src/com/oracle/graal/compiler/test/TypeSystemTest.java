@@ -24,12 +24,14 @@ package com.oracle.graal.compiler.test;
 
 import java.io.*;
 
-import org.junit.*;
+import junit.framework.Assert;
+
+import org.junit.Test;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.Verbosity;
+import com.oracle.graal.graph.Node.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.java.*;
@@ -184,13 +186,13 @@ public class TypeSystemTest extends GraalCompilerTest {
         StructuredGraph graph = parse(snippet);
         Debug.dump(graph, "Graph");
         Assumptions assumptions = new Assumptions(false);
-        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
+        new CanonicalizerPhase(runtime(), assumptions).apply(graph);
         new ConditionalEliminationPhase(runtime()).apply(graph);
-        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
+        new CanonicalizerPhase(runtime(), assumptions).apply(graph);
         // a second canonicalizer is needed to process nested MaterializeNodes
-        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
+        new CanonicalizerPhase(runtime(), assumptions).apply(graph);
         StructuredGraph referenceGraph = parse(referenceSnippet);
-        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(referenceGraph);
+        new CanonicalizerPhase(runtime(), assumptions).apply(referenceGraph);
         assertEquals(referenceGraph, graph);
     }
 
@@ -204,19 +206,19 @@ public class TypeSystemTest extends GraalCompilerTest {
     }
 
     public static void outputGraph(StructuredGraph graph, String message) {
-        TTY.println("========================= " + message);
+        System.out.println("========================= " + message);
         SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);
         for (Block block : schedule.getCFG().getBlocks()) {
-            TTY.print("Block " + block + " ");
+            System.out.print("Block " + block + " ");
             if (block == schedule.getCFG().getStartBlock()) {
-                TTY.print("* ");
+                System.out.print("* ");
             }
-            TTY.print("-> ");
+            System.out.print("-> ");
             for (Block succ : block.getSuccessors()) {
-                TTY.print(succ + " ");
+                System.out.print(succ + " ");
             }
-            TTY.println();
+            System.out.println();
             for (Node node : schedule.getBlockToNodesMap().get(block)) {
                 outputNode(node);
             }
@@ -224,11 +226,11 @@ public class TypeSystemTest extends GraalCompilerTest {
     }
 
     private static void outputNode(Node node) {
-        TTY.print("  " + node + "    (usage count: " + node.usages().count() + ") (inputs:");
+        System.out.print("  " + node + "    (usage count: " + node.usages().count() + ") (inputs:");
         for (Node input : node.inputs()) {
-            TTY.print(" " + input.toString(Verbosity.Id));
+            System.out.print(" " + input.toString(Verbosity.Id));
         }
-        TTY.println(")");
+        System.out.println(")");
         if (node instanceof MergeNode) {
             for (PhiNode phi : ((MergeNode) node).phis()) {
                 outputNode(phi);
@@ -240,9 +242,9 @@ public class TypeSystemTest extends GraalCompilerTest {
         StructuredGraph graph = parse(snippet);
         Debug.dump(graph, "Graph");
         Assumptions assumptions = new Assumptions(false);
-        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
+        new CanonicalizerPhase(runtime(), assumptions).apply(graph);
         new ConditionalEliminationPhase(runtime()).apply(graph);
-        new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
+        new CanonicalizerPhase(runtime(), assumptions).apply(graph);
         Debug.dump(graph, "Graph");
         Assert.assertFalse("shouldn't have nodes of type " + clazz, graph.getNodes(clazz).iterator().hasNext());
     }

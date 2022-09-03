@@ -60,9 +60,9 @@ public class InvokeExceptionTest extends GraalCompilerTest {
 
     private void test(String snippet) {
         StructuredGraph graph = parseProfiled(snippet);
-        Map<Invoke, Double> hints = new HashMap<>();
+        Collection<Invoke> hints = new ArrayList<>();
         for (Invoke invoke : graph.getInvokes()) {
-            hints.put(invoke, 1000d);
+            hints.add(invoke);
         }
         Assumptions assumptions = new Assumptions(false);
         new InliningPhase(runtime(), hints, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);

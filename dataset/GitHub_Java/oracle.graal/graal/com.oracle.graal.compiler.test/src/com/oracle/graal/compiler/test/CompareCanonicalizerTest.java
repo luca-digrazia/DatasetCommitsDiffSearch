@@ -30,13 +30,12 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 
 public class CompareCanonicalizerTest extends GraalCompilerTest {
 
     private StructuredGraph getCanonicalizedGraph(String name) {
         StructuredGraph graph = parse(name);
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), null, replacements));
+        new CanonicalizerPhase(runtime(), null).apply(graph);
         return graph;
     }
 
@@ -54,7 +53,7 @@ public class CompareCanonicalizerTest extends GraalCompilerTest {
             assertEquals(referenceGraph, graph);
         }
         Assumptions assumptions = new Assumptions(false);
-        new CanonicalizerPhase(true).apply(referenceGraph, new PhaseContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), assumptions, replacements));
+        new CanonicalizerPhase(runtime(), assumptions).apply(referenceGraph);
         for (int i = 1; i < 4; i++) {
             StructuredGraph graph = getCanonicalizedGraph("canonicalCompare" + i);
             assertEquals(referenceGraph, graph);

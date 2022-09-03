@@ -56,11 +56,11 @@ public abstract class LoopTransformations {
         // assert loop.isCounted(); //TODO (gd) strenghten : counted with known trip count
         int iterations = 0;
         LoopBeginNode loopBegin = loop.loopBegin();
-        StructuredGraph graph = loopBegin.graph();
+        StructuredGraph graph = (StructuredGraph) loopBegin.graph();
         while (!loopBegin.isDeleted()) {
             int mark = graph.getMark();
             peel(loop);
-            new CanonicalizerPhase.Instance(runtime, assumptions, mark, null).apply(graph);
+            new CanonicalizerPhase(runtime, assumptions, mark, null).apply(graph);
             if (iterations++ > UNROLL_LIMIT || graph.getNodeCount() > GraalOptions.MaximumDesiredSize * 3) {
                 throw new BailoutException("FullUnroll : Graph seems to grow out of proportion");
             }
@@ -78,19 +78,19 @@ public abstract class LoopTransformations {
         // original loop is used as first successor
         Position firstPosition = successors.nextPosition();
         NodeClass controlSplitClass = controlSplitNode.getNodeClass();
-        controlSplitClass.set(newControlSplit, firstPosition, AbstractBeginNode.begin(originalLoop.entryPoint()));
+        controlSplitClass.set(newControlSplit, firstPosition, BeginNode.begin(originalLoop.entryPoint()));
 
-        StructuredGraph graph = controlSplitNode.graph();
+        StructuredGraph graph = (StructuredGraph) controlSplitNode.graph();
         while (successors.hasNext()) {
             Position position = successors.nextPosition();
             // create a new loop duplicate, connect it and simplify it
             LoopFragmentWhole duplicateLoop = originalLoop.duplicate();
-            controlSplitClass.set(newControlSplit, position, AbstractBeginNode.begin(duplicateLoop.entryPoint()));
+            controlSplitClass.set(newControlSplit, position, BeginNode.begin(duplicateLoop.entryPoint()));
             ControlSplitNode duplicatedControlSplit = duplicateLoop.getDuplicatedNode(controlSplitNode);
-            graph.removeSplitPropagate(duplicatedControlSplit, (AbstractBeginNode) controlSplitClass.get(duplicatedControlSplit, position));
+            graph.removeSplitPropagate(duplicatedControlSplit, (BeginNode) controlSplitClass.get(duplicatedControlSplit, position));
         }
         // original loop is simplified last to avoid deleting controlSplitNode too early
-        graph.removeSplitPropagate(controlSplitNode, (AbstractBeginNode) controlSplitClass.get(controlSplitNode, firstPosition));
+        graph.removeSplitPropagate(controlSplitNode, (BeginNode) controlSplitClass.get(controlSplitNode, firstPosition));
         // TODO (gd) probabilities need some amount of fixup.. (probably also in other transforms)
     }
 

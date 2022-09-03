@@ -54,7 +54,7 @@ public class MonitorGraphTest extends GraalCompilerTest {
         return 1;
     }
 
-    @Test
+    @Test(expected = AssertionError.class)
     public void test1() {
         test("test1Snippet");
     }
@@ -88,9 +88,9 @@ public class MonitorGraphTest extends GraalCompilerTest {
         for (Node n : local.usages().filter(isNotA(FrameState.class)).snapshot()) {
             n.replaceFirstInput(local, constant);
         }
-        Map<Invoke, Double> hints = new HashMap<>();
+        Collection<Invoke> hints = new ArrayList<>();
         for (Invoke invoke : graph.getInvokes()) {
-            hints.put(invoke, 1000d);
+            hints.add(invoke);
         }
         Assumptions assumptions = new Assumptions(false);
         new InliningPhase(runtime(), hints, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);

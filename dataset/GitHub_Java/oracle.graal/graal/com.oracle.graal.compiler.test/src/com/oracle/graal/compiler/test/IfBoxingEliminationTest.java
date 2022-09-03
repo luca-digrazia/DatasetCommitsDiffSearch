@@ -83,9 +83,9 @@ public class IfBoxingEliminationTest extends GraalCompilerTest {
                 phasePlan.addPhase(PhasePosition.AFTER_PARSING, identifyBoxingPhase);
                 phasePlan.addPhase(PhasePosition.AFTER_PARSING, new PhiStampPhase());
                 identifyBoxingPhase.apply(graph);
-                Map<Invoke, Double> hints = new HashMap<>();
+                Collection<Invoke> hints = new ArrayList<>();
                 for (Invoke invoke : graph.getInvokes()) {
-                    hints.put(invoke, 1000d);
+                    hints.add(invoke);
                 }
 
                 Assumptions assumptions = new Assumptions(false);

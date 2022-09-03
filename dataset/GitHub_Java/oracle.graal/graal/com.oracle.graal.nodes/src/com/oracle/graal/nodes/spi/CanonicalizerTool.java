@@ -24,16 +24,13 @@ package com.oracle.graal.nodes.spi;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-
+import com.oracle.graal.graph.*;
 
 public interface CanonicalizerTool {
-    TargetDescription target();
-    Assumptions assumptions();
-    CodeCacheProvider runtime();
 
-    /**
-     * Determines if a given constant is an object/array whose current
-     * fields/elements will never change.
-     */
-    boolean isImmutable(Constant objectConstant);
+    Assumptions assumptions();
+
+    MetaAccessProvider runtime();
+
+    void removeIfUnused(Node node);
 }

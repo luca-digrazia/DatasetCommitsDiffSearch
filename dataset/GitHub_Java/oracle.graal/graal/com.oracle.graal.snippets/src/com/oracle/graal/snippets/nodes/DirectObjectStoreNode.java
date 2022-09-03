@@ -26,13 +26,14 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.snippets.*;
+import com.oracle.graal.word.*;
 
 /**
- * A special purpose store node that differs from {@link UnsafeStoreNode} in that
- * it is not a {@link StateSplit} and does not include a write barrier.
+ * A special purpose store node that differs from {@link UnsafeStoreNode} in that it is not a
+ * {@link StateSplit} and does not include a write barrier.
  */
 public class DirectObjectStoreNode extends FixedWithNextNode implements Lowerable {
+
     @Input private ValueNode object;
     @Input private ValueNode value;
     @Input private ValueNode offset;
@@ -46,34 +47,22 @@ public class DirectObjectStoreNode extends FixedWithNextNode implements Lowerabl
         this.displacement = displacement;
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void storeObject(Object obj, @ConstantNodeParameter int displacement, long offset, Object value) {
-        throw new UnsupportedOperationException();
-    }
+    public static native void storeObject(Object obj, @ConstantNodeParameter int displacement, long offset, Object value);
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void storeLong(Object obj, @ConstantNodeParameter int displacement, long offset, long value) {
-        throw new UnsupportedOperationException();
-    }
+    public static native void storeLong(Object obj, @ConstantNodeParameter int displacement, long offset, long value);
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void storeWord(Object obj, @ConstantNodeParameter int displacement, long offset, Word value) {
-        throw new UnsupportedOperationException();
-    }
+    public static native void storeWord(Object obj, @ConstantNodeParameter int displacement, long offset, Word value);
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void storeInt(Object obj, @ConstantNodeParameter int displacement, long offset, int value) {
-        throw new UnsupportedOperationException();
-    }
+    public static native void storeInt(Object obj, @ConstantNodeParameter int displacement, long offset, int value);
 
     @Override
     public void lower(LoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) this.graph();
-        IndexedLocationNode location = IndexedLocationNode.create(LocationNode.ANY_LOCATION, value.kind(), displacement, offset, graph, false);
+        IndexedLocationNode location = IndexedLocationNode.create(LocationNode.ANY_LOCATION, value.kind(), displacement, offset, graph, 1);
         WriteNode write = graph.add(new WriteNode(object, value, location));
         graph.replaceFixedWithFixed(this, write);
     }

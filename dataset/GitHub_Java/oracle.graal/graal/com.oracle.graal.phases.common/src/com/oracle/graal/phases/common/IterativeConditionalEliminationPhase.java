@@ -24,18 +24,27 @@ package com.oracle.graal.phases.common;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Graph.InputChangedListener;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
 
-public class IterativeConditionalEliminationPhase extends BasePhase<PhaseContext> {
+public class IterativeConditionalEliminationPhase extends Phase {
+
+    private final MetaAccessProvider runtime;
+    private final Assumptions assumptions;
+
+    public IterativeConditionalEliminationPhase(MetaAccessProvider runtime, Assumptions assumptions) {
+        this.runtime = runtime;
+        this.assumptions = assumptions;
+    }
 
     @Override
-    protected void run(StructuredGraph graph, PhaseContext context) {
+    protected void run(StructuredGraph graph) {
         Set<Node> canonicalizationRoots = new HashSet<>();
-        ConditionalEliminationPhase eliminate = new ConditionalEliminationPhase(context.getRuntime());
+        ConditionalEliminationPhase eliminate = new ConditionalEliminationPhase(runtime);
         Listener listener = new Listener(canonicalizationRoots);
         while (true) {
             graph.trackInputChange(listener);
@@ -44,7 +53,7 @@ public class IterativeConditionalEliminationPhase extends BasePhase<PhaseContext
             if (canonicalizationRoots.isEmpty()) {
                 break;
             }
-            new CanonicalizerPhase.Instance(context.getRuntime(), context.getAssumptions(), canonicalizationRoots, null).apply(graph);
+            new CanonicalizerPhase(runtime, assumptions, canonicalizationRoots, null).apply(graph);
             canonicalizationRoots.clear();
         }
     }
