@@ -24,17 +24,12 @@
  */
 package com.oracle.truffle.api.frame;
 
-import java.util.AbstractSet;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Predicate;
-
-import org.graalvm.collections.EconomicMap;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -52,9 +47,9 @@ public final class FrameDescriptor implements Cloneable {
 
     private final Object defaultValue;
     private final ArrayList<FrameSlot> slots;
-    private final EconomicMap<Object, FrameSlot> identifierToSlotMap;
+    private final HashMap<Object, FrameSlot> identifierToSlotMap;
     private Assumption version;
-    private EconomicMap<Object, Assumption> identifierToNotInFrameAssumptionMap;
+    private HashMap<Object, Assumption> identifierToNotInFrameAssumptionMap;
 
     /**
      * Flag that can be used by the runtime to track that {@link Frame#materialize()} was called on
@@ -85,9 +80,33 @@ public final class FrameDescriptor implements Cloneable {
     public FrameDescriptor(Object defaultValue) {
         CompilerAsserts.neverPartOfCompilation("do not create a FrameDescriptor from compiled code");
         this.defaultValue = defaultValue;
-        this.slots = new ArrayList<>();
-        this.identifierToSlotMap = EconomicMap.create();
-        this.version = createVersion();
+        slots = new ArrayList<>();
+        identifierToSlotMap = new HashMap<>();
+        version = createVersion();
+    }
+
+    /**
+     * Use {@link #FrameDescriptor()}.
+     *
+     * @return new instance of the descriptor
+     * @deprecated
+     * @since 0.8 or earlier
+     */
+    @Deprecated
+    public static FrameDescriptor create() {
+        return new FrameDescriptor();
+    }
+
+    /**
+     * Use {@link #FrameDescriptor(java.lang.Object) }.
+     *
+     * @return new instance of the descriptor
+     * @deprecated
+     * @since 0.8 or earlier
+     */
+    @Deprecated
+    public static FrameDescriptor create(Object defaultValue) {
+        return new FrameDescriptor(defaultValue);
     }
 
     /**
@@ -230,7 +249,7 @@ public final class FrameDescriptor implements Cloneable {
             throw new IllegalArgumentException("no such frame slot: " + identifier);
         }
         slots.remove(identifierToSlotMap.get(identifier));
-        identifierToSlotMap.removeKey(identifier);
+        identifierToSlotMap.remove(identifier);
         updateVersion();
         getNotInFrameAssumption(identifier);
     }
@@ -262,74 +281,7 @@ public final class FrameDescriptor implements Cloneable {
      * @since 0.8 or earlier
      */
     public Set<Object> getIdentifiers() {
-        return unmodifiableSetFromEconomicMap(identifierToSlotMap);
-    }
-
-    private static <K> Set<K> unmodifiableSetFromEconomicMap(EconomicMap<K, ?> map) {
-        return new AbstractSet<K>() {
-            @Override
-            public Iterator<K> iterator() {
-                return new Iterator<K>() {
-                    private final Iterator<K> it = map.getKeys().iterator();
-
-                    @Override
-                    public boolean hasNext() {
-                        return it.hasNext();
-                    }
-
-                    @Override
-                    public K next() {
-                        return it.next();
-                    }
-                };
-            }
-
-            @Override
-            public int size() {
-                return map.size();
-            }
-
-            @SuppressWarnings("unchecked")
-            @Override
-            public boolean contains(Object o) {
-                return map.containsKey((K) o);
-            }
-
-            @Override
-            public boolean add(K e) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public boolean remove(Object o) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public boolean addAll(Collection<? extends K> coll) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public boolean removeAll(Collection<?> coll) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public boolean retainAll(Collection<?> coll) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public void clear() {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public boolean removeIf(Predicate<? super K> filter) {
-                throw new UnsupportedOperationException();
-            }
-        };
+        return Collections.unmodifiableSet(identifierToSlotMap.keySet());
     }
 
     /**
@@ -413,7 +365,7 @@ public final class FrameDescriptor implements Cloneable {
         }
 
         if (identifierToNotInFrameAssumptionMap == null) {
-            identifierToNotInFrameAssumptionMap = EconomicMap.create();
+            identifierToNotInFrameAssumptionMap = new HashMap<>();
         } else {
             Assumption assumption = identifierToNotInFrameAssumptionMap.get(identifier);
             if (assumption != null) {
@@ -430,7 +382,7 @@ public final class FrameDescriptor implements Cloneable {
             Assumption assumption = identifierToNotInFrameAssumptionMap.get(identifier);
             if (assumption != null) {
                 assumption.invalidate();
-                identifierToNotInFrameAssumptionMap.removeKey(identifier);
+                identifierToNotInFrameAssumptionMap.remove(identifier);
             }
         }
     }
