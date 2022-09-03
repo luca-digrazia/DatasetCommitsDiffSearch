@@ -96,23 +96,23 @@ public final class Sulong extends LLVMLanguage {
         LLVMContext newContext = new LLVMContext(env, getContextExtensions(env));
         if (mainContext == null) {
             mainContext = newContext;
-        } else {
-            LLVMLanguage.SINGLE_CONTEXT_ASSUMPTION.invalidate();
+            return newContext;
         }
+
+        LLVMLanguage.SINGLE_CONTEXT_ASSUMPTION.invalidate();
         return newContext;
     }
 
     @Override
     protected void disposeContext(LLVMContext context) {
-        LLVMMemory memory = getCapability(LLVMMemory.class);
-        context.dispose(memory);
+        context.printNativeCallStatistic();
+        Runner.disposeContext(getCapability(LLVMMemory.class), context);
     }
 
     @Override
     protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
         Source source = request.getSource();
-        LLVMContext context = findLLVMContext();
-        return (new Runner(getNodeFactory())).parse(this, context, source);
+        return (new Runner(getNodeFactory())).parse(this, findLLVMContext(), source);
     }
 
     @Override
@@ -199,10 +199,7 @@ public final class Sulong extends LLVMLanguage {
     @Override
     protected Object findMetaObject(LLVMContext context, Object value) {
         if (value instanceof LLVMDebugObject) {
-            final LLVMSourceType source = ((LLVMDebugObject) value).getType();
-            if (source != null) {
-                return source.getName();
-            }
+            return ((LLVMDebugObject) value).getType();
         }
 
         return super.findMetaObject(context, value);
@@ -235,10 +232,6 @@ public final class Sulong extends LLVMLanguage {
 
     @Override
     protected Iterable<Scope> findLocalScopes(LLVMContext context, Node node, Frame frame) {
-        if (!context.getEnv().getOptions().get(SulongEngineOption.ENABLE_LVI)) {
-            return super.findLocalScopes(context, node, frame);
-        } else {
-            return LLVMSourceScope.create(node, frame, context);
-        }
+        return LLVMSourceScope.create(node, frame, context);
     }
 }

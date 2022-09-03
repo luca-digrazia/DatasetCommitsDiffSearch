@@ -33,7 +33,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -42,7 +41,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceModel;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
-import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.aggregate.ArrayConstant;
@@ -72,6 +70,7 @@ import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
+import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 
 public final class LLVMParserRuntime {
     private static final String CONSTRUCTORS_VARNAME = "@llvm.global_ctors";
@@ -95,9 +94,9 @@ public final class LLVMParserRuntime {
 
         DataLayoutConverter.DataSpecConverterImpl targetDataLayout = DataLayoutConverter.getConverter(layout.getDataLayout());
         context.setDataLayoutConverter(targetDataLayout);
-
         LLVMParserRuntime runtime = new LLVMParserRuntime(source, library, language, context, stack, nodeFactory, module.getAliases());
-        runtime.registerFunctions(phiManager, labels, module.getFunctions());
+
+        runtime.initializeFunctions(phiManager, labels, module.getFunctions());
 
         LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, labels);
         LLVMExpressionNode[] globals = runtime.createGlobalVariableInitializationNodes(symbolResolver, module.getGlobals());
@@ -114,29 +113,30 @@ public final class LLVMParserRuntime {
             final SourceModel sourceModel = model.getSourceModel();
             final LLVMSourceContext sourceContext = context.getSourceContext();
 
-            sourceModel.getGlobals().forEach((symbol, irValue) -> {
-                final LLVMExpressionNode node = symbolResolver.resolve(irValue);
-                final LLVMDebugValue value = nodeFactory.createDebugStaticValue(node);
-                sourceContext.registerStatic(symbol, value);
+            sourceModel.getGlobals().forEach((symbol, global) -> {
+                final LLVMExpressionNode node = symbolResolver.resolve(global);
+                final LLVMDebugValue value = nodeFactory.createDebugConstantValue(node);
+                sourceContext.registerGlobal(symbol, value);
             });
 
             sourceModel.getStaticMembers().forEach(((type, symbol) -> {
                 final LLVMExpressionNode node = symbolResolver.resolve(symbol);
-                final LLVMDebugValue value = nodeFactory.createDebugStaticValue(node);
+                final LLVMDebugValue value = nodeFactory.createDebugConstantValue(node);
                 type.setValue(value);
             }));
         }
 
-        RootCallTarget mainFunctionCallTarget = null;
+        RootCallTarget mainFunctionCallTarget;
         if (runtime.getScope().functionExists("@main")) {
             LLVMFunctionDescriptor mainDescriptor = runtime.getScope().getFunctionDescriptor("@main");
             LLVMFunctionDescriptor startDescriptor = runtime.getScope().getFunctionDescriptor("@_start");
             RootCallTarget startCallTarget = startDescriptor.getLLVMIRFunction();
-            String applicationPath = source.getPath() == null ? "" : source.getPath().toString();
-            RootNode globalFunction = nodeFactory.createGlobalRootNode(runtime, startCallTarget, mainDescriptor, applicationPath);
+            RootNode globalFunction = nodeFactory.createGlobalRootNode(runtime, startCallTarget, source, mainDescriptor.getType().getReturnType(), mainDescriptor.getType().getArgumentTypes());
             RootCallTarget globalFunctionRoot = Truffle.getRuntime().createCallTarget(globalFunction);
             RootNode globalRootNode = nodeFactory.createGlobalRootNodeWrapping(runtime, globalFunctionRoot, startDescriptor.getType().getReturnType());
             mainFunctionCallTarget = Truffle.getRuntime().createCallTarget(globalRootNode);
+        } else {
+            mainFunctionCallTarget = null;
         }
         return new LLVMParserResult(mainFunctionCallTarget, globalVarInitsTarget, globalVarDeallocsTarget, constructorFunctions, destructorFunctions);
     }
@@ -168,57 +168,31 @@ public final class LLVMParserRuntime {
         return library;
     }
 
-    private void registerFunctions(LLVMPhiManager phiManager, LLVMLabelList labels, List<FunctionDefinition> functions) {
+    private void initializeFunctions(LLVMPhiManager phiManager, LLVMLabelList labels, List<FunctionDefinition> functions) {
         for (FunctionDefinition function : functions) {
-            registerFunction(phiManager, labels, function);
+            String functionName = function.getName();
+            LLVMFunctionDescriptor functionDescriptor = scope.lookupOrCreateFunction(context, functionName, !Linkage.isFileLocal(function.getLinkage()),
+                            index -> LLVMFunctionDescriptor.createDescriptor(context, library, functionName, function.getType(), index));
+            LazyToTruffleConverterImpl lazyConverter = new LazyToTruffleConverterImpl(this, context, nodeFactory, function, source, stack.getFrame(functionName), phiManager.getPhiMap(functionName),
+                            labels.labels(functionName));
+
+            boolean replaceExistingFunction = checkReplaceExistingFunction(functionName, functionDescriptor);
+            functionDescriptor.declareInSulong(lazyConverter, Linkage.isWeak(function.getLinkage()), replaceExistingFunction);
         }
-
-        for (Entry<GlobalAlias, SymbolImpl> entry : aliases.entrySet()) {
-            GlobalAlias alias = entry.getKey();
-            SymbolImpl value = entry.getValue();
-            if (value instanceof FunctionDefinition) {
-                registerFunctionAlias(alias, (FunctionDefinition) value);
-            }
-        }
     }
 
-    private void registerFunction(LLVMPhiManager phiManager, LLVMLabelList labels, FunctionDefinition function) {
-        LLVMFunctionDescriptor functionDescriptor = scope.lookupOrCreateFunction(context, function.getName(), !Linkage.isFileLocal(function.getLinkage()),
-                        index -> LLVMFunctionDescriptor.createDescriptor(context, library, function.getName(), function.getType(), index));
-        boolean replaceExistingFunction = checkReplaceExistingFunction(functionDescriptor);
-        LazyToTruffleConverterImpl lazyConverter = new LazyToTruffleConverterImpl(this, context, nodeFactory, function, source, stack.getFrame(function.getName()),
-                        phiManager.getPhiMap(function.getName()), labels.labels(function.getName()));
-        functionDescriptor.declareInSulong(lazyConverter, Linkage.isWeak(function.getLinkage()), replaceExistingFunction);
-    }
-
-    private void registerFunctionAlias(GlobalAlias alias, FunctionDefinition existingFunction) {
-        LLVMFunctionDescriptor existingDescriptor = scope.getFunctionDescriptor(existingFunction.getName());
-        LLVMFunctionDescriptor aliasDescriptor = scope.lookupOrCreateFunction(context, alias.getName(), !Linkage.isFileLocal(alias.getLinkage()),
-                        index -> LLVMFunctionDescriptor.createDescriptor(context, library, alias.getName(), existingFunction.getType(), index));
-        boolean replaceExistingFunction = checkReplaceExistingFunction(aliasDescriptor);
-        aliasDescriptor.declareInSulong(existingDescriptor.getFunction(), Linkage.isWeak(alias.getLinkage()), replaceExistingFunction);
-    }
-
-    private boolean checkReplaceExistingFunction(LLVMFunctionDescriptor functionDescriptor) {
-        if (library.getLibrariesToReplace() != null) {
-            for (ExternalLibrary lib : library.getLibrariesToReplace()) {
-                if (functionDescriptor.getLibrary().equals(lib)) {
-                    // We already have a symbol defined in another library but now we are
-                    // overwriting it. We rename the already existing symbol by prefixing it with
-                    // "__libName_", e.g., "@__clock_gettime" would be renamed to
-                    // "@__libc___clock_gettime".
-                    String functionName = functionDescriptor.getName();
-                    assert functionName.charAt(0) == '@';
-                    String renamedFunctionName = "@__" + functionDescriptor.getLibrary().getName() + "_" + functionName.substring(1);
-                    LLVMFunctionDescriptor renamedFunctionDescriptor = scope.lookupOrCreateFunction(functionDescriptor.getContext(), renamedFunctionName, true,
-                                    index -> LLVMFunctionDescriptor.createDescriptor(functionDescriptor.getContext(), functionDescriptor.getLibrary(), renamedFunctionName,
-                                                    functionDescriptor.getType(),
-                                                    index));
-                    renamedFunctionDescriptor.declareInSulong(functionDescriptor.getFunction(), functionDescriptor.isWeak(), false);
-                    functionDescriptor.setLibrary(library);
-                    return true;
-                }
-            }
+    private boolean checkReplaceExistingFunction(String functionName, LLVMFunctionDescriptor functionDescriptor) {
+        if (functionDescriptor.getLibrary().equals(library.getLibraryToReplace())) {
+            // We already have a symbol defined in another library but now we are overwriting it. We
+            // rename the already existing symbol by prefixing it with "__libName_", e.g.,
+            // "@__clock_gettime" would be renamed to "@__libc___clock_gettime".
+            assert functionName.charAt(0) == '@';
+            String newFunctionName = "@__" + functionDescriptor.getLibrary().getName() + "_" + functionName.substring(1);
+            LLVMFunctionDescriptor libcFunctionDescriptor = scope.lookupOrCreateFunction(functionDescriptor.getContext(), newFunctionName, true,
+                            index -> LLVMFunctionDescriptor.createDescriptor(functionDescriptor.getContext(), functionDescriptor.getLibrary(), newFunctionName, functionDescriptor.getType(),
+                                            index));
+            libcFunctionDescriptor.declareInSulong(functionDescriptor.getFunction(), false);
+            return true;
         }
         return false;
     }
