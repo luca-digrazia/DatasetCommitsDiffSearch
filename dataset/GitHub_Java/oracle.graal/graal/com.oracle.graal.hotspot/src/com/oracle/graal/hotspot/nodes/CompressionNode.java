@@ -90,11 +90,15 @@ public final class CompressionNode extends FloatingNode implements LIRLowerable,
                 }
                 break;
         }
-        throw GraalInternalError.shouldNotReachHere(String.format("Unexpected input stamp %s", input));
+        throw GraalInternalError.shouldNotReachHere();
     }
 
     public ValueNode getInput() {
         return input;
+    }
+
+    public CompressEncoding getEncoding() {
+        return encoding;
     }
 
     @Override

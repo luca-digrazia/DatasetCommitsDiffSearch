@@ -131,7 +131,13 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitMove(Value input) {
-        Variable result = newVariable(input.getPlatformKind());
+        PlatformKind kind;
+        if (input instanceof Constant) {
+            kind = input.getKind().getStackKind();
+        } else {
+            kind = input.getPlatformKind();
+        }
+        Variable result = newVariable(kind);
         emitMove(result, input);
         return result;
     }
@@ -590,37 +596,6 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
                 return emitBinary(FMUL, true, a, b);
             case Double:
                 return emitBinary(DMUL, true, a, b);
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
-    private Value emitMulHigh(AMD64Arithmetic opcode, Value a, Value b) {
-        MulHighOp mulHigh = new MulHighOp(opcode, asAllocatable(b));
-        emitMove(mulHigh.x, a);
-        append(mulHigh);
-        return emitMove(mulHigh.highResult);
-    }
-
-    @Override
-    public Value emitMulHigh(Value a, Value b) {
-        switch (a.getKind().getStackKind()) {
-            case Int:
-                return emitMulHigh(IMUL, a, b);
-            case Long:
-                return emitMulHigh(LMUL, a, b);
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
-    @Override
-    public Value emitUMulHigh(Value a, Value b) {
-        switch (a.getKind().getStackKind()) {
-            case Int:
-                return emitMulHigh(IUMUL, a, b);
-            case Long:
-                return emitMulHigh(LUMUL, a, b);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }

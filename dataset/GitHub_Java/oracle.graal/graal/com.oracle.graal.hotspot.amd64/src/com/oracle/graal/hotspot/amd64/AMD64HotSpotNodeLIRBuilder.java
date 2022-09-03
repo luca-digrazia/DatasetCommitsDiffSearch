@@ -55,6 +55,7 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 /**
  * LIR generator specialized for AMD64 HotSpot.
  */
+@MatchableNodeImport({"com.oracle.graal.hotspot.nodes.HotSpotMatchableNodes"})
 public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements HotSpotNodeLIRBuilder {
 
     private static ValueNode filterCompression(ValueNode node) {
@@ -131,7 +132,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
     }
 
     @Override
-    protected DebugInfoBuilder createDebugInfoBuilder(StructuredGraph graph, NodeMap<Value> nodeOperands) {
+    protected DebugInfoBuilder createDebugInfoBuilder(NodeMap<Value> nodeOperands) {
         HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMap(), Kind.Long);
         return new HotSpotDebugInfoBuilder(nodeOperands, lockStack);
     }
