@@ -49,10 +49,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public boolean useAESIntrinsics;
     public boolean useG1GC;
 
-    // CPU capabilities
-    public int useSSE;
-    public int useAVX;
-
     // offsets, ...
     public int stackShadowPages;
 
@@ -363,7 +359,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long logPrimitiveStub;
     public long logObjectStub;
     public long logPrintfStub;
-    public long stubPrintfStub;
     public int deoptReasonNone;
     public long threadIsInterruptedStub;
     public long identityHashCodeStub;

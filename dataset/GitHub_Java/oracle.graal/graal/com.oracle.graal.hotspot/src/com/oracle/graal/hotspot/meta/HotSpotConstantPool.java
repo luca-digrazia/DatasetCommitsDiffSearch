@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.hotspot.*;
@@ -43,13 +41,13 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     @Override
     public int length() {
-        return graalRuntime().getCompilerToVM().constantPoolLength(type);
+        return HotSpotGraalRuntime.getInstance().getCompilerToVM().constantPoolLength(type);
     }
 
     @Override
     public Object lookupConstant(int cpi) {
         assert cpi != 0;
-        Object constant = graalRuntime().getCompilerToVM().lookupConstantInPool(type, cpi);
+        Object constant = HotSpotGraalRuntime.getInstance().getCompilerToVM().lookupConstantInPool(type, cpi);
         return constant;
     }
 
@@ -61,26 +59,26 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     @Override
     public Object lookupAppendix(int cpi, int opcode) {
         assert Bytecodes.isInvoke(opcode);
-        return graalRuntime().getCompilerToVM().lookupAppendixInPool(type, cpi, (byte) opcode);
+        return HotSpotGraalRuntime.getInstance().getCompilerToVM().lookupAppendixInPool(type, cpi, (byte) opcode);
     }
 
     @Override
     public JavaMethod lookupMethod(int cpi, int opcode) {
-        return graalRuntime().getCompilerToVM().lookupMethodInPool(type, cpi, (byte) opcode);
+        return HotSpotGraalRuntime.getInstance().getCompilerToVM().lookupMethodInPool(type, cpi, (byte) opcode);
     }
 
     @Override
     public JavaType lookupType(int cpi, int opcode) {
-        return graalRuntime().getCompilerToVM().lookupTypeInPool(type, cpi);
+        return HotSpotGraalRuntime.getInstance().getCompilerToVM().lookupTypeInPool(type, cpi);
     }
 
     @Override
     public JavaField lookupField(int cpi, int opcode) {
-        return graalRuntime().getCompilerToVM().lookupFieldInPool(type, cpi, (byte) opcode);
+        return HotSpotGraalRuntime.getInstance().getCompilerToVM().lookupFieldInPool(type, cpi, (byte) opcode);
     }
 
     @Override
     public void loadReferencedType(int cpi, int opcode) {
-        graalRuntime().getCompilerToVM().lookupReferencedTypeInPool(type, cpi, (byte) opcode);
+        HotSpotGraalRuntime.getInstance().getCompilerToVM().lookupReferencedTypeInPool(type, cpi, (byte) opcode);
     }
 }

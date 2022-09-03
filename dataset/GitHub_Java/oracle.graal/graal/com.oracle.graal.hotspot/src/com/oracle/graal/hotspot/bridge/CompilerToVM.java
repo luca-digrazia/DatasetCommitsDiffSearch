@@ -169,8 +169,6 @@ public interface CompilerToVM {
 
     HotSpotResolvedJavaField[] getInstanceFields(HotSpotResolvedObjectType klass);
 
-    boolean hasFinalizableSubclass(HotSpotResolvedObjectType klass);
-
     /**
      * Gets the compiled code size for a method.
      * 
