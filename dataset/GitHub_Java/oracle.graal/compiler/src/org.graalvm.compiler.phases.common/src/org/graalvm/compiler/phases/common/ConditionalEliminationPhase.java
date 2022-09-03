@@ -58,7 +58,6 @@ import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.MergeNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.ProxyNode;
@@ -415,7 +414,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                     Stamp bestPossibleStamp = null;
                     for (int i = 0; i < phi.valueCount(); ++i) {
                         ValueNode valueAt = phi.valueAt(i);
-                        Stamp curBestStamp = valueAt.stamp(NodeView.DEFAULT);
+                        Stamp curBestStamp = valueAt.stamp();
                         InfoElement infoElement = phiInfoElements.get(merge.forwardEndAt(i));
                         if (infoElement != null) {
                             curBestStamp = curBestStamp.join(infoElement.getStamp());
@@ -428,7 +427,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                         }
                     }
 
-                    Stamp oldStamp = phi.stamp(NodeView.DEFAULT);
+                    Stamp oldStamp = phi.stamp();
                     if (oldStamp.tryImproveWith(bestPossibleStamp) != null) {
 
                         // Need to be careful to not run into stamp update cycles with the iterative
@@ -461,7 +460,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                             ValuePhiNode newPhi = graph.addWithoutUnique(new ValuePhiNode(bestPossibleStamp, merge));
                             for (int i = 0; i < phi.valueCount(); ++i) {
                                 ValueNode valueAt = phi.valueAt(i);
-                                if (bestPossibleStamp.meet(valueAt.stamp(NodeView.DEFAULT)).equals(bestPossibleStamp)) {
+                                if (bestPossibleStamp.meet(valueAt.stamp()).equals(bestPossibleStamp)) {
                                     // Pi not required here.
                                 } else {
                                     InfoElement infoElement = phiInfoElements.get(merge.forwardEndAt(i));
@@ -495,7 +494,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                     InfoElement infoElement = this.getInfoElements(valueAt);
                     while (infoElement != null) {
                         Stamp newStamp = infoElement.getStamp();
-                        if (phi.stamp(NodeView.DEFAULT).tryImproveWith(newStamp) != null) {
+                        if (phi.stamp().tryImproveWith(newStamp) != null) {
                             if (mergeMap == null) {
                                 mergeMap = EconomicMap.create();
                                 mergeMaps.put(merge, mergeMap);
@@ -548,7 +547,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                              * It's equivalent to or'ing in the mask value since those values are
                              * known to be set.
                              */
-                            BinaryOp<Or> op = ArithmeticOpTable.forStamp(x.stamp(NodeView.DEFAULT)).getOr();
+                            BinaryOp<Or> op = ArithmeticOpTable.forStamp(x.stamp()).getOr();
                             IntegerStamp newStampX = (IntegerStamp) op.foldStamp(getSafeStamp(andX), getOtherSafeStamp(y));
                             registerNewStamp(andX, newStampX, guard);
                         }
@@ -581,7 +580,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                 if (y.isConstant()) {
                     InfoElement infoElement = getInfoElements(x);
                     while (infoElement != null) {
-                        Stamp result = binary.foldStamp(infoElement.stamp, y.stamp(NodeView.DEFAULT));
+                        Stamp result = binary.foldStamp(infoElement.stamp, y.stamp());
                         if (result != null) {
                             return Pair.create(infoElement, result);
                         }
@@ -598,7 +597,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
          * registered info elements is in the same chain of pi nodes.
          */
         private static Stamp getSafeStamp(ValueNode x) {
-            return x.stamp(NodeView.DEFAULT);
+            return x.stamp();
         }
 
         /**
@@ -611,9 +610,9 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
          */
         private static Stamp getOtherSafeStamp(ValueNode x) {
             if (x.isConstant()) {
-                return x.stamp(NodeView.DEFAULT);
+                return x.stamp();
             }
-            return x.stamp(NodeView.DEFAULT).unrestricted();
+            return x.stamp().unrestricted();
         }
 
         /**
@@ -778,7 +777,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                 ValueNode y = binaryOpLogicNode.getY();
                 infoElement = getInfoElements(x);
                 while (infoElement != null) {
-                    TriState result = binaryOpLogicNode.tryFold(infoElement.getStamp(), y.stamp(NodeView.DEFAULT));
+                    TriState result = binaryOpLogicNode.tryFold(infoElement.getStamp(), y.stamp());
                     if (result.isKnown()) {
                         return rewireGuards(infoElement.getGuard(), result.toBoolean(), infoElement.getProxifiedInput(), infoElement.getStamp(), rewireGuardFunction);
                     }
@@ -788,7 +787,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                 if (y.isConstant()) {
                     Pair<InfoElement, Stamp> foldResult = recursiveFoldStampFromInfo(x);
                     if (foldResult != null) {
-                        TriState result = binaryOpLogicNode.tryFold(foldResult.getRight(), y.stamp(NodeView.DEFAULT));
+                        TriState result = binaryOpLogicNode.tryFold(foldResult.getRight(), y.stamp());
                         if (result.isKnown()) {
                             return rewireGuards(foldResult.getLeft().getGuard(), result.toBoolean(), foldResult.getLeft().getProxifiedInput(), foldResult.getRight(), rewireGuardFunction);
                         }
@@ -796,7 +795,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                 } else {
                     infoElement = getInfoElements(y);
                     while (infoElement != null) {
-                        TriState result = binaryOpLogicNode.tryFold(x.stamp(NodeView.DEFAULT), infoElement.getStamp());
+                        TriState result = binaryOpLogicNode.tryFold(x.stamp(), infoElement.getStamp());
                         if (result.isKnown()) {
                             return rewireGuards(infoElement.getGuard(), result.toBoolean(), infoElement.getProxifiedInput(), infoElement.getStamp(), rewireGuardFunction);
                         }
@@ -816,8 +815,8 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                     if (binary.getY().isConstant()) {
                         infoElement = getInfoElements(binary.getX());
                         while (infoElement != null) {
-                            Stamp newStampX = binary.foldStamp(infoElement.getStamp(), binary.getY().stamp(NodeView.DEFAULT));
-                            TriState result = binaryOpLogicNode.tryFold(newStampX, y.stamp(NodeView.DEFAULT));
+                            Stamp newStampX = binary.foldStamp(infoElement.getStamp(), binary.getY().stamp());
+                            TriState result = binaryOpLogicNode.tryFold(newStampX, y.stamp());
                             if (result.isKnown()) {
                                 return rewireGuards(infoElement.getGuard(), result.toBoolean(), infoElement.getProxifiedInput(), newStampX, rewireGuardFunction);
                             }
@@ -835,7 +834,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                              * It's equivalent to or'ing in the mask value since those values are
                              * known to be set.
                              */
-                            BinaryOp<Or> op = ArithmeticOpTable.forStamp(x.stamp(NodeView.DEFAULT)).getOr();
+                            BinaryOp<Or> op = ArithmeticOpTable.forStamp(x.stamp()).getOr();
                             IntegerStamp newStampX = (IntegerStamp) op.foldStamp(getSafeStamp(and.getX()), getOtherSafeStamp(y));
                             if (foldPendingTest(thisGuard, and.getX(), newStampX, rewireGuardFunction)) {
                                 return true;
@@ -900,7 +899,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                 do {
                     counterStampsRegistered.increment(debug);
                     debug.log("\t Saving stamp for node %s stamp %s guarded by %s", value, stamp, guard);
-                    assert value instanceof LogicNode || stamp.isCompatible(value.stamp(NodeView.DEFAULT)) : stamp + " vs. " + value.stamp(NodeView.DEFAULT) + " (" + value + ")";
+                    assert value instanceof LogicNode || stamp.isCompatible(value.stamp()) : stamp + " vs. " + value.stamp() + " (" + value + ")";
                     map.setAndGrow(value, new InfoElement(stamp, guard, proxiedValue, map.getAndGrow(value)));
                     undoOperations.push(value);
                     if (value instanceof StampInverter) {
