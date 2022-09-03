@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.graph.UnsafeAccess.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.Options.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -50,7 +49,7 @@ import com.oracle.graal.phases.tiers.*;
  */
 public abstract class HotSpotGraalRuntime implements GraalRuntime {
 
-    private static final HotSpotGraalRuntime instance = (HotSpotGraalRuntime) Graal.getRuntime();
+    private static HotSpotGraalRuntime instance;
 
     /**
      * Gets the singleton {@link HotSpotGraalRuntime} object.
@@ -60,18 +59,22 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
     }
 
     /**
-     * Do deferred initialization.
+     * Called by the platform specific class exactly once to register the singleton instance.
      */
-    public void completeInitialization() {
+    protected static void setInstance(HotSpotGraalRuntime runtime) {
+        assert instance == null : "runtime already registered";
+        instance = runtime;
+
+        // Do deferred initialization
 
         // Proxies for the VM/Compiler interfaces cannot be initialized
         // in the constructor as proxy creation causes static
         // initializers to be executed for all the types involved in the
         // proxied methods. Some of these static initializers (e.g. in
-        // HotSpotMethodData) rely on the static 'instance' field being set
-        // to retrieve configuration details.
-        VMToCompiler toCompiler = this.vmToCompiler;
-        CompilerToVM toVM = this.compilerToVm;
+        // HotSpotMethodData) rely on the above instance field being set
+        // to retrieve config details.
+        VMToCompiler toCompiler = runtime.vmToCompiler;
+        CompilerToVM toVM = runtime.compilerToVm;
 
         if (CountingProxy.ENABLED) {
             toCompiler = CountingProxy.getProxy(VMToCompiler.class, toCompiler);
@@ -82,18 +85,14 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
             toVM = LoggingProxy.getProxy(CompilerToVM.class, toVM);
         }
 
-        this.vmToCompiler = toCompiler;
-        this.compilerToVm = toVM;
+        runtime.vmToCompiler = toCompiler;
+        runtime.compilerToVm = toVM;
     }
 
-    // Options must not be directly declared in HotSpotGraalRuntime - see VerifyHotSpotOptionsPhase
-    static class Options {
-
-        // @formatter:off
-        @Option(help = "The runtime configuration to use")
-        static final OptionValue<String> GraalRuntime = new OptionValue<>("");
-        // @formatter:on
-    }
+    // @formatter:off
+    @Option(help = "The runtime configuration to use")
+    private static final OptionValue<String> GraalRuntime = new OptionValue<>("");
+    // @formatter:on
 
     protected static HotSpotGraalRuntimeFactory findFactory(String architecture) {
         HotSpotGraalRuntimeFactory basic = null;
@@ -253,11 +252,6 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
     protected abstract HotSpotBackend createBackend();
 
     protected abstract HotSpotRuntime createRuntime();
-
-    /**
-     * Gets the registers that must be saved across a foreign call into the runtime.
-     */
-    protected abstract Value[] getNativeABICallerSaveRegisters();
 
     public HotSpotVMConfig getConfig() {
         return config;
