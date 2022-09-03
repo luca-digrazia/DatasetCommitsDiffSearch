@@ -27,6 +27,7 @@ package com.oracle.truffle.api.vm;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -37,7 +38,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.oracle.truffle.api.CallTarget;
@@ -61,7 +64,6 @@ import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import java.util.logging.Level;
 
 /**
  * Gate way into the world of {@link TruffleLanguage Truffle languages}. {@link #buildNew()
@@ -101,6 +103,13 @@ import java.util.logging.Level;
 @SuppressWarnings("rawtypes")
 public class PolyglotEngine {
     static final boolean JAVA_INTEROP_ENABLED = !TruffleOptions.AOT;
+    private static final Executor DIRECT_EXECUTOR = new Executor() {
+        @Override
+        public void execute(Runnable command) {
+            command.run();
+        }
+    };
+
     static final Logger LOG = Logger.getLogger(PolyglotEngine.class.getName());
     private static final SPIAccessor SPI = new SPIAccessor();
     private final Thread initThread;
@@ -333,7 +342,8 @@ public class PolyglotEngine {
             if (in == null) {
                 in = System.in;
             }
-            return new PolyglotEngine(executor, globals, out, err, in, handlers.toArray(new EventConsumer[0]));
+            Executor nonNullExecutor = executor != null ? executor : DIRECT_EXECUTOR;
+            return new PolyglotEngine(nonNullExecutor, globals, out, err, in, handlers.toArray(new EventConsumer[0]));
         }
     }
 
@@ -378,9 +388,9 @@ public class PolyglotEngine {
     public void dispose() {
         checkThread();
         disposed = true;
-        ComputeInExecutor<Void> compute = new ComputeInExecutor<Void>(executor) {
+        executor.execute(new Runnable() {
             @Override
-            protected Void compute() throws IOException {
+            public void run() {
                 for (Language language : getLanguages().values()) {
                     TruffleLanguage<?> impl = language.getImpl(false);
                     if (impl != null) {
@@ -391,26 +401,26 @@ public class PolyglotEngine {
                         }
                     }
                 }
-                return null;
             }
-        };
-        try {
-            compute.perform();
-        } catch (IOException ex) {
-            throw new IllegalStateException(ex);
-        }
+        });
     }
 
     private Value eval(final Language l, final Source s) throws IOException {
+        final Object[] result = {null, null};
+        final CountDownLatch ready = new CountDownLatch(1);
         final TruffleLanguage[] lang = {null};
-        ComputeInExecutor<Object> compute = new ComputeInExecutor<Object>(executor) {
+        executor.execute(new Runnable() {
             @Override
-            protected Object compute() throws IOException {
-                return evalImpl(lang, s, l);
+            public void run() {
+                evalImpl(lang, s, result, l, ready);
             }
-        };
-        compute.perform();
-        return new Value(lang, compute);
+        });
+        exceptionCheck(result);
+        return createValue(lang, result, ready);
+    }
+
+    Value createValue(TruffleLanguage[] lang, Object[] result, CountDownLatch ready) {
+        return new Value(lang, result, ready);
     }
 
     Language createLanguage(Map.Entry<String, LanguageCache> en) {
@@ -418,48 +428,62 @@ public class PolyglotEngine {
     }
 
     @SuppressWarnings("try")
-    private Object evalImpl(TruffleLanguage<?>[] fillLang, Source s, Language l) throws IOException {
+    private void evalImpl(TruffleLanguage<?>[] fillLang, Source s, Object[] result, Language l, CountDownLatch ready) {
         try (Closeable d = SPI.executionStart(this, -1, debugger, s)) {
             TruffleLanguage<?> langImpl = l.getImpl(true);
             fillLang[0] = langImpl;
-            return SPI.eval(langImpl, s);
+            result[0] = SPI.eval(langImpl, s);
+        } catch (IOException ex) {
+            result[1] = ex;
+        } finally {
+            ready.countDown();
         }
     }
 
     @SuppressWarnings("try")
     final Object invokeForeign(final Node foreignNode, VirtualFrame frame, final TruffleObject receiver) throws IOException {
-        Object res;
-        if (executor == null) {
+        final Object[] res = {null, null};
+        if (executor == DIRECT_EXECUTOR) {
             try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
                 final Object[] args = ForeignAccess.getArguments(frame).toArray();
-                res = ForeignAccess.execute(foreignNode, frame, receiver, args);
+                res[0] = ForeignAccess.execute(foreignNode, frame, receiver, args);
             }
         } else {
-            res = invokeForeignOnExecutor(foreignNode, frame, receiver);
+            invokeForeignOnExecutor(foreignNode, frame, receiver, res);
         }
-        if (res instanceof TruffleObject) {
-            return new EngineTruffleObject(this, (TruffleObject) res);
+        exceptionCheck(res);
+        if (res[0] instanceof TruffleObject) {
+            return new EngineTruffleObject(this, (TruffleObject) res[0]);
         } else {
-            return res;
+            return res[0];
         }
     }
 
     @TruffleBoundary
-    private Object invokeForeignOnExecutor(final Node foreignNode, VirtualFrame frame, final TruffleObject receiver) throws IOException {
+    private void invokeForeignOnExecutor(final Node foreignNode, VirtualFrame frame, final TruffleObject receiver, final Object[] res) throws IOException {
         final MaterializedFrame materialized = frame.materialize();
-        ComputeInExecutor<Object> compute = new ComputeInExecutor<Object>(executor) {
+        final CountDownLatch computed = new CountDownLatch(1);
+        executor.execute(new Runnable() {
             @SuppressWarnings("try")
             @Override
-            protected Object compute() throws IOException {
+            public void run() {
                 try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
                     final Object[] args = ForeignAccess.getArguments(materialized).toArray();
                     RootNode node = SymbolInvokerImpl.createTemporaryRoot(TruffleLanguage.class, foreignNode, receiver, args.length);
                     final CallTarget target = Truffle.getRuntime().createCallTarget(node);
-                    return target.call(args);
+                    res[0] = target.call(args);
+                } catch (Exception ex) {
+                    res[1] = ex;
+                } finally {
+                    computed.countDown();
                 }
             }
-        };
-        return compute.get();
+        });
+        try {
+            computed.await();
+        } catch (InterruptedException ex) {
+            throw new InterruptedIOException(ex.getMessage());
+        }
     }
 
     /**
@@ -482,48 +506,54 @@ public class PolyglotEngine {
     public Value findGlobalSymbol(final String globalName) {
         checkThread();
         final TruffleLanguage<?>[] lang = {null};
-        ComputeInExecutor<Object> compute = new ComputeInExecutor<Object>(executor) {
-            @Override
-            protected Object compute() throws IOException {
-                Object obj = globals.get(globalName);
-                if (obj == null) {
-                    for (Language dl : langs.values()) {
-                        TruffleLanguage.Env env = dl.getEnv(false);
-                        if (env == null) {
-                            continue;
-                        }
-                        obj = SPI.findExportedSymbol(env, globalName, true);
-                        if (obj != null) {
-                            lang[0] = dl.getImpl(true);
-                            break;
-                        }
-                    }
+        final Object[] obj = {globals.get(globalName), null};
+        final CountDownLatch ready = new CountDownLatch(1);
+        if (obj[0] == null) {
+            executor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    findGlobalSymbolImpl(obj, globalName, lang, ready);
                 }
-                if (obj == null) {
-                    for (Language dl : langs.values()) {
-                        TruffleLanguage.Env env = dl.getEnv(false);
-                        if (env == null) {
-                            continue;
-                        }
-                        obj = SPI.findExportedSymbol(env, globalName, true);
-                        if (obj != null) {
-                            lang[0] = dl.getImpl(true);
-                            break;
-                        }
-                    }
-                }
-                return obj;
+            });
+            try {
+                ready.await();
+            } catch (InterruptedException ex) {
+                LOG.log(Level.SEVERE, null, ex);
             }
-        };
-        try {
-            compute.perform();
-            if (compute.get() == null) {
-                return null;
-            }
-        } catch (IOException ex) {
-            // OK, go on
+        } else {
+            ready.countDown();
         }
-        return new Value(lang, compute);
+        return obj[0] == null ? null : createValue(lang, obj, ready);
+    }
+
+    private void findGlobalSymbolImpl(Object[] obj, String globalName, TruffleLanguage<?>[] lang, CountDownLatch ready) {
+        if (obj[0] == null) {
+            for (Language dl : langs.values()) {
+                TruffleLanguage.Env env = dl.getEnv(false);
+                if (env == null) {
+                    continue;
+                }
+                obj[0] = SPI.findExportedSymbol(env, globalName, true);
+                if (obj[0] != null) {
+                    lang[0] = dl.getImpl(true);
+                    break;
+                }
+            }
+        }
+        if (obj[0] == null) {
+            for (Language dl : langs.values()) {
+                TruffleLanguage.Env env = dl.getEnv(false);
+                if (env == null) {
+                    continue;
+                }
+                obj[0] = SPI.findExportedSymbol(env, globalName, true);
+                if (obj[0] != null) {
+                    lang[0] = dl.getImpl(true);
+                    break;
+                }
+            }
+        }
+        ready.countDown();
     }
 
     private void checkThread() {
@@ -564,6 +594,15 @@ public class PolyglotEngine {
         }
     }
 
+    static void exceptionCheck(Object[] result) throws RuntimeException, IOException {
+        if (result[1] instanceof IOException) {
+            throw (IOException) result[1];
+        }
+        if (result[1] instanceof RuntimeException) {
+            throw (RuntimeException) result[1];
+        }
+    }
+
     /**
      * A future value wrapper. A user level wrapper around values returned by evaluation of various
      * {@link PolyglotEngine} functions like
@@ -577,22 +616,14 @@ public class PolyglotEngine {
      */
     public class Value {
         private final TruffleLanguage<?>[] language;
-        private final ComputeInExecutor<Object> compute;
+        private final Object[] result;
+        private final CountDownLatch ready;
         private CallTarget target;
 
-        Value(TruffleLanguage<?>[] language, ComputeInExecutor<Object> compute) {
+        Value(TruffleLanguage<?>[] language, Object[] result, CountDownLatch ready) {
             this.language = language;
-            this.compute = compute;
-        }
-
-        Value(TruffleLanguage<?>[] language, final Object value) {
-            this.language = language;
-            this.compute = new ComputeInExecutor<Object>(null) {
-                @Override
-                protected Object compute() throws IOException {
-                    return value;
-                }
-            };
+            this.result = result;
+            this.ready = ready;
         }
 
         /**
@@ -605,11 +636,12 @@ public class PolyglotEngine {
          * @throws IOException in case it is not possible to obtain the value of the object
          */
         public Object get() throws IOException {
-            Object result = waitForSymbol();
-            if (result instanceof TruffleObject) {
-                return new EngineTruffleObject(PolyglotEngine.this, (TruffleObject) result);
+            waitForSymbol();
+            exceptionCheck(result);
+            if (result[0] instanceof TruffleObject) {
+                return new EngineTruffleObject(PolyglotEngine.this, (TruffleObject) result[0]);
             } else {
-                return result;
+                return result[0];
             }
         }
 
@@ -668,48 +700,67 @@ public class PolyglotEngine {
          */
         public Value invoke(final Object thiz, final Object... args) throws IOException {
             get();
-            ComputeInExecutor<Object> invokeCompute = new ComputeInExecutor<Object>(executor) {
-                @SuppressWarnings("try")
+            final CountDownLatch done = new CountDownLatch(1);
+            final Object[] res = {null, null};
+            executor.execute(new Runnable() {
                 @Override
-                protected Object compute() throws IOException {
-                    try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
-                        List<Object> arr = new ArrayList<>();
-                        if (thiz == null) {
-                            if (language[0] != null) {
-                                Object global = SPI.languageGlobal(SPI.findLanguage(PolyglotEngine.this, language[0].getClass()));
-                                if (global != null) {
-                                    arr.add(global);
-                                }
-                            }
-                        } else {
-                            arr.add(thiz);
-                        }
-                        arr.addAll(Arrays.asList(args));
-                        for (;;) {
-                            try {
-                                if (target == null) {
-                                    target = SymbolInvokerImpl.createCallTarget(language[0], compute.get(), arr.toArray());
-                                }
-                                return target.call(arr.toArray());
-                            } catch (ArgumentsMishmashException ex) {
-                                target = null;
-                            }
-                        }
-                    }
+                public void run() {
+                    invokeImpl(thiz, args, res, done);
                 }
-            };
-            invokeCompute.perform();
-            return new Value(language, invokeCompute);
+            });
+            exceptionCheck(res);
+            return createValue(language, res, done);
         }
 
-        private Object waitForSymbol() throws IOException {
+        @SuppressWarnings("try")
+        private void invokeImpl(Object thiz, Object[] args, Object[] res, CountDownLatch done) {
+            try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
+                List<Object> arr = new ArrayList<>();
+                if (thiz == null) {
+                    if (language[0] != null) {
+                        Object global = SPI.languageGlobal(SPI.findLanguage(PolyglotEngine.this, language[0].getClass()));
+                        if (global != null) {
+                            arr.add(global);
+                        }
+                    }
+                } else {
+                    arr.add(thiz);
+                }
+                arr.addAll(Arrays.asList(args));
+                for (;;) {
+                    try {
+                        if (target == null) {
+                            target = SymbolInvokerImpl.createCallTarget(language[0], result[0], arr.toArray());
+                        }
+                        res[0] = target.call(arr.toArray());
+                        break;
+                    } catch (ArgumentsMishmashException ex) {
+                        target = null;
+                    }
+                }
+            } catch (IOException ex) {
+                res[1] = ex;
+            } catch (RuntimeException ex) {
+                res[1] = ex;
+            } finally {
+                done.countDown();
+            }
+        }
+
+        private void waitForSymbol() throws InterruptedIOException {
             checkThread();
-            return compute.get();
+            try {
+                if (ready != null) {
+                    ready.await();
+                }
+            } catch (InterruptedException ex) {
+                throw (InterruptedIOException) new InterruptedIOException(ex.getMessage()).initCause(ex);
+            }
         }
 
         @Override
         public String toString() {
-            return "PolyglotEngine.Value[" + compute + "]";
+            return "PolyglotEngine.Value[value=" + result[0] + ",exception=" + result[1] + ",computed=" + (ready.getCount() == 0) + "]";
         }
     }
 
@@ -783,8 +834,8 @@ public class PolyglotEngine {
         public Value getGlobalObject() {
             checkThread();
 
-            Object res = SPI.languageGlobal(getEnv(true));
-            return res == null ? null : new Value(new TruffleLanguage[]{info.getImpl(true)}, res);
+            Object[] res = {SPI.languageGlobal(getEnv(true)), null};
+            return res[0] == null ? null : new Value(new TruffleLanguage[]{info.getImpl(true)}, res, null);
         }
 
         TruffleLanguage<?> getImpl(boolean create) {
