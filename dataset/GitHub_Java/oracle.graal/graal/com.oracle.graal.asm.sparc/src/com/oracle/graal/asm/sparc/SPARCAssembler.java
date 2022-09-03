@@ -1513,7 +1513,7 @@ public abstract class SPARCAssembler extends Assembler {
     }
 
     protected void op3(Op3s op3, Register rs1, int simm13, Register rd) {
-        assert isSimm13(simm13) : simm13;
+        assert isSimm13(simm13);
         int i = 1 << 13;
         int simm13WithX = simm13 | getXBit(op3);
         fmt(op3.op.value, rd.encoding, op3.value, rs1.encoding, i | simm13WithX & ((1 << 13) - 1));
@@ -2300,78 +2300,41 @@ public abstract class SPARCAssembler extends Assembler {
         ld(Ldsh, src, dst);
     }
 
-    public void ld(SPARCAddress src, Register dst, int bytes, boolean signExtend) {
-        if (SPARC.isCPURegister(dst)) {
-            if (signExtend) {
-                switch (bytes) {
-                    case 1:
-                        ldsb(src, dst);
-                        break;
-                    case 2:
-                        ldsh(src, dst);
-                        break;
-                    case 4:
-                        ldsw(src, dst);
-                        break;
-                    case 8:
-                        ldx(src, dst);
-                        break;
-                    default:
-                        throw new InternalError();
-                }
-            } else {
-                switch (bytes) {
-                    case 1:
-                        ldub(src, dst);
-                        break;
-                    case 2:
-                        lduh(src, dst);
-                        break;
-                    case 4:
-                        lduw(src, dst);
-                        break;
-                    case 8:
-                        ldx(src, dst);
-                        break;
-                    default:
-                        throw new InternalError();
-                }
-            }
-        } else if (SPARC.isDoubleFloatRegister(dst) && bytes == 8) {
-            assert !signExtend;
-            lddf(src, dst);
-        } else if (SPARC.isSingleFloatRegister(dst) && bytes == 4) {
-            assert !signExtend;
-            ldf(src, dst);
-        } else {
-            throw new InternalError(String.format("src: %s dst: %s bytes: %d signExtend: %b", src, dst, bytes, signExtend));
-        }
-    }
-
-    public void st(Register src, SPARCAddress dst, int bytes) {
-        if (SPARC.isCPURegister(src)) {
+    public void ld(SPARCAddress src, Register dst, int bytes, boolean signed) {
+        if (signed) {
             switch (bytes) {
                 case 1:
-                    stb(src, dst);
+                    ldub(src, dst);
                     break;
                 case 2:
-                    sth(src, dst);
+                    lduh(src, dst);
                     break;
                 case 4:
-                    stw(src, dst);
+                    lduw(src, dst);
                     break;
                 case 8:
-                    stx(src, dst);
+                    ldx(src, dst);
                     break;
                 default:
-                    throw new InternalError(Integer.toString(bytes));
+                    throw new InternalError();
             }
-        } else if (SPARC.isDoubleFloatRegister(src) && bytes == 8) {
-            stdf(src, dst);
-        } else if (SPARC.isSingleFloatRegister(src) && bytes == 4) {
-            stf(src, dst);
         } else {
-            throw new InternalError(String.format("src: %s dst: %s bytes: %d", src, dst, bytes));
+            switch (bytes) {
+                case 1:
+                    ldsb(src, dst);
+                    break;
+                case 2:
+                    ldsh(src, dst);
+                    break;
+                case 4:
+                    ldsw(src, dst);
+                    break;
+                case 8:
+                    ldx(src, dst);
+                    break;
+                default:
+                    throw new InternalError();
+            }
         }
     }
 
