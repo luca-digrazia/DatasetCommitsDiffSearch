@@ -310,7 +310,7 @@ public class GraphDecoder {
         @Input(InputType.Unchecked) Node proxyPoint;
 
         public ProxyPlaceholder(ValueNode value, MergeNode proxyPoint) {
-            super(TYPE, value.stamp(NodeView.DEFAULT));
+            super(TYPE, value.stamp());
             this.value = value;
             this.proxyPoint = proxyPoint;
         }
@@ -465,6 +465,28 @@ public class GraphDecoder {
                         ((AbstractMergeNode) node).forwardEndCount() == 1) {
             AbstractMergeNode merge = (AbstractMergeNode) node;
             EndNode singleEnd = merge.forwardEndAt(0);
+
+            /*
+             * In some corner cases, the MergeNode already has PhiNodes. Since there is a single
+             * EndNode, each PhiNode can only have one input, and we can replace the PhiNode with
+             * this single input.
+             */
+            for (PhiNode phi : merge.phis()) {
+                assert phi.inputs().count() == 1 : "input count must match end count";
+                Node singlePhiInput = phi.inputs().first();
+
+                /*
+                 * We do not have the orderID of the PhiNode anymore, so we need to search through
+                 * the complete list of nodes to find a match.
+                 */
+                for (int i = 0; i < loopScope.createdNodes.length; i++) {
+                    if (loopScope.createdNodes[i] == phi) {
+                        loopScope.createdNodes[i] = singlePhiInput;
+                    }
+                }
+
+                phi.replaceAndDelete(singlePhiInput);
+            }
 
             /* Nodes that would use this merge as the guard need to use the previous block. */
             registerNode(loopScope, nodeOrderId, AbstractBeginNode.prevBegin(singleEnd), true, false);
@@ -868,7 +890,7 @@ public class GraphDecoder {
                 /* Now we have two different values, so we need to create a phi node. */
                 PhiNode phi;
                 if (proxy instanceof ValueProxyNode) {
-                    phi = graph.addWithoutUnique(new ValuePhiNode(proxy.stamp(NodeView.DEFAULT), merge));
+                    phi = graph.addWithoutUnique(new ValuePhiNode(proxy.stamp(), merge));
                 } else if (proxy instanceof GuardProxyNode) {
                     phi = graph.addWithoutUnique(new GuardPhiNode(merge));
                 } else {
@@ -951,22 +973,8 @@ public class GraphDecoder {
             int phiNodeOrderId = readOrderId(methodScope);
 
             ValueNode phiInput = (ValueNode) ensureNodeCreated(methodScope, phiInputScope, phiInputOrderId);
+
             ValueNode existing = (ValueNode) lookupNode(phiNodeScope, phiNodeOrderId);
-
-            if (existing != null && merge.phiPredecessorCount() == 1) {
-                /*
-                 * When exploding loops and the code after the loop (FULL_EXPLODE_UNTIL_RETURN),
-                 * then an existing value can already be registered: Parsing of the code before the
-                 * loop registers it when preparing for the later merge. The code after the loop,
-                 * which starts with a clone of the values that were created before the loop, sees
-                 * the stale value when processing the merge the first time. We can safely ignore
-                 * the stale value because it will never be needed to be merged (we are exploding
-                 * until we hit a return).
-                 */
-                assert methodScope.loopExplosion == LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN && phiNodeScope.loopIteration > 0;
-                existing = null;
-            }
-
             if (lazyPhi && (existing == null || existing == phiInput)) {
                 /* Phi function not yet necessary. */
                 registerNode(phiNodeScope, phiNodeOrderId, phiInput, true, false);
@@ -1630,7 +1638,7 @@ class LoopDetector implements Runnable {
         List<PhiNode> loopBeginPhis = new ArrayList<>(mergePhis.size());
         for (int i = 0; i < mergePhis.size(); i++) {
             PhiNode mergePhi = mergePhis.get(i);
-            PhiNode loopBeginPhi = graph.addWithoutUnique(new ValuePhiNode(mergePhi.stamp(NodeView.DEFAULT), loopBegin));
+            PhiNode loopBeginPhi = graph.addWithoutUnique(new ValuePhiNode(mergePhi.stamp(), loopBegin));
             mergePhi.replaceAtUsages(loopBeginPhi);
             /*
              * The first input of the new phi function is the original phi function, for the one
@@ -1793,7 +1801,7 @@ class LoopDetector implements Runnable {
             assert irreducibleLoopHandler.header.phis().isEmpty();
 
             /* The new phi function for the loop variable. */
-            loopVariablePhi = graph.addWithoutUnique(new ValuePhiNode(explosionHeadValue.stamp(NodeView.DEFAULT).unrestricted(), irreducibleLoopHandler.header));
+            loopVariablePhi = graph.addWithoutUnique(new ValuePhiNode(explosionHeadValue.stamp().unrestricted(), irreducibleLoopHandler.header));
             for (int i = 0; i < irreducibleLoopHandler.header.phiPredecessorCount(); i++) {
                 loopVariablePhi.addInput(explosionHeadValue);
             }
