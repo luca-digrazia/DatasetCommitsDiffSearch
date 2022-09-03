@@ -44,18 +44,23 @@ import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.ExecutionEvent;
 import com.oracle.truffle.api.debug.SuspendedEvent;
-
-import java.util.*;
-
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.api.vm.*;
-import com.oracle.truffle.api.vm.TruffleVM.Language;
-import com.oracle.truffle.sl.*;
+import com.oracle.truffle.api.instrument.QuitException;
+import com.oracle.truffle.api.instrument.Visualizer;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.api.vm.EventConsumer;
+import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.PolyglotEngine.Language;
+import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.nodes.instrument.SLDefaultVisualizer;
-import com.oracle.truffle.tools.debug.shell.*;
-import com.oracle.truffle.tools.debug.shell.client.*;
-import com.oracle.truffle.tools.debug.shell.server.*;
+import com.oracle.truffle.tools.debug.shell.REPLMessage;
+import com.oracle.truffle.tools.debug.shell.REPLServer;
+import com.oracle.truffle.tools.debug.shell.client.SimpleREPLClient;
+import com.oracle.truffle.tools.debug.shell.server.REPLHandler;
+import com.oracle.truffle.tools.debug.shell.server.REPLServerContext;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Instantiation of the "server" side of the "REPL*" debugger for the Simple language.
@@ -85,7 +90,7 @@ public final class SLREPLServer extends REPLServer {
     }
 
     private final Language language;
-    private final TruffleVM vm;
+    private final PolyglotEngine vm;
     private Debugger db;
     private final String statusPrefix;
     private final Map<String, REPLHandler> handlerMap = new HashMap<>();
@@ -135,7 +140,7 @@ public final class SLREPLServer extends REPLServer {
             }
         };
 
-        TruffleVM newVM = TruffleVM.newVM().onEvent(onHalted).onEvent(onExec).build();
+        PolyglotEngine newVM = PolyglotEngine.buildNew().onEvent(onHalted).onEvent(onExec).build();
         this.language = newVM.getLanguages().get("application/x-sl");
         assert language != null;
 
@@ -210,7 +215,7 @@ public final class SLREPLServer extends REPLServer {
         }
 
         @Override
-        public TruffleVM vm() {
+        public PolyglotEngine engine() {
             return vm;
         }
 
