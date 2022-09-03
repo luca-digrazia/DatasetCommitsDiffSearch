@@ -113,7 +113,6 @@ public abstract class ShapeImpl extends Shape {
     private final Transition transitionFromParent;
 
     private static final AtomicReferenceFieldUpdater<ShapeImpl, Object> TRANSITION_MAP_UPDATER = AtomicReferenceFieldUpdater.newUpdater(ShapeImpl.class, Object.class, "transitionMap");
-    private static final AtomicReferenceFieldUpdater<ShapeImpl, Assumption> LEAF_ASSUMPTION_UPDATER = AtomicReferenceFieldUpdater.newUpdater(ShapeImpl.class, Assumption.class, "leafAssumption");
 
     /**
      * Private constructor.
@@ -297,10 +296,6 @@ public abstract class ShapeImpl extends Shape {
             Map<Transition, ShapeImpl> map = (Map<Transition, ShapeImpl>) trans;
             return map;
         }
-    }
-
-    private boolean isTransitionMapEmpty() {
-        return transitionMap == null;
     }
 
     public final PropertyMap getPropertyMap() {
@@ -521,33 +516,24 @@ public abstract class ShapeImpl extends Shape {
 
     @Override
     public final boolean isLeaf() {
-        Assumption assumption = leafAssumption;
-        return assumption == null || assumption.isValid();
+        return leafAssumption == null || leafAssumption.isValid();
     }
 
     @Override
     public final Assumption getLeafAssumption() {
-        Assumption assumption = leafAssumption;
-        if (assumption != null) {
-            return assumption;
-        } else {
+        if (leafAssumption == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            Assumption prev;
-            Assumption next;
-            do {
-                prev = LEAF_ASSUMPTION_UPDATER.get(this);
-                if (prev != null) {
-                    return prev;
-                } else {
-                    next = isLeafHelper() ? createLeafAssumption() : NeverValidAssumption.INSTANCE;
+            synchronized (getMutex()) {
+                if (leafAssumption == null) {
+                    leafAssumption = isLeafHelper() ? createLeafAssumption() : NeverValidAssumption.INSTANCE;
                 }
-            } while (!LEAF_ASSUMPTION_UPDATER.compareAndSet(this, prev, next));
-            return next;
+            }
         }
+        return leafAssumption;
     }
 
     private boolean isLeafHelper() {
-        return isTransitionMapEmpty();
+        return getTransitionMapForRead().isEmpty();
     }
 
     private static Assumption createLeafAssumption() {
@@ -555,16 +541,12 @@ public abstract class ShapeImpl extends Shape {
     }
 
     private void invalidateLeafAssumption() {
-        Assumption prev;
-        do {
-            prev = LEAF_ASSUMPTION_UPDATER.get(this);
-            if (prev == NeverValidAssumption.INSTANCE) {
-                break;
-            }
-            if (prev != null) {
-                prev.invalidate();
-            }
-        } while (!LEAF_ASSUMPTION_UPDATER.compareAndSet(this, prev, NeverValidAssumption.INSTANCE));
+        Assumption assumption = leafAssumption;
+        if (assumption != null) {
+            assumption.invalidate();
+        } else {
+            leafAssumption = NeverValidAssumption.INSTANCE;
+        }
     }
 
     @Override
