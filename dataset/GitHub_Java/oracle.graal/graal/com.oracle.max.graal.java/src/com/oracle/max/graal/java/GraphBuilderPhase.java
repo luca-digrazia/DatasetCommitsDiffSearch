@@ -243,7 +243,12 @@ public final class GraphBuilderPhase extends Phase {
         return blocksVisited.contains(block);
     }
 
-    public void mergeOrClone(Block target, FrameStateAccess newState, StateSplit first) {
+    public void mergeOrClone(Block target, FrameStateAccess newState) {
+        AbstractStateSplit first = (AbstractStateSplit) target.firstInstruction;
+
+        if (target.isLoopHeader && isVisited(target)) {
+            first = (AbstractStateSplit) loopBegin(target).loopEnd().predecessor();
+        }
 
         int bci = target.startBci;
         if (target instanceof ExceptionBlock) {
@@ -251,11 +256,10 @@ public final class GraphBuilderPhase extends Phase {
         }
 
         FrameState existingState = first.stateAfter();
+
         if (existingState == null) {
-            // There was no state : new target
             // copy state because it is modified
             first.setStateAfter(newState.duplicate(bci));
-            return;
         } else {
             if (!GraalOptions.AssumeVerifiedBytecode && !existingState.isCompatibleWith(newState)) {
                 // stacks or locks do not match--bytecodes would not verify
@@ -267,31 +271,27 @@ public final class GraphBuilderPhase extends Phase {
             assert existingState.stackSize() == newState.stackSize();
 
             if (first instanceof PlaceholderNode) {
-                // there is no merge yet here
                 PlaceholderNode p = (PlaceholderNode) first;
                 if (p.predecessor() == null) {
-                    //nothing seems to come here, yet there's a state?
-                    Debug.log("Funky control flow going to @bci %d : we already have a state but no predecessor", bci);
                     p.setStateAfter(newState.duplicate(bci));
                     return;
                 } else {
-                    //create a merge
                     MergeNode merge = currentGraph.add(new MergeNode());
                     FixedNode next = p.next();
-                    if (p.predecessor() != null) {
-                        EndNode end = currentGraph.add(new EndNode());
-                        p.setNext(end);
-                        merge.addForwardEnd(end);
-                    }
+                    EndNode end = currentGraph.add(new EndNode());
+                    p.setNext(end);
                     merge.setNext(next);
-                    FrameState mergeState = existingState.duplicate(bci);
-                    merge.setStateAfter(mergeState);
-                    mergeState.merge(merge, newState);
-                    target.firstInstruction = merge;
+                    merge.addEnd(end);
+                    merge.setStateAfter(existingState);
+                    p.setStateAfter(existingState.duplicate(bci));
+                    if (!(next instanceof LoopEndNode)) {
+                        target.firstInstruction = merge;
+                    }
+                    first = merge;
                 }
-            } else {
-                existingState.merge((MergeNode) first, newState);
             }
+
+            existingState.merge((MergeNode) first, newState);
         }
     }
 
@@ -921,7 +921,7 @@ public final class GraphBuilderPhase extends Phase {
                 for (ExceptionInfo info : exceptions) {
                     EndNode end = currentGraph.add(new EndNode());
                     info.exceptionEdge.setNext(end);
-                    merge.addForwardEnd(end);
+                    merge.addEnd(end);
                     phi.addInput(info.exception);
                 }
                 merge.setStateAfter(frameState.duplicate(bci()));
@@ -1264,42 +1264,48 @@ public final class GraphBuilderPhase extends Phase {
 
         if (block.firstInstruction == null) {
             if (block.isLoopHeader) {
-                LoopBeginNode loop = currentGraph.add(new LoopBeginNode());
-                EndNode end = currentGraph.add(new EndNode());
-                loop.addForwardEnd(end);
-                PlaceholderNode p = currentGraph.add(new PlaceholderNode());
-                p.setNext(end);
-                block.firstInstruction = p;
+                LoopBeginNode loopBegin = currentGraph.add(new LoopBeginNode());
+                loopBegin.addEnd(currentGraph.add(new EndNode()));
+                LoopEndNode loopEnd = currentGraph.add(new LoopEndNode());
+                loopEnd.setLoopBegin(loopBegin);
+                PlaceholderNode pBegin = currentGraph.add(new PlaceholderNode());
+                pBegin.setNext(loopBegin.forwardEdge());
+                PlaceholderNode pEnd = currentGraph.add(new PlaceholderNode());
+                pEnd.setNext(loopEnd);
+                loopBegin.setStateAfter(stateAfter.duplicate(block.startBci));
+                block.firstInstruction = pBegin;
             } else {
                 block.firstInstruction = currentGraph.add(new PlaceholderNode());
             }
         }
-        LoopEndNode loopend = null;
-        StateSplit mergeAt = null;
-        if (block.isLoopHeader && isVisited(block)) { // backedge
-            loopend = currentGraph.add(new LoopEndNode(loopBegin(block)));
-            mergeAt = loopBegin(block);
-        } else {
-            mergeAt = (StateSplit) block.firstInstruction;
-        }
-
-        mergeOrClone(block, stateAfter, mergeAt);
+        mergeOrClone(block, stateAfter);
         addToWorkList(block);
 
         FixedNode result = null;
-        if (loopend != null) {
-            result = loopend;
+        if (block.isLoopHeader && isVisited(block)) {
+            result = (FixedNode) loopBegin(block).loopEnd().predecessor();
         } else {
             result = block.firstInstruction;
         }
 
+        assert result instanceof MergeNode || result instanceof PlaceholderNode : result;
         if (result instanceof MergeNode) {
-            EndNode end = currentGraph.add(new EndNode());
-            ((MergeNode) result).addForwardEnd(end);
-            result = end;
+            if (result instanceof LoopBeginNode) {
+                result = ((LoopBeginNode) result).forwardEdge();
+            } else {
+                EndNode end = currentGraph.add(new EndNode());
+                ((MergeNode) result).addEnd(end);
+                PlaceholderNode p = currentGraph.add(new PlaceholderNode());
+                int bci = block.startBci;
+                if (block instanceof ExceptionBlock) {
+                    bci = ((ExceptionBlock) block).deoptBci;
+                }
+                p.setStateAfter(stateAfter.duplicate(bci));
+                p.setNext(end);
+                result = p;
+            }
         }
-        assert !(result instanceof MergeNode);
-        Debug.log("createTarget(%s, state) = %s", block, result);
+        assert !(result instanceof LoopBeginNode || result instanceof MergeNode);
         return result;
     }
 
@@ -1326,9 +1332,10 @@ public final class GraphBuilderPhase extends Phase {
                 if (block.isLoopHeader) {
                     LoopBeginNode begin = loopBegin(block);
                     FrameState preLoopState = ((StateSplit) block.firstInstruction).stateAfter();
-                    FrameState loopState = preLoopState.duplicate(preLoopState.bci);
-                    begin.setStateAfter(loopState);
-                    loopState.insertLoopPhis(begin);
+                    assert preLoopState != null;
+                    FrameState duplicate = preLoopState.duplicate(preLoopState.bci);
+                    begin.setStateAfter(duplicate);
+                    duplicate.insertLoopPhis(begin);
                     lastInstr = begin;
                 } else {
                     lastInstr = block.firstInstruction;
@@ -1354,7 +1361,11 @@ public final class GraphBuilderPhase extends Phase {
 
     private void connectLoopEndToBegin() {
         for (LoopBeginNode begin : currentGraph.getNodes(LoopBeginNode.class)) {
-            if (begin.loopEnds().isEmpty()) {
+            LoopEndNode loopEnd = begin.loopEnd();
+            AbstractStateSplit loopEndStateSplit = (AbstractStateSplit) loopEnd.predecessor();
+            if (loopEndStateSplit.stateAfter() != null) {
+                begin.stateAfter().mergeLoop(begin, loopEndStateSplit.stateAfter());
+            } else {
 //              This can happen with degenerated loops like this one:
 //              for (;;) {
 //                  try {
@@ -1362,18 +1373,30 @@ public final class GraphBuilderPhase extends Phase {
 //                  } catch (UnresolvedException iioe) {
 //                  }
 //              }
+                // Delete the phis (all of them must have exactly one input).
+                for (PhiNode phi : begin.phis().snapshot()) {
+                    assert phi.valueCount() == 1;
+                    begin.stateAfter().deleteRedundantPhi(phi, phi.firstValue());
+                }
 
-                // Remove the loop begin or transform it into a merge.
-                assert begin.forwardEndCount() > 0;
-                currentGraph.reduceDegenerateLoopBegin(begin);
-            } else {
-                begin.stateAfter().simplifyLoopState();
+                // Delete the loop end.
+                loopEndStateSplit.safeDelete();
+                loopEnd.safeDelete();
+
+                // Remove the loop begin.
+                EndNode loopEntryEnd = begin.forwardEdge();
+                FixedNode beginSucc = begin.next();
+                FrameState stateAfter = begin.stateAfter();
+                begin.safeDelete();
+                stateAfter.safeDelete();
+                loopEntryEnd.replaceAndDelete(beginSucc);
             }
         }
     }
 
     private static LoopBeginNode loopBegin(Block block) {
-        LoopBeginNode loopBegin = (LoopBeginNode) ((EndNode) block.firstInstruction.next()).merge();
+        EndNode endNode = (EndNode) block.firstInstruction.next();
+        LoopBeginNode loopBegin = (LoopBeginNode) endNode.merge();
         return loopBegin;
     }
 
@@ -1423,7 +1446,7 @@ public final class GraphBuilderPhase extends Phase {
             if (config.eagerResolving()) {
                 catchType = lookupType(block.handler.catchTypeCPI(), INSTANCEOF);
             }
-            boolean initialized = (catchType instanceof RiResolvedType) && ((RiResolvedType) catchType).isInitialized();
+            boolean initialized = (catchType instanceof RiResolvedType);
             if (initialized && config.getSkippedExceptionTypes() != null) {
                 RiResolvedType resolvedCatchType = (RiResolvedType) catchType;
                 for (RiResolvedType skippedType : config.getSkippedExceptionTypes()) {
