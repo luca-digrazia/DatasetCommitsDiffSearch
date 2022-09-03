@@ -58,7 +58,8 @@ public abstract class BlockEnd extends Instruction {
 
     public Instruction setBlockSuccessor(int index, Instruction n) {
         assert index >= 0 && index < blockSuccessorCount;
-        return (Merge) successors().set(super.successorCount() + SUCCESSOR_COUNT + index, n);
+//        assert n == null || n instanceof BlockBegin : "only BlockBegins, for now... " + n.getClass();
+        return (BlockBegin) successors().set(super.successorCount() + SUCCESSOR_COUNT + index, n);
     }
 
     public int blockSuccessorCount() {
@@ -90,10 +91,10 @@ public abstract class BlockEnd extends Instruction {
      * Gets the block begin associated with this block end.
      * @return the beginning of this basic block
      */
-    public Merge begin() {
+    public BlockBegin begin() {
         for (Node n : predecessors()) {
-            if (n instanceof Merge) {
-                return (Merge) n;
+            if (n instanceof BlockBegin) {
+                return (BlockBegin) n;
             }
         }
         return null;
@@ -105,7 +106,7 @@ public abstract class BlockEnd extends Instruction {
      * @param oldSucc the old successor to replace
      * @param newSucc the new successor
      */
-    public int substituteSuccessor(Merge oldSucc, Merge newSucc) {
+    public int substituteSuccessor(BlockBegin oldSucc, BlockBegin newSucc) {
         assert newSucc != null;
         int count = 0;
         for (int i = 0; i < blockSuccessorCount; i++) {
@@ -131,7 +132,7 @@ public abstract class BlockEnd extends Instruction {
      * @param b the block to search for in the successor list
      * @return the index of the block in the list if found; <code>-1</code> otherwise
      */
-    public int successorIndex(Merge b) {
+    public int successorIndex(BlockBegin b) {
         for (int i = 0; i < blockSuccessorCount; i++) {
             if (blockSuccessor(i) == b) {
                 return i;
@@ -145,8 +146,8 @@ public abstract class BlockEnd extends Instruction {
      * @return the successor list
      */
     @SuppressWarnings({ "unchecked", "rawtypes"})
-    public List<Instruction> blockSuccessors() {
-        List<Instruction> list = (List) successors().subList(super.successorCount() + SUCCESSOR_COUNT, super.successorCount() + blockSuccessorCount + SUCCESSOR_COUNT);
+    public List<BlockBegin> blockSuccessors() {
+        List<BlockBegin> list = (List) successors().subList(super.successorCount() + SUCCESSOR_COUNT, super.successorCount() + blockSuccessorCount + SUCCESSOR_COUNT);
         return Collections.unmodifiableList(list);
     }
 

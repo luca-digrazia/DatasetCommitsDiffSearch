@@ -24,6 +24,7 @@ package com.oracle.graal.graph;
 
 import java.util.AbstractList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 
 public class NodeArray extends AbstractList<Node> {
@@ -127,10 +128,8 @@ public class NodeArray extends AbstractList<Node> {
             if (value.predecessors.get(i) == clearedNode && value.predecessorsIndex.get(i) == clearedIndex) {
                 value.predecessors.set(i, self());
                 value.predecessorsIndex.set(i, index);
-                return;
             }
         }
-        assert false;
     }
 
     public int size() {
