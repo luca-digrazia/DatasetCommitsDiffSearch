@@ -28,7 +28,6 @@ import static java.util.Collections.*;
 import java.io.*;
 import java.util.*;
 
-import com.oracle.graal.api.code.Assumptions.Assumption;
 import com.oracle.graal.api.code.CodeUtil.RefMapFormatter;
 import com.oracle.graal.api.meta.*;
 
@@ -235,7 +234,6 @@ public class CompilationResult implements Serializable {
 
         private static final long serialVersionUID = 9011681879878139182L;
 
-        private boolean initialized;
         private int offset;
 
         public DataSectionReference() {
@@ -244,15 +242,10 @@ public class CompilationResult implements Serializable {
         }
 
         public int getOffset() {
-            assert initialized;
-
             return offset;
         }
 
         public void setOffset(int offset) {
-            assert !initialized;
-            initialized = true;
-
             this.offset = offset;
         }
 
@@ -529,12 +522,7 @@ public class CompilationResult implements Serializable {
 
     private ArrayList<CodeAnnotation> annotations;
 
-    private Assumption[] assumptions;
-
-    /**
-     * The list of the methods whose bytecodes were used as input to the compilation.
-     */
-    private ResolvedJavaMethod[] methods;
+    private Assumptions assumptions;
 
     public CompilationResult() {
         this(null);
@@ -570,12 +558,12 @@ public class CompilationResult implements Serializable {
                 this.targetCodeSize == that.targetCodeSize &&
                 Objects.equals(this.name, that.name) &&
                 Objects.equals(this.annotations, that.annotations) &&
+                Objects.equals(this.assumptions, that.assumptions) &&
                 Objects.equals(this.dataSection, that.dataSection) &&
                 Objects.equals(this.exceptionHandlers, that.exceptionHandlers) &&
                 Objects.equals(this.dataPatches, that.dataPatches) &&
                 Objects.equals(this.infopoints, that.infopoints) &&
                 Objects.equals(this.marks,  that.marks) &&
-                Arrays.equals(this.assumptions, that.assumptions) &&
                 Arrays.equals(targetCode, that.targetCode)) {
                 return true;
             }
@@ -612,34 +600,12 @@ public class CompilationResult implements Serializable {
         this.entryBCI = entryBCI;
     }
 
-    /**
-     * Sets the assumptions made during compilation.
-     */
-    public void setAssumptions(Assumption[] assumptions) {
+    public void setAssumptions(Assumptions assumptions) {
         this.assumptions = assumptions;
     }
 
-    /**
-     * Gets a fixed-size {@linkplain Arrays#asList(Object...) view} of the assumptions made during
-     * compilation.
-     */
-    public Collection<Assumption> getAssumptions() {
-        return assumptions == null ? Collections.emptyList() : Arrays.asList(assumptions);
-    }
-
-    /**
-     * Sets the methods whose bytecodes were used as input to the compilation.
-     */
-    public void setMethods(ResolvedJavaMethod[] methods) {
-        this.methods = methods;
-    }
-
-    /**
-     * Gets a fixed-size {@linkplain Arrays#asList(Object...) view} of the methods whose bytecodes
-     * were used as input to the compilation.
-     */
-    public Collection<ResolvedJavaMethod> getMethods() {
-        return methods == null ? Collections.emptyList() : Arrays.asList(methods);
+    public Assumptions getAssumptions() {
+        return assumptions;
     }
 
     public DataSection getDataSection() {
@@ -712,35 +678,7 @@ public class CompilationResult implements Serializable {
      * @param handlerPos the position of the handler
      */
     public void recordExceptionHandler(int codePos, int handlerPos) {
-        assert validateExceptionHandlerAdd(codePos, handlerPos) : String.format("Duplicate exception handler for pc 0x%x handlerPos 0x%x", codePos, handlerPos);
         exceptionHandlers.add(new ExceptionHandler(codePos, handlerPos));
-    }
-
-    /**
-     * Validate if the exception handler for codePos already exists and handlerPos is different.
-     *
-     * @param codePos
-     * @param handlerPos
-     * @return true if the validation is successful
-     */
-    private boolean validateExceptionHandlerAdd(int codePos, int handlerPos) {
-        ExceptionHandler exHandler = getExceptionHandlerForCodePos(codePos);
-        return exHandler == null || exHandler.handlerPos == handlerPos;
-    }
-
-    /**
-     * Returns the first ExceptionHandler which matches codePos.
-     *
-     * @param codePos position to search for
-     * @return first matching ExceptionHandler
-     */
-    private ExceptionHandler getExceptionHandlerForCodePos(int codePos) {
-        for (ExceptionHandler h : exceptionHandlers) {
-            if (h.pcOffset == codePos) {
-                return h;
-            }
-        }
-        return null;
     }
 
     /**
