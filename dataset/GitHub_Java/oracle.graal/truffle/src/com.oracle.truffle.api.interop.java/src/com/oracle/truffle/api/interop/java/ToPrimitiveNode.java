@@ -27,6 +27,7 @@ package com.oracle.truffle.api.interop.java;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -61,7 +62,15 @@ final class ToPrimitiveNode extends Node {
         if (value instanceof JavaObject) {
             attr = ((JavaObject) value).obj;
         } else if (value instanceof TruffleObject) {
-            attr = unbox((TruffleObject) value);
+            boolean isBoxed = ForeignAccess.sendIsBoxed(isBoxedNode, (TruffleObject) value);
+            if (!isBoxed) {
+                return null;
+            }
+            try {
+                attr = ForeignAccess.send(unboxNode, (TruffleObject) value);
+            } catch (InteropException e) {
+                throw new IllegalStateException();
+            }
         } else {
             attr = value;
         }
@@ -291,16 +300,8 @@ final class ToPrimitiveNode extends Node {
         return ForeignAccess.sendIsNull(isNullNode, ret);
     }
 
-    Object unbox(TruffleObject value) {
-        if (!ForeignAccess.sendIsBoxed(isBoxedNode, value)) {
-            return null;
-        }
-        Object result;
-        try {
-            result = ForeignAccess.sendUnbox(unboxNode, value);
-        } catch (UnsupportedMessageException e) {
-            throw new IllegalStateException();
-        }
+    Object unbox(TruffleObject ret) throws UnsupportedMessageException {
+        Object result = ForeignAccess.sendUnbox(unboxNode, ret);
         if (result instanceof TruffleObject && isNull((TruffleObject) result)) {
             return null;
         } else {
