@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.nodes;
 
+import static com.oracle.graal.graph.Edges.Type.*;
+
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
@@ -46,7 +48,7 @@ import com.oracle.graal.nodes.util.*;
  */
 @NodeInfo
 public final class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerable {
-    public static final NodeClass<IfNode> TYPE = NodeClass.create(IfNode.class);
+    public static final NodeClass<IfNode> TYPE = NodeClass.get(IfNode.class);
 
     private static final DebugMetric CORRECTED_PROBABILITIES = Debug.metric("CorrectedProbabilities");
 
@@ -92,10 +94,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
      */
     public AbstractBeginNode falseSuccessor() {
         return falseSuccessor;
-    }
-
-    public double getTrueSuccessorProbability() {
-        return this.trueSuccessorProbability;
     }
 
     public void setTrueSuccessor(AbstractBeginNode node) {
@@ -239,7 +237,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 FixedWithNextNode falseNext = (FixedWithNextNode) falseSucc.next();
                 NodeClass<?> nodeClass = trueNext.getNodeClass();
                 if (trueNext.getClass() == falseNext.getClass()) {
-                    if (nodeClass.getInputEdges().areEqualIn(trueNext, falseNext) && trueNext.valueEquals(falseNext)) {
+                    if (nodeClass.getEdges(Inputs).areEqualIn(trueNext, falseNext) && trueNext.valueEquals(falseNext)) {
                         falseNext.replaceAtUsages(trueNext);
                         graph().removeFixed(falseNext);
                         GraphUtil.unlinkFixedNode(trueNext);

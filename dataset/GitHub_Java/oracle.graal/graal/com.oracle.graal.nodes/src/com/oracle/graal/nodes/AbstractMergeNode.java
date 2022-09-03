@@ -39,7 +39,7 @@ import com.oracle.graal.nodes.util.*;
  */
 @NodeInfo(allowedUsageTypes = {InputType.Association})
 public abstract class AbstractMergeNode extends BeginStateSplitNode implements IterableNodeType, LIRLowerable {
-    public static final NodeClass<AbstractMergeNode> TYPE = NodeClass.create(AbstractMergeNode.class);
+    public static final NodeClass<AbstractMergeNode> TYPE = NodeClass.get(AbstractMergeNode.class);
 
     protected AbstractMergeNode(NodeClass<? extends AbstractMergeNode> c) {
         super(c);
@@ -131,10 +131,6 @@ public abstract class AbstractMergeNode extends BeginStateSplitNode implements I
 
     public NodeIterable<PhiNode> phis() {
         return this.usages().filter(PhiNode.class).filter(this::isPhiAtMerge);
-    }
-
-    public NodeIterable<ValuePhiNode> valuePhis() {
-        return this.usages().filter(ValuePhiNode.class).filter(this::isPhiAtMerge);
     }
 
     @Override
@@ -231,7 +227,7 @@ public abstract class AbstractMergeNode extends BeginStateSplitNode implements I
                 end.safeDelete();
             }
             for (PhiNode phi : phis) {
-                if (tool.allUsagesAvailable() && phi.isAlive() && phi.hasNoUsages()) {
+                if (phi.isAlive() && phi.hasNoUsages()) {
                     GraphUtil.killWithUnusedFloatingInputs(phi);
                 }
             }

@@ -22,18 +22,15 @@
  */
 package com.oracle.graal.phases.common.inlining.info;
 
-import com.oracle.jvmci.meta.ResolvedJavaType;
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.DeoptimizationReason;
-import com.oracle.jvmci.meta.Constant;
-import com.oracle.jvmci.meta.DeoptimizationAction;
-import com.oracle.jvmci.meta.ResolvedJavaMethod;
-import com.oracle.jvmci.meta.MetaAccessProvider;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+
 import java.util.*;
 
-import com.oracle.jvmci.meta.JavaTypeProfile.ProfiledType;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
@@ -42,10 +39,11 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.common.inlining.info.elem.*;
+import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
-import com.oracle.jvmci.debug.*;
 
 /**
  * Polymorphic inlining of m methods with n type checks (n &ge; m) in case that the profiling
@@ -53,6 +51,8 @@ import com.oracle.jvmci.debug.*;
  * unknown type is encountered a deoptimization is triggered.
  */
 public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
+
+    private static final DebugMetric metricInliningTailDuplication = Debug.metric("InliningTailDuplication");
 
     private final List<ResolvedJavaMethod> concretes;
     private final double[] methodProbabilities;
@@ -170,6 +170,7 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
         int numberOfMethods = concretes.size();
         FixedNode continuation = invoke.next();
 
+        ValueNode originalReceiver = ((MethodCallTargetNode) invoke.callTarget()).receiver();
         // setup merge and phi nodes for results and exceptions
         AbstractMergeNode returnMerge = graph.add(new MergeNode());
         returnMerge.setStateAfter(invoke.stateAfter());
@@ -190,7 +191,7 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
             FixedNode exceptionSux = exceptionEdge.next();
             graph.addBeforeFixed(exceptionSux, exceptionMerge);
             exceptionObjectPhi = graph.addWithoutUnique(new ValuePhiNode(StampFactory.forKind(Kind.Object), exceptionMerge));
-            exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicateModified(invoke.stateAfter().bci, true, Kind.Object, new Kind[]{Kind.Object}, new ValueNode[]{exceptionObjectPhi}));
+            exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicateModified(invoke.stateAfter().bci, true, Kind.Object, exceptionObjectPhi));
         }
 
         // create one separate block for each invoked method
@@ -225,10 +226,8 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
         assert invoke.next() == continuation;
         invoke.setNext(null);
         returnMerge.setNext(continuation);
-        if (returnValuePhi != null) {
-            invoke.asNode().replaceAtUsages(returnValuePhi);
-        }
-        invoke.asNode().safeDelete();
+        invoke.asNode().replaceAtUsages(returnValuePhi);
+        invoke.asNode().replaceAndDelete(null);
 
         ArrayList<GuardedValueNode> replacementNodes = new ArrayList<>();
 
@@ -254,6 +253,32 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
         }
         if (shouldFallbackToInvoke()) {
             replacementNodes.add(null);
+        }
+
+        if (OptTailDuplication.getValue()) {
+            /*
+             * We might want to perform tail duplication at the merge after a type switch, if there
+             * are invokes that would benefit from the improvement in type information.
+             */
+            FixedNode current = returnMerge;
+            int opportunities = 0;
+            do {
+                if (current instanceof InvokeNode && ((InvokeNode) current).callTarget() instanceof MethodCallTargetNode &&
+                                ((MethodCallTargetNode) ((InvokeNode) current).callTarget()).receiver() == originalReceiver) {
+                    opportunities++;
+                } else if (current.inputs().contains(originalReceiver)) {
+                    opportunities++;
+                }
+                current = ((FixedWithNextNode) current).next();
+            } while (current instanceof FixedWithNextNode);
+
+            if (opportunities > 0) {
+                metricInliningTailDuplication.increment();
+                Debug.log("MultiTypeGuardInlineInfo starting tail duplication (%d opportunities)", opportunities);
+                PhaseContext phaseContext = new PhaseContext(providers);
+                CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue());
+                TailDuplicationPhase.tailDuplicate(returnMerge, TailDuplicationPhase.TRUE_DECISION, replacementNodes, phaseContext, canonicalizer);
+            }
         }
 
         Collection<Node> canonicalizeNodes = new ArrayList<>();
@@ -472,7 +497,7 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
 
             ExceptionObjectNode newExceptionEdge = (ExceptionObjectNode) exceptionEdge.copyWithInputs();
             // set new state (pop old exception object, push new one)
-            newExceptionEdge.setStateAfter(stateAfterException.duplicateModified(Kind.Object, Kind.Object, newExceptionEdge));
+            newExceptionEdge.setStateAfter(stateAfterException.duplicateModified(Kind.Object, newExceptionEdge));
 
             EndNode endNode = graph.add(new EndNode());
             newExceptionEdge.setNext(endNode);

@@ -30,12 +30,10 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * This phase will find branches which always end with a {@link DeoptimizeNode} and replace their
@@ -50,7 +48,7 @@ import com.oracle.graal.phases.tiers.*;
  * {@link DeoptimizeNode} as close to the {@link ControlSplitNode} as possible.
  *
  */
-public class ConvertDeoptimizeToGuardPhase extends BasePhase<PhaseContext> {
+public class ConvertDeoptimizeToGuardPhase extends Phase {
     private SimplifierTool simplifierTool = GraphUtil.getDefaultSimplifier(null, null, false);
 
     private static AbstractBeginNode findBeginNode(FixedNode startNode) {
@@ -58,7 +56,7 @@ public class ConvertDeoptimizeToGuardPhase extends BasePhase<PhaseContext> {
     }
 
     @Override
-    protected void run(final StructuredGraph graph, PhaseContext context) {
+    protected void run(final StructuredGraph graph) {
         assert graph.hasValueProxies() : "ConvertDeoptimizeToGuardPhase always creates proxies";
         if (graph.getNodes(DeoptimizeNode.TYPE).isEmpty()) {
             return;
@@ -68,75 +66,47 @@ public class ConvertDeoptimizeToGuardPhase extends BasePhase<PhaseContext> {
             visitDeoptBegin(AbstractBeginNode.prevBegin(d), d.action(), d.reason(), graph);
         }
 
-        if (context != null) {
-            for (FixedGuardNode fixedGuard : graph.getNodes(FixedGuardNode.TYPE)) {
-                trySplitFixedGuard(fixedGuard, context);
+        for (FixedGuardNode fixedGuard : graph.getNodes(FixedGuardNode.TYPE)) {
+
+            AbstractBeginNode pred = AbstractBeginNode.prevBegin(fixedGuard);
+            if (pred instanceof AbstractMergeNode) {
+                AbstractMergeNode merge = (AbstractMergeNode) pred;
+                if (fixedGuard.condition() instanceof CompareNode) {
+                    CompareNode compare = (CompareNode) fixedGuard.condition();
+                    List<EndNode> mergePredecessors = merge.cfgPredecessors().snapshot();
+
+                    Constant[] xs = IfNode.constantValues(compare.getX(), merge, true);
+                    if (xs == null) {
+                        continue;
+                    }
+                    Constant[] ys = IfNode.constantValues(compare.getY(), merge, true);
+                    if (ys == null) {
+                        continue;
+                    }
+                    for (int i = 0; i < mergePredecessors.size(); ++i) {
+                        AbstractEndNode mergePredecessor = mergePredecessors.get(i);
+                        if (!mergePredecessor.isAlive()) {
+                            break;
+                        }
+                        if (xs[i] == null) {
+                            continue;
+                        }
+                        if (ys[i] == null) {
+                            continue;
+                        }
+                        if (xs[i] instanceof PrimitiveConstant && ys[i] instanceof PrimitiveConstant &&
+                                        compare.condition().foldCondition(xs[i], ys[i], null, compare.unorderedIsTrue()) == fixedGuard.isNegated()) {
+                            visitDeoptBegin(AbstractBeginNode.prevBegin(mergePredecessor), fixedGuard.getAction(), fixedGuard.getReason(), graph);
+                        }
+                    }
+                }
             }
         }
 
         new DeadCodeEliminationPhase(Optional).apply(graph);
     }
 
-    private void trySplitFixedGuard(FixedGuardNode fixedGuard, PhaseContext context) {
-        LogicNode condition = fixedGuard.condition();
-        if (condition instanceof CompareNode) {
-            CompareNode compare = (CompareNode) condition;
-            ValueNode x = compare.getX();
-            ValuePhiNode xPhi = (x instanceof ValuePhiNode) ? (ValuePhiNode) x : null;
-            if (x instanceof ConstantNode || xPhi != null) {
-                ValueNode y = compare.getY();
-                ValuePhiNode yPhi = (y instanceof ValuePhiNode) ? (ValuePhiNode) y : null;
-                if (y instanceof ConstantNode || yPhi != null) {
-                    processFixedGuardAndPhis(fixedGuard, context, compare, x, xPhi, y, yPhi);
-                }
-            }
-        }
-    }
-
-    private void processFixedGuardAndPhis(FixedGuardNode fixedGuard, PhaseContext context, CompareNode compare, ValueNode x, ValuePhiNode xPhi, ValueNode y, ValuePhiNode yPhi) {
-        AbstractBeginNode pred = AbstractBeginNode.prevBegin(fixedGuard);
-        if (pred instanceof AbstractMergeNode) {
-            AbstractMergeNode merge = (AbstractMergeNode) pred;
-            if (xPhi != null && xPhi.merge() != merge) {
-                return;
-            }
-            if (yPhi != null && yPhi.merge() != merge) {
-                return;
-            }
-
-            processFixedGuardAndMerge(fixedGuard, context, compare, x, xPhi, y, yPhi, merge);
-        }
-    }
-
-    private void processFixedGuardAndMerge(FixedGuardNode fixedGuard, PhaseContext context, CompareNode compare, ValueNode x, ValuePhiNode xPhi, ValueNode y, ValuePhiNode yPhi, AbstractMergeNode merge) {
-        List<EndNode> mergePredecessors = merge.cfgPredecessors().snapshot();
-        for (int i = 0; i < mergePredecessors.size(); ++i) {
-            AbstractEndNode mergePredecessor = mergePredecessors.get(i);
-            if (!mergePredecessor.isAlive()) {
-                break;
-            }
-            Constant xs;
-            if (xPhi == null) {
-                xs = x.asConstant();
-            } else {
-                xs = xPhi.valueAt(mergePredecessor).asConstant();
-            }
-            Constant ys;
-            if (yPhi == null) {
-                ys = y.asConstant();
-            } else {
-                ys = yPhi.valueAt(mergePredecessor).asConstant();
-            }
-            if (xs != null && ys != null && compare.condition().foldCondition(xs, ys, context.getConstantReflection(), compare.unorderedIsTrue()) == fixedGuard.isNegated()) {
-                visitDeoptBegin(AbstractBeginNode.prevBegin(mergePredecessor), fixedGuard.getAction(), fixedGuard.getReason(), fixedGuard.graph());
-            }
-        }
-    }
-
     private void visitDeoptBegin(AbstractBeginNode deoptBegin, DeoptimizationAction deoptAction, DeoptimizationReason deoptReason, StructuredGraph graph) {
-        if (!deoptAction.doesInvalidateCompilation()) {
-            return;
-        }
         if (deoptBegin instanceof AbstractMergeNode) {
             AbstractMergeNode mergeNode = (AbstractMergeNode) deoptBegin;
             Debug.log("Visiting %s", mergeNode);
@@ -163,13 +133,22 @@ public class ConvertDeoptimizeToGuardPhase extends BasePhase<PhaseContext> {
                 survivingSuccessor = ifNode.trueSuccessor();
             }
             graph.removeSplitPropagate(ifNode, survivingSuccessor);
-
-            Node newGuard = guard;
-            if (survivingSuccessor instanceof LoopExitNode) {
-                newGuard = ProxyNode.forGuard(guard, survivingSuccessor, graph);
+            ProxyNode proxyGuard = null;
+            for (Node n : survivingSuccessor.usages().snapshot()) {
+                if (n instanceof GuardNode || n instanceof ProxyNode) {
+                    // Keep wired to the begin node.
+                } else {
+                    // Rewire to the fixed guard.
+                    if (survivingSuccessor instanceof LoopExitNode) {
+                        if (proxyGuard == null) {
+                            proxyGuard = ProxyNode.forGuard(guard, survivingSuccessor, graph);
+                        }
+                        n.replaceFirstInput(survivingSuccessor, proxyGuard);
+                    } else {
+                        n.replaceFirstInput(survivingSuccessor, guard);
+                    }
+                }
             }
-            survivingSuccessor.replaceAtUsages(InputType.Guard, newGuard);
-
             Debug.log("Converting deopt on %-5s branch of %s to guard for remaining branch %s.", deoptBegin == ifNode.trueSuccessor() ? "true" : "false", ifNode, otherBegin);
             FixedNode next = pred.next();
             pred.setNext(guard);

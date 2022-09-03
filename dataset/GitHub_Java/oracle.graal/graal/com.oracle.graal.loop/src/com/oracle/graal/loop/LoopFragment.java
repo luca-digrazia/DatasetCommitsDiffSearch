@@ -22,38 +22,17 @@
  */
 package com.oracle.graal.loop;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-
-import com.oracle.graal.graph.Graph;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.GuardPhiNode;
-import com.oracle.graal.nodes.GuardProxyNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.MergeNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.ValueProxyNode;
-import com.oracle.graal.nodes.VirtualState;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.java.MonitorEnterNode;
-import com.oracle.graal.nodes.spi.NodeWithState;
-import com.oracle.graal.nodes.virtual.CommitAllocationNode;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
 
 public abstract class LoopFragment {
 
@@ -353,7 +332,7 @@ public abstract class LoopFragment {
                  * VirtualState nodes contained in the old exit's state may be shared by other
                  * dominated VirtualStates. Those dominated virtual states need to see the
                  * proxy->phi update that are applied below.
-                 * 
+                 *
                  * We now update the original fragment's nodes accordingly:
                  */
                 originalExitState.applyToVirtual(node -> original.nodes.clearAndGrow(node));
@@ -370,11 +349,6 @@ public abstract class LoopFragment {
                 if (vpn.hasNoUsages()) {
                     continue;
                 }
-                if (vpn.value() == null) {
-                    assert vpn instanceof GuardProxyNode;
-                    vpn.replaceAtUsages(null);
-                    continue;
-                }
                 final ValueNode replaceWith;
                 ValueNode newVpn = prim(newEarlyExitIsLoopExit ? vpn : vpn.value());
                 if (newVpn != null) {
@@ -384,7 +358,7 @@ public abstract class LoopFragment {
                     } else if (vpn instanceof GuardProxyNode) {
                         phi = graph.addWithoutUnique(new GuardPhiNode(merge));
                     } else {
-                        throw JVMCIError.shouldNotReachHere();
+                        throw GraalInternalError.shouldNotReachHere();
                     }
                     phi.addInput(vpn);
                     phi.addInput(newVpn);
@@ -398,7 +372,7 @@ public abstract class LoopFragment {
                     }
                     if (usage instanceof VirtualState) {
                         VirtualState stateUsage = (VirtualState) usage;
-                        if (finalExitState != null && finalExitState.isPartOfThisState(stateUsage)) {
+                        if (finalExitState.isPartOfThisState(stateUsage)) {
                             return false;
                         }
                     }
