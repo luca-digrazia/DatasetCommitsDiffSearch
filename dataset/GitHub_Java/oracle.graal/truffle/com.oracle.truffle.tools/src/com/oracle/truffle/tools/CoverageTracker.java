@@ -34,6 +34,7 @@ import java.util.Map.Entry;
 import java.util.TreeSet;
 
 import com.oracle.truffle.api.instrument.Instrument;
+import com.oracle.truffle.api.instrument.InstrumentationTool;
 import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.instrument.ProbeListener;
@@ -62,7 +63,7 @@ import com.oracle.truffle.api.source.SourceSection;
  * <p>
  * <ul>
  * <li>"Execution call" on a node is is defined as invocation of a node method that is instrumented
- * to produce the event {@link SimpleInstrumentListener#onEnter(Probe)};</li>
+ * to produce the event {@link SimpleInstrumentListener#enter(Probe)};</li>
  * <li>Execution calls are tabulated only at <em>instrumented</em> nodes, i.e. those for which
  * {@link Instrumenter#isInstrumentable(Node)}{@code == true};</li>
  * <li>Execution calls are tabulated only at nodes present in the AST when originally created;
@@ -82,7 +83,7 @@ import com.oracle.truffle.api.source.SourceSection;
  * @see Instrument
  * @see SyntaxTag
  */
-public final class CoverageTracker extends Instrumenter.Tool<CoverageTracker> {
+public final class CoverageTracker extends InstrumentationTool {
 
     /** Counting data. */
     private final Map<LineLocation, CoverageRecord> coverageMap = new HashMap<>();
@@ -255,7 +256,7 @@ public final class CoverageTracker extends Instrumenter.Tool<CoverageTracker> {
         }
 
         @Override
-        public void onEnter(Probe probe) {
+        public void enter(Probe probe) {
             if (isEnabled()) {
                 count++;
             }
@@ -303,10 +304,12 @@ public final class CoverageTracker extends Instrumenter.Tool<CoverageTracker> {
             }
         }
 
-        final CoverageRecord coverageRecord = new CoverageRecord(srcSection);
-        final Instrument instrument = getInstrumenter().attach(probe, coverageRecord, CoverageTracker.class.getSimpleName());
-        coverageRecord.instrument = instrument;
+        final CoverageRecord coverage = new CoverageRecord(srcSection);
+        final Instrument instrument = Instrument.create(coverage, CoverageTracker.class.getSimpleName());
+        coverage.instrument = instrument;
         instruments.add(instrument);
-        coverageMap.put(lineLocation, coverageRecord);
+        probe.attach(instrument);
+        coverageMap.put(lineLocation, coverage);
     }
+
 }
