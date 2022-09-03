@@ -30,6 +30,7 @@ import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.truffle.api.instrumentation.AbstractInstrumentationTest;
@@ -69,7 +70,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.hasData());
         Assert.assertNull(profiler.getMimeTypes());
 
-        run(source);
+        assertEvalOut(source, "");
 
         counters = profiler.getCounters();
         Assert.assertEquals(4, counters.size());
@@ -103,7 +104,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.isTiming());
         Assert.assertTrue(profiler.hasData());
 
-        run(source);
+        assertEvalOut(source, "");
 
         Assert.assertFalse(profiler.isCollecting());
         Assert.assertFalse(profiler.isTiming());
@@ -131,7 +132,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.isTiming());
         Assert.assertFalse(profiler.hasData());
 
-        run(source);
+        assertEvalOut(source, "");
 
         Assert.assertTrue(profiler.isCollecting());
         Assert.assertFalse(profiler.isTiming());
@@ -152,7 +153,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertEquals(4, counters.size());
 
         for (int i = 0; i < 10000; i++) {
-            run(source);
+            assertEvalOut(source, "");
         }
 
         Assert.assertTrue(profiler.isCollecting());
@@ -177,6 +178,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         engine = null;
     }
 
+    @Ignore
     @Test
     public void testTimingEnabled() throws IOException {
 
@@ -189,7 +191,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.hasData());
         Assert.assertNull(profiler.getMimeTypes());
 
-        run(source);
+        assertEvalOut(source, "");
 
         counters = profiler.getCounters();
         Assert.assertEquals(4, counters.size());
@@ -227,7 +229,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertTrue(profiler.isTiming());
         Assert.assertTrue(profiler.hasData());
 
-        run(source);
+        assertEvalOut(source, "");
 
         Assert.assertTrue(root.getTotalTime(testTimeKind) > 0);
         Assert.assertTrue(leaf.getTotalTime(testTimeKind) > 0);
@@ -243,7 +245,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertFalse(profiler.isTiming());
         Assert.assertTrue(profiler.hasData());
 
-        run(source);
+        assertEvalOut(source, "");
 
         Assert.assertTrue(root.getTotalTime(testTimeKind) > 0);
         Assert.assertTrue(leaf.getTotalTime(testTimeKind) > 0);
@@ -257,7 +259,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         profiler.clearData();
 
-        run(source);
+        assertEvalOut(source, "");
 
         Assert.assertFalse(profiler.isTiming());
         Assert.assertTrue(profiler.hasData());
@@ -296,36 +298,6 @@ public class ProfilerTest extends AbstractInstrumentationTest {
     }
 
     @Test
-    public void testRootName() throws IOException {
-
-        profiler.setCollecting(true);
-        profiler.setTiming(false);
-        Map<SourceSection, Counter> counters = profiler.getCounters();
-        Assert.assertEquals(0, counters.size());
-        Assert.assertTrue(profiler.isCollecting());
-        Assert.assertFalse(profiler.isTiming());
-        Assert.assertFalse(profiler.hasData());
-        Assert.assertNull(profiler.getMimeTypes());
-
-        run(source);
-
-        counters = profiler.getCounters();
-        final SourceSection rootSection = source.createSection(null, 0, 140);
-        final SourceSection leafSection = source.createSection(null, 17, 16);
-        final SourceSection callfooSection = source.createSection(null, 47, 27);
-        final SourceSection callbarSection = source.createSection(null, 88, 27);
-        Counter root = counters.get(rootSection);
-        Counter leaf = counters.get(leafSection);
-        Counter callfoo = counters.get(callfooSection);
-        Counter callbar = counters.get(callbarSection);
-
-        Assert.assertEquals("", root.getName());
-        Assert.assertEquals("foo", leaf.getName());
-        Assert.assertEquals("bar", callfoo.getName());
-        Assert.assertEquals("baz", callbar.getName());
-    }
-
-    @Test
     public void testMIMEFilter() throws IOException {
 
         profiler.setCollecting(true);
@@ -333,7 +305,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
         Assert.assertNull(profiler.getMimeTypes());
         Assert.assertFalse(profiler.hasData());
 
-        run(source);
+        assertEvalOut(source, "");
 
         Assert.assertTrue(profiler.hasData());
 
@@ -342,7 +314,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         Assert.assertFalse(profiler.hasData());
 
-        run(source);
+        assertEvalOut(source, "");
 
         Assert.assertTrue(profiler.hasData());
 
@@ -351,7 +323,7 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         Assert.assertFalse(profiler.hasData());
 
-        run(source);
+        assertEvalOut(source, "");
 
         Assert.assertTrue(profiler.hasData());
 
@@ -360,13 +332,13 @@ public class ProfilerTest extends AbstractInstrumentationTest {
 
         Assert.assertFalse(profiler.hasData());
 
-        run(source);
+        assertEvalOut(source, "");
 
         Assert.assertFalse(profiler.hasData());
 
         profiler.setMimeTypes(null);
 
-        run(source);
+        assertEvalOut(source, "");
 
         Assert.assertTrue(profiler.hasData());
     }
