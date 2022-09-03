@@ -170,6 +170,7 @@ class NativeImage {
     static final String oXmx = "-Xmx";
     static final String oXms = "-Xms";
 
+    private static final String defaultProperties = "default.properties";
     private static final String pKeyNativeImageArgs = "NativeImageArgs";
 
     private final LinkedHashSet<String> imageBuilderArgs = new LinkedHashSet<>();
@@ -186,7 +187,7 @@ class NativeImage {
     private final Path workDir;
     private final Path rootDir;
     private final Path homeDir;
-    private final Map<String, String> userConfigProperties = new HashMap<>();
+    private final Map<String, String> userConfigProperties;
 
     private boolean verbose = Boolean.valueOf(System.getenv("VERBOSE_GRAALVM_LAUNCHERS"));
     private boolean dryRun = false;
@@ -209,16 +210,7 @@ class NativeImage {
         String homeDirString = System.getProperty("user.home");
         homeDir = Paths.get(homeDirString);
         assert homeDir != null;
-
-        String configFileEnvVarKey = "NATIVE_IMAGE_CONFIG_FILE";
-        String configFile = System.getenv(configFileEnvVarKey);
-        if (configFile != null && !configFile.isEmpty()) {
-            try {
-                userConfigProperties.putAll(loadProperties(canonicalize(Paths.get(configFile))));
-            } catch (NativeImageError | Exception e) {
-                showError("Invalid environment variable " + configFileEnvVarKey, e);
-            }
-        }
+        userConfigProperties = loadProperties(getUserConfigDir().resolve(defaultProperties));
 
         // Default javaArgs needed for image building
         addImageBuilderJavaArgs("-server", "-d64", "-noverify");
@@ -255,10 +247,6 @@ class NativeImage {
         /* Default handler needs to be fist */
         registerOptionHandler(new DefaultOptionHandler(this));
         registerOptionHandler(new MacroOptionHandler(this));
-    }
-
-    void addMacroOptionRoot(Path configDir) {
-        optionRegistry.addMacroOptionRoot(canonicalize(configDir));
     }
 
     protected void registerOptionHandler(OptionHandler<? extends NativeImage> handler) {
@@ -469,11 +457,7 @@ class NativeImage {
                 }
             }
             if (!leftoverArgs.isEmpty()) {
-                if (leftoverArgs.size() == 1) {
-                    showError("Unrecognized option: " + leftoverArgs.get(0));
-                } else {
-                    showError(leftoverArgs.stream().collect(Collectors.joining(", ", "Unrecognized options: ", "")));
-                }
+                showError(leftoverArgs.stream().collect(Collectors.joining(", ", "Unhandled leftover args: [", "]")));
             }
 
             /* Main-class from customImageBuilderArgs counts as explicitMainClass */
@@ -481,7 +465,7 @@ class NativeImage {
 
             if (extraImageArgs.isEmpty()) {
                 if (mainClass == null || mainClass.isEmpty()) {
-                    showError("Please specify class containing the main entry point method. (see --help)");
+                    showError("Please specify class containing the main entry point method. (see -help)");
                 }
             } else {
                 /* extraImageArgs main-class overrules previous main-class specification */
@@ -546,9 +530,9 @@ class NativeImage {
     }
 
     public static void main(String[] args) {
-        try {
-            NativeImage nativeImage = new NativeImageServer();
+        NativeImage nativeImage = new NativeImageServer();
 
+        try {
             if (args.length == 0) {
                 nativeImage.showMessage(usageText);
                 System.exit(0);
