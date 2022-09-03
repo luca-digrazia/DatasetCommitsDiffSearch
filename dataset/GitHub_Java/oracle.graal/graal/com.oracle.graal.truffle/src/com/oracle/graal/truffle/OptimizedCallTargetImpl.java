@@ -51,7 +51,7 @@ public final class OptimizedCallTargetImpl extends OptimizedCallTarget {
     @CompilerDirectives.SlowPath
     @Override
     public Object call(PackedFrame caller, Arguments args) {
-        return CompilerDirectives.inInterpreter() ? callHelper(caller, args) : executeHelper(caller, args);
+        return callHelper(caller, args);
     }
 
     private Object callHelper(PackedFrame caller, Arguments args) {
@@ -90,15 +90,13 @@ public final class OptimizedCallTargetImpl extends OptimizedCallTarget {
         if (m != null) {
             CompilerAsserts.neverPartOfCompilation();
             installedCode = null;
-            inliningResult = null;
             compilationProfile.reportInvalidated();
             logOptimizedInvalidated(this, oldNode, newNode, reason);
         }
         cancelInstalledTask(oldNode, newNode, reason);
     }
 
-    @Override
-    protected void cancelInstalledTask(Node oldNode, Node newNode, CharSequence reason) {
+    private void cancelInstalledTask(Node oldNode, Node newNode, CharSequence reason) {
         Future<InstalledCode> task = this.installedCodeTask;
         if (task != null) {
             task.cancel(true);
@@ -147,7 +145,6 @@ public final class OptimizedCallTargetImpl extends OptimizedCallTarget {
             return null;
         } else {
             performInlining();
-            cancelInlinedCallOptimization();
             logOptimizingQueued(this);
             this.installedCodeTask = compiler.compile(this);
             if (!TruffleBackgroundCompilation.getValue()) {
@@ -174,8 +171,6 @@ public final class OptimizedCallTargetImpl extends OptimizedCallTarget {
                 }
             }
             return null;
-        } finally {
-            onCompilationDone();
         }
     }
 
