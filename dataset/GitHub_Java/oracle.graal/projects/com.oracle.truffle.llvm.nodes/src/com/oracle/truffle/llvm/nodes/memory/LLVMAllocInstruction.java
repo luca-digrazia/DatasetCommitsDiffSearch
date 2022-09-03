@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,53 +29,101 @@
  */
 package com.oracle.truffle.llvm.nodes.memory;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.NodeFields;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.context.LLVMContext;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMFrameUtil;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack.UniquesRegion.UniqueSlot;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
-@NodeFields({@NodeField(type = int.class, name = "size"), @NodeField(type = int.class, name = "alignment"), @NodeField(type = LLVMContext.class, name = "context"),
-                @NodeField(type = FrameSlot.class, name = "stackPointerSlot")})
-public abstract class LLVMAllocInstruction extends LLVMAddressNode {
+@NodeFields({@NodeField(type = int.class, name = "size"), @NodeField(type = int.class, name = "alignment"), @NodeField(type = Type.class, name = "symbolType")})
+public abstract class LLVMAllocInstruction extends LLVMExpressionNode {
 
     abstract int getSize();
 
     abstract int getAlignment();
 
-    abstract LLVMContext getContext();
+    abstract Type getSymbolType();
 
-    abstract FrameSlot getStackPointerSlot();
+    @CompilationFinal private FrameSlot stackPointer;
 
+    protected FrameSlot getStackPointerSlot() {
+        if (stackPointer == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            stackPointer = getRootNode().getFrameDescriptor().findFrameSlot(LLVMStack.FRAME_ID);
+        }
+        return stackPointer;
+    }
+
+    public abstract static class LLVMAllocConstInstruction extends LLVMAllocInstruction {
+
+        @CompilationFinal(dimensions = 1) private Type[] types = null;
+        @CompilationFinal(dimensions = 1) private int[] offsets = null;
+
+        public void setTypes(Type[] types) {
+            this.types = types;
+        }
+
+        public void setOffsets(int[] offsets) {
+            this.offsets = offsets;
+        }
+
+        public Type[] getTypes() {
+            return types;
+        }
+
+        public int[] getOffsets() {
+            return offsets;
+        }
+
+        public int getLength() {
+            return offsets.length;
+        }
+
+    }
+
+    public abstract static class LLVMAllocaConstInstruction extends LLVMAllocConstInstruction {
+
+        @Specialization
+        protected LLVMNativePointer doOp(VirtualFrame frame,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return LLVMNativePointer.create(LLVMStack.allocateStackMemory(frame, memory, getStackPointerSlot(), getSize(), getAlignment()));
+        }
+    }
+
+    @NodeField(type = UniqueSlot.class, name = "uniqueSlot")
+    public abstract static class LLVMUniqueAllocConstInstruction extends LLVMAllocConstInstruction {
+
+        abstract UniqueSlot getUniqueSlot();
+
+        @Specialization
+        protected LLVMNativePointer doOp(VirtualFrame frame) {
+            return LLVMNativePointer.create(getUniqueSlot().toPointer(frame, getStackPointerSlot()));
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMAllocaInstruction extends LLVMAllocInstruction {
+
         @Specialization
-        public LLVMAddress execute(VirtualFrame frame) {
-            return LLVMFrameUtil.allocateMemory(getContext().getStack(), frame, getStackPointerSlot(), getSize(), getAlignment());
+        protected LLVMNativePointer doOp(VirtualFrame frame, int nr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return LLVMNativePointer.create(LLVMStack.allocateStackMemory(frame, memory, getStackPointerSlot(), getSize() * nr, getAlignment()));
         }
 
-    }
-
-    @NodeChild(type = LLVMI32Node.class)
-    public abstract static class LLVMI32AllocaInstruction extends LLVMAllocInstruction {
         @Specialization
-        public LLVMAddress execute(VirtualFrame frame, int nr) {
-            return LLVMFrameUtil.allocateMemory(getContext().getStack(), frame, getStackPointerSlot(), getSize() * nr, getAlignment());
+        protected LLVMNativePointer doOp(VirtualFrame frame, long nr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return LLVMNativePointer.create(LLVMStack.allocateStackMemory(frame, memory, getStackPointerSlot(), (int) (getSize() * nr), getAlignment()));
         }
     }
-
-    @NodeChild(type = LLVMI64Node.class)
-    public abstract static class LLVMI64AllocaInstruction extends LLVMAllocInstruction {
-        @Specialization
-        public LLVMAddress execute(VirtualFrame frame, long nr) {
-            return LLVMFrameUtil.allocateMemory(getContext().getStack(), frame, getStackPointerSlot(), (int) (getSize() * nr), getAlignment());
-        }
-    }
-
 }

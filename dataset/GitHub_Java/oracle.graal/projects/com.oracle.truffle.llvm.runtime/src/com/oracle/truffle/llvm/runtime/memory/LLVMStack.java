@@ -58,13 +58,12 @@ public final class LLVMStack {
         lowerBounds = 0;
         upperBounds = 0;
         stackPointer = 0;
-        uniquesRegionPointer = 0;
         isAllocated = false;
     }
 
     public final class StackPointer implements AutoCloseable {
         private long basePointer;
-        private final long uniquesRegionBasePointer;
+        private long uniquesRegionBasePointer;
 
         private StackPointer(long basePointer, long uniquesRegionBasePointer) {
             this.basePointer = basePointer;
@@ -104,19 +103,6 @@ public final class LLVMStack {
         }
     }
 
-    /**
-     * Implements a stack region dedicated to values which should be bound to unique frame slots.
-     *
-     * Adding a slot to the region will extend it according to the specified slot size and slot
-     * alignment. The {@link #addSlot} method will return a handle to the new slot in the form of a
-     * {@link UniqueSlot}. In combination with a stack pointer this handle can be resolved to an
-     * address pointing to the corresponding pre-allocated slot on the current stack frame. This
-     * requires that the region has already been allocated on the current stack frame through the
-     * {@link #allocate} method of its {@link UniquesRegionAllocator}. Aside from allocating memory,
-     * this method is responsible for setting the region's base pointer for the current stack frame.
-     * A {@link UniqueSlot} uses the region's base pointer to resolve its internal unique relative
-     * address to an absolute address.
-     */
     public static final class UniquesRegion {
         private long currentSlotPointer = 0;
         private int alignment = 1;
@@ -125,44 +111,26 @@ public final class LLVMStack {
             CompilerAsserts.neverPartOfCompilation();
             currentSlotPointer = getAlignedAllocation(currentSlotPointer, slotSize, slotAlignment);
             // maximum of current alignment, slot alignment and the alignment masking slot size
-            alignment = Integer.highestOneBit(alignment | slotAlignment | Integer.highestOneBit(slotSize) << 1);
+            alignment = setMSB(alignment | slotAlignment | setMSB(slotSize) << 1);
             return new UniqueSlot(currentSlotPointer);
         }
 
-        public UniquesRegionAllocator build() {
-            return new UniquesRegionAllocator(-currentSlotPointer, alignment);
+        void allocate(VirtualFrame frame, LLVMMemory memory, FrameSlot stackPointerSlot) {
+            StackPointer basePointer = (StackPointer) FrameUtil.getObjectSafe(frame, stackPointerSlot);
+            long stackPointer = basePointer.get(memory);
+            assert stackPointer != 0;
+            long uniquesRegionBasePointer = getAlignedBasePointer(stackPointer);
+            long uniquesRegionSize = stackPointer - uniquesRegionBasePointer - currentSlotPointer;
+            basePointer.setUniquesRegionPointer(uniquesRegionBasePointer);
+            allocateStackMemory(memory, basePointer, uniquesRegionSize, NO_ALIGNMENT_REQUIREMENTS);
         }
 
-        public static final class UniquesRegionAllocator {
-            private final long uniquesRegionSize;
-            private final int uniquesRegionAlignment;
-
-            private UniquesRegionAllocator(long uniquesRegionSize, int uniquesRegionAlignment) {
-                this.uniquesRegionSize = uniquesRegionSize;
-                this.uniquesRegionAlignment = uniquesRegionAlignment;
-            }
-
-            void allocate(VirtualFrame frame, LLVMMemory memory, FrameSlot stackPointerSlot) {
-                if (uniquesRegionSize == 0) {
-                    // UniquesRegion is empty - nothing to allocate
-                    return;
-                }
-                StackPointer basePointer = (StackPointer) FrameUtil.getObjectSafe(frame, stackPointerSlot);
-                long stackPointer = basePointer.get(memory);
-                assert stackPointer != 0;
-                long uniquesRegionPointer = getAlignedBasePointer(stackPointer);
-                basePointer.setUniquesRegionPointer(uniquesRegionPointer);
-                long alignedAllocation = getAlignedAllocation(uniquesRegionPointer, uniquesRegionSize, NO_ALIGNMENT_REQUIREMENTS);
-                basePointer.set(alignedAllocation);
-            }
-
-            long getAlignedBasePointer(long address) {
-                assert uniquesRegionAlignment != 0 && powerOfTwo(uniquesRegionAlignment);
-                return address & -uniquesRegionAlignment;
-            }
+        long getAlignedBasePointer(long address) {
+            assert alignment != 0 && powerOfTwo(alignment);
+            return address & -alignment;
         }
 
-        public static final class UniqueSlot {
+        public final class UniqueSlot {
             private final long address;
 
             private UniqueSlot(long address) {
@@ -218,6 +186,10 @@ public final class LLVMStack {
 
     public static long allocateStackMemory(VirtualFrame frame, LLVMMemory memory, FrameSlot stackPointerSlot, final long size, final int alignment) {
         StackPointer basePointer = (StackPointer) FrameUtil.getObjectSafe(frame, stackPointerSlot);
+        return allocateStackMemory(memory, basePointer, size, alignment);
+    }
+
+    private static long allocateStackMemory(LLVMMemory memory, StackPointer basePointer, final long size, final int alignment) {
         long stackPointer = basePointer.get(memory);
         assert stackPointer != 0;
         long alignedAllocation = getAlignedAllocation(stackPointer, size, alignment);
@@ -235,5 +207,19 @@ public final class LLVMStack {
 
     private static boolean powerOfTwo(int value) {
         return (value & -value) == value;
+    }
+
+    // https://www.geeksforgeeks.org/find-significant-set-bit-number/
+    private static int setMSB(int value) {
+        int n = value;
+
+        n |= n >> 1;
+        n |= n >> 2;
+        n |= n >> 4;
+        n |= n >> 8;
+        n |= n >> 16;
+
+        n = n + 1;
+        return (n >>> 1);
     }
 }
