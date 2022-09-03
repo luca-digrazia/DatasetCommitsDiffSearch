@@ -31,10 +31,12 @@ import java.util.*;
 import com.oracle.graal.alloc.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.alloc.Interval.RegisterBinding;
 import com.oracle.graal.compiler.alloc.Interval.RegisterPriority;
 import com.oracle.graal.compiler.alloc.Interval.SpillState;
 import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
@@ -43,9 +45,7 @@ import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.LIRInstruction.StateProcedure;
 import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.util.*;
+import com.oracle.graal.lir.cfg.*;
 
 /**
  * An implementation of the linear scan register allocator algorithm described
@@ -163,7 +163,7 @@ public final class LinearScan {
         this.sortedBlocks = ir.linearScanOrder().toArray(new Block[ir.linearScanOrder().size()]);
         this.registerAttributes = frameMap.registerConfig.getAttributesMap();
 
-        this.registers = target.arch.getRegisters();
+        this.registers = target.arch.registers;
         this.firstVariableNumber = registers.length;
         this.variables = new ArrayList<>(ir.numVariables() * 3 / 2);
         this.blockData = new BlockMap<>(ir.cfg);
@@ -802,12 +802,12 @@ public final class LinearScan {
                 changeOccurredInBlock = false;
 
                 // liveOut(block) is the union of liveIn(sux), for successors sux of block
-                int n = block.getSuccessorCount();
+                int n = block.numberOfSux();
                 if (n > 0) {
                     // block has successors
                     if (n > 0) {
                         liveOut.clear();
-                        liveOut.or(blockData.get(block.getFirstSuccessor()).liveIn);
+                        liveOut.or(blockData.get(block.suxAt(0)).liveIn);
                         for (int j = 1; j < n; j++) {
                             liveOut.or(blockData.get(block.suxAt(j)).liveIn);
                         }
@@ -1095,7 +1095,7 @@ public final class LinearScan {
                 StackSlot slot = (StackSlot) move.getInput();
                 if (GraalOptions.DetailedAsserts) {
                     assert op.id() > 0 : "invalid id";
-                    assert blockForId(op.id()).getPredecessorCount() == 0 : "move from stack must be in first block";
+                    assert blockForId(op.id()).numberOfPreds() == 0 : "move from stack must be in first block";
                     assert isVariable(move.getResult()) : "result of move must be a variable";
 
                     if (GraalOptions.TraceLinearScanLevel >= 4) {
@@ -1194,7 +1194,7 @@ public final class LinearScan {
                     @Override
                     public Value doValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                         if (isVariableOrRegister(operand)) {
-                            addDef(operand, opId, registerPriorityOfOutputOperand(op), operand.getKind().getStackKind());
+                            addDef(operand, opId, registerPriorityOfOutputOperand(op), operand.getKind().stackKind());
                             addRegisterHint(op, operand, mode, flags);
                         }
                         return operand;
@@ -1204,7 +1204,7 @@ public final class LinearScan {
                     @Override
                     public Value doValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                         if (isVariableOrRegister(operand)) {
-                            addTemp(operand, opId, RegisterPriority.MustHaveRegister, operand.getKind().getStackKind());
+                            addTemp(operand, opId, RegisterPriority.MustHaveRegister, operand.getKind().stackKind());
                             addRegisterHint(op, operand, mode, flags);
                         }
                         return operand;
@@ -1215,7 +1215,7 @@ public final class LinearScan {
                     public Value doValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                         if (isVariableOrRegister(operand)) {
                             RegisterPriority p = registerPriorityOfInputOperand(flags);
-                            addUse(operand, blockFrom, opId + 1, p, operand.getKind().getStackKind());
+                            addUse(operand, blockFrom, opId + 1, p, operand.getKind().stackKind());
                             addRegisterHint(op, operand, mode, flags);
                         }
                         return operand;
@@ -1226,7 +1226,7 @@ public final class LinearScan {
                     public Value doValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                         if (isVariableOrRegister(operand)) {
                             RegisterPriority p = registerPriorityOfInputOperand(flags);
-                            addUse(operand, blockFrom, opId, p, operand.getKind().getStackKind());
+                            addUse(operand, blockFrom, opId, p, operand.getKind().stackKind());
                             addRegisterHint(op, operand, mode, flags);
                         }
                         return operand;
@@ -1240,7 +1240,7 @@ public final class LinearScan {
                 op.forEachState(new ValueProcedure() {
                     @Override
                     public Value doValue(Value operand) {
-                        addUse(operand, blockFrom, opId + 1, RegisterPriority.None, operand.getKind().getStackKind());
+                        addUse(operand, blockFrom, opId + 1, RegisterPriority.None, operand.getKind().stackKind());
                         return operand;
                     }
                 });
@@ -1417,7 +1417,7 @@ public final class LinearScan {
         notPrecoloredIntervals = result.second;
 
         // allocate cpu registers
-        LinearScanWalker lsw = new LinearScanWalker(this, precoloredIntervals, notPrecoloredIntervals);
+        LinearScanWalker lsw = new LinearScanWalker(this, precoloredIntervals, notPrecoloredIntervals, !target.arch.isX86());
         lsw.walk();
         lsw.finishAllocation();
     }
@@ -1484,7 +1484,7 @@ public final class LinearScan {
     }
 
     void resolveFindInsertPos(Block fromBlock, Block toBlock, MoveResolver moveResolver) {
-        if (fromBlock.getSuccessorCount() <= 1) {
+        if (fromBlock.numberOfSux() <= 1) {
             if (GraalOptions.TraceLinearScanLevel >= 4) {
                 TTY.println("inserting moves at end of fromBlock B%d", fromBlock.getId());
             }
@@ -1510,8 +1510,8 @@ public final class LinearScan {
                 // successor edges, blocks which are reached by switch statements
                 // may have be more than one predecessor but it will be guaranteed
                 // that all predecessors will be the same.
-                for (Block predecessor : toBlock.getPredecessors()) {
-                    assert fromBlock == predecessor : "all critical edges must be broken";
+                for (int i = 0; i < toBlock.numberOfPreds(); i++) {
+                    assert fromBlock == toBlock.predAt(i) : "all critical edges must be broken";
                 }
             }
 
@@ -1534,22 +1534,22 @@ public final class LinearScan {
             Block block = blockAt(i);
 
             // check if block has only one predecessor and only one successor
-            if (block.getPredecessorCount() == 1 && block.getSuccessorCount() == 1) {
+            if (block.numberOfPreds() == 1 && block.numberOfSux() == 1) {
                 List<LIRInstruction> instructions = ir.lir(block);
                 assert instructions.get(0) instanceof StandardOp.LabelOp : "block must start with label";
                 assert instructions.get(instructions.size() - 1) instanceof StandardOp.JumpOp : "block with successor must end with unconditional jump";
 
                 // check if block is empty (only label and branch)
                 if (instructions.size() == 2) {
-                    Block pred = block.getPredecessors().get(0);
-                    Block sux = block.getSuccessors().get(0);
+                    Block pred = block.predAt(0);
+                    Block sux = block.suxAt(0);
 
                     // prevent optimization of two consecutive blocks
-                    if (!blockCompleted.get(pred.getLinearScanNumber()) && !blockCompleted.get(sux.getLinearScanNumber())) {
+                    if (!blockCompleted.get(pred.linearScanNumber) && !blockCompleted.get(sux.linearScanNumber)) {
                         if (GraalOptions.TraceLinearScanLevel >= 3) {
                             TTY.println(" optimizing empty block B%d (pred: B%d, sux: B%d)", block.getId(), pred.getId(), sux.getId());
                         }
-                        blockCompleted.set(block.getLinearScanNumber());
+                        blockCompleted.set(block.linearScanNumber);
 
                         // directly resolve between pred and sux (without looking at the empty block between)
                         resolveCollectMappings(pred, sux, moveResolver);
@@ -1568,15 +1568,16 @@ public final class LinearScan {
                 alreadyResolved.clear();
                 alreadyResolved.or(blockCompleted);
 
-                int numSux = fromBlock.getSuccessorCount();
-                for (Block toBlock : fromBlock.getSuccessors()) {
+                int numSux = fromBlock.numberOfSux();
+                for (int s = 0; s < numSux; s++) {
+                    Block toBlock = fromBlock.suxAt(s);
 
                     // check for duplicate edges between the same blocks (can happen with switch blocks)
-                    if (!alreadyResolved.get(toBlock.getLinearScanNumber())) {
+                    if (!alreadyResolved.get(toBlock.linearScanNumber)) {
                         if (GraalOptions.TraceLinearScanLevel >= 3) {
                             TTY.println(" processing edge between B%d and B%d", fromBlock.getId(), toBlock.getId());
                         }
-                        alreadyResolved.set(toBlock.getLinearScanNumber());
+                        alreadyResolved.set(toBlock.linearScanNumber);
 
                         // collect all intervals that have been split between fromBlock and toBlock
                         resolveCollectMappings(fromBlock, toBlock, moveResolver);
@@ -1592,6 +1593,49 @@ public final class LinearScan {
 
     // * Phase 7: assign register numbers back to LIR
     // (includes computation of debug information and oop maps)
+
+    boolean verifyAssignedLocation(Interval interval, Value location) {
+        Kind kind = interval.kind();
+
+        assert isRegister(location) || isStackSlot(location);
+
+        if (isRegister(location)) {
+            Register reg = asRegister(location);
+
+            // register
+            switch (kind) {
+                case Byte:
+                case Char:
+                case Short:
+                case Jsr:
+                case Object:
+                case Int: {
+                    assert reg.isCpu() : "not cpu register";
+                    break;
+                }
+
+                case Long: {
+                    assert reg.isCpu() : "not cpu register";
+                    break;
+                }
+
+                case Float: {
+                    assert !target.arch.isX86() || reg.isFpu() : "not xmm register: " + reg;
+                    break;
+                }
+
+                case Double: {
+                    assert !target.arch.isX86() || reg.isFpu() : "not xmm register: " + reg;
+                    break;
+                }
+
+                default: {
+                    throw GraalInternalError.shouldNotReachHere();
+                }
+            }
+        }
+        return true;
+    }
 
     static StackSlot canonicalSpillOpr(Interval interval) {
         assert interval.spillSlot() != null : "canonical spill slot not set";
@@ -1613,7 +1657,7 @@ public final class LinearScan {
         if (opId != -1) {
             if (GraalOptions.DetailedAsserts) {
                 Block block = blockForId(opId);
-                if (block.getSuccessorCount() <= 1 && opId == getLastLirInstructionId(block)) {
+                if (block.numberOfSux() <= 1 && opId == getLastLirInstructionId(block)) {
                     // check if spill moves could have been appended at the end of this block, but
                     // before the branch instruction. So the split child information for this branch would
                     // be incorrect.
@@ -1644,7 +1688,7 @@ public final class LinearScan {
         // intervals that have no oops inside need not to be processed.
         // to ensure a walking until the last instruction id, add a dummy interval
         // with a high operation id
-        nonOopIntervals = new Interval(Value.ILLEGAL, -1);
+        nonOopIntervals = new Interval(Value.IllegalValue, -1);
         nonOopIntervals.addRange(Integer.MAX_VALUE - 2, Integer.MAX_VALUE - 1);
 
         return new IntervalWalker(this, oopIntervals, nonOopIntervals);
@@ -1707,7 +1751,7 @@ public final class LinearScan {
                 int tempOpId = op.id();
                 OperandMode mode = OperandMode.USE;
                 Block block = blockForId(tempOpId);
-                if (block.getSuccessorCount() == 1 && tempOpId == getLastLirInstructionId(block)) {
+                if (block.numberOfSux() == 1 && tempOpId == getLastLirInstructionId(block)) {
                     // generating debug information for the last instruction of a block.
                     // if this instruction is a branch, spill moves are inserted before this branch
                     // and so the wrong operand would be returned (spill moves at block boundaries are not
@@ -1716,7 +1760,7 @@ public final class LinearScan {
                     final LIRInstruction instr = ir.lir(block).get(ir.lir(block).size() - 1);
                     if (instr instanceof StandardOp.JumpOp) {
                         if (blockData.get(block).liveOut.get(operandNumber(operand))) {
-                            tempOpId = getFirstLirInstructionId(block.getFirstSuccessor());
+                            tempOpId = getFirstLirInstructionId(block.suxAt(0));
                             mode = OperandMode.DEF;
                         }
                     }
@@ -2016,7 +2060,7 @@ public final class LinearScan {
         fixedIntervals = createUnhandledLists(IS_PRECOLORED_INTERVAL, null).first;
         // to ensure a walking until the last instruction id, add a dummy interval
         // with a high operation id
-        otherIntervals = new Interval(Value.ILLEGAL, -1);
+        otherIntervals = new Interval(Value.IllegalValue, -1);
         otherIntervals.addRange(Integer.MAX_VALUE - 2, Integer.MAX_VALUE - 1);
         IntervalWalker iw = new IntervalWalker(this, fixedIntervals, otherIntervals);
 

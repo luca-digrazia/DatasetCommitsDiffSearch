@@ -29,24 +29,24 @@ import static com.oracle.graal.lir.LIRValueUtil.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.Register.RegisterFlag;
+import com.oracle.graal.api.code.Register.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.alloc.Interval.RegisterBinding;
 import com.oracle.graal.compiler.alloc.Interval.RegisterPriority;
 import com.oracle.graal.compiler.alloc.Interval.SpillState;
 import com.oracle.graal.compiler.alloc.Interval.State;
+import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.util.*;
+import com.oracle.graal.lir.StandardOp.*;
+import com.oracle.graal.lir.cfg.*;
 
 /**
  */
 final class LinearScanWalker extends IntervalWalker {
 
-    private final boolean callKillsRegisters;
+    private final boolean hasCalleeSavedRegisters;
 
     private Register[] availableRegs;
 
@@ -71,15 +71,9 @@ final class LinearScanWalker extends IntervalWalker {
         return allocator.blockForId(opId);
     }
 
-    LinearScanWalker(LinearScan allocator, Interval unhandledFixedFirst, Interval unhandledAnyFirst) {
+    LinearScanWalker(LinearScan allocator, Interval unhandledFixedFirst, Interval unhandledAnyFirst, boolean hasCalleeSavedRegisters) {
         super(allocator, unhandledFixedFirst, unhandledAnyFirst);
-
-        // If all allocatable registers are caller saved, then no registers are live across a call site.
-        // The register allocator can save time not trying to find a register at a call site.
-        HashSet<Register> registers = new HashSet<>(Arrays.asList(allocator.frameMap.registerConfig.getAllocatableRegisters()));
-        registers.removeAll(Arrays.asList(allocator.frameMap.registerConfig.getCallerSaveRegisters()));
-        callKillsRegisters = registers.size() == 0;
-
+        this.hasCalleeSavedRegisters = hasCalleeSavedRegisters;
         moveResolver = new MoveResolver(allocator);
         spillIntervals = Util.uncheckedCast(new List[allocator.registers.length]);
         for (int i = 0; i < allocator.registers.length; i++) {
@@ -682,6 +676,32 @@ final class LinearScanWalker extends IntervalWalker {
         return true;
     }
 
+    Register findLockedRegister(int regNeededUntil, int intervalTo, Value ignoreReg, boolean[] needSplit) {
+        int maxReg = -1;
+        Register ignore = isRegister(ignoreReg) ? asRegister(ignoreReg) : null;
+
+        for (Register reg : availableRegs) {
+            int i = reg.number;
+            if (reg == ignore) {
+                // this register must be ignored
+
+            } else if (usePos[i] > regNeededUntil) {
+                if (maxReg == -1 || (usePos[i] > usePos[maxReg])) {
+                    maxReg = i;
+                }
+            }
+        }
+
+        if (maxReg != -1) {
+            if (blockPos[maxReg] <= intervalTo) {
+                needSplit[0] = true;
+            }
+            return availableRegs[maxReg];
+        }
+
+        return null;
+    }
+
     void splitAndSpillIntersectingIntervals(Register reg) {
         assert reg != null : "no register assigned";
 
@@ -777,10 +797,10 @@ final class LinearScanWalker extends IntervalWalker {
 
     boolean noAllocationPossible(Interval interval) {
 
-        if (callKillsRegisters) {
+        if (!hasCalleeSavedRegisters) {
             // fast calculation of intervals that can never get a register because the
             // the next instruction is a call that blocks all registers
-            // Note: this only works if a call kills all registers
+            // Note: this does not work if callee-saved registers are available (e.g. on Sparc)
 
             // check if this interval is the result of a split operation
             // (an interval got a register until this position)
@@ -796,6 +816,7 @@ final class LinearScanWalker extends IntervalWalker {
                     assert !allocFreeRegister(interval) : "found a register for this interval";
                     return true;
                 }
+
             }
         }
         return false;

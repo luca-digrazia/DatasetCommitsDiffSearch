@@ -28,13 +28,13 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.*;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.util.*;
+import com.oracle.graal.lir.cfg.*;
 
 /**
  */
@@ -118,7 +118,8 @@ final class RegisterVerifier {
         processOperations(allocator.ir.lir(block), inputState);
 
         // iterate all successors
-        for (Block succ : block.getSuccessors()) {
+        for (int i = 0; i < block.numberOfSux(); i++) {
+            Block succ = block.suxAt(i);
             processSuccessor(succ, inputState);
         }
     }

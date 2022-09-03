@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.compiler.alloc;
 
+import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.alloc.Interval.RegisterBinding;
 import com.oracle.graal.compiler.alloc.Interval.RegisterBindingLists;
 import com.oracle.graal.compiler.alloc.Interval.State;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.phases.*;
 
 /**
  */
@@ -66,11 +66,9 @@ public class IntervalWalker {
 
     /**
      * Processes the {@linkplain #currentInterval} interval in an attempt to allocate a physical
-     * register to it and thus allow it to be moved to a list of {@linkplain #activeLists active}
-     * intervals.
-     * 
-     * @return {@code true} if a register was allocated to the {@linkplain #currentInterval}
-     *         interval
+     * register to it and thus allow it to be moved to a list of {@linkplain #activeLists active} intervals.
+     *
+     * @return {@code true} if a register was allocated to the {@linkplain #currentInterval} interval
      */
     boolean activateCurrent() {
         return true;
@@ -86,12 +84,10 @@ public class IntervalWalker {
 
     /**
      * Creates a new interval walker.
-     * 
+     *
      * @param allocator the register allocator context
-     * @param unhandledFixed the list of unhandled {@linkplain RegisterBinding#Fixed fixed}
-     *            intervals
-     * @param unhandledAny the list of unhandled {@linkplain RegisterBinding#Any non-fixed}
-     *            intervals
+     * @param unhandledFixed the list of unhandled {@linkplain RegisterBinding#Fixed fixed} intervals
+     * @param unhandledAny the list of unhandled {@linkplain RegisterBinding#Any non-fixed} intervals
      */
     IntervalWalker(LinearScan allocator, Interval unhandledFixed, Interval unhandledAny) {
         this.allocator = allocator;

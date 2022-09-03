@@ -28,9 +28,9 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.phases.*;
 
 /**
  */
@@ -161,8 +161,8 @@ final class MoveResolver {
     }
 
     /**
-     * Checks if the {@linkplain Interval#location() location} of {@code to} is not blocked or is
-     * only blocked by {@code from}.
+     * Checks if the {@linkplain Interval#location() location} of {@code to} is not blocked
+     * or is only blocked by {@code from}.
      */
     private boolean safeToProcessMove(Interval from, Interval to) {
         Value fromReg = from != null ? from.location() : null;
@@ -271,8 +271,7 @@ final class MoveResolver {
                 spillInterval.setKind(fromInterval.kind());
 
                 // add a dummy range because real position is difficult to calculate
-                // Note: this range is a special case when the integrity of the allocation is
-                // checked
+                // Note: this range is a special case when the integrity of the allocation is checked
                 spillInterval.addRange(1, 2);
 
                 // do not allocate a new spill slot for temporary interval, but
@@ -334,7 +333,7 @@ final class MoveResolver {
         assert fromInterval.operand != toInterval.operand : "from and to interval equal: " + fromInterval;
         assert fromInterval.kind() == toInterval.kind();
         mappingFrom.add(fromInterval);
-        mappingFromOpr.add(Value.ILLEGAL);
+        mappingFromOpr.add(Value.IllegalValue);
         mappingTo.add(toInterval);
     }
 
