@@ -40,6 +40,7 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.ptx.*;
 import com.oracle.graal.nodes.*;
@@ -263,18 +264,18 @@ public class PTXWrapperBuilder extends GraphKit {
             case Short:
             case Char:
             case Int:
-                returnValue = unique(new NarrowNode(result, 32));
+                returnValue = unique(new ConvertNode(Kind.Long, Kind.Int, result));
                 break;
             case Long:
                 returnValue = result;
                 break;
             case Float: {
-                ValueNode asInt = unique(new NarrowNode(result, 32));
-                returnValue = ReinterpretNode.reinterpret(Kind.Float, asInt);
+                ValueNode asInt = unique(new ConvertNode(Kind.Long, Kind.Int, result));
+                returnValue = unique(new ReinterpretNode(Kind.Float, asInt));
                 break;
             }
             case Double:
-                returnValue = ReinterpretNode.reinterpret(Kind.Double, result);
+                returnValue = unique(new ReinterpretNode(returnKind, result));
                 break;
             case Object:
                 getObjectResult = createInvoke(getClass(), "getObjectResult", args.get(Thread));
