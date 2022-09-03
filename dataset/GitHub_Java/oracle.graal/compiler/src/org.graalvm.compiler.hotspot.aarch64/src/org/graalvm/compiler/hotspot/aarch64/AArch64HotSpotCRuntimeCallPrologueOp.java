@@ -1,13 +1,11 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2018, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -64,10 +62,10 @@ public class AArch64HotSpotCRuntimeCallPrologueOp extends AArch64LIRInstruction 
         // We cannot save the SP directly so use a temporary register.
         Register scratchRegister = asRegister(scratch);
         masm.movx(scratchRegister, sp);
-        masm.str(64, scratchRegister, masm.makeAddress(64, thread, threadLastJavaSpOffset));
+        masm.str(64, scratchRegister, masm.makeAddress(thread, threadLastJavaSpOffset, 8));
 
         // Get the current PC. Use a label to patch the return address.
         masm.adr(scratchRegister, label);
-        masm.str(64, scratchRegister, masm.makeAddress(64, thread, threadLastJavaPcOffset));
+        masm.str(64, scratchRegister, masm.makeAddress(thread, threadLastJavaPcOffset, 8));
     }
 }
