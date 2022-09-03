@@ -35,7 +35,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 
 interface JavaFieldDesc {
@@ -112,11 +111,7 @@ abstract class SingleFieldDesc implements JavaFieldDesc {
                 throw UnsupportedTypeException.raise(e, JavaInteropReflect.EMPTY);
             } catch (IllegalAccessException e) {
                 CompilerDirectives.transferToInterpreter();
-                if (Modifier.isFinal(field.getModifiers())) {
-                    throw UnknownIdentifierException.raise(field.getName());
-                } else {
-                    throw new IllegalStateException(e);
-                }
+                throw new IllegalStateException(e);
             }
         }
 
@@ -174,7 +169,7 @@ abstract class SingleFieldDesc implements JavaFieldDesc {
             try {
                 invokeSetHandle(setHandle, receiver, value);
             } catch (Exception e) {
-                throw UnsupportedTypeException.raise(e, new Object[]{value});
+                throw UnsupportedTypeException.raise(e, JavaInteropReflect.EMPTY);
             } catch (Throwable e) {
                 throw JavaInteropReflect.rethrow(e);
             }
@@ -213,14 +208,8 @@ abstract class SingleFieldDesc implements JavaFieldDesc {
                     MethodHandle setter = MethodHandles.publicLookup().findSetter(field.getDeclaringClass(), field.getName(), field.getType());
                     return setter.asType(MethodType.methodType(void.class, Object.class, Object.class));
                 }
-            } catch (NoSuchFieldException e) {
-                throw UnknownIdentifierException.raise(field.getName());
-            } catch (IllegalAccessException e) {
-                if (Modifier.isFinal(field.getModifiers())) {
-                    throw UnknownIdentifierException.raise(field.getName());
-                } else {
-                    throw new IllegalStateException(e);
-                }
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                throw new IllegalStateException(e);
             }
         }
 
