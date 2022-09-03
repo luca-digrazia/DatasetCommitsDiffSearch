@@ -22,16 +22,14 @@
  */
 package com.oracle.truffle.api.nodes;
 
-import com.oracle.truffle.api.TestingLanguage;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
+
+import com.oracle.truffle.api.TestingLanguage;
+import com.oracle.truffle.api.frame.VirtualFrame;
 
 /**
  * Tests optional method for ensuring that a node replacement is type safe. Ordinary node
@@ -45,7 +43,7 @@ public class SafeReplaceTest {
         final TestNode oldChild = new TestNode();
         final TestNode newChild = new TestNode();
         root.child = oldChild;
-        assertFalse(oldChild.isSafelyReplaceableBy(newChild));  // No parent node
+        assertTrue(oldChild.isSafelyReplaceableBy(newChild));  // No parent node
         root.adoptChildren();
         assertTrue(oldChild.isSafelyReplaceableBy(newChild));   // Now adopted by parent
         // new node
@@ -64,7 +62,7 @@ public class SafeReplaceTest {
         root.adoptChildren();
         final TestNode newChild = new TestNode();
         final TestNode strayChild = new TestNode();
-        assertFalse(strayChild.isSafelyReplaceableBy(newChild)); // Stray not a child of parent
+        assertTrue(strayChild.isSafelyReplaceableBy(newChild)); // Stray not a child of parent
         final WrongTestNode wrongTypeNewChild = new WrongTestNode();
         assertFalse(oldChild.isSafelyReplaceableBy(wrongTypeNewChild));
     }
@@ -85,7 +83,7 @@ public class SafeReplaceTest {
 
         private int executed;
 
-        public TestRootNode() {
+        TestRootNode() {
             super(TestingLanguage.class, null, null);
         }
 
