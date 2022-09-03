@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.asm.ptx;
 
+import static com.oracle.graal.asm.ptx.PTXStateSpace.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 
 import com.oracle.graal.asm.Label;
@@ -228,7 +229,7 @@ public class PTXAssembler extends AbstractPTXAssembler {
     public static class SingleOperandFormat {
 
         protected Variable dest;
-        protected Value source;
+        protected Value    source;
 
         public SingleOperandFormat(Variable dst, Value src) {
             setDestination(dst);
@@ -339,7 +340,8 @@ public class PTXAssembler extends AbstractPTXAssembler {
 
         @Override
         public String emit() {
-            return (typeForKind(dest.getKind()) + "." + typeForKind(source.getKind()) + " " + emitVariable(dest) + ", " + emitValue(source) + ";");
+            return (typeForKind(dest.getKind()) + "." + typeForKind(source.getKind()) + " " +
+                    emitVariable(dest) + ", " + emitValue(source) + ";");
         }
     }
 
@@ -365,18 +367,21 @@ public class PTXAssembler extends AbstractPTXAssembler {
 
         @Override
         public String emitRegister(Variable var, boolean comma) {
-            /*
-             * if (space == Parameter) { return ("param" + var.index); } else { return ("%r" +
-             * var.index); }
-             */
+            /* if (space == Parameter) {
+                return ("param" + var.index);
+            } else {
+                return ("%r" + var.index);
+            } */
             return ("%r" + var.index);
         }
 
         public String emit(boolean isLoad) {
             if (isLoad) {
-                return (space.getStateName() + "." + typeForKind(valueKind) + " " + emitRegister(dest, false) + ", " + emitAddress(source1, source2) + ";");
+                return (space.getStateName() + "." + typeForKind(valueKind) + " " +
+                        emitRegister(dest, false) + ", " + emitAddress(source1, source2) + ";");
             } else {
-                return (space.getStateName() + "." + typeForKind(valueKind) + " " + emitAddress(source1, source2) + ", " + emitRegister(dest, false) + ";");
+                return (space.getStateName() + "." + typeForKind(valueKind) + " " +
+                        emitAddress(source1, source2) + ", " + emitRegister(dest, false) + ";");
             }
         }
     }
@@ -532,7 +537,8 @@ public class PTXAssembler extends AbstractPTXAssembler {
         }
 
         public void emit(PTXAssembler asm) {
-            if (dest.getKind() == Kind.Float || dest.getKind() == Kind.Double) {
+            if (dest.getKind() == Kind.Float ||
+                dest.getKind() == Kind.Double) {
                 // round-to-zero - might not be right
                 asm.emitString("cvt.rz." + super.emit());
             } else {
@@ -540,7 +546,7 @@ public class PTXAssembler extends AbstractPTXAssembler {
             }
         }
     }
-
+    
     public static class Mov extends SingleOperandFormat {
 
         private int predicateRegisterNumber = -1;
@@ -553,15 +559,16 @@ public class PTXAssembler extends AbstractPTXAssembler {
             super(dst, src);
             this.predicateRegisterNumber = predicate;
         }
-
         /*
-         * public Mov(Variable dst, AbstractAddress src) { throw
-         * GraalInternalError.unimplemented("AbstractAddress Mov"); }
-         */
-
+        public Mov(Variable dst, AbstractAddress src) {
+            throw GraalInternalError.unimplemented("AbstractAddress Mov");
+        }
+        */
+        
         public void emit(PTXAssembler asm) {
             if (predicateRegisterNumber >= 0) {
-                asm.emitString("@%p" + String.valueOf(predicateRegisterNumber) + " mov." + super.emit());
+                asm.emitString("@%p" + String.valueOf(predicateRegisterNumber)
+                               + " mov." + super.emit());
             } else {
                 asm.emitString("mov." + super.emit());
             }
@@ -578,7 +585,7 @@ public class PTXAssembler extends AbstractPTXAssembler {
             asm.emitString("neg." + super.emit());
         }
     }
-
+    
     public static class Not extends BinarySingleOperandFormat {
 
         public Not(Variable dst, Variable src) {
@@ -589,7 +596,7 @@ public class PTXAssembler extends AbstractPTXAssembler {
             asm.emitString("not." + super.emit());
         }
     }
-
+    
     public static class Ld extends LoadStoreFormat {
 
         public Ld(PTXStateSpace space, Variable dst, Variable src1, Value src2) {
@@ -644,7 +651,7 @@ public class PTXAssembler extends AbstractPTXAssembler {
 
             for (int i = 0; i < refs.length; i++) {
                 sb.append(asm.nameOf(refs[i].label()));
-                if (i < (refs.length - 1)) {
+                if (i < (refs.length -1)) {
                     sb.append(", ");
                 }
             }
@@ -653,7 +660,9 @@ public class PTXAssembler extends AbstractPTXAssembler {
         }
 
         public void emit(PTXAssembler asm) {
-            asm.emitString(".global ." + valueForKind(kind) + " " + name + "[" + targets.length + "] = " + "{ " + emitTargets(asm, targets) + " };");
+            asm.emitString(".global ." + valueForKind(kind) +
+                           " " + name + "[" + targets.length + "] = " +
+                           "{ " + emitTargets(asm, targets) + " };");
         }
     }
 
@@ -675,7 +684,7 @@ public class PTXAssembler extends AbstractPTXAssembler {
         }
 
         public void emit(PTXAssembler asm) {
-            asm.emitString(".param ." + paramForKind(dest.getKind()) + emitParameter(dest) + (lastParameter ? "" : ","));
+            asm.emitString(".param ." + paramForKind(dest.getKind()) + emitParameter(dest)  + (lastParameter ? "" : ","));
         }
 
         public String paramForKind(Kind k) {
@@ -721,7 +730,9 @@ public class PTXAssembler extends AbstractPTXAssembler {
     }
 
     public enum BooleanOperator {
-        AND("and"), OR("or"), XOR("xor");
+        AND("and"),
+        OR("or"),
+        XOR("xor");
 
         private final String output;
 
@@ -734,15 +745,18 @@ public class PTXAssembler extends AbstractPTXAssembler {
         }
     }
 
-    public static class Setp {
+    public static class Setp  {
 
-        private BooleanOperator booleanOperator;
-        private ConditionOperator operator;
+
+        private BooleanOperator    booleanOperator;
+        private ConditionOperator  operator;
         private Value first, second;
         private Kind kind;
         private int predicate;
 
-        public Setp(Condition condition, Value first, Value second, int predicateRegisterNumber) {
+        public Setp(Condition condition,
+                    Value first, Value second,
+                    int predicateRegisterNumber) {
             setFirst(first);
             setSecond(second);
             setPredicate(predicateRegisterNumber);
@@ -750,7 +764,9 @@ public class PTXAssembler extends AbstractPTXAssembler {
             setConditionOperator(operatorForConditon(condition));
         }
 
-        public Setp(Condition condition, BooleanOperator operator, Value first, Value second, int predicateRegisterNumber) {
+        public Setp(Condition condition, BooleanOperator operator,
+                    Value first, Value second,
+                    int predicateRegisterNumber) {
             setFirst(first);
             setSecond(second);
             setPredicate(predicateRegisterNumber);
@@ -788,18 +804,12 @@ public class PTXAssembler extends AbstractPTXAssembler {
                 case 'a':
                     // unsigned
                     switch (condition) {
-                        case EQ:
-                            return ConditionOperator.U_EQ;
-                        case NE:
-                            return ConditionOperator.U_NE;
-                        case LT:
-                            return ConditionOperator.U_LO;
-                        case LE:
-                            return ConditionOperator.U_LS;
-                        case GT:
-                            return ConditionOperator.U_HI;
-                        case GE:
-                            return ConditionOperator.U_HS;
+                        case EQ: return ConditionOperator.U_EQ;
+                        case NE: return ConditionOperator.U_NE;
+                        case LT: return ConditionOperator.U_LO;
+                        case LE: return ConditionOperator.U_LS;
+                        case GT: return ConditionOperator.U_HI;
+                        case GE: return ConditionOperator.U_HS;
                         default:
                             throw GraalInternalError.shouldNotReachHere();
                     }
@@ -809,16 +819,11 @@ public class PTXAssembler extends AbstractPTXAssembler {
                 case 'j':
                     // signed
                     switch (condition) {
-                        case EQ:
-                            return ConditionOperator.S_EQ;
-                        case NE:
-                            return ConditionOperator.S_NE;
-                        case LT:
-                            return ConditionOperator.S_LT;
-                        case LE:
-                            return ConditionOperator.S_LE;
-                        case GT:
-                            return ConditionOperator.S_GT;
+                        case EQ: return ConditionOperator.S_EQ;
+                        case NE: return ConditionOperator.S_NE;
+                        case LT: return ConditionOperator.S_LT;
+                        case LE: return ConditionOperator.S_LE;
+                        case GT: return ConditionOperator.S_GT;
                         case GE:
                         case AE:
                             return ConditionOperator.S_GE;
@@ -829,18 +834,12 @@ public class PTXAssembler extends AbstractPTXAssembler {
                 case 'd':
                     // floating point - do these need to accept NaN??
                     switch (condition) {
-                        case EQ:
-                            return ConditionOperator.F_EQ;
-                        case NE:
-                            return ConditionOperator.F_NE;
-                        case LT:
-                            return ConditionOperator.F_LT;
-                        case LE:
-                            return ConditionOperator.F_LE;
-                        case GT:
-                            return ConditionOperator.F_GT;
-                        case GE:
-                            return ConditionOperator.F_GE;
+                        case EQ: return ConditionOperator.F_EQ;
+                        case NE: return ConditionOperator.F_NE;
+                        case LT: return ConditionOperator.F_LT;
+                        case LE: return ConditionOperator.F_LE;
+                        case GT: return ConditionOperator.F_GT;
+                        case GE: return ConditionOperator.F_GE;
                         default:
                             throw GraalInternalError.shouldNotReachHere();
                     }
@@ -858,7 +857,7 @@ public class PTXAssembler extends AbstractPTXAssembler {
                 kind = first.getKind();
             }
         }
-
+        
         public String emitValue(Value v) {
             assert v != null;
 
@@ -910,7 +909,7 @@ public class PTXAssembler extends AbstractPTXAssembler {
                     throw GraalInternalError.shouldNotReachHere();
             }
         }
-
+        
         public String emitVariable(Variable v) {
             return ("%r" + v.index);
         }
@@ -918,14 +917,21 @@ public class PTXAssembler extends AbstractPTXAssembler {
         public void emit(PTXAssembler asm) {
 
             if (booleanOperator != null) {
-                // Predicates need to be objects
-                asm.emitString("setp." + operator.getOperator() + "." + booleanOperator.getOperator() + typeForKind(kind) + " %p" + predicate + emitValue(first) + emitValue(second) + ", %r;");
+                asm.emitString("setp." +
+                               operator.getOperator() + "." +
+                               booleanOperator.getOperator() +
+                               typeForKind(kind) + " %p" + predicate +
+                               emitValue(first) + emitValue(second) +
+                               ", %r;"); // Predicates need to be objects
+
             } else {
-                asm.emitString("setp." + operator.getOperator() + "." + typeForKind(kind) + " %p" + predicate + emitValue(first) + emitValue(second) + ";");
+                asm.emitString("setp." +
+                               operator.getOperator() + "." +
+                               typeForKind(kind) + " %p" + predicate +
+                               emitValue(first) + emitValue(second) + ";");
             }
         }
     }
-
     @Override
     public PTXAddress makeAddress(Register base, int displacement) {
         throw GraalInternalError.shouldNotReachHere();
@@ -944,5 +950,6 @@ public class PTXAssembler extends AbstractPTXAssembler {
         }
         bra(str);
     }
+
 
 }

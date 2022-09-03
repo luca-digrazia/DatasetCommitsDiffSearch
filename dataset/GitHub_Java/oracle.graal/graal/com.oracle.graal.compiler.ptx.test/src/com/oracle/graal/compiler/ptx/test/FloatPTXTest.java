@@ -64,7 +64,7 @@ public class FloatPTXTest extends PTXTestBase {
     }
 
     public static float testAdd2I(int a, int b) {
-        return a + b;
+        return (float) (a + b);
     }
 
     public static float testAdd2F(float a, float b) {
@@ -366,7 +366,9 @@ public class FloatPTXTest extends PTXTestBase {
         for (Method m : FloatPTXTest.class.getMethods()) {
             String name = m.getName();
             if (m.getAnnotation(Test.class) == null && name.startsWith("test") && name.startsWith("testRem") == false) {
-                printReport(name + ": \n" + new String(test.compile(name).getTargetCode()));
+                // CheckStyle: stop system..print check
+                System.out.println(name + ": \n" + new String(test.compile(name).getTargetCode()));
+                // CheckStyle: resume system..print check
             }
         }
     }
