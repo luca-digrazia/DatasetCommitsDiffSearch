@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,19 +22,20 @@
  */
 package org.graalvm.compiler.truffle.test.nodes;
 
-import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.Objects;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class IsLoggableNode extends AbstractTestNode {
-    private final TruffleLogger log;
+    private final Logger log;
     private final Level level;
     private final int result;
 
     public IsLoggableNode(final Level level, final int result) {
         Objects.requireNonNull(level, "Level must be non null.");
-        this.log = TruffleLogger.getLogger("test", "testLogger");
+        this.log = Truffle.getLogger("test", "testLogger");
         this.level = level;
         this.result = result;
     }
