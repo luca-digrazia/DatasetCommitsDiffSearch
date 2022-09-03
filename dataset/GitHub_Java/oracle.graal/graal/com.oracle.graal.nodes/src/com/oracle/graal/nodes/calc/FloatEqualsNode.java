@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
@@ -32,21 +31,12 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "==")
-public final class FloatEqualsNode extends CompareNode {
+public class FloatEqualsNode extends CompareNode {
 
     public FloatEqualsNode(ValueNode x, ValueNode y) {
         super(Condition.EQ, false, x, y);
         assert x.stamp() instanceof FloatStamp && y.stamp() instanceof FloatStamp : x.stamp() + " " + y.stamp();
         assert x.stamp().isCompatible(y.stamp());
-    }
-
-    public static LogicNode create(ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {
-        LogicNode result = CompareNode.tryConstantFold(Condition.EQ, x, y, constantReflection, false);
-        if (result != null) {
-            return result;
-        } else {
-            return new FloatEqualsNode(x, y);
-        }
     }
 
     @Override

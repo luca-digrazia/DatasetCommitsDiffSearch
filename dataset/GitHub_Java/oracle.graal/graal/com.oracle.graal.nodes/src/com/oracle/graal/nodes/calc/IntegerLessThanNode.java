@@ -40,19 +40,6 @@ public class IntegerLessThanNode extends CompareNode {
         assert !y.getKind().isNumericFloat() && y.getKind() != Kind.Object;
     }
 
-    public static LogicNode create(ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {
-        LogicNode result = CompareNode.tryConstantFold(Condition.LT, x, y, constantReflection, false);
-        if (result != null) {
-            return result;
-        } else {
-            result = findSynonym(x, y);
-            if (result != null) {
-                return result;
-            }
-            return new IntegerLessThanNode(x, y);
-        }
-    }
-
     @Override
     protected ValueNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
         PrimitiveConstant primitive = (PrimitiveConstant) constant;
@@ -76,19 +63,6 @@ public class IntegerLessThanNode extends CompareNode {
         if (result != this) {
             return result;
         }
-        ValueNode synonym = findSynonym(forX, forY);
-        if (synonym != null) {
-            return synonym;
-        }
-        if (forX.stamp() instanceof IntegerStamp && forY.stamp() instanceof IntegerStamp) {
-            if (IntegerStamp.sameSign((IntegerStamp) forX.stamp(), (IntegerStamp) forY.stamp())) {
-                return new IntegerBelowNode(forX, forY);
-            }
-        }
-        return this;
-    }
-
-    private static LogicNode findSynonym(ValueNode forX, ValueNode forY) {
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
             return LogicConstantNode.contradiction();
         } else if (forX.stamp() instanceof IntegerStamp && forY.stamp() instanceof IntegerStamp) {
@@ -100,7 +74,12 @@ public class IntegerLessThanNode extends CompareNode {
                 return LogicConstantNode.contradiction();
             }
         }
-        return null;
+        if (forX.stamp() instanceof IntegerStamp && forY.stamp() instanceof IntegerStamp) {
+            if (IntegerStamp.sameSign((IntegerStamp) forX.stamp(), (IntegerStamp) forY.stamp())) {
+                return new IntegerBelowNode(forX, forY);
+            }
+        }
+        return this;
     }
 
     @Override
