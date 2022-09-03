@@ -30,7 +30,6 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
 import com.oracle.graal.snippets.Snippet.Fold;
-import com.oracle.graal.snippets.nodes.*;
 
 
 @SuppressWarnings("unused")
@@ -82,7 +81,7 @@ public class ArrayCopySnippets implements SnippetsInterface{
         long srcOffset = srcPos * arrayIndexScale(baseKind);
         long destOffset = destPos * arrayIndexScale(baseKind);
         if (src == dest && srcPos < destPos) { // bad aliased case
-            for (long i = byteLength - arrayIndexScale(Kind.Byte); i >= byteLength - nonVectorBytes; i -= arrayIndexScale(Kind.Byte)) {
+            for (long i = byteLength - 1; i > byteLength - 1 - nonVectorBytes; i--) {
                 Byte a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Byte);
                 UnsafeStoreNode.store(dest, header, i + destOffset, a.byteValue(), Kind.Byte);
             }
@@ -92,7 +91,7 @@ public class ArrayCopySnippets implements SnippetsInterface{
                 UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
             }
         } else {
-            for (long i = 0; i < nonVectorBytes; i += arrayIndexScale(Kind.Byte)) {
+            for (long i = 0; i < nonVectorBytes; i++) {
                 Byte a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Byte);
                 UnsafeStoreNode.store(dest, header, i + destOffset, a.byteValue(), Kind.Byte);
             }
@@ -118,7 +117,7 @@ public class ArrayCopySnippets implements SnippetsInterface{
         long srcOffset = srcPos * arrayIndexScale(baseKind);
         long destOffset = destPos * arrayIndexScale(baseKind);
         if (src == dest && srcPos < destPos) { // bad aliased case
-            for (long i = byteLength - arrayIndexScale(Kind.Char); i >= byteLength - nonVectorBytes; i -= arrayIndexScale(Kind.Char)) {
+            for (long i = byteLength - 1; i > byteLength - 1 - nonVectorBytes; i -= arrayIndexScale(Kind.Char)) {
                 Character a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Char);
                 UnsafeStoreNode.store(dest, header, i + destOffset, a.charValue(), Kind.Char);
             }
@@ -154,7 +153,7 @@ public class ArrayCopySnippets implements SnippetsInterface{
         long srcOffset = srcPos * arrayIndexScale(baseKind);
         long destOffset = destPos * arrayIndexScale(baseKind);
         if (src == dest && srcPos < destPos) { // bad aliased case
-            for (long i = byteLength - arrayIndexScale(Kind.Short); i >= byteLength - nonVectorBytes; i -= arrayIndexScale(Kind.Short)) {
+            for (long i = byteLength - 1; i > byteLength - 1 - nonVectorBytes; i -= arrayIndexScale(Kind.Short)) {
                 Short a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Short);
                 UnsafeStoreNode.store(dest, header, i + destOffset, a.shortValue(), Kind.Short);
             }
@@ -190,7 +189,7 @@ public class ArrayCopySnippets implements SnippetsInterface{
         long srcOffset = srcPos * arrayIndexScale(baseKind);
         long destOffset = destPos * arrayIndexScale(baseKind);
         if (src == dest && srcPos < destPos) { // bad aliased case
-            for (long i = byteLength - arrayIndexScale(Kind.Int); i >= byteLength - nonVectorBytes; i -= arrayIndexScale(Kind.Int)) {
+            for (long i = byteLength - 1; i > byteLength - 1 - nonVectorBytes; i -= arrayIndexScale(Kind.Int)) {
                 Integer a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Int);
                 UnsafeStoreNode.store(dest, header, i + destOffset, a.intValue(), Kind.Int);
             }
@@ -226,7 +225,7 @@ public class ArrayCopySnippets implements SnippetsInterface{
         long srcOffset = srcPos * arrayIndexScale(baseKind);
         long destOffset = destPos * arrayIndexScale(baseKind);
         if (src == dest && srcPos < destPos) { // bad aliased case
-            for (long i = byteLength - arrayIndexScale(Kind.Float); i >= byteLength - nonVectorBytes; i -= arrayIndexScale(Kind.Float)) {
+            for (long i = byteLength - 1; i > byteLength - 1 - nonVectorBytes; i -= arrayIndexScale(Kind.Float)) {
                 Float a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Float);
                 UnsafeStoreNode.store(dest, header, i + destOffset, a.floatValue(), Kind.Float);
             }
@@ -313,12 +312,12 @@ public class ArrayCopySnippets implements SnippetsInterface{
         if (src == dest && srcPos < destPos) { // bad aliased case
             for (long i = (length - 1) * scale; i >= 0; i -= scale) {
                 Object a = UnsafeLoadNode.load(src, header, i + (long) srcPos * scale, Kind.Object);
-                DirectObjectStoreNode.storeObject(dest, header, i + (long) destPos * scale, a);
+                DirectObjectStoreNode.store(dest, header, i + (long) destPos * scale, a);
             }
         } else {
             for (long i = 0; i < length * scale; i += scale) {
                 Object a = UnsafeLoadNode.load(src, header, i + (long) srcPos * scale, Kind.Object);
-                DirectObjectStoreNode.storeObject(dest, header, i + (long) destPos * scale, a);
+                DirectObjectStoreNode.store(dest, header, i + (long) destPos * scale, a);
             }
         }
         if (length > 0) {
