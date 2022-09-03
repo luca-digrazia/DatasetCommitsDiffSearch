@@ -26,7 +26,6 @@ import java.math.*;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.internal.*;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
@@ -35,43 +34,41 @@ public class TypeSystemTest {
 
     @TypeSystem({int.class, long.class, double.class, boolean.class, BigInteger.class, String.class, CallTarget.class, BExtendsAbstract.class, CExtendsAbstract.class, Abstract.class, Interface.class,
                     Object[].class})
-    @DSLOptions(useNewLayout = true)
     static class SimpleTypes {
 
         static int intCheck;
         static int intCast;
 
-        @TypeCheck(int.class)
-        public static boolean isInteger(Object value) {
+        @TypeCheck
+        public boolean isInteger(Object value) {
             intCheck++;
             return value instanceof Integer;
         }
 
-        @TypeCast(int.class)
-        public static int asInteger(Object value) {
+        @TypeCast
+        public int asInteger(Object value) {
             intCast++;
             return (int) value;
         }
 
         @ImplicitCast
-        public static double castDouble(int value) {
+        public double castDouble(int value) {
             return value;
         }
 
         @ImplicitCast
-        public static long castLong(int value) {
+        public long castLong(int value) {
             return value;
         }
 
         @ImplicitCast
-        public static BigInteger castBigInteger(int value) {
+        public BigInteger castBigInteger(int value) {
             return BigInteger.valueOf(value);
         }
 
     }
 
     @TypeSystemReference(SimpleTypes.class)
-    @GenerateNodeFactory
     public static class ValueNode extends Node {
 
         public ValueNode() {
@@ -83,47 +80,47 @@ public class TypeSystemTest {
         }
 
         public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
-            return SimpleTypesGen.expectInteger(execute(frame));
+            return SimpleTypesGen.SIMPLETYPES.expectInteger(execute(frame));
         }
 
         public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-            return SimpleTypesGen.expectLong(execute(frame));
+            return SimpleTypesGen.SIMPLETYPES.expectLong(execute(frame));
         }
 
         public String executeString(VirtualFrame frame) throws UnexpectedResultException {
-            return SimpleTypesGen.expectString(execute(frame));
+            return SimpleTypesGen.SIMPLETYPES.expectString(execute(frame));
         }
 
         public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {
-            return SimpleTypesGen.expectBoolean(execute(frame));
+            return SimpleTypesGen.SIMPLETYPES.expectBoolean(execute(frame));
         }
 
         public Object[] executeIntArray(VirtualFrame frame) throws UnexpectedResultException {
-            return SimpleTypesGen.expectObjectArray(execute(frame));
+            return SimpleTypesGen.SIMPLETYPES.expectObjectArray(execute(frame));
         }
 
         public BigInteger executeBigInteger(VirtualFrame frame) throws UnexpectedResultException {
-            return SimpleTypesGen.expectBigInteger(execute(frame));
+            return SimpleTypesGen.SIMPLETYPES.expectBigInteger(execute(frame));
         }
 
         public BExtendsAbstract executeBExtendsAbstract(VirtualFrame frame) throws UnexpectedResultException {
-            return SimpleTypesGen.expectBExtendsAbstract(execute(frame));
+            return SimpleTypesGen.SIMPLETYPES.expectBExtendsAbstract(execute(frame));
         }
 
         public CExtendsAbstract executeCExtendsAbstract(VirtualFrame frame) throws UnexpectedResultException {
-            return SimpleTypesGen.expectCExtendsAbstract(execute(frame));
+            return SimpleTypesGen.SIMPLETYPES.expectCExtendsAbstract(execute(frame));
         }
 
         public Abstract executeAbstract(VirtualFrame frame) throws UnexpectedResultException {
-            return SimpleTypesGen.expectAbstract(execute(frame));
+            return SimpleTypesGen.SIMPLETYPES.expectAbstract(execute(frame));
         }
 
         public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
-            return SimpleTypesGen.expectDouble(execute(frame));
+            return SimpleTypesGen.SIMPLETYPES.expectDouble(execute(frame));
         }
 
         public Interface executeInterface(VirtualFrame frame) throws UnexpectedResultException {
-            return SimpleTypesGen.expectInterface(execute(frame));
+            return SimpleTypesGen.SIMPLETYPES.expectInterface(execute(frame));
         }
 
         public Object execute(@SuppressWarnings("unused") VirtualFrame frame) {
@@ -137,7 +134,6 @@ public class TypeSystemTest {
     }
 
     @NodeChild(value = "children", type = ValueNode[].class)
-    @GenerateNodeFactory
     public abstract static class ChildrenNode extends ValueNode {
 
     }
