@@ -34,10 +34,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ConditionProfile;
@@ -525,8 +527,14 @@ abstract class ExecuteMethodNode extends Node {
         Object ret;
         try {
             ret = method.invoke(obj, arguments);
+        } catch (IllegalArgumentException ex) {
+            throw UnsupportedTypeException.raise(ex, arguments);
+        } catch (RuntimeException | Error ex) {
+            CompilerDirectives.transferToInterpreter();
+            throw ex;
         } catch (Throwable ex) {
-            throw rethrow(ex);
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException(ex);
         }
         return JavaInterop.toGuestValue(ret, languageContext);
     }
@@ -537,11 +545,6 @@ abstract class ExecuteMethodNode extends Node {
             sj.add(arg == null ? null : arg.toString() + " (" + arg.getClass().getSimpleName() + ")");
         }
         return sj.toString();
-    }
-
-    @SuppressWarnings({"unchecked"})
-    private static <E extends Throwable> RuntimeException rethrow(Throwable ex) throws E {
-        throw (E) ex;
     }
 
     static class JavaObjectType implements Type {
