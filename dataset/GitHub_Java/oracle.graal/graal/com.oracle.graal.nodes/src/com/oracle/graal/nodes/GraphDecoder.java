@@ -22,16 +22,54 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.compiler.common.GraalInternalError.*;
+import static com.oracle.graal.debug.GraalError.shouldNotReachHere;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.util.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.compiler.common.Fields;
+import com.oracle.graal.compiler.common.util.TypeReader;
+import com.oracle.graal.compiler.common.util.UnsafeArrayTypeReader;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.Edges;
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeBitMap;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.graph.NodeList;
+import com.oracle.graal.graph.NodeSourcePosition;
+import com.oracle.graal.graph.NodeSuccessorList;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.GraphDecoder.MethodScope;
+import com.oracle.graal.nodes.GraphDecoder.ProxyPlaceholder;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.extended.IntegerSwitchNode;
+import com.oracle.graal.nodes.graphbuilderconf.LoopExplosionPlugin.LoopExplosionKind;
+
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.PrimitiveConstant;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Decoder for {@link EncodedGraph encoded graphs} produced by {@link GraphEncoder}. Support for
@@ -41,56 +79,52 @@ import com.oracle.graal.nodes.util.*;
  */
 public class GraphDecoder {
 
-    public enum LoopExplosionKind {
-        /**
-         * No loop explosion.
-         */
-        NONE,
-        /**
-         * Fully unroll all loops. The loops must have a known finite number of iterations. If a
-         * loop has multiple loop ends, they are merged so that the subsequent loop iteration is
-         * processed only once. For example, a loop with 4 iterations and 2 loop ends leads to
-         * 1+1+1+1 = 4 copies of the loop body. The merge can introduce phi functions.
-         */
-        FULL_UNROLL,
-        /**
-         * Fully explode all loops. The loops must have a known finite number of iterations. If a
-         * loop has multiple loop ends, they are not merged so that subsequent loop iterations are
-         * processed multiple times. For example, a loop with 4 iterations and 2 loop ends leads to
-         * 1+2+4+8 = 15 copies of the loop body.
-         */
-        FULL_EXPLODE,
-        /**
-         * like {@link #FULL_EXPLODE}, but copies of the loop body that have the exact same state
-         * are merged. This reduces the number of copies necessary, but can introduce loops again.
-         */
-        MERGE_EXPLODE
-    }
-
     /** Decoding state maintained for each encoded graph. */
-    protected static class MethodScope {
+    protected class MethodScope {
+        /** The loop that contains the call. Only non-null during method inlining. */
+        public final LoopScope callerLoopScope;
         /** The target graph where decoded nodes are added to. */
         public final StructuredGraph graph;
+        /**
+         * Mark for nodes that were present before the decoding of this method started. Note that
+         * nodes that were decoded after the mark can still be part of an outer method, since
+         * floating nodes of outer methods are decoded lazily.
+         */
+        public final Graph.Mark methodStartMark;
         /** The encode graph that is decoded. */
         public final EncodedGraph encodedGraph;
         /** Access to the encoded graph. */
         public final TypeReader reader;
         /** The kind of loop explosion to be performed during decoding. */
         public final LoopExplosionKind loopExplosion;
+        /** A list of tasks to run before the method scope is closed. */
+        public final List<Runnable> cleanupTasks;
 
         /** All return nodes encountered during decoding. */
         public final List<ReturnNode> returnNodes;
         /** The exception unwind node encountered during decoding, or null. */
-        public UnwindNode unwindNode;
+        public final List<UnwindNode> unwindNodes;
 
-        protected MethodScope(StructuredGraph graph, EncodedGraph encodedGraph, LoopExplosionKind loopExplosion) {
+        /** All merges created during loop explosion. */
+        public final NodeBitMap loopExplosionMerges;
+        /**
+         * The start of explosion, and the merge point for when irreducible loops are detected. Only
+         * used when {@link MethodScope#loopExplosion} is {@link LoopExplosionKind#MERGE_EXPLODE}.
+         */
+        public MergeNode loopExplosionHead;
+
+        protected MethodScope(LoopScope callerLoopScope, StructuredGraph graph, EncodedGraph encodedGraph, LoopExplosionKind loopExplosion) {
+            this.callerLoopScope = callerLoopScope;
             this.graph = graph;
+            this.methodStartMark = graph.getMark();
             this.encodedGraph = encodedGraph;
             this.loopExplosion = loopExplosion;
+            this.cleanupTasks = new ArrayList<>();
             this.returnNodes = new ArrayList<>();
+            this.unwindNodes = new ArrayList<>();
 
             if (encodedGraph != null) {
-                reader = new UnsafeArrayTypeReader(encodedGraph.getEncoding(), encodedGraph.getStartOffset());
+                reader = UnsafeArrayTypeReader.create(encodedGraph.getEncoding(), encodedGraph.getStartOffset(), architecture.supportsUnalignedMemoryAccess());
                 if (encodedGraph.nodeStartOffsets == null) {
                     int nodeCount = reader.getUVInt();
                     long[] nodeStartOffsets = new long[nodeCount];
@@ -102,11 +136,18 @@ public class GraphDecoder {
             } else {
                 reader = null;
             }
+
+            if (loopExplosion != LoopExplosionKind.NONE) {
+                loopExplosionMerges = new NodeBitMap(graph);
+            } else {
+                loopExplosionMerges = null;
+            }
         }
     }
 
     /** Decoding state maintained for each loop in the encoded graph. */
     protected static class LoopScope {
+        public final MethodScope methodScope;
         public final LoopScope outer;
         public final int loopDepth;
         public final int loopIteration;
@@ -137,8 +178,9 @@ public class GraphDecoder {
         public final Node[] initialCreatedNodes;
 
         protected LoopScope(MethodScope methodScope) {
+            this.methodScope = methodScope;
             this.outer = null;
-            this.nextIterations = null;
+            this.nextIterations = methodScope.loopExplosion == LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN ? new ArrayDeque<>() : null;
             this.loopDepth = 0;
             this.loopIteration = 0;
             this.iterationStates = null;
@@ -150,8 +192,9 @@ public class GraphDecoder {
             this.createdNodes = new Node[nodeCount];
         }
 
-        protected LoopScope(LoopScope outer, int loopDepth, int loopIteration, int loopBeginOrderId, Node[] initialCreatedNodes, Deque<LoopScope> nextIterations,
-                        Map<LoopExplosionState, LoopExplosionState> iterationStates) {
+        protected LoopScope(MethodScope methodScope, LoopScope outer, int loopDepth, int loopIteration, int loopBeginOrderId, Node[] initialCreatedNodes, Node[] createdNodes,
+                        Deque<LoopScope> nextIterations, Map<LoopExplosionState, LoopExplosionState> iterationStates) {
+            this.methodScope = methodScope;
             this.outer = outer;
             this.loopDepth = loopDepth;
             this.loopIteration = loopIteration;
@@ -160,7 +203,7 @@ public class GraphDecoder {
             this.loopBeginOrderId = loopBeginOrderId;
             this.nodesToProcess = new BitSet(initialCreatedNodes.length);
             this.initialCreatedNodes = initialCreatedNodes;
-            this.createdNodes = Arrays.copyOf(initialCreatedNodes, initialCreatedNodes.length);
+            this.createdNodes = Arrays.copyOf(createdNodes, createdNodes.length);
         }
 
         @Override
@@ -183,7 +226,7 @@ public class GraphDecoder {
                 if (value == null) {
                     h = h * 31 + 1234;
                 } else {
-                    h = h * 31 + value.hashCode();
+                    h = h * 31 + ProxyPlaceholder.unwrap(value).hashCode();
                 }
             }
             this.hashCode = h;
@@ -202,8 +245,8 @@ public class GraphDecoder {
             Iterator<ValueNode> thisIter = thisState.values().iterator();
             Iterator<ValueNode> otherIter = otherState.values().iterator();
             while (thisIter.hasNext() && otherIter.hasNext()) {
-                ValueNode thisValue = thisIter.next();
-                ValueNode otherValue = otherIter.next();
+                ValueNode thisValue = ProxyPlaceholder.unwrap(thisIter.next());
+                ValueNode otherValue = ProxyPlaceholder.unwrap(otherIter.next());
                 if (thisValue != otherValue) {
                     return false;
                 }
@@ -233,6 +276,7 @@ public class GraphDecoder {
         public final int exceptionOrderId;
         public final int exceptionStateOrderId;
         public final int exceptionNextOrderId;
+        public JavaConstant constantReceiver;
 
         protected InvokeData(Invoke invoke, ResolvedJavaType contextType, int invokeOrderId, int callTargetOrderId, int stateAfterOrderId, int nextOrderId, int nextNextOrderId, int exceptionOrderId,
                         int exceptionStateOrderId, int exceptionNextOrderId) {
@@ -249,18 +293,77 @@ public class GraphDecoder {
         }
     }
 
-    public final void decode(StructuredGraph graph, EncodedGraph encodedGraph) {
-        MethodScope methodScope = new MethodScope(graph, encodedGraph, LoopExplosionKind.NONE);
-        decode(methodScope, null);
-        cleanupGraph(methodScope, null);
-        methodScope.graph.verify();
+    /**
+     * A node that is created during {@link LoopExplosionKind#MERGE_EXPLODE loop explosion} that can
+     * later be replaced by a ProxyNode if {@link LoopDetector loop detection} finds out that the
+     * value is defined in the loop, but used outside the loop.
+     */
+    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    protected static final class ProxyPlaceholder extends FloatingNode implements Canonicalizable {
+        public static final NodeClass<ProxyPlaceholder> TYPE = NodeClass.create(ProxyPlaceholder.class);
+
+        @Input ValueNode value;
+        @Input(InputType.Unchecked) Node proxyPoint;
+
+        public ProxyPlaceholder(ValueNode value, MergeNode proxyPoint) {
+            super(TYPE, value.stamp());
+            this.value = value;
+            this.proxyPoint = proxyPoint;
+        }
+
+        void setValue(ValueNode value) {
+            updateUsages(this.value, value);
+            this.value = value;
+        }
+
+        @Override
+        public Node canonical(CanonicalizerTool tool) {
+            if (tool.allUsagesAvailable()) {
+                /* The node is always unnecessary after graph decoding. */
+                return value;
+            } else {
+                return this;
+            }
+        }
+
+        public static ValueNode unwrap(ValueNode value) {
+            ValueNode result = value;
+            while (result instanceof ProxyPlaceholder) {
+                result = ((ProxyPlaceholder) result).value;
+            }
+            return result;
+        }
     }
 
-    protected final void decode(MethodScope methodScope, FixedWithNextNode startNode) {
-        Graph.Mark start = methodScope.graph.getMark();
+    protected final Architecture architecture;
+
+    public GraphDecoder(Architecture architecture) {
+        this.architecture = architecture;
+    }
+
+    @SuppressWarnings("try")
+    public final void decode(StructuredGraph graph, EncodedGraph encodedGraph) {
+        try (Debug.Scope scope = Debug.scope("GraphDecoder", graph)) {
+            MethodScope methodScope = new MethodScope(null, graph, encodedGraph, LoopExplosionKind.NONE);
+            decode(createInitialLoopScope(methodScope, null));
+            cleanupGraph(methodScope);
+            assert methodScope.graph.verify();
+        } catch (Throwable ex) {
+            Debug.handle(ex);
+        }
+    }
+
+    protected final LoopScope createInitialLoopScope(MethodScope methodScope, FixedWithNextNode startNode) {
         LoopScope loopScope = new LoopScope(methodScope);
         FixedNode firstNode;
         if (startNode != null) {
+            /*
+             * The start node of a graph can be referenced as the guard for a GuardedNode. We
+             * register the previous block node, so that such guards are correctly anchored when
+             * doing inlining during graph decoding.
+             */
+            registerNode(loopScope, GraphEncoder.START_NODE_ORDER_ID, AbstractBeginNode.prevBegin(startNode), false, false);
+
             firstNode = makeStubNode(methodScope, loopScope, GraphEncoder.FIRST_NODE_ORDER_ID);
             startNode.setNext(firstNode);
             loopScope.nodesToProcess.set(GraphEncoder.FIRST_NODE_ORDER_ID);
@@ -270,29 +373,62 @@ public class GraphDecoder {
             loopScope.nodesToProcess.set(GraphEncoder.START_NODE_ORDER_ID);
         }
 
+        if (methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE) {
+            methodScope.cleanupTasks.add(new LoopDetector(methodScope, startNode));
+        }
+        return loopScope;
+    }
+
+    protected final void decode(LoopScope initialLoopScope) {
+        LoopScope loopScope = initialLoopScope;
+        /* Process inlined methods. */
         while (loopScope != null) {
-            while (!loopScope.nodesToProcess.isEmpty()) {
-                loopScope = processNextNode(methodScope, loopScope);
+            MethodScope methodScope = loopScope.methodScope;
+
+            /* Process loops of method. */
+            while (loopScope != null) {
+
+                /* Process nodes of loop. */
+                while (!loopScope.nodesToProcess.isEmpty()) {
+                    loopScope = processNextNode(methodScope, loopScope);
+                    methodScope = loopScope.methodScope;
+                    /*
+                     * We can have entered a new loop, and we can have entered a new inlined method.
+                     */
+                }
+
+                /* Finished with a loop. */
+                if (loopScope.nextIterations != null && !loopScope.nextIterations.isEmpty()) {
+                    /* Loop explosion: process the loop iteration. */
+                    assert loopScope.nextIterations.peekFirst().loopIteration == loopScope.loopIteration + 1;
+                    loopScope = loopScope.nextIterations.removeFirst();
+                } else {
+                    propagateCreatedNodes(loopScope);
+                    loopScope = loopScope.outer;
+                }
             }
 
-            if (loopScope.nextIterations != null && !loopScope.nextIterations.isEmpty()) {
-                /* Loop explosion: process the loop iteration. */
-                assert loopScope.nextIterations.peekFirst().loopIteration == loopScope.loopIteration + 1;
-                loopScope = loopScope.nextIterations.removeFirst();
-            } else {
-                loopScope = loopScope.outer;
+            /*
+             * Finished with an inlined method. Perform all registered end-of-method cleanup tasks
+             * and continue with loop that contained the call.
+             */
+            for (Runnable task : methodScope.cleanupTasks) {
+                task.run();
             }
+            loopScope = methodScope.callerLoopScope;
+        }
+    }
+
+    private static void propagateCreatedNodes(LoopScope loopScope) {
+        if (loopScope.outer == null) {
+            return;
         }
 
-        if (methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE) {
-            /*
-             * The startNode can get deleted during graph cleanup, so we use its predecessor (if
-             * available) as the starting point for loop detection.
-             */
-            FixedNode detectLoopsStart = startNode.predecessor() != null ? (FixedNode) startNode.predecessor() : startNode;
-            cleanupGraph(methodScope, start);
-            Debug.dump(methodScope.graph, "Before loop detection");
-            detectLoops(methodScope.graph, detectLoopsStart);
+        /* Register nodes that were created while decoding the loop to the outside scope. */
+        for (int i = 0; i < loopScope.createdNodes.length; i++) {
+            if (loopScope.outer.createdNodes[i] == null) {
+                loopScope.outer.createdNodes[i] = loopScope.createdNodes[i];
+            }
         }
     }
 
@@ -305,10 +441,16 @@ public class GraphDecoder {
             return loopScope;
         }
 
-        if ((node instanceof MergeNode || (node instanceof LoopBeginNode && (methodScope.loopExplosion == LoopExplosionKind.FULL_UNROLL || methodScope.loopExplosion == LoopExplosionKind.FULL_EXPLODE))) &&
+        if ((node instanceof MergeNode ||
+                        (node instanceof LoopBeginNode && (methodScope.loopExplosion == LoopExplosionKind.FULL_UNROLL || methodScope.loopExplosion == LoopExplosionKind.FULL_EXPLODE ||
+                                        methodScope.loopExplosion == LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN))) &&
                         ((AbstractMergeNode) node).forwardEndCount() == 1) {
             AbstractMergeNode merge = (AbstractMergeNode) node;
             EndNode singleEnd = merge.forwardEndAt(0);
+
+            /* Nodes that would use this merge as the guard need to use the previous block. */
+            registerNode(loopScope, nodeOrderId, AbstractBeginNode.prevBegin(singleEnd), true, false);
+
             FixedNode next = makeStubNode(methodScope, loopScope, nodeOrderId + GraphEncoder.BEGIN_NEXT_ORDER_ID_OFFSET);
             singleEnd.replaceAtPredecessor(next);
 
@@ -320,7 +462,32 @@ public class GraphDecoder {
         LoopScope successorAddScope = loopScope;
         boolean updatePredecessors = true;
         if (node instanceof LoopExitNode) {
-            successorAddScope = loopScope.outer;
+            if (methodScope.loopExplosion == LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN || (methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE && loopScope.loopDepth > 1)) {
+                /*
+                 * We do not want to merge loop exits of inner loops. Instead, we want to keep
+                 * exploding the outer loop separately for every loop exit and then merge the outer
+                 * loop. Therefore, we create a new LoopScope of the outer loop for every loop exit
+                 * of the inner loop.
+                 */
+                LoopScope outerScope = loopScope.outer;
+                int nextIterationNumber = outerScope.nextIterations.isEmpty() ? outerScope.loopIteration + 1 : outerScope.nextIterations.getLast().loopIteration + 1;
+                successorAddScope = new LoopScope(methodScope, outerScope.outer, outerScope.loopDepth, nextIterationNumber, outerScope.loopBeginOrderId, outerScope.initialCreatedNodes,
+                                loopScope.initialCreatedNodes, outerScope.nextIterations, outerScope.iterationStates);
+                checkLoopExplosionIteration(methodScope, successorAddScope);
+
+                /*
+                 * Nodes that are still unprocessed in the outer scope might be merge nodes that are
+                 * also reachable from the new exploded scope. Clearing them ensures that we do not
+                 * merge, but instead keep exploding.
+                 */
+                for (int id = outerScope.nodesToProcess.nextSetBit(0); id >= 0; id = outerScope.nodesToProcess.nextSetBit(id + 1)) {
+                    successorAddScope.createdNodes[id] = null;
+                }
+
+                outerScope.nextIterations.addLast(successorAddScope);
+            } else {
+                successorAddScope = loopScope.outer;
+            }
             updatePredecessors = methodScope.loopExplosion == LoopExplosionKind.NONE;
         }
 
@@ -339,10 +506,13 @@ public class GraphDecoder {
 
         } else if (node instanceof LoopExitNode) {
             if (methodScope.loopExplosion != LoopExplosionKind.NONE) {
-                handleLoopExplosionProxyNodes(methodScope, loopScope, (LoopExitNode) node, nodeOrderId);
+                handleLoopExplosionProxyNodes(methodScope, loopScope, successorAddScope, (LoopExitNode) node, nodeOrderId);
             } else {
                 handleProxyNodes(methodScope, loopScope, (LoopExitNode) node);
             }
+
+        } else if (node instanceof MergeNode) {
+            handleMergeNode(((MergeNode) node));
 
         } else if (node instanceof AbstractEndNode) {
             LoopScope phiInputScope = loopScope;
@@ -360,14 +530,16 @@ public class GraphDecoder {
 
                 if (merge instanceof LoopBeginNode) {
                     assert phiNodeScope == phiInputScope && phiNodeScope == loopScope;
-                    resultScope = new LoopScope(loopScope, loopScope.loopDepth + 1, 0, mergeOrderId, Arrays.copyOf(loopScope.createdNodes, loopScope.createdNodes.length), //
+                    resultScope = new LoopScope(methodScope, loopScope, loopScope.loopDepth + 1, 0, mergeOrderId,
+                                    Arrays.copyOf(loopScope.createdNodes, loopScope.createdNodes.length), loopScope.createdNodes, //
                                     methodScope.loopExplosion != LoopExplosionKind.NONE ? new ArrayDeque<>() : null, //
                                     methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE ? new HashMap<>() : null);
+                    phiInputScope = resultScope;
                     phiNodeScope = resultScope;
 
-                    registerNode(phiInputScope, mergeOrderId, null, true, true);
-                    phiInputScope.nodesToProcess.clear(mergeOrderId);
-                    phiNodeScope.nodesToProcess.set(mergeOrderId);
+                    registerNode(loopScope, mergeOrderId, null, true, true);
+                    loopScope.nodesToProcess.clear(mergeOrderId);
+                    resultScope.nodesToProcess.set(mergeOrderId);
                 }
             }
 
@@ -375,16 +547,15 @@ public class GraphDecoder {
 
         } else if (node instanceof Invoke) {
             InvokeData invokeData = readInvokeData(methodScope, nodeOrderId, (Invoke) node);
-            handleInvoke(methodScope, loopScope, invokeData);
+            resultScope = handleInvoke(methodScope, loopScope, invokeData);
 
         } else if (node instanceof ReturnNode) {
             methodScope.returnNodes.add((ReturnNode) node);
         } else if (node instanceof UnwindNode) {
-            assert methodScope.unwindNode == null : "graph can have only one UnwindNode";
-            methodScope.unwindNode = (UnwindNode) node;
+            methodScope.unwindNodes.add((UnwindNode) node);
 
         } else {
-            simplifyFixedNode(methodScope, loopScope, nodeOrderId, node);
+            handleFixedNode(methodScope, loopScope, nodeOrderId, node);
         }
 
         return resultScope;
@@ -401,7 +572,8 @@ public class GraphDecoder {
             int exceptionOrderId = readOrderId(methodScope);
             int exceptionStateOrderId = readOrderId(methodScope);
             int exceptionNextOrderId = readOrderId(methodScope);
-            return new InvokeData(invoke, contextType, invokeOrderId, callTargetOrderId, stateAfterOrderId, nextOrderId, nextNextOrderId, exceptionOrderId, exceptionStateOrderId, exceptionNextOrderId);
+            return new InvokeData(invoke, contextType, invokeOrderId, callTargetOrderId, stateAfterOrderId, nextOrderId, nextNextOrderId, exceptionOrderId, exceptionStateOrderId,
+                            exceptionNextOrderId);
         } else {
             return new InvokeData(invoke, contextType, invokeOrderId, callTargetOrderId, stateAfterOrderId, nextOrderId, -1, -1, -1, -1);
         }
@@ -412,8 +584,12 @@ public class GraphDecoder {
      * successors encoded. Instead, this information is provided separately to allow method inlining
      * without decoding and adding them to the graph upfront. For non-inlined methods, this method
      * restores the normal state. Subclasses can override it to perform method inlining.
+     *
+     * The return value is the loop scope where decoding should continue. When method inlining
+     * should be performed, the returned loop scope must be a new loop scope for the inlined method.
+     * Without inlining, the original loop scope must be returned.
      */
-    protected void handleInvoke(MethodScope methodScope, LoopScope loopScope, InvokeData invokeData) {
+    protected LoopScope handleInvoke(MethodScope methodScope, LoopScope loopScope, InvokeData invokeData) {
         assert invokeData.invoke.callTarget() == null : "callTarget edge is ignored during decoding of Invoke";
         CallTargetNode callTarget = (CallTargetNode) ensureNodeCreated(methodScope, loopScope, invokeData.callTargetOrderId);
         if (invokeData.invoke instanceof InvokeWithExceptionNode) {
@@ -429,6 +605,15 @@ public class GraphDecoder {
         if (invokeData.invoke instanceof InvokeWithExceptionNode) {
             ((InvokeWithExceptionNode) invokeData.invoke).setExceptionEdge((AbstractBeginNode) makeStubNode(methodScope, loopScope, invokeData.exceptionOrderId));
         }
+        return loopScope;
+    }
+
+    /**
+     * Hook for subclasses to perform simplifications for a non-loop-header control flow merge.
+     *
+     * @param merge The control flow merge.
+     */
+    protected void handleMergeNode(MergeNode merge) {
     }
 
     protected void handleLoopExplosionBegin(MethodScope methodScope, LoopScope loopScope, LoopBeginNode loopBegin) {
@@ -442,8 +627,7 @@ public class GraphDecoder {
             LoopExplosionState queryState = new LoopExplosionState(frameState, null);
             LoopExplosionState existingState = loopScope.iterationStates.get(queryState);
             if (existingState != null) {
-                loopBegin.replaceAtUsages(existingState.merge);
-                loopBegin.safeDelete();
+                loopBegin.replaceAtUsagesAndDelete(existingState.merge);
                 successor.safeDelete();
                 for (EndNode predecessor : predecessors) {
                     existingState.merge.addForwardEnd(predecessor);
@@ -453,8 +637,49 @@ public class GraphDecoder {
         }
 
         MergeNode merge = methodScope.graph.add(new MergeNode());
-        loopBegin.replaceAtUsages(merge);
-        loopBegin.safeDelete();
+        methodScope.loopExplosionMerges.markAndGrow(merge);
+
+        if (methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE) {
+            if (loopScope.iterationStates.size() == 0 && loopScope.loopDepth == 1) {
+                if (methodScope.loopExplosionHead != null) {
+                    throw new BailoutException("Graal implementation restriction: Method with " + LoopExplosionKind.MERGE_EXPLODE + " loop explosion must not have more than one top-level loop");
+                }
+                methodScope.loopExplosionHead = merge;
+            }
+
+            List<ValueNode> newFrameStateValues = new ArrayList<>();
+            for (ValueNode frameStateValue : frameState.values) {
+                if (frameStateValue == null || frameStateValue.isConstant() || !methodScope.graph.isNew(methodScope.methodStartMark, frameStateValue)) {
+                    newFrameStateValues.add(frameStateValue);
+
+                } else {
+                    ProxyPlaceholder newFrameStateValue = methodScope.graph.unique(new ProxyPlaceholder(frameStateValue, merge));
+                    newFrameStateValues.add(newFrameStateValue);
+
+                    /*
+                     * We do not have the orderID of the value anymore, so we need to search through
+                     * the complete list of nodes to find a match.
+                     */
+                    for (int i = 0; i < loopScope.createdNodes.length; i++) {
+                        if (loopScope.createdNodes[i] == frameStateValue) {
+                            loopScope.createdNodes[i] = newFrameStateValue;
+                        }
+                        if (loopScope.initialCreatedNodes[i] == frameStateValue) {
+                            loopScope.initialCreatedNodes[i] = newFrameStateValue;
+                        }
+                    }
+                }
+            }
+
+            FrameState newFrameState = methodScope.graph.add(new FrameState(frameState.outerFrameState(), frameState.method(), frameState.bci, newFrameStateValues, frameState.localsSize(),
+                            frameState.stackSize(), frameState.rethrowException(), frameState.duringCall(), frameState.monitorIds(), frameState.virtualObjectMappings()));
+
+            frameState.replaceAtUsages(newFrameState);
+            frameState.safeDelete();
+            frameState = newFrameState;
+        }
+
+        loopBegin.replaceAtUsagesAndDelete(merge);
         merge.setStateAfter(frameState);
         merge.setNext(successor);
         for (EndNode predecessor : predecessors) {
@@ -485,8 +710,9 @@ public class GraphDecoder {
         assert methodScope.loopExplosion != LoopExplosionKind.NONE;
         if (methodScope.loopExplosion != LoopExplosionKind.FULL_UNROLL || loopScope.nextIterations.isEmpty()) {
             int nextIterationNumber = loopScope.nextIterations.isEmpty() ? loopScope.loopIteration + 1 : loopScope.nextIterations.getLast().loopIteration + 1;
-            LoopScope nextIterationScope = new LoopScope(loopScope.outer, loopScope.loopDepth, nextIterationNumber, loopScope.loopBeginOrderId, loopScope.initialCreatedNodes,
-                            loopScope.nextIterations, loopScope.iterationStates);
+            LoopScope nextIterationScope = new LoopScope(methodScope, loopScope.outer, loopScope.loopDepth, nextIterationNumber, loopScope.loopBeginOrderId, loopScope.initialCreatedNodes,
+                            loopScope.initialCreatedNodes, loopScope.nextIterations, loopScope.iterationStates);
+            checkLoopExplosionIteration(methodScope, nextIterationScope);
             loopScope.nextIterations.addLast(nextIterationScope);
             registerNode(nextIterationScope, loopScope.loopBeginOrderId, null, true, true);
             makeStubNode(methodScope, nextIterationScope, loopScope.loopBeginOrderId);
@@ -502,7 +728,7 @@ public class GraphDecoder {
      * @param nodeOrderId The orderId of the node.
      * @param node The node to be simplified.
      */
-    protected void simplifyFixedNode(MethodScope methodScope, LoopScope loopScope, int nodeOrderId, FixedNode node) {
+    protected void handleFixedNode(MethodScope methodScope, LoopScope loopScope, int nodeOrderId, FixedNode node) {
     }
 
     protected void handleProxyNodes(MethodScope methodScope, LoopScope loopScope, LoopExitNode loopExit) {
@@ -522,7 +748,7 @@ public class GraphDecoder {
         }
     }
 
-    protected void handleLoopExplosionProxyNodes(MethodScope methodScope, LoopScope loopScope, LoopExitNode loopExit, int loopExitOrderId) {
+    protected void handleLoopExplosionProxyNodes(MethodScope methodScope, LoopScope loopScope, LoopScope outerScope, LoopExitNode loopExit, int loopExitOrderId) {
         assert loopExit.stateAfter() == null;
         int stateAfterOrderId = readOrderId(methodScope);
 
@@ -531,22 +757,39 @@ public class GraphDecoder {
         FixedNode loopExitSuccessor = loopExit.next();
         loopExit.replaceAtPredecessor(begin);
 
+        MergeNode loopExitPlaceholder = null;
+        if (methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE && loopScope.loopDepth == 1) {
+            /*
+             * This exit might end up as a loop exit of a loop detected after partial evaluation. We
+             * need to be able to create a FrameState and the necessary proxy nodes in this case.
+             */
+            loopExitPlaceholder = methodScope.graph.add(new MergeNode());
+            methodScope.loopExplosionMerges.markAndGrow(loopExitPlaceholder);
+
+            EndNode end = methodScope.graph.add(new EndNode());
+            begin.setNext(end);
+            loopExitPlaceholder.addForwardEnd(end);
+
+            begin = methodScope.graph.add(new BeginNode());
+            loopExitPlaceholder.setNext(begin);
+        }
+
         /*
          * In the original graph, the loop exit is not a merge node. Multiple exploded loop
          * iterations now take the same loop exit, so we have to introduce a new merge node to
          * handle the merge.
          */
         MergeNode merge = null;
-        Node existingExit = lookupNode(loopScope.outer, loopExitOrderId);
+        Node existingExit = lookupNode(outerScope, loopExitOrderId);
         if (existingExit == null) {
             /* First loop iteration that exits. No merge necessary yet. */
-            registerNode(loopScope.outer, loopExitOrderId, begin, false, false);
+            registerNode(outerScope, loopExitOrderId, begin, false, false);
             begin.setNext(loopExitSuccessor);
 
         } else if (existingExit instanceof BeginNode) {
             /* Second loop iteration that exits. Create the merge. */
             merge = methodScope.graph.add(new MergeNode());
-            registerNode(loopScope.outer, loopExitOrderId, merge, true, false);
+            registerNode(outerScope, loopExitOrderId, merge, true, false);
             /* Add the first iteration. */
             EndNode firstEnd = methodScope.graph.add(new EndNode());
             ((BeginNode) existingExit).setNext(firstEnd);
@@ -575,15 +818,22 @@ public class GraphDecoder {
             int proxyOrderId = readOrderId(methodScope);
             ProxyNode proxy = (ProxyNode) ensureNodeCreated(methodScope, loopScope, proxyOrderId);
             ValueNode phiInput = proxy.value();
-            ValueNode replacement;
 
-            ValueNode existing = (ValueNode) loopScope.outer.createdNodes[proxyOrderId];
+            if (loopExitPlaceholder != null) {
+                if (!phiInput.isConstant()) {
+                    phiInput = methodScope.graph.unique(new ProxyPlaceholder(phiInput, loopExitPlaceholder));
+                }
+                registerNode(loopScope, proxyOrderId, phiInput, true, false);
+            }
+
+            ValueNode replacement;
+            ValueNode existing = (ValueNode) outerScope.createdNodes[proxyOrderId];
             if (existing == null || existing == phiInput) {
                 /*
                  * We are at the first loop exit, or the proxy carries the same value for all exits.
                  * We do not need a phi node yet.
                  */
-                registerNode(loopScope.outer, proxyOrderId, phiInput, true, false);
+                registerNode(outerScope, proxyOrderId, phiInput, true, false);
                 replacement = phiInput;
 
             } else if (!merge.isPhiAtMerge(existing)) {
@@ -595,7 +845,7 @@ public class GraphDecoder {
                 }
                 /* Add the input from this exit. */
                 phi.addInput(phiInput);
-                registerNode(loopScope.outer, proxyOrderId, phi, true, false);
+                registerNode(outerScope, proxyOrderId, phi, true, false);
                 replacement = phi;
                 phiCreated = true;
 
@@ -606,18 +856,22 @@ public class GraphDecoder {
                 replacement = phi;
             }
 
-            methodScope.graph.replaceFloating(proxy, replacement);
+            proxy.replaceAtUsagesAndDelete(replacement);
+        }
+
+        if (loopExitPlaceholder != null) {
+            registerNode(loopScope, stateAfterOrderId, null, true, true);
+            loopExitPlaceholder.setStateAfter((FrameState) ensureNodeCreated(methodScope, loopScope, stateAfterOrderId));
         }
 
         if (merge != null && (merge.stateAfter() == null || phiCreated)) {
             FrameState oldStateAfter = merge.stateAfter();
-            registerNode(loopScope.outer, stateAfterOrderId, null, true, true);
-            merge.setStateAfter((FrameState) ensureNodeCreated(methodScope, loopScope.outer, stateAfterOrderId));
+            registerNode(outerScope, stateAfterOrderId, null, true, true);
+            merge.setStateAfter((FrameState) ensureNodeCreated(methodScope, outerScope, stateAfterOrderId));
             if (oldStateAfter != null) {
                 oldStateAfter.safeDelete();
             }
         }
-
         loopExit.safeDelete();
         assert loopExitSuccessor.predecessor() == null;
         if (merge != null) {
@@ -655,7 +909,7 @@ public class GraphDecoder {
          * not processed yet when processing the loop body, we need to create all phi functions
          * upfront.
          */
-        boolean lazyPhi = !(merge instanceof LoopBeginNode) || methodScope.loopExplosion != LoopExplosionKind.NONE;
+        boolean lazyPhi = allowLazyPhis() && (!(merge instanceof LoopBeginNode) || methodScope.loopExplosion != LoopExplosionKind.NONE);
         int numPhis = methodScope.reader.getUVInt();
         for (int i = 0; i < numPhis; i++) {
             int phiInputOrderId = readOrderId(methodScope);
@@ -690,6 +944,11 @@ public class GraphDecoder {
         }
     }
 
+    protected boolean allowLazyPhis() {
+        /* We need to exactly reproduce the encoded graph, including unnecessary phi functions. */
+        return false;
+    }
+
     protected Node instantiateNode(MethodScope methodScope, int nodeOrderId) {
         methodScope.reader.setByteIndex(methodScope.encodedGraph.nodeStartOffsets[nodeOrderId]);
         NodeClass<?> nodeClass = methodScope.encodedGraph.getNodeClasses()[methodScope.reader.getUVInt()];
@@ -697,6 +956,7 @@ public class GraphDecoder {
     }
 
     protected void readProperties(MethodScope methodScope, Node node) {
+        node.setNodeSourcePosition((NodeSourcePosition) readObject(methodScope));
         Fields fields = node.getNodeClass().getData();
         for (int pos = 0; pos < fields.getCount(); pos++) {
             if (fields.getType(pos).isPrimitive()) {
@@ -723,7 +983,7 @@ public class GraphDecoder {
             }
             int orderId = readOrderId(methodScope);
             Node value = ensureNodeCreated(methodScope, loopScope, orderId);
-            Edges.initializeNode(node, edges.getOffsets(), index, value);
+            edges.initializeNode(node, index, value);
             if (updateUsages && value != null && !value.isDeleted()) {
                 edges.update(node, null, value);
 
@@ -736,7 +996,7 @@ public class GraphDecoder {
             int size = methodScope.reader.getSVInt();
             if (size != -1) {
                 NodeList<Node> nodeList = new NodeInputList<>(node, size);
-                Edges.initializeList(node, edges.getOffsets(), index, nodeList);
+                edges.initializeList(node, index, nodeList);
                 for (int idx = 0; idx < size; idx++) {
                     int orderId = readOrderId(methodScope);
                     Node value = ensureNodeCreated(methodScope, loopScope, orderId);
@@ -766,17 +1026,24 @@ public class GraphDecoder {
              * or value numbering.
              */
             node = methodScope.graph.addWithoutUnique(node);
-
         } else {
             /* Allow subclasses to canonicalize and intercept nodes. */
             node = handleFloatingNodeBeforeAdd(methodScope, loopScope, node);
             if (!node.isAlive()) {
-                node = methodScope.graph.addOrUnique(node);
+                node = addFloatingNode(methodScope, node);
             }
             node = handleFloatingNodeAfterAdd(methodScope, loopScope, node);
         }
         registerNode(loopScope, nodeOrderId, node, false, false);
         return node;
+    }
+
+    protected Node addFloatingNode(MethodScope methodScope, Node node) {
+        /*
+         * We want to exactly reproduce the encoded graph. Even though nodes should be unique in the
+         * encoded graph, this is not always guaranteed.
+         */
+        return methodScope.graph.addWithoutUnique(node);
     }
 
     /**
@@ -785,7 +1052,13 @@ public class GraphDecoder {
     protected Node decodeFloatingNode(MethodScope methodScope, LoopScope loopScope, int nodeOrderId) {
         long readerByteIndex = methodScope.reader.getByteIndex();
         Node node = instantiateNode(methodScope, nodeOrderId);
-        assert !(node instanceof FixedNode);
+        if (node instanceof FixedNode) {
+            /*
+             * This is a severe error that will lead to a corrupted graph, so it is better not to
+             * continue decoding at all.
+             */
+            throw shouldNotReachHere("Not a floating node: " + node.getClass().getName());
+        }
 
         /* Read the properties of the node. */
         readProperties(methodScope, node);
@@ -812,6 +1085,9 @@ public class GraphDecoder {
     /**
      * Hook for subclasses to process a non-fixed node after it is added to the graph.
      *
+     * If this method replaces a node with another node, it must update its source position if the
+     * original node has the source position set.
+     *
      * @param methodScope The current method.
      * @param loopScope The current loop.
      * @param node The node to be canonicalized.
@@ -834,7 +1110,7 @@ public class GraphDecoder {
             }
             int orderId = readOrderId(methodScope);
             Node value = makeStubNode(methodScope, loopScope, orderId);
-            Edges.initializeNode(node, edges.getOffsets(), index, value);
+            edges.initializeNode(node, index, value);
             if (updatePredecessors && value != null) {
                 edges.update(node, null, value);
             }
@@ -846,7 +1122,7 @@ public class GraphDecoder {
             int size = methodScope.reader.getSVInt();
             if (size != -1) {
                 NodeList<Node> nodeList = new NodeSuccessorList<>(node, size);
-                Edges.initializeList(node, edges.getOffsets(), index, nodeList);
+                edges.initializeList(node, index, nodeList);
                 for (int idx = 0; idx < size; idx++) {
                     int orderId = readOrderId(methodScope);
                     Node value = makeStubNode(methodScope, loopScope, orderId);
@@ -892,7 +1168,7 @@ public class GraphDecoder {
                 assert index == edges.getCount() - 1 : "PhiNode has one variable size input (the values)";
                 if (decode) {
                     /* The values must not be null, so initialize with an empty list. */
-                    Edges.initializeList(node, edges.getOffsets(), index, new NodeInputList<>(node));
+                    edges.initializeList(node, index, new NodeInputList<>(node));
                 }
             }
             return true;
@@ -908,7 +1184,7 @@ public class GraphDecoder {
             return true;
 
         } else if (node instanceof Invoke) {
-            assert node instanceof InvokeNode || node instanceof InvokeWithExceptionNode : "The only two Invoke node classes";
+            assert node instanceof InvokeNode || node instanceof InvokeWithExceptionNode : "The only two Invoke node classes. Got " + node.getClass();
             assert direct : "Invoke and InvokeWithException only have direct successor and input edges";
             if (edges.type() == Edges.Type.Successors) {
                 assert edges.getCount() == (node instanceof InvokeWithExceptionNode ? 2 : 1) : "InvokeNode has one successor (next); InvokeWithExceptionNode has two successors (next, exceptionEdge)";
@@ -945,224 +1221,30 @@ public class GraphDecoder {
         return methodScope.encodedGraph.getObjects()[methodScope.reader.getUVInt()];
     }
 
-    /*
-     * The following methods are a literal copy from GraphBuilderPhase.
+    /**
+     * Removes unnecessary nodes from the graph after decoding.
+     *
+     * @param methodScope The current method.
      */
-
-    protected void detectLoops(StructuredGraph currentGraph, FixedNode startInstruction) {
-        NodeBitMap visited = currentGraph.createNodeBitMap();
-        NodeBitMap active = currentGraph.createNodeBitMap();
-        Deque<Node> stack = new ArrayDeque<>();
-        stack.add(startInstruction);
-        visited.mark(startInstruction);
-        while (!stack.isEmpty()) {
-            Node next = stack.peek();
-            assert next.isDeleted() || visited.isMarked(next);
-            if (next.isDeleted() || active.isMarked(next)) {
-                stack.pop();
-                if (!next.isDeleted()) {
-                    active.clear(next);
-                }
-            } else {
-                active.mark(next);
-                for (Node n : next.cfgSuccessors()) {
-                    if (active.contains(n)) {
-                        // Detected cycle.
-                        assert n instanceof MergeNode;
-                        assert next instanceof EndNode;
-                        MergeNode merge = (MergeNode) n;
-                        EndNode endNode = (EndNode) next;
-                        merge.removeEnd(endNode);
-                        FixedNode afterMerge = merge.next();
-                        if (!(afterMerge instanceof EndNode) || !(((EndNode) afterMerge).merge() instanceof LoopBeginNode)) {
-                            FrameState stateAfter = merge.stateAfter();
-                            merge.setNext(null);
-                            merge.setStateAfter(null);
-                            LoopBeginNode newLoopBegin = appendLoopBegin(currentGraph, merge);
-                            newLoopBegin.setNext(afterMerge);
-                            newLoopBegin.setStateAfter(stateAfter);
-                        }
-                        LoopBeginNode loopBegin = (LoopBeginNode) ((EndNode) merge.next()).merge();
-                        LoopEndNode loopEnd = currentGraph.add(new LoopEndNode(loopBegin));
-                        endNode.replaceAndDelete(loopEnd);
-                    } else if (visited.contains(n)) {
-                        // Normal merge into a branch we are already exploring.
-                    } else {
-                        visited.mark(n);
-                        stack.push(n);
-                    }
-                }
-            }
-        }
-
-        Debug.dump(currentGraph, "After loops detected");
-        insertLoopEnds(currentGraph, startInstruction);
-    }
-
-    private static LoopBeginNode appendLoopBegin(StructuredGraph currentGraph, FixedWithNextNode fixedWithNext) {
-        EndNode preLoopEnd = currentGraph.add(new EndNode());
-        LoopBeginNode loopBegin = currentGraph.add(new LoopBeginNode());
-        fixedWithNext.setNext(preLoopEnd);
-        // Add the single non-loop predecessor of the loop header.
-        loopBegin.addForwardEnd(preLoopEnd);
-        return loopBegin;
-    }
-
-    private static void insertLoopEnds(StructuredGraph currentGraph, FixedNode startInstruction) {
-        NodeBitMap visited = currentGraph.createNodeBitMap();
-        Deque<Node> stack = new ArrayDeque<>();
-        stack.add(startInstruction);
-        visited.mark(startInstruction);
-        List<LoopBeginNode> loopBegins = new ArrayList<>();
-        while (!stack.isEmpty()) {
-            Node next = stack.pop();
-            assert visited.isMarked(next);
-            if (next instanceof LoopBeginNode) {
-                loopBegins.add((LoopBeginNode) next);
-            }
-            for (Node n : next.cfgSuccessors()) {
-                if (visited.contains(n)) {
-                    // Nothing to do.
-                } else {
-                    visited.mark(n);
-                    stack.push(n);
-                }
-            }
-        }
-
-        IdentityHashMap<LoopBeginNode, List<LoopBeginNode>> innerLoopsMap = new IdentityHashMap<>();
-        for (int i = loopBegins.size() - 1; i >= 0; --i) {
-            LoopBeginNode loopBegin = loopBegins.get(i);
-            insertLoopExits(currentGraph, loopBegin, innerLoopsMap);
-        }
-
-        // Remove degenerated merges with only one predecessor.
-        for (LoopBeginNode loopBegin : loopBegins) {
-            Node pred = loopBegin.forwardEnd().predecessor();
-            if (pred instanceof MergeNode) {
-                MergeNode.removeMergeIfDegenerated((MergeNode) pred);
-            }
-        }
-    }
-
-    private static void insertLoopExits(StructuredGraph currentGraph, LoopBeginNode loopBegin, IdentityHashMap<LoopBeginNode, List<LoopBeginNode>> innerLoopsMap) {
-        NodeBitMap visited = currentGraph.createNodeBitMap();
-        Deque<Node> stack = new ArrayDeque<>();
-        for (LoopEndNode loopEnd : loopBegin.loopEnds()) {
-            stack.push(loopEnd);
-            visited.mark(loopEnd);
-        }
-
-        List<ControlSplitNode> controlSplits = new ArrayList<>();
-        List<LoopBeginNode> innerLoopBegins = new ArrayList<>();
-
-        while (!stack.isEmpty()) {
-            Node current = stack.pop();
-            if (current == loopBegin) {
-                continue;
-            }
-            for (Node pred : current.cfgPredecessors()) {
-                if (!visited.isMarked(pred)) {
-                    visited.mark(pred);
-                    if (pred instanceof LoopExitNode) {
-                        // Inner loop
-                        LoopExitNode loopExitNode = (LoopExitNode) pred;
-                        LoopBeginNode innerLoopBegin = loopExitNode.loopBegin();
-                        if (!visited.isMarked(innerLoopBegin)) {
-                            stack.push(innerLoopBegin);
-                            visited.mark(innerLoopBegin);
-                            innerLoopBegins.add(innerLoopBegin);
-                        }
-                    } else {
-                        if (pred instanceof ControlSplitNode) {
-                            ControlSplitNode controlSplitNode = (ControlSplitNode) pred;
-                            controlSplits.add(controlSplitNode);
-                        }
-                        stack.push(pred);
-                    }
-                }
-            }
-        }
-
-        for (ControlSplitNode controlSplit : controlSplits) {
-            for (Node succ : controlSplit.cfgSuccessors()) {
-                if (!visited.isMarked(succ)) {
-                    LoopExitNode loopExit = currentGraph.add(new LoopExitNode(loopBegin));
-                    FixedNode next = ((FixedWithNextNode) succ).next();
-                    next.replaceAtPredecessor(loopExit);
-                    loopExit.setNext(next);
-                }
-            }
-        }
-
-        for (LoopBeginNode inner : innerLoopBegins) {
-            addLoopExits(currentGraph, loopBegin, inner, innerLoopsMap, visited);
-        }
-
-        innerLoopsMap.put(loopBegin, innerLoopBegins);
-    }
-
-    private static void addLoopExits(StructuredGraph currentGraph, LoopBeginNode loopBegin, LoopBeginNode inner, IdentityHashMap<LoopBeginNode, List<LoopBeginNode>> innerLoopsMap, NodeBitMap visited) {
-        for (LoopExitNode exit : inner.loopExits()) {
-            if (!visited.isMarked(exit)) {
-                LoopExitNode newLoopExit = currentGraph.add(new LoopExitNode(loopBegin));
-                FixedNode next = exit.next();
-                next.replaceAtPredecessor(newLoopExit);
-                newLoopExit.setNext(next);
-            }
-        }
-
-        for (LoopBeginNode innerInner : innerLoopsMap.get(inner)) {
-            addLoopExits(currentGraph, loopBegin, innerInner, innerLoopsMap, visited);
-        }
-    }
-
-    protected void cleanupGraph(MethodScope methodScope, Graph.Mark start) {
+    protected void cleanupGraph(MethodScope methodScope) {
         assert verifyEdges(methodScope);
-
-        Debug.dump(methodScope.graph, "Before removing redundant merges");
-        for (Node node : methodScope.graph.getNewNodes(start)) {
-            if (node instanceof MergeNode) {
-                MergeNode mergeNode = (MergeNode) node;
-                if (mergeNode.forwardEndCount() == 1) {
-                    methodScope.graph.reduceTrivialMerge(mergeNode);
-                }
-            }
-        }
-
-        Debug.dump(methodScope.graph, "Before removing redundant begins");
-        for (Node node : methodScope.graph.getNewNodes(start)) {
-            if (node instanceof BeginNode || node instanceof KillingBeginNode) {
-                if (!(node.predecessor() instanceof ControlSplitNode) && node.hasNoUsages()) {
-                    GraphUtil.unlinkFixedNode((AbstractBeginNode) node);
-                    node.safeDelete();
-                }
-            }
-        }
-
-        Debug.dump(methodScope.graph, "Before removing unused non-fixed nodes");
-        for (Node node : methodScope.graph.getNewNodes(start)) {
-            if (!(node instanceof FixedNode) && node.hasNoUsages()) {
-                GraphUtil.killCFG(node);
-            }
-        }
     }
 
     protected boolean verifyEdges(MethodScope methodScope) {
         for (Node node : methodScope.graph.getNodes()) {
             assert node.isAlive();
-            node.acceptInputs((n, i) -> {
+            for (Node i : node.inputs()) {
                 assert i.isAlive();
-                assert i.usages().contains(n);
-            });
-            node.acceptSuccessors((n, s) -> {
+                assert i.usages().contains(node);
+            }
+            for (Node s : node.successors()) {
                 assert s.isAlive();
-                assert s.predecessor() == n;
-            });
+                assert s.predecessor() == node;
+            }
 
             for (Node usage : node.usages()) {
                 assert usage.isAlive();
-                assert usage.inputs().contains(node);
+                assert usage.inputs().contains(node) : node + " / " + usage + " / " + usage.inputs().count();
             }
             if (node.predecessor() != null) {
                 assert node.predecessor().isAlive();
@@ -1170,5 +1252,610 @@ public class GraphDecoder {
             }
         }
         return true;
+    }
+}
+
+class LoopDetector implements Runnable {
+
+    /**
+     * Information about loops before the actual loop nodes are inserted.
+     */
+    static class Loop {
+        /**
+         * The header, i.e., the target of backward branches.
+         */
+        MergeNode header;
+        /**
+         * The ends, i.e., the source of backward branches. The {@link EndNode#successors successor}
+         * is the {@link #header loop header}.
+         */
+        List<EndNode> ends = new ArrayList<>();
+        /**
+         * Exits of the loop. The successor is a {@link MergeNode} marked in
+         * {@link MethodScope#loopExplosionMerges}.
+         */
+        List<AbstractEndNode> exits = new ArrayList<>();
+        /**
+         * Set to true when the loop is irreducible, i.e., has multiple entries. See
+         * {@link #handleIrreducibleLoop} for details on the handling.
+         */
+        boolean irreducible;
+    }
+
+    private final MethodScope methodScope;
+    private final FixedNode startInstruction;
+
+    private Loop irreducibleLoopHandler;
+    private IntegerSwitchNode irreducibleLoopSwitch;
+
+    protected LoopDetector(MethodScope methodScope, FixedNode startInstruction) {
+        this.methodScope = methodScope;
+        this.startInstruction = startInstruction;
+    }
+
+    @Override
+    public void run() {
+        Debug.dump(Debug.VERBOSE_LOG_LEVEL, methodScope.graph, "Before loop detection");
+
+        List<Loop> orderedLoops = findLoops();
+        assert orderedLoops.get(orderedLoops.size() - 1) == irreducibleLoopHandler : "outermost loop must be the last element in the list";
+
+        for (Loop loop : orderedLoops) {
+            if (loop.ends.isEmpty()) {
+                assert loop == irreducibleLoopHandler;
+                continue;
+            }
+
+            /*
+             * The algorithm to find loop exits requires that inner loops have already been
+             * processed. Therefore, we need to iterate the loops in order (inner loops before outer
+             * loops), and we cannot find the exits for all loops before we start inserting nodes.
+             */
+            findLoopExits(loop);
+
+            if (loop.irreducible) {
+                handleIrreducibleLoop(loop);
+            } else {
+                insertLoopNodes(loop);
+            }
+            Debug.dump(Debug.VERBOSE_LOG_LEVEL, methodScope.graph, "After handling of loop %s", loop.header);
+        }
+
+        logIrreducibleLoops();
+        Debug.dump(Debug.VERBOSE_LOG_LEVEL, methodScope.graph, "After loop detection");
+    }
+
+    private List<Loop> findLoops() {
+        /* Mapping from the loop header node to additional loop information. */
+        Map<MergeNode, Loop> unorderedLoops = new HashMap<>();
+        /* Loops in reverse order of, i.e., inner loops before outer loops. */
+        List<Loop> orderedLoops = new ArrayList<>();
+
+        /*
+         * Ensure we have an outermost loop that we can use to eliminate irreducible loops. This
+         * loop can remain empty (no ends), in which case it is ignored.
+         */
+        irreducibleLoopHandler = findOrCreateLoop(unorderedLoops, methodScope.loopExplosionHead);
+
+        NodeBitMap visited = methodScope.graph.createNodeBitMap();
+        NodeBitMap active = methodScope.graph.createNodeBitMap();
+        Deque<Node> stack = new ArrayDeque<>();
+        visited.mark(startInstruction);
+        stack.push(startInstruction);
+
+        while (!stack.isEmpty()) {
+            Node current = stack.peek();
+            assert visited.isMarked(current);
+
+            if (active.isMarked(current)) {
+                /* We are back-tracking, i.e., all successor nodes have been processed. */
+                stack.pop();
+                active.clear(current);
+
+                Loop loop = unorderedLoops.get(current);
+                if (loop != null) {
+                    /*
+                     * Since nodes are popped in reverse order that they were pushed, we add inner
+                     * loops before outer loops here.
+                     */
+                    assert !orderedLoops.contains(loop);
+                    orderedLoops.add(loop);
+                }
+
+            } else {
+                /*
+                 * Process the node. Note that we do not remove the node from the stack, i.e., we
+                 * will peek it again. But the next time the node is marked as active, so we do not
+                 * execute this code again.
+                 */
+                active.mark(current);
+                for (Node successor : current.cfgSuccessors()) {
+                    if (active.isMarked(successor)) {
+                        /* Detected a cycle, i.e., a backward branch of a loop. */
+                        Loop loop = findOrCreateLoop(unorderedLoops, (MergeNode) successor);
+                        assert !loop.ends.contains(current);
+                        loop.ends.add((EndNode) current);
+
+                    } else if (visited.isMarked(successor)) {
+                        /* Forward merge into a branch we are already exploring. */
+
+                    } else {
+                        /* Forward branch to a node we have not seen yet. */
+                        visited.mark(successor);
+                        stack.push(successor);
+                    }
+                }
+            }
+        }
+        return orderedLoops;
+    }
+
+    private Loop findOrCreateLoop(Map<MergeNode, Loop> unorderedLoops, MergeNode loopHeader) {
+        assert methodScope.loopExplosionMerges.isMarkedAndGrow(loopHeader) : loopHeader;
+        Loop loop = unorderedLoops.get(loopHeader);
+        if (loop == null) {
+            loop = new Loop();
+            loop.header = loopHeader;
+            unorderedLoops.put(loopHeader, loop);
+        }
+        return loop;
+    }
+
+    private void findLoopExits(Loop loop) {
+        /*
+         * Backward marking of loop nodes: Starting with the known loop ends, we mark all nodes that
+         * are reachable until we hit the loop begin. All successors of loop nodes that are not
+         * marked as loop nodes themselves are exits of the loop. We mark all successors, and then
+         * subtract the loop nodes, to find the exits.
+         */
+
+        NodeBitMap possibleExits = methodScope.graph.createNodeBitMap();
+        NodeBitMap visited = methodScope.graph.createNodeBitMap();
+        Deque<Node> stack = new ArrayDeque<>();
+        for (EndNode loopEnd : loop.ends) {
+            stack.push(loopEnd);
+            visited.mark(loopEnd);
+        }
+
+        while (!stack.isEmpty()) {
+            Node current = stack.pop();
+            if (current == loop.header) {
+                continue;
+            }
+            if (!methodScope.graph.isNew(methodScope.methodStartMark, current)) {
+                /*
+                 * The current node is before the method that contains the exploded loop. The loop
+                 * must have a second entry point, i.e., it is an irreducible loop.
+                 */
+                loop.irreducible = true;
+                return;
+            }
+
+            for (Node predecessor : current.cfgPredecessors()) {
+                if (predecessor instanceof LoopExitNode) {
+                    /*
+                     * Inner loop. We do not need to mark every node of it, instead we just continue
+                     * marking at the loop header.
+                     */
+                    LoopBeginNode innerLoopBegin = ((LoopExitNode) predecessor).loopBegin();
+                    if (!visited.isMarked(innerLoopBegin)) {
+                        stack.push(innerLoopBegin);
+                        visited.mark(innerLoopBegin);
+
+                        /*
+                         * All loop exits of the inner loop possibly need a LoopExit of our loop.
+                         * Because we are processing inner loops first, we are guaranteed to already
+                         * have all exits of the inner loop.
+                         */
+                        for (LoopExitNode exit : innerLoopBegin.loopExits()) {
+                            possibleExits.mark(exit);
+                        }
+                    }
+
+                } else if (!visited.isMarked(predecessor)) {
+                    stack.push(predecessor);
+                    visited.mark(predecessor);
+
+                    if (predecessor instanceof ControlSplitNode) {
+                        for (Node succ : predecessor.cfgSuccessors()) {
+                            /*
+                             * We would not need to mark the current node, and would not need to
+                             * mark visited nodes. But it is easier to just mark everything, since
+                             * we subtract all visited nodes in the end anyway. Note that at this
+                             * point we do not have the complete visited information, so we would
+                             * always mark too many possible exits.
+                             */
+                            possibleExits.mark(succ);
+                        }
+                    }
+                }
+            }
+        }
+
+        /* All visited nodes are not exits of our loop. */
+        possibleExits.subtract(visited);
+
+        /*
+         * Now we know all the actual loop exits. Ideally, we would insert LoopExit nodes for them.
+         * However, a LoopExit needs a valid FrameState that captures the state at the point where
+         * we exit the loop. During graph decoding, we create a FrameState for every exploded loop
+         * iteration. We need to do a forward marking until we hit the next such point. This puts
+         * some nodes into the loop that are actually not part of the loop.
+         *
+         * In some cases, we did not create a FrameState during graph decoding: when there was no
+         * LoopExit in the original loop that we exploded. This happens for code paths that lead
+         * immediately to a DeoptimizeNode.
+         *
+         * Both cases mimic the behavior of the BytecodeParser, which also puts more nodes than
+         * necessary into a loop because it computes loop information based on bytecodes, before the
+         * actual parsing.
+         */
+
+        for (Node succ : possibleExits) {
+            stack.push(succ);
+            visited.mark(succ);
+            assert !methodScope.loopExplosionMerges.isMarkedAndGrow(succ);
+        }
+
+        while (!stack.isEmpty()) {
+            Node current = stack.pop();
+            assert visited.isMarked(current);
+            assert current instanceof ControlSinkNode || current instanceof LoopEndNode || current.cfgSuccessors().iterator().hasNext() : "Must not reach a node that has not been decoded yet";
+
+            for (Node successor : current.cfgSuccessors()) {
+                if (visited.isMarked(successor)) {
+                    /* Already processed this successor. */
+
+                } else if (methodScope.loopExplosionMerges.isMarkedAndGrow(successor)) {
+                    /*
+                     * We have a FrameState for the successor. The LoopExit will be inserted between
+                     * the current node and the successor node. Since the successor node is a
+                     * MergeNode, the current node mus be a AbstractEndNode with only that MergeNode
+                     * as the successor.
+                     */
+                    assert successor instanceof MergeNode;
+                    assert !loop.exits.contains(current);
+                    loop.exits.add((AbstractEndNode) current);
+
+                } else {
+                    /* Node we have not seen yet. */
+                    visited.mark(successor);
+                    stack.push(successor);
+                }
+            }
+        }
+    }
+
+    private void insertLoopNodes(Loop loop) {
+        MergeNode merge = loop.header;
+        FrameState stateAfter = merge.stateAfter().duplicate();
+        FixedNode afterMerge = merge.next();
+        merge.setNext(null);
+        EndNode preLoopEnd = methodScope.graph.add(new EndNode());
+        LoopBeginNode loopBegin = methodScope.graph.add(new LoopBeginNode());
+
+        merge.setNext(preLoopEnd);
+        /* Add the single non-loop predecessor of the loop header. */
+        loopBegin.addForwardEnd(preLoopEnd);
+        loopBegin.setNext(afterMerge);
+        loopBegin.setStateAfter(stateAfter);
+
+        /*
+         * Phi functions of the original merge need to be split: inputs that come from forward edges
+         * remain with the original phi function; inputs that come from backward edges are added to
+         * new phi functions.
+         */
+        List<PhiNode> mergePhis = merge.phis().snapshot();
+        List<PhiNode> loopBeginPhis = new ArrayList<>(mergePhis.size());
+        for (int i = 0; i < mergePhis.size(); i++) {
+            PhiNode mergePhi = mergePhis.get(i);
+            PhiNode loopBeginPhi = methodScope.graph.addWithoutUnique(new ValuePhiNode(mergePhi.stamp(), loopBegin));
+            mergePhi.replaceAtUsages(loopBeginPhi);
+            /*
+             * The first input of the new phi function is the original phi function, for the one
+             * forward edge of the LoopBeginNode.
+             */
+            loopBeginPhi.addInput(mergePhi);
+            loopBeginPhis.add(loopBeginPhi);
+        }
+
+        for (EndNode endNode : loop.ends) {
+            for (int i = 0; i < mergePhis.size(); i++) {
+                PhiNode mergePhi = mergePhis.get(i);
+                PhiNode loopBeginPhi = loopBeginPhis.get(i);
+                loopBeginPhi.addInput(mergePhi.valueAt(endNode));
+            }
+
+            merge.removeEnd(endNode);
+            LoopEndNode loopEnd = methodScope.graph.add(new LoopEndNode(loopBegin));
+            endNode.replaceAndDelete(loopEnd);
+        }
+
+        /*
+         * Insert the LoopExit nodes (the easy part) and compute the FrameState for the new exits
+         * (the difficult part).
+         */
+        for (AbstractEndNode exit : loop.exits) {
+            AbstractMergeNode loopExplosionMerge = exit.merge();
+            assert methodScope.loopExplosionMerges.isMarkedAndGrow(loopExplosionMerge);
+
+            LoopExitNode loopExit = methodScope.graph.add(new LoopExitNode(loopBegin));
+            exit.replaceAtPredecessor(loopExit);
+            loopExit.setNext(exit);
+            assignLoopExitState(loopExit, loopExplosionMerge, exit);
+        }
+    }
+
+    /**
+     * During graph decoding, we create a FrameState for every exploded loop iteration. This is
+     * mostly the state that we want, we only need to tweak it a little bit: we need to insert the
+     * appropriate ProxyNodes for all values that are created inside the loop and that flow out of
+     * the loop.
+     */
+    private void assignLoopExitState(LoopExitNode loopExit, AbstractMergeNode loopExplosionMerge, AbstractEndNode loopExplosionEnd) {
+        FrameState oldState = loopExplosionMerge.stateAfter();
+
+        /* Collect all nodes that are in the FrameState at the LoopBegin. */
+        NodeBitMap loopBeginValues = new NodeBitMap(methodScope.graph);
+        for (FrameState state = loopExit.loopBegin().stateAfter(); state != null; state = state.outerFrameState()) {
+            for (ValueNode value : state.values()) {
+                if (value != null && !value.isConstant() && !loopExit.loopBegin().isPhiAtMerge(value)) {
+                    loopBeginValues.mark(ProxyPlaceholder.unwrap(value));
+                }
+            }
+        }
+
+        List<ValueNode> newValues = new ArrayList<>(oldState.values().size());
+        for (ValueNode v : oldState.values()) {
+            ValueNode value = v;
+            ValueNode realValue = ProxyPlaceholder.unwrap(value);
+
+            /*
+             * The LoopExit is inserted before the existing merge, i.e., separately for every branch
+             * that leads to the merge. So for phi functions of the merge, we need to take the input
+             * that corresponds to our branch.
+             */
+            if (realValue instanceof PhiNode && loopExplosionMerge.isPhiAtMerge(realValue)) {
+                value = ((PhiNode) realValue).valueAt(loopExplosionEnd);
+                realValue = ProxyPlaceholder.unwrap(value);
+            }
+
+            if (realValue == null || realValue.isConstant() || loopBeginValues.contains(realValue) || !methodScope.graph.isNew(methodScope.methodStartMark, realValue)) {
+                newValues.add(realValue);
+            } else {
+                /*
+                 * The node is not in the FrameState of the LoopBegin, i.e., it is a value computed
+                 * inside the loop.
+                 */
+                GraalError.guarantee(value instanceof ProxyPlaceholder && ((ProxyPlaceholder) value).proxyPoint == loopExplosionMerge,
+                                "Value flowing out of loop, but we are not prepared to insert a ProxyNode");
+
+                ProxyPlaceholder proxyPlaceholder = (ProxyPlaceholder) value;
+                ValueProxyNode proxy = ProxyNode.forValue(proxyPlaceholder.value, loopExit, methodScope.graph);
+                proxyPlaceholder.setValue(proxy);
+                newValues.add(proxy);
+            }
+        }
+
+        FrameState newState = new FrameState(oldState.outerFrameState(), oldState.method(), oldState.bci, newValues, oldState.localsSize(), oldState.stackSize(), oldState.rethrowException(),
+                        oldState.duringCall(), oldState.monitorIds(), oldState.virtualObjectMappings());
+
+        assert loopExit.stateAfter() == null;
+        loopExit.setStateAfter(methodScope.graph.add(newState));
+    }
+
+    /**
+     * Graal does not support irreducible loops (loops with more than one entry point). There are
+     * two ways to make them reducible: 1) duplicate nodes (peel a loop iteration starting at the
+     * second entry point until we reach the first entry point), or 2) insert a big outer loop
+     * covering the whole method and build a state machine for the different loop entry points.
+     * Since node duplication can lead to an exponential explosion of nodes in the worst case, we
+     * use the second approach.
+     *
+     * We already did some preparations to insert a big outer loop:
+     * {@link MethodScope#loopExplosionHead} is the loop header for the outer loop, and we ensured
+     * that we have a {@link Loop} data object for it in {@link #irreducibleLoopHandler}.
+     *
+     * Now we need to insert the state machine. We have several implementation restrictions to make
+     * that efficient:
+     * <ul>
+     * <li>There must be only one loop variable, i.e., one value that is different in the
+     * {@link FrameState} of the different loop headers.</li>
+     * <li>The loop variable must use the primitive {@code int} type, because Graal only has a
+     * {@link IntegerSwitchNode switch node} for {@code int}.</li>
+     * <li>The values of the loop variable that are merged are {@link PrimitiveConstant compile time
+     * constants}.</li>
+     * </ul>
+     */
+    private void handleIrreducibleLoop(Loop loop) {
+        assert loop != irreducibleLoopHandler;
+
+        FrameState loopState = loop.header.stateAfter();
+        FrameState explosionHeadState = irreducibleLoopHandler.header.stateAfter();
+        assert loopState.outerFrameState() == explosionHeadState.outerFrameState();
+        NodeInputList<ValueNode> loopValues = loopState.values();
+        NodeInputList<ValueNode> explosionHeadValues = explosionHeadState.values();
+        assert loopValues.size() == explosionHeadValues.size();
+
+        /*
+         * Find the loop variable, and the value of the loop variable for our loop and the outermost
+         * loop. There must be exactly one loop variable.
+         */
+        int loopVariableIndex = -1;
+        ValueNode loopValue = null;
+        ValueNode explosionHeadValue = null;
+        for (int i = 0; i < loopValues.size(); i++) {
+            ValueNode curLoopValue = loopValues.get(i);
+            ValueNode curExplosionHeadValue = explosionHeadValues.get(i);
+
+            if (curLoopValue != curExplosionHeadValue) {
+                if (loopVariableIndex != -1) {
+                    throw bailout("must have only one variable that is changed in loop. " + loopValue + " != " + explosionHeadValue + " and " + curLoopValue + " != " + curExplosionHeadValue);
+                }
+
+                loopVariableIndex = i;
+                loopValue = curLoopValue;
+                explosionHeadValue = curExplosionHeadValue;
+            }
+        }
+        assert loopVariableIndex != -1;
+
+        ValuePhiNode loopVariablePhi;
+        SortedMap<Integer, AbstractBeginNode> dispatchTable = new TreeMap<>();
+        AbstractBeginNode unreachableDefaultSuccessor;
+        if (irreducibleLoopSwitch == null) {
+            /*
+             * This is the first irreducible loop. We need to build the initial state machine
+             * (dispatch for the loop header of the outermost loop).
+             */
+            assert !irreducibleLoopHandler.header.isPhiAtMerge(explosionHeadValue);
+            assert irreducibleLoopHandler.header.phis().isEmpty();
+
+            /* The new phi function for the loop variable. */
+            loopVariablePhi = methodScope.graph.addWithoutUnique(new ValuePhiNode(explosionHeadValue.stamp().unrestricted(), irreducibleLoopHandler.header));
+            for (int i = 0; i < irreducibleLoopHandler.header.phiPredecessorCount(); i++) {
+                loopVariablePhi.addInput(explosionHeadValue);
+            }
+
+            /*
+             * Build the new FrameState for the loop header. There is only once change in comparison
+             * to the old FrameState: the loop variable is replaced with the phi function.
+             */
+            FrameState oldFrameState = explosionHeadState;
+            List<ValueNode> newFrameStateValues = new ArrayList<>();
+            for (int i = 0; i < explosionHeadValues.size(); i++) {
+                if (i == loopVariableIndex) {
+                    newFrameStateValues.add(loopVariablePhi);
+                } else {
+                    newFrameStateValues.add(explosionHeadValues.get(i));
+                }
+            }
+            FrameState newFrameState = methodScope.graph.add(new FrameState(oldFrameState.outerFrameState(), oldFrameState.method(), oldFrameState.bci, newFrameStateValues, oldFrameState.localsSize(),
+                            oldFrameState.stackSize(), oldFrameState.rethrowException(), oldFrameState.duringCall(), oldFrameState.monitorIds(), oldFrameState.virtualObjectMappings()));
+            oldFrameState.replaceAtUsages(newFrameState);
+
+            /*
+             * Disconnect the outermost loop header from its loop body, so that we can later on
+             * insert the switch node. Collect dispatch information for the outermost loop.
+             */
+            FixedNode handlerNext = irreducibleLoopHandler.header.next();
+            irreducibleLoopHandler.header.setNext(null);
+            BeginNode handlerBegin = methodScope.graph.add(new BeginNode());
+            handlerBegin.setNext(handlerNext);
+            dispatchTable.put(asInt(explosionHeadValue), handlerBegin);
+
+            /*
+             * We know that there will always be a matching key in the switch. But Graal always
+             * wants a default successor, so we build a dummy block that just deoptimizes.
+             */
+            unreachableDefaultSuccessor = methodScope.graph.add(new BeginNode());
+            DeoptimizeNode deopt = methodScope.graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.UnreachedCode));
+            unreachableDefaultSuccessor.setNext(deopt);
+
+        } else {
+            /*
+             * This is the second or a subsequent irreducible loop, i.e., we already inserted a
+             * switch node before. We re-create the dispatch state machine of that switch, so that
+             * we can extend it with one more branch.
+             */
+            assert irreducibleLoopHandler.header.isPhiAtMerge(explosionHeadValue);
+            assert irreducibleLoopHandler.header.phis().count() == 1 && irreducibleLoopHandler.header.phis().first() == explosionHeadValue;
+            assert irreducibleLoopSwitch.value() == explosionHeadValue;
+
+            /* We can modify the phi function used by the old switch node. */
+            loopVariablePhi = (ValuePhiNode) explosionHeadValue;
+
+            /*
+             * We cannot modify the old switch node. Insert all information from the old switch node
+             * into our temporary data structures for the new, larger, switch node.
+             */
+            for (int i = 0; i < irreducibleLoopSwitch.keyCount(); i++) {
+                int key = irreducibleLoopSwitch.keyAt(i).asInt();
+                dispatchTable.put(key, irreducibleLoopSwitch.successorAtKey(key));
+            }
+            unreachableDefaultSuccessor = irreducibleLoopSwitch.defaultSuccessor();
+
+            /* Unlink and delete the old switch node, we do not need it anymore. */
+            assert irreducibleLoopHandler.header.next() == irreducibleLoopSwitch;
+            irreducibleLoopHandler.header.setNext(null);
+            irreducibleLoopSwitch.clearSuccessors();
+            irreducibleLoopSwitch.safeDelete();
+        }
+
+        /* Insert our loop into the dispatch state machine. */
+        assert loop.header.phis().isEmpty();
+        BeginNode dispatchBegin = methodScope.graph.add(new BeginNode());
+        EndNode dispatchEnd = methodScope.graph.add(new EndNode());
+        dispatchBegin.setNext(dispatchEnd);
+        loop.header.addForwardEnd(dispatchEnd);
+        int intLoopValue = asInt(loopValue);
+        assert !dispatchTable.containsKey(intLoopValue);
+        dispatchTable.put(intLoopValue, dispatchBegin);
+
+        /* Disconnect the ends of our loop and re-connect them to the outermost loop header. */
+        for (EndNode end : loop.ends) {
+            loop.header.removeEnd(end);
+            irreducibleLoopHandler.ends.add(end);
+            irreducibleLoopHandler.header.addForwardEnd(end);
+            loopVariablePhi.addInput(loopValue);
+        }
+
+        /* Build and insert the switch node. */
+        irreducibleLoopSwitch = methodScope.graph.add(createSwitch(loopVariablePhi, dispatchTable, unreachableDefaultSuccessor));
+        irreducibleLoopHandler.header.setNext(irreducibleLoopSwitch);
+    }
+
+    private static int asInt(ValueNode node) {
+        if (!node.isConstant() || node.asJavaConstant().getJavaKind() != JavaKind.Int) {
+            throw bailout("must have a loop variable of type int. " + node);
+        }
+        return node.asJavaConstant().asInt();
+    }
+
+    private static RuntimeException bailout(String msg) {
+        throw new BailoutException("Graal implementation restriction: Method with " + LoopExplosionKind.MERGE_EXPLODE + " loop explosion " + msg);
+    }
+
+    private static IntegerSwitchNode createSwitch(ValuePhiNode switchedValue, SortedMap<Integer, AbstractBeginNode> dispatchTable, AbstractBeginNode defaultSuccessor) {
+        int numKeys = dispatchTable.size();
+        int numSuccessors = numKeys + 1;
+
+        AbstractBeginNode[] switchSuccessors = new AbstractBeginNode[numSuccessors];
+        int[] switchKeys = new int[numKeys];
+        double[] switchKeyProbabilities = new double[numSuccessors];
+        int[] switchKeySuccessors = new int[numSuccessors];
+
+        int idx = 0;
+        for (Map.Entry<Integer, AbstractBeginNode> entry : dispatchTable.entrySet()) {
+            switchSuccessors[idx] = entry.getValue();
+            switchKeys[idx] = entry.getKey();
+            switchKeyProbabilities[idx] = 1d / numKeys;
+            switchKeySuccessors[idx] = idx;
+            idx++;
+        }
+        switchSuccessors[idx] = defaultSuccessor;
+        /* We know the default branch is never going to be executed. */
+        switchKeyProbabilities[idx] = 0;
+        switchKeySuccessors[idx] = idx;
+
+        return new IntegerSwitchNode(switchedValue, switchSuccessors, switchKeys, switchKeyProbabilities, switchKeySuccessors);
+    }
+
+    /**
+     * Print information about irreducible loops, when enabled with -Dgraal.Log=IrreducibleLoops.
+     */
+    @SuppressWarnings("try")
+    private void logIrreducibleLoops() {
+        try (Debug.Scope s = Debug.scope("IrreducibleLoops")) {
+            if (Debug.isLogEnabled(Debug.BASIC_LOG_LEVEL) && irreducibleLoopSwitch != null) {
+                StringBuilder msg = new StringBuilder("Inserted state machine to remove irreducible loops. Dispatching to the following states: ");
+                String sep = "";
+                for (int i = 0; i < irreducibleLoopSwitch.keyCount(); i++) {
+                    msg.append(sep).append(irreducibleLoopSwitch.keyAt(i).asInt());
+                    sep = ", ";
+                }
+                Debug.log(Debug.BASIC_LOG_LEVEL, "%s", msg);
+            }
+        }
     }
 }
