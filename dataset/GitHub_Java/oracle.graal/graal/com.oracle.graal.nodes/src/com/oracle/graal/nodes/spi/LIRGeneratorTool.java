@@ -22,101 +22,78 @@
  */
 package com.oracle.graal.nodes.spi;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.DeoptimizeNode.DeoptAction;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.java.*;
 
-public abstract class LIRGeneratorTool {
-    public abstract CiTarget target();
+public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
+
+    TargetDescription target();
+
+    MetaAccessProvider getMetaAccess();
+
+    CodeCacheProvider getCodeCache();
+
+    ForeignCallsProvider getForeignCalls();
+
+    Value emitLoad(PlatformKind kind, Value address, Access access);
+
+    void emitStore(PlatformKind kind, Value address, Value input, Access access);
+
+    Value emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue);
+
+    void emitDeoptimize(Value actionAndReason, Value failedSpeculation, DeoptimizingNode deopting);
+
+    Value emitForeignCall(ForeignCallLinkage linkage, DeoptimizingNode info, Value... args);
 
     /**
-     * Checks whether the supplied constant can be used without loading it into a register
-     * for most operations, i.e., for commonly used arithmetic, logical, and comparison operations.
+     * Checks whether the supplied constant can be used without loading it into a register for most
+     * operations, i.e., for commonly used arithmetic, logical, and comparison operations.
+     *
      * @param c The constant to check.
-     * @return True if the constant can be used directly, false if the constant needs to be in a register.
+     * @return True if the constant can be used directly, false if the constant needs to be in a
+     *         register.
      */
-    public abstract boolean canInlineConstant(CiConstant c);
+    boolean canInlineConstant(Constant c);
+
+    boolean canStoreConstant(Constant c, boolean isCompressed);
+
+    RegisterAttributes attributes(Register register);
+
+    AllocatableValue newVariable(PlatformKind kind);
+
+    AllocatableValue emitMove(Value input);
+
+    void emitMove(AllocatableValue dst, Value src);
 
     /**
-     * Checks whether the supplied constant can be used without loading it into a register
-     * for store operations, i.e., on the right hand side of a memory access.
-     * @param c The constant to check.
-     * @return True if the constant can be used directly, false if the constant needs to be in a register.
+     * Emits an op that loads the address of some raw data.
+     *
+     * @param dst the variable into which the address is loaded
+     * @param data the data to be installed with the generated code
      */
-    public abstract boolean canStoreConstant(CiConstant c);
+    void emitData(AllocatableValue dst, byte[] data);
 
-    public abstract CiValue operand(ValueNode object);
-    public abstract CiValue newVariable(CiKind kind);
-    public abstract CiValue setResult(ValueNode x, CiValue operand);
+    Value emitAddress(Value base, long displacement, Value index, int scale);
 
-    public abstract CiAddress makeAddress(LocationNode location, ValueNode object);
+    Value emitAddress(StackSlot slot);
 
-    public abstract CiValue emitMove(CiValue input);
-    public abstract void emitMove(CiValue src, CiValue dst);
-    public abstract CiValue emitLoad(CiValue loadAddress, boolean canTrap);
-    public abstract void emitStore(CiValue storeAddress, CiValue input, boolean canTrap);
-    public abstract CiValue emitLea(CiValue address);
+    void emitMembar(int barriers);
 
-    public abstract CiValue emitNegate(CiValue input);
-    public abstract CiValue emitAdd(CiValue a, CiValue b);
-    public abstract CiValue emitSub(CiValue a, CiValue b);
-    public abstract CiValue emitMul(CiValue a, CiValue b);
-    public abstract CiValue emitDiv(CiValue a, CiValue b);
-    public abstract CiValue emitRem(CiValue a, CiValue b);
-    public abstract CiValue emitUDiv(CiValue a, CiValue b);
-    public abstract CiValue emitURem(CiValue a, CiValue b);
+    void emitUnwind(Value operand);
 
-    public abstract CiValue emitAnd(CiValue a, CiValue b);
-    public abstract CiValue emitOr(CiValue a, CiValue b);
-    public abstract CiValue emitXor(CiValue a, CiValue b);
+    /**
+     * Called just before register allocation is performed on the LIR owned by this generator.
+     * Overriding implementations of this method must call the overridden method.
+     */
+    void beforeRegisterAllocation();
 
-    public abstract CiValue emitShl(CiValue a, CiValue b);
-    public abstract CiValue emitShr(CiValue a, CiValue b);
-    public abstract CiValue emitUShr(CiValue a, CiValue b);
+    void emitIncomingValues(Value[] params);
 
-    public abstract CiValue emitConvert(ConvertNode.Op opcode, CiValue inputVal);
-    public abstract void emitMembar(int barriers);
-    public abstract void emitDeoptimizeOn(Condition of, DeoptAction action, Object deoptInfo);
-    public abstract CiValue emitCallToRuntime(CiRuntimeCall runtimeCall, boolean canTrap, CiValue... args);
-
-    public abstract void emitIf(IfNode i);
-    public abstract void emitConditional(ConditionalNode i);
-    public abstract void emitGuardCheck(BooleanNode comp);
-
-    public abstract void emitLookupSwitch(LookupSwitchNode i);
-    public abstract void emitTableSwitch(TableSwitchNode i);
-
-    public abstract void emitInvoke(Invoke i);
-    public abstract void emitRuntimeCall(RuntimeCallNode i);
-
-    // Handling of block-end nodes still needs to be unified in the LIRGenerator.
-    public abstract void visitMerge(MergeNode i);
-    public abstract void visitEndNode(EndNode i);
-    public abstract void visitLoopEnd(LoopEndNode i);
-
-    // The CompareAndSwapNode in its current form needs to be lowered to several Nodes before code generation to separate three parts:
-    // * The write barriers (and possibly read barriers) when accessing an object field
-    // * The distinction of returning a boolean value (semantic similar to a BooleanNode to be used as a condition?) or the old value being read
-    // * The actual compare-and-swap
-    public abstract void visitCompareAndSwap(CompareAndSwapNode i);
-
-    // Functionality that is currently implemented in XIR.
-    // These methods will go away eventually when lowering is done via snippets in the front end.
-    public abstract void visitArrayLength(ArrayLengthNode i);
-    public abstract void visitCheckCast(CheckCastNode i);
-    public abstract void visitMonitorEnter(MonitorEnterNode i);
-    public abstract void visitMonitorExit(MonitorExitNode i);
-    public abstract void visitLoadField(LoadFieldNode i);
-    public abstract void visitStoreField(StoreFieldNode i);
-    public abstract void visitLoadIndexed(LoadIndexedNode i);
-    public abstract void visitStoreIndexed(StoreIndexedNode i);
-    public abstract void visitNewInstance(NewInstanceNode i);
-    public abstract void visitNewTypeArray(NewTypeArrayNode i);
-    public abstract void visitNewObjectArray(NewObjectArrayNode i);
-    public abstract void visitNewMultiArray(NewMultiArrayNode i);
-    public abstract void visitExceptionObject(ExceptionObjectNode i);
-    public abstract void visitReturn(ReturnNode i);
+    /**
+     * Emits a return instruction. Implementations need to insert a move if the input is not in the
+     * correct location.
+     */
+    void emitReturn(Value input);
 }

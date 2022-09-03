@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -234,7 +234,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
                         int vtableEntryOffset = hsMethod.vtableEntryOffset();
                         assert vtableEntryOffset > 0;
                         Kind wordKind = runtime.getTarget().wordKind;
-                        FloatingReadNode hub = createReadHub(graph, wordKind, receiver, receiverNullCheck);
+                        ValueNode hub = createReadHub(graph, wordKind, receiver, receiverNullCheck);
 
                         ReadNode metaspaceMethod = createReadVirtualMethod(graph, wordKind, hub, hsMethod);
                         // We use LocationNode.ANY_LOCATION for the reads that access the
@@ -370,12 +370,15 @@ public class HotSpotLoweringProvider implements LoweringProvider {
         }
     }
 
-    private static void lowerCompareAndSwapNode(CompareAndSwapNode cas) {
-        // Separate out GC barrier semantics
+    private void lowerCompareAndSwapNode(CompareAndSwapNode cas) {
         StructuredGraph graph = cas.graph();
-        LocationNode location = IndexedLocationNode.create(cas.getLocationIdentity(), cas.expected().getKind(), cas.displacement(), cas.offset(), graph, 1);
-        LoweredCompareAndSwapNode atomicNode = graph.add(new LoweredCompareAndSwapNode(cas.object(), location, cas.expected(), cas.newValue(), getCompareAndSwapBarrier(cas),
-                        cas.expected().getKind() == Kind.Object));
+        Kind valueKind = cas.getValueKind();
+        LocationNode location = IndexedLocationNode.create(cas.getLocationIdentity(), valueKind, cas.displacement(), cas.offset(), graph, 1);
+
+        ValueNode expectedValue = implicitStoreConvert(graph, valueKind, cas.expected(), true);
+        ValueNode newValue = implicitStoreConvert(graph, valueKind, cas.newValue(), true);
+
+        LoweredCompareAndSwapNode atomicNode = graph.add(new LoweredCompareAndSwapNode(cas.object(), location, expectedValue, newValue, getCompareAndSwapBarrier(cas), false));
         atomicNode.setStateAfter(cas.stateAfter());
         graph.replaceFixedWithFixed(cas, atomicNode);
     }
@@ -418,7 +421,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
                 }
             } else {
                 Kind wordKind = runtime.getTarget().wordKind;
-                FloatingReadNode arrayClass = createReadHub(graph, wordKind, array, boundsCheck);
+                ValueNode arrayClass = createReadHub(graph, wordKind, array, boundsCheck);
                 LocationNode location = ConstantLocationNode.create(FINAL_LOCATION, wordKind, runtime.getConfig().arrayClassElementOffset, graph);
                 /*
                  * Anchor the read of the element klass to the cfg, because it is only valid when
@@ -524,7 +527,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
             assert loadHub.getKind() == wordKind;
             ValueNode object = loadHub.object();
             GuardingNode guard = loadHub.getGuard();
-            FloatingReadNode hub = createReadHub(graph, wordKind, object, guard);
+            ValueNode hub = createReadHub(graph, wordKind, object, guard);
             graph.replaceFloating(loadHub, hub);
         }
     }
@@ -795,18 +798,37 @@ public class HotSpotLoweringProvider implements LoweringProvider {
         return metaspaceMethod;
     }
 
-    private FloatingReadNode createReadHub(StructuredGraph graph, Kind wordKind, ValueNode object, GuardingNode guard) {
+    private ValueNode createReadHub(StructuredGraph graph, Kind wordKind, ValueNode object, GuardingNode guard) {
         HotSpotVMConfig config = runtime.getConfig();
         LocationNode location = ConstantLocationNode.create(FINAL_LOCATION, wordKind, config.hubOffset, graph);
         assert !object.isConstant() || object.asConstant().isNull();
-        return graph.unique(new FloatingReadNode(object, location, null, StampFactory.forKind(wordKind), guard, BarrierType.NONE, config.useCompressedClassPointers));
+
+        Stamp hubStamp;
+        if (config.useCompressedClassPointers) {
+            hubStamp = StampFactory.forInteger(32, false);
+        } else {
+            hubStamp = StampFactory.forKind(wordKind);
+        }
+
+        FloatingReadNode memoryRead = graph.unique(new FloatingReadNode(object, location, null, hubStamp, guard, BarrierType.NONE, false));
+        if (config.useCompressedClassPointers) {
+            return CompressionNode.uncompress(memoryRead, config.getKlassEncoding());
+        } else {
+            return memoryRead;
+        }
     }
 
     private WriteNode createWriteHub(StructuredGraph graph, Kind wordKind, ValueNode object, ValueNode value) {
         HotSpotVMConfig config = runtime.getConfig();
         LocationNode location = ConstantLocationNode.create(HUB_LOCATION, wordKind, config.hubOffset, graph);
         assert !object.isConstant() || object.asConstant().isNull();
-        return graph.add(new WriteNode(object, value, location, BarrierType.NONE, config.useCompressedClassPointers));
+
+        ValueNode writeValue = value;
+        if (config.useCompressedClassPointers) {
+            writeValue = CompressionNode.compress(value, config.getKlassEncoding());
+        }
+
+        return graph.add(new WriteNode(object, writeValue, location, BarrierType.NONE, false));
     }
 
     private static BarrierType getFieldLoadBarrierType(HotSpotResolvedJavaField loadField) {

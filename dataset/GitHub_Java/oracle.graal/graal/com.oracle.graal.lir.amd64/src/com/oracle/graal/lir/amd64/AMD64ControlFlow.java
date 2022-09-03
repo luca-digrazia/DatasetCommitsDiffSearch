@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,12 +33,12 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.nodes.calc.*;
 
 public class AMD64ControlFlow {
 
@@ -157,8 +157,9 @@ public class AMD64ControlFlow {
                             break;
                         case Object:
                             assert condition == Condition.EQ || condition == Condition.NE;
-                            AMD64Move.move(crb, masm, scratch, keyConstants[index]);
-                            masm.cmpptr(keyRegister, asObjectReg(scratch));
+                            Register temp = asObjectReg(scratch);
+                            AMD64Move.move(crb, masm, temp.asValue(Kind.Object), keyConstants[index]);
+                            masm.cmpptr(keyRegister, temp);
                             break;
                         default:
                             throw new GraalInternalError("switch only supported for int, long and object");
@@ -326,10 +327,6 @@ public class AMD64ControlFlow {
         if (isRegister(other)) {
             assert !asRegister(other).equals(asRegister(result)) : "other already overwritten by previous move";
             switch (other.getKind()) {
-                case Boolean:
-                case Byte:
-                case Short:
-                case Char:
                 case Int:
                     masm.cmovl(cond, asRegister(result), asRegister(other));
                     break;
@@ -342,10 +339,6 @@ public class AMD64ControlFlow {
         } else {
             AMD64Address addr = (AMD64Address) crb.asAddress(other);
             switch (other.getKind()) {
-                case Boolean:
-                case Byte:
-                case Short:
-                case Char:
                 case Int:
                     masm.cmovl(cond, asRegister(result), addr);
                     break;

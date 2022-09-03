@@ -32,9 +32,8 @@ import static com.oracle.graal.lir.ptx.PTXCompare.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.ptx.*;
@@ -59,6 +58,7 @@ import com.oracle.graal.lir.ptx.PTXMemOp.StoreReturnValOp;
 import com.oracle.graal.lir.ptx.PTXMove.MoveFromRegOp;
 import com.oracle.graal.lir.ptx.PTXMove.MoveToRegOp;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.calc.FloatConvertNode.FloatConvert;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.type.*;
@@ -830,12 +830,13 @@ public class PTXLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitReturn(Value input) {
+        AllocatableValue operand = Value.ILLEGAL;
         if (input != null) {
-            AllocatableValue operand = resultOperandFor(input.getKind());
+            operand = resultOperandFor(input.getKind());
             // Load the global memory address from return parameter
             Variable loadVar = emitLoadReturnAddress(operand.getKind(), operand, null);
-            // Store input in global memory whose location is loadVar
-            emitStoreReturnValue(operand.getKind(), loadVar, input, null);
+            // Store result in global memory whose location is loadVar
+            emitStoreReturnValue(operand.getKind(), loadVar, operand, null);
         }
         emitReturnNoVal();
     }

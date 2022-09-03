@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,11 +28,12 @@ import static java.lang.Double.*;
 import static java.lang.Float.*;
 
 import com.oracle.graal.amd64.*;
+import com.oracle.graal.api.code.CompilationResult.RawData;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.ImplicitNullCheck;
 import com.oracle.graal.lir.StandardOp.MoveOp;
@@ -258,9 +259,9 @@ public class AMD64Move {
 
     public static class StoreConstantOp extends MemOp {
 
-        protected final JavaConstant input;
+        protected final Constant input;
 
-        public StoreConstantOp(Kind kind, AMD64AddressValue address, JavaConstant input, LIRFrameState state) {
+        public StoreConstantOp(Kind kind, AMD64AddressValue address, Constant input, LIRFrameState state) {
             super(kind, address, state);
             this.input = input;
         }
@@ -332,17 +333,17 @@ public class AMD64Move {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            masm.leaq(asRegister(result), (AMD64Address) crb.recordDataReferenceInCode(data, 16));
+            RawData rawData = new RawData(data, 16);
+            masm.leaq(asRegister(result), (AMD64Address) crb.recordDataReferenceInCode(rawData));
         }
     }
 
     public static class StackLeaOp extends AMD64LIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
-        @Use({STACK, UNINITIALIZED}) protected StackSlotValue slot;
+        @Use({STACK, UNINITIALIZED}) protected StackSlot slot;
 
-        public StackLeaOp(AllocatableValue result, StackSlotValue slot) {
-            assert isStackSlotValue(slot) : "Not a stack slot: " + slot;
+        public StackLeaOp(AllocatableValue result, StackSlot slot) {
             this.result = result;
             this.slot = slot;
         }
@@ -431,74 +432,6 @@ public class AMD64Move {
         }
     }
 
-    @Opcode("ATOMIC_READ_AND_ADD")
-    public static class AtomicReadAndAddOp extends AMD64LIRInstruction {
-
-        private final Kind accessKind;
-
-        @Def protected AllocatableValue result;
-        @Alive({COMPOSITE}) protected AMD64AddressValue address;
-        @Use protected AllocatableValue delta;
-
-        public AtomicReadAndAddOp(Kind accessKind, AllocatableValue result, AMD64AddressValue address, AllocatableValue delta) {
-            this.accessKind = accessKind;
-            this.result = result;
-            this.address = address;
-            this.delta = delta;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            move(accessKind, crb, masm, result, delta);
-            if (crb.target.isMP) {
-                masm.lock();
-            }
-            switch (accessKind) {
-                case Int:
-                    masm.xaddl(address.toAddress(), asRegister(result));
-                    break;
-                case Long:
-                    masm.xaddq(address.toAddress(), asRegister(result));
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
-        }
-    }
-
-    @Opcode("ATOMIC_READ_AND_WRITE")
-    public static class AtomicReadAndWriteOp extends AMD64LIRInstruction {
-
-        private final Kind accessKind;
-
-        @Def protected AllocatableValue result;
-        @Alive({COMPOSITE}) protected AMD64AddressValue address;
-        @Use protected AllocatableValue newValue;
-
-        public AtomicReadAndWriteOp(Kind accessKind, AllocatableValue result, AMD64AddressValue address, AllocatableValue newValue) {
-            this.accessKind = accessKind;
-            this.result = result;
-            this.address = address;
-            this.newValue = newValue;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            move(accessKind, crb, masm, result, newValue);
-            switch (accessKind) {
-                case Int:
-                    masm.xchgl(asRegister(result), address.toAddress());
-                    break;
-                case Long:
-                case Object:
-                    masm.xchgq(asRegister(result), address.toAddress());
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
-        }
-    }
-
     public static void move(CompilationResultBuilder crb, AMD64MacroAssembler masm, Value result, Value input) {
         move(result.getKind(), crb, masm, result, input);
     }
@@ -520,9 +453,9 @@ public class AMD64Move {
             }
         } else if (isConstant(input)) {
             if (isRegister(result)) {
-                const2reg(crb, masm, result, (JavaConstant) input);
+                const2reg(crb, masm, result, (Constant) input);
             } else if (isStackSlot(result)) {
-                const2stack(crb, masm, result, (JavaConstant) input);
+                const2stack(crb, masm, result, (Constant) input);
             } else {
                 throw GraalInternalError.shouldNotReachHere();
             }
@@ -622,7 +555,7 @@ public class AMD64Move {
         }
     }
 
-    private static void const2reg(CompilationResultBuilder crb, AMD64MacroAssembler masm, Value result, JavaConstant input) {
+    private static void const2reg(CompilationResultBuilder crb, AMD64MacroAssembler masm, Value result, Constant input) {
         /*
          * Note: we use the kind of the input operand (and not the kind of the result operand)
          * because they don't match in all cases. For example, an object constant can be loaded to a
@@ -699,7 +632,7 @@ public class AMD64Move {
         }
     }
 
-    private static void const2stack(CompilationResultBuilder crb, AMD64MacroAssembler masm, Value result, JavaConstant input) {
+    private static void const2stack(CompilationResultBuilder crb, AMD64MacroAssembler masm, Value result, Constant input) {
         assert !crb.codeCache.needsDataPatch(input);
         AMD64Address dest = (AMD64Address) crb.asAddress(result);
         switch (input.getKind().getStackKind()) {
