@@ -29,13 +29,10 @@ import java.util.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
-
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 import jdk.internal.jvmci.meta.*;
 import jdk.internal.jvmci.options.*;
-import jdk.internal.jvmci.service.*;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.type.*;
@@ -81,9 +78,7 @@ public class PartialEvaluator {
     private final ResolvedJavaMethod callInlinedMethod;
     private final ResolvedJavaMethod callSiteProxyMethod;
     private final ResolvedJavaMethod callRootMethod;
-    private final GraphBuilderConfiguration configForPartialEvaluation;
-    private final GraphBuilderConfiguration configForParsing;
-    private final InvocationPlugins decodingInvocationPlugins;
+    private final GraphBuilderConfiguration configForRoot;
 
     public PartialEvaluator(Providers providers, GraphBuilderConfiguration configForRoot, SnippetReflectionProvider snippetReflection, Architecture architecture) {
         this.providers = providers;
@@ -93,16 +88,13 @@ public class PartialEvaluator {
         this.callDirectMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod());
         this.callInlinedMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallInlinedMethod());
         this.callSiteProxyMethod = providers.getMetaAccess().lookupJavaMethod(GraalFrameInstance.CallNodeFrame.METHOD);
+        this.configForRoot = configForRoot;
 
         try {
             callRootMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.class.getDeclaredMethod("callRoot", Object[].class));
         } catch (NoSuchMethodException ex) {
             throw new RuntimeException(ex);
         }
-
-        this.configForPartialEvaluation = createGraphBuilderConfig(configForRoot, false);
-        this.configForParsing = createGraphBuilderConfig(configForRoot, true);
-        this.decodingInvocationPlugins = createDecodingInvocationPlugins();
     }
 
     public Providers getProviders() {
@@ -113,10 +105,6 @@ public class PartialEvaluator {
         return snippetReflection;
     }
 
-    public GraphBuilderConfiguration getConfigForParsing() {
-        return configForParsing;
-    }
-
     public ResolvedJavaMethod[] getCompilationRootMethods() {
         return new ResolvedJavaMethod[]{callRootMethod, callInlinedMethod};
     }
@@ -125,7 +113,6 @@ public class PartialEvaluator {
         return new ResolvedJavaMethod[]{callSiteProxyMethod, callDirectMethod};
     }
 
-    @SuppressWarnings("try")
     public StructuredGraph createGraph(final OptimizedCallTarget callTarget, AllowAssumptions allowAssumptions) {
         try (Scope c = Debug.scope("TruffleTree")) {
             Debug.dump(callTarget, "truffle tree");
@@ -256,10 +243,8 @@ public class PartialEvaluator {
 
         @Override
         public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments, JavaType returnType) {
-            if (invocationPlugins.lookupInvocation(original) != null) {
+            if (invocationPlugins.lookupInvocation(original) != null || loopExplosionPlugin.shouldExplodeLoops(original)) {
                 return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
-            } else if (loopExplosionPlugin.shouldExplodeLoops(original)) {
-                return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
             }
             TruffleBoundary truffleBoundary = original.getAnnotation(TruffleBoundary.class);
             if (truffleBoundary != null) {
@@ -270,7 +255,7 @@ public class PartialEvaluator {
             }
 
             if (original.equals(callSiteProxyMethod) || original.equals(callDirectMethod)) {
-                return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
+                return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
             }
             if (hasMethodHandleArgument(arguments)) {
                 /*
@@ -300,7 +285,9 @@ public class PartialEvaluator {
     }
 
     protected void doFastPE(OptimizedCallTarget callTarget, StructuredGraph graph) {
-        GraphBuilderConfiguration newConfig = configForPartialEvaluation.copy();
+        GraphBuilderConfiguration newConfig = configForRoot.copy();
+        InvocationPlugins invocationPlugins = newConfig.getPlugins().getInvocationPlugins();
+        TruffleGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), invocationPlugins, false, snippetReflection);
 
         newConfig.setUseProfiling(false);
         Plugins plugins = newConfig.getPlugins();
@@ -326,8 +313,9 @@ public class PartialEvaluator {
     }
 
     protected PEGraphDecoder createGraphDecoder(StructuredGraph graph) {
-        GraphBuilderConfiguration newConfig = configForParsing.copy();
+        GraphBuilderConfiguration newConfig = configForRoot.copy();
         InvocationPlugins parsingInvocationPlugins = newConfig.getPlugins().getInvocationPlugins();
+        TruffleGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), parsingInvocationPlugins, true, snippetReflection);
 
         LoopExplosionPlugin loopExplosionPlugin = new PELoopExplosionPlugin();
 
@@ -351,6 +339,7 @@ public class PartialEvaluator {
 
         LoopExplosionPlugin loopExplosionPlugin = new PELoopExplosionPlugin();
         ParameterPlugin parameterPlugin = new InterceptReceiverPlugin(callTarget);
+        InvocationPlugins invocationPlugins = createDecodingInvocationPlugins();
 
         ReplacementsImpl replacements = (ReplacementsImpl) providers.getReplacements();
         InlineInvokePlugin[] inlineInvokePlugins;
@@ -364,38 +353,20 @@ public class PartialEvaluator {
             inlineInvokePlugins = new InlineInvokePlugin[]{replacements, inlineInvokePlugin};
         }
 
-        decoder.decode(graph, graph.method(), loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin);
+        decoder.decode(graph, graph.method(), loopExplosionPlugin, invocationPlugins, inlineInvokePlugins, parameterPlugin);
 
         if (PrintTruffleExpansionHistogram.getValue()) {
             histogramPlugin.print(callTarget);
         }
     }
 
-    protected GraphBuilderConfiguration createGraphBuilderConfig(GraphBuilderConfiguration config, boolean canDelayIntrinsification) {
-        GraphBuilderConfiguration newConfig = config.copy();
-        InvocationPlugins invocationPlugins = newConfig.getPlugins().getInvocationPlugins();
-        registerTruffleInvocationPlugins(invocationPlugins, canDelayIntrinsification);
-        invocationPlugins.closeRegistration();
-        return newConfig;
-    }
-
-    protected void registerTruffleInvocationPlugins(InvocationPlugins invocationPlugins, boolean canDelayIntrinsification) {
-        TruffleGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), invocationPlugins, canDelayIntrinsification, snippetReflection);
-
-        for (TruffleInvocationPluginProvider p : Services.load(TruffleInvocationPluginProvider.class)) {
-            p.registerInvocationPlugins(providers.getMetaAccess(), invocationPlugins, canDelayIntrinsification, snippetReflection);
-        }
-    }
-
     protected InvocationPlugins createDecodingInvocationPlugins() {
-        @SuppressWarnings("hiding")
         InvocationPlugins decodingInvocationPlugins = new InvocationPlugins(providers.getMetaAccess());
-        registerTruffleInvocationPlugins(decodingInvocationPlugins, false);
-        decodingInvocationPlugins.closeRegistration();
+        TruffleGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), decodingInvocationPlugins, false, snippetReflection);
         return decodingInvocationPlugins;
     }
 
-    @SuppressWarnings({"try", "unused"})
+    @SuppressWarnings("unused")
     private void fastPartialEvaluation(OptimizedCallTarget callTarget, StructuredGraph graph, PhaseContext baseContext, HighTierContext tierContext) {
         if (GraphPE.getValue()) {
             doGraphPE(callTarget, graph);
@@ -438,7 +409,6 @@ public class PartialEvaluator {
         }
     }
 
-    @SuppressWarnings("try")
     private static void reportPerformanceWarnings(OptimizedCallTarget target, StructuredGraph graph) {
         ArrayList<ValueNode> warnings = new ArrayList<>();
         for (MethodCallTargetNode call : graph.getNodes(MethodCallTargetNode.TYPE)) {
