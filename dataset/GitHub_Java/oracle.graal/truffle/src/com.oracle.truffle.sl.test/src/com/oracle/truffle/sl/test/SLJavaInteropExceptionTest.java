@@ -57,7 +57,6 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
-import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.interop.java.JavaInterop;
@@ -85,7 +84,7 @@ public class SLJavaInteropExceptionTest {
         }
 
         public void validateMap(Map<String, Object> map) {
-            Assert.assertNull(map.get(null));
+            map.get(null);
         }
     }
 
@@ -175,7 +174,23 @@ public class SLJavaInteropExceptionTest {
         try (Context context = Context.newBuilder(SLLanguage.ID).build()) {
             context.eval(Source.newBuilder(SLLanguage.ID, sourceText, "Test").build());
             Value test = context.lookup(SLLanguage.ID, "test");
-            test.execute(new Validator());
+            try {
+                test.execute(new Validator());
+                fail("expected a PolyglotException but did not throw");
+            } catch (PolyglotException ex) {
+                StackTraceElement last = null;
+                boolean found = false;
+                for (StackTraceElement curr : ex.getStackTrace()) {
+                    if (curr.getMethodName().contains(javaMethod)) {
+                        assertNotNull(last);
+                        assertThat("expected TruffleMap stack frame", last.getClassName(), containsString("TruffleMap"));
+                        found = true;
+                        break;
+                    }
+                    last = curr;
+                }
+                assertTrue(javaMethod + " not found in stack trace", found);
+            }
         }
     }
 }
