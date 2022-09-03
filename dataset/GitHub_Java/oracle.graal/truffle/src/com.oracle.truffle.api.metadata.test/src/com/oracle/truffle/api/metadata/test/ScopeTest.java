@@ -143,21 +143,11 @@ public class ScopeTest extends AbstractInstrumentationTest {
                 assertEquals("Line = " + line + ", num vars:", numVars, varsMap.size());
                 if (numVars >= 1) {
                     assertTrue("Var a: ", varsMap.containsKey("a"));
-                    try {
-                        varsMap.get("a");
-                        fail();
-                    } catch (Exception ex) {
-                        // variable value can not be read in the static access
-                    }
+                    assertNull(varsMap.get("a"));
                 }
                 if (numVars >= 2) {
                     assertTrue("Var b: ", varsMap.containsKey("b"));
-                    try {
-                        varsMap.get("b");
-                        fail();
-                    } catch (Exception ex) {
-                        // variable value can not be read in the static access
-                    }
+                    assertNull(varsMap.get("b"));
                 }
 
                 // Dynamic access:
@@ -239,6 +229,7 @@ public class ScopeTest extends AbstractInstrumentationTest {
             public CustomScopeNode() {
             }
 
+            @SuppressWarnings("all")
             public Object execute(VirtualFrame frame) {
                 return 1;
             }

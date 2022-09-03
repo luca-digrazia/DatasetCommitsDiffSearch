@@ -45,13 +45,10 @@ import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.instrumentation.ExecutionEventListener;
-import com.oracle.truffle.api.instrumentation.GenerateWrapper;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode;
-import com.oracle.truffle.api.instrumentation.ProbeNode;
+import com.oracle.truffle.api.instrumentation.Instrumentable;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.StandardTags;
-import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
@@ -89,7 +86,7 @@ public class VariablesScopeTest extends AbstractInstrumentationTest {
         @Override
         protected void onCreate(TruffleInstrument.Env env) {
             INSTANCE = this;
-            env.getInstrumenter().attachExecutionEventListener(SourceSectionFilter.ANY, new ExecutionEventListener() {
+            env.getInstrumenter().attachListener(SourceSectionFilter.ANY, new ExecutionEventListener() {
                 @Override
                 public void onEnter(EventContext context, VirtualFrame frame) {
                     scopeTested = true;
@@ -221,6 +218,11 @@ public class VariablesScopeTest extends AbstractInstrumentationTest {
         }
 
         @Override
+        protected Object getLanguageGlobal(Object context) {
+            return null;
+        }
+
+        @Override
         protected boolean isObjectOfLanguage(Object object) {
             return true;
         }
@@ -286,10 +288,14 @@ public class VariablesScopeTest extends AbstractInstrumentationTest {
                 return scopeNode.execute(frame);
             }
 
+            @Override
+            protected boolean isInstrumentable() {
+                return true;
+            }
         }
 
-        @GenerateWrapper
-        public static class CustomScopeNode extends Node implements InstrumentableNode {
+        @Instrumentable(factory = CustomScopeNodeWrapper.class)
+        public static class CustomScopeNode extends Node {
 
             public CustomScopeNode() {
             }
@@ -304,18 +310,10 @@ public class VariablesScopeTest extends AbstractInstrumentationTest {
                 return Source.newBuilder("test").name("unknown").mimeType("x-testCustomVariablesScope").build().createSection(1);
             }
 
-            public WrapperNode createWrapper(ProbeNode probe) {
-                return new CustomScopeNodeWrapper(this, probe);
-            }
-
-            public boolean isInstrumentable() {
-                return true;
-            }
-
-            public boolean hasTag(Class<? extends Tag> tag) {
+            @Override
+            protected boolean isTaggedWith(Class<?> tag) {
                 return StandardTags.StatementTag.class.equals(tag);
             }
-
         }
     }
 
