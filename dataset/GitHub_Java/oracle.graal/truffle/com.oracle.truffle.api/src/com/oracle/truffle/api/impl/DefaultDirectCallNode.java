@@ -25,6 +25,7 @@
 package com.oracle.truffle.api.impl;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 
 /**
@@ -39,7 +40,7 @@ public final class DefaultDirectCallNode extends DirectCallNode {
     }
 
     @Override
-    public Object call(Object[] arguments) {
+    public Object call(final VirtualFrame frame, Object[] arguments) {
         return ((DefaultCallTarget) callTarget).callDirectOrIndirect(this, arguments);
     }
 
