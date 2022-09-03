@@ -33,63 +33,34 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import com.oracle.truffle.llvm.LLVM;
-import com.oracle.truffle.llvm.runtime.LLVMOptions;
-import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
-import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
 
 @RunWith(Parameterized.class)
 public class TestGCCSuite extends TestSuiteBase {
 
     private TestCaseFiles tuple;
-    private File byteCodeFile;
 
     public TestGCCSuite(TestCaseFiles tuple) {
         this.tuple = tuple;
-        this.byteCodeFile = tuple.getBitCodeFile();
     }
 
     @Parameterized.Parameters
     public static List<TestCaseFiles[]> getTestFiles() throws IOException {
         File configFile = LLVMPaths.GCC_TEST_SUITE_CONFIG;
         File testSuite = LLVMPaths.GCC_TEST_SUITE;
-        String discoveryPath = LLVMOptions.getGCCTestDiscoveryPath();
-        if (LLVMOptions.isDebug()) {
-            System.out.println("...start to read and compile files");
-        }
-        List<TestCaseFiles[]> files = getTestCasesFromConfigFile(configFile, testSuite, discoveryPath, new TestCaseGeneratorImpl());
-        if (LLVMOptions.isDebug()) {
-            System.out.println("...finished reading and compiling files!");
-        }
+        LLVMLogger.info("...start to read and compile files");
+        List<TestCaseFiles[]> files = getTestCasesFromConfigFile(configFile, testSuite, new TestCaseGeneratorImpl(true));
+        LLVMLogger.info("...finished reading and compiling files!");
         return files;
     }
 
     @Test
     public void test() {
-        try {
-            if (LLVMOptions.isDebug()) {
-                System.out.println("original file: " + tuple.getOriginalFile());
-            }
-            int expectedResult;
-            try {
-                expectedResult = TestHelper.executeLLVMBinary(byteCodeFile).getReturnValue();
-            } catch (Throwable t) {
-                t.printStackTrace();
-                throw new LLVMUnsupportedException(UnsupportedReason.CLANG_ERROR);
-            }
-            int truffleResult = LLVM.executeMain(byteCodeFile);
-            boolean pass = expectedResult == truffleResult;
-            recordTestCase(tuple, pass);
-            Assert.assertEquals(byteCodeFile.getAbsolutePath(), expectedResult, truffleResult);
-        } catch (Throwable e) {
-            recordError(tuple, e);
-            throw e;
-        }
+        executeLLVMBitCodeFileTest(tuple);
     }
 
 }
