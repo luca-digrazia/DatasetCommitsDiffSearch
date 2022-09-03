@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,72 +22,79 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.amd64.AMD64.*;
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.hotspot.HotSpotBackend.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.EXCEPTION_HANDLER_IN_CALLER;
+import static jdk.vm.ci.amd64.AMD64.rbp;
+import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
+import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.amd64.AMD64Kind;
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.ValueUtil;
+import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
 
-import java.lang.reflect.*;
-
-import com.oracle.graal.amd64.*;
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
-import com.oracle.graal.asm.amd64.AMD64Address.Scale;
-import com.oracle.graal.compiler.amd64.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.amd64.AMD64HotSpotLIRGenerator.SaveRbp;
-import com.oracle.graal.hotspot.amd64.AMD64HotSpotMove.CompareAndSwapCompressedOp;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.NoOp;
-import com.oracle.graal.lir.amd64.*;
-import com.oracle.graal.lir.amd64.AMD64ControlFlow.CondMoveOp;
+import com.oracle.graal.compiler.amd64.AMD64NodeLIRBuilder;
+import com.oracle.graal.compiler.amd64.AMD64NodeMatchRules;
+import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.compiler.gen.DebugInfoBuilder;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.hotspot.HotSpotDebugInfoBuilder;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.hotspot.HotSpotLockStack;
+import com.oracle.graal.hotspot.HotSpotNodeLIRBuilder;
+import com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode;
+import com.oracle.graal.hotspot.nodes.HotSpotDirectCallTargetNode;
+import com.oracle.graal.hotspot.nodes.HotSpotIndirectCallTargetNode;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
+import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.DirectCallTargetNode;
+import com.oracle.graal.nodes.FullInfopointNode;
+import com.oracle.graal.nodes.IndirectCallTargetNode;
+import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.SafepointNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.NodeValueMap;
 
 /**
  * LIR generator specialized for AMD64 HotSpot.
  */
 public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements HotSpotNodeLIRBuilder {
 
-    public AMD64HotSpotNodeLIRBuilder(StructuredGraph graph, LIRGenerator gen) {
-        super(graph, gen);
-        memoryPeephole = new AMD64HotSpotMemoryPeephole(this);
+    public AMD64HotSpotNodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool gen, AMD64NodeMatchRules nodeMatchRules) {
+        super(graph, gen, nodeMatchRules);
+        assert gen instanceof AMD64HotSpotLIRGenerator;
+        assert getDebugInfoBuilder() instanceof HotSpotDebugInfoBuilder;
+        ((AMD64HotSpotLIRGenerator) gen).setDebugInfoBuilder(((HotSpotDebugInfoBuilder) getDebugInfoBuilder()));
     }
 
     private AMD64HotSpotLIRGenerator getGen() {
         return (AMD64HotSpotLIRGenerator) gen;
     }
 
-    private SaveRbp getSaveRbp() {
-        return getGen().saveRbp;
-    }
-
-    private void setSaveRbp(SaveRbp saveRbp) {
-        getGen().saveRbp = saveRbp;
-    }
-
     @Override
-    protected DebugInfoBuilder createDebugInfoBuilder(NodeMap<Value> nodeOperands) {
-        HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMap(), Kind.Long);
-        return new HotSpotDebugInfoBuilder(nodeOperands, lockStack);
+    protected DebugInfoBuilder createDebugInfoBuilder(StructuredGraph graph, NodeValueMap nodeValueMap) {
+        HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMapBuilder(), LIRKind.value(AMD64Kind.QWORD));
+        return new HotSpotDebugInfoBuilder(nodeValueMap, lockStack, (HotSpotLIRGenerator) gen);
     }
 
     @Override
     protected void emitPrologue(StructuredGraph graph) {
 
-        CallingConvention incomingArguments = gen.getCallingConvention();
+        CallingConvention incomingArguments = gen.getResult().getCallingConvention();
 
         Value[] params = new Value[incomingArguments.getArgumentCount() + 1];
         for (int i = 0; i < params.length - 1; i++) {
-            params[i] = LIRGenerator.toStackKind(incomingArguments.getArgument(i));
+            params[i] = incomingArguments.getArgument(i);
             if (isStackSlot(params[i])) {
                 StackSlot slot = ValueUtil.asStackSlot(params[i]);
                 if (slot.isInCallerFrame() && !gen.getResult().getLIR().hasArgInCallerFrame()) {
@@ -95,48 +102,50 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
                 }
             }
         }
-        params[params.length - 1] = rbp.asValue(Kind.Long);
+        params[params.length - 1] = rbp.asValue(LIRKind.value(AMD64Kind.QWORD));
 
         gen.emitIncomingValues(params);
 
-        setSaveRbp(((AMD64HotSpotLIRGenerator) gen).new SaveRbp(new NoOp(gen.getCurrentBlock(), gen.getResult().getLIR().getLIRforBlock(gen.getCurrentBlock()).size())));
-        append(getSaveRbp().placeholder);
+        getGen().emitSaveRbp();
 
-        for (ParameterNode param : graph.getNodes(ParameterNode.class)) {
+        getGen().append(((HotSpotDebugInfoBuilder) getDebugInfoBuilder()).lockStack());
+
+        for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
             Value paramValue = params[param.index()];
-            assert paramValue.getKind() == param.getKind().getStackKind();
+            assert paramValue.getLIRKind().equals(getLIRGeneratorTool().getLIRKind(param.stamp())) : paramValue.getLIRKind() + " != " + param.stamp();
             setResult(param, gen.emitMove(paramValue));
         }
     }
 
     @Override
     public void visitSafepointNode(SafepointNode i) {
-        LIRFrameState info = gen.state(i);
+        LIRFrameState info = state(i);
         append(new AMD64HotSpotSafepointOp(info, getGen().config, this));
     }
 
     @Override
     protected void emitDirectCall(DirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
         InvokeKind invokeKind = ((HotSpotDirectCallTargetNode) callTarget).invokeKind();
-        if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual) {
-            append(new AMD64HotspotDirectVirtualCallOp(callTarget.target(), result, parameters, temps, callState, invokeKind));
+        if (invokeKind.isIndirect()) {
+            append(new AMD64HotspotDirectVirtualCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind, config()));
         } else {
-            assert invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special;
-            HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.target();
-            assert !Modifier.isAbstract(resolvedMethod.getModifiers()) : "Cannot make direct call to abstract method.";
-            Constant metaspaceMethod = resolvedMethod.getMetaspaceMethodConstant();
-            append(new AMD64HotspotDirectStaticCallOp(callTarget.target(), result, parameters, temps, callState, invokeKind, metaspaceMethod));
+            assert invokeKind.isDirect();
+            HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
+            assert resolvedMethod.isConcrete() : "Cannot make direct call to abstract method.";
+            append(new AMD64HotSpotDirectStaticCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind, config()));
         }
     }
 
     @Override
     protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
         if (callTarget instanceof HotSpotIndirectCallTargetNode) {
-            AllocatableValue metaspaceMethod = AMD64.rbx.asValue();
-            gen.emitMove(metaspaceMethod, operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()));
-            AllocatableValue targetAddress = AMD64.rax.asValue();
-            gen.emitMove(targetAddress, operand(callTarget.computedAddress()));
-            append(new AMD64IndirectCallOp(callTarget.target(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
+            Value metaspaceMethodSrc = operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod());
+            Value targetAddressSrc = operand(callTarget.computedAddress());
+            AllocatableValue metaspaceMethodDst = AMD64.rbx.asValue(metaspaceMethodSrc.getLIRKind());
+            AllocatableValue targetAddressDst = AMD64.rax.asValue(targetAddressSrc.getLIRKind());
+            gen.emitMove(metaspaceMethodDst, metaspaceMethodSrc);
+            gen.emitMove(targetAddressDst, targetAddressSrc);
+            append(new AMD64IndirectCallOp(callTarget.targetMethod(), result, parameters, temps, metaspaceMethodDst, targetAddressDst, callState, config()));
         } else {
             super.emitIndirectCall(callTarget, result, parameters, temps, callState);
         }
@@ -164,66 +173,24 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
     }
 
     @Override
-    public void visitInfopointNode(InfopointNode i) {
-        if (i.getState() != null && i.getState().bci == FrameState.AFTER_BCI) {
+    public void visitFullInfopointNode(FullInfopointNode i) {
+        if (i.getState() != null && i.getState().bci == BytecodeFrame.AFTER_BCI) {
             Debug.log("Ignoring InfopointNode for AFTER_BCI");
         } else {
-            super.visitInfopointNode(i);
+            super.visitFullInfopointNode(i);
         }
-    }
-
-    public void emitPrefetchAllocate(ValueNode address, ValueNode distance) {
-        AMD64AddressValue addr = getGen().emitAddress(operand(address), 0, gen.loadNonConst(operand(distance)), 1);
-        append(new AMD64PrefetchOp(addr, getGen().config.allocatePrefetchInstr));
     }
 
     @Override
     public void visitDirectCompareAndSwap(DirectCompareAndSwapNode x) {
-        Kind kind = x.newValue().getKind();
-        assert kind == x.expectedValue().getKind();
-
         Value expected = gen.loadNonConst(operand(x.expectedValue()));
         Variable newVal = gen.load(operand(x.newValue()));
+        assert expected.getLIRKind().equals(newVal.getLIRKind());
 
-        int disp = 0;
-        AMD64AddressValue address;
-        Value index = operand(x.offset());
-        if (ValueUtil.isConstant(index) && NumUtil.isInt(ValueUtil.asConstant(index).asLong() + disp)) {
-            assert !gen.getCodeCache().needsDataPatch(asConstant(index));
-            disp += (int) ValueUtil.asConstant(index).asLong();
-            address = new AMD64AddressValue(kind, gen.load(operand(x.object())), disp);
-        } else {
-            address = new AMD64AddressValue(kind, gen.load(operand(x.object())), gen.load(index), Scale.Times1, disp);
-        }
-
-        RegisterValue raxLocal = AMD64.rax.asValue(kind);
+        RegisterValue raxLocal = AMD64.rax.asValue(expected.getLIRKind());
         gen.emitMove(raxLocal, expected);
-        append(new CompareAndSwapOp(raxLocal, address, raxLocal, newVal));
+        append(new CompareAndSwapOp((AMD64Kind) expected.getPlatformKind(), raxLocal, getGen().asAddressValue(operand(x.getAddress())), raxLocal, newVal));
 
-        Variable result = newVariable(x.getKind());
-        gen.emitMove(result, raxLocal);
-        setResult(x, result);
+        setResult(x, gen.emitMove(raxLocal));
     }
-
-    @Override
-    public void visitCompareAndSwap(LoweredCompareAndSwapNode node, Value address) {
-        Kind kind = node.getNewValue().getKind();
-        assert kind == node.getExpectedValue().getKind();
-        Value expected = gen.loadNonConst(operand(node.getExpectedValue()));
-        Variable newValue = gen.load(operand(node.getNewValue()));
-        AMD64AddressValue addressValue = getGen().asAddressValue(address);
-        RegisterValue raxRes = AMD64.rax.asValue(kind);
-        gen.emitMove(raxRes, expected);
-        if (getGen().config.useCompressedOops && node.isCompressible()) {
-            Variable scratch = newVariable(Kind.Long);
-            Register heapBaseReg = getGen().getProviders().getRegisters().getHeapBaseRegister();
-            append(new CompareAndSwapCompressedOp(raxRes, addressValue, raxRes, newValue, scratch, getGen().config.getOopEncoding(), heapBaseReg));
-        } else {
-            append(new CompareAndSwapOp(raxRes, addressValue, raxRes, newValue));
-        }
-        Variable result = newVariable(node.getKind());
-        append(new CondMoveOp(result, Condition.EQ, gen.load(Constant.TRUE), Constant.FALSE));
-        setResult(node, result);
-    }
-
 }

@@ -54,6 +54,7 @@ import com.oracle.graal.lir.phases.LIRSuites;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.DebugInfoMode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
 import com.oracle.graal.nodes.spi.Replacements;
@@ -157,8 +158,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
             Plugins plugins = new Plugins(providers.getGraphBuilderPlugins());
             GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
             IntrinsicContext initialReplacementContext = new IntrinsicContext(method, substMethod, ROOT_COMPILATION);
-            new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), config, OptimisticOptimizations.NONE,
-                            initialReplacementContext).apply(graph);
+            new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), config, OptimisticOptimizations.NONE, initialReplacementContext).apply(graph);
             assert !graph.isFrozen();
             return graph;
         }
@@ -195,7 +195,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
             if (shouldDebugNonSafepoints) {
                 GraphBuilderPhase graphBuilderPhase = (GraphBuilderPhase) newGbs.findPhase(GraphBuilderPhase.class).previous();
                 GraphBuilderConfiguration graphBuilderConfig = graphBuilderPhase.getGraphBuilderConfig();
-                graphBuilderConfig = graphBuilderConfig.withNodeSourcePosition(true);
+                graphBuilderConfig = graphBuilderConfig.withDebugInfoMode(DebugInfoMode.Simple);
                 GraphBuilderPhase newGraphBuilderPhase = new GraphBuilderPhase(graphBuilderConfig);
                 newGbs.findPhase(GraphBuilderPhase.class).set(newGraphBuilderPhase);
             }

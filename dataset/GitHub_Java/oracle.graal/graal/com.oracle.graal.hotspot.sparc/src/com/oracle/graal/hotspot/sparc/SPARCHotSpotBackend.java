@@ -28,17 +28,12 @@ import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_NO
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Xcc;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.NotEqual;
 import static com.oracle.graal.compiler.common.GraalOptions.ZapStackOnMethodEntry;
+import static jdk.vm.ci.code.CallingConvention.Type.JavaCall;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 import static jdk.vm.ci.sparc.SPARC.g0;
 import static jdk.vm.ci.sparc.SPARC.g5;
-import static jdk.vm.ci.sparc.SPARC.i0;
-import static jdk.vm.ci.sparc.SPARC.i7;
-import static jdk.vm.ci.sparc.SPARC.l0;
-import static jdk.vm.ci.sparc.SPARC.l7;
-import static jdk.vm.ci.sparc.SPARC.o0;
-import static jdk.vm.ci.sparc.SPARC.o7;
 import static jdk.vm.ci.sparc.SPARC.sp;
 
 import java.util.HashSet;
@@ -51,7 +46,6 @@ import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -238,14 +232,14 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         crb.setMaxInterpreterFrameSize(gen.getMaxInterpreterFrameSize());
         StackSlot deoptimizationRescueSlot = gen.getDeoptimizationRescueSlot();
         if (deoptimizationRescueSlot != null && stub == null) {
-            crb.compilationResult.setCustomStackAreaOffset(deoptimizationRescueSlot);
+            crb.compilationResult.setCustomStackAreaOffset(frameMap.offsetForStackSlot(deoptimizationRescueSlot));
         }
 
         if (stub != null) {
             // Even on sparc we need to save floating point registers
-            Set<Register> destroyedCallerRegisters = gatherDestroyedCallerRegisters(lir);
+            Set<Register> definedRegisters = gatherDefinedRegisters(lir);
             Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = gen.getCalleeSaveInfo();
-            updateStub(stub, destroyedCallerRegisters, calleeSaveInfo, frameMap);
+            updateStub(stub, definedRegisters, calleeSaveInfo, frameMap);
         }
         assert registerSizePredictionValidator(crb);
         return crb;
@@ -323,8 +317,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
             if (unverifiedStub != null) {
                 crb.recordMark(config.MARKID_UNVERIFIED_ENTRY);
                 // We need to use JavaCall here because we haven't entered the frame yet.
-                CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCall, null, new JavaType[]{getProviders().getMetaAccess().lookupJavaType(Object.class)},
-                                getTarget());
+                CallingConvention cc = regConfig.getCallingConvention(JavaCall, null, new JavaType[]{getProviders().getMetaAccess().lookupJavaType(Object.class)}, getTarget(), false);
                 Register inlineCacheKlass = g5; // see MacroAssembler::ic_call
 
                 try (ScratchRegister sc = masm.getScratchRegister()) {
@@ -492,28 +485,5 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
         return new SPARCHotSpotRegisterAllocationConfig(registerConfigNonNull);
-    }
-
-    @Override
-    public Set<Register> translateToCallerRegisters(Set<Register> calleeRegisters) {
-        HashSet<Register> callerRegisters = new HashSet<>(calleeRegisters.size());
-        for (Register register : calleeRegisters) {
-            if (l0.number <= register.number && register.number <= l7.number) {
-                // do nothing
-            } else if (o0.number <= register.number && register.number <= o7.number) {
-                // do nothing
-            } else if (i0.number <= register.number && register.number <= i7.number) {
-                // translate input to output registers
-                callerRegisters.add(translateInputToOutputRegister(register));
-            } else {
-                callerRegisters.add(register);
-            }
-        }
-        return callerRegisters;
-    }
-
-    private Register translateInputToOutputRegister(Register register) {
-        assert i0.number <= register.number && register.number <= i7.number : "Not an input register " + register;
-        return getTarget().arch.getRegisters()[o0.number + register.number - i0.number];
     }
 }

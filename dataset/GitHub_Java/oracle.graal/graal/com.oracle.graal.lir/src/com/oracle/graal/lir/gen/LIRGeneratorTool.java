@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,72 @@
  */
 package com.oracle.graal.lir.gen;
 
-import java.util.*;
+import jdk.vm.ci.code.BytecodePosition;
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterAttributes;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.Value;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.compiler.common.spi.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.gen.LIRGenerator.*;
+import com.oracle.graal.compiler.common.calc.Condition;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.compiler.common.spi.CodeGenProviders;
+import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.LabelRef;
+import com.oracle.graal.lir.SwitchStrategy;
+import com.oracle.graal.lir.Variable;
 
-public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
+public interface LIRGeneratorTool extends BenchmarkCounterFactory {
+
+    /**
+     * Factory for creating moves.
+     */
+    public interface MoveFactory {
+
+        /**
+         * Checks whether the supplied constant can be used without loading it into a register for
+         * most operations, i.e., for commonly used arithmetic, logical, and comparison operations.
+         *
+         * @param c The constant to check.
+         * @return True if the constant can be used directly, false if the constant needs to be in a
+         *         register.
+         */
+        boolean canInlineConstant(JavaConstant c);
+
+        /**
+         * @param constant The constant that might be moved to a stack slot.
+         * @return {@code true} if constant to stack moves are supported for this constant.
+         */
+        boolean allowConstantToStackMove(Constant constant);
+
+        LIRInstruction createMove(AllocatableValue result, Value input);
+
+        LIRInstruction createStackMove(AllocatableValue result, AllocatableValue input);
+
+        LIRInstruction createLoad(AllocatableValue result, Constant input);
+    }
+
+    abstract class BlockScope implements AutoCloseable {
+
+        public abstract AbstractBlockBase<?> getCurrentBlock();
+
+        public abstract void close();
+
+    }
+
+    ArithmeticLIRGeneratorTool getArithmetic();
 
     CodeGenProviders getProviders();
 
@@ -45,25 +99,41 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     ForeignCallsProvider getForeignCalls();
 
-    AbstractBlock<?> getCurrentBlock();
+    AbstractBlockBase<?> getCurrentBlock();
 
     LIRGenerationResult getResult();
 
-    boolean hasBlockEnd(AbstractBlock<?> block);
+    boolean hasBlockEnd(AbstractBlockBase<?> block);
 
-    void doBlockStart(AbstractBlock<?> block);
+    MoveFactory getMoveFactory();
 
-    void doBlockEnd(AbstractBlock<?> block);
+    /**
+     * Get a special {@link MoveFactory} for spill moves.
+     *
+     * The instructions returned by this factory must only depend on the input values. References to
+     * values that require interaction with register allocation are strictly forbidden.
+     */
+    MoveFactory getSpillMoveFactory();
 
-    Map<Constant, LoadConstant> getConstantLoads();
+    BlockScope getBlockScope(AbstractBlockBase<?> block);
 
-    void setConstantLoads(Map<Constant, LoadConstant> constantLoads);
+    Value emitConstant(LIRKind kind, Constant constant);
 
-    Value emitLoad(PlatformKind kind, Value address, LIRFrameState state);
+    Value emitJavaConstant(JavaConstant constant);
 
-    void emitStore(PlatformKind kind, Value address, Value input, LIRFrameState state);
+    /**
+     * Some backends need to convert sub-word kinds to a larger kind in
+     * {@link ArithmeticLIRGeneratorTool#emitLoad} and {@link #emitLoadConstant} because sub-word
+     * registers can't be accessed. This method converts the {@link LIRKind} of a memory location or
+     * constant to the {@link LIRKind} that will be used when it is loaded into a register.
+     */
+    LIRKind toRegisterKind(LIRKind kind);
 
-    Value emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue);
+    AllocatableValue emitLoadConstant(LIRKind kind, Constant constant);
+
+    void emitNullCheck(Value address, LIRFrameState state);
+
+    Variable emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue);
 
     /**
      * Emit an atomic read-and-add instruction.
@@ -72,7 +142,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
      * @param delta the value to be added
      */
     default Value emitAtomicReadAndAdd(Value address, Value delta) {
-        throw GraalInternalError.unimplemented();
+        throw JVMCIError.unimplemented();
     }
 
     /**
@@ -82,32 +152,30 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
      * @param newValue the new value to be written
      */
     default Value emitAtomicReadAndWrite(Value address, Value newValue) {
-        throw GraalInternalError.unimplemented();
+        throw JVMCIError.unimplemented();
     }
 
     void emitDeoptimize(Value actionAndReason, Value failedSpeculation, LIRFrameState state);
 
     Variable emitForeignCall(ForeignCallLinkage linkage, LIRFrameState state, Value... args);
 
-    /**
-     * Checks whether the supplied constant can be used without loading it into a register for most
-     * operations, i.e., for commonly used arithmetic, logical, and comparison operations.
-     *
-     * @param c The constant to check.
-     * @return True if the constant can be used directly, false if the constant needs to be in a
-     *         register.
-     */
-    boolean canInlineConstant(Constant c);
-
-    boolean canStoreConstant(Constant c, boolean isCompressed);
-
     RegisterAttributes attributes(Register register);
 
-    Variable newVariable(PlatformKind kind);
+    /**
+     * Create a new {@link Variable}.
+     *
+     * @param kind The type of the value that will be stored in this {@link Variable}. See
+     *            {@link LIRKind} for documentation on what to pass here. Note that in most cases,
+     *            simply passing {@link Value#getLIRKind()} is wrong.
+     * @return A new {@link Variable}.
+     */
+    Variable newVariable(LIRKind kind);
 
     Variable emitMove(Value input);
 
     void emitMove(AllocatableValue dst, Value src);
+
+    void emitMoveConstant(AllocatableValue dst, Constant src);
 
     /**
      * Emits an op that loads the address of some raw data.
@@ -117,9 +185,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
      */
     void emitData(AllocatableValue dst, byte[] data);
 
-    Value emitAddress(Value base, long displacement, Value index, int scale);
-
-    Value emitAddress(StackSlot slot);
+    Variable emitAddress(AllocatableValue stackslot);
 
     void emitMembar(int barriers);
 
@@ -137,19 +203,13 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
      * Emits a return instruction. Implementations need to insert a move if the input is not in the
      * correct location.
      */
-    void emitReturn(Value input);
+    void emitReturn(JavaKind javaKind, Value input);
 
     AllocatableValue asAllocatable(Value value);
 
     Variable load(Value value);
 
     Value loadNonConst(Value value);
-
-    /**
-     * Returns true if the redundant move elimination optimization should be done after register
-     * allocation.
-     */
-    boolean canEliminateRedundantMoves();
 
     /**
      * Determines if only oop maps are required for the code generated from the LIR.
@@ -159,20 +219,23 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
     /**
      * Gets the ABI specific operand used to return a value of a given kind from a method.
      *
-     * @param kind the kind of value being returned
+     * @param javaKind the {@link JavaKind} of value being returned
+     * @param lirKind the backend type of the value being returned
      * @return the operand representing the ABI defined location used return a value of kind
      *         {@code kind}
      */
-    AllocatableValue resultOperandFor(Kind kind);
+    AllocatableValue resultOperandFor(JavaKind javaKind, LIRKind lirKind);
 
-    void append(LIRInstruction op);
+    <I extends LIRInstruction> I append(I op);
+
+    void setInfo(BytecodePosition position);
 
     void emitJump(LabelRef label);
 
     void emitCompareBranch(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
                     double trueDestinationProbability);
 
-    void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, double overflowProbability);
+    void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, LIRKind cmpKind, double overflowProbability);
 
     void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueSuccessorProbability);
 
@@ -180,20 +243,17 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     Variable emitIntegerTestMove(Value leftVal, Value right, Value trueValue, Value falseValue);
 
-    void emitStrategySwitch(Constant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value);
+    void emitStrategySwitch(JavaConstant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value);
 
     void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget);
 
-    CallingConvention getCallingConvention();
+    Variable emitByteSwap(Value operand);
 
-    void emitBitCount(Variable result, Value operand);
+    Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length);
 
-    void emitBitScanForward(Variable result, Value operand);
+    void emitBlackhole(Value operand);
 
-    void emitBitScanReverse(Variable result, Value operand);
+    LIRKind getLIRKind(Stamp stamp);
 
-    void emitByteSwap(Variable result, Value operand);
-
-    void emitArrayEquals(Kind kind, Variable result, Value array1, Value array2, Value length);
-
+    void emitPause();
 }

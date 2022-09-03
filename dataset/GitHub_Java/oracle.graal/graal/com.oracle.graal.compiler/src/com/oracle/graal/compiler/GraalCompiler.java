@@ -23,7 +23,9 @@
 package com.oracle.graal.compiler;
 
 import static com.oracle.graal.compiler.GraalCompilerOptions.EmitLIRRepeatCount;
+import static com.oracle.graal.compiler.common.GraalOptions.RegisterPressure;
 import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
+import static com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.ALL_REGISTERS;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 
 import java.util.List;
@@ -32,7 +34,6 @@ import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.code.site.ConstantReference;
 import jdk.vm.ci.code.site.DataPatch;
-import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -51,8 +52,8 @@ import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugCloseable;
 import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.DebugTimer;
-import com.oracle.graal.lir.BailoutAndRestartBackendException;
 import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.alloc.lsra.OutOfRegistersException;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
 import com.oracle.graal.lir.framemap.FrameMap;
@@ -67,6 +68,7 @@ import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
 import com.oracle.graal.nodes.cfg.Block;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.options.OptionValue.OverrideScope;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhaseSuite;
@@ -237,21 +239,16 @@ public class GraalCompiler {
 
     @SuppressWarnings("try")
     public static LIRGenerationResult emitLIR(Backend backend, StructuredGraph graph, Object stub, RegisterConfig registerConfig, LIRSuites lirSuites) {
-        OverrideScope overrideScope = null;
-        LIRSuites lirSuites0 = lirSuites;
-        while (true) {
-            try (OverrideScope scope = overrideScope) {
-                return emitLIR0(backend, graph, stub, registerConfig, lirSuites0);
-            } catch (BailoutAndRestartBackendException e) {
-                if (BailoutAndRestartBackendException.Options.LIRUnlockBackendRestart.getValue() && e.shouldRestart()) {
-                    overrideScope = e.getOverrideScope();
-                    lirSuites0 = e.updateLIRSuites(lirSuites);
-                    if (lirSuites0 != null) {
-                        continue;
-                    }
+        try {
+            return emitLIR0(backend, graph, stub, registerConfig, lirSuites);
+        } catch (OutOfRegistersException e) {
+            if (RegisterPressure.getValue() != null && !RegisterPressure.getValue().equals(ALL_REGISTERS)) {
+                try (OverrideScope s = OptionValue.override(RegisterPressure, ALL_REGISTERS)) {
+                    // retry with default register set
+                    return emitLIR0(backend, graph, stub, registerConfig, lirSuites);
                 }
-                /* If the restart fails we convert the exception into a "hard" failure */
-                throw new JVMCIError(e);
+            } else {
+                throw e;
             }
         }
     }

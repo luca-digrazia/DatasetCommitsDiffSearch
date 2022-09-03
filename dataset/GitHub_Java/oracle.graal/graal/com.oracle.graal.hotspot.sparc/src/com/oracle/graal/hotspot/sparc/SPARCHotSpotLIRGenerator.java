@@ -67,13 +67,32 @@ import static jdk.vm.ci.sparc.SPARCKind.XWORD;
 
 import java.util.Map;
 
-import com.oracle.graal.compiler.common.LIRKind;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
+import jdk.vm.ci.hotspot.HotSpotObjectConstant;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.sparc.SPARC;
+import jdk.vm.ci.sparc.SPARCKind;
+
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
 import com.oracle.graal.compiler.common.spi.LIRKindTool;
 import com.oracle.graal.compiler.sparc.SPARCArithmeticLIRGenerator;
 import com.oracle.graal.compiler.sparc.SPARCLIRGenerator;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.hotspot.HotSpotBackend;
 import com.oracle.graal.hotspot.HotSpotDebugInfoBuilder;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
@@ -99,28 +118,7 @@ import com.oracle.graal.lir.sparc.SPARCImmediateAddressValue;
 import com.oracle.graal.lir.sparc.SPARCMove.CompareAndSwapOp;
 import com.oracle.graal.lir.sparc.SPARCMove.NullCheckOp;
 import com.oracle.graal.lir.sparc.SPARCMove.StoreOp;
-import com.oracle.graal.lir.sparc.SPARCPrefetchOp;
 import com.oracle.graal.lir.sparc.SPARCSaveRegistersOp;
-
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
-import jdk.vm.ci.hotspot.HotSpotObjectConstant;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
-import jdk.vm.ci.sparc.SPARC;
-import jdk.vm.ci.sparc.SPARCKind;
 
 public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSpotLIRGenerator {
 
@@ -232,7 +230,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     public void emitReturn(JavaKind javaKind, Value input) {
         AllocatableValue operand = Value.ILLEGAL;
         if (input != null) {
-            operand = resultOperandFor(javaKind, input.getValueKind());
+            operand = resultOperandFor(javaKind, input.getLIRKind());
             emitMove(operand, input);
         }
         append(new SPARCHotSpotReturnOp(operand, getStub() != null, config, getSafepointAddressValue()));
@@ -240,7 +238,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     @Override
     public void emitTailcall(Value[] args, Value address) {
-        throw GraalError.unimplemented();
+        throw JVMCIError.unimplemented();
     }
 
     @Override
@@ -279,17 +277,15 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         append(new SPARCHotSpotDeoptimizeCallerOp());
     }
 
-    @Override
     public Variable emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
-        ValueKind<?> kind = newValue.getValueKind();
-        assert kind.equals(expectedValue.getValueKind());
+        LIRKind kind = newValue.getLIRKind();
+        assert kind.equals(expectedValue.getLIRKind());
         SPARCKind memKind = (SPARCKind) kind.getPlatformKind();
-        Variable result = newVariable(newValue.getValueKind());
+        Variable result = newVariable(newValue.getLIRKind());
         append(new CompareAndSwapOp(result, asAllocatable(address), asAllocatable(expectedValue), asAllocatable(newValue)));
         return emitConditionalMove(memKind, expectedValue, result, Condition.EQ, true, trueValue, falseValue);
     }
 
-    @Override
     public void emitPrefetchAllocate(Value address) {
         SPARCAddressValue addr = asAddressValue(address);
         append(new SPARCPrefetchOp(addr, config.allocatePrefetchInstr));
@@ -338,7 +334,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     @Override
     public Value emitCompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
-        LIRKind inputKind = pointer.getValueKind(LIRKind.class);
+        LIRKind inputKind = pointer.getLIRKind();
         assert inputKind.getPlatformKind() == XWORD : inputKind;
         if (inputKind.isReference(0)) {
             // oop
@@ -359,7 +355,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     @Override
     public Value emitUncompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
-        LIRKind inputKind = pointer.getValueKind(LIRKind.class);
+        LIRKind inputKind = pointer.getLIRKind();
         assert inputKind.getPlatformKind() == WORD;
         if (inputKind.isReference(0)) {
             // oop
@@ -389,7 +385,6 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         return save;
     }
 
-    @Override
     public SaveRegistersOp emitSaveAllRegisters() {
         // We save all registers that were not saved by the save instruction.
         // @formatter:off
@@ -416,17 +411,14 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         return emitSaveRegisters(savedRegisters, savedRegisterLocations, false);
     }
 
-    @Override
     public void emitLeaveCurrentStackFrame(SaveRegistersOp saveRegisterOp) {
         append(new SPARCHotSpotLeaveCurrentStackFrameOp());
     }
 
-    @Override
     public void emitLeaveDeoptimizedStackFrame(Value frameSize, Value initialInfo) {
         append(new SPARCHotSpotLeaveDeoptimizedStackFrameOp());
     }
 
-    @Override
     public void emitEnterUnpackFramesStackFrame(Value framePc, Value senderSp, Value senderFp, SaveRegistersOp saveRegisterOp) {
         Register thread = getProviders().getRegisters().getThreadRegister();
         Variable framePcVariable = load(framePc);
@@ -436,13 +428,11 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
                         target().arch.getWordKind()));
     }
 
-    @Override
     public void emitLeaveUnpackFramesStackFrame(SaveRegistersOp saveRegisterOp) {
         Register thread = getProviders().getRegisters().getThreadRegister();
         append(new SPARCHotSpotLeaveUnpackFramesStackFrameOp(thread, config.threadLastJavaSpOffset(), config.threadLastJavaPcOffset(), config.threadJavaFrameAnchorFlagsOffset()));
     }
 
-    @Override
     public void emitPushInterpreterFrame(Value frameSize, Value framePc, Value senderSp, Value initialInfo) {
         Variable frameSizeVariable = load(frameSize);
         Variable framePcVariable = load(framePc);
@@ -508,7 +498,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         if (BenchmarkCounters.enabled) {
             return new SPARCHotSpotCounterOp(name, group, increment, getProviders().getRegisters(), config);
         }
-        throw GraalError.shouldNotReachHere("BenchmarkCounters are not enabled!");
+        throw JVMCIError.shouldNotReachHere("BenchmarkCounters are not enabled!");
     }
 
     @Override
@@ -516,7 +506,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         if (BenchmarkCounters.enabled) {
             return new SPARCHotSpotCounterOp(names, groups, increments, getProviders().getRegisters(), config);
         }
-        throw GraalError.shouldNotReachHere("BenchmarkCounters are not enabled!");
+        throw JVMCIError.shouldNotReachHere("BenchmarkCounters are not enabled!");
     }
 
     public AllocatableValue getSafepointAddressValue() {

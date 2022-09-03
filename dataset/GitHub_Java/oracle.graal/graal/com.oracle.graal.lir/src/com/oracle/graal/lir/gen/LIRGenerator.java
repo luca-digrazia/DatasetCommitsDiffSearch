@@ -34,8 +34,24 @@ import static jdk.vm.ci.code.ValueUtil.isLegal;
 import java.util.ArrayList;
 import java.util.List;
 
+import jdk.vm.ci.code.BytecodePosition;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterAttributes;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.code.site.InfopointReason;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.asm.Label;
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.spi.CodeGenProviders;
@@ -43,14 +59,13 @@ import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
 import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
 import com.oracle.graal.compiler.common.spi.LIRKindTool;
 import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.TTY;
-import com.oracle.graal.graph.NodeSourcePosition;
 import com.oracle.graal.lir.ConstantValue;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LIRVerifier;
 import com.oracle.graal.lir.LabelRef;
+import com.oracle.graal.lir.SimpleInfopointOp;
 import com.oracle.graal.lir.StandardOp;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
@@ -59,20 +74,6 @@ import com.oracle.graal.lir.Variable;
 import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
 import com.oracle.graal.options.OptionValue;
-
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterAttributes;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
@@ -122,7 +123,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     private MoveFactory spillMoveFactory;
 
-    @Override
     public MoveFactory getSpillMoveFactory() {
         if (spillMoveFactory == null) {
             boolean verify = false;
@@ -137,16 +137,10 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     }
 
     @Override
-    public LIRKind getValueKind(JavaKind javaKind) {
-        return LIRKind.fromJavaKind(target().arch, javaKind);
-    }
-
-    @Override
     public TargetDescription target() {
         return getCodeCache().getTarget();
     }
 
-    @Override
     public CodeGenProviders getProviders() {
         return providers;
     }
@@ -170,24 +164,9 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         return lirKindTool;
     }
 
-    /**
-     * Hide {@link #nextVariable()} from other users.
-     */
-    public abstract static class VariableProvider {
-        private int numVariables;
-
-        public int numVariables() {
-            return numVariables;
-        }
-
-        private int nextVariable() {
-            return numVariables++;
-        }
-    }
-
     @Override
-    public Variable newVariable(ValueKind<?> valueKind) {
-        return new Variable(valueKind, ((VariableProvider) res.getLIR()).nextVariable());
+    public Variable newVariable(LIRKind lirKind) {
+        return new Variable(lirKind, res.getLIR().nextVariable());
     }
 
     @Override
@@ -198,7 +177,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     @Override
     public Variable emitMove(Value input) {
         assert !(input instanceof Variable) : "Creating a copy of a variable via this method is not supported (and potentially a bug): " + input;
-        Variable result = newVariable(input.getValueKind());
+        Variable result = newVariable(input.getLIRKind());
         emitMove(result, input);
         return result;
     }
@@ -224,28 +203,26 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     @Override
     public Value emitJavaConstant(JavaConstant constant) {
-        return emitConstant(getValueKind(constant.getJavaKind()), constant);
+        return emitConstant(target().getLIRKind(constant.getJavaKind()), constant);
     }
 
     @Override
-    public AllocatableValue emitLoadConstant(ValueKind<?> kind, Constant constant) {
+    public AllocatableValue emitLoadConstant(LIRKind kind, Constant constant) {
         Variable result = newVariable(kind);
         emitMoveConstant(result, constant);
         return result;
     }
 
-    @Override
     public AllocatableValue asAllocatable(Value value) {
         if (isAllocatableValue(value)) {
             return asAllocatableValue(value);
         } else if (isConstantValue(value)) {
-            return emitLoadConstant(value.getValueKind(), asConstant(value));
+            return emitLoadConstant(value.getLIRKind(), asConstant(value));
         } else {
             return emitMove(value);
         }
     }
 
-    @Override
     public Variable load(Value value) {
         if (!isVariable(value)) {
             return emitMove(value);
@@ -253,7 +230,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         return (Variable) value;
     }
 
-    @Override
     public Value loadNonConst(Value value) {
         if (isJavaConstant(value) && !moveFactory.canInlineConstant(asJavaConstant(value))) {
             return emitMove(value);
@@ -264,7 +240,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     /**
      * Determines if only oop maps are required for the code generated from the LIR.
      */
-    @Override
     public boolean needOnlyOopMaps() {
         return false;
     }
@@ -273,25 +248,22 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
      * Gets the ABI specific operand used to return a value of a given kind from a method.
      *
      * @param javaKind the kind of value being returned
-     * @param valueKind the backend type of the value being returned
+     * @param lirKind the backend type of the value being returned
      * @return the operand representing the ABI defined location used return a value of kind
      *         {@code kind}
      */
-    @Override
-    public AllocatableValue resultOperandFor(JavaKind javaKind, ValueKind<?> valueKind) {
+    public AllocatableValue resultOperandFor(JavaKind javaKind, LIRKind lirKind) {
         Register reg = res.getFrameMapBuilder().getRegisterConfig().getReturnRegister(javaKind);
-        assert target().arch.canStoreValue(reg.getRegisterCategory(), valueKind.getPlatformKind()) : reg.getRegisterCategory() + " " + valueKind.getPlatformKind();
-        return reg.asValue(valueKind);
+        assert target().arch.canStoreValue(reg.getRegisterCategory(), lirKind.getPlatformKind()) : reg.getRegisterCategory() + " " + lirKind.getPlatformKind();
+        return reg.asValue(lirKind);
     }
 
-    NodeSourcePosition currentPosition;
+    BytecodePosition currentInfo;
 
-    @Override
-    public void setSourcePosition(NodeSourcePosition position) {
-        currentPosition = position;
+    public void setInfo(BytecodePosition position) {
+        currentInfo = position;
     }
 
-    @Override
     public <I extends LIRInstruction> I append(I op) {
         if (Options.PrintIRWithLIR.getValue() && !TTY.isSuppressed()) {
             TTY.println(op.toStringWithIdPrefix());
@@ -299,12 +271,16 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         }
         assert LIRVerifier.verify(op);
         List<LIRInstruction> lirForBlock = res.getLIR().getLIRforBlock(getCurrentBlock());
-        op.setPosition(currentPosition);
+        if (op instanceof SimpleInfopointOp) {
+            currentInfo = null;
+        } else if (currentInfo != null) {
+            lirForBlock.add(new SimpleInfopointOp(InfopointReason.BYTECODE_POSITION, currentInfo));
+            currentInfo = null;
+        }
         lirForBlock.add(op);
         return op;
     }
 
-    @Override
     public boolean hasBlockEnd(AbstractBlockBase<?> block) {
         List<LIRInstruction> ops = getResult().getLIR().getLIRforBlock(block);
         if (ops.size() == 0) {
@@ -358,35 +334,27 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     }
 
-    @Override
     public final BlockScope getBlockScope(AbstractBlockBase<?> block) {
         BlockScopeImpl blockScope = new BlockScopeImpl(block);
         blockScope.doBlockStart();
         return blockScope;
     }
 
-    @Override
     public void emitIncomingValues(Value[] params) {
         ((LabelOp) res.getLIR().getLIRforBlock(getCurrentBlock()).get(0)).setIncomingValues(params);
     }
 
-    @Override
     public abstract void emitJump(LabelRef label);
 
-    @Override
     public abstract void emitCompareBranch(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
                     double trueDestinationProbability);
 
-    @Override
     public abstract void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, LIRKind cmpKind, double overflowProbability);
 
-    @Override
     public abstract void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueSuccessorProbability);
 
-    @Override
     public abstract Variable emitConditionalMove(PlatformKind cmpKind, Value leftVal, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue);
 
-    @Override
     public abstract Variable emitIntegerTestMove(Value leftVal, Value right, Value trueValue, Value falseValue);
 
     /**
@@ -428,7 +396,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         }
     }
 
-    @Override
     public void emitStrategySwitch(JavaConstant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value) {
         int keyCount = keyConstants.length;
         SwitchStrategy strategy = SwitchStrategy.getBestStrategy(keyProbabilities, keyConstants, keyTargets);
@@ -456,7 +423,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         }
     }
 
-    @Override
     public abstract void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget);
 
     protected abstract void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key);
@@ -470,43 +436,37 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
      */
     protected abstract JavaConstant zapValueForKind(PlatformKind kind);
 
-    @Override
     public LIRKind getLIRKind(Stamp stamp) {
         return stamp.getLIRKind(lirKindTool);
     }
 
     protected LIRKind getAddressKind(Value base, long displacement, Value index) {
-        if (LIRKind.isValue(base) && (index.equals(Value.ILLEGAL) || LIRKind.isValue(index))) {
+        if (base.getLIRKind().isValue() && (index.equals(Value.ILLEGAL) || index.getLIRKind().isValue())) {
             return LIRKind.value(target().arch.getWordKind());
-        } else if (base.getValueKind() instanceof LIRKind && base.getValueKind(LIRKind.class).isReference(0) && displacement == 0L && index.equals(Value.ILLEGAL)) {
+        } else if (base.getLIRKind().isReference(0) && displacement == 0L && index.equals(Value.ILLEGAL)) {
             return LIRKind.reference(target().arch.getWordKind());
         } else {
             return LIRKind.unknownReference(target().arch.getWordKind());
         }
     }
 
-    @Override
     public AbstractBlockBase<?> getCurrentBlock() {
         return currentBlock;
     }
 
-    @Override
     public LIRGenerationResult getResult() {
         return res;
     }
 
-    @Override
     public void emitBlackhole(Value operand) {
         append(new StandardOp.BlackholeOp(operand));
     }
 
-    @Override
     public LIRInstruction createBenchmarkCounter(String name, String group, Value increment) {
-        throw GraalError.unimplemented();
+        throw JVMCIError.unimplemented();
     }
 
-    @Override
     public LIRInstruction createMultiBenchmarkCounter(String[] names, String[] groups, Value[] increments) {
-        throw GraalError.unimplemented();
+        throw JVMCIError.unimplemented();
     }
 }

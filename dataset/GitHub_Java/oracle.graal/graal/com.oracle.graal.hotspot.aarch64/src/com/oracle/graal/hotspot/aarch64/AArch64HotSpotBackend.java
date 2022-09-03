@@ -28,6 +28,7 @@ import static jdk.vm.ci.aarch64.AArch64.lr;
 import static jdk.vm.ci.aarch64.AArch64.r10;
 import static jdk.vm.ci.aarch64.AArch64.sp;
 import static jdk.vm.ci.aarch64.AArch64.zr;
+import static jdk.vm.ci.code.CallingConvention.Type.JavaCallee;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 import static jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig.fp;
@@ -38,7 +39,6 @@ import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig;
 import jdk.vm.ci.meta.JavaType;
@@ -162,7 +162,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
                     }
                     masm.mov(64, sp, scratch);
                 } else {
-                    if (AArch64MacroAssembler.isArithmeticImmediate(frameSize)) {
+                    if (AArch64MacroAssembler.isArithmeticImmediate(totalFrameSize)) {
                         masm.sub(64, sp, scratch, frameSize);
                     } else {
                         try (ScratchRegister sc2 = masm.getScratchRegister()) {
@@ -180,7 +180,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
         public void leave(CompilationResultBuilder crb) {
             AArch64MacroAssembler masm = (AArch64MacroAssembler) crb.asm;
             crb.blockComment("[method epilogue]");
-            final int frameSize = crb.frameMap.frameSize();
+            final int frameSize = crb.frameMap.totalFrameSize();
             if (AArch64MacroAssembler.isArithmeticImmediate(frameSize)) {
                 masm.add(64, sp, sp, frameSize);
             } else {
@@ -255,7 +255,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
         HotSpotProviders providers = getProviders();
         if (installedCodeOwner != null && !isStatic(installedCodeOwner.getModifiers())) {
             crb.recordMark(config.MARKID_UNVERIFIED_ENTRY);
-            CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, new JavaType[]{providers.getMetaAccess().lookupJavaType(Object.class)}, getTarget());
+            CallingConvention cc = regConfig.getCallingConvention(JavaCallee, null, new JavaType[]{providers.getMetaAccess().lookupJavaType(Object.class)}, getTarget(), false);
             // See definition of IC_Klass in c1_LIRAssembler_aarch64.cpp
             // equal to scratch(1) careful!
             Register inlineCacheKlass = AArch64HotSpotRegisterConfig.inlineCacheRegister;

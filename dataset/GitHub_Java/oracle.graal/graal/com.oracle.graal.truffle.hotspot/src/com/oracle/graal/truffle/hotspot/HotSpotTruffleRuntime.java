@@ -23,7 +23,7 @@
 package com.oracle.graal.truffle.hotspot;
 
 import static com.oracle.graal.compiler.GraalCompiler.compileGraph;
-import static com.oracle.graal.hotspot.meta.HotSpotSuitesProvider.withNodeSourcePosition;
+import static com.oracle.graal.hotspot.meta.HotSpotSuitesProvider.withSimpleDebugInfo;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleStackTraceLimit;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleTransferToInterpreter;
 import static com.oracle.graal.truffle.hotspot.UnsafeAccess.UNSAFE;
@@ -184,7 +184,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         } else {
             compilationPolicy = new InterpreterOnlyCompilationPolicy();
         }
-        OptimizedCallTarget target = new OptimizedCallTarget(source, rootNode, compilationPolicy, new HotSpotSpeculationLog());
+        OptimizedCallTarget target = new OptimizedCallTarget(source, rootNode, this, compilationPolicy, new HotSpotSpeculationLog());
         rootNode.setCallTarget(target);
         callTargets.put(target, null);
 
@@ -215,7 +215,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
             if (method.getAnnotation(TruffleCallBoundary.class) != null) {
                 CompilationResult compResult = compileMethod(method);
                 CodeCacheProvider codeCache = providers.getCodeCache();
-                try (Scope s = Debug.scope("CodeInstall", codeCache, method, compResult)) {
+                try (Scope s = Debug.scope("CodeInstall", codeCache, method)) {
                     CompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(method, null, compResult);
                     codeCache.setDefaultCode(method, compiledCode);
                 } catch (Throwable e) {
@@ -269,7 +269,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     private static PhaseSuite<HighTierContext> getGraphBuilderSuite(CodeCacheProvider codeCache, SuitesProvider suitesProvider) {
         PhaseSuite<HighTierContext> graphBuilderSuite = suitesProvider.getDefaultGraphBuilderSuite();
         if (codeCache.shouldDebugNonSafepoints()) {
-            graphBuilderSuite = withNodeSourcePosition(graphBuilderSuite);
+            graphBuilderSuite = withSimpleDebugInfo(graphBuilderSuite);
         }
         return graphBuilderSuite;
     }

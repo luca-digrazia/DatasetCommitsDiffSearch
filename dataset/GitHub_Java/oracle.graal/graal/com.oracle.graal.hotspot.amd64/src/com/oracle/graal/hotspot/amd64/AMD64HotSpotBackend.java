@@ -27,6 +27,7 @@ import static com.oracle.graal.compiler.common.GraalOptions.ZapStackOnMethodEntr
 import static jdk.vm.ci.amd64.AMD64.r10;
 import static jdk.vm.ci.amd64.AMD64.rax;
 import static jdk.vm.ci.amd64.AMD64.rsp;
+import static jdk.vm.ci.code.CallingConvention.Type.JavaCallee;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 
@@ -37,7 +38,6 @@ import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -212,12 +212,12 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
         crb.setMaxInterpreterFrameSize(gen.getMaxInterpreterFrameSize());
         StackSlot deoptimizationRescueSlot = gen.getDeoptimizationRescueSlot();
         if (deoptimizationRescueSlot != null && stub == null) {
-            crb.compilationResult.setCustomStackAreaOffset(deoptimizationRescueSlot);
+            crb.compilationResult.setCustomStackAreaOffset(frameMap.offsetForStackSlot(deoptimizationRescueSlot));
         }
 
         if (stub != null) {
-            Set<Register> destroyedCallerRegisters = gatherDestroyedCallerRegisters(lir);
-            updateStub(stub, destroyedCallerRegisters, gen.getCalleeSaveInfo(), frameMap);
+            Set<Register> definedRegisters = gatherDefinedRegisters(lir);
+            updateStub(stub, definedRegisters, gen.getCalleeSaveInfo(), frameMap);
         }
 
         return crb;
@@ -253,7 +253,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
         HotSpotProviders providers = getProviders();
         if (installedCodeOwner != null && !installedCodeOwner.isStatic()) {
             crb.recordMark(config.MARKID_UNVERIFIED_ENTRY);
-            CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, new JavaType[]{providers.getMetaAccess().lookupJavaType(Object.class)}, getTarget());
+            CallingConvention cc = regConfig.getCallingConvention(JavaCallee, null, new JavaType[]{providers.getMetaAccess().lookupJavaType(Object.class)}, getTarget(), false);
             Register inlineCacheKlass = rax; // see definition of IC_Klass in
                                              // c1_LIRAssembler_x86.cpp
             Register receiver = asRegister(cc.getArgument(0));
@@ -316,10 +316,5 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
     public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
         return new AMD64HotSpotRegisterAllocationConfig(registerConfigNonNull);
-    }
-
-    @Override
-    public Set<Register> translateToCallerRegisters(Set<Register> calleeRegisters) {
-        return calleeRegisters;
     }
 }
