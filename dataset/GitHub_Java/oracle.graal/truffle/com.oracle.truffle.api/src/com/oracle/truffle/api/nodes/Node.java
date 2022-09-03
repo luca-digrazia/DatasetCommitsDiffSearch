@@ -24,28 +24,44 @@
  */
 package com.oracle.truffle.api.nodes;
 
-import java.lang.annotation.*;
-import java.util.*;
-import java.util.concurrent.*;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
-import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
-import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.api.utilities.*;
+import com.oracle.truffle.api.ReplaceObserver;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.TruffleOptions;
+import com.oracle.truffle.api.TruffleRuntime;
+import com.oracle.truffle.api.impl.Accessor;
+import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * Abstract base class for all Truffle nodes.
+ *
+ * @since 0.8 or earlier
  */
 public abstract class Node implements NodeInterface, Cloneable {
 
-    private final NodeClass nodeClass;
-    @CompilationFinal private Node parent;
-    @CompilationFinal private SourceSection sourceSection;
+    @CompilationFinal private volatile Node parent;
 
     /**
      * Marks array fields that are children of this node.
+     *
+     * This annotation implies the semantics of @{@link CompilationFinal}(dimensions = 1).
+     *
+     * @since 0.8 or earlier
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.FIELD})
@@ -54,44 +70,31 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     /**
      * Marks fields that represent child nodes of this node.
+     *
+     * This annotation implies the semantics of {@link CompilationFinal}.
+     *
+     * @since 0.8 or earlier
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.FIELD})
     public @interface Child {
     }
 
+    /** @since 0.8 or earlier */
     protected Node() {
-        this(null);
-    }
-
-    protected Node(SourceSection sourceSection) {
-        CompilerAsserts.neverPartOfCompilation();
-        this.sourceSection = sourceSection;
-        this.nodeClass = NodeClass.get(getClass());
+        CompilerAsserts.neverPartOfCompilation("do not create a Node from compiled code");
+        assert NodeClass.get(getClass()) != null; // ensure NodeClass constructor does not throw
         if (TruffleOptions.TraceASTJSON) {
-            JSONHelper.dumpNewNode(this);
+            dump(this, null, null);
         }
-    }
-
-    /**
-     * Assigns a link to a guest language source section to this node.
-     *
-     * @param section the object representing a section in guest language source code
-     */
-    public final void assignSourceSection(SourceSection section) {
-        if (sourceSection != null) {
-            // Patch this test during the transition to constructor-based
-            // source attribution, which would otherwise trigger this
-            // exception. This method will eventually be deprecated.
-            if (getSourceSection() != section) {
-                throw new IllegalStateException("Source section is already assigned. Old: " + getSourceSection() + ", new: " + section);
-            }
-        }
-        this.sourceSection = section;
     }
 
     NodeClass getNodeClass() {
-        return nodeClass;
+        return NodeClass.get(getClass());
+    }
+
+    void setParent(Node parent) {
+        this.parent = parent;
     }
 
     /**
@@ -101,6 +104,8 @@ public abstract class Node implements NodeInterface, Cloneable {
      * {@link NodeInfo#cost()} of the {@link NodeInfo} annotation declared at the subclass. If no
      * {@link NodeInfo} annotation is declared the method returns {@link NodeCost#MONOMORPHIC} as a
      * default value.
+     *
+     * @since 0.8 or earlier
      */
     public NodeCost getCost() {
         NodeInfo info = getClass().getAnnotation(NodeInfo.class);
@@ -111,19 +116,26 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     /**
-     * Clears any previously assigned guest language source code from this node.
-     */
-    public final void clearSourceSection() {
-        this.sourceSection = null;
-    }
-
-    /**
-     * Retrieves the segment of guest language source code that is represented by this Node.
+     * Retrieves the segment of guest language source code that is represented by this Node. The
+     * default implementation of this method returns <code>null</code>. If your node represents a
+     * segment of the source code, override this method and return a <code>final</code> or
+     * {@link CompilationFinal} field in your node to the caller.
+     *
+     * To define node with <em>fixed</em> {@link SourceSection} that doesn't change after node
+     * construction use:
+     *
+     * {@link com.oracle.truffle.api.nodes.NodeSnippets.NodeWithFixedSourceSection#section}
+     *
+     * To create a node which can associate and change the {@link SourceSection} later at any point
+     * of time use:
+     *
+     * {@link com.oracle.truffle.api.nodes.NodeSnippets.MutableSourceSectionNode#section}
      *
      * @return the source code represented by this Node
+     * @since 0.8 or earlier
      */
-    public final SourceSection getSourceSection() {
-        return sourceSection;
+    public SourceSection getSourceSection() {
+        return null;
     }
 
     /**
@@ -132,13 +144,15 @@ public abstract class Node implements NodeInterface, Cloneable {
      * this information.
      *
      * @return an approximation of the source code represented by this Node
+     * @since 0.8 or earlier
      */
     @ExplodeLoop
-    public final SourceSection getEncapsulatingSourceSection() {
+    public SourceSection getEncapsulatingSourceSection() {
         Node current = this;
         while (current != null) {
-            if (current.sourceSection != null) {
-                return current.sourceSection;
+            final SourceSection currentSection = current.getSourceSection();
+            if (currentSection != null) {
+                return currentSection;
             }
             current = current.parent;
         }
@@ -151,6 +165,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      *
      * @param newChildren the array of new children whose parent should be updated
      * @return the array of new children
+     * @since 0.8 or earlier
      */
     protected final <T extends Node> T[] insert(final T[] newChildren) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -166,6 +181,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      *
      * @param newChild the new child whose parent should be updated
      * @return the new child
+     * @since 0.8 or earlier
      */
     protected final <T extends Node> T insert(final T newChild) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -174,30 +190,22 @@ public abstract class Node implements NodeInterface, Cloneable {
         return newChild;
     }
 
+    /** @since 0.8 or earlier */
     public final void adoptChildren() {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        adoptHelper();
+        NodeUtil.adoptChildrenHelper(this);
     }
 
-    private void adoptHelper(final Node newChild) {
+    final void adoptHelper(final Node newChild) {
         assert newChild != null;
         if (newChild == this) {
             throw new IllegalStateException("The parent of a node can never be the node itself.");
         }
         newChild.parent = this;
         if (TruffleOptions.TraceASTJSON) {
-            JSONHelper.dumpNewChild(this, newChild);
+            dump(this, newChild, null);
         }
-        newChild.adoptHelper();
-    }
-
-    private void adoptHelper() {
-        Iterable<Node> children = this.getChildren();
-        for (Node child : children) {
-            if (child != null && child.getParent() != this) {
-                this.adoptHelper(child);
-            }
-        }
+        NodeUtil.adoptChildrenHelper(newChild);
     }
 
     private void adoptUnadoptedHelper(final Node newChild) {
@@ -206,16 +214,14 @@ public abstract class Node implements NodeInterface, Cloneable {
             throw new IllegalStateException("The parent of a node can never be the node itself.");
         }
         newChild.parent = this;
-        newChild.adoptUnadoptedHelper();
-    }
-
-    private void adoptUnadoptedHelper() {
-        Iterable<Node> children = this.getChildren();
-        for (Node child : children) {
-            if (child != null && child.getParent() == null) {
-                this.adoptUnadoptedHelper(child);
+        NodeUtil.forEachChild(newChild, new NodeVisitor() {
+            public boolean visit(Node child) {
+                if (child != null && child.getParent() == null) {
+                    newChild.adoptUnadoptedHelper(child);
+                }
+                return true;
             }
-        }
+        });
     }
 
     /**
@@ -223,6 +229,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      * subclasses to add their own custom properties.
      *
      * @return the properties as a key/value hash map
+     * @since 0.8 or earlier
      */
     public Map<String, Object> getDebugProperties() {
         Map<String, Object> properties = new HashMap<>();
@@ -233,6 +240,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      * The current parent node of this node.
      *
      * @return the parent node
+     * @since 0.8 or earlier
      */
     public final Node getParent() {
         return parent;
@@ -245,6 +253,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      * @param newNode the new node that is the replacement
      * @param reason a description of the reason for the replacement
      * @return the new node
+     * @since 0.8 or earlier
      */
     public final <T extends Node> T replace(final T newNode, final CharSequence reason) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -262,27 +271,22 @@ public abstract class Node implements NodeInterface, Cloneable {
      *
      * @param newNode the new node that is the replacement
      * @return the new node
+     * @since 0.8 or earlier
      */
     public final <T extends Node> T replace(T newNode) {
         return replace(newNode, "");
     }
 
     final void replaceHelper(Node newNode, CharSequence reason) {
-        CompilerAsserts.neverPartOfCompilation();
+        CompilerAsserts.neverPartOfCompilation("do not call Node.replaceHelper from compiled code");
         assert inAtomicBlock();
         if (this.getParent() == null) {
             throw new IllegalStateException("This node cannot be replaced, because it does not yet have a parent.");
         }
-        if (sourceSection != null && newNode.getSourceSection() == null) {
-            // Pass on the source section to the new node.
-            newNode.assignSourceSection(sourceSection);
-        }
         // (aw) need to set parent *before* replace, so that (unsynchronized) getRootNode()
         // will always find the root node
         newNode.parent = this.parent;
-        if (NodeUtil.replaceChild(this.parent, this, newNode)) {
-            this.parent.adoptHelper(newNode);
-        } else {
+        if (!NodeUtil.replaceChild(this.parent, this, newNode, true)) {
             this.parent.adoptUnadoptedHelper(newNode);
         }
         reportReplace(this, newNode, reason);
@@ -291,6 +295,8 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     /**
      * Checks if this node can be replaced by another node: tree structure & type.
+     *
+     * @since 0.8 or earlier
      */
     public final boolean isSafelyReplaceableBy(Node newNode) {
         return NodeUtil.isReplacementSafe(getParent(), this, newNode);
@@ -317,7 +323,16 @@ public abstract class Node implements NodeInterface, Cloneable {
             NodeUtil.traceRewrite(this, newNode, reason);
         }
         if (TruffleOptions.TraceASTJSON) {
-            JSONHelper.dumpReplaceChild(this, newNode, reason);
+            dump(this, newNode, reason);
+        }
+    }
+
+    private static void dump(Node node, Node newChild, CharSequence reason) {
+        if (ACCESSOR != null) {
+            Accessor.DumpSupport dumpSupport = ACCESSOR.dumpSupport();
+            if (dumpSupport != null) {
+                dumpSupport.dump(node, newChild, reason);
+            }
         }
     }
 
@@ -327,6 +342,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      *
      * @param newNode the replacement node
      * @param reason the reason the replace supplied
+     * @since 0.8 or earlier
      */
     protected void onReplace(Node newNode, CharSequence reason) {
         // empty default
@@ -337,6 +353,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      * child nodes.
      *
      * @param nodeVisitor the visitor
+     * @since 0.8 or earlier
      */
     public final void accept(NodeVisitor nodeVisitor) {
         if (nodeVisitor.visit(this)) {
@@ -348,6 +365,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      * Iterator over the children of this node.
      *
      * @return the iterator
+     * @since 0.8 or earlier
      */
     public final Iterable<Node> getChildren() {
         return new Iterable<Node>() {
@@ -361,8 +379,11 @@ public abstract class Node implements NodeInterface, Cloneable {
      * Creates a shallow copy of this node.
      *
      * @return the new copy
+     * @since 0.8 or earlier
      */
     public Node copy() {
+        CompilerAsserts.neverPartOfCompilation("do not call Node.copy from compiled code");
+
         try {
             return (Node) super.clone();
         } catch (CloneNotSupportedException e) {
@@ -374,25 +395,17 @@ public abstract class Node implements NodeInterface, Cloneable {
      * Creates a deep copy of this node.
      *
      * @return the new deep copy
+     * @since 0.8 or earlier
      */
     public Node deepCopy() {
         return NodeUtil.deepCopyImpl(this);
     }
 
     /**
-     * This method must never be called. It enforces that {@link Object#clone} is not directly
-     * called by subclasses. Use the {@link #copy()} method instead.
-     */
-    @Override
-    @Deprecated
-    protected final Object clone() throws CloneNotSupportedException {
-        throw new IllegalStateException("This method should never be called, use the copy method instead!");
-    }
-
-    /**
      * Get the root node of the tree a node belongs to.
      *
      * @return the {@link RootNode} or {@code null} if there is none.
+     * @since 0.8 or earlier
      */
     public final RootNode getRootNode() {
         Node rootNode = this;
@@ -407,87 +420,9 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     /**
-     * Any node for which this is {@code true} can be "instrumented" by installing a {@link Probe}
-     * that intercepts execution events at the node and routes them to any {@link Instrument}s that
-     * have been attached to the {@link Probe}. Only one {@link Probe} may be installed at each
-     * node; subsequent calls return the one already installed.
-     * <p>
-     * <b>Note:</b> instrumentation requires a appropriate {@link WrapperNode}, which must be
-     * provided by {@link #createWrapperNode()}.
-     *
-     * @see Instrument
-     */
-    public boolean isInstrumentable() {
-        return false;
-    }
-
-    /**
-     * For any node that {@link #isInstrumentable()}, this method must return a {@link Node} that:
-     * <ol>
-     * <li>implements {@link WrapperNode}</li>
-     * <li>has {@code this} as it's child, and</li>
-     * <li>whose type is safe for replacement of {@code this} in the parent.</li>
-     * </ol>
-     *
-     * @return an appropriately typed {@link WrapperNode} if {@link #isInstrumentable()}.
-     */
-    public WrapperNode createWrapperNode() {
-        return null;
-    }
-
-    /**
-     * Enables {@linkplain Instrument instrumentation} of a node, where the node is presumed to be
-     * part of a well-formed Truffle AST that is not being executed. If this node has not already
-     * been probed, modifies the AST by inserting a {@linkplain WrapperNode wrapper node} between
-     * the node and its parent; the wrapper node must be provided by implementations of
-     * {@link #createWrapperNode()}. No more than one {@link Probe} may be associated with a node,
-     * so a {@linkplain WrapperNode wrapper} may not wrap another {@linkplain WrapperNode wrapper}.
-     *
-     * @return a (possibly newly created) {@link Probe} associated with this node.
-     * @throws ProbeException (unchecked) when a probe cannot be created, leaving the AST unchanged
-     */
-    public final Probe probe() {
-
-        if (this instanceof WrapperNode) {
-            throw new ProbeException(ProbeFailure.Reason.WRAPPER_NODE, null, this, null);
-        }
-
-        if (parent == null) {
-            throw new ProbeException(ProbeFailure.Reason.NO_PARENT, null, this, null);
-        }
-
-        if (parent instanceof WrapperNode) {
-            return ((WrapperNode) parent).getProbe();
-        }
-
-        if (!isInstrumentable()) {
-            throw new ProbeException(ProbeFailure.Reason.NOT_INSTRUMENTABLE, parent, this, null);
-        }
-
-        // Create a new wrapper/probe with this node as its child.
-        final WrapperNode wrapper = createWrapperNode();
-
-        if (wrapper == null || !(wrapper instanceof Node)) {
-            throw new ProbeException(ProbeFailure.Reason.NO_WRAPPER, parent, this, wrapper);
-        }
-
-        final Node wrapperNode = (Node) wrapper;
-
-        if (!this.isSafelyReplaceableBy(wrapperNode)) {
-            throw new ProbeException(ProbeFailure.Reason.WRAPPER_TYPE, parent, this, wrapper);
-        }
-
-        // Connect it to a Probe
-        final Probe probe = ProbeNode.insertProbe(wrapper);
-
-        // Replace this node in the AST with the wrapper
-        this.replace(wrapperNode);
-
-        return probe;
-    }
-
-    /**
      * Converts this node to a textual representation useful for debugging.
+     *
+     * @since 0.8 or earlier
      */
     @Override
     public String toString() {
@@ -506,39 +441,109 @@ public abstract class Node implements NodeInterface, Cloneable {
         return sb.toString();
     }
 
+    /** @since 0.8 or earlier */
     public final void atomic(Runnable closure) {
-        RootNode rootNode = getRootNode();
-        synchronized (rootNode != null ? rootNode : GIL) {
-            assert enterAtomic();
-            try {
-                closure.run();
-            } finally {
-                assert exitAtomic();
-            }
+        Lock lock = getLock();
+        try {
+            lock.lock();
+            closure.run();
+        } finally {
+            lock.unlock();
         }
     }
 
+    /** @since 0.8 or earlier */
     public final <T> T atomic(Callable<T> closure) {
+        Lock lock = getLock();
         try {
-            RootNode rootNode = getRootNode();
-            synchronized (rootNode != null ? rootNode : GIL) {
-                assert enterAtomic();
-                try {
-                    return closure.call();
-                } finally {
-                    assert exitAtomic();
-                }
-            }
+            lock.lock();
+            return closure.call();
         } catch (RuntimeException | Error e) {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException(e);
+        } finally {
+            lock.unlock();
         }
+    }
+
+    /**
+     * Returns a lock object that can be used to synchronize modifications to the AST. Only use it
+     * as part of a synchronized block, do not call {@link Object#wait()} or {@link Object#notify()}
+     * manually.
+     *
+     * @since 0.17
+     * @deprecated replaced with {@link #getLock()}
+     */
+    @Deprecated
+    protected final Object getAtomicLock() {
+        // Major Assumption: parent is never null after a node got adopted
+        // it is never reset to null, and thus, rootNode is always reachable.
+        // GIL: used for nodes that are replace in ASTs that are not yet adopted
+        RootNode root = getRootNode();
+        return root == null ? GIL : root;
+    }
+
+    /**
+     * Returns a lock object that can be used to synchronize modifications to the AST. Don't lock if
+     * you call into foreign code with potential recursions to avoid deadlocks. Use responsibly.
+     *
+     * @since 0.19
+     */
+    protected final Lock getLock() {
+        // Major Assumption: parent is never null after a node got adopted
+        // it is never reset to null, and thus, rootNode is always reachable.
+        // GIL: used for nodes that are replace in ASTs that are not yet adopted
+        RootNode root = getRootNode();
+        return root == null ? GIL_LOCK : root.lock;
+    }
+
+    /**
+     * Returns <code>true</code> if this node should be considered tagged by a given tag else
+     * <code>false</code>. The method is only invoked for tags which are explicitly declared as
+     * {@link com.oracle.truffle.api.instrumentation.ProvidedTags provided} by the
+     * {@link TruffleLanguage language}. If the {@link #getSourceSection() source section} of the
+     * node returns <code>null</code> then this node is considered to be not tagged by any tag.
+     * <p>
+     * Tags are used by guest languages to indicate that a {@link Node node} is a member of a
+     * certain category of nodes. For example a debugger
+     * {@link com.oracle.truffle.api.instrumentation.TruffleInstrument instrument} might require a
+     * guest language to tag all nodes as halt locations that should be considered as such.
+     * <p>
+     * The node implementor may decide how to implement tagging for nodes. The simplest way to
+     * implement tagging using Java types is by overriding the {@link #isTaggedWith(Class)} method.
+     * This example shows how to tag a node subclass and all its subclasses as expression and
+     * statement:
+     *
+     * {@link com.oracle.truffle.api.nodes.NodeSnippets.ExpressionNode}
+     *
+     * <p>
+     * Often it is impossible to just rely on the node's Java type to implement tagging. This
+     * example shows how to use local state to implement tagging for a node.
+     *
+     * {@link com.oracle.truffle.api.nodes.NodeSnippets.StatementNode#isDebuggerHalt}
+     *
+     * <p>
+     * The implementation of isTaggedWith method must ensure that its result is stable after the
+     * parent {@link RootNode root node} was wrapped in a {@link CallTarget} using
+     * {@link TruffleRuntime#createCallTarget(RootNode)}. The result is stable if the result of
+     * calling this method for a particular tag remains always the same.
+     *
+     * @param tag the class {@link com.oracle.truffle.api.instrumentation.ProvidedTags provided} by
+     *            the {@link TruffleLanguage language}
+     * @return <code>true</code> if the node should be considered tagged by a tag else
+     *         <code>false</code>.
+     * @since 0.12
+     */
+    protected boolean isTaggedWith(Class<?> tag) {
+        return false;
     }
 
     /**
      * Returns a user-readable description of the purpose of the Node, or "" if no description is
      * available.
+     *
+     * @since 0.8 or earlier
      */
     public String getDescription() {
         NodeInfo info = getClass().getAnnotation(NodeInfo.class);
@@ -551,7 +556,13 @@ public abstract class Node implements NodeInterface, Cloneable {
     /**
      * Returns a string representing the language this node has been implemented for. If the
      * language is unknown, returns "".
+     *
+     * @since 0.8 or earlier
+     * @deprecated in 0.25 use {@link #getRootNode() getRootNode()}.
+     *             {@link RootNode#getLanguageInfo() getLanguageInfo()}.
+     *             {@link LanguageInfo#getName() getName()} instead
      */
+    @Deprecated
     public String getLanguage() {
         NodeInfo info = getClass().getAnnotation(NodeInfo.class);
         if (info != null && info.language() != null && info.language().length() > 0) {
@@ -564,25 +575,155 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     private static final Object GIL = new Object();
+    private static final ReentrantLock GIL_LOCK = new ReentrantLock(false);
 
-    private static final ThreadLocal<Integer> IN_ATOMIC_BLOCK = new ThreadLocal<Integer>() {
+    private boolean inAtomicBlock() {
+        return ((ReentrantLock) getLock()).isHeldByCurrentThread();
+    }
+
+    static final class AccessorNodes extends Accessor {
+
         @Override
-        protected Integer initialValue() {
-            return 0;
+        protected void onLoopCount(Node source, int iterations) {
+            super.onLoopCount(source, iterations);
         }
-    };
 
-    private static boolean inAtomicBlock() {
-        return IN_ATOMIC_BLOCK.get() > 0;
+        @Override
+        protected EngineSupport engineSupport() {
+            return super.engineSupport();
+        }
+
+        @Override
+        protected Accessor.Nodes nodes() {
+            return new AccessNodes();
+        }
+
+        @Override
+        protected LanguageSupport languageSupport() {
+            return super.languageSupport();
+        }
+
+        @Override
+        protected DumpSupport dumpSupport() {
+            return super.dumpSupport();
+        }
+
+        static final class AccessNodes extends Accessor.Nodes {
+
+            @Override
+            public boolean isInstrumentable(RootNode rootNode) {
+                return rootNode.isInstrumentable();
+            }
+
+            @Override
+            public boolean isTaggedWith(Node node, Class<?> tag) {
+                return node.isTaggedWith(tag);
+            }
+
+            @Override
+            public boolean isCloneUninitializedSupported(RootNode rootNode) {
+                return rootNode.isCloneUninitializedSupported();
+            }
+
+            @Override
+            public RootNode cloneUninitialized(RootNode rootNode) {
+                return rootNode.cloneUninitialized();
+            }
+
+            @Override
+            public Object getEngineObject(LanguageInfo languageInfo) {
+                return languageInfo.getEngineObject();
+            }
+
+            @Override
+            public TruffleLanguage<?> getLanguageSpi(LanguageInfo languageInfo) {
+                return languageInfo.getSpi();
+            }
+
+            @Override
+            public LanguageInfo createLanguageInfo(Object vm, TruffleLanguage<?> language, String name, String version, Set<String> mimeTypes) {
+                return new LanguageInfo(vm, language, name, version, mimeTypes);
+            }
+
+        }
     }
 
-    private static boolean enterAtomic() {
-        IN_ATOMIC_BLOCK.set(IN_ATOMIC_BLOCK.get() + 1);
-        return true;
+    // registers into Accessor.NODES
+    static final AccessorNodes ACCESSOR = new AccessorNodes();
+
+}
+
+class NodeSnippets {
+    static class NodeWithFixedSourceSection extends Node {
+        // BEGIN: com.oracle.truffle.api.nodes.NodeSnippets.NodeWithFixedSourceSection#section
+        private final SourceSection section;
+
+        NodeWithFixedSourceSection(SourceSection section) {
+            this.section = section;
+        }
+
+        @Override
+        public SourceSection getSourceSection() {
+            return section;
+        }
+        // END: com.oracle.truffle.api.nodes.NodeSnippets.NodeWithFixedSourceSection#section
     }
 
-    private static boolean exitAtomic() {
-        IN_ATOMIC_BLOCK.set(IN_ATOMIC_BLOCK.get() - 1);
-        return true;
+    static class MutableSourceSectionNode extends Node {
+        // BEGIN: com.oracle.truffle.api.nodes.NodeSnippets.MutableSourceSectionNode#section
+        @CompilerDirectives.CompilationFinal private SourceSection section;
+
+        final void changeSourceSection(SourceSection sourceSection) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            this.section = sourceSection;
+        }
+
+        @Override
+        public SourceSection getSourceSection() {
+            return section;
+        }
+        // END: com.oracle.truffle.api.nodes.NodeSnippets.MutableSourceSectionNode#section
     }
+
+    private static final class Debugger {
+        static class HaltTag {
+        }
+    }
+
+    // BEGIN: com.oracle.truffle.api.nodes.NodeSnippets.StatementNode#isDebuggerHalt
+    class StatementNode extends Node {
+        private boolean isDebuggerHalt;
+
+        public void setDebuggerHalt(boolean isDebuggerHalt) {
+            this.isDebuggerHalt = isDebuggerHalt;
+        }
+
+        @Override
+        protected boolean isTaggedWith(Class<?> tag) {
+            if (tag == Debugger.HaltTag.class) {
+                return isDebuggerHalt;
+            }
+            return super.isTaggedWith(tag);
+        }
+    }
+
+    // END: com.oracle.truffle.api.nodes.NodeSnippets.StatementNode#isDebuggerHalt
+
+    static class ExpressionTag {
+    }
+
+    // BEGIN: com.oracle.truffle.api.nodes.NodeSnippets.ExpressionNode
+    class ExpressionNode extends Node {
+
+        @Override
+        protected boolean isTaggedWith(Class<?> tag) {
+            if (tag == ExpressionTag.class) {
+                return true;
+            }
+            return super.isTaggedWith(tag);
+        }
+    }
+
+    // END: com.oracle.truffle.api.nodes.NodeSnippets.ExpressionNode
+
 }
