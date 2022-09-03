@@ -22,17 +22,11 @@
  */
 package com.oracle.graal.hotspot;
 
-import static jdk.internal.jvmci.hotspot.CompilerToVM.compilerToVM;
+import java.io.*;
+import java.lang.management.*;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintStream;
-import java.lang.management.ManagementFactory;
-
-import jdk.internal.jvmci.hotspot.CompilerToVM;
-import jdk.internal.jvmci.options.OptionValue;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.options.*;
 
 /**
  * An option that encapsulates and configures a print stream.
@@ -105,7 +99,7 @@ public class PrintStreamOption extends OptionValue<String> {
 
                     private CompilerToVM vm() {
                         if (vm == null) {
-                            vm = compilerToVM();
+                            vm = HotSpotJVMCIRuntime.runtime().getCompilerToVM();
                         }
                         return vm;
                     }
