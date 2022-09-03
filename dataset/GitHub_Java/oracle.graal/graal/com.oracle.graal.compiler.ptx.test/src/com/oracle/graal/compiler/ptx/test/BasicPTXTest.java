@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,44 +22,48 @@
  */
 package com.oracle.graal.compiler.ptx.test;
 
-import org.junit.*;
+import static org.junit.Assert.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.ptx.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.java.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.PhasePlan.*;
-import com.oracle.graal.ptx.*;
+import org.junit.*;
 
 /**
  * Test class for small Java methods compiled to PTX kernels.
  */
-public class BasicPTXTest extends GraalCompilerTest {
+public class BasicPTXTest extends PTXTest {
 
     @Test
-    public void test1() {
-        test("test1Snippet");
+    public void test() {
+        test("testConstI");
     }
 
-    @SuppressWarnings("all")
-    public static int test1Snippet(int a) {
-        return a + 1;
+    public static int testConstI() {
+        return 42;
     }
 
-    private void test(String snippet) {
-        StructuredGraph graph = parse(snippet);
-        Debug.dump(graph, "Graph");
-        TargetDescription target = new TargetDescription(new PTX(), true, 1, 0, 0, 0, 0, true);
-        PTXBackend ptxBackend = new PTXBackend(Graal.getRequiredCapability(CodeCacheProvider.class), target);
-        PhasePlan phasePlan = new PhasePlan();
-        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.NONE);
-        phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
-        CompilationResult result = GraalCompiler.compileMethod(runtime, ptxBackend, target, graph.method(), graph, null, phasePlan, OptimisticOptimizations.NONE);
-        System.out.println("result=" + result);
+    @Test
+    public void testStaticIntKernel() {
+        test("staticIntKernel", 'a', 42);
+    }
+
+    public static int staticIntKernel(char p0, int p1) {
+        return p1 + p0;
+    }
+
+    @Test
+    public void testVirtualIntKernel() {
+        test("virtualIntKernel", 'a', 42);
+    }
+
+    public int virtualIntKernel(char p0, int p1) {
+        return p1 + p0;
+    }
+
+    @Test
+    public void testGetAvailableProcessors() {
+        assertTrue(getPTXBackend().getAvailableProcessors() >= 0);
+    }
+
+    public static void main(String[] args) {
+        compileAndPrintCode(new BasicPTXTest());
     }
 }

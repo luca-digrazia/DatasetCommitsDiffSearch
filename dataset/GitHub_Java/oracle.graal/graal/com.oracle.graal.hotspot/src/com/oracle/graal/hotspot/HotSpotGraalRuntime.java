@@ -183,6 +183,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
     protected/* final */CompilerToVM compilerToVm;
     protected/* final */VMToCompiler vmToCompiler;
 
+    private HotSpotRuntimeInterpreterInterface runtimeInterpreterInterface;
     private volatile HotSpotGraphCache cache;
 
     protected final HotSpotVMConfig config;
@@ -340,9 +341,16 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
         // Resolve the type in the VM.
         final long metaspaceKlass = compilerToVm.lookupType(name, accessingClass, eagerResolve);
         if (metaspaceKlass == 0) {
-            return HotSpotUnresolvedJavaType.create(name);
+            return vmToCompiler.createUnresolvedJavaType(name);
         }
         return HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
+    }
+
+    public HotSpotRuntimeInterpreterInterface getRuntimeInterpreterInterface() {
+        if (runtimeInterpreterInterface == null) {
+            runtimeInterpreterInterface = new HotSpotRuntimeInterpreterInterface(getHostProviders().getMetaAccess());
+        }
+        return runtimeInterpreterInterface;
     }
 
     public HotSpotProviders getHostProviders() {

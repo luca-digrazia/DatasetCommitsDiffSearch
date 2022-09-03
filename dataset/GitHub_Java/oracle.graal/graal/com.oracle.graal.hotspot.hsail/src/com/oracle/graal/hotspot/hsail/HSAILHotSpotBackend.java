@@ -48,9 +48,11 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.hsail.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.replacements.hsail.*;
 
 /**
  * HSAIL specific backend.
@@ -58,6 +60,7 @@ import com.oracle.graal.phases.tiers.*;
 public class HSAILHotSpotBackend extends HotSpotBackend {
 
     private Map<String, String> paramTypeMap = new HashMap<>();
+    private Buffer codeBuffer;
     private final boolean deviceInitialized;
 
     public HSAILHotSpotBackend(HotSpotGraalRuntime runtime, HotSpotProviders providers) {
@@ -104,8 +107,10 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         lowerer.initialize(providers, config);
 
         // Register the replacements used by the HSAIL backend.
-        HSAILHotSpotReplacementsImpl replacements = (HSAILHotSpotReplacementsImpl) providers.getReplacements();
-        replacements.completeInitialization();
+        Replacements replacements = providers.getReplacements();
+
+        // Register the substitutions for java.lang.Math routines.
+        replacements.registerSubstitutions(HSAILMathSubstitutions.class);
     }
 
     /**
@@ -132,8 +137,8 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         graphBuilderSuite.appendPhase(new NonNullParametersPhase());
         CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
         Suites suites = providers.getSuites().getDefaultSuites();
-        ExternalCompilationResult hsailCode = compileGraph(graph, null, cc, method, providers, this, this.getTarget(), null, graphBuilderSuite, OptimisticOptimizations.NONE, getProfilingInfo(graph),
-                        null, suites, true, new ExternalCompilationResult(), CompilationResultBuilderFactory.Default);
+        ExternalCompilationResult hsailCode = compileGraph(graph, cc, method, providers, this, this.getTarget(), null, graphBuilderSuite, OptimisticOptimizations.NONE, getProfilingInfo(graph), null,
+                        suites, true, new ExternalCompilationResult(), CompilationResultBuilderFactory.Default);
 
         if (makeBinary) {
             if (!deviceInitialized) {
@@ -188,8 +193,16 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
     }
 
     @Override
-    public LIRGenerator newLIRGenerator(StructuredGraph graph, Object stub, FrameMap frameMap, CallingConvention cc, LIR lir) {
+    public LIRGenerator newLIRGenerator(StructuredGraph graph, FrameMap frameMap, CallingConvention cc, LIR lir) {
         return new HSAILHotSpotLIRGenerator(graph, getProviders(), getRuntime().getConfig(), frameMap, cc, lir);
+    }
+
+    public String getPartialCodeString() {
+        if (codeBuffer == null) {
+            return "";
+        }
+        byte[] data = codeBuffer.copyData(0, codeBuffer.position());
+        return (data == null ? "" : new String(data));
     }
 
     class HotSpotFrameContext implements FrameContext {
@@ -210,14 +223,14 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
     }
 
     @Override
-    protected Assembler createAssembler(FrameMap frameMap) {
+    protected AbstractAssembler createAssembler(FrameMap frameMap) {
         return new HSAILAssembler(getTarget());
     }
 
     @Override
     public CompilationResultBuilder newCompilationResultBuilder(LIRGenerator lirGen, CompilationResult compilationResult, CompilationResultBuilderFactory factory) {
         FrameMap frameMap = lirGen.frameMap;
-        Assembler masm = createAssembler(frameMap);
+        AbstractAssembler masm = createAssembler(frameMap);
         HotSpotFrameContext frameContext = new HotSpotFrameContext();
         CompilationResultBuilder crb = factory.createBuilder(getCodeCache(), getForeignCalls(), frameMap, masm, frameContext, compilationResult);
         crb.setFrameSize(frameMap.frameSize());
@@ -225,12 +238,12 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, LIR lir, ResolvedJavaMethod method) {
-        assert method != null : lir + " is not associated with a method";
+    public void emitCode(CompilationResultBuilder crb, LIRGenerator lirGen, ResolvedJavaMethod method) {
+        assert method != null : lirGen.getGraph() + " is not associated with a method";
         // Emit the prologue.
-        Assembler asm = crb.asm;
-        asm.emitString0("version 0:95: $full : $large;");
-        asm.emitString("");
+        codeBuffer = crb.asm.codeBuffer;
+        codeBuffer.emitString0("version 0:95: $full : $large;");
+        codeBuffer.emitString("");
 
         Signature signature = method.getSignature();
         int sigParamCount = signature.getParameterCount(false);
@@ -275,10 +288,10 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
             }
         }
 
-        asm.emitString0("// " + (isStatic ? "static" : "instance") + " method " + method);
-        asm.emitString("");
-        asm.emitString0("kernel &run (");
-        asm.emitString("");
+        codeBuffer.emitString0("// " + (isStatic ? "static" : "instance") + " method " + method);
+        codeBuffer.emitString("");
+        codeBuffer.emitString0("kernel &run (");
+        codeBuffer.emitString("");
 
         FrameMap frameMap = crb.frameMap;
         RegisterConfig regConfig = frameMap.registerConfig;
@@ -308,14 +321,14 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         }
         // Emit the kernel function parameters.
         for (int i = 0; i < totalParamCount; i++) {
-            String str = "align 8 kernarg_" + paramHsailSizes[i] + " " + paramNames[i];
+            String str = "kernarg_" + paramHsailSizes[i] + " " + paramNames[i];
 
             if (i != totalParamCount - 1) {
                 str += ",";
             }
-            asm.emitString(str);
+            codeBuffer.emitString(str);
         }
-        asm.emitString(") {");
+        codeBuffer.emitString(") {");
 
         /*
          * End of parameters start of prolog code. Emit the load instructions for loading of the
@@ -323,7 +336,7 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
          * loaded up front but will be loaded as needed.
          */
         for (int i = 0; i < nonConstantParamCount; i++) {
-            asm.emitString("ld_kernarg_" + paramHsailSizes[i] + "  " + HSAIL.mapRegister(cc.getArgument(i)) + ", [" + paramNames[i] + "];");
+            codeBuffer.emitString("ld_kernarg_" + paramHsailSizes[i] + "  " + HSAIL.mapRegister(cc.getArgument(i)) + ", [" + paramNames[i] + "];");
         }
 
         /*
@@ -331,16 +344,16 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
          * the register as if it were the last of the nonConstant parameters.
          */
         String workItemReg = "$s" + Integer.toString(asRegister(cc.getArgument(nonConstantParamCount)).encoding());
-        asm.emitString("workitemabsid_u32 " + workItemReg + ", 0;");
+        codeBuffer.emitString("workitemabsid_u32 " + workItemReg + ", 0;");
 
         /*
          * Note the logic used for this spillseg size is to leave space and then go back and patch
          * in the correct size once we have generated all the instructions. This should probably be
          * done in a more robust way by implementing something like codeBuffer.insertString.
          */
-        int spillsegDeclarationPosition = asm.position() + 1;
+        int spillsegDeclarationPosition = codeBuffer.position() + 1;
         String spillsegTemplate = "align 4 spill_u8 %spillseg[123456];";
-        asm.emitString(spillsegTemplate);
+        codeBuffer.emitString(spillsegTemplate);
         // Emit object array load prologue here.
         if (isObjectLambda) {
             boolean useCompressedOops = getRuntime().getConfig().useCompressedOops;
@@ -350,41 +363,41 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
             // so tempReg can be the next higher $d register
             String tmpReg = "$d" + (asRegister(cc.getArgument(nonConstantParamCount - 1)).encoding() + 1);
             // Convert gid to long.
-            asm.emitString("cvt_u64_s32 " + tmpReg + ", " + workItemReg + "; // Convert gid to long");
+            codeBuffer.emitString("cvt_u64_s32 " + tmpReg + ", " + workItemReg + "; // Convert gid to long");
             // Adjust index for sizeof ref. Where to pull this size from?
-            asm.emitString("mul_u64 " + tmpReg + ", " + tmpReg + ", " + (useCompressedOops ? 4 : 8) + "; // Adjust index for sizeof ref");
+            codeBuffer.emitString("mul_u64 " + tmpReg + ", " + tmpReg + ", " + (useCompressedOops ? 4 : 8) + "; // Adjust index for sizeof ref");
             // Adjust for actual data start.
-            asm.emitString("add_u64 " + tmpReg + ", " + tmpReg + ", " + arrayElementsOffset + "; // Adjust for actual elements data start");
+            codeBuffer.emitString("add_u64 " + tmpReg + ", " + tmpReg + ", " + arrayElementsOffset + "; // Adjust for actual elements data start");
             // Add to array ref ptr.
-            asm.emitString("add_u64 " + tmpReg + ", " + tmpReg + ", " + iterationObjArgReg + "; // Add to array ref ptr");
+            codeBuffer.emitString("add_u64 " + tmpReg + ", " + tmpReg + ", " + iterationObjArgReg + "; // Add to array ref ptr");
             // Load the object into the parameter reg.
             if (useCompressedOops) {
 
                 // Load u32 into the d 64 reg since it will become an object address
-                asm.emitString("ld_global_u32 " + tmpReg + ", " + "[" + tmpReg + "]" + "; // Load compressed ptr from array");
+                codeBuffer.emitString("ld_global_u32 " + tmpReg + ", " + "[" + tmpReg + "]" + "; // Load compressed ptr from array");
 
                 long narrowOopBase = getRuntime().getConfig().narrowOopBase;
                 long narrowOopShift = getRuntime().getConfig().narrowOopShift;
 
                 if (narrowOopBase == 0 && narrowOopShift == 0) {
                     // No more calculation to do, mov to target register
-                    asm.emitString("mov_b64 " + iterationObjArgReg + ", " + tmpReg + "; // no shift or base addition");
+                    codeBuffer.emitString("mov_b64 " + iterationObjArgReg + ", " + tmpReg + "; // no shift or base addition");
                 } else {
                     if (narrowOopBase == 0) {
-                        asm.emitString("shl_u64 " + iterationObjArgReg + ", " + tmpReg + ", " + narrowOopShift + "; // do narrowOopShift");
+                        codeBuffer.emitString("shl_u64 " + iterationObjArgReg + ", " + tmpReg + ", " + narrowOopShift + "; // do narrowOopShift");
                     } else if (narrowOopShift == 0) {
-                        asm.emitString("add_u64 " + iterationObjArgReg + ", " + tmpReg + ", " + narrowOopBase + "; // add narrowOopBase");
+                        codeBuffer.emitString("add_u64 " + iterationObjArgReg + ", " + tmpReg + ", " + narrowOopBase + "; // add narrowOopBase");
                     } else {
-                        asm.emitString("mad_u64 " + iterationObjArgReg + ", " + tmpReg + ", " + (1 << narrowOopShift) + ", " + narrowOopBase + "; // shift and add narrowOopBase");
+                        codeBuffer.emitString("mad_u64 " + iterationObjArgReg + ", " + tmpReg + ", " + (1 << narrowOopShift) + ", " + narrowOopBase + "; // shift and add narrowOopBase");
                     }
                 }
 
             } else {
-                asm.emitString("ld_global_u64 " + iterationObjArgReg + ", " + "[" + tmpReg + "]" + "; // Load from array element into parameter reg");
+                codeBuffer.emitString("ld_global_u64 " + iterationObjArgReg + ", " + "[" + tmpReg + "]" + "; // Load from array element into parameter reg");
             }
         }
         // Prologue done, Emit code for the LIR.
-        crb.emit(lir);
+        crb.emit(lirGen.lir);
         // Now that code is emitted go back and figure out what the upper Bound stack size was.
         long maxStackSize = ((HSAILAssembler) crb.asm).upperBoundStackSize();
         String spillsegStringFinal;
@@ -396,10 +409,9 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         } else {
             spillsegStringFinal = spillsegTemplate.replace("123456", String.format("%6d", maxStackSize));
         }
-        asm.emitString(spillsegStringFinal, spillsegDeclarationPosition);
-
+        codeBuffer.emitString(spillsegStringFinal, spillsegDeclarationPosition);
         // Emit the epilogue.
-        asm.emitString0("};");
-        asm.emitString("");
+        codeBuffer.emitString0("};");
+        codeBuffer.emitString("");
     }
 }

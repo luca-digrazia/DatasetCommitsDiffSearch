@@ -118,8 +118,6 @@ public abstract class KernelTester {
         dispatchMode = DispatchMode.SEQ;
         hsailMode = HsailMode.COMPILED;
         useLambdaMethod = false;
-        // Control which okra instances can run the tests (is Simulator is static).
-        onSimulator = OkraContext.isSimulator();
         this.okraLibExists = okraLibExists;
     }
 
@@ -611,12 +609,8 @@ public abstract class KernelTester {
             fail("wrong arguments invoking " + testMethod + ", check number and type of args passed to dispatchMethodKernel");
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException) {
-                throw ((RuntimeException) cause);
-            } else {
-                String errstr = testMethod + " threw a checked exception on gid=" + rangeIndex + ", exception was " + cause;
-                fail(errstr);
-            }
+            String errstr = testMethod + " threw an exception on gid=" + rangeIndex + ", exception was " + cause;
+            fail(errstr);
         } catch (Exception e) {
             fail("Unknown exception " + e + " invoking " + testMethod);
         }
