@@ -22,34 +22,40 @@
  */
 package com.oracle.graal.hotspot.hsail;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.*;
-import static com.oracle.graal.java.GraphBuilderPhase.RuntimeCalls.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 
-public class HSAILHotSpotForeignCallsProvider extends HotSpotForeignCallsProviderImpl {
+public class HSAILHotSpotForeignCallsProvider implements HotSpotForeignCallsProvider {
 
-    public HSAILHotSpotForeignCallsProvider(HotSpotGraalRuntime runtime, MetaAccessProvider metaAccess, CodeCacheProvider codeCache) {
-        super(runtime, metaAccess, codeCache);
+    private final ForeignCallsProvider host;
+
+    public HSAILHotSpotForeignCallsProvider(ForeignCallsProvider host) {
+        this.host = host;
     }
 
-    @Override
-    public HotSpotForeignCallLinkage lookupForeignCall(ForeignCallDescriptor descriptor) {
-        return super.lookupForeignCall(descriptor);
+    public boolean isReexecutable(ForeignCallDescriptor descriptor) {
+        return host.isReexecutable(descriptor);
+    }
+
+    public LocationIdentity[] getKilledLocations(ForeignCallDescriptor descriptor) {
+        return host.getKilledLocations(descriptor);
+    }
+
+    public boolean canDeoptimize(ForeignCallDescriptor descriptor) {
+        return host.canDeoptimize(descriptor);
+    }
+
+    public ForeignCallLinkage lookupForeignCall(ForeignCallDescriptor descriptor) {
+        throw GraalInternalError.unimplemented();
     }
 
     public Value[] getNativeABICallerSaveRegisters() {
-        // TODO is this correct?
-        return new Value[0];
+        throw GraalInternalError.unimplemented();
     }
 
-    public void initialize(HotSpotProviders providers, HotSpotVMConfig c) {
-        // TODO are these correct? what other foreign calls are supported on HSAIL?
-        linkForeignCall(providers, CREATE_NULL_POINTER_EXCEPTION, c.createNullPointerExceptionAddress, PREPEND_THREAD, NOT_LEAF, REEXECUTABLE, ANY_LOCATION);
-        linkForeignCall(providers, CREATE_OUT_OF_BOUNDS_EXCEPTION, c.createOutOfBoundsExceptionAddress, PREPEND_THREAD, NOT_LEAF, REEXECUTABLE, ANY_LOCATION);
+    public void initialize(HotSpotProviders providers, HotSpotVMConfig config) {
     }
 }

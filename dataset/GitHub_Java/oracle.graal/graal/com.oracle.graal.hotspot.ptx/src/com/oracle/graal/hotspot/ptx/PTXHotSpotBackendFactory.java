@@ -40,7 +40,7 @@ public class PTXHotSpotBackendFactory implements HotSpotBackendFactory {
         PTXHotSpotCodeCacheProvider codeCache = new PTXHotSpotCodeCacheProvider(runtime, createTarget());
         ConstantReflectionProvider constantReflection = host.getConstantReflection();
         HotSpotForeignCallsProvider foreignCalls = new PTXHotSpotForeignCallsProvider();
-        LoweringProvider lowerer = new PTXHotSpotLoweringProvider(host.getLowerer());
+        HotSpotLoweringProvider lowerer = new PTXHotSpotLoweringProvider(host.getLowerer());
         Replacements replacements = host.getReplacements();
         HotSpotDisassemblerProvider disassembler = host.getDisassembler();
         HotSpotSuitesProvider suites = host.getSuites();

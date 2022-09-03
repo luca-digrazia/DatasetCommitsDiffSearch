@@ -23,9 +23,7 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.api.code.UnsignedMath.*;
-import static com.oracle.graal.api.meta.MetaUtil.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.Options.*;
 import static com.oracle.graal.nodes.PiArrayNode.*;
 import static com.oracle.graal.nodes.PiNode.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
@@ -66,11 +64,11 @@ public class NewObjectSnippets implements Snippets {
 
     public static final LocationIdentity INIT_LOCATION = new NamedLocationIdentity("Initialization");
 
-    static class Options {
+    public static class Options {
 
         //@formatter:off
         @Option(help = "")
-        static final OptionValue<Boolean> ProfileAllocations = new OptionValue<>(false);
+        private static final OptionValue<Boolean> ProfileAllocations = new OptionValue<>(false);
         //@formatter:on
     }
 
@@ -116,7 +114,7 @@ public class NewObjectSnippets implements Snippets {
 
     @Fold
     private static boolean doProfile() {
-        return ProfileAllocations.getValue();
+        return Options.ProfileAllocations.getValue();
     }
 
     private static void profileAllocation(String path, long size, String typeContext) {
@@ -317,7 +315,7 @@ public class NewObjectSnippets implements Snippets {
             args.add("hub", hub);
             args.add("prototypeMarkWord", type.prototypeMarkWord());
             args.addConst("fillContents", newInstanceNode.fillContents());
-            args.addConst("typeContext", ProfileAllocations.getValue() ? toJavaName(type, false) : "");
+            args.addConst("typeContext", MetaUtil.toJavaName(type, false));
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering allocateInstance in %s: node=%s, template=%s, arguments=%s", graph, newInstanceNode, template, args);
@@ -334,7 +332,7 @@ public class NewObjectSnippets implements Snippets {
             Kind elementKind = elementType.getKind();
             ConstantNode hub = ConstantNode.forConstant(arrayType.klass(), providers.getMetaAccess(), graph);
             final int headerSize = HotSpotGraalRuntime.getArrayBaseOffset(elementKind);
-            HotSpotHostLoweringProvider lowerer = (HotSpotHostLoweringProvider) providers.getLowerer();
+            HotSpotLoweringProvider lowerer = (HotSpotLoweringProvider) providers.getLowerer();
             int log2ElementSize = CodeUtil.log2(lowerer.getScalingFactor(elementKind));
 
             Arguments args = new Arguments(allocateArray, graph.getGuardsStage());
@@ -344,7 +342,7 @@ public class NewObjectSnippets implements Snippets {
             args.addConst("headerSize", headerSize);
             args.addConst("log2ElementSize", log2ElementSize);
             args.addConst("fillContents", newArrayNode.fillContents());
-            args.addConst("typeContext", ProfileAllocations.getValue() ? toJavaName(arrayType, false) : "");
+            args.addConst("typeContext", MetaUtil.toJavaName(arrayType, false));
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering allocateArray in %s: node=%s, template=%s, arguments=%s", graph, newArrayNode, template, args);
