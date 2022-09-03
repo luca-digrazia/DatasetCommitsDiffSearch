@@ -35,7 +35,7 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
 
     public static final DebugCounter reshapeCount = DebugCounter.create("Reshape count");
 
-    protected DynamicObjectImpl(Shape shape) {
+    public DynamicObjectImpl(Shape shape) {
         assert shape instanceof ShapeImpl;
         initialize(shape);
         setShape(shape);

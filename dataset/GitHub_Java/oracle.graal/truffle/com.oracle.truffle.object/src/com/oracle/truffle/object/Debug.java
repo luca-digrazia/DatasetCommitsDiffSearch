@@ -34,8 +34,11 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import com.oracle.truffle.api.nodes.GraphPrintVisitor;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.Property;
+import com.oracle.truffle.object.debug.GraphvizShapeVisitor;
+import com.oracle.truffle.object.debug.IGVShapeVisitor;
+import com.oracle.truffle.object.debug.JSONShapeVisitor;
+import com.oracle.truffle.object.debug.ShapeProfiler;
 
-@SuppressWarnings("deprecation")
 class Debug {
     private static Collection<ShapeImpl> allShapes;
 
@@ -44,7 +47,7 @@ class Debug {
     }
 
     static void trackObject(DynamicObject obj) {
-        com.oracle.truffle.object.debug.ShapeProfiler.getInstance().track(obj);
+        ShapeProfiler.getInstance().track(obj);
     }
 
     static Iterable<ShapeImpl> getAllShapes() {
@@ -112,7 +115,7 @@ class Debug {
 
                 private void dumpDOT() throws FileNotFoundException, UnsupportedEncodingException {
                     try (PrintWriter out = new PrintWriter(getOutputFile("dot"), "UTF-8")) {
-                        com.oracle.truffle.object.debug.GraphvizShapeVisitor visitor = new com.oracle.truffle.object.debug.GraphvizShapeVisitor();
+                        GraphvizShapeVisitor visitor = new GraphvizShapeVisitor();
                         for (ShapeImpl shape : getAllShapes()) {
                             shape.accept(visitor);
                         }
@@ -129,7 +132,7 @@ class Debug {
                                 out.println(",");
                             }
                             first = false;
-                            out.print(shape.accept(new com.oracle.truffle.object.debug.JSONShapeVisitor()));
+                            out.print(shape.accept(new JSONShapeVisitor()));
                         }
                         if (!first) {
                             out.println();
@@ -141,7 +144,7 @@ class Debug {
                 private void dumpIGV() {
                     GraphPrintVisitor printer = new GraphPrintVisitor();
                     printer.beginGroup("shapes");
-                    com.oracle.truffle.object.debug.IGVShapeVisitor visitor = new com.oracle.truffle.object.debug.IGVShapeVisitor(printer);
+                    IGVShapeVisitor visitor = new IGVShapeVisitor(printer);
                     for (ShapeImpl shape : getAllShapes()) {
                         if (isRootShape(shape)) {
                             printer.beginGraph(DebugShapeVisitor.getId(shape));
