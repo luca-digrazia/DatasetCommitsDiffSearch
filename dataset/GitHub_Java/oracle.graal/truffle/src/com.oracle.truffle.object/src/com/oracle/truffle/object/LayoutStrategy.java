@@ -47,7 +47,8 @@ public abstract class LayoutStrategy {
     protected LayoutStrategy() {
     }
 
-    private static final LocationFactory DEFAULT_LOCATION_FACTORY = new LocationFactory() {
+    /** @since 0.17 or earlier */
+    @Deprecated protected static final LocationFactory DEFAULT_LAYOUT_FACTORY = new LocationFactory() {
         public Location createLocation(Shape shape, Object value) {
             return ((ShapeImpl) shape).allocator().locationForValue(value, true, value != null);
         }
@@ -55,7 +56,7 @@ public abstract class LayoutStrategy {
 
     /** @since 0.18 */
     protected LocationFactory getDefaultLocationFactory() {
-        return DEFAULT_LOCATION_FACTORY;
+        return DEFAULT_LAYOUT_FACTORY;
     }
 
     /** @since 0.17 or earlier */
