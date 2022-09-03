@@ -22,6 +22,9 @@
  */
 package com.oracle.graal.api.code;
 
+import static com.oracle.graal.api.meta.MetaUtil.*;
+import static java.lang.reflect.Modifier.*;
+
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
@@ -80,7 +83,7 @@ public class TypeCheckHints {
 
     /**
      * Derives hint information for use when generating the code for a type check instruction.
-     *
+     * 
      * @param targetType the target type of the type check
      * @param profile the profiling information available for the instruction (if any)
      * @param assumptions the object in which speculations are recorded. This is null if
@@ -97,7 +100,7 @@ public class TypeCheckHints {
         } else {
             ResolvedJavaType uniqueSubtype = targetType == null ? null : targetType.findUniqueConcreteSubtype();
             if (uniqueSubtype != null) {
-                if (assumptions != null) {
+                if (assumptions.useOptimisticAssumptions()) {
                     assumptions.recordConcreteSubtype(targetType, uniqueSubtype);
                     exact = uniqueSubtype;
                 } else {
@@ -148,10 +151,10 @@ public class TypeCheckHints {
     /**
      * Determines if a given type can have subtypes other than itself. This analysis is purely
      * static; no assumptions are made.
-     *
+     * 
      * @return true if {@code type} can have subtypes
      */
     public static boolean canHaveSubtype(ResolvedJavaType type) {
-        return !type.getElementalType().isFinal();
+        return !isFinal(getElementalType(type).getModifiers());
     }
 }
