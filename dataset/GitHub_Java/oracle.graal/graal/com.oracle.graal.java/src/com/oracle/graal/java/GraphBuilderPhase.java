@@ -239,7 +239,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             protected void build(int depth, FixedWithNextNode startInstruction, HIRFrameStateBuilder startFrameState) {
                 this.currentDepth = depth;
-                if (PrintProfilingInformation.getValue()) {
+                if (PrintProfilingInformation.getValue() && profilingInfo != null) {
                     TTY.println("Profiling info for " + method.format("%H.%n(%p)"));
                     TTY.println(MetaUtil.indent(profilingInfo.toString(method, CodeUtil.NEW_LINE), "  "));
                 }
@@ -333,12 +333,10 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
                     if (context.targetPeelIteration != -1) {
                         // We were reaching the backedge during explosion. Explode further.
-                        Debug.dump(currentGraph, "Before loop explosion " + context.targetPeelIteration);
                         context.peelIteration = context.targetPeelIteration;
                         context.targetPeelIteration = -1;
                     } else {
                         // We did not reach the backedge. Exit.
-                        Debug.dump(currentGraph, "after loop explosion " + context.peelIteration);
                         break;
                     }
                 }
@@ -473,7 +471,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             private DispatchBeginNode handleException(ValueNode exceptionObject, int bci) {
                 assert bci == BytecodeFrame.BEFORE_BCI || bci == bci() : "invalid bci";
-                Debug.log("Creating exception dispatch edges at %d, exception object=%s, exception seen=%s", bci, exceptionObject, profilingInfo.getExceptionSeen(bci));
+                Debug.log("Creating exception dispatch edges at %d, exception object=%s, exception seen=%s", bci, exceptionObject, (profilingInfo == null ? "" : profilingInfo.getExceptionSeen(bci)));
 
                 BciBlock dispatchBlock = currentBlock.exceptionDispatchBlock();
                 /*
@@ -854,7 +852,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
                 if (invokeKind.hasReceiver()) {
                     emitExplicitExceptions(args[0], null);
-                    if (invokeKind.isIndirect() && this.optimisticOpts.useTypeCheckHints()) {
+                    if (invokeKind.isIndirect() && profilingInfo != null && this.optimisticOpts.useTypeCheckHints()) {
                         JavaTypeProfile profile = profilingInfo.getTypeProfile(bci());
                         args[0] = TypeProfileProxyNode.proxify(args[0], profile);
                     }
@@ -868,6 +866,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
 
                 if (tryAnnotatedInvocationPlugin(args, targetMethod)) {
+                    System.out.println("plugin used for : " + targetMethod);
                     if (GraalOptions.TraceInlineDuringParsing.getValue()) {
                         TTY.println(format("%sUsed annotated invocation plugin for %s", nSpaces(currentDepth), targetMethod));
                     }
@@ -882,7 +881,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
                 // be conservative if information was not recorded (could result in endless
                 // recompiles otherwise)
-                if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
+                if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo != null && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
                     createInvoke(callTarget, resultType);
                 } else {
                     InvokeWithExceptionNode invoke = createInvokeWithException(callTarget, resultType);
@@ -896,7 +895,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 InvocationPlugin plugin = graphBuilderConfig.getInvocationPlugins().lookupInvocation(targetMethod);
                 if (plugin != null) {
                     int beforeStackSize = frameState.stackSize;
-                    boolean needsNullCheck = !targetMethod.isStatic() && args[0].getKind() == Kind.Object && !StampTool.isPointerNonNull(args[0].stamp());
+                    boolean needsNullCheck = !targetMethod.isStatic() && !StampTool.isPointerNonNull(args[0].stamp());
                     int nodeCount = currentGraph.getNodeCount();
                     Mark mark = needsNullCheck ? currentGraph.getMark() : null;
                     if (InvocationPlugin.execute(this, plugin, args)) {
@@ -933,17 +932,14 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     return false;
                 }
                 ResolvedJavaMethod inlinedMethod = plugin.getInlinedMethod(this, targetMethod, args, returnType, currentDepth);
-                if (inlinedMethod != null) {
-                    if (inlinedMethod != null) {
-                        assert inlinedMethod.hasBytecodes();
-                        if (TraceInlineDuringParsing.getValue()) {
-                            int bci = this.bci();
-                            StackTraceElement ste = this.method.asStackTraceElement(bci);
-                            TTY.println(format("%s%s (%s:%d) inlining call to %s", nSpaces(currentDepth), method.getName(), ste.getFileName(), ste.getLineNumber(), inlinedMethod.format("%h.%n(%p)")));
-                        }
-                        parseAndInlineCallee(inlinedMethod, args, parsingReplacement || !inlinedMethod.equals(targetMethod));
-                        plugin.postInline(inlinedMethod);
+                if (inlinedMethod != null && inlinedMethod.hasBytecodes()) {
+                    if (TraceInlineDuringParsing.getValue()) {
+                        int bci = this.bci();
+                        StackTraceElement ste = this.method.asStackTraceElement(bci);
+                        TTY.println(format("%s%s (%s:%d) inlining call to %s", nSpaces(currentDepth), method.getName(), ste.getFileName(), ste.getLineNumber(), inlinedMethod.format("%h.%n(%p)")));
                     }
+                    parseAndInlineCallee(inlinedMethod, args, parsingReplacement || !inlinedMethod.equals(targetMethod));
+                    plugin.postInline(inlinedMethod);
                     return true;
                 }
 
@@ -1687,8 +1683,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     return;
                 }
 
-                double probability = branchProbability();
-
                 // the mirroring and negation operations get the condition into canonical form
                 boolean mirror = cond.canonicalMirror();
                 boolean negate = cond.canonicalNegate();
@@ -1772,6 +1766,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     }
 
                     this.controlFlowSplit = true;
+
+                    double probability = branchProbability();
                     ValueNode trueSuccessor = createBlockTarget(probability, trueBlock, frameState);
                     ValueNode falseSuccessor = createBlockTarget(1 - probability, falseBlock, frameState);
 
