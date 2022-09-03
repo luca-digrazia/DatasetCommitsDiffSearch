@@ -375,7 +375,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         }
 
         // Falsify the reference check.
-        setCondition(graph().addOrUniqueWithInputs(LogicConstantNode.contradiction()));
+        setCondition(graph().addOrUnique(LogicConstantNode.contradiction()));
 
         return true;
     }
