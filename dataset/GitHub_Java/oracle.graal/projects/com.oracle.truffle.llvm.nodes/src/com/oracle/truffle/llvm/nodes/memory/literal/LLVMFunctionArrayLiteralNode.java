@@ -85,14 +85,7 @@ public abstract class LLVMFunctionArrayLiteralNode extends LLVMExpressionNode {
         return array;
     }
 
-    @Specialization(guards = "addr.isNative()")
-    protected LLVMAddress handleAddress(VirtualFrame frame, LLVMTruffleObject addr,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return handleAddress(frame, addr.asNative(), toNative, memory);
-    }
-
-    @Specialization(guards = "array.isManaged()")
+    @Specialization
     @ExplodeLoop
     protected LLVMTruffleObject handleTruffleObject(VirtualFrame frame, LLVMTruffleObject array,
                     @Cached("createForeignWrites()") LLVMForeignWriteNode[] foreignWrites) {

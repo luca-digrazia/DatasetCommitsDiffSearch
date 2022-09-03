@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
@@ -41,10 +40,10 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
@@ -56,8 +55,7 @@ public abstract class LLVMTruffleReadNBytes extends LLVMIntrinsic {
 
     @Specialization
     protected Object doIntrinsic(LLVMAddress value, int n,
-                    @Cached("getLLVMMemory()") LLVMMemory memory,
-                    @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef) {
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         int count = n < 0 ? 0 : n;
         byte[] bytes = new byte[count];
         long ptr = value.getVal();
@@ -65,15 +63,13 @@ public abstract class LLVMTruffleReadNBytes extends LLVMIntrinsic {
             bytes[i] = memory.getI8(ptr);
             ptr += Byte.BYTES;
         }
-        TruffleObject ret = (TruffleObject) ctxRef.get().getEnv().asGuestValue(bytes);
-        return new LLVMTruffleObject(LLVMTypedForeignObject.createUnknown(ret));
+        return new LLVMTruffleObject(LLVMTypedForeignObject.createUnknown(JavaInterop.asTruffleObject(bytes)));
     }
 
     @Specialization
     protected Object interop(LLVMTruffleObject objectWithOffset, int n,
                     @Cached("createForeignReadNode()") Node foreignRead,
-                    @Cached("createToByteNode()") ForeignToLLVM toLLVM,
-                    @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef) {
+                    @Cached("createToByteNode()") ForeignToLLVM toLLVM) {
         long offset = objectWithOffset.getOffset();
         TruffleObject object = objectWithOffset.getObject();
         byte[] chars = new byte[n];
@@ -87,8 +83,7 @@ public abstract class LLVMTruffleReadNBytes extends LLVMIntrinsic {
             }
             chars[i] = (byte) toLLVM.executeWithTarget(rawValue);
         }
-        TruffleObject ret = (TruffleObject) ctxRef.get().getEnv().asGuestValue(chars);
-        return new LLVMTruffleObject(LLVMTypedForeignObject.createUnknown(ret));
+        return new LLVMTruffleObject(LLVMTypedForeignObject.createUnknown(JavaInterop.asTruffleObject(chars)));
     }
 
     @Fallback

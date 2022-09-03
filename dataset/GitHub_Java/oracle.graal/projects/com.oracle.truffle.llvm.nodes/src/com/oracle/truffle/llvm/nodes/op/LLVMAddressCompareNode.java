@@ -30,8 +30,6 @@
 package com.oracle.truffle.llvm.nodes.op;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.ImportStatic;
@@ -40,6 +38,7 @@ import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.ForeignToComparableValueNodeGen;
 import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.LLVMAddressEQNodeGen;
@@ -53,7 +52,6 @@ import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.NativeToCompar
 import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.ToComparableValueNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
@@ -62,7 +60,6 @@ import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
@@ -283,27 +280,24 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
         return op.compare(convertVal1.execute(val1), convertVal2.execute(val2));
     }
 
+    @ImportStatic(JavaInterop.class)
     abstract static class LLVMForeignEqualsNode extends Node {
 
-        abstract boolean execute(Env env, TruffleObject obj1, TruffleObject obj2);
+        abstract boolean execute(TruffleObject obj1, TruffleObject obj2);
 
-        boolean isHostObject(Env env, TruffleObject obj) {
-            return env.isHostObject(obj);
-        }
-
-        @Specialization(guards = {"isHostObject(env, obj1)", "isHostObject(env, obj2)"})
-        protected boolean doJava(Env env, TruffleObject obj1, TruffleObject obj2) {
-            return env.asHostObject(obj1) == env.asHostObject(obj2);
+        @Specialization(guards = {"isJavaObject(obj1)", "isJavaObject(obj2)"})
+        protected boolean doJava(TruffleObject obj1, TruffleObject obj2) {
+            return JavaInterop.asJavaObject(obj1) == JavaInterop.asJavaObject(obj2);
         }
 
         @Specialization
-        protected boolean doForeign(Env env, LLVMTypedForeignObject obj1, LLVMTypedForeignObject obj2,
+        protected boolean doForeign(LLVMTypedForeignObject obj1, LLVMTypedForeignObject obj2,
                         @Cached("create()") LLVMForeignEqualsNode equals) {
-            return equals.execute(env, obj1.getForeign(), obj2.getForeign());
+            return equals.execute(obj1.getForeign(), obj2.getForeign());
         }
 
         @Fallback
-        protected boolean doOther(@SuppressWarnings("unused") Env env, TruffleObject obj1, TruffleObject obj2) {
+        protected boolean doOther(TruffleObject obj1, TruffleObject obj2) {
             return obj1 == obj2;
         }
 
@@ -312,15 +306,14 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
         }
     }
 
-    abstract static class LLVMManagedEqualsNode extends LLVMNode {
+    abstract static class LLVMManagedEqualsNode extends Node {
 
         abstract boolean execute(Object val1, Object val2);
 
         @Specialization
         protected boolean doForeign(LLVMTruffleObject obj1, LLVMTruffleObject obj2,
-                        @Cached("create()") LLVMForeignEqualsNode equals,
-                        @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef) {
-            return equals.execute(ctxRef.get().getEnv(), obj1.getObject(), obj2.getObject()) && obj1.getOffset() == obj2.getOffset();
+                        @Cached("create()") LLVMForeignEqualsNode equals) {
+            return equals.execute(obj1.getObject(), obj2.getObject()) && obj1.getOffset() == obj2.getOffset();
         }
 
         @Specialization

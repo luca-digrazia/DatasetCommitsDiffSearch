@@ -42,14 +42,13 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMPolyglotBoxedPredicateNodeGen.MatchForeignNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
 @NodeChild(value = "object", type = LLVMExpressionNode.class)
 public abstract class LLVMPolyglotBoxedPredicate extends LLVMIntrinsic {
 
-    public abstract static class Predicate extends LLVMNode {
+    public abstract static class Predicate extends Node {
 
         abstract boolean execute(Object obj);
     }
@@ -363,7 +362,7 @@ public abstract class LLVMPolyglotBoxedPredicate extends LLVMIntrinsic {
     }
 
     @Specialization
-    boolean matchManaged(LLVMManagedPointer object,
+    boolean matchLLVMTruffleObject(LLVMTruffleObject object,
                     @Cached("createOptional()") LLVMAsForeignNode asForeign,
                     @Cached("create()") MatchForeign match) {
         TruffleObject foreign = asForeign.execute(object);
@@ -389,7 +388,7 @@ public abstract class LLVMPolyglotBoxedPredicate extends LLVMIntrinsic {
         return false;
     }
 
-    abstract static class MatchForeign extends LLVMNode {
+    abstract static class MatchForeign extends Node {
 
         @Child Node isBoxed = Message.IS_BOXED.createNode();
         @Child Node unbox = Message.UNBOX.createNode();

@@ -33,21 +33,16 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
-public abstract class LLVM80BitFloatStoreNode extends LLVMStoreNodeCommon {
+public abstract class LLVM80BitFloatStoreNode extends LLVMStoreNode {
 
     public LLVM80BitFloatStoreNode() {
-        this(null);
-    }
-
-    public LLVM80BitFloatStoreNode(LLVMSourceLocation sourceLocation) {
-        super(sourceLocation, PrimitiveType.X86_FP80);
+        super(PrimitiveType.X86_FP80);
     }
 
     @Specialization

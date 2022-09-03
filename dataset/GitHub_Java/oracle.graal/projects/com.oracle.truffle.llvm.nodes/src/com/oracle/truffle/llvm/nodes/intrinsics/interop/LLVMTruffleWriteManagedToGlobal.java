@@ -54,26 +54,23 @@ public abstract class LLVMTruffleWriteManagedToGlobal extends LLVMIntrinsic {
 
     @Specialization
     protected LLVMTruffleObject doIntrinsic(LLVMGlobal address, LLVMTruffleObject value,
-                    @Cached("create()") LLVMGlobal.GetFrame getFrameNode,
                     @Cached("getContextReference()") ContextReference<LLVMContext> context) {
-        LLVMTruffleObject typedValue = (LLVMTruffleObject) attachType.execute(value, address.getInteropType());
-        MaterializedFrame globalFrame = getFrameNode.execute(context.get());
-        globalFrame.setObject(address.getSlot(), LLVMGlobal.assignManaged(value));
+        LLVMTruffleObject typedValue = (LLVMTruffleObject) attachType.execute(value, address.getSourceType());
+        context.get().getGlobalFrame().setObject(address.getSlot(), typedValue);
         return typedValue;
     }
 
     @Specialization
     @TruffleBoundary
     protected Object doIntrinsic(Object address, Object value,
-                    @Cached("create()") LLVMGlobal.GetFrame getFrameNode,
                     @Cached("getContextReference()") ContextReference<LLVMContext> context) {
         // TODO: (timfel) This is so slow :(
-        MaterializedFrame globalFrame = getFrameNode.execute(context.get());
+        MaterializedFrame globalFrame = context.get().getGlobalFrame();
         for (FrameSlot slot : globalFrame.getFrameDescriptor().getSlots()) {
             if (slot.getKind() == FrameSlotKind.Object) {
                 try {
                     if (globalFrame.getObject(slot) == address) {
-                        globalFrame.setObject(slot, LLVMGlobal.assignManaged(value));
+                        globalFrame.setObject(slot, value);
                         return value;
                     }
                 } catch (FrameSlotTypeException e) {

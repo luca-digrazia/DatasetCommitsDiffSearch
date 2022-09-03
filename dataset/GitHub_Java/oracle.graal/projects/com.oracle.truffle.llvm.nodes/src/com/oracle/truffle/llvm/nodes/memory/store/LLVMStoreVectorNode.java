@@ -34,7 +34,6 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
@@ -49,16 +48,12 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
-public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
+public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
 
     private final int vectorLength;
 
     public LLVMStoreVectorNode(VectorType type) {
-        this(null, type);
-    }
-
-    public LLVMStoreVectorNode(LLVMSourceLocation sourceLocation, VectorType type) {
-        super(sourceLocation, type);
+        super(type);
         this.vectorLength = type.getNumberOfElements();
     }
 
@@ -197,17 +192,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isNative()")
-    protected Object doOp(LLVMTruffleObject address, Object value,
-                    @Cached("createRecursive()") LLVMStoreVectorNode recursive) {
-        return recursive.executeWithTarget(address.asNative(), value);
-    }
-
-    LLVMStoreVectorNode createRecursive() {
-        return LLVMStoreVectorNodeGen.create((VectorType) valueType, null, null);
-    }
-
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     @ExplodeLoop
     protected Object writeVector(LLVMTruffleObject address, LLVMI1Vector value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
@@ -220,7 +205,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     @ExplodeLoop
     protected Object writeVector(LLVMTruffleObject address, LLVMI8Vector value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
@@ -233,7 +218,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     @ExplodeLoop
     protected Object writeVector(LLVMTruffleObject address, LLVMI16Vector value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
@@ -246,7 +231,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     @ExplodeLoop
     protected Object writeVector(LLVMTruffleObject address, LLVMI32Vector value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
@@ -259,7 +244,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     @ExplodeLoop
     protected Object writeVector(LLVMTruffleObject address, LLVMFloatVector value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
@@ -272,7 +257,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     @ExplodeLoop
     protected Object writeVector(LLVMTruffleObject address, LLVMDoubleVector value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
@@ -285,7 +270,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     @ExplodeLoop
     protected Object writeVector(LLVMTruffleObject address, LLVMI64Vector value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
@@ -298,7 +283,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     @ExplodeLoop
     protected Object writeVector(LLVMTruffleObject address, LLVMAddressVector value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
@@ -311,7 +296,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     @ExplodeLoop
     protected Object writeVector(LLVMTruffleObject address, LLVMFunctionVector value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {

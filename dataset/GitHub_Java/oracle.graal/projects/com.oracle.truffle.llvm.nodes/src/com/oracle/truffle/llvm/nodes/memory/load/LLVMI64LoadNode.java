@@ -42,7 +42,6 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadI64Node;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 
 public abstract class LLVMI64LoadNode extends LLVMLoadNode {
@@ -73,13 +72,7 @@ public abstract class LLVMI64LoadNode extends LLVMLoadNode {
         return new LLVMForeignReadNode(ForeignToLLVMType.I64);
     }
 
-    @Specialization(guards = "addr.isNative()")
-    protected Object doI64(LLVMTruffleObject addr,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return doI64(addr.asNative(), memory);
-    }
-
-    @Specialization(guards = "addr.isManaged()")
+    @Specialization
     protected Object doI64(LLVMTruffleObject addr,
                     @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
         return foreignRead.execute(addr);

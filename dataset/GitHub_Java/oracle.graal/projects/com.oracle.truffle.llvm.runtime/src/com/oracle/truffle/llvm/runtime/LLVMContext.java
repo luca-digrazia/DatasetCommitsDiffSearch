@@ -53,6 +53,7 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayoutConverter.DataSpecConverterImpl;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
@@ -233,12 +234,12 @@ public final class LLVMContext {
         return environment.entrySet().stream().map((e) -> e.getKey() + "=" + e.getValue()).toArray(String[]::new);
     }
 
-    private LLVMTruffleObject toTruffleObjects(String[] values) {
+    private static LLVMTruffleObject toTruffleObjects(String[] values) {
         TruffleObject[] result = new TruffleObject[values.length];
         for (int i = 0; i < values.length; i++) {
-            result[i] = (TruffleObject) env.asGuestValue(values[i].getBytes());
+            result[i] = JavaInterop.asTruffleObject(values[i].getBytes());
         }
-        return new LLVMTruffleObject(LLVMTypedForeignObject.createUnknown((TruffleObject) env.asGuestValue(result)));
+        return new LLVMTruffleObject(LLVMTypedForeignObject.createUnknown(JavaInterop.asTruffleObject(result)));
     }
 
     public void dispose(LLVMMemory memory) {

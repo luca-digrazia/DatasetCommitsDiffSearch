@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.nodes.func;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
@@ -38,6 +39,7 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
@@ -122,11 +124,12 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
                     @Cached("create()") LLVMAsForeignNode asForeign,
                     @Cached("createCrossLanguageCallNode(arguments)") Node crossLanguageCallNode,
                     @Cached("createLLVMDataEscapeNodes()") LLVMDataEscapeNode[] dataEscapeNodes,
-                    @Cached("createToLLVMNode()") ForeignToLLVM toLLVMNode) {
+                    @Cached("createToLLVMNode()") ForeignToLLVM toLLVMNode,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> context) {
         try {
             Object ret;
             try (StackPointer save = ((StackPointer) arguments[0]).newFrame()) {
-                ret = ForeignAccess.sendExecute(crossLanguageCallNode, asForeign.execute(function), getForeignArguments(dataEscapeNodes, arguments));
+                ret = ForeignAccess.sendExecute(crossLanguageCallNode, asForeign.execute(function), getForeignArguments(dataEscapeNodes, arguments, context.get()));
             }
             return toLLVMNode.executeWithTarget(ret);
         } catch (InteropException e) {
@@ -136,11 +139,11 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
     }
 
     @ExplodeLoop
-    private Object[] getForeignArguments(LLVMDataEscapeNode[] dataEscapeNodes, Object[] arguments) {
+    private Object[] getForeignArguments(LLVMDataEscapeNode[] dataEscapeNodes, Object[] arguments, LLVMContext context) {
         assert arguments.length == type.getArgumentTypes().length;
         Object[] args = new Object[type.getArgumentTypes().length - LLVMCallNode.USER_ARGUMENT_OFFSET];
         for (int i = 0; i < type.getArgumentTypes().length - LLVMCallNode.USER_ARGUMENT_OFFSET; i++) {
-            args[i] = dataEscapeNodes[i].executeWithTarget(arguments[i + LLVMCallNode.USER_ARGUMENT_OFFSET]);
+            args[i] = dataEscapeNodes[i].executeWithTarget(arguments[i + LLVMCallNode.USER_ARGUMENT_OFFSET], context);
         }
         return args;
     }

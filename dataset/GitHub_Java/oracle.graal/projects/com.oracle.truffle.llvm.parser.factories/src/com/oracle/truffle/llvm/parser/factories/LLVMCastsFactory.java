@@ -469,8 +469,6 @@ final class LLVMCastsFactory {
         if (hasJavaCastSemantics() || conv == LLVMConversionType.BITCAST) {
             if (targetType == PrimitiveType.I8) {
                 return LLVMToI8NoZeroExtNodeGen.create(fromNode);
-            } else if (targetType == PrimitiveType.I16) {
-                return LLVMToI16NoZeroExtNodeGen.create(fromNode);
             } else if (targetType == PrimitiveType.I32) {
                 return LLVMToI32NoZeroExtNodeGen.create(fromNode);
             } else if (targetType == PrimitiveType.I64) {
@@ -809,8 +807,6 @@ final class LLVMCastsFactory {
                         return LLVMToI32ZeroExtNodeGen.create(fromNode);
                     case I64:
                         return LLVMToI64ZeroExtNodeGen.create(fromNode);
-                    case FLOAT:
-                        return LLVMToFloatZeroExtNodeGen.create(fromNode);
                     case DOUBLE:
                         return LLVMToDoubleZeroExtNodeGen.create(fromNode);
                     default:

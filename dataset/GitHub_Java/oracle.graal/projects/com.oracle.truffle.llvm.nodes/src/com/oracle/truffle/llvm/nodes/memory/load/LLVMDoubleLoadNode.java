@@ -42,7 +42,6 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadDoubleNode;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 
 public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
 
@@ -71,13 +70,7 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
         return new LLVMForeignReadNode(ForeignToLLVMType.DOUBLE);
     }
 
-    @Specialization(guards = "addr.isNative()")
-    protected double doDouble(LLVMTruffleObject addr,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return doDouble(addr.asNative(), memory);
-    }
-
-    @Specialization(guards = "addr.isManaged()")
+    @Specialization
     protected double doDouble(LLVMTruffleObject addr,
                     @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
         return (double) foreignRead.execute(addr);

@@ -29,14 +29,12 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.c;
 
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
@@ -50,15 +48,13 @@ public abstract class LLVMTruffleReadBytes extends LLVMIntrinsic {
     @Specialization
     protected Object doIntrinsic(LLVMGlobal value,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
-                    @Cached("getLLVMMemory()") LLVMMemory memory,
-                    @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef) {
-        return doIntrinsic(globalAccess.executeWithTarget(value), memory, ctxRef);
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return doIntrinsic(globalAccess.executeWithTarget(value), memory);
     }
 
     @Specialization
     protected Object doIntrinsic(LLVMAddress value,
-                    @Cached("getLLVMMemory()") LLVMMemory memory,
-                    @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef) {
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         byte c;
         long ptr = value.getVal();
         int count = 0;
@@ -73,7 +69,6 @@ public abstract class LLVMTruffleReadBytes extends LLVMIntrinsic {
             bytes[count++] = c;
             ptr += Byte.BYTES;
         }
-        TruffleObject ret = (TruffleObject) ctxRef.get().getEnv().asGuestValue(bytes);
-        return new LLVMTruffleObject(LLVMTypedForeignObject.createUnknown(ret));
+        return new LLVMTruffleObject(LLVMTypedForeignObject.createUnknown(JavaInterop.asTruffleObject(bytes)));
     }
 }
