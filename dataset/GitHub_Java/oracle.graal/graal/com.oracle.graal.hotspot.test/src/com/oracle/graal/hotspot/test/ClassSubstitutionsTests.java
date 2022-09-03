@@ -23,12 +23,11 @@
 
 package com.oracle.graal.hotspot.test;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
 import org.junit.*;
 
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
@@ -41,7 +40,6 @@ public class ClassSubstitutionsTests extends GraalCompilerTest {
 
     public String[] stringArrayField;
 
-    @SuppressWarnings("try")
     protected StructuredGraph test(final String snippet) {
         try (Scope s = Debug.scope("ClassSubstitutionsTest", getMetaAccess().lookupJavaMethod(getMethod(snippet)))) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);

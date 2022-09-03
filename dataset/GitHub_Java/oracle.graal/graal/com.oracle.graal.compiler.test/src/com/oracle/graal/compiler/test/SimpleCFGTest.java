@@ -22,21 +22,14 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.Assert;
-import org.junit.Test;
+import java.util.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.BeginNode;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.MergeNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import org.junit.*;
+
+import com.oracle.graal.debug.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
+import com.oracle.graal.nodes.cfg.*;
 
 public class SimpleCFGTest extends GraalCompilerTest {
 
@@ -69,37 +62,45 @@ public class SimpleCFGTest extends GraalCompilerTest {
 
         ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, true, true);
 
-        Block[] blocks = cfg.getBlocks();
+        List<Block> blocks = cfg.getBlocks();
         // check number of blocks
-        assertDeepEquals(4, blocks.length);
+        assertDeepEquals(4, blocks.size());
 
         // check block - node assignment
-        assertDeepEquals(blocks[0], cfg.blockFor(graph.start()));
-        assertDeepEquals(blocks[0], cfg.blockFor(ifNode));
-        assertDeepEquals(blocks[1], cfg.blockFor(trueBegin));
-        assertDeepEquals(blocks[1], cfg.blockFor(trueEnd));
-        assertDeepEquals(blocks[2], cfg.blockFor(falseBegin));
-        assertDeepEquals(blocks[2], cfg.blockFor(falseEnd));
-        assertDeepEquals(blocks[3], cfg.blockFor(merge));
-        assertDeepEquals(blocks[3], cfg.blockFor(returnNode));
+        assertDeepEquals(blocks.get(0), cfg.blockFor(graph.start()));
+        assertDeepEquals(blocks.get(0), cfg.blockFor(ifNode));
+        assertDeepEquals(blocks.get(1), cfg.blockFor(trueBegin));
+        assertDeepEquals(blocks.get(1), cfg.blockFor(trueEnd));
+        assertDeepEquals(blocks.get(2), cfg.blockFor(falseBegin));
+        assertDeepEquals(blocks.get(2), cfg.blockFor(falseEnd));
+        assertDeepEquals(blocks.get(3), cfg.blockFor(merge));
+        assertDeepEquals(blocks.get(3), cfg.blockFor(returnNode));
+
+        // check postOrder
+        Iterator<Block> it = cfg.postOrder().iterator();
+        for (int i = blocks.size() - 1; i >= 0; i--) {
+            assertTrue(it.hasNext());
+            Block b = it.next();
+            assertDeepEquals(blocks.get(i), b);
+        }
 
         // check dominators
-        assertDominator(blocks[0], null);
-        assertDominator(blocks[1], blocks[0]);
-        assertDominator(blocks[2], blocks[0]);
-        assertDominator(blocks[3], blocks[0]);
+        assertDominator(blocks.get(0), null);
+        assertDominator(blocks.get(1), blocks.get(0));
+        assertDominator(blocks.get(2), blocks.get(0));
+        assertDominator(blocks.get(3), blocks.get(0));
 
         // check dominated
-        assertDominatedSize(blocks[0], 3);
-        assertDominatedSize(blocks[1], 0);
-        assertDominatedSize(blocks[2], 0);
-        assertDominatedSize(blocks[3], 0);
+        assertDominatedSize(blocks.get(0), 3);
+        assertDominatedSize(blocks.get(1), 0);
+        assertDominatedSize(blocks.get(2), 0);
+        assertDominatedSize(blocks.get(3), 0);
 
         // check postdominators
-        assertPostdominator(blocks[0], blocks[3]);
-        assertPostdominator(blocks[1], blocks[3]);
-        assertPostdominator(blocks[2], blocks[3]);
-        assertPostdominator(blocks[3], null);
+        assertPostdominator(blocks.get(0), blocks.get(3));
+        assertPostdominator(blocks.get(1), blocks.get(3));
+        assertPostdominator(blocks.get(2), blocks.get(3));
+        assertPostdominator(blocks.get(3), null);
     }
 
     public static void assertDominator(Block block, Block expectedDominator) {

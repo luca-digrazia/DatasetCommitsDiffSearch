@@ -22,54 +22,19 @@
  */
 package com.oracle.graal.test;
 
-import java.io.PrintStream;
-import java.io.PrintWriter;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.Arrays;
+import java.io.*;
+import java.lang.reflect.*;
+import java.util.*;
 
-import org.junit.Assert;
-import org.junit.internal.ComparisonCriteria;
-import org.junit.internal.ExactComparisonCriteria;
-
-import sun.misc.Unsafe;
+import org.junit.*;
+import org.junit.internal.*;
 
 /**
- * Base class that contains common utility methods and classes useful in unit tests.
+ * Base class for Graal tests.
+ * <p>
+ * This contains common utility methods and classes that are used in tests.
  */
 public class GraalTest {
-
-    public static final Unsafe UNSAFE;
-    static {
-        try {
-            Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
-            theUnsafe.setAccessible(true);
-            UNSAFE = (Unsafe) theUnsafe.get(Unsafe.class);
-        } catch (Exception e) {
-            throw new RuntimeException("exception while trying to get Unsafe", e);
-        }
-    }
-
-    public static final boolean JDK8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
-
-    /**
-     * A class loader that exports all packages in the module defining the class loader to all
-     * classes in the unnamed module associated with the loader.
-     */
-    public static class ExportingClassLoader extends ClassLoader {
-        public ExportingClassLoader() {
-            if (!JDK8OrEarlier) {
-                JLRModule.fromClass(getClass()).exportAllPackagesTo(JLRModule.getUnnamedModuleFor(this));
-            }
-        }
-
-        public ExportingClassLoader(ClassLoader parent) {
-            super(parent);
-            if (!JDK8OrEarlier) {
-                JLRModule.fromClass(getClass()).exportAllPackagesTo(JLRModule.getUnnamedModuleFor(this));
-            }
-        }
-    }
 
     protected Method getMethod(String methodName) {
         return getMethod(getClass(), methodName);

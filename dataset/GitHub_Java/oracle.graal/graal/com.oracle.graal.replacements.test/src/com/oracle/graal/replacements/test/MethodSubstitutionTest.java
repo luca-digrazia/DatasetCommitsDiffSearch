@@ -33,6 +33,7 @@ import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
@@ -44,10 +45,10 @@ import com.oracle.graal.phases.tiers.*;
  */
 public abstract class MethodSubstitutionTest extends GraalCompilerTest {
 
-    protected StructuredGraph testGraph(final String snippet) {
+    protected StructuredGraph test(final String snippet) {
         try (Scope s = Debug.scope("MethodSubstitutionTest", getResolvedJavaMethod(snippet))) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
-            HighTierContext context = getDefaultHighTierContext();
+            HighTierContext context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
             Debug.dump(graph, "Graph");
             new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
             Debug.dump(graph, "Graph");
@@ -73,10 +74,10 @@ public abstract class MethodSubstitutionTest extends GraalCompilerTest {
     protected void testSubstitution(String testMethodName, Class<?> intrinsicClass, Class<?> holder, String methodName, Class<?>[] parameterTypes, boolean optional, Object[] args1, Object[] args2) {
         ResolvedJavaMethod realMethod = getResolvedJavaMethod(holder, methodName, parameterTypes);
         ResolvedJavaMethod testMethod = getResolvedJavaMethod(testMethodName);
-        StructuredGraph graph = testGraph(testMethodName);
+        StructuredGraph graph = test(testMethodName);
 
         // Check to see if the resulting graph contains the expected node
-        StructuredGraph replacement = getReplacements().getSubstitution(realMethod, -1);
+        StructuredGraph replacement = getReplacements().getMethodSubstitution(realMethod);
         if (replacement == null && !optional) {
             assertInGraph(graph, intrinsicClass);
         }

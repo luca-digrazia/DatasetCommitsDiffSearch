@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,22 +24,36 @@ package com.oracle.graal.compiler.test;
 
 import org.junit.*;
 
-import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class CompareCanonicalizerTest extends GraalCompilerTest {
 
+    private StructuredGraph getCanonicalizedGraph(String name) {
+        StructuredGraph graph = parseEager(name, AllowAssumptions.YES);
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        return graph;
+    }
+
+    private static ValueNode getResult(StructuredGraph graph) {
+        assertTrue(graph.start().next() instanceof ReturnNode);
+        ReturnNode ret = (ReturnNode) graph.start().next();
+        return ret.result();
+    }
+
     @Test
     public void testCanonicalComparison() {
-        StructuredGraph referenceGraph = parse("referenceCanonicalComparison");
+        StructuredGraph referenceGraph = parseEager("referenceCanonicalComparison", AllowAssumptions.NO);
         for (int i = 1; i < 4; i++) {
-            StructuredGraph graph = parse("canonicalCompare" + i);
+            StructuredGraph graph = parseEager("canonicalCompare" + i, AllowAssumptions.NO);
             assertEquals(referenceGraph, graph);
         }
-        new CanonicalizerPhase(null, runtime(), null).apply(referenceGraph);
+        new CanonicalizerPhase().apply(referenceGraph, new PhaseContext(getProviders()));
         for (int i = 1; i < 4; i++) {
-            StructuredGraph graph = parse("canonicalCompare" + i);
-            new CanonicalizerPhase(null, runtime(), null).apply(graph);
+            StructuredGraph graph = getCanonicalizedGraph("canonicalCompare" + i);
             assertEquals(referenceGraph, graph);
         }
     }
@@ -75,4 +89,77 @@ public class CompareCanonicalizerTest extends GraalCompilerTest {
             return 1;
         }
     }
+
+    @Test
+    public void testIntegerTest() {
+        for (int i = 1; i <= 4; i++) {
+            StructuredGraph graph = getCanonicalizedGraph("integerTest" + i);
+
+            ReturnNode returnNode = (ReturnNode) graph.start().next();
+            ConditionalNode conditional = (ConditionalNode) returnNode.result();
+            IntegerTestNode test = (IntegerTestNode) conditional.condition();
+            ParameterNode param0 = graph.getParameter(0);
+            ParameterNode param1 = graph.getParameter(1);
+            assertTrue((test.getX() == param0 && test.getY() == param1) || (test.getX() == param1 && test.getY() == param0));
+        }
+    }
+
+    public static boolean integerTest1(int x, int y) {
+        return (x & y) == 0;
+    }
+
+    public static boolean integerTest2(long x, long y) {
+        return 0 == (x & y);
+    }
+
+    public static boolean integerTest3(long x, long y) {
+        int c = 5;
+        return (c - 5) == (x & y);
+    }
+
+    public static boolean integerTest4(int x, int y) {
+        int c = 10;
+        return (x & y) == (10 - c);
+    }
+
+    @Test
+    public void testIntegerTestCanonicalization() {
+        ValueNode result = getResult(getCanonicalizedGraph("integerTestCanonicalization1"));
+        assertTrue(result.isConstant() && result.asJavaConstant().asLong() == 1);
+        result = getResult(getCanonicalizedGraph("integerTestCanonicalization2"));
+        assertTrue(result.isConstant() && result.asJavaConstant().asLong() == 1);
+        StructuredGraph graph = getCanonicalizedGraph("integerTestCanonicalization3");
+        assertDeepEquals(1, graph.getNodes(ReturnNode.TYPE).count());
+        assertTrue(graph.getNodes(ReturnNode.TYPE).first().result() instanceof ConditionalNode);
+    }
+
+    public static int integerTestCanonicalization1(boolean b) {
+        int x = b ? 128 : 256;
+        if ((x & 8) == 0) {
+            return 1;
+        } else {
+            return 2;
+        }
+    }
+
+    public static int integerTestCanonicalization2(boolean b) {
+        int x = b ? 128 : 256;
+        int y = b ? 32 : 64;
+        if ((x & y) == 0) {
+            return 1;
+        } else {
+            return 2;
+        }
+    }
+
+    public static int integerTestCanonicalization3(boolean b) {
+        int x = b ? 128 : 64;
+        int y = b ? 32 : 64;
+        if ((x & y) == 0) {
+            return 1;
+        } else {
+            return 2;
+        }
+    }
+
 }

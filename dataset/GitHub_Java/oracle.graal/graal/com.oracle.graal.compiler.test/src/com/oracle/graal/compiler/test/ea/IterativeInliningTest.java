@@ -22,18 +22,18 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
-import static org.junit.Assert.*;
-
 import java.util.concurrent.*;
 
 import org.junit.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.compiler.test.ea.EATestBase.TestClassInt;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.phases.ea.*;
 
 public class IterativeInliningTest extends GraalCompilerTest {
@@ -49,14 +49,10 @@ public class IterativeInliningTest extends GraalCompilerTest {
         }
     }
 
-    public static class TestInt implements Callable<Integer> {
-
-        public int x;
-        public int y;
+    public static class TestInt extends TestClassInt implements Callable<Integer> {
 
         public TestInt(int x, int y) {
-            this.x = x;
-            this.y = y;
+            super(x, y);
         }
 
         @Override
@@ -75,34 +71,19 @@ public class IterativeInliningTest extends GraalCompilerTest {
     @Test
     public void testSimple() {
         ValueNode result = getReturn("testSimpleSnippet").result();
-        assertTrue(graph.getNodes(LoadFieldNode.class).isEmpty());
-        assertEquals(graph.getLocal(0), result);
-    }
-
-    @SuppressWarnings("all")
-    public static int testSimpleReadSnippet(TestObject a, int b) throws Exception {
-        a.callable = new TestInt(b, 9);
-        return a.callable.call();
-    }
-
-    @Ignore
-    @Test
-    public void testSimpleRead() {
-        ValueNode result = getReturn("testSimpleReadSnippet").result();
-        assertTrue(graph.getNodes(LoadFieldNode.class).isEmpty());
-        assertEquals(graph.getLocal(1), result);
+        assertTrue(graph.getNodes().filter(LoadFieldNode.class).isEmpty());
+        assertDeepEquals(graph.getParameter(0), result);
     }
 
     final ReturnNode getReturn(String snippet) {
         processMethod(snippet);
-        assertEquals(1, graph.getNodes(ReturnNode.class).count());
-        return graph.getNodes(ReturnNode.class).first();
+        assertDeepEquals(1, graph.getNodes(ReturnNode.TYPE).count());
+        return graph.getNodes(ReturnNode.TYPE).first();
     }
 
     private void processMethod(final String snippet) {
-        graph = parse(snippet);
-        new ComputeProbabilityPhase().apply(graph);
-        GraalOptions.PEAReadCache = true;
-        new IterativeInliningPhase(runtime(), new Assumptions(false), null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
+        graph = parseEager(snippet, AllowAssumptions.YES);
+        HighTierContext context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+        new IterativeInliningPhase(new CanonicalizerPhase()).apply(graph, context);
     }
 }
