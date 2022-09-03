@@ -33,7 +33,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 
 final class PolyglotCache {
 
-    private final Map<Class<?>, Cache> cachedTargets = new HashMap<>();
+    private final Map<Object, Cache> cachedTargets = new HashMap<>();
     private final PolyglotEngine engine;
 
     PolyglotCache(PolyglotEngine engine) {
@@ -56,19 +56,19 @@ final class PolyglotCache {
         return cache.execute;
     }
 
-    CallTarget lookupComputation(RootNode computation) {
-        Cache cache = lookupCache(void.class);
+    CallTarget lookupComputation(Object key, RootNode computation) {
+        Cache cache = lookupCache(key);
         if (cache.computation == null && computation != null) {
             cache.computation = Truffle.getRuntime().createCallTarget(computation);
         }
         return cache.computation;
     }
 
-    private Cache lookupCache(Class<?> clazz) {
-        Cache cache = cachedTargets.get(clazz);
+    private Cache lookupCache(Object clazzOrMethod) {
+        Cache cache = cachedTargets.get(clazzOrMethod);
         if (cache == null) {
             cache = new Cache();
-            cachedTargets.put(clazz, cache);
+            cachedTargets.put(clazzOrMethod, cache);
         }
         return cache;
     }

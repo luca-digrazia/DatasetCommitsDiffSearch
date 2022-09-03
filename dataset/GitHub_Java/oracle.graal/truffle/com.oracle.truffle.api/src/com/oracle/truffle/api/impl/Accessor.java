@@ -75,12 +75,6 @@ public abstract class Accessor {
         public abstract void dump(Node newNode, Node newChild, CharSequence reason);
     }
 
-    public abstract static class InteropSupport {
-        public abstract boolean canHandle(Object foreignAccess, Object receiver);
-
-        public abstract CallTarget canHandleTarget(Object access);
-    }
-
     public abstract static class JavaInteropSupport {
         public abstract Node createToJavaNode();
 
@@ -177,7 +171,6 @@ public abstract class Accessor {
     private static Accessor.InstrumentSupport INSTRUMENTHANDLER;
     private static Accessor.DebugSupport DEBUG;
     private static Accessor.DumpSupport DUMP;
-    private static Accessor.InteropSupport INTEROP;
     private static Accessor.JavaInteropSupport JAVAINTEROP;
     private static Accessor.Frames FRAMES;
     @SuppressWarnings("unused") private static Accessor SOURCE;
@@ -295,8 +288,6 @@ public abstract class Accessor {
             DUMP = this.dumpSupport();
         } else if (this.getClass().getSimpleName().endsWith("JavaInteropAccessor")) {
             JAVAINTEROP = this.javaInteropSupport();
-        } else if (this.getClass().getSimpleName().endsWith("InteropAccessor")) {
-            INTEROP = this.interopSupport();
         } else {
             if (SPI != null) {
                 throw new IllegalStateException();
@@ -327,10 +318,6 @@ public abstract class Accessor {
 
     protected InstrumentSupport instrumentSupport() {
         return INSTRUMENTHANDLER;
-    }
-
-    protected InteropSupport interopSupport() {
-        return INTEROP;
     }
 
     protected JavaInteropSupport javaInteropSupport() {
