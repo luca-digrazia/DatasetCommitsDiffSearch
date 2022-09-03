@@ -49,7 +49,6 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.util.InterruptImageBuilding;
 import com.oracle.svm.core.util.VMError;
 
@@ -230,7 +229,7 @@ public class SubstrateOptionsParser {
                 selectedOptionTypes = EnumSet.noneOf(OptionType.class);
                 String enumString = null;
                 try {
-                    String[] enumStrings = SubstrateUtil.split(optionValue, ",");
+                    String[] enumStrings = optionValue.split(",");
                     for (int i = 0; i < enumStrings.length; i++) {
                         enumString = enumStrings[i];
                         selectedOptionTypes.add(OptionType.valueOf(enumString));
@@ -269,7 +268,7 @@ public class SubstrateOptionsParser {
         } else if (optionType == String.class) {
             value = valueString;
         } else if (optionType == Double.class) {
-            value = parseDouble(valueString);
+            value = Double.parseDouble(valueString);
         } else if (optionType == Boolean.class) {
             if (valueString.equals("true")) {
                 value = true;
@@ -345,7 +344,7 @@ public class SubstrateOptionsParser {
         String indent = spaces(indentation);
         String desc = wrap(description != null ? description : "", wrapWidth);
         String nl = System.lineSeparator();
-        String[] descLines = SubstrateUtil.split(desc, nl);
+        String[] descLines = desc.split(nl);
         if (option.length() >= optionWidth && description != null) {
             println.accept(indent + option + nl + indent + spaces(optionWidth) + descLines[0]);
         } else {
@@ -428,7 +427,7 @@ public class SubstrateOptionsParser {
     }
 
     public static long parseLong(String v) {
-        String valueString = v.trim().toLowerCase();
+        String valueString = v.toLowerCase();
         long scale = 1;
         if (valueString.endsWith("k")) {
             scale = 1024L;
@@ -446,48 +445,6 @@ public class SubstrateOptionsParser {
         }
 
         return Long.parseLong(valueString) * scale;
-    }
-
-    /**
-     * Parses the provide string to a double number, avoiding the JDK dependencies (which pull in a
-     * lot of classes, including the regular expression library). Only simple numbers are supported,
-     * without fancy exponent styles.
-     */
-    public static double parseDouble(String v) {
-        String valueString = v.trim();
-
-        int dotPos = valueString.indexOf('.');
-        if (dotPos == -1) {
-            return parseLong(valueString);
-        }
-
-        String beforeDot = valueString.substring(0, dotPos);
-        String afterDot = valueString.substring(dotPos + 1);
-
-        double sign = 1;
-        if (beforeDot.startsWith("-")) {
-            sign = -1;
-            beforeDot = beforeDot.substring(1);
-        } else if (beforeDot.startsWith("+")) {
-            beforeDot = beforeDot.substring(1);
-        }
-
-        if (beforeDot.startsWith("-") || beforeDot.startsWith("+") || afterDot.startsWith("-") || afterDot.startsWith("+") ||
-                        (beforeDot.length() == 0 && afterDot.length() == 0)) {
-            throw new NumberFormatException(v);
-        }
-
-        double integral = 0;
-        if (beforeDot.length() > 0) {
-            integral = Long.parseLong(beforeDot);
-        }
-
-        double fraction = 0;
-        if (afterDot.length() > 0) {
-            fraction = Long.parseLong(afterDot) * Math.pow(10, -afterDot.length());
-        }
-
-        return sign * (integral + fraction);
     }
 
     /**
