@@ -271,7 +271,8 @@ public abstract class TruffleLanguage<C> {
     /**
      * Generates language specific textual representation of a value. Each language may have special
      * formating conventions - even primitive values may not follow the traditional Java formating
-     * rules. As such when {@link com.oracle.truffle.api.vm.PolyglotEngine.Value#as(java.lang.Class)
+     * rules. As such when
+     * {@link com.oracle.truffle.api.vm.PolyglotEngine.Value#as(java.lang.Class)
      * value.as(String.class)} is requested, it consults the language that produced the value by
      * calling this method. By default this method calls {@link Objects#toString(java.lang.Object)}.
      *
@@ -296,8 +297,7 @@ public abstract class TruffleLanguage<C> {
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
     protected final Node createFindContextNode() {
-        final Class<? extends TruffleLanguage<?>> c = (Class<? extends TruffleLanguage<?>>) getClass();
-        return new FindContextNode(c);
+        return new FindContextNode(this);
     }
 
     /**
@@ -317,7 +317,7 @@ public abstract class TruffleLanguage<C> {
     @SuppressWarnings({"rawtypes", "unchecked"})
     protected final C findContext(Node n) {
         FindContextNode fcn = (FindContextNode) n;
-        if (fcn.getLanguageClass() != getClass()) {
+        if (fcn.getTruffleLanguage() != this) {
             throw new ClassCastException();
         }
         return (C) fcn.executeFindContext();

@@ -31,27 +31,16 @@ import java.util.Map;
 final class ContextReference<C> {
     private static Map<TruffleLanguage<?>,Integer> ids = new HashMap<>();
     private final ContextStoreProfile profile;
-    private final TruffleLanguage<C> language;
     private final int languageId;
 
-    private ContextReference(ContextStoreProfile profile, TruffleLanguage<C> language, int languageId) {
+    private ContextReference(ContextStoreProfile profile, int languageId) {
         this.profile = profile;
-        this.language = language;
-        this.languageId = languageId;
+        this.languageId = languageId; // index
     }
 
     @SuppressWarnings("unchecked")
     public C get() {
-        final ContextStore store = profile.get();
-        Object context = store.getContext(languageId);
-        if (context == this) {
-            return null;
-        }
-        if (context == null) {
-            context = ExecutionImpl.findContext(language.getClass());
-            store.setContext(languageId, context == null ? this : context);
-        }
-        return (C) context;
+        return (C) profile.get().getContext(languageId);
     }
 
     public static synchronized <C> ContextReference<C> create(TruffleLanguage<C> language) {
@@ -59,6 +48,6 @@ final class ContextReference<C> {
         if (id == null) {
             ids.put(language, id = ids.size());
         }
-        return new ContextReference<>(ExecutionImpl.sharedProfile(), language, id);
+        return new ContextReference<>(ExecutionImpl.sharedProfile(), id);
     }
 }

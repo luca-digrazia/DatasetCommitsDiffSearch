@@ -37,7 +37,7 @@ public final class FindContextNode<C> extends Node {
     }
 
     public C executeFindContext() {
-        return ref.get();
+        return ExecutionImpl.findContext(language.getClass());
     }
 
     public TruffleLanguage<C> getTruffleLanguage() {

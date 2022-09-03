@@ -55,6 +55,8 @@ final class ExecutionImpl extends Accessor.ExecSupport {
         Object vm = context.vm;
         Objects.requireNonNull(vm);
         final ContextStore prev = CURRENT_VM.get();
+        Accessor.DebugSupport debug = Accessor.debugAccess();
+        final Closeable debugClose = debug == null ? null : debug.executionStart(vm, prev == null ? 0 : -1, debuggerHolder, s);
         CURRENT_VM.enter(context);
         class ContextCloseable implements Closeable {
 
@@ -62,6 +64,9 @@ final class ExecutionImpl extends Accessor.ExecSupport {
             @Override
             public void close() throws IOException {
                 CURRENT_VM.enter(prev);
+                if (debugClose != null) {
+                    debugClose.close();
+                }
             }
         }
         return new ContextCloseable();
