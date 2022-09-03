@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 
-import com.oracle.graal.bytecode.Bytecode;
 import com.oracle.graal.code.SourceStackTrace;
 import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
 import com.oracle.graal.graph.Node;
@@ -51,7 +50,6 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.java.MethodCallTargetNode;
 import com.oracle.graal.nodes.spi.ArrayLengthProvider;
 import com.oracle.graal.nodes.spi.LimitedValueProxy;
-import com.oracle.graal.nodes.spi.LoweringProvider;
 import com.oracle.graal.nodes.spi.ValueProxy;
 
 import jdk.vm.ci.code.BailoutException;
@@ -396,9 +394,9 @@ public class GraphUtil {
         ArrayList<StackTraceElement> elements = new ArrayList<>();
         FrameState state = frameState;
         while (state != null) {
-            Bytecode code = state.getCode();
-            if (code != null) {
-                elements.add(code.asStackTraceElement(state.bci - 1));
+            ResolvedJavaMethod method = state.method();
+            if (method != null) {
+                elements.add(method.asStackTraceElement(state.bci - 1));
             }
             state = state.outerFrameState();
         }
@@ -648,16 +646,14 @@ public class GraphUtil {
         private final ConstantFieldProvider constantFieldProvider;
         private final boolean canonicalizeReads;
         private final Assumptions assumptions;
-        private final LoweringProvider loweringProvider;
 
         DefaultSimplifierTool(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, boolean canonicalizeReads,
-                        Assumptions assumptions, LoweringProvider loweringProvider) {
+                        Assumptions assumptions) {
             this.metaAccess = metaAccess;
             this.constantReflection = constantReflection;
             this.constantFieldProvider = constantFieldProvider;
             this.canonicalizeReads = canonicalizeReads;
             this.assumptions = assumptions;
-            this.loweringProvider = loweringProvider;
         }
 
         @Override
@@ -708,24 +704,10 @@ public class GraphUtil {
         public Assumptions getAssumptions() {
             return assumptions;
         }
-
-        @Override
-        public boolean supportSubwordCompare(int bits) {
-            if (loweringProvider != null) {
-                return loweringProvider.supportSubwordCompare(bits);
-            } else {
-                return false;
-            }
-        }
     }
 
     public static SimplifierTool getDefaultSimplifier(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
                     boolean canonicalizeReads, Assumptions assumptions) {
-        return getDefaultSimplifier(metaAccess, constantReflection, constantFieldProvider, canonicalizeReads, assumptions, null);
-    }
-
-    public static SimplifierTool getDefaultSimplifier(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
-                    boolean canonicalizeReads, Assumptions assumptions, LoweringProvider loweringProvider) {
-        return new DefaultSimplifierTool(metaAccess, constantReflection, constantFieldProvider, canonicalizeReads, assumptions, loweringProvider);
+        return new DefaultSimplifierTool(metaAccess, constantReflection, constantFieldProvider, canonicalizeReads, assumptions);
     }
 }
