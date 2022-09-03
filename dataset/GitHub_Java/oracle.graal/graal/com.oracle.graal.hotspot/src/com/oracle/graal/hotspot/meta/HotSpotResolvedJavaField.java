@@ -117,7 +117,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         return false;
     }
 
-    private static final List<ResolvedJavaField> notEmbeddable = new ArrayList<>();
+    private static final Set<ResolvedJavaField> notEmbeddable = new HashSet<>();
 
     private static void addResolvedToSet(Field field) {
         MetaAccessProvider metaAccess = runtime().getHostProviders().getMetaAccess();
