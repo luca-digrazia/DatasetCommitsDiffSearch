@@ -29,11 +29,6 @@
  */
 package com.oracle.truffle.llvm.parser.listeners;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
 import com.oracle.truffle.llvm.parser.metadata.MDBaseNode;
 import com.oracle.truffle.llvm.parser.metadata.MDKind;
 import com.oracle.truffle.llvm.parser.metadata.MDLocation;
@@ -88,6 +83,11 @@ import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 public final class Function implements ParserListener {
 
@@ -321,12 +321,10 @@ public final class Function implements ParserListener {
     private void emit(ValueInstruction instruction) {
         instructionBlock.append(instruction);
         scope.addSymbol(instruction, instruction.getType());
-        scope.addInstruction(instruction);
     }
 
     private void emit(VoidInstruction instruction) {
         instructionBlock.append(instruction);
-        scope.addInstruction(instruction);
     }
 
     private static final int INVOKE_HASEXPLICITFUNCTIONTYPE_SHIFT = 13;
