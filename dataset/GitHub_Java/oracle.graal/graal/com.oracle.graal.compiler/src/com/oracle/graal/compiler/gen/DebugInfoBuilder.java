@@ -45,7 +45,7 @@ public class DebugInfoBuilder {
     private HashMap<VirtualObjectNode, VirtualObject> virtualObjects = new HashMap<>();
     private IdentityHashMap<VirtualObjectNode, EscapeObjectState> objectStates = new IdentityHashMap<>();
 
-    public LIRFrameState build(FrameState topState, List<StackSlot> lockData, LabelRef exceptionEdge, long leafGraphId) {
+    public LIRFrameState build(FrameState topState, List<StackSlot> lockData, List<StackSlot> pointerSlots, LabelRef exceptionEdge, long leafGraphId) {
         assert virtualObjects.size() == 0;
         assert objectStates.size() == 0;
 
@@ -103,7 +103,7 @@ public class DebugInfoBuilder {
         }
         objectStates.clear();
 
-        return new LIRFrameState(frame, virtualObjectsArray, exceptionEdge);
+        return new LIRFrameState(frame, virtualObjectsArray, pointerSlots, exceptionEdge);
     }
 
     private BytecodeFrame computeFrameForState(FrameState state, List<StackSlot> lockDataSlots, long leafGraphId) {
@@ -148,6 +148,7 @@ public class DebugInfoBuilder {
                 throw new GraalInternalError("no mapping found for virtual object %s", obj);
             }
             if (state instanceof MaterializedObjectState) {
+                assert !(((MaterializedObjectState) state).materializedValue() instanceof VirtualObjectNode);
                 return toValue(((MaterializedObjectState) state).materializedValue());
             } else {
                 assert obj.entryCount() == 0 || state instanceof VirtualObjectState || obj instanceof BoxedVirtualObjectNode;
