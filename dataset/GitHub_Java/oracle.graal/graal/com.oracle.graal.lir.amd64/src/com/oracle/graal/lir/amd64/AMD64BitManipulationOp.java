@@ -25,31 +25,39 @@ package com.oracle.graal.lir.amd64;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
 public class AMD64BitManipulationOp extends AMD64LIRInstruction {
-    public enum IntrinsicOpcode  {
-        IPOPCNT, LPOPCNT,
-        IBSR, LBSR,
-        BSF;
+
+    public enum IntrinsicOpcode {
+        IPOPCNT,
+        LPOPCNT,
+        IBSR,
+        LBSR,
+        BSF,
+        ILZCNT,
+        LLZCNT,
+        ITZCNT,
+        LTZCNT
     }
 
     @Opcode private final IntrinsicOpcode opcode;
-    @Def protected Value result;
-    @Use({OperandFlag.REG, OperandFlag.ADDR}) protected Value input;
+    @Def protected AllocatableValue result;
+    @Use({OperandFlag.REG, OperandFlag.STACK}) protected AllocatableValue input;
 
-    public AMD64BitManipulationOp(IntrinsicOpcode opcode, Value result, Value input) {
+    public AMD64BitManipulationOp(IntrinsicOpcode opcode, AllocatableValue result, AllocatableValue input) {
         this.opcode = opcode;
         this.result = result;
         this.input = input;
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
         Register dst = ValueUtil.asIntReg(result);
-        if (ValueUtil.isAddress(input)) {
-            Address src = ValueUtil.asAddress(input);
-            switch(opcode) {
+        if (ValueUtil.isRegister(input)) {
+            Register src = ValueUtil.asRegister(input);
+            switch (opcode) {
                 case IPOPCNT:
                     masm.popcntl(dst, src);
                     break;
@@ -64,11 +72,23 @@ public class AMD64BitManipulationOp extends AMD64LIRInstruction {
                     break;
                 case LBSR:
                     masm.bsrq(dst, src);
+                    break;
+                case ILZCNT:
+                    masm.lzcntl(dst, src);
+                    break;
+                case LLZCNT:
+                    masm.lzcntq(dst, src);
+                    break;
+                case ITZCNT:
+                    masm.tzcntl(dst, src);
+                    break;
+                case LTZCNT:
+                    masm.tzcntq(dst, src);
                     break;
             }
         } else {
-            Register src = ValueUtil.asRegister(input);
-            switch(opcode) {
+            AMD64Address src = (AMD64Address) crb.asAddress(input);
+            switch (opcode) {
                 case IPOPCNT:
                     masm.popcntl(dst, src);
                     break;
@@ -83,6 +103,18 @@ public class AMD64BitManipulationOp extends AMD64LIRInstruction {
                     break;
                 case LBSR:
                     masm.bsrq(dst, src);
+                    break;
+                case ILZCNT:
+                    masm.lzcntl(dst, src);
+                    break;
+                case LLZCNT:
+                    masm.lzcntq(dst, src);
+                    break;
+                case ITZCNT:
+                    masm.tzcntl(dst, src);
+                    break;
+                case LTZCNT:
+                    masm.tzcntq(dst, src);
                     break;
             }
         }

@@ -108,7 +108,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     protected AMD64LIRInstruction createMove(AllocatableValue dst, Value src) {
         if (src instanceof AMD64AddressValue) {
             return new LeaOp(dst, (AMD64AddressValue) src);
-        } else if (isRegister(src) || isStackSlotValue(dst)) {
+        } else if (isRegister(src) || isStackSlot(dst)) {
             return new MoveFromRegOp(dst.getKind(), dst, src);
         } else {
             return new MoveToRegOp(dst.getKind(), dst, src);
@@ -155,7 +155,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
                 if (CodeUtil.isPowerOf2(scale)) {
                     indexRegister = emitShl(longIndex, JavaConstant.forLong(CodeUtil.log2(scale)));
                 } else {
-                    indexRegister = emitMul(longIndex, JavaConstant.forLong(scale), false);
+                    indexRegister = emitMul(longIndex, JavaConstant.forLong(scale));
                 }
                 scaleEnum = Scale.Times1;
 
@@ -179,7 +179,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
                 indexRegister = displacementRegister;
                 scaleEnum = Scale.Times1;
             } else {
-                baseRegister = emitAdd(baseRegister, displacementRegister, false);
+                baseRegister = emitAdd(baseRegister, displacementRegister);
             }
         }
 
@@ -196,7 +196,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitAddress(StackSlotValue address) {
+    public Variable emitAddress(StackSlot address) {
         Variable result = newVariable(LIRKind.value(target().wordKind));
         append(new StackLeaOp(result, address));
         return result;
@@ -231,7 +231,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, LIRKind cmpLIRKind, double overflowProbability) {
+    public void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, double overflowProbability) {
         append(new BranchOp(ConditionFlag.Overflow, overflow, noOverflow, overflowProbability));
     }
 
@@ -498,7 +498,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitAdd(Value a, Value b, boolean setFlags) {
+    public Variable emitAdd(Value a, Value b) {
         switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(IADD, true, a, b);
@@ -514,7 +514,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitSub(Value a, Value b, boolean setFlags) {
+    public Variable emitSub(Value a, Value b) {
         switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(ISUB, false, a, b);
@@ -530,7 +530,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitMul(Value a, Value b, boolean setFlags) {
+    public Variable emitMul(Value a, Value b) {
         switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(IMUL, true, a, b);

@@ -112,7 +112,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     Value emitAddress(Value base, long displacement, Value index, int scale);
 
-    Value emitAddress(StackSlotValue slot);
+    Value emitAddress(StackSlot slot);
 
     void emitMembar(int barriers);
 
@@ -165,7 +165,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
     void emitCompareBranch(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
                     double trueDestinationProbability);
 
-    void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, LIRKind cmpKind, double overflowProbability);
+    void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, double overflowProbability);
 
     void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueSuccessorProbability);
 

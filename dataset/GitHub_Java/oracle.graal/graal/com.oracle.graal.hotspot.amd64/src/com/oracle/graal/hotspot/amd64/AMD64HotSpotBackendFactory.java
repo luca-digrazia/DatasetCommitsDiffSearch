@@ -40,7 +40,7 @@ import com.oracle.graal.phases.util.*;
 public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
 
     protected Architecture createArchitecture(HotSpotVMConfig config) {
-        return new AMD64(computeFeatures(config), computeFlags(config));
+        return new AMD64(computeFeatures(config));
     }
 
     protected EnumSet<AMD64.CPUFeature> computeFeatures(HotSpotVMConfig config) {
@@ -89,17 +89,6 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
             features.add(AMD64.CPUFeature.BMI1);
         }
         return features;
-    }
-
-    protected EnumSet<AMD64.Flag> computeFlags(HotSpotVMConfig config) {
-        EnumSet<AMD64.Flag> flags = EnumSet.noneOf(AMD64.Flag.class);
-        if (config.useCountLeadingZerosInstruction) {
-            flags.add(AMD64.Flag.UseCountLeadingZerosInstruction);
-        }
-        if (config.useCountTrailingZerosInstruction) {
-            flags.add(AMD64.Flag.UseCountTrailingZerosInstruction);
-        }
-        return flags;
     }
 
     protected TargetDescription createTarget(HotSpotVMConfig config) {
@@ -155,7 +144,7 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
             // Replacements cannot have speculative optimizations since they have
             // to be valid for the entire run of the VM.
             Assumptions assumptions = new Assumptions(false);
-            Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null, new HotSpotStampProvider());
+            Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null);
             try (InitTimer rt = timer("create SnippetReflection provider")) {
                 snippetReflection = createSnippetReflection();
             }
