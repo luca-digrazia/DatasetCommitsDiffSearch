@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.hosted.analysis;
 
-import static com.oracle.graal.pointsto.reports.AnalysisReportsOptions.PrintAnalysisCallTree;
-import static com.oracle.svm.hosted.NativeImageOptions.MaxReachableTypes;
 import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
 
 import java.lang.annotation.Annotation;
@@ -61,7 +59,6 @@ import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.graal.pointsto.meta.HostedProviders;
-import com.oracle.graal.pointsto.reports.CallTreePrinter;
 import com.oracle.graal.pointsto.util.AnalysisError.TypeNotFoundError;
 import com.oracle.svm.core.annotate.UnknownObjectField;
 import com.oracle.svm.core.annotate.UnknownPrimitiveField;
@@ -69,7 +66,6 @@ import com.oracle.svm.core.hub.AnnotatedSuperInfo;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.GenericInfo;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
-import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.NativeImageClassLoader;
 import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.analysis.flow.SVMMethodTypeFlowBuilder;
@@ -137,36 +133,31 @@ public class Inflation extends BigBang {
         SVMHost svmHost = (SVMHost) hostVM;
 
         if (type.getJavaKind() == JavaKind.Object) {
-            DynamicHub hub = svmHost.dynamicHub(type);
             if (type.isArray() && (type.isInstantiated() || type.isInTypeCheck())) {
-                hub.getComponentHub().setArrayHub(hub);
+                svmHost.dynamicHub(type).getComponentHub().setArrayHub(svmHost.dynamicHub(type));
             }
 
             try {
                 AnalysisType enclosingType = type.getEnclosingType();
                 if (enclosingType != null) {
-                    hub.setEnclosingClass(svmHost.dynamicHub(enclosingType));
+                    svmHost.dynamicHub(type).setEnclosingClass(svmHost.dynamicHub(enclosingType));
                 }
             } catch (UnsupportedFeatureException ex) {
                 getUnsupportedFeatures().addMessage(type.toJavaName(true), null, ex.getMessage(), null, ex);
             }
 
-            if (hub.getAnnotatedSuperInfo() == null) {
-                fillGenericInfo(type, hub);
-            }
-            if (hub.getInterfacesEncoding() == null) {
-                fillInterfaces(type, hub);
-            }
+            fillGenericInfo(type);
+            fillInterfaces(type);
 
             /*
              * Support for Java annotations.
              */
-            hub.setAnnotationsEncoding(encodeAnnotations(metaAccess, type.getAnnotations(), hub.getAnnotationsEncoding()));
+            svmHost.dynamicHub(type).setAnnotationsEncoding(encodeAnnotations(metaAccess, type.getAnnotations(), svmHost.dynamicHub(type).getAnnotationsEncoding()));
 
             /*
              * Support for Java enumerations.
              */
-            if (type.getSuperclass() != null && type.getSuperclass().equals(metaAccess.lookupJavaType(Enum.class)) && hub.getEnumConstantsShared() == null) {
+            if (type.getSuperclass() != null && type.getSuperclass().equals(metaAccess.lookupJavaType(Enum.class)) && svmHost.dynamicHub(type).getEnumConstantsShared() == null) {
                 /*
                  * We want to retrieve the enum constant array that is maintained as a private
                  * static field in the enumeration class. We do not want a copy because that would
@@ -201,7 +192,7 @@ public class Inflation extends BigBang {
                     enumConstants = (Enum[]) SubstrateObjectConstant.asObject(getConstantReflectionProvider().readFieldValue(found, null));
                     assert enumConstants != null;
                 }
-                hub.setEnumConstants(enumConstants);
+                svmHost.dynamicHub(type).setEnumConstants(enumConstants);
             }
         }
     }
@@ -219,22 +210,6 @@ public class Inflation extends BigBang {
     public boolean isValidClassLoader(Object valueObj) {
         return valueObj.getClass().getClassLoader() == null || // boot class loader
                         !(valueObj.getClass().getClassLoader() instanceof NativeImageClassLoader) || valueObj.getClass().getClassLoader() == Thread.currentThread().getContextClassLoader();
-    }
-
-    @Override
-    public void checkUserLimitations() {
-        int maxReachableTypes = MaxReachableTypes.getValue();
-        if (maxReachableTypes >= 0) {
-            CallTreePrinter callTreePrinter = new CallTreePrinter(this);
-            callTreePrinter.buildCallTree();
-            int numberOfTypes = callTreePrinter.classesSet(false).size();
-            if (numberOfTypes > maxReachableTypes) {
-                throw UserError.abort("Reachable " + numberOfTypes + " types but only " + maxReachableTypes + " allowed (because the " + MaxReachableTypes.getName() +
-                                " option is set). To see all reachable types use " + PrintAnalysisCallTree.getName() + "; to change the maximum number of allowed types use " +
-                                MaxReachableTypes.getName() +
-                                ".");
-            }
-        }
     }
 
     class GenericInterfacesEncodingKey {
@@ -273,7 +248,10 @@ public class Inflation extends BigBang {
         }
     }
 
-    private void fillGenericInfo(AnalysisType type, DynamicHub hub) {
+    private void fillGenericInfo(AnalysisType type) {
+        SVMHost svmHost = (SVMHost) hostVM;
+        DynamicHub hub = svmHost.dynamicHub(type);
+
         Class<?> javaClass = type.getJavaClass();
 
         TypeVariable<?>[] typeParameters = javaClass.getTypeParameters();
@@ -329,8 +307,9 @@ public class Inflation extends BigBang {
     /**
      * Fill array returned by Class.getInterfaces().
      */
-    private void fillInterfaces(AnalysisType type, DynamicHub hub) {
+    private void fillInterfaces(AnalysisType type) {
         SVMHost svmHost = (SVMHost) hostVM;
+        DynamicHub hub = svmHost.dynamicHub(type);
 
         AnalysisType[] aInterfaces = type.getInterfaces();
         if (aInterfaces.length == 0) {
