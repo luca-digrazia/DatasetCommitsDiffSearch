@@ -84,8 +84,8 @@ public abstract class TruffleLanguage<C> {
 
         /**
          * List of MIME types associated with your language. Users will use them (directly or
-         * indirectly) when {@link TruffleVM#eval(com.oracle.truffle.api.source.Source) executing}
-         * their code snippets or their {@link Source files}.
+         * indirectly) when {@link TruffleVM#eval(java.lang.String, java.lang.String) executing}
+         * their code snippets or their {@link TruffleVM#eval(java.net.URI) files}.
          *
          * @return array of MIME types assigned to your language files
          */
@@ -234,7 +234,6 @@ public abstract class TruffleLanguage<C> {
      */
     public static final class Env {
         private final TruffleVM vm;
-        private final TruffleLanguage<?> lang;
         private final LangCtx<?> langCtx;
         private final Reader in;
         private final Writer err;
@@ -245,7 +244,6 @@ public abstract class TruffleLanguage<C> {
             this.in = in;
             this.err = err;
             this.out = out;
-            this.lang = lang;
             this.langCtx = new LangCtx<>(lang, this);
         }
 
@@ -259,7 +257,7 @@ public abstract class TruffleLanguage<C> {
          * @return object representing the symbol or <code>null</code>
          */
         public Object importSymbol(String globalName) {
-            return API.importSymbol(vm, lang, globalName);
+            return API.importSymbol(vm, langCtx.lang, globalName);
         }
 
         /**

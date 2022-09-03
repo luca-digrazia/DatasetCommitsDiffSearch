@@ -74,40 +74,40 @@ import com.oracle.truffle.api.source.*;
 public final class TruffleVM {
     private static final Logger LOG = Logger.getLogger(TruffleVM.class.getName());
     private static final SPIAccessor SPI = new SPIAccessor();
+    private final Thread initThread;
+    private final Map<String, Language> langs;
+    private final Reader in;
+    private final Writer err;
+    private final Writer out;
+    private final EventConsumer<?>[] handlers;
+    private Debugger debugger;
 
-    static final class LanguageData {
-        final String name;
-        final String version;
-        final Set<String> mimeTypes;
-        final TruffleLanguage<?> language;
-
-        LanguageData(String prefix, Properties props) {
-            this.name = props.getProperty(prefix + "name");
-            this.version = props.getProperty(prefix + "version");
-
-            TreeSet<String> ts = new TreeSet<>();
-            for (int i = 0;; i++) {
-                String mt = props.getProperty(prefix + "mimeType." + i);
-                if (mt == null) {
-                    break;
-                }
-                ts.add(mt);
-            }
-            this.mimeTypes = Collections.unmodifiableSet(ts);
-
-            String n = props.getProperty(prefix + "className");
-            try {
-                Class<?> langClazz = Class.forName(n, true, loader());
-                this.language = (TruffleLanguage<?>) langClazz.getField("INSTANCE").get(null);
-            } catch (Exception ex) {
-                throw new IllegalStateException("Cannot initialize " + name + " language with implementation " + n, ex);
-            }
-        }
+    /**
+     * Private & temporary only constructor.
+     */
+    private TruffleVM() {
+        this.initThread = null;
+        this.in = null;
+        this.err = null;
+        this.out = null;
+        this.langs = null;
+        this.handlers = null;
     }
 
-    private static final List<LanguageData> ALL_LANGUAGE_DATA;
-    static {
-        ALL_LANGUAGE_DATA = new ArrayList<>();
+    /**
+     * Real constructor used from the builder.
+     *
+     * @param out stdout
+     * @param err stderr
+     * @param in stdin
+     */
+    private TruffleVM(Writer out, Writer err, Reader in, EventConsumer<?>[] handlers) {
+        this.out = out;
+        this.err = err;
+        this.in = in;
+        this.handlers = handlers;
+        this.initThread = Thread.currentThread();
+        this.langs = new HashMap<>();
         Enumeration<URL> en;
         try {
             en = loader().getResources("META-INF/truffle/language");
@@ -131,53 +131,10 @@ public final class TruffleVM {
                 if (p.getProperty(prefix + "name") == null) {
                     break;
                 }
-                ALL_LANGUAGE_DATA.add(new LanguageData(prefix, p));
-            }
-        }
-    }
-
-    private final Thread initThread;
-    private final Map<String, Language> langs;
-    private final Reader in;
-    private final Writer err;
-    private final Writer out;
-    private final EventConsumer<?>[] handlers;
-    private final Map<String, Object> globals;
-    private Debugger debugger;
-
-    /**
-     * Private & temporary only constructor.
-     */
-    private TruffleVM() {
-        this.initThread = null;
-        this.in = null;
-        this.err = null;
-        this.out = null;
-        this.langs = null;
-        this.handlers = null;
-        this.globals = null;
-    }
-
-    /**
-     * Real constructor used from the builder.
-     *
-     * @param out stdout
-     * @param err stderr
-     * @param in stdin
-     */
-    private TruffleVM(Map<String, Object> globals, Writer out, Writer err, Reader in, EventConsumer<?>[] handlers) {
-        this.out = out;
-        this.err = err;
-        this.in = in;
-        this.handlers = handlers;
-        this.initThread = Thread.currentThread();
-        this.globals = new HashMap<>(globals);
-        this.langs = new HashMap<>();
-
-        for (LanguageData data : ALL_LANGUAGE_DATA) {
-            Language l = new Language(data);
-            for (String mimeType : l.getMimeTypes()) {
-                langs.put(mimeType, l);
+                Language l = new Language(prefix, p);
+                for (String mimeType : l.getMimeTypes()) {
+                    langs.put(mimeType, l);
+                }
             }
         }
     }
@@ -232,8 +189,7 @@ public final class TruffleVM {
         private Writer out;
         private Writer err;
         private Reader in;
-        private final List<EventConsumer<?>> handlers = new ArrayList<>();
-        private final Map<String, Object> globals = new HashMap<>();
+        private List<EventConsumer<?>> handlers = new ArrayList<>();
 
         Builder() {
         }
@@ -288,24 +244,6 @@ public final class TruffleVM {
         }
 
         /**
-         * Adds global named symbol into the configuration of to-be-built {@link TruffleVM}. This
-         * symbol will be accessible to all languages via {@link Env#importSymbol(java.lang.String)}
-         * and will take precedence over {@link TruffleLanguage#findExportedSymbol symbols exported
-         * by languages itself}. Repeated use of <code>globalSymbol</code> is possible; later
-         * definition of the same name overrides the previous one.
-         * 
-         * @param name name of the symbol to register
-         * @param obj value of the object - expected to be primitive wrapper, {@link String} or
-         *            <code>TruffleObject</code> for mutual inter-operability
-         * @return instance of this builder
-         * @see TruffleVM#findGlobalSymbol(java.lang.String)
-         */
-        public Builder globalSymbol(String name, Object obj) {
-            globals.put(name, obj);
-            return this;
-        }
-
-        /**
          * Creates the {@link TruffleVM Truffle virtual machine}. The configuration is taken from
          * values passed into configuration methods in this class.
          *
@@ -321,7 +259,7 @@ public final class TruffleVM {
             if (in == null) {
                 in = new InputStreamReader(System.in);
             }
-            return new TruffleVM(globals, out, err, in, handlers.toArray(new EventConsumer[0]));
+            return new TruffleVM(out, err, in, handlers.toArray(new EventConsumer[0]));
         }
     }
 
@@ -441,17 +379,15 @@ public final class TruffleVM {
     public Symbol findGlobalSymbol(String globalName) {
         checkThread();
         TruffleLanguage<?> lang = null;
-        Object obj = globals.get(globalName);
+        Object obj = null;
         Object global = null;
-        if (obj == null) {
-            for (Language dl : langs.values()) {
-                TruffleLanguage<?> l = dl.getImpl();
-                obj = SPI.findExportedSymbol(dl.env, globalName, true);
-                if (obj != null) {
-                    lang = l;
-                    global = SPI.languageGlobal(dl.env);
-                    break;
-                }
+        for (Language dl : langs.values()) {
+            TruffleLanguage<?> l = dl.getImpl();
+            obj = SPI.findExportedSymbol(dl.env, globalName, true);
+            if (obj != null) {
+                lang = l;
+                global = SPI.languageGlobal(dl.env);
+                break;
             }
         }
         if (obj == null) {
@@ -577,13 +513,15 @@ public final class TruffleVM {
      * {@link TruffleVM#eval(java.lang.String, java.lang.String) a code is evaluated} in it.
      */
     public final class Language {
-        private final LanguageData data;
+        private final Properties props;
         private TruffleLanguage<?> impl;
         private TruffleLanguage.Env env;
+        private final String prefix;
         private String shortName;
 
-        Language(LanguageData data) {
-            this.data = data;
+        Language(String prefix, Properties props) {
+            this.prefix = prefix;
+            this.props = props;
         }
 
         /**
@@ -592,7 +530,15 @@ public final class TruffleVM {
          * @return returns immutable set of recognized MIME types
          */
         public Set<String> getMimeTypes() {
-            return data.mimeTypes;
+            TreeSet<String> ts = new TreeSet<>();
+            for (int i = 0;; i++) {
+                String mt = props.getProperty(prefix + "mimeType." + i);
+                if (mt == null) {
+                    break;
+                }
+                ts.add(mt);
+            }
+            return Collections.unmodifiableSet(ts);
         }
 
         /**
@@ -601,7 +547,7 @@ public final class TruffleVM {
          * @return string giving the language a name
          */
         public String getName() {
-            return data.name;
+            return props.getProperty(prefix + "name");
         }
 
         /**
@@ -610,7 +556,7 @@ public final class TruffleVM {
          * @return string specifying the language version
          */
         public String getVersion() {
-            return data.version;
+            return props.getProperty(prefix + "version");
         }
 
         /**
@@ -627,12 +573,14 @@ public final class TruffleVM {
 
         TruffleLanguage<?> getImpl() {
             if (impl == null) {
+                String n = props.getProperty(prefix + "className");
                 try {
-                    TruffleLanguage<?> language = data.language;
+                    Class<?> langClazz = Class.forName(n, true, loader());
+                    TruffleLanguage<?> language = (TruffleLanguage<?>) langClazz.getField("INSTANCE").get(null);
                     env = SPI.attachEnv(TruffleVM.this, language, out, err, in);
                     impl = language;
                 } catch (Exception ex) {
-                    throw new IllegalStateException("Cannot initialize " + getShortName() + " language with implementation " + data.language.getClass().getName(), ex);
+                    throw new IllegalStateException("Cannot initialize " + getShortName() + " language with implementation " + n, ex);
                 }
             }
             return impl;
@@ -676,10 +624,6 @@ public final class TruffleVM {
     private static class SPIAccessor extends Accessor {
         @Override
         public Object importSymbol(TruffleVM vm, TruffleLanguage<?> ownLang, String globalName) {
-            Object g = vm.globals.get(globalName);
-            if (g != null) {
-                return g;
-            }
             Set<Language> uniqueLang = new LinkedHashSet<>(vm.langs.values());
             for (Language dl : uniqueLang) {
                 TruffleLanguage<?> l = dl.getImpl();
