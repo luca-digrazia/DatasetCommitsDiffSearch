@@ -37,7 +37,6 @@ import java.util.ServiceLoader;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Value;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -52,8 +51,7 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 @TruffleLanguage.Registration(id = "llvm", name = "llvm", version = "0.01", mimeType = {Sulong.LLVM_BITCODE_MIME_TYPE, Sulong.LLVM_BITCODE_BASE64_MIME_TYPE,
-                Sulong.SULONG_LIBRARY_MIME_TYPE, Sulong.LLVM_ELF_SHARED_MIME_TYPE, Sulong.LLVM_ELF_EXEC_MIME_TYPE}, internal = false, interactive = false)
-// TODO: remove Sulong.SULONG_LIBRARY_MIME_TYPE after GR-5904 is closed.
+                Sulong.SULONG_LIBRARY_MIME_TYPE}, internal = false, interactive = false)
 @ProvidedTags({StandardTags.StatementTag.class, StandardTags.CallTag.class})
 public final class Sulong extends LLVMLanguage {
 
@@ -129,15 +127,13 @@ public final class Sulong extends LLVMLanguage {
     public static int executeMain(File file, String[] args) throws Exception {
         org.graalvm.polyglot.Source source = org.graalvm.polyglot.Source.newBuilder(LLVMLanguage.NAME, file).build();
         Context context = Context.newBuilder().arguments(LLVMLanguage.NAME, args).build();
+        int result;
         try {
-            Value result = context.eval(source);
-            if (result.isNull()) {
-                throw new LinkageError("No main function found.");
-            }
-            return result.asInt();
+            result = context.eval(source).asInt();
         } finally {
             context.close();
         }
+        return result;
     }
 
     @Override
