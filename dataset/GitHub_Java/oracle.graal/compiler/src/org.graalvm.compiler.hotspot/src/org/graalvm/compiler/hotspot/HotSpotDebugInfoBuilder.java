@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,16 +29,13 @@ import java.util.List;
 
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.api.replacements.Snippet;
-import org.graalvm.compiler.bytecode.Bytecodes;
 import org.graalvm.compiler.core.gen.DebugInfoBuilder;
 import org.graalvm.compiler.graph.GraalGraphError;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.lir.VirtualStackSlot;
-import org.graalvm.compiler.nodes.DeoptimizeNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.spi.NodeValueMap;
-import org.graalvm.compiler.nodes.spi.NodeWithState;
 
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.StackLockValue;
@@ -62,7 +57,7 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
     private HotSpotCodeCacheProvider codeCacheProvider;
 
     public HotSpotDebugInfoBuilder(NodeValueMap nodeValueMap, HotSpotLockStack lockStack, HotSpotLIRGenerator gen) {
-        super(nodeValueMap, gen.getResult().getLIR().getDebug());
+        super(nodeValueMap);
         this.lockStack = lockStack;
         this.codeCacheProvider = gen.getProviders().getCodeCache();
     }
@@ -87,27 +82,6 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
         boolean eliminated = object instanceof VirtualObject || state.monitorIdAt(lockIndex).isEliminated();
         assert state.monitorIdAt(lockIndex).getLockDepth() == lockDepth;
         return new StackLockValue(object, slot, eliminated);
-    }
-
-    @Override
-    protected boolean verifyFrameState(NodeWithState node, FrameState topState) {
-        // There are many properties of FrameStates which could be validated though it's complicated
-        // by some of the idiomatic ways that they are used. This check specifically tries to catch
-        // cases where a FrameState that's constructed for reexecution has an incorrect stack depth
-        // at invokes.
-        if (node instanceof DeoptimizeNode && topState.bci >= 0 && !topState.duringCall() && !topState.rethrowException()) {
-            ResolvedJavaMethod m = topState.getMethod();
-            int opcode = m.getCode()[topState.bci] & 0xff;
-            if (opcode == Bytecodes.INVOKEVIRTUAL || opcode == Bytecodes.INVOKEINTERFACE) {
-                assert topState.stackSize() > 0 : "expected non-empty stack: " + topState;
-            } else {
-                int stackEffect = Bytecodes.stackEffectOf(opcode);
-                if (stackEffect < 0) {
-                    assert topState.stackSize() >= -stackEffect : "expected at least " + (-stackEffect) + " stack depth : " + topState;
-                }
-            }
-        }
-        return true;
     }
 
     @Override
