@@ -56,13 +56,13 @@ final class JavaInteropReflect {
     private static final Object[] EMPTY = {};
 
     @CompilerDirectives.TruffleBoundary
-    static Object readField(JavaObject object, String name) {
+    static Object readField(JavaObject object, String name) throws NoSuchFieldError, SecurityException, IllegalArgumentException, IllegalAccessException {
         Object obj = object.obj;
         final boolean onlyStatic = object.isClass();
         JavaClassDesc classDesc = JavaClassDesc.forClass(object.clazz);
         Field field = classDesc.lookupField(name, onlyStatic);
         if (field != null) {
-            Object val = getField(obj, field);
+            Object val = field.get(obj);
             return JavaInterop.toGuestValue(val, object.languageContext);
         } else {
             JavaMethodDesc method = classDesc.lookupMethod(name, onlyStatic);
@@ -196,20 +196,11 @@ final class JavaInteropReflect {
     }
 
     @CompilerDirectives.TruffleBoundary
-    static void setField(Object obj, Field field, Object value) {
+    static void setField(Object obj, Field f, Object convertedValue) {
         try {
-            field.set(obj, value);
+            f.set(obj, convertedValue);
         } catch (IllegalAccessException ex) {
-            throw new IllegalStateException(ex);
-        }
-    }
-
-    @CompilerDirectives.TruffleBoundary
-    static Object getField(Object obj, Field field) {
-        try {
-            return field.get(obj);
-        } catch (IllegalAccessException e) {
-            throw new IllegalStateException(e);
+            throw new RuntimeException(ex);
         }
     }
 
