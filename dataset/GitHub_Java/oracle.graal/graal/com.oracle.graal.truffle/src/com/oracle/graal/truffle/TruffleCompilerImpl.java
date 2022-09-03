@@ -78,8 +78,11 @@ public class TruffleCompilerImpl {
         this.suites = backend.getSuites().getDefaultSuites();
 
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
-        GraphBuilderConfiguration eagerConfig = GraphBuilderConfiguration.getEagerDefault().withSkippedExceptionTypes(skippedExceptionTypes);
-        this.config = GraphBuilderConfiguration.getDefault().withSkippedExceptionTypes(skippedExceptionTypes);
+        GraphBuilderConfiguration eagerConfig = GraphBuilderConfiguration.getEagerDefault();
+        eagerConfig.setSkippedExceptionTypes(skippedExceptionTypes);
+        this.config = GraphBuilderConfiguration.getDefault();
+        this.config.setSkippedExceptionTypes(skippedExceptionTypes);
+
         this.truffleCache = new TruffleCacheImpl(providers, eagerConfig, config, TruffleCompilerImpl.Optimizations);
 
         this.partialEvaluator = new PartialEvaluator(providers, truffleCache);
@@ -111,19 +114,14 @@ public class TruffleCompilerImpl {
         if (TraceTruffleCompilation.getValue() || TraceTruffleCompilationAST.getValue()) {
             OptimizedCallTargetLog.logOptimizingStart(compilable);
             if (TraceTruffleCompilationAST.getValue()) {
-                OptimizedCallUtils.printCompactTree(OptimizedCallTarget.OUT, compilable.getRootNode());
+                NodeUtil.printCompactTree(OptimizedCallTarget.OUT, compilable.getRootNode());
             }
-        }
-        if (TraceTruffleCompilationCallTree.getValue()) {
-            OptimizedCallTargetLog.log(0, "opt call tree", compilable.toString(), compilable.getDebugProperties());
-            OptimizedCallTargetLog.logTruffleCalls(compilable);
         }
 
         long timeCompilationStarted = System.nanoTime();
         Assumptions assumptions = new Assumptions(true);
-        ContextSensitiveInlining inlining = TruffleCompilerOptions.TruffleContextSensitiveInlining.getValue() ? new ContextSensitiveInlining(compilable, new DefaultInliningPolicy()) : null;
         try (TimerCloseable a = PartialEvaluationTime.start(); Closeable c = PartialEvaluationMemUse.start()) {
-            graph = partialEvaluator.createGraph(compilable, assumptions, inlining);
+            graph = partialEvaluator.createGraph(compilable, assumptions);
         }
 
         if (Thread.currentThread().isInterrupted()) {
@@ -136,34 +134,23 @@ public class TruffleCompilerImpl {
         long timeCompilationFinished = System.nanoTime();
         int nodeCountLowered = graph.getNodeCount();
 
-        compilable.setInliningDecision(inlining);
-
-        if (TraceTruffleInlining.getValue() && inlining != null) {
-            OptimizedCallTargetLog.logInliningDecision(compilable);
-        }
         if (TraceTruffleCompilation.getValue()) {
-            printTruffleCompilation(compilable, timeCompilationStarted, timePartialEvaluationFinished, nodeCountPartialEval, compilationResult, timeCompilationFinished, nodeCountLowered);
+            int calls = OptimizedCallUtils.countCalls(compilable);
+            int inlinedCalls = OptimizedCallUtils.countCallsInlined(compilable);
+            int dispatchedCalls = calls - inlinedCalls;
+            Map<String, Object> properties = new LinkedHashMap<>();
+            OptimizedCallTargetLog.addASTSizeProperty(compilable, properties);
+            properties.put("Time", String.format("%5.0f(%4.0f+%-4.0f)ms", //
+                            (timeCompilationFinished - timeCompilationStarted) / 1e6, //
+                            (timePartialEvaluationFinished - timeCompilationStarted) / 1e6, //
+                            (timeCompilationFinished - timePartialEvaluationFinished) / 1e6));
+            properties.put("CallNodes", String.format("I %5d/D %5d", inlinedCalls, dispatchedCalls));
+            properties.put("GraalNodes", String.format("%5d/%5d", nodeCountPartialEval, nodeCountLowered));
+            properties.put("CodeSize", compilationResult.getTargetCodeSize());
+            properties.put("Source", formatSourceSection(compilable.getRootNode().getSourceSection()));
+
+            OptimizedCallTargetLog.logOptimizingDone(compilable, properties);
         }
-
-    }
-
-    private static void printTruffleCompilation(final OptimizedCallTarget compilable, long timeCompilationStarted, long timePartialEvaluationFinished, int nodeCountPartialEval,
-                    CompilationResult compilationResult, long timeCompilationFinished, int nodeCountLowered) {
-        int calls = OptimizedCallUtils.countCalls(compilable);
-        int inlinedCalls = OptimizedCallUtils.countCallsInlined(compilable);
-        int dispatchedCalls = calls - inlinedCalls;
-        Map<String, Object> properties = new LinkedHashMap<>();
-        OptimizedCallTargetLog.addASTSizeProperty(compilable, properties);
-        properties.put("Time", String.format("%5.0f(%4.0f+%-4.0f)ms", //
-                        (timeCompilationFinished - timeCompilationStarted) / 1e6, //
-                        (timePartialEvaluationFinished - timeCompilationStarted) / 1e6, //
-                        (timeCompilationFinished - timePartialEvaluationFinished) / 1e6));
-        properties.put("CallNodes", String.format("I %5d/D %5d", inlinedCalls, dispatchedCalls));
-        properties.put("GraalNodes", String.format("%5d/%5d", nodeCountPartialEval, nodeCountLowered));
-        properties.put("CodeSize", compilationResult.getTargetCodeSize());
-        properties.put("Source", formatSourceSection(compilable.getRootNode().getSourceSection()));
-
-        OptimizedCallTargetLog.logOptimizingDone(compilable, properties);
     }
 
     private static String formatSourceSection(SourceSection sourceSection) {
