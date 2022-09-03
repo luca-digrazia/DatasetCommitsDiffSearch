@@ -67,8 +67,6 @@ import com.oracle.graal.sparc.*;
  */
 public abstract class SPARCLIRGenerator extends LIRGenerator {
 
-    private StackSlot tmpStackSlot;
-
     private class SPARCSpillMoveFactory implements LIR.SpillMoveFactory {
 
         @Override
@@ -873,11 +871,13 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         append(new MoveFpGp(dst, src, tempSlot));
     }
 
+    private StackSlot tmp;
+
     private StackSlot getTempSlot(LIRKind kind) {
-        if (tmpStackSlot == null) {
-            tmpStackSlot = getResult().getFrameMap().allocateSpillSlot(kind);
+        if (tmp == null) {
+            tmp = getResult().getFrameMap().allocateSpillSlot(kind);
         }
-        return tmpStackSlot;
+        return tmp;
     }
 
     protected SPARC getArchitecture() {

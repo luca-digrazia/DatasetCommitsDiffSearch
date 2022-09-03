@@ -43,7 +43,8 @@ import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
 
 /**
- * Emits code which compares two arrays of the same length.
+ * Emits code which compares two arrays of the same length. If the CPU supports any vector
+ * instructions specialized code is emitted to leverage these instructions.
  */
 @Opcode("ARRAY_EQUALS")
 public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
@@ -141,7 +142,7 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         new Add(array2, length, array2).emit(masm);
         new Sub(g0, length, length).emit(masm);
 
-        // Load the first value from array 1 (Later done in back branch delay-slot)
+        // Align the main loop
         new Ldx(new SPARCAddress(array1, length), tempReg1).emit(masm);
         masm.bind(loop);
         new Ldx(new SPARCAddress(array2, length), tempReg2).emit(masm);

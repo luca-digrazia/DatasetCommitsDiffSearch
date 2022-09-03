@@ -1515,8 +1515,6 @@ public abstract class SPARCAssembler extends Assembler {
         Fones(0x7F, "fones"),
         Fandd(0b0_0111_0000, "fandd"),
         Fands(0b0_0111_0001, "fands"),
-        Fxord(0b0_0110_1100, "fxord"),
-        Fxors(0b0_0110_1101, "fxord"),
         // end VIS1
 
         // start VIS2
@@ -2199,7 +2197,7 @@ public abstract class SPARCAssembler extends Assembler {
             super(0, ConditionFlag.Equal, Op2s.Bp, cc, predictTaken ? 1 : 0, label);
         }
 
-        public Bpe(CC cc, boolean annul, boolean predictTaken, Label label) {
+        public Bpe(boolean annul, CC cc, Label label, boolean predictTaken) {
             super(annul ? 1 : 0, ConditionFlag.Equal, Op2s.Bp, cc, predictTaken ? 1 : 0, label);
         }
 
@@ -4134,18 +4132,6 @@ public abstract class SPARCAssembler extends Assembler {
     public static class Fandd extends Fmt3p {
         public Fandd(Register src1, Register src2, Register dst) {
             super(Ops.ArithOp, Op3s.Impdep1, Opfs.Fandd, src1, src2, dst);
-        }
-    }
-
-    public static class Fxord extends Fmt3p {
-        public Fxord(Register src1, Register src2, Register dst) {
-            super(Ops.ArithOp, Op3s.Impdep1, Opfs.Fxord, src1, src2, dst);
-        }
-    }
-
-    public static class Fxors extends Fmt3p {
-        public Fxors(Register src1, Register src2, Register dst) {
-            super(Ops.ArithOp, Op3s.Impdep1, Opfs.Fxors, src1, src2, dst);
         }
     }
 
