@@ -127,8 +127,6 @@ class JavaObjectMessageResolution {
     @Resolve(message = "NEW")
     abstract static class NewNode extends Node {
         @Child private ExecuteMethodNode doExecute;
-        @Child private ToJavaNode toJava;
-        private static final TypeAndClass<Integer> INT_TYPE = new TypeAndClass<>(null, int.class);
 
         public Object access(JavaObject receiver, Object[] args) {
             if (TruffleOptions.AOT) {
@@ -136,18 +134,6 @@ class JavaObjectMessageResolution {
             }
 
             if (receiver.isClass()) {
-                if (receiver.clazz.isArray()) {
-                    if (args.length != 1) {
-                        throw ArityException.raise(1, args.length);
-                    }
-                    if (toJava == null) {
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
-                        toJava = insert(ToJavaNode.create());
-                    }
-                    int length = (int) toJava.execute(args[0], INT_TYPE, receiver.languageContext);
-                    return JavaInterop.asTruffleObject(Array.newInstance(receiver.clazz.getComponentType(), length), receiver.languageContext);
-                }
-
                 JavaClassDesc classDesc = JavaClassDesc.forClass(receiver.clazz);
                 JavaMethodDesc method = classDesc.lookupConstructor();
                 if (method != null) {
