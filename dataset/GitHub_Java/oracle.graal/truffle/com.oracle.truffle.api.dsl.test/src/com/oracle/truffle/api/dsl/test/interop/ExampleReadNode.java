@@ -34,7 +34,7 @@ language = TestTruffleLanguage.class)
 public final class ExampleReadNode extends ExampleReadBaseNode {
 
     @Override
-    protected Object access(VirtualFrame frame,
+    protected Object access(VirtualFrame vf,
                     ExampleTruffleObject receiver,
                     String name) {
         if (ExampleTruffleObject.MEMBER_NAME.equals(name)) {
