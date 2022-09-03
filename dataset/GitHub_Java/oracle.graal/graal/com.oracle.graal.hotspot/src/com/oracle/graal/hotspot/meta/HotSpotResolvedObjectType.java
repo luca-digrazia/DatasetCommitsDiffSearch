@@ -144,7 +144,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     public int getAccessFlags() {
         HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
-        return unsafe.getInt(metaspaceKlass + config.klassAccessFlagsOffset);
+        return unsafe.getInt(null, metaspaceKlass + config.klassAccessFlagsOffset);
     }
 
     @Override
@@ -446,11 +446,6 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     }
 
     @Override
-    public String getSourceFileName() {
-       return HotSpotGraalRuntime.getInstance().getCompilerToVM().getFileName(this);
-    }
-
-    @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
         return javaMirror.getAnnotation(annotationClass);
     }
@@ -473,7 +468,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     public int superCheckOffset() {
         HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
-        return unsafe.getInt(metaspaceKlass + config.superCheckOffsetOffset);
+        return unsafe.getInt(null, metaspaceKlass + config.superCheckOffsetOffset);
     }
 
     public long prototypeMarkWord() {

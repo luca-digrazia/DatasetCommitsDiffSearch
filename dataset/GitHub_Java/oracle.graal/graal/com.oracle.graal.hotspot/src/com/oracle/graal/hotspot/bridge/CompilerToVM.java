@@ -200,10 +200,4 @@ public interface CompilerToVM {
     long[] getDeoptedLeafGraphIds();
 
     String decodePC(long pc);
-
-
-    long[] getLineNumberTable(HotSpotResolvedJavaMethod method);
-
-
-    String getFileName(HotSpotResolvedJavaType method);
 }
