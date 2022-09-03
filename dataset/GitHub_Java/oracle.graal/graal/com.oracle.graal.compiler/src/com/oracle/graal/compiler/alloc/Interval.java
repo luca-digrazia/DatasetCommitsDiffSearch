@@ -22,18 +22,17 @@
  */
 package com.oracle.graal.compiler.alloc;
 
+import static com.oracle.graal.alloc.util.LocationUtil.*;
 
 import java.util.*;
 
+import com.oracle.max.criutils.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.util.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.lir.LIRValueUtil.*;
 
 /**
  * Represents an interval in the {@linkplain LinearScan linear scan register allocator}.
@@ -490,15 +489,15 @@ public final class Interval {
     void assignLocation(Value newLocation) {
         if (isRegister(newLocation)) {
             assert this.location == null : "cannot re-assign location for " + this;
-            if (newLocation.getKind() == Kind.Illegal && kind != Kind.Illegal) {
+            if (newLocation.kind == Kind.Illegal && kind != Kind.Illegal) {
                 this.location = asRegister(newLocation).asValue(kind);
                 return;
             }
         } else {
             assert this.location == null || isRegister(this.location) : "cannot re-assign location for " + this;
             assert isStackSlot(newLocation);
-            assert newLocation.getKind() != Kind.Illegal;
-            assert newLocation.getKind() == this.kind;
+            assert newLocation.kind != Kind.Illegal;
+            assert newLocation.kind == this.kind;
         }
         this.location = newLocation;
     }

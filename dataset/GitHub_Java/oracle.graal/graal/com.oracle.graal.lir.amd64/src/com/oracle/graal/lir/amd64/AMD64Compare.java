@@ -26,11 +26,10 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.max.asm.target.amd64.*;
 
-// @formatter:off
 public enum AMD64Compare {
     ICMP, LCMP, ACMP, FCMP, DCMP;
 
@@ -53,12 +52,12 @@ public enum AMD64Compare {
         @Override
         protected void verify() {
             super.verify();
-            assert (name().startsWith("I") && x.getKind() == Kind.Int && y.getKind().getStackKind() == Kind.Int)
-                || (name().startsWith("I") && x.getKind() == Kind.Jsr && y.getKind() == Kind.Jsr)
-                || (name().startsWith("L") && x.getKind() == Kind.Long && y.getKind() == Kind.Long)
-                || (name().startsWith("A") && x.getKind() == Kind.Object && y.getKind() == Kind.Object)
-                || (name().startsWith("F") && x.getKind() == Kind.Float && y.getKind() == Kind.Float)
-                || (name().startsWith("D") && x.getKind() == Kind.Double && y.getKind() == Kind.Double);
+            assert (name().startsWith("I") && x.kind == Kind.Int && y.kind.stackKind() == Kind.Int)
+                || (name().startsWith("I") && x.kind == Kind.Jsr && y.kind == Kind.Jsr)
+                || (name().startsWith("L") && x.kind == Kind.Long && y.kind == Kind.Long)
+                || (name().startsWith("A") && x.kind == Kind.Object && y.kind == Kind.Object)
+                || (name().startsWith("F") && x.kind == Kind.Float && y.kind == Kind.Float)
+                || (name().startsWith("D") && x.kind == Kind.Double && y.kind == Kind.Double);
         }
     }
 

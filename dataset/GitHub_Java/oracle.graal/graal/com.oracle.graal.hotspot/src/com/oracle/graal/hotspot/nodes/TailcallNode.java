@@ -29,6 +29,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.target.amd64.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -58,18 +59,19 @@ public class TailcallNode extends FixedWithNextNode implements LIRLowerable {
         LIRGenerator gen = (LIRGenerator) generator;
         HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
         ResolvedJavaMethod method = frameState.method();
-        boolean isStatic = Modifier.isStatic(method.getModifiers());
+        boolean isStatic = Modifier.isStatic(method.accessFlags());
 
-        JavaType[] signature = MetaUtil.signatureToTypes(method.getSignature(), isStatic ? null : method.getDeclaringClass());
-        CallingConvention cc = gen.frameMap().registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, null, signature, gen.target(), false);
-        gen.frameMap().callsMethod(cc); // TODO (aw): I think this is unnecessary for a tail call.
+        Kind[] signature = MetaUtil.signatureToKinds(method.signature(), isStatic ? null : method.holder().kind());
+        CallingConvention cc = gen.frameMap().registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, signature, gen.target(), false);
+        gen.frameMap().callsMethod(cc, CallingConvention.Type.JavaCall); // TODO (aw): I think this is unnecessary for a tail call.
         List<ValueNode> parameters = new ArrayList<>();
-        for (int i = 0, slot = 0; i < cc.getArgumentCount(); i++, slot += FrameStateBuilder.stackSlots(frameState.localAt(slot).kind())) {
+        for (int i = 0, slot = 0; i < cc.locations.length; i++, slot += FrameStateBuilder.stackSlots(frameState.localAt(slot).kind())) {
             parameters.add(frameState.localAt(slot));
         }
-        Value[] args = gen.visitInvokeArguments(cc, parameters);
+        List<Value> argList = gen.visitInvokeArguments(cc, parameters);
+
         Value entry = gen.emitLoad(new Address(Kind.Long, gen.operand(target), config.nmethodEntryOffset), false);
-        HotSpotLIRGenerator hsgen = (HotSpotLIRGenerator) gen;
-        hsgen.emitTailcall(args, entry);
+
+        gen.append(new AMD64TailcallOp(argList, entry));
     }
 }

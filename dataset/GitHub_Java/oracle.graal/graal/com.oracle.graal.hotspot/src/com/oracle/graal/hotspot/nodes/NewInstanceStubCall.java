@@ -22,27 +22,26 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.target.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import com.oracle.max.asm.target.amd64.*;
 
 /**
- * A call to the {@link NewInstanceStub}.
+ * Node implementing a call to HotSpot's {@code new_instance} stub.
+ *
+ * @see AMD64NewInstanceStubCallOp
  */
 public class NewInstanceStubCall extends FixedWithNextNode implements LIRGenLowerable {
 
     private static final Stamp defaultStamp = StampFactory.objectNonNull();
 
     @Input private final ValueNode hub;
-
-    public static final Descriptor NEW_INSTANCE = new Descriptor("new_instance", false, Object.class, Word.class);
 
     public NewInstanceStubCall(ValueNode hub) {
         super(defaultStamp);
@@ -52,7 +51,8 @@ public class NewInstanceStubCall extends FixedWithNextNode implements LIRGenLowe
     @Override
     public boolean inferStamp() {
         if (stamp() == defaultStamp && hub.isConstant()) {
-            updateStamp(StampFactory.exactNonNull(HotSpotResolvedObjectType.fromMetaspaceKlass(hub.asConstant())));
+            HotSpotKlassOop klassOop = (HotSpotKlassOop) this.hub.asConstant().asObject();
+            updateStamp(StampFactory.exactNonNull(klassOop.type));
             return true;
         }
         return false;
@@ -60,11 +60,19 @@ public class NewInstanceStubCall extends FixedWithNextNode implements LIRGenLowe
 
     @Override
     public void generate(LIRGenerator gen) {
-        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(NEW_INSTANCE);
-        Variable result = gen.emitCall(stub, stub.getCallingConvention(), true, gen.operand(hub));
+        Variable result = gen.newVariable(Kind.Object);
+        gen.emitMove(gen.operand(hub), AMD64.rdx.asValue(Kind.Object));
+        LIRFrameState info = gen.state();
+        AMD64NewInstanceStubCallOp op = new AMD64NewInstanceStubCallOp(result, AMD64.rdx.asValue(Kind.Object), info);
+        gen.append(op);
         gen.setResult(this, result);
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native Object call(Word hub);
+    public static Object call(Object hub) {
+        throw new UnsupportedOperationException();
+    }
+
+
 }

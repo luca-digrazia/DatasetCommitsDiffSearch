@@ -22,15 +22,14 @@
  */
 package com.oracle.graal.lir.amd64;
 
-import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.max.asm.target.amd64.*;
 
 /**
  * Convenience class to provide AMD64MacroAssembler for the {@link #emitCode} method.
  */
 public abstract class AMD64LIRInstruction extends LIRInstruction {
-
     @Override
     public final void emitCode(TargetMethodAssembler tasm) {
         emitCode(tasm, (AMD64MacroAssembler) tasm.asm);

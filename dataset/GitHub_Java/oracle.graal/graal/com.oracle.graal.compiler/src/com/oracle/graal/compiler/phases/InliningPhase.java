@@ -33,11 +33,11 @@ import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.compiler.util.InliningUtil.InlineInfo;
 import com.oracle.graal.compiler.util.InliningUtil.InliningCallback;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
 
 
 public class InliningPhase extends Phase implements InliningCallback {
@@ -48,7 +48,7 @@ public class InliningPhase extends Phase implements InliningCallback {
      */
 
     private final TargetDescription target;
-    private final GraalCodeCacheProvider runtime;
+    private final ExtendedRiRuntime runtime;
 
     private final Collection<? extends Invoke> hints;
 
@@ -56,7 +56,7 @@ public class InliningPhase extends Phase implements InliningCallback {
     private Assumptions assumptions;
 
     private final PhasePlan plan;
-    private final GraphCache cache;
+    private final RiGraphCache cache;
     private final WeightComputationPolicy weightComputationPolicy;
     private final InliningPolicy inliningPolicy;
     private final OptimisticOptimizations optimisticOpts;
@@ -66,7 +66,7 @@ public class InliningPhase extends Phase implements InliningCallback {
     private static final DebugMetric metricInliningConsidered = Debug.metric("InliningConsidered");
     private static final DebugMetric metricInliningStoppedByMaxDesiredSize = Debug.metric("InliningStoppedByMaxDesiredSize");
 
-    public InliningPhase(TargetDescription target, GraalCodeCacheProvider runtime, Collection<? extends Invoke> hints, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
+    public InliningPhase(TargetDescription target, ExtendedRiRuntime runtime, Collection<? extends Invoke> hints, Assumptions assumptions, RiGraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
         this.target = target;
         this.runtime = runtime;
         this.hints = hints;
@@ -84,10 +84,10 @@ public class InliningPhase extends Phase implements InliningCallback {
         graph.createNodeMap();
 
         if (hints != null) {
-            scanInvokes((Iterable<? extends Node>) Util.uncheckedCast(this.hints));
+            scanInvokes((Iterable<? extends Node>) Util.uncheckedCast(this.hints), -1);
         } else {
-            scanInvokes(graph.getNodes(InvokeNode.class));
-            scanInvokes(graph.getNodes(InvokeWithExceptionNode.class));
+            scanInvokes(graph.getNodes(InvokeNode.class), 0);
+            scanInvokes(graph.getNodes(InvokeWithExceptionNode.class), 0);
         }
 
         while (!inlineCandidates.isEmpty() && graph.getNodeCount() < GraalOptions.MaximumDesiredSize) {
@@ -131,7 +131,7 @@ public class InliningPhase extends Phase implements InliningCallback {
                 }
 
                 if (newNodes != null && info.level < GraalOptions.MaximumInlineLevel) {
-                    scanInvokes(newNodes);
+                    scanInvokes(newNodes, info.level + 1);
                 }
             }
         }
@@ -149,17 +149,17 @@ public class InliningPhase extends Phase implements InliningCallback {
         }
     }
 
-    private void scanInvokes(final Iterable<? extends Node> nodes) {
+    private void scanInvokes(final Iterable<? extends Node> nodes, final int level) {
         Debug.scope("InliningDecisions", new Runnable() {
             public void run() {
                 for (Node node : nodes) {
                     if (node != null) {
                         if (node instanceof Invoke) {
                             Invoke invoke = (Invoke) node;
-                            scanInvoke(invoke);
+                            scanInvoke(invoke, level);
                         }
                         for (Node usage : node.usages().filterInterface(Invoke.class).snapshot()) {
-                            scanInvoke((Invoke) usage);
+                            scanInvoke((Invoke) usage, level);
                         }
                     }
                 }
@@ -167,9 +167,10 @@ public class InliningPhase extends Phase implements InliningCallback {
         });
     }
 
-    private void scanInvoke(Invoke invoke) {
-        InlineInfo info = InliningUtil.getInlineInfo(invoke, computeInliningLevel(invoke), runtime, assumptions, this, optimisticOpts);
+    private void scanInvoke(Invoke invoke, int level) {
+        InlineInfo info = InliningUtil.getInlineInfo(invoke, level >= 0 ? level : computeInliningLevel(invoke), runtime, assumptions, this, optimisticOpts);
         if (info != null) {
+            assert level == -1 || computeInliningLevel(invoke) == level : "outer FramesStates must match inlining level";
             metricInliningConsidered.increment();
             inlineCandidates.add(info);
         }
@@ -259,13 +260,13 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     private static int computeInliningLevel(Invoke invoke) {
-        int count = -1;
+        int count = 0;
         FrameState curState = invoke.stateAfter();
         while (curState != null) {
             count++;
             curState = curState.outerFrameState();
         }
-        return count;
+        return count - 1;
     }
 
     private static InliningPolicy createInliningPolicy() {

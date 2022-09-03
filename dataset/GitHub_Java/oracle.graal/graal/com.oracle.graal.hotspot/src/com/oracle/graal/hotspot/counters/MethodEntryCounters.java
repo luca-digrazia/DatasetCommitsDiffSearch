@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.counters;
 
-import static com.oracle.graal.api.code.CiValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
@@ -32,16 +32,14 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.HotSpotCompiler;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.lir.LIRInstruction.Opcode;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.max.criutils.*;
-
 
 public class MethodEntryCounters {
     protected static final class Counter implements Comparable<Counter> {
@@ -52,8 +50,8 @@ public class MethodEntryCounters {
 
         protected long sortCount;
 
-        protected Counter(RiResolvedMethod method) {
-            this.method = CiUtil.format("%H.%n", method);
+        protected Counter(ResolvedJavaMethod method) {
+            this.method = MetaUtil.format("%H.%n", method);
             counters.add(this);
         }
 
@@ -64,33 +62,34 @@ public class MethodEntryCounters {
     }
 
 
+    @Opcode("ENTRY_COUNTER")
     protected static class AMD64MethodEntryOp extends AMD64LIRInstruction {
+        @Temp protected Value counterArr;
+        @Temp protected Value callerPc;
+
         protected static int codeSize;
 
         protected final Counter counter;
 
-        protected AMD64MethodEntryOp(Counter counter, RiValue counterArr, RiValue callerPc) {
-            super("ENTRY_COUNTER", LIRInstruction.NO_OPERANDS, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, new RiValue[] {counterArr, callerPc});
+        protected AMD64MethodEntryOp(Counter counter, Value counterArr, Value callerPc) {
             this.counter = counter;
+            this.counterArr = counterArr;
+            this.callerPc = callerPc;
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
             int start = masm.codeBuffer.position();
-
-            RiValue counterArr = temp(0);
-            RiValue callerPc = temp(1);
-
             int off = Unsafe.getUnsafe().arrayBaseOffset(long[].class);
             int scale = Unsafe.getUnsafe().arrayIndexScale(long[].class);
 
-            AMD64Move.move(tasm, masm, counterArr, RiConstant.forObject(counter.counts));
-            AMD64Move.load(tasm, masm, callerPc, new CiAddress(RiKind.Long, AMD64.rbp.asValue(RiKind.Long), 8), null);
+            AMD64Move.move(tasm, masm, counterArr, Constant.forObject(counter.counts));
+            AMD64Move.load(tasm, masm, callerPc, new Address(Kind.Long, AMD64.rbp.asValue(Kind.Long), 8), null);
 
             Label done = new Label();
             for (int i = 0; i < counter.counts.length - 2; i += 2) {
-                CiAddress counterPcAddr = new CiAddress(RiKind.Long, counterArr, i * scale + off);
-                CiAddress counterValueAddr = new CiAddress(RiKind.Long, counterArr, (i + 1) * scale + off);
+                Address counterPcAddr = new Address(Kind.Long, counterArr, i * scale + off);
+                Address counterValueAddr = new Address(Kind.Long, counterArr, (i + 1) * scale + off);
 
                 Label skipClaim = new Label();
                 masm.cmpq(counterPcAddr, 0);
@@ -106,7 +105,7 @@ public class MethodEntryCounters {
                 masm.bind(skipInc);
             }
 
-            CiAddress counterValueAddr = new CiAddress(RiKind.Long, counterArr, (counter.counts.length - 1) * scale + off);
+            Address counterValueAddr = new Address(Kind.Long, counterArr, (counter.counts.length - 1) * scale + off);
             masm.addq(counterValueAddr, 1);
             masm.bind(done);
 
@@ -114,24 +113,14 @@ public class MethodEntryCounters {
             assert codeSize == 0 || codeSize == size;
             codeSize = size;
         }
-
-        @Override
-        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-            if (mode == OperandMode.Temp && index == 0) {
-                return EnumSet.of(OperandFlag.Register);
-            } else if (mode == OperandMode.Temp && index == 1) {
-                return EnumSet.of(OperandFlag.Register);
-            }
-            throw GraalInternalError.shouldNotReachHere();
-        }
     }
 
 
-    public static void emitCounter(LIRGenerator gen, RiResolvedMethod method) {
+    public static void emitCounter(LIRGenerator gen, ResolvedJavaMethod method) {
         if (!GraalOptions.MethodEntryCounters) {
             return;
         }
-        gen.append(new AMD64MethodEntryOp(new Counter(method), gen.newVariable(RiKind.Long), gen.newVariable(RiKind.Long)));
+        gen.append(new AMD64MethodEntryOp(new Counter(method), gen.newVariable(Kind.Long), gen.newVariable(Kind.Long)));
     }
 
     public static int getCodeSize() {
@@ -142,7 +131,7 @@ public class MethodEntryCounters {
     }
 
 
-    public static void printCounters(HotSpotCompiler compiler) {
+    public static void printCounters(HotSpotGraalRuntime compiler) {
         if (!GraalOptions.MethodEntryCounters) {
             return;
         }

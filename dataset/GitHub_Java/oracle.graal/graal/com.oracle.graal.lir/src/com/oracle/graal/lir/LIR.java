@@ -28,20 +28,20 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
 
 /**
- * This class implements the overall container for the LIR graph and directs its construction,
- * optimization, and finalization.
+ * This class implements the overall container for the LIR graph
+ * and directs its construction, optimization, and finalization.
  */
 public class LIR {
 
     public final ControlFlowGraph cfg;
 
     /**
-     * The nodes for the blocks. TODO: This should go away, we want all nodes connected with a
-     * next-pointer.
+     * The nodes for the blocks.
+     * TODO: This should go away, we want all nodes connected with a next-pointer.
      */
     private final BlockMap<List<ScheduledNode>> blockToNodesMap;
 
@@ -56,8 +56,8 @@ public class LIR {
     private final List<Block> codeEmittingOrder;
 
     /**
-     * Various out-of-line stubs to be emitted near the end of the method after all other LIR code
-     * has been emitted.
+     * Various out-of-line stubs to be emitted near the end of the method
+     * after all other LIR code has been emitted.
      */
     public final List<Code> stubs;
 
@@ -65,12 +65,8 @@ public class LIR {
 
     public SpillMoveFactory spillMoveFactory;
 
-    public final BlockMap<List<LIRInstruction>> lirInstructions;
-
     public interface SpillMoveFactory {
-
         LIRInstruction createMove(Value result, Value input);
-
         LIRInstruction createExchange(Value input1, Value input2);
     }
 
@@ -80,9 +76,7 @@ public class LIR {
      * An opaque chunk of machine code.
      */
     public interface Code {
-
         void emitCode(TargetMethodAssembler tasm);
-
         /**
          * A description of this code stub useful for commenting the code in a disassembly.
          */
@@ -97,7 +91,6 @@ public class LIR {
         this.blockToNodesMap = blockToNodesMap;
         this.codeEmittingOrder = codeEmittingOrder;
         this.linearScanOrder = linearScanOrder;
-        this.lirInstructions = new BlockMap<>(cfg);
 
         stubs = new ArrayList<>();
     }
@@ -114,7 +107,7 @@ public class LIR {
      */
     public boolean hasDebugInfo() {
         for (Block b : linearScanOrder()) {
-            for (LIRInstruction op : lir(b)) {
+            for (LIRInstruction op : b.lir) {
                 if (op.hasState()) {
                     return true;
                 }
@@ -123,18 +116,8 @@ public class LIR {
         return false;
     }
 
-    public List<LIRInstruction> lir(Block block) {
-        return lirInstructions.get(block);
-    }
-
-    public void setLir(Block block, List<LIRInstruction> list) {
-        assert lir(block) == null : "lir instruction list should only be initialized once";
-        lirInstructions.put(block, list);
-    }
-
     /**
      * Gets the linear scan ordering of blocks as a list.
-     * 
      * @return the blocks in linear scan order
      */
     public List<Block> linearScanOrder() {
@@ -168,12 +151,12 @@ public class LIR {
         }
     }
 
-    private void emitBlock(TargetMethodAssembler tasm, Block block) {
+    private static void emitBlock(TargetMethodAssembler tasm, Block block) {
         if (Debug.isDumpEnabled()) {
             tasm.blockComment(String.format("block B%d %s", block.getId(), block.getLoop()));
         }
 
-        for (LIRInstruction op : lir(block)) {
+        for (LIRInstruction op : block.lir) {
             if (Debug.isDumpEnabled()) {
                 tasm.blockComment(String.format("%d %s", op.id(), op));
             }
@@ -208,10 +191,80 @@ public class LIR {
     }
 
     /**
-     * Determines if any of the parameters to the method are passed via the stack where the
-     * parameters are located in the caller's frame.
+     * Determines if any of the parameters to the method are passed via the stack
+     * where the parameters are located in the caller's frame.
      */
     public boolean hasArgInCallerFrame() {
         return hasArgInCallerFrame;
     }
+
+/*
+    private int lastDecodeStart;
+
+    private void printAssembly(TargetMethodAssembler tasm) {
+        byte[] currentBytes = tasm.asm.codeBuffer.copyData(lastDecodeStart, tasm.asm.codeBuffer.position());
+        if (currentBytes.length > 0) {
+            String disasm = tasm.runtime.disassemble(currentBytes, lastDecodeStart);
+            if (disasm.length() != 0) {
+                TTY.println(disasm);
+            } else {
+                TTY.println("Code [+%d]: %d bytes", lastDecodeStart, currentBytes.length);
+                Util.printBytes(lastDecodeStart, currentBytes, GraalOptions.PrintAssemblyBytesPerLine);
+            }
+        }
+        lastDecodeStart = tasm.asm.codeBuffer.position();
+    }
+
+
+    public static void printBlock(Block x) {
+        // print block id
+        TTY.print("B%d ", x.getId());
+
+        // print flags
+        if (x.isLoopHeader()) {
+            TTY.print("lh ");
+        }
+        if (x.isLoopEnd()) {
+            TTY.print("le ");
+        }
+
+        // print block bci range
+        TTY.print("[%d, %d] ", -1, -1);
+
+        // print predecessors and successors
+        if (x.numberOfPreds() > 0) {
+            TTY.print("preds: ");
+            for (int i = 0; i < x.numberOfPreds(); i++) {
+                TTY.print("B%d ", x.predAt(i).getId());
+            }
+        }
+
+        if (x.numberOfSux() > 0) {
+            TTY.print("sux: ");
+            for (int i = 0; i < x.numberOfSux(); i++) {
+                TTY.print("B%d ", x.suxAt(i).getId());
+            }
+        }
+
+        TTY.println();
+    }
+
+    public static void printLIR(List<Block> blocks) {
+        if (TTY.isSuppressed()) {
+            return;
+        }
+        TTY.println("LIR:");
+        int i;
+        for (i = 0; i < blocks.size(); i++) {
+            Block bb = blocks.get(i);
+            printBlock(bb);
+            TTY.println("__id_Instruction___________________________________________");
+            for (LIRInstruction op : bb.lir) {
+                TTY.println(op.toStringWithIdPrefix());
+                TTY.println();
+            }
+            TTY.println();
+        }
+    }
+*/
 }

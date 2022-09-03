@@ -25,22 +25,20 @@ package com.oracle.graal.lir.amd64;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.Address.Scale;
 import com.oracle.graal.api.code.CompilationResult.JumpTable;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
-import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.Opcode;
 import com.oracle.graal.lir.StandardOp.FallThroughOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.max.asm.*;
+import com.oracle.max.asm.target.amd64.*;
+import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
 
-// @formatter:off
 public class AMD64ControlFlow {
 
     public static class ReturnOp extends AMD64LIRInstruction {
@@ -153,24 +151,13 @@ public class AMD64ControlFlow {
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            if (key.getKind() == Kind.Int) {
+            if (key.kind == Kind.Int) {
                 Register intKey = asIntReg(key);
                 for (int i = 0; i < keyConstants.length; i++) {
-                    if (tasm.runtime.needsDataPatch(keyConstants[i])) {
-                        tasm.recordDataReferenceInCode(keyConstants[i], 0, true);
-                    }
-                    long lc = keyConstants[i].asLong();
-                    assert NumUtil.isInt(lc);
-                    masm.cmpl(intKey, (int) lc);
+                    masm.cmpl(intKey, tasm.asIntConst(keyConstants[i]));
                     masm.jcc(ConditionFlag.equal, keyTargets[i].label());
                 }
-            } else if (key.getKind() == Kind.Long) {
-                Register longKey = asLongReg(key);
-                for (int i = 0; i < keyConstants.length; i++) {
-                    masm.cmpq(longKey, tasm.asLongConstRef(keyConstants[i]));
-                    masm.jcc(ConditionFlag.equal, keyTargets[i].label());
-                }
-            } else if (key.getKind() == Kind.Object) {
+            } else if (key.kind == Kind.Object) {
                 Register intKey = asObjectReg(key);
                 Register temp = asObjectReg(scratch);
                 for (int i = 0; i < keyConstants.length; i++) {
@@ -179,7 +166,7 @@ public class AMD64ControlFlow {
                     masm.jcc(ConditionFlag.equal, keyTargets[i].label());
                 }
             } else {
-                throw new GraalInternalError("sequential switch only supported for int, long and object");
+                throw new GraalInternalError("sequential switch only supported for int and object");
             }
             if (defaultTarget != null) {
                 masm.jmp(defaultTarget.label());
@@ -216,33 +203,29 @@ public class AMD64ControlFlow {
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            assert isSorted(lowKeys) && isSorted(highKeys);
-
-            Label actualDefaultTarget = defaultTarget == null ? new Label() : defaultTarget.label();
-            int prevHighKey = 0;
-            boolean skipLowCheck = false;
             for (int i = 0; i < lowKeys.length; i++) {
                 int lowKey = lowKeys[i];
                 int highKey = highKeys[i];
                 if (lowKey == highKey) {
                     masm.cmpl(asIntReg(key), lowKey);
                     masm.jcc(ConditionFlag.equal, keyTargets[i].label());
-                    skipLowCheck = false;
+                } else if (lowKey + 1 == highKey) {
+                    masm.cmpl(asIntReg(key), lowKey);
+                    masm.jcc(ConditionFlag.equal, keyTargets[i].label());
+                    masm.cmpl(asIntReg(key), highKey);
+                    masm.jcc(ConditionFlag.equal, keyTargets[i].label());
                 } else {
-                    if (!skipLowCheck || (prevHighKey + 1) != lowKey) {
-                        masm.cmpl(asIntReg(key), lowKey);
-                        masm.jcc(ConditionFlag.less, actualDefaultTarget);
-                    }
+                    Label skip = new Label();
+                    masm.cmpl(asIntReg(key), lowKey);
+                    masm.jcc(ConditionFlag.less, skip);
                     masm.cmpl(asIntReg(key), highKey);
                     masm.jcc(ConditionFlag.lessEqual, keyTargets[i].label());
-                    skipLowCheck = true;
+                    masm.bind(skip);
                 }
-                prevHighKey = highKey;
             }
             if (defaultTarget != null) {
                 masm.jmp(defaultTarget.label());
             } else {
-                masm.bind(actualDefaultTarget);
                 masm.hlt();
             }
         }
@@ -252,7 +235,7 @@ public class AMD64ControlFlow {
             super.verify();
             assert lowKeys.length == keyTargets.length;
             assert highKeys.length == keyTargets.length;
-            assert key.getKind() == Kind.Int;
+            assert key.kind == Kind.Int;
         }
 
         @Override
@@ -263,15 +246,6 @@ public class AMD64ControlFlow {
         @Override
         public void setFallThroughTarget(LabelRef target) {
             defaultTarget = target;
-        }
-
-        private static boolean isSorted(int[] values) {
-            for (int i = 1; i < values.length; i++) {
-                if (values[i - 1] >= values[i]) {
-                    return false;
-                }
-            }
-            return true;
         }
     }
 
@@ -407,13 +381,13 @@ public class AMD64ControlFlow {
     private static void cmove(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Value result, ConditionFlag cond, Value other) {
         if (isRegister(other)) {
             assert asRegister(other) != asRegister(result) : "other already overwritten by previous move";
-            switch (other.getKind()) {
+            switch (other.kind) {
                 case Int:  masm.cmovl(cond, asRegister(result), asRegister(other)); break;
                 case Long: masm.cmovq(cond, asRegister(result), asRegister(other)); break;
                 default:   throw GraalInternalError.shouldNotReachHere();
             }
         } else {
-            switch (other.getKind()) {
+            switch (other.kind) {
                 case Int:  masm.cmovl(cond, asRegister(result), tasm.asAddress(other)); break;
                 case Long: masm.cmovq(cond, asRegister(result), tasm.asAddress(other)); break;
                 default:   throw GraalInternalError.shouldNotReachHere();
