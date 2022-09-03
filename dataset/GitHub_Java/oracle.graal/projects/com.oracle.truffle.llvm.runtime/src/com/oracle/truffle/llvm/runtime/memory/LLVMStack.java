@@ -34,7 +34,6 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
-import com.oracle.truffle.llvm.runtime.types.Type;
 
 /**
  * Implements a stack that grows from the top to the bottom.
@@ -131,14 +130,14 @@ public final class LLVMStack extends LLVMMemory {
     }
 
     /**
-     * Allocates stack memory and associates it with a type.
+     * Allocates stack memory and associates it with a symbol name.
      *
      * @param size the size of the memory to be allocated, must be greater equals zero
      * @param alignment the alignment, either {@link #NO_ALIGNMENT_REQUIREMENTS} or a power of two.
-     * @param type the type of the object for which memory is to be allocated
+     * @param name the name of the object for which memory is to be allocated
      * @return the allocated memory, satisfying the alignment requirements
      */
-    public AllocationResult allocateMemory(final LLVMAddress stackPointer, final long size, final int alignment, final Type type) {
+    public AllocationResult allocateMemory(final LLVMAddress stackPointer, final long size, final int alignment, final String name) {
         assert size >= 0;
         assert alignment != 0 && powerOfTo(alignment);
         final long alignedAllocation = (stackPointer.getVal() - size) & -alignment;
@@ -147,7 +146,7 @@ public final class LLVMStack extends LLVMMemory {
             CompilerDirectives.transferToInterpreter();
             throw new StackOverflowError("stack overflow");
         }
-        final LLVMAddress allocatedMemory = LLVMAddress.fromLong(type, alignedAllocation);
+        final LLVMAddress allocatedMemory = LLVMAddress.fromLong(name, alignedAllocation);
         return new AllocationResult(newStackPointer, allocatedMemory);
     }
 
