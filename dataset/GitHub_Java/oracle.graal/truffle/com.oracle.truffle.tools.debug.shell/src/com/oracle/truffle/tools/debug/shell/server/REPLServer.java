@@ -28,12 +28,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.WeakHashMap;
 
 import com.oracle.truffle.api.debug.Breakpoint;
@@ -73,19 +70,9 @@ public final class REPLServer {
     private String statusPrefix;
     private final Map<String, REPLHandler> handlerMap = new HashMap<>();
 
-    /** Languages sorted by name. */
-    private final TreeSet<Language> engineLanguages = new TreeSet<>(new Comparator<Language>() {
-
-        public int compare(Language lang1, Language lang2) {
-            return lang1.getName().compareTo(lang2.getName());
-        }
-    });
-
-    /** MAP: language name => Language. */
-    private final Map<String, Language> nameToLanguage = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-
     // TODO (mlvdv) Language-specific
-    private PolyglotEngine.Language defaultLanguage;
+    private final String mimeType;
+    private final PolyglotEngine.Language language;
     private final Visualizer visualizer;
 
     private int nextBreakpointUID = 0;
@@ -102,68 +89,58 @@ public final class REPLServer {
      */
     private Map<Breakpoint, Integer> breakpoints = new WeakHashMap<>();
 
-    public REPLServer(String defaultMIMEType, Visualizer visualizer) {
+    /**
+     * Create a single-language server.
+     */
+    public REPLServer(String mimeType, Visualizer visualizer) {
+        this.mimeType = mimeType;
         this.visualizer = visualizer == null ? new DefaultVisualizer() : visualizer;
-        this.engine = PolyglotEngine.newBuilder().onEvent(onHalted).onEvent(onExec).build();
-        engineLanguages.addAll(engine.getLanguages().values());
-        if (engineLanguages.size() == 0) {
-            throw new RuntimeException("No language implementations installed");
-        }
-        for (Language language : engineLanguages) {
-            nameToLanguage.put(language.getName(), language);
-        }
-
-        if (defaultMIMEType == null) {
-            defaultLanguage = engineLanguages.iterator().next();
-        } else {
-            this.defaultLanguage = engine.getLanguages().get(defaultMIMEType);
-            if (defaultLanguage == null) {
-                throw new RuntimeException("Implementation not found for \"" + defaultMIMEType + "\"");
+        EventConsumer<SuspendedEvent> onHalted = new EventConsumer<SuspendedEvent>(SuspendedEvent.class) {
+            @Override
+            protected void on(SuspendedEvent ev) {
+                REPLServer.this.haltedAt(ev);
             }
-        }
-        statusPrefix = languageName(defaultLanguage);
-    }
+        };
+        EventConsumer<ExecutionEvent> onExec = new EventConsumer<ExecutionEvent>(ExecutionEvent.class) {
+            @Override
+            protected void on(ExecutionEvent event) {
+                if (db == null) {
+                    db = event.getDebugger();
+                    if (!breakpoints.isEmpty()) {
+                        ArrayList<? extends Breakpoint> pendingBreakpoints = new ArrayList<>(breakpoints.keySet());
+                        try {
+                            for (Breakpoint pending : pendingBreakpoints) {
 
-    private final EventConsumer<SuspendedEvent> onHalted = new EventConsumer<SuspendedEvent>(SuspendedEvent.class) {
-        @Override
-        protected void on(SuspendedEvent ev) {
-            REPLServer.this.haltedAt(ev);
-        }
-    };
+                                Integer uid = breakpoints.get(pending);
+                                pending.dispose();
+                                Breakpoint replacement = null;
+                                if (pending instanceof PendingLineBreakpoint) {
+                                    final PendingLineBreakpoint lineBreak = (PendingLineBreakpoint) pending;
+                                    replacement = db.setLineBreakpoint(lineBreak.getIgnoreCount(), lineBreak.getLineLocation(), lineBreak.isOneShot());
 
-    private final EventConsumer<ExecutionEvent> onExec = new EventConsumer<ExecutionEvent>(ExecutionEvent.class) {
-        @Override
-        protected void on(ExecutionEvent event) {
-            if (db == null) {
-                db = event.getDebugger();
-                if (!breakpoints.isEmpty()) {
-                    ArrayList<? extends Breakpoint> pendingBreakpoints = new ArrayList<>(breakpoints.keySet());
-                    try {
-                        for (Breakpoint pending : pendingBreakpoints) {
-
-                            Integer uid = breakpoints.get(pending);
-                            pending.dispose();
-                            Breakpoint replacement = null;
-                            if (pending instanceof PendingLineBreakpoint) {
-                                final PendingLineBreakpoint lineBreak = (PendingLineBreakpoint) pending;
-                                replacement = db.setLineBreakpoint(lineBreak.getIgnoreCount(), lineBreak.getLineLocation(), lineBreak.isOneShot());
-
-                            } else if (pending instanceof PendingTagBreakpoint) {
-                                final PendingTagBreakpoint tagBreak = (PendingTagBreakpoint) pending;
-                                replacement = db.setTagBreakpoint(tagBreak.getIgnoreCount(), tagBreak.getTag(), tagBreak.isOneShot());
+                                } else if (pending instanceof PendingTagBreakpoint) {
+                                    final PendingTagBreakpoint tagBreak = (PendingTagBreakpoint) pending;
+                                    replacement = db.setTagBreakpoint(tagBreak.getIgnoreCount(), tagBreak.getTag(), tagBreak.isOneShot());
+                                }
+                                breakpoints.put(replacement, uid);
                             }
-                            breakpoints.put(replacement, uid);
+                        } catch (IOException e) {
+                            throw new IllegalStateException("pending breakpoints should all be valid");
                         }
-                    } catch (IOException e) {
-                        throw new IllegalStateException("pending breakpoints should all be valid");
                     }
                 }
+                if (!currentServerContext.isEval) {
+                    event.prepareStepInto();
+                }
             }
-            if (!currentServerContext.isEval) {
-                event.prepareStepInto();
-            }
+        };
+        engine = PolyglotEngine.newBuilder().onEvent(onHalted).onEvent(onExec).build();
+        this.language = engine.getLanguages().get(mimeType);
+        if (language == null) {
+            throw new RuntimeException("Implementation not found for \"" + mimeType + "\"");
         }
-    };
+        statusPrefix = languageName(language);
+    }
 
     public void add(REPLHandler handler) {
         handlerMap.put(handler.getOp(), handler);
@@ -194,7 +171,6 @@ public final class REPLServer {
         add(REPLHandler.LOAD_HANDLER);
         add(REPLHandler.QUIT_HANDLER);
         add(REPLHandler.SET_BREAK_CONDITION_HANDLER);
-        add(REPLHandler.SET_LANGUAGE_HANDLER);
         add(REPLHandler.STEP_INTO_HANDLER);
         add(REPLHandler.STEP_OUT_HANDLER);
         add(REPLHandler.STEP_OVER_HANDLER);
@@ -202,38 +178,17 @@ public final class REPLServer {
         add(REPLHandler.TRUFFLE_NODE_HANDLER);
         add(REPLHandler.UNSET_BREAK_CONDITION_HANDLER);
         this.replClient = new SimpleREPLClient(this);
-        this.currentServerContext = new Context(null, null, defaultLanguage);
+        this.currentServerContext = new Context(null, null);
         replClient.start();
     }
 
-    @SuppressWarnings("static-method")
-    public String getWelcome() {
-        return "GraalVM MultiLanguage Debugger 0.9\n" + "Copyright (c) 2013-5, Oracle and/or its affiliates";
-    }
-
     void haltedAt(SuspendedEvent event) {
+        // Create and push a new debug context where execution is halted
+        currentServerContext = new Context(currentServerContext, event);
+
         // Message the client that execution is halted and is in a new debugging context
         final REPLMessage message = new REPLMessage();
         message.put(REPLMessage.OP, REPLMessage.STOPPED);
-
-        // Identify language execution where halted; default to previous context
-        Language haltedLanguage = currentServerContext.currentLanguage;
-        final String mimeType = findMime(event.getNode());
-        if (mimeType == null) {
-            message.put(REPLMessage.WARNINGS, "unable to detect language at halt");
-        } else {
-            final Language language = engine.getLanguages().get(mimeType);
-            if (language == null) {
-                message.put(REPLMessage.WARNINGS, "no language installed for MIME type \"" + mimeType + "\"");
-            } else {
-                haltedLanguage = language;
-            }
-        }
-
-        // Create and push a new debug context where execution is halted
-        currentServerContext = new Context(currentServerContext, event, haltedLanguage);
-
-        message.put(REPLMessage.LANG_NAME, haltedLanguage.getName());
         final SourceSection src = event.getNode().getSourceSection();
         final Source source = src.getSource();
         message.put(REPLMessage.SOURCE_NAME, source.getName());
@@ -244,7 +199,6 @@ public final class REPLServer {
             message.put(REPLMessage.FILE_PATH, path);
         }
         message.put(REPLMessage.LINE_NUMBER, Integer.toString(src.getStartLine()));
-
         message.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
         message.put(REPLMessage.DEBUG_LEVEL, Integer.toString(currentServerContext.getLevel()));
         List<String> warnings = event.getRecentWarnings();
@@ -267,19 +221,6 @@ public final class REPLServer {
         }
     }
 
-    @SuppressWarnings("static-method")
-    private String findMime(Node node) {
-        String result = null;
-        final SourceSection section = node.getEncapsulatingSourceSection();
-        if (section != null) {
-            final Source source = section.getSource();
-            if (source != null) {
-                result = source.getMimeType();
-            }
-        }
-        return result;
-    }
-
     /**
      * Execution context of a halted program, possibly nested.
      */
@@ -288,15 +229,12 @@ public final class REPLServer {
         private final Context predecessor;
         private final int level;
         private final SuspendedEvent event;
-        private Language currentLanguage;
         private boolean isEval = false;  // When true, run without StepInto
 
-        Context(Context predecessor, SuspendedEvent event, Language language) {
-            assert language != null;
+        Context(Context predecessor, SuspendedEvent event) {
             this.level = predecessor == null ? 0 : predecessor.getLevel() + 1;
             this.predecessor = predecessor;
             this.event = event;
-            this.currentLanguage = language;
         }
 
         /**
@@ -327,7 +265,6 @@ public final class REPLServer {
             if (event == null) {
                 try {
                     isEval = true;
-                    final String mimeType = defaultMIME(currentLanguage);
                     final Value value = engine.eval(Source.fromText(code, "eval(\"" + code + "\")").withMimeType(mimeType));
                     return value.get();
                 } finally {
@@ -381,22 +318,6 @@ public final class REPLServer {
             return Collections.unmodifiableList(frames);
         }
 
-        public String getLanguageName() {
-            return currentLanguage.getName();
-        }
-
-        /**
-         * Case-insensitive; returns actual language name set.
-         */
-        String setLanguage(String name) {
-            final Language language = nameToLanguage.get(name);
-            if (language == null) {
-                return null;
-            }
-            this.currentLanguage = language;
-            return language.getName();
-        }
-
         void prepareStepOut() {
             event.prepareStepOut();
         }
@@ -412,7 +333,6 @@ public final class REPLServer {
         void prepareContinue() {
             event.prepareContinue();
         }
-
     }
 
     /**
@@ -441,25 +361,16 @@ public final class REPLServer {
 
     // TODO (mlvdv) language-specific
     Language getLanguage() {
-        return defaultLanguage;
-    }
-
-    TreeSet<Language> getLanguages() {
-        return engineLanguages;
+        return language;
     }
 
     // TODO (mlvdv) language-specific
     public String getLanguageName() {
-        return languageName(this.defaultLanguage);
+        return languageName(this.language);
     }
 
     private static String languageName(Language lang) {
         return lang.getName() + "(" + lang.getVersion() + ")";
-    }
-
-    @SuppressWarnings("static-method")
-    private String defaultMIME(Language language) {
-        return language.getMimeTypes().iterator().next();
     }
 
     void eval(Source source) throws IOException {
