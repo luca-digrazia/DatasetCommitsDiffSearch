@@ -54,9 +54,6 @@ public final class GraalOptions {
     public static int     MaximumDesiredSize                 = 8000;
     public static int     MaximumShortLoopSize               = 5;
 
-    // escape analysis settings
-    public static int     ForcedInlineEscapeWeight           = 0;
-
     // debugging settings
     public static boolean VerifyPointerMaps                  = ____;
     public static int     MethodEndBreakpointGuards          = 0;
