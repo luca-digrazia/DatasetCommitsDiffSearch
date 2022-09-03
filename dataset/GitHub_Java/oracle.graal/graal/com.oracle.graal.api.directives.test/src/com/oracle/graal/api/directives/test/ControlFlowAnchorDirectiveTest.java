@@ -182,13 +182,14 @@ public class ControlFlowAnchorDirectiveTest extends GraalCompilerTest {
     }
 
     @NodeCount(nodeClass = LoopBeginNode.class, expectedCount = 2)
+    @NodeCount(nodeClass = IfNode.class, expectedCount = 5)
     public static void verifyUnswitchSnippet(int arg, boolean flag) {
         int ret = arg;
         while (GraalDirectives.injectBranchProbability(0.9999, ret < 1000)) {
             if (flag) {
-                ret = ret * 2 + 1;
+                ret++;
             } else {
-                ret = ret * 3 + 1;
+                ret += 2;
             }
         }
     }
