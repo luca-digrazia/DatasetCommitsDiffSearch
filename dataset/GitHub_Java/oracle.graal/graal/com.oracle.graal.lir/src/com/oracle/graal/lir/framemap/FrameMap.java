@@ -22,21 +22,12 @@
  */
 package com.oracle.graal.lir.framemap;
 
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.List;
+import java.util.*;
 
-import jdk.internal.jvmci.code.Architecture;
-import jdk.internal.jvmci.code.BailoutException;
-import jdk.internal.jvmci.code.CallingConvention;
-import jdk.internal.jvmci.code.CodeCacheProvider;
-import jdk.internal.jvmci.code.RegisterConfig;
-import jdk.internal.jvmci.code.StackSlot;
-import jdk.internal.jvmci.code.TargetDescription;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.asm.*;
 
 /**
  * This class is used to build the stack frame layout for a compiled method. A {@link StackSlot} is
@@ -129,6 +120,11 @@ public abstract class FrameMap {
         return getTarget().arch.getReturnAddressSize();
     }
 
+    protected int calleeSaveAreaSize() {
+        CalleeSaveLayout csl = getRegisterConfig().getCalleeSaveLayout();
+        return csl != null ? csl.size : 0;
+    }
+
     /**
      * Determines if an offset to an incoming stack argument was ever returned by
      * {@link #offsetForStackSlot(StackSlot)}.
@@ -207,6 +203,14 @@ public abstract class FrameMap {
         }
         return slot.getOffset(totalFrameSize());
     }
+
+    /**
+     * Gets the offset from the stack pointer to the stack area where callee-saved registers are
+     * stored.
+     *
+     * @return The offset to the callee save area (in bytes).
+     */
+    public abstract int offsetToCalleeSaveArea();
 
     /**
      * Informs the frame map that the compiled code calls a particular method, which may need stack
@@ -300,14 +304,14 @@ public abstract class FrameMap {
             for (int slotIndex = 0; slotIndex < slots; slotIndex++) {
                 StackSlot objectSlot = null;
                 if (objects.get(slotIndex)) {
-                    objectSlot = allocateNewSpillSlot(LIRKind.reference(getTarget().arch.getWordKind()), slotIndex * getTarget().wordSize);
+                    objectSlot = allocateNewSpillSlot(LIRKind.reference(Kind.Object), slotIndex * getTarget().wordSize);
                     addObjectStackSlot(objectSlot);
                 }
                 if (slotIndex == 0) {
                     if (objectSlot != null) {
                         result = objectSlot;
                     } else {
-                        result = allocateNewSpillSlot(LIRKind.value(getTarget().arch.getWordKind()), 0);
+                        result = allocateNewSpillSlot(LIRKind.value(getTarget().wordKind), 0);
                     }
                 }
             }
@@ -315,7 +319,7 @@ public abstract class FrameMap {
             return result;
 
         } else {
-            return allocateNewSpillSlot(LIRKind.value(getTarget().arch.getWordKind()), 0);
+            return allocateNewSpillSlot(LIRKind.value(getTarget().wordKind), 0);
         }
     }
 

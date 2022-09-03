@@ -22,15 +22,12 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import jdk.internal.jvmci.code.CodeCacheProvider;
-import jdk.internal.jvmci.code.RegisterConfig;
-import jdk.internal.jvmci.code.StackSlot;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.sparc.SPARC;
-import jdk.internal.jvmci.sparc.SPARCKind;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.sparc.*;
 
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.lir.framemap.FrameMap;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.lir.framemap.*;
 
 /**
  * SPARC specific frame map.
@@ -92,12 +89,22 @@ public final class SPARCFrameMap extends FrameMap {
 
     @Override
     public int currentFrameSize() {
-        return alignFrameSize(SPARC.REGISTER_SAFE_AREA_SIZE + outgoingSize + spillSize);
+        return alignFrameSize(calleeSaveAreaSize() + outgoingSize + spillSize);
+    }
+
+    @Override
+    protected int calleeSaveAreaSize() {
+        return SPARC.REGISTER_SAFE_AREA_SIZE;
     }
 
     @Override
     protected int alignFrameSize(int size) {
         return NumUtil.roundUp(size, getTarget().stackAlignment);
+    }
+
+    @Override
+    public int offsetToCalleeSaveArea() {
+        return 0;
     }
 
     @Override
@@ -110,7 +117,7 @@ public final class SPARCFrameMap extends FrameMap {
      */
     @Override
     public int spillSlotSize(LIRKind kind) {
-        return Math.max(kind.getPlatformKind().getSizeInBytes(), SPARC.MEMORY_ACCESS_ALIGN);
+        return SPARC.spillSlotSize(getTarget(), kind.getPlatformKind());
     }
 
     @Override
@@ -131,6 +138,6 @@ public final class SPARCFrameMap extends FrameMap {
 
     public StackSlot allocateDeoptimizationRescueSlot() {
         assert spillSize == initialSpillSize : "Deoptimization rescue slot must be the first stack slot";
-        return allocateSpillSlot(LIRKind.value(SPARCKind.DWORD));
+        return allocateSpillSlot(LIRKind.value(Kind.Long));
     }
 }
