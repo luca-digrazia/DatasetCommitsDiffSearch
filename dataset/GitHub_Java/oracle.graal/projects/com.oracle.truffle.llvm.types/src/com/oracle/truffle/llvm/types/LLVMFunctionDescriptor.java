@@ -29,11 +29,12 @@
  */
 package com.oracle.truffle.llvm.types;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 
-public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<LLVMFunctionDescriptor>, LLVMFunction {
+public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<LLVMFunctionDescriptor> {
 
     public enum LLVMRuntimeType {
         I1,
@@ -84,6 +85,7 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
     }
 
     public static LLVMFunctionDescriptor create(String name, LLVMRuntimeType llvmReturnType, LLVMRuntimeType[] llvmParamTypes, boolean varArgs, int functionId) {
+        CompilerAsserts.neverPartOfCompilation();
         LLVMFunctionDescriptor func = new LLVMFunctionDescriptor(name, llvmReturnType, llvmParamTypes, varArgs, functionId);
         return func;
     }
@@ -92,22 +94,18 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         return new LLVMFunctionDescriptor(null, LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false, index);
     }
 
-    @Override
     public String getName() {
         return functionName;
     }
 
-    @Override
     public LLVMRuntimeType getReturnType() {
         return returnType;
     }
 
-    @Override
     public LLVMRuntimeType[] getParameterTypes() {
         return parameterTypes;
     }
 
-    @Override
     public boolean isVarArgs() {
         return hasVarArgs;
     }
@@ -117,7 +115,6 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
      *
      * @return the function's index
      */
-    @Override
     public int getFunctionIndex() {
         return functionId;
     }
