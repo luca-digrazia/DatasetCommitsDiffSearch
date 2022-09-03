@@ -22,20 +22,18 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.jvmci.code.CallingConvention;
-import com.oracle.jvmci.code.CodeCacheProvider;
-import com.oracle.jvmci.code.InstalledCode;
-import com.oracle.jvmci.code.CompilationResult;
-import com.oracle.jvmci.meta.*;
-
-import static com.oracle.jvmci.code.CodeUtil.*;
+import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
 
 import java.util.*;
 
-import com.oracle.jvmci.code.CallingConvention.Type;
-import com.oracle.jvmci.meta.Assumptions.Assumption;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CallingConvention.Type;
+import com.oracle.graal.api.meta.Assumptions.Assumption;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.lir.asm.*;
@@ -47,8 +45,6 @@ import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.truffle.nodes.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
 
@@ -198,6 +194,9 @@ public abstract class TruffleCompiler {
             a.getAssumption().registerInstalledCode(installedCode);
         }
 
+        if (Debug.isLogEnabled()) {
+            Debug.log(providers.getCodeCache().disassemble(result, installedCode));
+        }
         return result;
     }
 
