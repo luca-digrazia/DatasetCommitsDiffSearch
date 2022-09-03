@@ -180,10 +180,9 @@ public abstract class RootNode extends Node {
     }
 
     /**
-     * Apply to the AST all instances of {@link ASTProber} specified for the language, if any, held
-     * by this root node. This can only be done once the AST is complete, notably once all parent
-     * pointers are correctly assigned. But it also must be done before any AST cloning or
-     * execution.
+     * Apply all registered instances of {@link ASTProber} to the AST, if any, held by this root
+     * node. This can only be done once the AST is complete, notably once all parent pointers are
+     * correctly assigned. But it also must be done before any AST cloning or execution.
      * <p>
      * If this is not done, then the AST will not be subject to debugging or any other
      * instrumentation-supported tooling.
@@ -191,15 +190,15 @@ public abstract class RootNode extends Node {
      * Implementations should ensure that instrumentation is never applied more than once to an AST,
      * as this is not guaranteed to be error-free.
      *
-     * @see TruffleLanguage
+     * @see Probe#registerASTProber(com.oracle.truffle.api.instrument.ASTProber)
      */
     public void applyInstrumentation() {
     }
 
     /**
      * Helper method to create a root node that always returns the same value. Certain operations
-     * (expecially {@link com.oracle.api.truffle.api.interop inter-operability} API) require return
-     * of stable {@link RootNode root nodes}. To simplify creation of such nodes, here is a factory
+     * (expecially {@link com.oracle.truffle.api.interop inter-operability} API) require return of
+     * stable {@link RootNode root nodes}. To simplify creation of such nodes, here is a factory
      * method that can create {@link RootNode} that returns always the same value.
      *
      * @param constant the constant to return

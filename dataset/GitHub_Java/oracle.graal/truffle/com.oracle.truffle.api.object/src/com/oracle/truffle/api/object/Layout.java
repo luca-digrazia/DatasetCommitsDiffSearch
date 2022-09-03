@@ -24,10 +24,11 @@
  */
 package com.oracle.truffle.api.object;
 
-import com.oracle.truffle.api.nodes.NodeUtil.FieldOffsetProvider;
-import com.oracle.truffle.api.object.Shape.Allocator;
 import java.util.EnumSet;
 import java.util.ServiceLoader;
+
+import com.oracle.truffle.api.nodes.NodeUtil.FieldOffsetProvider;
+import com.oracle.truffle.api.object.Shape.Allocator;
 
 /**
  * Describes layout and behavior of a {@link DynamicObject} subclass and is used to create shapes.
