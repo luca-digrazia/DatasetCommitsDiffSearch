@@ -94,6 +94,10 @@ final class TruffleSplittingStrategy {
         if (callTarget.getNonTrivialNodeCount() > TruffleCompilerOptions.getValue(TruffleSplittingMaxCalleeSize)) {
             return false;
         }
+        // TODO remove this
+        if (callTarget.isValid()) {
+            return false;
+        }
         return true;
     }
 
