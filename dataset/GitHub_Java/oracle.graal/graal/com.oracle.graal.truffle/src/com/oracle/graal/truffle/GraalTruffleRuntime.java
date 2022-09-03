@@ -62,8 +62,16 @@ public final class GraalTruffleRuntime implements TruffleRuntime {
     private Replacements truffleReplacements;
     private ArrayList<String> includes;
     private ArrayList<String> excludes;
+    private final CodeCacheProvider codeCacheProvider;
+    private final ResolvedJavaMethod callMethod;
+    private final CompilationResult callCompilationResult;
 
     private GraalTruffleRuntime() {
+        Providers providers = getGraalProviders();
+        MetaAccessProvider metaAccess = providers.getMetaAccess();
+        codeCacheProvider = providers.getCodeCache();
+        callMethod = metaAccess.lookupJavaMethod(getCallMethod());
+        callCompilationResult = compileMethod(callMethod, providers);
         installOptimizedCallTargetCallMethod();
     }
 
@@ -157,11 +165,8 @@ public final class GraalTruffleRuntime implements TruffleRuntime {
         }
     }
 
-    public static void installOptimizedCallTargetCallMethod() {
-        Providers providers = getGraalProviders();
-        MetaAccessProvider metaAccess = providers.getMetaAccess();
-        ResolvedJavaMethod resolvedCallMethod = metaAccess.lookupJavaMethod(getCallMethod());
-        providers.getCodeCache().setDefaultMethod(resolvedCallMethod, compileMethod(resolvedCallMethod));
+    public void installOptimizedCallTargetCallMethod() {
+        codeCacheProvider.addDefaultMethod(callMethod, callCompilationResult);
     }
 
     private static Method getCallMethod() {
@@ -174,8 +179,7 @@ public final class GraalTruffleRuntime implements TruffleRuntime {
         return method;
     }
 
-    private static CompilationResult compileMethod(ResolvedJavaMethod javaMethod) {
-        Providers providers = getGraalProviders();
+    private static CompilationResult compileMethod(ResolvedJavaMethod javaMethod, Providers providers) {
         MetaAccessProvider metaAccess = providers.getMetaAccess();
         Suites suites = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getSuites().createSuites();
         suites.getHighTier().findPhase(InliningPhase.class).remove();
