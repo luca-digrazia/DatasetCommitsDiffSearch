@@ -185,17 +185,14 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
 
     @Override
     protected void run(StructuredGraph graph, MidTierContext context) {
-        if (graph.getGuardsStage().ordinal() < GuardsStage.FIXED_DEOPTS.ordinal()) {
-            SchedulePhase schedule = new SchedulePhase(SchedulingStrategy.EARLIEST);
-            schedule.apply(graph);
+        SchedulePhase schedule = new SchedulePhase(SchedulingStrategy.EARLIEST);
+        schedule.apply(graph);
 
-            for (Block block : schedule.getCFG().getBlocks()) {
-                processBlock(block, schedule, context.getTarget().implicitNullCheckLimit);
-            }
-            graph.setGuardsStage(GuardsStage.FIXED_DEOPTS);
+        for (Block block : schedule.getCFG().getBlocks()) {
+            processBlock(block, schedule, context.getTarget().implicitNullCheckLimit);
         }
 
-        assert graph.getNodes(GuardNode.class).isEmpty();
+        graph.setGuardsStage(GuardsStage.FIXED_DEOPTS);
     }
 
     private static void processBlock(Block block, SchedulePhase schedule, int implicitNullCheckLimit) {
