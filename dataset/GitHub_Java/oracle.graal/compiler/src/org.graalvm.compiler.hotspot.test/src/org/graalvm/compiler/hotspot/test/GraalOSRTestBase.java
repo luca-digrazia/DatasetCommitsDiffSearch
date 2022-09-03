@@ -104,11 +104,11 @@ public abstract class GraalOSRTestBase extends GraalCompilerTest {
         BciBlockMapping bciBlockMapping = BciBlockMapping.create(stream, code, options, debug);
 
         for (BciBlock block : bciBlockMapping.getBlocks()) {
-            if (block.getStartBci() != -1) {
-                int bci = block.getStartBci();
+            if (block.startBci != -1) {
+                int bci = block.startBci;
                 for (BciBlock succ : block.getSuccessors()) {
-                    if (succ.getStartBci() != -1) {
-                        int succBci = succ.getStartBci();
+                    if (succ.startBci != -1) {
+                        int succBci = succ.startBci;
                         if (succBci < bci) {
                             // back edge
                             return succBci;
