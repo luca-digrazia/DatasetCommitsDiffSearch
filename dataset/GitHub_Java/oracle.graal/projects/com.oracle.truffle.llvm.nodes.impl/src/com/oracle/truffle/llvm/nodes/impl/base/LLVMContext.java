@@ -154,29 +154,23 @@ public class LLVMContext extends ExecutionContext {
     }
 
     public synchronized void registerThread(LLVMThreadNode thread) {
-        assert (!runningThreads.contains(thread));
         runningThreads.add(thread);
     }
 
     public synchronized void unregisterThread(LLVMThreadNode thread) {
         runningThreads.remove(thread);
-        assert (!runningThreads.contains(thread));
     }
 
     public synchronized void shutdownThreads() {
-        // we need to iterate over a copy of the list, because stop() can modify the original list
-        for (LLVMThreadNode node : new ArrayList<>(runningThreads)) {
+        for (LLVMThreadNode node : runningThreads) {
             node.stop();
         }
     }
 
     public synchronized void awaitThreadTermination() {
         shutdownThreads();
-
-        while (!runningThreads.isEmpty()) {
-            LLVMThreadNode node = runningThreads.get(0);
+        for (LLVMThreadNode node : runningThreads) {
             node.awaitFinish();
-            assert (!runningThreads.contains(node)); // should be unregistered by LLVMThreadNode
         }
     }
 
