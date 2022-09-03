@@ -68,7 +68,7 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
     @Override
     public Object attachExecutionListener(Engine engineAPI, Consumer<ExecutionEvent> onEnter, Consumer<ExecutionEvent> onReturn, boolean expressions, boolean statements,
                     boolean roots,
-                    Predicate<Source> sourceFilter, Predicate<String> rootFilter, boolean collectInputValues, boolean collectReturnValues, boolean collectErrors) {
+                    Predicate<Source> sourceFilter, Predicate<String> rootFilter, boolean collectInputValues, boolean collectReturnValues, boolean collectExceptions) {
         PolyglotEngineImpl engine = (PolyglotEngineImpl) engineImpl.getAPIAccess().getImpl(engineAPI);
         Instrumenter instrumenter = (Instrumenter) VMAccessor.INSTRUMENT.getEngineInstrumenter(engine.instrumentationHandler);
 
@@ -87,13 +87,13 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
             throw new IllegalArgumentException("No elements specified to listen to for execution listener. Need to specify at least one element kind: expressions, statements or roots.");
         }
         if (onReturn == null && onEnter == null) {
-            throw new IllegalArgumentException("At least one listener must be provided for onEnter, onReturn or onError.");
+            throw new IllegalArgumentException("At least one event consumer must be provided for onEnter or onReturn.");
         }
 
         SourceSectionFilter.Builder filterBuilder = SourceSectionFilter.newBuilder().tagIs(tags.toArray(new Class<?>[0]));
         filterBuilder.includeInternal(false);
 
-        ListenerImpl config = new ListenerImpl(engine, onEnter, onReturn, collectInputValues, collectReturnValues, collectErrors);
+        ListenerImpl config = new ListenerImpl(engine, onEnter, onReturn, collectInputValues, collectReturnValues, collectExceptions);
 
         filterBuilder.sourceIs(new SourcePredicate() {
             public boolean test(com.oracle.truffle.api.source.Source s) {
@@ -139,9 +139,9 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
         try {
             boolean mayNeedInputValues = config.collectInputValues && config.onReturn != null;
             boolean mayNeedReturnValue = config.collectReturnValues && config.onReturn != null;
-            boolean mayNeedErrors = config.collectErrors;
+            boolean mayNeedExceptions = config.collectExceptions;
 
-            if (mayNeedInputValues || mayNeedReturnValue || mayNeedErrors) {
+            if (mayNeedInputValues || mayNeedReturnValue || mayNeedExceptions) {
                 binding = instrumenter.attachExecutionEventFactory(filter, mayNeedInputValues ? filter : null, new ExecutionEventNodeFactory() {
                     public ExecutionEventNode create(EventContext context) {
                         return new ProfilingNode(config, context);
@@ -201,17 +201,12 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
 
     @Override
     public SourceSection getLocation(Object impl) {
-        try {
-            return ((Event) impl).getLocation();
-        } catch (Throwable t) {
-            assert false;
-            throw t;
-        }
+        return ((Event) impl).getLocation();
     }
 
     @Override
-    public PolyglotException getError(Object impl) {
-        return ((Event) impl).getError();
+    public PolyglotException getException(Object impl) {
+        return ((Event) impl).getException();
     }
 
     @Override
@@ -253,7 +248,7 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
         final MonitoringAccess monitoring;
         final boolean collectInputValues;
         final boolean collectReturnValues;
-        final boolean collectErrors;
+        final boolean collectExceptions;
 
         volatile EventBinding<?> binding;
         volatile boolean closing;
@@ -262,7 +257,7 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
                         Consumer<ExecutionEvent> onReturn,
                         boolean collectInputValues,
                         boolean collectReturnValues,
-                        boolean collectErrors) {
+                        boolean collectExceptions) {
             this.engine = engine;
             this.onEnter = onEnter;
             this.onReturn = onReturn;
@@ -270,7 +265,7 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
             this.monitoring = engine.impl.getMonitoring();
             this.collectInputValues = collectInputValues;
             this.collectReturnValues = collectReturnValues;
-            this.collectErrors = collectErrors;
+            this.collectExceptions = collectExceptions;
         }
     }
 
@@ -286,7 +281,7 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
 
         EventContext getContext();
 
-        PolyglotException getError();
+        PolyglotException getException();
 
     }
 
@@ -308,7 +303,7 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
             return node.getRootName();
         }
 
-        public PolyglotException getError() {
+        public PolyglotException getException() {
             return exception;
         }
 
@@ -397,11 +392,11 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
                         } else {
                             inputValues = EMPTY_ARRAY;
                         }
-                        invokeErrorAllocate(inputValues, exception);
-                    } else if (config.collectErrors) {
-                        invokeErrorAllocate(config.collectInputValues ? ReadOnlyValueList.EMPTY : (List<Value>) null, exception);
+                        invokeExceptionAllocate(inputValues, exception);
+                    } else if (config.collectExceptions) {
+                        invokeExceptionAllocate(config.collectInputValues ? ReadOnlyValueList.EMPTY : (List<Value>) null, exception);
                     } else {
-                        invokeError();
+                        invokeException();
                     }
                 } catch (Throwable t) {
                     throw wrapHostError(t);
@@ -410,12 +405,12 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
         }
 
         @TruffleBoundary
-        private void invokeErrorAllocate(Object[] inputValues, Throwable result) {
-            boolean reportError = config.collectErrors;
+        private void invokeExceptionAllocate(Object[] inputValues, Throwable result) {
+            boolean reportException = config.collectExceptions;
             boolean reportInputValues = config.collectInputValues && inputValues.length > 0;
 
-            if (!reportError && !reportInputValues) {
-                invokeError();
+            if (!reportException && !reportInputValues) {
+                invokeException();
                 return;
             } else {
                 PolyglotLanguageContext languageContext = language.getCurrentLanguageContext();
@@ -434,7 +429,7 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
                 } else {
                     convertedInputValues = ReadOnlyValueList.EMPTY;
                 }
-                invokeErrorAllocate(convertedInputValues, result);
+                invokeExceptionAllocate(convertedInputValues, result);
             }
         }
 
@@ -466,7 +461,7 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
         }
 
         @TruffleBoundary(allowInlining = true)
-        protected final void invokeErrorAllocate(List<Value> inputValues, Throwable e) {
+        protected final void invokeExceptionAllocate(List<Value> inputValues, Throwable e) {
             PolyglotException ex = e != null ? PolyglotImpl.wrapGuestException(language.getCurrentLanguageContext(), e) : null;
             config.onReturn.accept(config.monitoring.newExecutionEvent(new DynamicEvent(this, inputValues, null, ex)));
         }
@@ -494,7 +489,7 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
         protected void onReturnExceptional(VirtualFrame frame, Throwable exception) {
             if (config.onReturn != null) {
                 try {
-                    invokeError();
+                    invokeException();
                 } catch (Throwable t) {
                     throw wrapHostError(t);
                 }
@@ -557,7 +552,7 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
         }
 
         @TruffleBoundary(allowInlining = true)
-        protected final void invokeError() {
+        protected final void invokeException() {
             config.onReturn.accept(cachedEvent);
         }
 
@@ -578,7 +573,7 @@ final class PolyglotExecutionListener extends AbstractExecutionListenerImpl {
             }
         }
 
-        public final PolyglotException getError() {
+        public final PolyglotException getException() {
             return null;
         }
 
