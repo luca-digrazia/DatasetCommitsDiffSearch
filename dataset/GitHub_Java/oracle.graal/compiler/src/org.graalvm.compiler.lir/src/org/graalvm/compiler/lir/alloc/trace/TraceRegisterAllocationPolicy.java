@@ -64,18 +64,6 @@ public final class TraceRegisterAllocationPolicy {
             return resultTraces;
         }
 
-        protected final GlobalLivenessInfo getGlobalLivenessInfo() {
-            return livenessInfo;
-        }
-
-        protected final RegisterAllocationConfig getRegisterAllocationConfig() {
-            return registerAllocationConfig;
-        }
-
-        protected final TargetDescription getTarget() {
-            return target;
-        }
-
         protected final OptionValues getOptions() {
             return getLIR().getOptions();
         }
