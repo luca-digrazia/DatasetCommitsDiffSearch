@@ -423,35 +423,11 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         return findLegacyExportedSymbol(symbolName, false);
     }
 
-    private Value findLegacyExportedSymbolValue(String symbolName) {
-        Value legacySymbol = findLegacyExportedSymbolValue(symbolName, true);
-        if (legacySymbol != null) {
-            return legacySymbol;
-        }
-        return findLegacyExportedSymbolValue(symbolName, false);
-    }
-
     private Object findLegacyExportedSymbol(String name, boolean onlyExplicit) {
         for (PolyglotLanguageContext languageContext : contexts) {
             Env env = languageContext.env;
             if (env != null) {
-                Object s = LANGUAGE.findExportedSymbol(env, name, onlyExplicit);
-                if (s != null) {
-                    return s;
-                }
-            }
-        }
-        return null;
-    }
-
-    private Value findLegacyExportedSymbolValue(String name, boolean onlyExplicit) {
-        for (PolyglotLanguageContext languageContext : contexts) {
-            Env env = languageContext.env;
-            if (env != null) {
-                Object s = LANGUAGE.findExportedSymbol(env, name, onlyExplicit);
-                if (s != null) {
-                    return languageContext.toHostValue(s);
-                }
+                return LANGUAGE.findExportedSymbol(env, name, onlyExplicit);
             }
         }
         return null;
@@ -491,7 +467,12 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         try {
             Value value = polyglotScope.get(symbolName);
             if (value == null) {
-                value = findLegacyExportedSymbolValue(symbolName);
+                Object legacySymbol = findLegacyExportedSymbol(symbolName);
+                if (legacySymbol == null) {
+                    value = null;
+                } else {
+                    value = getHostContext().toHostValue(legacySymbol);
+                }
             }
             return value;
         } catch (Throwable e) {
