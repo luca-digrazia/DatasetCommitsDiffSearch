@@ -23,34 +23,33 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.debug.GraalDebugConfig.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.Options.*;
-import static jdk.internal.jvmci.inittimer.InitTimer.*;
+import static com.oracle.jvmci.common.UnsafeAccess.*;
+import static com.oracle.jvmci.debug.JVMCIDebugConfig.*;
+import static com.oracle.jvmci.hotspot.InitTimer.*;
 
 import java.lang.reflect.*;
 import java.util.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.stack.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.inittimer.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
-import jdk.internal.jvmci.runtime.*;
-import jdk.internal.jvmci.service.*;
 
 import com.oracle.graal.api.collections.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.debug.*;
-import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.runtime.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.code.stack.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.hotspot.logging.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.options.*;
+import com.oracle.jvmci.runtime.*;
+import com.oracle.jvmci.service.*;
 
 //JaCoCo Exclude
 
@@ -164,6 +163,23 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
      */
     public static Kind getHostWordKind() {
         return instance.getHostBackend().getTarget().wordKind;
+    }
+
+    /**
+     * Reads a klass pointer from a constant object.
+     */
+    public static long unsafeReadKlassPointer(Object object) {
+        return instance.getCompilerToVM().readUnsafeKlassPointer(object);
+    }
+
+    /**
+     * Reads a word value from a given object.
+     */
+    public static long unsafeReadWord(Object object, long offset) {
+        if (getHostWordKind() == Kind.Long) {
+            return unsafe.getLong(object, offset);
+        }
+        return unsafe.getInt(object, offset) & 0xFFFFFFFFL;
     }
 
     private final HotSpotBackend hostBackend;
