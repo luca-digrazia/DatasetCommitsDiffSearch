@@ -343,7 +343,7 @@ class CFGPrinter extends CompilationPrinter {
         out.println("=== Succesors ===");
         printNamedNodes(node, node.successors().iterator(), "", "\n", null);
         out.println("=== Usages ===");
-        if (!node.hasNoUsages()) {
+        if (!node.usages().isEmpty()) {
             for (Node usage : node.usages()) {
                 out.print(nodeToString(usage)).print(" ");
             }

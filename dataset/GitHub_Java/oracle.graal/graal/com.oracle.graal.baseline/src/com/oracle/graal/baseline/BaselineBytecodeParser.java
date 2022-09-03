@@ -266,7 +266,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
 
     @Override
     protected Value genIntegerAdd(Kind kind, Value x, Value y) {
-        return gen.emitAdd(x, y, false);
+        return gen.emitAdd(x, y);
     }
 
     @Override
@@ -277,7 +277,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
 
     @Override
     protected Value genIntegerMul(Kind kind, Value x, Value y) {
-        return gen.emitMul(x, y, false);
+        return gen.emitMul(x, y);
     }
 
     @Override
