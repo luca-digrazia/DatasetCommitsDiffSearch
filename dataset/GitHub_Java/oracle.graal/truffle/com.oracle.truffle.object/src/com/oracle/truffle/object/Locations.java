@@ -61,7 +61,18 @@ public abstract class Locations {
 
         @Override
         public boolean equals(Object obj) {
-            return super.equals(obj) && Objects.equals(value, ((ValueLocation) obj).value);
+            if (!super.equals(obj)) {
+                return false;
+            }
+            ValueLocation other = (ValueLocation) obj;
+            if (value == null) {
+                if (other.value != null) {
+                    return false;
+                }
+            } else if (!value.equals(other.value)) {
+                return false;
+            }
+            return true;
         }
 
         @Override
