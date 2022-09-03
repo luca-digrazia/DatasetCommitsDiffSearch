@@ -23,14 +23,13 @@
 package com.oracle.graal.virtual.phases.ea;
 
 import static com.oracle.graal.debug.Debug.*;
-import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
 
 import java.util.*;
 
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.Graph.NodeEventScope;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
@@ -101,7 +100,7 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
                     Debug.dump(graph, "after " + getName() + " iteration");
                 }
 
-                new DeadCodeEliminationPhase(REQUIRED).apply(graph);
+                new DeadCodeEliminationPhase().apply(graph);
 
                 Set<Node> changedNodes = listener.getNodes();
                 for (Node node : graph.getNodes()) {
