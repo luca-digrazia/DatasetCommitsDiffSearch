@@ -34,8 +34,7 @@ public interface TruffleCompiler {
     String SECOND_TIER_COMPILATION_SUFFIX = "#2";
 
     /**
-     * Creates a new, unique compilation identifier for {@code compilable}. Each call results in a
-     * new identifier.
+     * Gets a unique compilation identifier for a given compilable.
      */
     String getCompilationIdentifier(CompilableTruffleAST compilable);
 

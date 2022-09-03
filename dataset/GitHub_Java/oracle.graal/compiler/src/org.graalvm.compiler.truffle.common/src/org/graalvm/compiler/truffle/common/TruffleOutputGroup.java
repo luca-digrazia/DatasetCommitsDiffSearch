@@ -26,8 +26,6 @@ package org.graalvm.compiler.truffle.common;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import org.graalvm.graphio.GraphOutput;
 
 /**
@@ -36,26 +34,14 @@ import org.graalvm.graphio.GraphOutput;
  */
 public final class TruffleOutputGroup implements Closeable {
 
-    /**
-     * An unique id used to pair "Truffle" groups coming from different connections.
-     */
-    public static final String GROUP_ID = "truffle.compilation.id";
-
     private final GraphOutput<Void, ?> output;
 
-    private TruffleOutputGroup(TruffleDebugContext debug, CompilableTruffleAST compilable, Map<Object, Object> properties) {
+    private TruffleOutputGroup(TruffleDebugContext debug, CompilableTruffleAST compilable) {
         String name = "Truffle::" + compilable.getName();
         GraphOutput<Void, ?> out = null;
         try {
-            out = debug.buildOutput(GraphOutput.newBuilder(VoidGraphStructure.INSTANCE).protocolVersion(6, 1));
-            Map<Object, Object> effectiveProperties;
-            if (properties != null) {
-                effectiveProperties = new HashMap<>(properties);
-                effectiveProperties.putAll(debug.getVersionProperties());
-            } else {
-                effectiveProperties = debug.getVersionProperties();
-            }
-            out.beginGroup(null, name, name, null, 0, effectiveProperties);
+            out = debug.buildOutput(GraphOutput.newBuilder(VoidGraphStructure.INSTANCE).protocolVersion(6, 0));
+            out.beginGroup(null, name, name, null, 0, debug.getVersionProperties());
         } catch (Throwable e) {
             if (out != null) {
                 out.close();
@@ -74,17 +60,9 @@ public final class TruffleOutputGroup implements Closeable {
         }
     }
 
-    /**
-     * Opens a new "Truffle::method_name" group.
-     *
-     * @param debug the {@link TruffleDebugContext} used for dumping
-     * @param compilable the compiled AST
-     * @param properties additional group properties or {@code null}
-     * @return the opened {@link TruffleOutputGroup}
-     */
-    public static TruffleOutputGroup open(TruffleDebugContext debug, CompilableTruffleAST compilable, Map<Object, Object> properties) {
+    public static TruffleOutputGroup open(TruffleDebugContext debug, CompilableTruffleAST compilable) {
         if (debug != null && debug.isDumpEnabled()) {
-            return new TruffleOutputGroup(debug, compilable, properties);
+            return new TruffleOutputGroup(debug, compilable);
         }
         return null;
     }
