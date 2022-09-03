@@ -362,6 +362,15 @@ public final class NodeUtil {
             return childrenFields;
         }
 
+        public NodeField findField(long fieldOffset) {
+            for (NodeField field : getFields()) {
+                if (field.getOffset() == fieldOffset) {
+                    return field;
+                }
+            }
+            return null;
+        }
+
         @Override
         public int hashCode() {
             return clazz.hashCode();
@@ -656,18 +665,20 @@ public final class NodeUtil {
         NodeClass parentNodeClass = NodeClass.get(parent.getClass());
 
         for (NodeField field : parentNodeClass.getChildFields()) {
-            if (field.getObject(parent) == child) {
-                return field;
+            final long fieldOffset = field.getOffset();
+            if (unsafe.getObject(parent, fieldOffset) == child) {
+                return parentNodeClass.findField(fieldOffset);
             }
         }
 
         for (NodeField field : parentNodeClass.getChildrenFields()) {
-            Object arrayObject = field.getObject(parent);
+            final long fieldOffset = field.getOffset();
+            Object arrayObject = unsafe.getObject(parent, fieldOffset);
             if (arrayObject != null) {
                 Object[] array = (Object[]) arrayObject;
                 for (int i = 0; i < array.length; i++) {
                     if (array[i] == child) {
-                        return field;
+                        return parentNodeClass.findField(fieldOffset);
                     }
                 }
             }
