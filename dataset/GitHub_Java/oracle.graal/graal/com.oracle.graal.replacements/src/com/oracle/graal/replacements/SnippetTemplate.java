@@ -360,6 +360,7 @@ public class SnippetTemplate {
 
     private static final DebugTimer SnippetTemplateCreationTime = Debug.timer("SnippetTemplateCreationTime");
     private static final DebugMetric SnippetTemplates = Debug.metric("SnippetTemplateCount");
+    private static final DebugMetric SnippetTemplatesNodeCount = Debug.metric("SnippetTemplatesNodeCount");
 
     private static final String MAX_TEMPLATES_PER_SNIPPET_PROPERTY_NAME = "graal.maxTemplatesPerSnippet";
     private static final boolean UseSnippetTemplateCache = Boolean.parseBoolean(System.getProperty("graal.useSnippetTemplateCache", "true"));
@@ -660,7 +661,7 @@ public class SnippetTemplate {
         this.stampNodes = curStampNodes;
         this.returnNode = retNode;
 
-        Debug.metric(debugValueName("SnippetTemplateNodeCount", args)).add(nodes.size());
+        SnippetTemplatesNodeCount.add(nodes.size());
         args.info.notifyNewTemplate();
     }
 
