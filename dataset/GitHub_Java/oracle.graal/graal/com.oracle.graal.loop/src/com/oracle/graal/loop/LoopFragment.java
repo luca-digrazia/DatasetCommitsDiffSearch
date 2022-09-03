@@ -26,7 +26,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 
-import com.oracle.graal.debug.GraalError;
+import jdk.vm.ci.common.JVMCIError;
+
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.Node;
@@ -176,11 +177,6 @@ public abstract class LoopFragment {
 
     protected static NodeBitMap computeNodes(Graph graph, Iterable<AbstractBeginNode> blocks, Iterable<LoopExitNode> earlyExits) {
         final NodeBitMap nodes = graph.createNodeBitMap();
-        computeNodes(nodes, graph, blocks, earlyExits);
-        return nodes;
-    }
-
-    protected static void computeNodes(NodeBitMap nodes, Graph graph, Iterable<AbstractBeginNode> blocks, Iterable<LoopExitNode> earlyExits) {
         for (AbstractBeginNode b : blocks) {
             if (b.isDeleted()) {
                 continue;
@@ -232,6 +228,8 @@ public abstract class LoopFragment {
                 }
             }
         }
+
+        return nodes;
     }
 
     private static boolean markFloating(Node n, NodeBitMap loopNodes, NodeBitMap notloopNodes) {
@@ -271,7 +269,6 @@ public abstract class LoopFragment {
     public static NodeIterable<AbstractBeginNode> toHirBlocks(final Iterable<Block> blocks) {
         return new NodeIterable<AbstractBeginNode>() {
 
-            @Override
             public Iterator<AbstractBeginNode> iterator() {
                 final Iterator<Block> it = blocks.iterator();
                 return new Iterator<AbstractBeginNode>() {
@@ -281,12 +278,10 @@ public abstract class LoopFragment {
                         throw new UnsupportedOperationException();
                     }
 
-                    @Override
                     public AbstractBeginNode next() {
                         return it.next().getBeginNode();
                     }
 
-                    @Override
                     public boolean hasNext() {
                         return it.hasNext();
                     }
@@ -299,7 +294,6 @@ public abstract class LoopFragment {
     public static NodeIterable<LoopExitNode> toHirExits(final Iterable<Block> blocks) {
         return new NodeIterable<LoopExitNode>() {
 
-            @Override
             public Iterator<LoopExitNode> iterator() {
                 final Iterator<Block> it = blocks.iterator();
                 return new Iterator<LoopExitNode>() {
@@ -309,12 +303,10 @@ public abstract class LoopFragment {
                         throw new UnsupportedOperationException();
                     }
 
-                    @Override
                     public LoopExitNode next() {
                         return (LoopExitNode) it.next().getBeginNode();
                     }
 
-                    @Override
                     public boolean hasNext() {
                         return it.hasNext();
                     }
@@ -361,7 +353,7 @@ public abstract class LoopFragment {
                  * VirtualState nodes contained in the old exit's state may be shared by other
                  * dominated VirtualStates. Those dominated virtual states need to see the
                  * proxy->phi update that are applied below.
-                 *
+                 * 
                  * We now update the original fragment's nodes accordingly:
                  */
                 originalExitState.applyToVirtual(node -> original.nodes.clearAndGrow(node));
@@ -392,7 +384,7 @@ public abstract class LoopFragment {
                     } else if (vpn instanceof GuardProxyNode) {
                         phi = graph.addWithoutUnique(new GuardPhiNode(merge));
                     } else {
-                        throw GraalError.shouldNotReachHere();
+                        throw JVMCIError.shouldNotReachHere();
                     }
                     phi.addInput(vpn);
                     phi.addInput(newVpn);
