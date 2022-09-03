@@ -116,8 +116,7 @@ public final class InstanceOfNode extends LogicNode implements Canonicalizable, 
     @Override
     public boolean verify() {
         for (Node usage : usages()) {
-            assertTrue(usage instanceof IfNode || usage instanceof FixedGuardNode || usage instanceof GuardingPiNode || usage instanceof ConditionalNode || usage instanceof LogicBinaryNode,
-                            "unsupported usage: %s", usage);
+            assertTrue(usage instanceof IfNode || usage instanceof FixedGuardNode || usage instanceof ConditionalNode, "unsupported usage: ", usage);
         }
         return super.verify();
     }
