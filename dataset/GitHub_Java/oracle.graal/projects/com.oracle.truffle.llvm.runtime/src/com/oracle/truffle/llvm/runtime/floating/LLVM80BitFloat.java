@@ -354,40 +354,21 @@ public final class LLVM80BitFloat {
         return isPositiveInfinity() || isNegativeInfinity();
     }
 
-    public boolean isSNaN() {
-        // Checkstyle: stop magic number name check
-        if (getExponent() == ALL_ONE_EXPONENT) {
-            if (getBit(63, getFraction())) {
-                if (!getBit(62, getFraction())) {
-                    return (getFraction() & 0x3FFFFFFF_FFFFFFFFL) != 0L;
-                }
-            }
-        }
-        // Checkstyle: resume magic number name check
-        return false;
-    }
-
     public boolean isQNaN() {
         // Checkstyle: stop magic number name check
         if (getExponent() == ALL_ONE_EXPONENT) {
-            if (getBit(63, getFraction())) {
+            if (!getBit(63, getFraction())) {
                 if (getBit(62, getFraction())) {
                     return true;
                 }
-            } else {
-                return true; // Handle Pseudo NaN as quiet NaN
             }
         }
         // Checkstyle: resume magic number name check
         return false;
     }
 
-    public boolean isNaN() {
-        return isSNaN() || isQNaN();
-    }
-
     public boolean isOrdered() {
-        return !isNaN();
+        return !isQNaN();
     }
 
     int compareOrdered(LLVM80BitFloat val) {
@@ -507,7 +488,7 @@ public final class LLVM80BitFloat {
     // get value
 
     public byte getByteValue() {
-        if (isNaN() || isInfinity()) {
+        if (isQNaN() || isInfinity()) {
             return UNDEFINED_FLOAT_TO_BYTE_VALUE;
         } else {
             long value = getFractionAsLong();
@@ -516,7 +497,7 @@ public final class LLVM80BitFloat {
     }
 
     public short getShortValue() {
-        if (isNaN() || isInfinity()) {
+        if (isQNaN() || isInfinity()) {
             return UNDEFINED_FLOAT_TO_SHORT_VALUE;
         } else {
             long value = getFractionAsLong();
@@ -525,7 +506,7 @@ public final class LLVM80BitFloat {
     }
 
     public int getIntValue() {
-        if (isNaN() || isInfinity()) {
+        if (isQNaN() || isInfinity()) {
             return UNDEFINED_FLOAT_TO_INT_VALUE;
         }
         int value = (int) getFractionAsLong();
@@ -533,7 +514,7 @@ public final class LLVM80BitFloat {
     }
 
     public long getLongValue() {
-        if (isNaN() || isInfinity()) {
+        if (isQNaN() || isInfinity()) {
             return UNDEFINED_FLOAT_TO_LONG_VALUE;
         } else {
             long value = getFractionAsLong();
@@ -550,7 +531,7 @@ public final class LLVM80BitFloat {
             return FloatHelper.POSITIVE_INFINITY;
         } else if (isNegativeInfinity()) {
             return FloatHelper.NEGATIVE_INFINITY;
-        } else if (isNaN()) {
+        } else if (isQNaN()) {
             return FloatHelper.NaN;
         } else {
             int floatExponent = getUnbiasedExponent() + FLOAT_EXPONENT_BIAS;
@@ -572,7 +553,7 @@ public final class LLVM80BitFloat {
             return DoubleHelper.POSITIVE_INFINITY;
         } else if (isNegativeInfinity()) {
             return DoubleHelper.NEGATIVE_INFINITY;
-        } else if (isNaN()) {
+        } else if (isQNaN()) {
             return DoubleHelper.NaN;
         } else {
             int doubleExponent = getUnbiasedExponent() + DoubleHelper.DOUBLE_EXPONENT_BIAS;
