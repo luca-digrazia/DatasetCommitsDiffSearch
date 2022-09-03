@@ -79,12 +79,12 @@ public class TruffleInliningTest {
         @Override
         public Object execute(VirtualFrame frame) {
 
-            int maxRecursionDepth = (int) frame.getArguments()[0];
-            if (maxRecursionDepth < 100) {
+            int depth = (int) frame.getArguments()[0];
+            if (depth < 100) {
                 for (Node child : children) {
                     if (child instanceof OptimizedDirectCallNode) {
                         OptimizedDirectCallNode callNode = (OptimizedDirectCallNode) child;
-                        frame.getArguments()[0] = maxRecursionDepth + 1;
+                        frame.getArguments()[0] = depth + 1;
                         callNode.call(frame.getArguments());
                     }
                 }
@@ -124,15 +124,21 @@ public class TruffleInliningTest {
             return this;
         }
 
-        TruffleInlining build() {
+        TruffleInlining build(boolean withCall) {
             try {
                 buildTargets();
                 buildCalls();
-                targets.get(lastAddedTargetName).call(0);
+                if (withCall) {
+                    targets.get(lastAddedTargetName).call(0);
+                }
                 return new TruffleInlining(targets.get(lastAddedTargetName), new DefaultInliningPolicy());
             } finally {
                 cleanup();
             }
+        }
+
+        TruffleInlining build() {
+            return build(true);
         }
 
         private void buildCalls() {
