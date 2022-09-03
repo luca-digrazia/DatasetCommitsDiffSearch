@@ -128,7 +128,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
 
     public static final Class<?>[] TAGS = new Class<?>[]{EXPRESSION, DEFINE, LOOP, STATEMENT, CALL, BLOCK, ROOT};
     public static final String[] TAG_NAMES = new String[]{"EXPRESSION", "DEFINE", "LOOP", "STATEMENT", "CALL", "RECURSIVE_CALL", "BLOCK", "ROOT", "CONSTANT", "VARIABLE", "ARGUMENT", "PRINT",
-                    "ALLOCATION", "SLEEP"};
+                    "ALLOCATION", "WASTE_TIME"};
 
     // used to test that no getSourceSection calls happen in certain situations
     private static int rootSourceSectionQueryCount;
@@ -242,9 +242,9 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
 
             int argumentIndex = 0;
             int numberOfIdents = 0;
-            if (tag.equals("DEFINE") || tag.equals("ARGUMENT") || tag.equals("CALL") || tag.equals("LOOP") || tag.equals("CONSTANT") || tag.equals("SLEEP")) {
+            if (tag.equals("DEFINE") || tag.equals("ARGUMENT") || tag.equals("CALL") || tag.equals("RECURSIVE_CALL") || tag.equals("LOOP") || tag.equals("CONSTANT")) {
                 numberOfIdents = 1;
-            } else if (tag.equals("VARIABLE") || tag.equals("RECURSIVE_CALL") || tag.equals("PRINT")) {
+            } else if (tag.equals("VARIABLE") || tag.equals("PRINT")) {
                 numberOfIdents = 2;
             }
             String[] idents = new String[numberOfIdents];
@@ -313,7 +313,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
                 case "CALL":
                     return new CallNode(idents[0], childArray);
                 case "RECURSIVE_CALL":
-                    return new RecursiveCallNode(idents[0], (Integer) parseIdent(idents[1]), childArray);
+                    return new RecurisveCallNode(idents[0], childArray);
                 case "LOOP":
                     return new LoopNode(parseIdent(idents[0]), childArray);
                 case "BLOCK":
@@ -332,8 +332,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
                     return new PrintNode(idents[0], idents[1], childArray);
                 case "ALLOCATION":
                     return new AllocationNode(new BaseNode[0]);
-                case "SLEEP":
-                    return new SleepNode(parseIdent(idents[0]), new BaseNode[0]);
+                case "WASTE_TIME":
+                    return new WasteTime(new BaseNode[0]);
                 default:
                     throw new AssertionError();
             }
@@ -480,7 +480,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
             if (tag == StandardTags.RootTag.class) {
                 return this instanceof FunctionRootNode;
             } else if (tag == StandardTags.CallTag.class) {
-                return this instanceof CallNode || this instanceof RecursiveCallNode;
+                return this instanceof CallNode || this instanceof RecurisveCallNode;
             } else if (tag == StandardTags.StatementTag.class) {
                 return this instanceof StatementNode;
             }
@@ -570,17 +570,16 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
         }
     }
 
-    private static class RecursiveCallNode extends InstrumentedNode {
+    private static class RecurisveCallNode extends InstrumentedNode {
 
         @Child private DirectCallNode callNode;
         private final String identifier;
-        private final int depth;
+        private final int depth = 10;
         private int currentDepth = 0;
 
-        RecursiveCallNode(String identifier, int depth, BaseNode[] children) {
+        RecurisveCallNode(String identifier, BaseNode[] children) {
             super(children);
             this.identifier = identifier;
-            this.depth = depth;
         }
 
         @Override
@@ -616,19 +615,16 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
         }
     }
 
-    private static class SleepNode extends InstrumentedNode {
+    private static class WasteTime extends InstrumentedNode {
 
-        private final int timeToSleep;
-
-        SleepNode(Object timeToSleep, BaseNode[] children) {
+        WasteTime(BaseNode[] children) {
             super(children);
-            this.timeToSleep = (Integer) timeToSleep;
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
             try {
-                Thread.sleep(timeToSleep);
+                Thread.sleep(1);
             } catch (InterruptedException e) {
             }
             return null;
