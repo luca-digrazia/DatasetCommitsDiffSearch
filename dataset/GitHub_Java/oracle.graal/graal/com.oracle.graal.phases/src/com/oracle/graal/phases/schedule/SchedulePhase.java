@@ -33,7 +33,7 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
@@ -625,8 +625,10 @@ public final class SchedulePhase extends Phase {
             cdbc.apply(cfg.getNodeToBlock().get(succ));
         }
         ensureScheduledUsages(node, strategy);
-        for (Node usage : node.usages()) {
-            blocksForUsage(node, usage, cdbc, strategy);
+        if (node.recordsUsages()) {
+            for (Node usage : node.usages()) {
+                blocksForUsage(node, usage, cdbc, strategy);
+            }
         }
 
         if (assertionEnabled()) {
@@ -818,8 +820,10 @@ public final class SchedulePhase extends Phase {
     }
 
     private void ensureScheduledUsages(Node node, SchedulingStrategy strategy) {
-        for (Node usage : node.usages().filter(ScheduledNode.class)) {
-            assignBlockToNode((ScheduledNode) usage, strategy);
+        if (node.recordsUsages()) {
+            for (Node usage : node.usages().filter(ScheduledNode.class)) {
+                assignBlockToNode((ScheduledNode) usage, strategy);
+            }
         }
         // now true usages are ready
     }
@@ -1145,14 +1149,16 @@ public final class SchedulePhase extends Phase {
             }
 
             visited.mark(instruction);
-            for (Node usage : instruction.usages()) {
-                if (usage instanceof VirtualState) {
-                    // only fixed nodes can have VirtualState -> no need to schedule them
-                } else {
-                    if (instruction instanceof LoopExitNode && usage instanceof ProxyNode) {
-                        // value proxies should be scheduled before the loopexit, not after
+            if (instruction.recordsUsages()) {
+                for (Node usage : instruction.usages()) {
+                    if (usage instanceof VirtualState) {
+                        // only fixed nodes can have VirtualState -> no need to schedule them
                     } else {
-                        addToEarliestSorting(b, (ScheduledNode) usage, sortedInstructions, visited);
+                        if (instruction instanceof LoopExitNode && usage instanceof ProxyNode) {
+                            // value proxies should be scheduled before the loopexit, not after
+                        } else {
+                            addToEarliestSorting(b, (ScheduledNode) usage, sortedInstructions, visited);
+                        }
                     }
                 }
             }
