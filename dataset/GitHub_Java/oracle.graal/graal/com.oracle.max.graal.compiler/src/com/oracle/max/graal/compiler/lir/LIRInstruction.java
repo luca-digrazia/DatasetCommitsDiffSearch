@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,48 +22,136 @@
  */
 package com.oracle.max.graal.compiler.lir;
 
-import static com.oracle.max.graal.compiler.C1XCompilation.*;
-
+import static com.oracle.max.graal.alloc.util.ValueUtil.*;
 import java.util.*;
 
-import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.lir.LIROperand.*;
-import com.sun.cri.ci.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.graal.compiler.asm.*;
+import com.oracle.max.graal.compiler.util.*;
 
 /**
  * The {@code LIRInstruction} class definition.
- *
- * @author Marcelo Cintra
- * @author Thomas Wuerthinger
  */
 public abstract class LIRInstruction {
 
-    private static final LIROperand ILLEGAL_SLOT = new LIROperand(CiValue.IllegalValue);
-
-    private static final CiValue[] NO_OPERANDS = {};
-
-    public static final OperandMode[] OPERAND_MODES = OperandMode.values();
+    public static final CiValue[] NO_OPERANDS = {};
 
     /**
-     * Constants denoting how a LIR instruction uses an operand. Any combination of these modes
-     * can be applied to an operand as long as every operand has at least one mode applied to it.
+     * Iterator for iterating over a list of values. Subclasses must overwrite one of the doValue methods.
+     * Clients of the class must only call the doValue method that takes additional parameters.
+     */
+    public abstract static class ValueProcedure {
+        /**
+         * Iterator method to be overwritten. This version of the iterator does not take additional parameters
+         * to keep the signature short.
+         *
+         * @param value The value that is iterated.
+         * @return The new value to replace the value that was passed in.
+         */
+        protected CiValue doValue(CiValue value) {
+            throw Util.shouldNotReachHere("One of the doValue() methods must be overwritten");
+        }
+
+        /**
+         * Iterator method to be overwritten. This version of the iterator gets additional parameters about the
+         * processed value.
+         *
+         * @param value The value that is iterated.
+         * @param mode The operand mode for the value.
+         * @param flags A set of flags for the value.
+         * @return The new value to replace the value that was passed in.
+         */
+        public CiValue doValue(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) {
+            return doValue(value);
+        }
+    }
+
+
+    /**
+     * Constants denoting how a LIR instruction uses an operand.
      */
     public enum OperandMode {
         /**
-         * An operand that is defined by a LIR instruction and is live after the code emitted for a LIR instruction.
-         */
-        Output,
-
-        /**
-         * An operand that is used by a LIR instruction and is live before the code emitted for a LIR instruction.
-         * Unless such an operand is also an output or temp operand, it must not be modified by a LIR instruction.
+         * The value must have been defined before. It is alive before the instruction until the beginning of the
+         * instruction, but not necessarily throughout the instruction. A register assigned to it can also be assigend
+         * to a Temp or Output operand. The value can be used again after the instruction, so the instruction must not
+         * modify the register.
          */
         Input,
 
         /**
-         * An operand that is both modified and used by a LIR instruction.
+         * The value must have been defined before. It is alive before the instruction and throughout the instruction. A
+         * register assigned to it cannot be assigned to a Temp or Output operand. The value can be used again after the
+         * instruction, so the instruction must not modify the register.
          */
-        Temp
+        Alive,
+
+        /**
+         * The value must not have been defined before, and must not be used after the instruction. The instruction can
+         * do whatever it wants with the register assigned to it (or not use it at all).
+         */
+        Temp,
+
+        /**
+         * The value must not have been defined before. The instruction has to assign a value to the register. The
+         * value can (and most likely will) be used after the instruction.
+         */
+        Output,
+    }
+
+    /**
+     * Flags for an operand.
+     */
+    public enum OperandFlag {
+        /**
+         * The value can be a {@link CiRegisterValue}.
+         */
+        Register,
+
+        /**
+         * The value can be a {@link CiStackSlot}.
+         */
+        Stack,
+
+        /**
+         * The value can be a {@link CiAddress}.
+         */
+        Address,
+
+        /**
+         * The value can be a {@link CiConstant}.
+         */
+        Constant,
+
+        /**
+         * The value can be {@link CiValue#IllegalValue}.
+         */
+        Illegal,
+
+        /**
+         * The register allocator should try to assign a certain register to improve code quality.
+         * Use {@link LIRInstruction#forEachRegisterHint} to access the register hints.
+         */
+        RegisterHint,
+
+        /**
+         * The value can be uninitialized, e.g., a stack slot that has not written to before. This is only
+         * used to avoid false positives in verification code.
+         */
+        Uninitialized,
+    }
+
+    /**
+     * For validity checking of the operand flags defined by instruction subclasses.
+     */
+    private static final EnumMap<OperandMode, EnumSet<OperandFlag>> ALLOWED_FLAGS;
+
+    static {
+        ALLOWED_FLAGS = new EnumMap<>(OperandMode.class);
+        ALLOWED_FLAGS.put(OperandMode.Input,  EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Address, OperandFlag.Constant, OperandFlag.Illegal, OperandFlag.RegisterHint, OperandFlag.Uninitialized));
+        ALLOWED_FLAGS.put(OperandMode.Alive,  EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Address, OperandFlag.Constant, OperandFlag.Illegal, OperandFlag.RegisterHint, OperandFlag.Uninitialized));
+        ALLOWED_FLAGS.put(OperandMode.Temp,   EnumSet.of(OperandFlag.Register, OperandFlag.Constant, OperandFlag.Illegal, OperandFlag.RegisterHint));
+        ALLOWED_FLAGS.put(OperandMode.Output, EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Illegal, OperandFlag.RegisterHint));
     }
 
     /**
@@ -72,14 +160,24 @@ public abstract class LIRInstruction {
     public final LIROpcode code;
 
     /**
-     * The result operand for this instruction.
+     * The output operands for this instruction (modified by the register allocator).
      */
-    private final LIROperand result;
+    protected final CiValue[] outputs;
 
     /**
-     * The input and temporary operands of this instruction.
+     * The input operands for this instruction (modified by the register allocator).
      */
-    protected final LIROperand[] operands;
+    protected final CiValue[] inputs;
+
+    /**
+     * The alive operands for this instruction (modified by the register allocator).
+     */
+    protected final CiValue[] alives;
+
+    /**
+     * The temp operands for this instruction (modified by the register allocator).
+     */
+    protected final CiValue[] temps;
 
     /**
      * Used to emit debug information.
@@ -87,260 +185,68 @@ public abstract class LIRInstruction {
     public final LIRDebugInfo info;
 
     /**
-     * Value id for register allocation.
+     * Instruction id for register allocation.
      */
-    public int id;
+    private int id;
 
     /**
-     * Determines if all caller-saved registers are destroyed by this instruction.
-     */
-    public final boolean hasCall;
-
-    /**
-     * The number of variable or register output operands for this instruction.
-     * These operands are at indexes {@code [0 .. allocatorOutputCount-1]} in {@link #allocatorOperands}.
-     *
-     * @see OperandMode#Output
-     */
-    private byte allocatorOutputCount;
-
-    /**
-     * The number of variable or register input operands for this instruction.
-     * These operands are at indexes {@code [allocatorOutputCount .. (allocatorInputCount+allocatorOutputCount-1)]} in {@link #allocatorOperands}.
-     *
-     * @see OperandMode#Input
-     */
-    private byte allocatorInputCount;
-
-    /**
-     * The number of variable or register temp operands for this instruction.
-     * These operands are at indexes {@code [allocatorInputCount+allocatorOutputCount .. (allocatorTempCount+allocatorInputCount+allocatorOutputCount-1)]} in {@link #allocatorOperands}.
-     *
-     * @see OperandMode#Temp
-     */
-    private byte allocatorTempCount;
-
-    /**
-     * The number of variable or register input or temp operands for this instruction.
-     */
-    private byte allocatorTempInputCount;
-
-    /**
-     * The set of operands that must be known to the register allocator either to bind a register
-     * or stack slot to a {@linkplain CiVariable variable} or to inform the allocator about operands
-     * that are already fixed to a specific register.
-     * This set excludes all constant operands as well as operands that are bound to
-     * a stack slot in the {@linkplain CiStackSlot#inCallerFrame() caller's frame}.
-     * This array is partitioned as follows.
-     * <pre>
-     *
-     *   <-- allocatorOutputCount --> <-- allocatorInputCount --> <-- allocatorTempCount -->
-     *  +----------------------------+---------------------------+--------------------------+
-     *  |       output operands      |       input operands      |      temp operands       |
-     *  +----------------------------+---------------------------+--------------------------+
-     *
-     * </pre>
-     */
-    final List<CiValue> allocatorOperands;
-
-    /**
-     * Constructs a new LIR instruction that has no input or temp operands.
+     * Constructs a new LIR instruction that has input and temp operands.
      *
      * @param opcode the opcode of the new instruction
-     * @param result the operand that holds the operation result of this instruction. This will be
-     *            {@link CiValue#IllegalValue} for instructions that do not produce a result.
+     * @param outputs the operands that holds the operation results of this instruction.
      * @param info the {@link LIRDebugInfo} info that is to be preserved for the instruction. This will be {@code null} when no debug info is required for the instruction.
-     * @param hasCall specifies if all caller-saved registers are destroyed by this instruction
+     * @param inputs the input operands for the instruction.
+     * @param temps the temp operands for the instruction.
      */
-    public LIRInstruction(LIROpcode opcode, CiValue result, LIRDebugInfo info, boolean hasCall) {
-        this(opcode, result, info, hasCall, 0, 0, NO_OPERANDS);
-    }
-
-    /**
-     * Constructs a new LIR instruction. The {@code operands} array is partitioned as follows:
-     * <pre>
-     *
-     *                              <------- tempInput -------> <--------- temp --------->
-     *  +--------------------------+---------------------------+--------------------------+
-     *  |       input operands     |   input+temp operands     |      temp operands       |
-     *  +--------------------------+---------------------------+--------------------------+
-     *
-     * </pre>
-     *
-     * @param opcode the opcode of the new instruction
-     * @param result the operand that holds the operation result of this instruction. This will be
-     *            {@link CiValue#IllegalValue} for instructions that do not produce a result.
-     * @param info the {@link LIRDebugInfo} that is to be preserved for the instruction. This will be {@code null} when no debug info is required for the instruction.
-     * @param hasCall specifies if all caller-saved registers are destroyed by this instruction
-     * @param tempInput the number of operands that are both {@linkplain OperandMode#Input input} and {@link OperandMode#Temp temp} operands for this instruction
-     * @param temp the number of operands that are {@link OperandMode#Temp temp} operands for this instruction
-     * @param operands the input and temp operands for the instruction
-     */
-    public LIRInstruction(LIROpcode opcode, CiValue result, LIRDebugInfo info, boolean hasCall, int tempInput, int temp, CiValue... operands) {
+    public LIRInstruction(LIROpcode opcode, CiValue[] outputs, LIRDebugInfo info, CiValue[] inputs, CiValue[] alives, CiValue[] temps) {
         this.code = opcode;
+        this.outputs = outputs;
+        this.inputs = inputs;
+        this.alives = alives;
+        this.temps = temps;
         this.info = info;
-        this.hasCall = hasCall;
-
-        assert opcode != LIROpcode.Move || result != CiValue.IllegalValue;
-        allocatorOperands = new ArrayList<CiValue>(operands.length + 3);
-        this.result = initOutput(result);
-
-        C1XMetrics.LIRInstructions++;
-
-        if (opcode == LIROpcode.Move) {
-            C1XMetrics.LIRMoveInstructions++;
-        }
-        id = -1;
-        this.operands = new LIROperand[operands.length];
-        initInputsAndTemps(tempInput, temp, operands);
-
-        assert verifyOperands();
+        this.id = -1;
     }
 
-    private LIROperand initOutput(CiValue output) {
-        assert output != null;
-        if (output != CiValue.IllegalValue) {
-            if (output.isAddress()) {
-                return addAddress((CiAddress) output);
-            }
-            if (output.isStackSlot()) {
-                return new LIROperand(output);
-            }
+    public abstract void emitCode(TargetMethodAssembler tasm);
 
-            assert allocatorOperands.size() == allocatorOutputCount;
-            allocatorOperands.add(output);
-            allocatorOutputCount++;
-            return new LIRVariableOperand(allocatorOperands.size() - 1);
-        } else {
-            return ILLEGAL_SLOT;
-        }
+
+    public final int id() {
+        return id;
+    }
+
+    public final void setId(int id) {
+        this.id = id;
     }
 
     /**
-     * Adds a {@linkplain CiValue#isLegal() legal} value that is part of an address to
-     * the list of {@linkplain #allocatorOperands register allocator operands}. If
-     * the value is {@linkplain CiVariable variable}, then its index into the list
-     * of register allocator operands is returned. Otherwise, {@code -1} is returned.
-     */
-    private int addAddressPart(CiValue part) {
-        if (part.isRegister()) {
-            allocatorInputCount++;
-            allocatorOperands.add(part);
-            return -1;
-        }
-        if (part.isVariable()) {
-            allocatorInputCount++;
-            allocatorOperands.add(part);
-            return allocatorOperands.size() - 1;
-        }
-        assert part.isIllegal();
-        return -1;
-    }
-
-    private LIROperand addAddress(CiAddress address) {
-        assert address.base.isVariableOrRegister();
-
-        int base = addAddressPart(address.base);
-        int index = addAddressPart(address.index);
-
-        if (base != -1 || index != -1) {
-            return new LIRAddressOperand(base, index, address);
-        }
-
-        assert address.base.isRegister() && (address.index.isIllegal() || address.index.isRegister());
-        return new LIROperand(address);
-    }
-
-    private LIROperand addOperand(CiValue operand, boolean isInput, boolean isTemp) {
-        assert operand != null;
-        if (operand != CiValue.IllegalValue) {
-            assert !(operand.isAddress());
-            if (operand.isStackSlot()) {
-                // no variables to add
-                return new LIROperand(operand);
-            } else if (operand.isConstant()) {
-                // no variables to add
-                return new LIROperand(operand);
-            } else {
-                assert allocatorOperands.size() == allocatorOutputCount + allocatorInputCount + allocatorTempInputCount + allocatorTempCount;
-                allocatorOperands.add(operand);
-
-                if (isInput && isTemp) {
-                    allocatorTempInputCount++;
-                } else if (isInput) {
-                    allocatorInputCount++;
-                } else {
-                    assert isTemp;
-                    allocatorTempCount++;
-                }
-
-                return new LIRVariableOperand(allocatorOperands.size() - 1);
-            }
-        } else {
-            return ILLEGAL_SLOT;
-        }
-    }
-
-    /**
-     * Gets an input or temp operand of this instruction.
+     * Gets an input operand of this instruction.
      *
-     * @param index the index of the operand requested
-     * @return the {@code index}'th operand
+     * @param index the index of the operand requested.
+     * @return the {@code index}'th input operand.
      */
-    public final CiValue operand(int index) {
-        if (index >= operands.length) {
-            return CiValue.IllegalValue;
-        }
-
-        return operands[index].value(this);
+    protected final CiValue input(int index) {
+        return inputs[index];
     }
 
-    private void initInputsAndTemps(int tempInputCount, int tempCount, CiValue[] operands) {
-
-        // Addresses in instruction
-        for (int i = 0; i < operands.length; i++) {
-            CiValue op = operands[i];
-            if (op.isAddress()) {
-                this.operands[i] = addAddress((CiAddress) op);
-            }
-        }
-
-        int z = 0;
-        // Input-only operands
-        for (int i = 0; i < operands.length - tempInputCount - tempCount; i++) {
-            if (this.operands[z] == null) {
-                this.operands[z] = addOperand(operands[z], true, false);
-            }
-            z++;
-        }
-
-        // Operands that are both inputs and temps
-        for (int i = 0; i < tempInputCount; i++) {
-            if (this.operands[z] == null) {
-                this.operands[z] = addOperand(operands[z], true, true);
-            }
-            z++;
-        }
-
-        // Temp-only operands
-        for (int i = 0; i < tempCount; i++) {
-            if (this.operands[z] == null) {
-                this.operands[z] = addOperand(operands[z], false, true);
-            }
-            z++;
-        }
+    /**
+     * Gets an alive operand of this instruction.
+     *
+     * @param index the index of the operand requested.
+     * @return the {@code index}'th alive operand.
+     */
+    protected final CiValue alive(int index) {
+        return alives[index];
     }
 
-    private boolean verifyOperands() {
-        for (LIROperand operandSlot : operands) {
-            assert operandSlot != null;
-        }
-
-        for (CiValue operand : this.allocatorOperands) {
-            assert operand != null;
-            assert operand.isVariableOrRegister() : "LIR operands can only be variables and registers initially, not " + operand.getClass().getSimpleName();
-        }
-        return true;
+    /**
+     * Gets a temp operand of this instruction.
+     *
+     * @param index the index of the operand requested.
+     * @return the {@code index}'th temp operand.
+     */
+    protected final CiValue temp(int index) {
+        return temps[index];
     }
 
     /**
@@ -348,147 +254,118 @@ public abstract class LIRInstruction {
      *
      * @return return the result operand
      */
-    public final CiValue result() {
-        return result.value(this);
+    protected final CiValue output(int index) {
+        return outputs[index];
     }
 
     /**
      * Gets the instruction name.
-     *
-     * @return the name of the enum constant that represents the instruction opcode, exactly as declared in the enum
-     *         LIROpcode declaration.
      */
     public String name() {
-        return code.name();
-    }
-
-    /**
-     * Abstract method to be used to emit target code for this instruction.
-     *
-     * @param masm the target assembler.
-     */
-    public abstract void emitCode(LIRAssembler masm);
-
-    /**
-     * Utility for specializing how a {@linkplain CiValue LIR operand} is formatted to a string.
-     * The {@linkplain OperandFormatter#DEFAULT default formatter} returns the value of
-     * {@link CiValue#toString()}.
-     */
-    public static class OperandFormatter {
-        public static final OperandFormatter DEFAULT = new OperandFormatter();
-
-        /**
-         * Formats a given operand as a string.
-         *
-         * @param operand the operand to format
-         * @return {@code operand} as a string
-         */
-        public String format(CiValue operand) {
-            return operand.toString();
-        }
-    }
-
-    /**
-     * Gets the operation performed by this instruction in terms of its operands as a string.
-     */
-    public String operationString(OperandFormatter operandFmt) {
-        StringBuilder buf = new StringBuilder();
-        if (result != ILLEGAL_SLOT) {
-            buf.append(operandFmt.format(result.value(this))).append(" = ");
-        }
-        if (operands.length > 1) {
-            buf.append("(");
-        }
-        boolean first = true;
-        for (LIROperand operandSlot : operands) {
-            String operand = operandFmt.format(operandSlot.value(this));
-            if (!operand.isEmpty()) {
-                if (!first) {
-                    buf.append(", ");
-                } else {
-                    first = false;
-                }
-                buf.append(operand);
-            }
-        }
-        if (operands.length > 1) {
-            buf.append(")");
-        }
-        return buf.toString();
-    }
-
-    public boolean verify() {
-        return true;
-    }
-
-    /**
-     * Determines if a given opcode is in a given range of valid opcodes.
-     *
-     * @param opcode the opcode to be tested.
-     * @param start the lower bound range limit of valid opcodes
-     * @param end the upper bound range limit of valid opcodes
-     */
-    protected static boolean isInRange(LIROpcode opcode, LIROpcode start, LIROpcode end) {
-        return start.ordinal() < opcode.ordinal() && opcode.ordinal() < end.ordinal();
+        return code.toString();
     }
 
     public boolean hasOperands() {
-        if (info != null || hasCall) {
-            return true;
-        }
-        return allocatorOperands.size() > 0;
+        return inputs.length > 0 || alives.length > 0 || temps.length > 0 || outputs.length > 0 || info != null || hasCall();
     }
 
-    public final int operandCount(OperandMode mode) {
-        if (mode == OperandMode.Output) {
-            return allocatorOutputCount;
-        } else if (mode == OperandMode.Input) {
-            return allocatorInputCount + allocatorTempInputCount;
+    private static final EnumSet<OperandFlag> ADDRESS_FLAGS = EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
+
+    private void forEach(CiValue[] values, OperandMode mode, ValueProcedure proc) {
+        for (int i = 0; i < values.length; i++) {
+            assert ALLOWED_FLAGS.get(mode).containsAll(flagsFor(mode, i));
+
+            CiValue value = values[i];
+            if (isAddress(value)) {
+                assert flagsFor(mode, i).contains(OperandFlag.Address);
+                CiAddress address = asAddress(value);
+                address.base = proc.doValue(address.base, mode, ADDRESS_FLAGS);
+                address.index = proc.doValue(address.index, mode, ADDRESS_FLAGS);
+            } else {
+                values[i] = proc.doValue(values[i], mode, flagsFor(mode, i));
+            }
+        }
+    }
+
+    public final void forEachInput(ValueProcedure proc) {
+        forEach(inputs, OperandMode.Input, proc);
+    }
+
+    public final void forEachAlive(ValueProcedure proc) {
+        forEach(alives, OperandMode.Alive, proc);
+    }
+
+    public final void forEachTemp(ValueProcedure proc) {
+        forEach(temps, OperandMode.Temp, proc);
+    }
+
+    public final void forEachOutput(ValueProcedure proc) {
+        forEach(outputs, OperandMode.Output, proc);
+    }
+
+    public final void forEachState(ValueProcedure proc) {
+        if (info != null) {
+            info.forEachState(proc);
+
+            if (this instanceof LIRXirInstruction) {
+                LIRXirInstruction xir = (LIRXirInstruction) this;
+                if (xir.infoAfter != null) {
+                    xir.infoAfter.forEachState(proc);
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns true when this instruction is a call instruction that destroys all caller-saved registers.
+     */
+    public boolean hasCall() {
+        return false;
+    }
+
+    /**
+     * Iterates all register hints for the specified value, i.e., all preferred candidates for the register to be
+     * assigned to the value.
+     * <br>
+     * Subclasses can override this method. The default implementation processes all Input operands as the hints for
+     * an Output operand, and all Output operands as the hints for an Input operand.
+     *
+     * @param value The value the hints are needed for.
+     * @param mode The operand mode of the value.
+     * @param proc The procedure invoked for all the hints. If the procedure returns a non-null value, the iteration is stopped
+     *             and the value is returned by this method, i.e., clients can stop the iteration once a suitable hint has been found.
+     * @return The non-null value returned by the procedure, or null.
+     */
+    public CiValue forEachRegisterHint(CiValue value, OperandMode mode, ValueProcedure proc) {
+        CiValue[] hints;
+        if (mode == OperandMode.Input) {
+            hints = outputs;
+        } else if (mode == OperandMode.Output) {
+            hints = inputs;
         } else {
-            assert mode == OperandMode.Temp;
-            return allocatorTempInputCount + allocatorTempCount;
+            return null;
         }
-    }
 
-    public final CiValue operandAt(OperandMode mode, int index) {
-        if (mode == OperandMode.Output) {
-            assert index < allocatorOutputCount;
-            return allocatorOperands.get(index);
-        } else if (mode == OperandMode.Input) {
-            assert index < allocatorInputCount + allocatorTempInputCount;
-            return allocatorOperands.get(index + allocatorOutputCount);
-        } else {
-            assert mode == OperandMode.Temp;
-            assert index < allocatorTempInputCount + allocatorTempCount;
-            return allocatorOperands.get(index + allocatorOutputCount + allocatorInputCount);
+        for (int i = 0; i < hints.length; i++) {
+            CiValue result = proc.doValue(hints[i], null, null);
+            if (result != null) {
+                return result;
+            }
         }
+        return null;
     }
 
-    public final void setOperandAt(OperandMode mode, int index, CiValue location) {
-        assert index < operandCount(mode);
-        assert location.kind != CiKind.Illegal;
-        assert operandAt(mode, index).isVariable();
-        if (mode == OperandMode.Output) {
-            assert index < allocatorOutputCount;
-            allocatorOperands.set(index, location);
-        } else if (mode == OperandMode.Input) {
-            assert index < allocatorInputCount + allocatorTempInputCount;
-            allocatorOperands.set(index + allocatorOutputCount, location);
-        } else {
-            assert mode == OperandMode.Temp;
-            assert index < allocatorTempInputCount + allocatorTempCount;
-            allocatorOperands.set(index + allocatorOutputCount + allocatorInputCount, location);
-        }
+    /**
+     * Used by the register allocator to decide which kind of location can be assigned to the operand.
+     * @param mode The kind of operand.
+     * @param index The index of the operand.
+     * @return The flags for the operand.
+     */
+    // TODO this method will go away when we have named operands, the flags will be specified as annotations instead.
+    protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+        return EnumSet.of(OperandFlag.Register);
     }
 
-    public final LIRBlock exceptionEdge() {
-        return (info == null) ? null : info.exceptionEdge();
-    }
-
-    @Override
-    public String toString() {
-        return toString(OperandFormatter.DEFAULT);
-    }
 
     public final String toStringWithIdPrefix() {
         if (id != -1) {
@@ -497,47 +374,72 @@ public abstract class LIRInstruction {
         return "     " + toString();
     }
 
-    protected static String refMapToString(CiDebugInfo debugInfo, OperandFormatter operandFmt) {
+    /**
+     * Gets the operation performed by this instruction in terms of its operands as a string.
+     */
+    public String operationString() {
         StringBuilder buf = new StringBuilder();
-        if (debugInfo.hasStackRefMap()) {
-            CiBitMap bm = debugInfo.frameRefMap;
-            for (int slot = bm.nextSetBit(0); slot >= 0; slot = bm.nextSetBit(slot + 1)) {
-                if (buf.length() != 0) {
-                    buf.append(", ");
-                }
-                buf.append(operandFmt.format(CiStackSlot.get(CiKind.Object, slot)));
-            }
+        String sep = "";
+        if (outputs.length > 1) {
+            buf.append("(");
         }
-        if (debugInfo.hasRegisterRefMap()) {
-            CiBitMap bm = debugInfo.registerRefMap;
-            for (int reg = bm.nextSetBit(0); reg >= 0; reg = bm.nextSetBit(reg + 1)) {
-                if (buf.length() != 0) {
-                    buf.append(", ");
-                }
-                CiRegisterValue register = compilation().target.arch.registers[reg].asValue(CiKind.Object);
-                buf.append(operandFmt.format(register));
-            }
+        for (CiValue output : outputs) {
+            buf.append(sep).append(output);
+            sep = ", ";
+        }
+        if (outputs.length > 1) {
+            buf.append(")");
+        }
+        if (outputs.length > 0) {
+            buf.append(" = ");
+        }
+
+        if (inputs.length + alives.length != 1) {
+            buf.append("(");
+        }
+        sep = "";
+        for (CiValue input : inputs) {
+            buf.append(sep).append(input);
+            sep = ", ";
+        }
+        for (CiValue input : alives) {
+            buf.append(sep).append(input).append(" ~");
+            sep = ", ";
+        }
+        if (inputs.length + alives.length != 1) {
+            buf.append(")");
+        }
+
+        if (temps.length > 0) {
+            buf.append(" [");
+        }
+        sep = "";
+        for (CiValue temp : temps) {
+            buf.append(sep).append(temp);
+            sep = ", ";
+        }
+        if (temps.length > 0) {
+            buf.append("]");
         }
         return buf.toString();
     }
 
-    protected void appendDebugInfo(StringBuilder buf, OperandFormatter operandFmt, LIRDebugInfo info) {
+    protected void appendDebugInfo(StringBuilder buf) {
         if (info != null) {
-            buf.append(" [bci:").append(info.state.bci);
-            if (info.hasDebugInfo()) {
-                CiDebugInfo debugInfo = info.debugInfo();
-                String refmap = refMapToString(debugInfo, operandFmt);
-                if (refmap.length() != 0) {
-                    buf.append(", refmap(").append(refmap.trim()).append(')');
-                }
+            buf.append(" [bci:");
+            String sep = "";
+            for (CiFrame cur = info.topFrame; cur != null; cur = cur.caller()) {
+                buf.append(sep).append(cur.bci);
+                sep = ",";
             }
-            buf.append(']');
+            buf.append("]");
         }
     }
 
-    public String toString(OperandFormatter operandFmt) {
-        StringBuilder buf = new StringBuilder(name()).append(' ').append(operationString(operandFmt));
-        appendDebugInfo(buf, operandFmt, info);
+    @Override
+    public String toString() {
+        StringBuilder buf = new StringBuilder(name()).append(' ').append(operationString());
+        appendDebugInfo(buf);
         return buf.toString();
     }
 }

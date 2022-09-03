@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,55 +22,160 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
+import static com.oracle.max.graal.alloc.util.ValueUtil.*;
 import static java.lang.Double.*;
 import static java.lang.Float.*;
 
+import java.util.*;
+
 import com.oracle.max.asm.target.amd64.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
-import com.oracle.max.graal.compiler.lir.FrameMap.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.sun.cri.ci.*;
 
 public class AMD64MoveOpcode {
 
-    public enum MoveOpcode implements StandardOpcode.MoveOpcode {
+    public enum MoveOpcode implements LIROpcode {
         MOVE;
 
-        @Override
         public LIRInstruction create(CiValue result, CiValue input) {
-            assert !result.isAddress() && !input.isAddress();
             assert result.kind == result.kind.stackKind() && result.kind != CiKind.Illegal;
             CiValue[] inputs = new CiValue[] {input};
+            CiValue[] outputs = new CiValue[] {result};
 
-            return new AMD64LIRInstruction(this, result, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
-                @Override
-                public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    CiValue input = input(0);
-                    move(tasm, masm, result(), input);
-                }
-
-                @Override
-                public CiValue registerHint() {
-                    return input(0);
-                }
-            };
+            if (isRegister(input) || isStackSlot(result)) {
+                return new AMD64MoveFromRegInstruction(this, outputs, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
+            } else {
+                return new AMD64MoveToRegInstruction(this, outputs, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
+            }
         }
     }
 
+    public enum SpillMoveOpcode implements StandardOpcode.MoveOpcode {
+        SPILL_MOVE;
+
+        @Override
+        public MoveInstruction create(CiValue result, CiValue input) {
+            assert result.kind == result.kind.stackKind() && result.kind != CiKind.Illegal;
+            CiValue[] inputs = new CiValue[] {input};
+            CiValue[] outputs = new CiValue[] {result};
+
+            return new AMD64SpillMoveInstruction(this, outputs, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
+        }
+    }
+
+    protected static class AMD64SpillMoveInstruction extends MoveInstruction {
+        public AMD64SpillMoveInstruction(LIROpcode opcode, CiValue[] outputs, LIRDebugInfo info, CiValue[] inputs, CiValue[] alives, CiValue[] temps) {
+            super(opcode, outputs, info, inputs, alives, temps);
+        }
+
+        @Override
+        public void emitCode(TargetMethodAssembler tasm) {
+            move(tasm, (AMD64MacroAssembler) tasm.asm, getDest(), getSource());
+        }
+
+        @Override
+        public CiValue getSource() {
+            return input(0);
+        }
+        @Override
+        public CiValue getDest() {
+            return output(0);
+        }
+
+        @Override
+        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Input && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+            } else if (mode == OperandMode.Output && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack);
+            }
+            throw Util.shouldNotReachHere();
+        }
+
+    }
+
+    protected static class AMD64MoveToRegInstruction extends MoveInstruction {
+        public AMD64MoveToRegInstruction(LIROpcode opcode, CiValue[] outputs, LIRDebugInfo info, CiValue[] inputs, CiValue[] alives, CiValue[] temps) {
+            super(opcode, outputs, info, inputs, alives, temps);
+        }
+
+        @Override
+        public void emitCode(TargetMethodAssembler tasm) {
+            move(tasm, (AMD64MacroAssembler) tasm.asm, getDest(), getSource());
+        }
+
+        @Override
+        public CiValue getSource() {
+            return input(0);
+        }
+        @Override
+        public CiValue getDest() {
+            return output(0);
+        }
+
+        @Override
+        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Input && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+            } else if (mode == OperandMode.Output && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
+            }
+            throw Util.shouldNotReachHere();
+        }
+    }
+
+    protected static class AMD64MoveFromRegInstruction extends MoveInstruction {
+        public AMD64MoveFromRegInstruction(LIROpcode opcode, CiValue[] outputs, LIRDebugInfo info, CiValue[] inputs, CiValue[] alives, CiValue[] temps) {
+            super(opcode, outputs, info, inputs, alives, temps);
+        }
+
+        @Override
+        public void emitCode(TargetMethodAssembler tasm) {
+            move(tasm, (AMD64MacroAssembler) tasm.asm, getDest(), getSource());
+        }
+
+        @Override
+        public CiValue getSource() {
+            return input(0);
+        }
+        @Override
+        public CiValue getDest() {
+            return output(0);
+        }
+
+
+        @Override
+        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Input && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Constant, OperandFlag.RegisterHint);
+            } else if (mode == OperandMode.Output && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack);
+            }
+            throw Util.shouldNotReachHere();
+        }
+    }
 
     public enum LoadOpcode implements LIROpcode {
         LOAD;
 
-        public LIRInstruction create(CiVariable result, CiValue addrBase, CiValue addrIndex, final CiAddress.Scale addrScale, final int addrDisplacement, final CiKind kind, LIRDebugInfo info) {
-            CiValue[] inputs = new CiValue[] {addrBase, addrIndex};
+        public LIRInstruction create(CiValue result, CiValue address, LIRDebugInfo info) {
+            CiValue[] inputs = new CiValue[] {address};
+            CiValue[] outputs = new CiValue[] {result};
 
-            return new AMD64LIRInstruction(this, result, info, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, outputs, info, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    CiValue addrBase = input(0);
-                    CiValue addrIndex = input(1);
-                    load(tasm, masm, result(), new CiAddress(CiKind.Illegal, addrBase, addrIndex, addrScale, addrDisplacement), kind, info);
+                    load(tasm, masm, output(0), (CiAddress) input(0), info);
+                }
+
+                @Override
+                protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+                    if (mode == OperandMode.Input && index == 0) {
+                        return EnumSet.of(OperandFlag.Address);
+                    }
+                    return super.flagsFor(mode, index);
                 }
             };
         }
@@ -80,17 +185,23 @@ public class AMD64MoveOpcode {
     public enum StoreOpcode implements LIROpcode {
         STORE;
 
-        public LIRInstruction create(CiValue addrBase, CiValue addrIndex, final CiAddress.Scale addrScale, final int addrDisplacement, CiValue input, final CiKind kind, LIRDebugInfo info) {
-            CiValue[] inputs = new CiValue[] {addrBase, addrIndex, input};
+        public LIRInstruction create(CiValue address, CiValue input, LIRDebugInfo info) {
+            CiValue[] inputs = new CiValue[] {address, input};
 
-            return new AMD64LIRInstruction(this, CiValue.IllegalValue, info, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, info, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    CiValue addrBase = input(0);
-                    CiValue addrIndex = input(1);
-                    CiValue input = input(2);
+                    store(tasm, masm, (CiAddress) input(0), input(1), info);
+                }
 
-                    store(tasm, masm, new CiAddress(CiKind.Illegal, addrBase, addrIndex, addrScale, addrDisplacement), input, kind, info);
+                @Override
+                protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+                    if (mode == OperandMode.Input && index == 0) {
+                        return EnumSet.of(OperandFlag.Address);
+                    } else if (mode == OperandMode.Input && index == 1) {
+                        return EnumSet.of(OperandFlag.Register, OperandFlag.Constant);
+                    }
+                    return super.flagsFor(mode, index);
                 }
             };
         }
@@ -100,33 +211,22 @@ public class AMD64MoveOpcode {
     public enum LeaOpcode implements LIROpcode {
         LEA;
 
-        public LIRInstruction create(CiVariable result, CiValue addrBase, CiValue addrIndex, final CiAddress.Scale addrScale, final int addrDisplacement) {
-            CiValue[] inputs = new CiValue[] {addrBase, addrIndex};
+        public LIRInstruction create(CiValue result, CiValue address) {
+            CiValue[] inputs = new CiValue[] {address};
+            CiValue[] outputs = new CiValue[] {result};
 
-            return new AMD64LIRInstruction(this, result, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, outputs, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    CiValue addrBase = input(0);
-                    CiValue addrIndex = input(1);
-                    masm.leaq(tasm.asLongReg(result()), new CiAddress(CiKind.Illegal, addrBase, addrIndex, addrScale, addrDisplacement));
+                    masm.leaq(asLongReg(output(0)), tasm.asAddress(input(0)));
                 }
-            };
-        }
-    }
 
-
-    // Note: This LIR operation is similar to a LEA, so reusing the LEA op would be desirable.
-    // However, the address that is loaded depends on the stack slot, and the stack slot numbers are
-    // only fixed after register allocation when the number of spill slots is known. Therefore, the address
-    // is not known when the LIR is generated.
-    public enum LeaStackBlockOpcode implements LIROpcode {
-        LEA_STACK_BLOCK;
-
-        public LIRInstruction create(CiVariable result, final StackBlock stackBlock) {
-            return new AMD64LIRInstruction(this, result, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
-                public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    masm.leaq(tasm.asRegister(result()), tasm.compilation.frameMap().toStackAddress(stackBlock));
+                protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+                    if (mode == OperandMode.Input && index == 0) {
+                        return EnumSet.of(OperandFlag.Address, OperandFlag.Stack, OperandFlag.Uninitialized);
+                    }
+                    return super.flagsFor(mode, index);
                 }
             };
         }
@@ -137,7 +237,7 @@ public class AMD64MoveOpcode {
         MEMBAR;
 
         public LIRInstruction create(final int barriers) {
-            return new AMD64LIRInstruction(this, CiValue.IllegalValue, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
                     masm.membar(barriers);
@@ -151,15 +251,14 @@ public class AMD64MoveOpcode {
         NULL_CHECK;
 
         @Override
-        public LIRInstruction create(CiVariable input, LIRDebugInfo info) {
+        public LIRInstruction create(Variable input, LIRDebugInfo info) {
             CiValue[] inputs = new CiValue[] {input};
 
-            return new AMD64LIRInstruction(this, CiValue.IllegalValue, info, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, info, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    CiValue input = input(0);
                     tasm.recordImplicitException(masm.codeBuffer.position(), info);
-                    masm.nullCheck(tasm.asRegister(input));
+                    masm.nullCheck(asRegister(input(0)));
                 }
             };
         }
@@ -169,45 +268,46 @@ public class AMD64MoveOpcode {
     public enum CompareAndSwapOpcode implements LIROpcode {
         CAS;
 
-        public LIRInstruction create(CiRegisterValue result, CiValue addrBase, CiValue addrIndex, final CiAddress.Scale addrScale, final int addrDisplacement, CiRegisterValue cmpValue, CiVariable newValue) {
-            CiValue[] inputs = new CiValue[] {addrBase, addrIndex, cmpValue, newValue};
+        public LIRInstruction create(CiValue result, CiAddress address, CiValue cmpValue, CiValue newValue) {
+            CiValue[] inputs = new CiValue[] {address, cmpValue, newValue};
+            CiValue[] outputs = new CiValue[] {result};
 
-            return new AMD64LIRInstruction(this, result, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, outputs, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    CiValue addrBase = input(0);
-                    CiValue addrIndex = input(1);
-                    CiValue cmpValue = input(2);
-                    CiValue newValue = input(3);
+                    compareAndSwap(tasm, masm, output(0), asAddress(input(0)), input(1), input(2));
+                }
 
-                    compareAndSwap(tasm, masm, result(), new CiAddress(CiKind.Illegal, addrBase, addrIndex, addrScale, addrDisplacement), cmpValue, newValue);
+                @Override
+                protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+                    if (mode == OperandMode.Input && index == 0) {
+                        return EnumSet.of(OperandFlag.Address);
+                    }
+                    return super.flagsFor(mode, index);
                 }
             };
         }
     }
 
-
     protected static void move(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue input) {
-        if (input.isRegister()) {
-            if (result.isRegister()) {
-                reg2reg(tasm, masm, result, input);
-            } else if (result.isStackSlot()) {
+        if (isRegister(input)) {
+            if (isRegister(result)) {
+                reg2reg(masm, result, input);
+            } else if (isStackSlot(result)) {
                 reg2stack(tasm, masm, result, input);
             } else {
                 throw Util.shouldNotReachHere();
             }
-        } else if (input.isStackSlot()) {
-            if (result.isRegister()) {
+        } else if (isStackSlot(input)) {
+            if (isRegister(result)) {
                 stack2reg(tasm, masm, result, input);
-            } else if (result.isStackSlot()) {
-                stack2stack(tasm, masm, result, input);
             } else {
                 throw Util.shouldNotReachHere();
             }
-        } else if (input.isConstant()) {
-            if (result.isRegister()) {
+        } else if (isConstant(input)) {
+            if (isRegister(result)) {
                 const2reg(tasm, masm, result, (CiConstant) input);
-            } else if (result.isStackSlot()) {
+            } else if (isStackSlot(result)) {
                 const2stack(tasm, masm, result, (CiConstant) input);
             } else {
                 throw Util.shouldNotReachHere();
@@ -217,17 +317,17 @@ public class AMD64MoveOpcode {
         }
     }
 
-    private static void reg2reg(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue input) {
+    private static void reg2reg(AMD64MacroAssembler masm, CiValue result, CiValue input) {
         if (input.equals(result)) {
             return;
         }
         switch (result.kind) {
             case Jsr:
-            case Int:    masm.movl(tasm.asRegister(result),    tasm.asRegister(input)); break;
-            case Long:   masm.movq(tasm.asRegister(result),    tasm.asRegister(input)); break;
-            case Float:  masm.movflt(tasm.asFloatReg(result),  tasm.asFloatReg(input)); break;
-            case Double: masm.movdbl(tasm.asDoubleReg(result), tasm.asDoubleReg(input)); break;
-            case Object: masm.movq(tasm.asRegister(result),    tasm.asRegister(input)); break;
+            case Int:    masm.movl(asRegister(result),    asRegister(input)); break;
+            case Long:   masm.movq(asRegister(result),    asRegister(input)); break;
+            case Float:  masm.movflt(asFloatReg(result),  asFloatReg(input)); break;
+            case Double: masm.movdbl(asDoubleReg(result), asDoubleReg(input)); break;
+            case Object: masm.movq(asRegister(result),    asRegister(input)); break;
             default:     throw Util.shouldNotReachHere("kind=" + result.kind);
         }
     }
@@ -235,11 +335,11 @@ public class AMD64MoveOpcode {
     private static void reg2stack(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue input) {
         switch (result.kind) {
             case Jsr:
-            case Int:    masm.movl(tasm.asAddress(result),   tasm.asRegister(input)); break;
-            case Long:   masm.movq(tasm.asAddress(result),   tasm.asRegister(input)); break;
-            case Float:  masm.movflt(tasm.asAddress(result), tasm.asFloatReg(input)); break;
-            case Double: masm.movsd(tasm.asAddress(result),  tasm.asDoubleReg(input)); break;
-            case Object: masm.movq(tasm.asAddress(result),   tasm.asRegister(input)); break;
+            case Int:    masm.movl(tasm.asAddress(result),   asRegister(input)); break;
+            case Long:   masm.movq(tasm.asAddress(result),   asRegister(input)); break;
+            case Float:  masm.movflt(tasm.asAddress(result), asFloatReg(input)); break;
+            case Double: masm.movsd(tasm.asAddress(result),  asDoubleReg(input)); break;
+            case Object: masm.movq(tasm.asAddress(result),   asRegister(input)); break;
             default:     throw Util.shouldNotReachHere();
         }
     }
@@ -247,31 +347,12 @@ public class AMD64MoveOpcode {
     private static void stack2reg(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue input) {
         switch (result.kind) {
             case Jsr:
-            case Int:    masm.movl(tasm.asRegister(result),    tasm.asAddress(input)); break;
-            case Long:   masm.movq(tasm.asRegister(result),    tasm.asAddress(input)); break;
-            case Float:  masm.movflt(tasm.asFloatReg(result),  tasm.asAddress(input)); break;
-            case Double: masm.movdbl(tasm.asDoubleReg(result), tasm.asAddress(input)); break;
-            case Object: masm.movq(tasm.asRegister(result),    tasm.asAddress(input)); break;
+            case Int:    masm.movl(asRegister(result),    tasm.asAddress(input)); break;
+            case Long:   masm.movq(asRegister(result),    tasm.asAddress(input)); break;
+            case Float:  masm.movflt(asFloatReg(result),  tasm.asAddress(input)); break;
+            case Double: masm.movdbl(asDoubleReg(result), tasm.asAddress(input)); break;
+            case Object: masm.movq(asRegister(result),    tasm.asAddress(input)); break;
             default:     throw Util.shouldNotReachHere();
-        }
-    }
-
-    private static void stack2stack(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue input) {
-        switch (result.kind) {
-            case Jsr:
-            case Int:
-            case Float:
-                masm.pushl(tasm.asAddress(input));
-                masm.popl(tasm.asAddress(result));
-                break;
-            case Long:
-            case Double:
-            case Object:
-                masm.pushq(tasm.asAddress(input));
-                masm.popq(tasm.asAddress(result));
-                break;
-            default:
-                throw Util.shouldNotReachHere();
         }
     }
 
@@ -282,28 +363,28 @@ public class AMD64MoveOpcode {
                 // Do not optimize with an XOR as this instruction may be between
                 // a CMP and a Jcc in which case the XOR will modify the condition
                 // flags and interfere with the Jcc.
-                masm.movl(tasm.asRegister(result), tasm.asIntConst(c));
+                masm.movl(asRegister(result), tasm.asIntConst(c));
                 break;
             case Long:
                 // Do not optimize with an XOR as this instruction may be between
                 // a CMP and a Jcc in which case the XOR will modify the condition
                 // flags and interfere with the Jcc.
-                masm.movq(tasm.asRegister(result), c.asLong());
+                masm.movq(asRegister(result), c.asLong());
                 break;
             case Float:
                 // This is *not* the same as 'constant == 0.0f' in the case where constant is -0.0f
                 if (Float.floatToRawIntBits(c.asFloat()) == Float.floatToRawIntBits(0.0f)) {
-                    masm.xorps(tasm.asFloatReg(result), tasm.asFloatReg(result));
+                    masm.xorps(asFloatReg(result), asFloatReg(result));
                 } else {
-                    masm.movflt(tasm.asFloatReg(result), tasm.asFloatConstRef(c));
+                    masm.movflt(asFloatReg(result), tasm.asFloatConstRef(c));
                 }
                 break;
             case Double:
                 // This is *not* the same as 'constant == 0.0d' in the case where constant is -0.0d
                 if (Double.doubleToRawLongBits(c.asDouble()) == Double.doubleToRawLongBits(0.0d)) {
-                    masm.xorpd(tasm.asDoubleReg(result), tasm.asDoubleReg(result));
+                    masm.xorpd(asDoubleReg(result), asDoubleReg(result));
                 } else {
-                    masm.movdbl(tasm.asDoubleReg(result), tasm.asDoubleConstRef(c));
+                    masm.movdbl(asDoubleReg(result), tasm.asDoubleConstRef(c));
                 }
                 break;
             case Object:
@@ -311,12 +392,12 @@ public class AMD64MoveOpcode {
                 // a CMP and a Jcc in which case the XOR will modify the condition
                 // flags and interfere with the Jcc.
                 if (c.isNull()) {
-                    masm.movq(tasm.asRegister(result), 0x0L);
+                    masm.movq(asRegister(result), 0x0L);
                 } else if (tasm.target.inlineObjects) {
                     tasm.recordDataReferenceInCode(c, 0);
-                    masm.movq(tasm.asRegister(result), 0xDEADDEADDEADDEADL);
+                    masm.movq(asRegister(result), 0xDEADDEADDEADDEADL);
                 } else {
-                    masm.movq(tasm.asRegister(result), tasm.recordDataReferenceInCode(c, 0));
+                    masm.movq(asRegister(result), tasm.recordDataReferenceInCode(c, 0));
                 }
                 break;
             default:
@@ -344,45 +425,45 @@ public class AMD64MoveOpcode {
     }
 
 
-    protected static void load(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiAddress loadAddr, CiKind kind, LIRDebugInfo info) {
+    protected static void load(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiAddress loadAddr, LIRDebugInfo info) {
         if (info != null) {
             tasm.recordImplicitException(masm.codeBuffer.position(), info);
         }
-        switch (kind) {
+        switch (loadAddr.kind) {
             case Boolean:
-            case Byte:   masm.movsxb(tasm.asRegister(result),  loadAddr); break;
-            case Char:   masm.movzxl(tasm.asRegister(result),  loadAddr); break;
-            case Short:  masm.movswl(tasm.asRegister(result),  loadAddr); break;
-            case Int:    masm.movslq(tasm.asRegister(result),  loadAddr); break;
-            case Long:   masm.movq(tasm.asRegister(result),    loadAddr); break;
-            case Float:  masm.movflt(tasm.asFloatReg(result),  loadAddr); break;
-            case Double: masm.movdbl(tasm.asDoubleReg(result), loadAddr); break;
-            case Object: masm.movq(tasm.asRegister(result),    loadAddr); break;
+            case Byte:   masm.movsxb(asRegister(result),  loadAddr); break;
+            case Char:   masm.movzxl(asRegister(result),  loadAddr); break;
+            case Short:  masm.movswl(asRegister(result),  loadAddr); break;
+            case Int:    masm.movslq(asRegister(result),  loadAddr); break;
+            case Long:   masm.movq(asRegister(result),    loadAddr); break;
+            case Float:  masm.movflt(asFloatReg(result),  loadAddr); break;
+            case Double: masm.movdbl(asDoubleReg(result), loadAddr); break;
+            case Object: masm.movq(asRegister(result),    loadAddr); break;
             default:     throw Util.shouldNotReachHere();
         }
     }
 
-    protected static void store(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiAddress storeAddr, CiValue input, CiKind kind, LIRDebugInfo info) {
+    protected static void store(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiAddress storeAddr, CiValue input, LIRDebugInfo info) {
         if (info != null) {
             tasm.recordImplicitException(masm.codeBuffer.position(), info);
         }
 
-        if (input.isRegister()) {
-            switch (kind) {
+        if (isRegister(input)) {
+            switch (storeAddr.kind) {
                 case Boolean:
-                case Byte:   masm.movb(storeAddr,   tasm.asRegister(input)); break;
+                case Byte:   masm.movb(storeAddr,   asRegister(input)); break;
                 case Char:
-                case Short:  masm.movw(storeAddr,   tasm.asRegister(input)); break;
-                case Int:    masm.movl(storeAddr,   tasm.asRegister(input)); break;
-                case Long:   masm.movq(storeAddr,   tasm.asRegister(input)); break;
-                case Float:  masm.movflt(storeAddr, tasm.asFloatReg(input)); break;
-                case Double: masm.movsd(storeAddr,  tasm.asDoubleReg(input)); break;
-                case Object: masm.movq(storeAddr,   tasm.asRegister(input)); break;
-                default:     throw Util.shouldNotReachHere("kind=" + kind);
+                case Short:  masm.movw(storeAddr,   asRegister(input)); break;
+                case Int:    masm.movl(storeAddr,   asRegister(input)); break;
+                case Long:   masm.movq(storeAddr,   asRegister(input)); break;
+                case Float:  masm.movflt(storeAddr, asFloatReg(input)); break;
+                case Double: masm.movsd(storeAddr,  asDoubleReg(input)); break;
+                case Object: masm.movq(storeAddr,   asRegister(input)); break;
+                default:     throw Util.shouldNotReachHere();
             }
-        } else if (input.isConstant()) {
+        } else if (isConstant(input)) {
             CiConstant c = (CiConstant) input;
-            switch (kind) {
+            switch (storeAddr.kind) {
                 case Boolean:
                 case Byte:   masm.movb(storeAddr, c.asInt() & 0xFF); break;
                 case Char:
@@ -406,7 +487,7 @@ public class AMD64MoveOpcode {
                     }
                     break;
                 default:
-                    throw Util.shouldNotReachHere("kind=" + kind);
+                    throw Util.shouldNotReachHere();
             }
 
         } else {
@@ -415,15 +496,15 @@ public class AMD64MoveOpcode {
     }
 
     protected static void compareAndSwap(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiAddress address, CiValue cmpValue, CiValue newValue) {
-        assert tasm.asRegister(cmpValue) == AMD64.rax && tasm.asRegister(result) == AMD64.rax;
+        assert asRegister(cmpValue) == AMD64.rax && asRegister(result) == AMD64.rax;
 
         if (tasm.target.isMP) {
             masm.lock();
         }
         switch (cmpValue.kind) {
-            case Int:    masm.cmpxchgl(tasm.asRegister(newValue), address); break;
+            case Int:    masm.cmpxchgl(asRegister(newValue), address); break;
             case Long:
-            case Object: masm.cmpxchgq(tasm.asRegister(newValue), address); break;
+            case Object: masm.cmpxchgq(asRegister(newValue), address); break;
             default:     throw Util.shouldNotReachHere();
         }
     }

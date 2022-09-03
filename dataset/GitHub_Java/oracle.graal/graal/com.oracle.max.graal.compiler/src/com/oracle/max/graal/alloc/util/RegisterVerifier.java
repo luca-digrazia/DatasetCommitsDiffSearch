@@ -203,18 +203,14 @@ public final class RegisterVerifier {
     }
 
     private CiValue temp(CiValue value) {
-        if (!isConstant(value) && value != CiValue.IllegalValue && !isIgnoredRegister(value)) {
-            assert trace("    temp %s -> remove key %s", value, key(value));
-            curInputState.remove(key(value));
-        }
+        assert trace("    temp %s -> remove key %s", value, key(value));
+        curInputState.remove(key(value));
         return value;
     }
 
     private CiValue output(CiValue value) {
-        if (value != CiValue.IllegalValue && !isIgnoredRegister(value)) {
-            assert trace("    output %s -> set key %s", value, key(value));
-            curInputState.put(key(value), value);
-        }
+        assert trace("    output %s -> set key %s", value, key(value));
+        curInputState.put(key(value), value);
         return value;
     }
 
