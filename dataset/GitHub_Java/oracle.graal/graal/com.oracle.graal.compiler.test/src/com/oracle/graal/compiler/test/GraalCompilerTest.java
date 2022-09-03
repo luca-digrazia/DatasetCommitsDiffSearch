@@ -421,7 +421,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         ScheduleResult scheduleResult = graph.getLastSchedule();
 
         StringBuilder result = new StringBuilder();
-        Block[] blocks = scheduleResult.getCFG().getBlocks();
+        List<Block> blocks = scheduleResult.getCFG().getBlocks();
         for (Block block : blocks) {
             result.append("Block " + block + " ");
             if (block == scheduleResult.getCFG().getStartBlock()) {
