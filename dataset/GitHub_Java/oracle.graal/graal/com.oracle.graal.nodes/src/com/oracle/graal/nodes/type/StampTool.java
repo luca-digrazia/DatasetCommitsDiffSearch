@@ -32,6 +32,23 @@ import com.oracle.graal.nodes.calc.*;
  */
 public class StampTool {
 
+    private static Kind joinKind(Kind a, Kind b) {
+        if (a == b) {
+            return a;
+        }
+        return Kind.Illegal;
+    }
+
+    /**
+     * Create an {@link IllegalStamp} from two incompatible input stamps, joining the kind of the
+     * input stamps if possible.
+     */
+    private static Stamp joinIllegal(Stamp a, Stamp b) {
+        IllegalStamp ia = (IllegalStamp) a.illegal();
+        IllegalStamp ib = (IllegalStamp) b.illegal();
+        return StampFactory.illegal(joinKind(ia.kind(), ib.kind()));
+    }
+
     public static Stamp negate(Stamp stamp) {
         if (stamp instanceof IntegerStamp) {
             IntegerStamp integerStamp = (IntegerStamp) stamp;
@@ -76,7 +93,7 @@ public class StampTool {
         if (stamp1 instanceof IntegerStamp && stamp2 instanceof IntegerStamp) {
             return add((IntegerStamp) stamp1, (IntegerStamp) stamp2);
         }
-        return StampFactory.illegal();
+        return joinIllegal(stamp1, stamp2);
     }
 
     private static long carryBits(long x, long y) {
@@ -91,7 +108,7 @@ public class StampTool {
         if (stamp1 instanceof IntegerStamp && stamp2 instanceof IntegerStamp) {
             return div((IntegerStamp) stamp1, (IntegerStamp) stamp2);
         }
-        return StampFactory.illegal();
+        return joinIllegal(stamp1, stamp2);
     }
 
     public static Stamp div(IntegerStamp stamp1, IntegerStamp stamp2) {
@@ -206,7 +223,7 @@ public class StampTool {
         if (stamp1 instanceof IntegerStamp && stamp2 instanceof IntegerStamp) {
             return and((IntegerStamp) stamp1, (IntegerStamp) stamp2);
         }
-        return StampFactory.illegal();
+        return joinIllegal(stamp1, stamp2);
     }
 
     public static Stamp and(IntegerStamp stamp1, IntegerStamp stamp2) {
@@ -218,7 +235,7 @@ public class StampTool {
         if (stamp1 instanceof IntegerStamp && stamp2 instanceof IntegerStamp) {
             return or((IntegerStamp) stamp1, (IntegerStamp) stamp2);
         }
-        return StampFactory.illegal();
+        return joinIllegal(stamp1, stamp2);
     }
 
     public static Stamp or(IntegerStamp stamp1, IntegerStamp stamp2) {
@@ -230,7 +247,7 @@ public class StampTool {
         if (stamp1 instanceof IntegerStamp && stamp2 instanceof IntegerStamp) {
             return xor((IntegerStamp) stamp1, (IntegerStamp) stamp2);
         }
-        return StampFactory.illegal();
+        return joinIllegal(stamp1, stamp2);
     }
 
     public static Stamp xor(IntegerStamp stamp1, IntegerStamp stamp2) {
@@ -444,42 +461,5 @@ public class StampTool {
             return min;
         }
         return v;
-    }
-
-    /**
-     * Compute the stamp resulting from the unsigned comparison being true.
-     *
-     * @return null if it's can't be true or it nothing useful can be encoded.
-     */
-    public static Stamp unsignedCompare(Stamp stamp, Stamp stamp2) {
-        IntegerStamp x = (IntegerStamp) stamp;
-        IntegerStamp y = (IntegerStamp) stamp2;
-        if (x == x.unrestricted() && y == y.unrestricted()) {
-            // Don't know anything.
-            return null;
-        }
-        // c <| n, where c is a constant and n is known to be positive.
-        if (x.lowerBound() == x.upperBound()) {
-            if (y.isPositive()) {
-                if (x.lowerBound() == (1 << x.getBits()) - 1) {
-                    // Constant is MAX_VALUE which must fail.
-                    return null;
-                }
-                if (x.lowerBound() <= y.lowerBound()) {
-                    // Test will fail. Return illegalStamp instead?
-                    return null;
-                }
-                // If the test succeeds then this proves that n is at greater than c so the bounds
-                // are [c+1..-n.upperBound)].
-                return StampFactory.forInteger(x.getBits(), false, x.lowerBound() + 1, y.upperBound());
-            }
-            return null;
-        }
-        // n <| c, where c is a strictly positive constant
-        if (y.lowerBound() == y.upperBound() && y.isStrictlyPositive()) {
-            // The test proves that n is positive and less than c, [0..c-1]
-            return StampFactory.forInteger(y.getBits(), false, 0, y.lowerBound() - 1);
-        }
-        return null;
     }
 }
