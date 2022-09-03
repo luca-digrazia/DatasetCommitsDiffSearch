@@ -130,9 +130,6 @@ public class CompilationTask implements Runnable, Comparable {
         try {
             runCompilation(true);
         } finally {
-            if (method.currentTask() == this) {
-                method.setCurrentTask(null);
-            }
             withinEnqueue.set(Boolean.TRUE);
             status.set(CompilationStatus.Finished);
             synchronized (this) {
@@ -264,7 +261,7 @@ public class CompilationTask implements Runnable, Comparable {
                 ProfilingInfo profilingInfo = getProfilingInfo();
                 OptimisticOptimizations optimisticOpts = getOptimisticOpts(profilingInfo);
                 result = compileGraph(graph, null, cc, method, providers, backend, backend.getTarget(), graphCache, getGraphBuilderSuite(providers), optimisticOpts, profilingInfo,
-                                method.getSpeculationLog(), suites, true, new CompilationResult(), CompilationResultBuilderFactory.Default);
+                                method.getSpeculationLog(), suites, new CompilationResult(), CompilationResultBuilderFactory.Default);
                 result.setId(getId());
                 result.setEntryBCI(entryBCI);
             } catch (Throwable e) {
