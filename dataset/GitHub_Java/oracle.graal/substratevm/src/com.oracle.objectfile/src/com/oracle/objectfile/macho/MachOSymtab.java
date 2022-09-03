@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,14 +22,13 @@
  */
 package com.oracle.objectfile.macho;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.function.Predicate;
 
 import com.oracle.objectfile.BuildDependency;
@@ -51,7 +48,7 @@ import com.oracle.objectfile.macho.MachOObjectFile.LinkEditSegment64Command;
 import com.oracle.objectfile.macho.MachOObjectFile.MachOSection;
 import com.oracle.objectfile.macho.MachOObjectFile.Segment64Command;
 
-public final class MachOSymtab extends MachOObjectFile.LinkEditElement implements SymbolTable {
+public class MachOSymtab extends MachOObjectFile.LinkEditElement implements SymbolTable {
 
     /*
      * Mach-O symbol tables are not sections! They are opaque data inside some segment (__LINKEDIT
@@ -61,10 +58,9 @@ public final class MachOSymtab extends MachOObjectFile.LinkEditElement implement
      * (The same goes for strtabs!)
      */
 
-    final MachOStrtab strtab;
+    MachOStrtab strtab;
 
-    private boolean isSorted = false;
-    private final ArrayList<Entry> entries = new ArrayList<>();
+    SortedSet<Entry> entries = new TreeSet<>(MachOSymtab::compareEntries);
 
     private static int compareEntries(Entry a, Entry b) {
         /*
@@ -84,27 +80,20 @@ public final class MachOSymtab extends MachOObjectFile.LinkEditElement implement
         return cmp;
     }
 
-    private final HashMap<String, Entry> entriesByName = new HashMap<>();
+    private HashMap<String, Entry> entriesByName = new HashMap<>();
 
     public MachOSymtab(String name, MachOObjectFile objectFile, Segment64Command containingSegment, MachOStrtab strtab) {
         objectFile.super(name, containingSegment, objectFile.getWordSizeInBytes());
+        setStrtab(strtab);
+    }
+
+    public SortedSet<Entry> getEntries() {
+        return entries;
+    }
+
+    public void setStrtab(MachOStrtab strtab) {
         this.strtab = strtab;
-        strtab.setContentProvider(() -> getSortedEntries().stream().map(Entry::getNameInObject).iterator());
-    }
-
-    public List<Entry> getSortedEntries() {
-        if (!isSorted) {
-            entries.sort(MachOSymtab::compareEntries);
-            isSorted = true;
-        }
-        return entries;
-    }
-
-    private List<Entry> getModifiableEntries() {
-        if (isSorted) {
-            throw new RuntimeException("unexpected access to unsorted symtab entries");
-        }
-        return entries;
+        strtab.setContentProvider(entries.stream().map(Entry::getNameInObject)::iterator);
     }
 
     enum ReferenceType {
@@ -364,7 +353,7 @@ public final class MachOSymtab extends MachOObjectFile.LinkEditElement implement
     }
 
     private int getWrittenSize() {
-        return getEntryCount() * EntryStruct.getWrittenSize();
+        return entries.size() * EntryStruct.getWrittenSize();
     }
 
     @Override
@@ -374,7 +363,7 @@ public final class MachOSymtab extends MachOObjectFile.LinkEditElement implement
 
     private int firstIndexMatching(Predicate<Entry> p) {
         int i = 0;
-        for (Entry e : getSortedEntries()) {
+        for (Entry e : entries) {
             if (p.test(e)) {
                 return i;
             }
@@ -390,7 +379,7 @@ public final class MachOSymtab extends MachOObjectFile.LinkEditElement implement
 
     private int nContiguousMatching(Predicate<Entry> p) {
         int n = 0;
-        for (Entry e : getSortedEntries()) {
+        for (Entry e : entries) {
             if (p.test(e)) {
                 n++;
             } else if (n != 0) {
@@ -445,7 +434,7 @@ public final class MachOSymtab extends MachOObjectFile.LinkEditElement implement
         StringTable t = new StringTable(strtabContent);
         EntryStruct s = new EntryStruct();
 
-        for (Entry e : getSortedEntries()) {
+        for (Entry e : entries) {
             s.strx = t.indexFor(e.getNameInObject());
             assert s.strx != -1;
             s.type = (byte) (e.type.value() | (e.privateExtern ? EntryStruct.N_PEXT : 0) | (e.extern ? EntryStruct.N_EXT : 0));
@@ -488,7 +477,7 @@ public final class MachOSymtab extends MachOObjectFile.LinkEditElement implement
     }
 
     private Entry addEntry(Entry entry) {
-        getModifiableEntries().add(entry);
+        entries.add(entry);
         entriesByName.put(entry.getName(), entry);
         return entry;
     }
@@ -513,17 +502,17 @@ public final class MachOSymtab extends MachOObjectFile.LinkEditElement implement
     }
 
     public int indexOf(Symbol sym) {
-        int offset = Collections.binarySearch(getSortedEntries(), (Entry) sym, MachOSymtab::compareEntries);
-        return offset < 0 ? -1 : offset;
+        SortedSet<Entry> headSet = entries.headSet((Entry) sym);
+        int before = headSet.size();
+        if (before == 0) { // empty headSet means either the symbol is first, or that it is unknown
+            return entries.contains(sym) ? 0 : -1;
+        }
+        return before;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Override
     public Iterator<Symbol> iterator() {
-        return (Iterator) getSortedEntries().iterator();
-    }
-
-    public int getEntryCount() {
-        return entries.size();
+        return (Iterator) entries.iterator();
     }
 }

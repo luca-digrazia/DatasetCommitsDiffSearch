@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -131,28 +129,6 @@ enum X86_64Reloc {
     SIGNED_2,
     SIGNED_4,
     TLV;
-
-    public int getValue() {
-        return ordinal();
-    }
-}
-
-enum ARM64Reloc {
-    /*
-     * These are defined as an enum in /usr/include/mach-o/arm64/reloc.h, which we reproduce. Of
-     * course, take care to preserve the order!
-     */
-    UNSIGNED,
-    SUBTRACTOR,
-    BRANCH26,
-    PAGE21,
-    PAGEOFF12,
-    GOT_LOAD_PAGE21,
-    GOT_LOAD_PAGEOFF12,
-    POINTER_TO_GOT,
-    TLVP_LOAD_PAGE21,
-    TLVP_LOAD_PAGEOFF12,
-    ADDEND;
 
     public int getValue() {
         return ordinal();
@@ -307,14 +283,6 @@ final class RelocationInfo implements RelocationRecord, RelocationMethod {
                         return X86_64Reloc.SIGNED.getValue();
                     case PROGRAM_BASE:
                         throw new IllegalArgumentException("Mach-O does not support PROGRAM_BASE relocations");
-                    default:
-                    case UNKNOWN:
-                        throw new IllegalArgumentException("unknown relocation kind: " + kind);
-                }
-            case ARM64:
-                switch (kind) {
-                    case DIRECT:
-                        return ARM64Reloc.UNSIGNED.getValue();
                     default:
                     case UNKNOWN:
                         throw new IllegalArgumentException("unknown relocation kind: " + kind);

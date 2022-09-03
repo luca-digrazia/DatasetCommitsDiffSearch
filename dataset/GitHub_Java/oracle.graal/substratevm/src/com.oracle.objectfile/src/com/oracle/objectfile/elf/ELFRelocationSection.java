@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -236,15 +234,6 @@ public class ELFRelocationSection extends ELFSection {
         // decisions.get(syms).getDecision(LayoutProperty.Kind.CONTENT);
         // deps.add(BuildDependency.createOrGet(ourContent, symtabContent));
         /* If we're dynamic, it also depends on the vaddr of all referenced sections. */
-
-        // our content depends on the content of the section being relocated
-        // (because entries only get registered during generation)
-        if (relocated != null) {
-            LayoutDecision relocatedSectionContent = decisions.get(relocated).getDecision(LayoutDecision.Kind.CONTENT);
-            deps.add(BuildDependency.createOrGet(ourContent,
-                            relocatedSectionContent));
-        }
-
         if (isDynamic()) {
             Set<ELFSection> referenced = new HashSet<>();
             for (Entry ent : entries.keySet()) {
@@ -265,14 +254,12 @@ public class ELFRelocationSection extends ELFSection {
         for (Entry ent : entries.keySet()) {
             long offset = !isDynamic() ? ent.offset : (int) alreadyDecided.get(ent.section).getDecidedValue(LayoutDecision.Kind.VADDR) + ent.offset;
             long info;
-            int symIndex = syms.indexOf(ent.sym);
-            assert symIndex >= 0 : "symbol not found";
             switch (getOwner().getFileClass()) {
                 case ELFCLASS32:
-                    info = ((symIndex << 8) & 0xffffffffL) + (ent.t.toLong() & 0xffL);
+                    info = ((syms.indexOf(ent.sym) << 8) & 0xffffffffL) + (ent.t.toLong() & 0xffL);
                     break;
                 case ELFCLASS64:
-                    info = (((long) symIndex) << 32) + (ent.t.toLong() & 0xffffffffL);
+                    info = (((long) syms.indexOf(ent.sym)) << 32) + (ent.t.toLong() & 0xffffffffL);
                     break;
                 default:
                     throw new RuntimeException(getOwner().getFileClass().toString());
