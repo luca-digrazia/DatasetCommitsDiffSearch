@@ -30,7 +30,6 @@ import java.lang.reflect.Constructor;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.Consumer;
 
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
@@ -352,7 +351,7 @@ public class InliningUtil extends ValueMergeUtil {
             }
         }
 
-        updateSourcePositions(invoke, inlineGraph, duplicates, !Objects.equals(inlineGraph.method(), inlineeMethod));
+        updateSourcePositions(invoke, inlineGraph, duplicates, !inlineGraph.method().equals(inlineeMethod));
         if (stateAfter != null) {
             processFrameStates(invoke, inlineGraph, duplicates, stateAtExceptionEdge, returnNodes.size() > 1);
             int callerLockDepth = stateAfter.nestedLockDepth();
