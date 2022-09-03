@@ -26,9 +26,9 @@ import java.lang.reflect.*;
 
 import org.junit.*;
 
-import sun.misc.*;
-
 import com.oracle.graal.jtt.*;
+
+import sun.misc.*;
 
 public class Unsafe_compareAndSwap extends JTTTest {
 

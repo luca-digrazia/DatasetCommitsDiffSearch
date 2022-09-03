@@ -24,9 +24,8 @@ package com.oracle.graal.jtt.loop;
 
 import java.lang.reflect.*;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 /*
  */
