@@ -92,8 +92,8 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
         public SaveRbp(NoOp placeholder) {
             this.placeholder = placeholder;
-            AMD64FrameMapBuilder frameMapBuilder = (AMD64FrameMapBuilder) getResult().getFrameMapBuilder();
-            this.reservedSlot = frameMapBuilder.allocateRBPSpillSlot();
+            this.reservedSlot = getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(Kind.Long));
+            assert reservedSlot.getRawOffset() == -16 : reservedSlot.getRawOffset();
         }
 
         /**
@@ -106,7 +106,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
             if (useStack) {
                 dst = reservedSlot;
             } else {
-                ((AMD64FrameMapBuilder) getResult().getFrameMapBuilder()).freeRBPSpillSlot();
+                getResult().getFrameMapBuilder().freeSpillSlot(reservedSlot);
                 dst = newVariable(LIRKind.value(Kind.Long));
             }
 
@@ -131,7 +131,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     @Override
-    public StackSlotValue getLockSlot(int lockDepth) {
+    public StackSlot getLockSlot(int lockDepth) {
         return getLockStack().makeLockSlot(lockDepth);
     }
 
@@ -218,7 +218,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
      * @param savedRegisterLocations the slots to which the registers are saved
      * @param supportsRemove determines if registers can be pruned
      */
-    protected AMD64SaveRegistersOp emitSaveRegisters(Register[] savedRegisters, StackSlotValue[] savedRegisterLocations, boolean supportsRemove) {
+    protected AMD64SaveRegistersOp emitSaveRegisters(Register[] savedRegisters, StackSlot[] savedRegisterLocations, boolean supportsRemove) {
         AMD64SaveRegistersOp save = new AMD64SaveRegistersOp(savedRegisters, savedRegisterLocations, supportsRemove);
         append(save);
         return save;
@@ -231,11 +231,11 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
      * @return the register save node
      */
     private AMD64SaveRegistersOp emitSaveAllRegisters(Register[] savedRegisters, boolean supportsRemove) {
-        StackSlotValue[] savedRegisterLocations = new StackSlotValue[savedRegisters.length];
+        StackSlot[] savedRegisterLocations = new StackSlot[savedRegisters.length];
         for (int i = 0; i < savedRegisters.length; i++) {
             PlatformKind kind = target().arch.getLargestStorableKind(savedRegisters[i].getRegisterCategory());
             assert kind != Kind.Illegal;
-            VirtualStackSlot spillSlot = getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(kind));
+            StackSlot spillSlot = getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(kind));
             savedRegisterLocations[i] = spillSlot;
         }
         return emitSaveRegisters(savedRegisters, savedRegisterLocations, supportsRemove);
@@ -417,7 +417,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         boolean hasDebugInfo = getResult().getLIR().hasDebugInfo();
         AllocatableValue savedRbp = saveRbp.finalize(hasDebugInfo);
         if (hasDebugInfo) {
-            ((AMD64HotSpotLIRGenerationResult) getResult()).setDeoptimizationRescueSlot(((AMD64FrameMapBuilder) getResult().getFrameMapBuilder()).allocateDeoptimizationRescueSlot());
+            ((AMD64HotSpotLIRGenerationResult) getResult()).setDeoptimizationRescueSlot(getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(Kind.Long)));
         }
 
         for (AMD64HotSpotEpilogueOp op : epilogueOps) {

@@ -48,9 +48,9 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     public static class Options {
         // @formatter:off
-        @Option(help = "Print HIR along side LIR as the latter is generated", type = OptionType.Debug)
+        @Option(help = "Print HIR along side LIR as the latter is generated")
         public static final OptionValue<Boolean> PrintIRWithLIR = new OptionValue<>(false);
-        @Option(help = "The trace level for the LIR generator", type = OptionType.Debug)
+        @Option(help = "The trace level for the LIR generator")
         public static final OptionValue<Integer> TraceLIRGeneratorLevel = new OptionValue<>(0);
         // @formatter:on
     }
@@ -362,7 +362,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
             case Long:
                 return JavaConstant.forLong(dead);
             case Object:
-                return JavaConstant.NULL_POINTER;
+                return JavaConstant.NULL_OBJECT;
             default:
                 throw new IllegalArgumentException(kind.toString());
         }
