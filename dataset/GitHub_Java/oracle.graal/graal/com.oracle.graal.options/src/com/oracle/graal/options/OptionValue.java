@@ -22,20 +22,15 @@
  */
 package com.oracle.graal.options;
 
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Objects;
 
 /**
  * An option value.
  */
 public class OptionValue<T> {
+
     /**
      * Temporarily changes the value for an option. The {@linkplain OptionValue#getValue() value} of
      * {@code option} is set to {@code value} until {@link OverrideScope#close()} is called on the
@@ -51,7 +46,7 @@ public class OptionValue<T> {
      * </pre>
      */
     public static OverrideScope override(OptionValue<?> option, Object value) {
-        OverrideScope current = getOverrideScope();
+        OverrideScope current = overrideScopes.get();
         if (current == null) {
             if (!value.equals(option.getValue())) {
                 return new SingleOverrideScope(option, value);
@@ -81,7 +76,7 @@ public class OptionValue<T> {
      * </pre>
      */
     public static OverrideScope override(Map<OptionValue<?>, Object> overrides) {
-        OverrideScope current = getOverrideScope();
+        OverrideScope current = overrideScopes.get();
         if (current == null && overrides.size() == 1) {
             Entry<OptionValue<?>, Object> single = overrides.entrySet().iterator().next();
             OptionValue<?> option = single.getKey();
@@ -111,7 +106,7 @@ public class OptionValue<T> {
      * @param overrides overrides in the form {@code [option1, override1, option2, override2, ...]}
      */
     public static OverrideScope override(Object... overrides) {
-        OverrideScope current = getOverrideScope();
+        OverrideScope current = overrideScopes.get();
         if (current == null && overrides.length == 2) {
             OptionValue<?> option = (OptionValue<?>) overrides[0];
             Object overrideValue = overrides[1];
@@ -133,17 +128,9 @@ public class OptionValue<T> {
         return new MultipleOverridesScope(current, map);
     }
 
-    private static final ThreadLocal<OverrideScope> overrideScopeTL = new ThreadLocal<>();
+    static final ThreadLocal<OverrideScope> overrideScopes = new ThreadLocal<>();
 
-    protected static OverrideScope getOverrideScope() {
-        return overrideScopeTL.get();
-    }
-
-    protected static void setOverrideScope(OverrideScope overrideScope) {
-        overrideScopeTL.set(overrideScope);
-    }
-
-    private T defaultValue;
+    private T initialValue;
 
     /**
      * The raw option value.
@@ -169,37 +156,35 @@ public class OptionValue<T> {
 
     @SuppressWarnings("unchecked")
     public OptionValue(T value) {
-        this.defaultValue = value;
-        this.value = (T) DEFAULT;
+        this.initialValue = value;
+        this.value = (T) UNINITIALIZED;
         addToHistogram(this);
     }
 
-    private static final Object DEFAULT = "DEFAULT";
     private static final Object UNINITIALIZED = "UNINITIALIZED";
 
     /**
      * Creates an uninitialized option value for a subclass that initializes itself
-     * {@link #defaultValue() lazily}.
+     * {@link #initialValue() lazily}.
      */
     @SuppressWarnings("unchecked")
     protected OptionValue() {
-        this.defaultValue = (T) UNINITIALIZED;
-        this.value = (T) DEFAULT;
+        this.initialValue = (T) UNINITIALIZED;
+        this.value = (T) UNINITIALIZED;
         addToHistogram(this);
     }
 
     /**
-     * Lazy initialization of default value.
+     * Lazy initialization of value.
      */
-    protected T defaultValue() {
-        throw new InternalError("Option without a default value value must override defaultValue()");
+    protected T initialValue() {
+        throw new InternalError("Uninitialized option value must override initialValue()");
     }
 
     /**
      * Sets the descriptor for this option.
      */
     public void setDescriptor(OptionDescriptor descriptor) {
-        assert this.descriptor == null : "Overwriting existing descriptor";
         this.descriptor = descriptor;
     }
 
@@ -230,21 +215,27 @@ public class OptionValue<T> {
      * {@link #setValue(Object)} or registering {@link OverrideScope}s. Therefore, it is also not
      * affected by options set on the command line.
      */
-    public T getDefaultValue() {
-        if (defaultValue == UNINITIALIZED) {
-            defaultValue = defaultValue();
+    public T getInitialValue() {
+        if (initialValue == UNINITIALIZED) {
+            initialValue = initialValue();
         }
-        return defaultValue;
+        return initialValue;
     }
 
     /**
      * Returns true if the option has the same value that was set in the source code.
      */
-    public boolean hasDefaultValue() {
+    public boolean hasInitialValue() {
         if (!(this instanceof StableOptionValue)) {
-            getValue(); // ensure initialized
+            OverrideScope overrideScope = overrideScopes.get();
+            if (overrideScope != null) {
+                T override = overrideScope.getOverride(this);
+                if (override != null) {
+                    return false;
+                }
+            }
         }
-        return value == DEFAULT || Objects.equals(value, getDefaultValue());
+        return value == UNINITIALIZED || Objects.equals(value, getInitialValue());
     }
 
     /**
@@ -255,7 +246,7 @@ public class OptionValue<T> {
             reads++;
         }
         if (!(this instanceof StableOptionValue)) {
-            OverrideScope overrideScope = getOverrideScope();
+            OverrideScope overrideScope = overrideScopes.get();
             if (overrideScope != null) {
                 T override = overrideScope.getOverride(this);
                 if (override != null) {
@@ -263,10 +254,10 @@ public class OptionValue<T> {
                 }
             }
         }
-        if (value != DEFAULT) {
+        if (value != UNINITIALIZED) {
             return value;
         } else {
-            return getDefaultValue();
+            return getInitialValue();
         }
     }
 
@@ -281,15 +272,15 @@ public class OptionValue<T> {
     public Collection<T> getValues(Collection<T> c) {
         Collection<T> values = c == null ? new ArrayList<>() : c;
         if (!(this instanceof StableOptionValue)) {
-            OverrideScope overrideScope = getOverrideScope();
+            OverrideScope overrideScope = overrideScopes.get();
             if (overrideScope != null) {
                 overrideScope.getOverrides(this, (Collection<Object>) values);
             }
         }
-        if (value != DEFAULT) {
+        if (value != UNINITIALIZED) {
             values.add(value);
         } else {
-            values.add(getDefaultValue());
+            values.add(getInitialValue());
         }
         return values;
     }
@@ -343,7 +334,7 @@ public class OptionValue<T> {
             }
             this.option = option;
             this.value = value;
-            setOverrideScope(this);
+            overrideScopes.set(this);
         }
 
         @Override
@@ -369,7 +360,7 @@ public class OptionValue<T> {
 
         @Override
         public void close() {
-            setOverrideScope(null);
+            overrideScopes.set(null);
         }
     }
 
@@ -390,7 +381,7 @@ public class OptionValue<T> {
                 this.overrides.put(option, value);
             }
             if (!overrides.isEmpty()) {
-                setOverrideScope(this);
+                overrideScopes.set(this);
             }
         }
 
@@ -414,7 +405,7 @@ public class OptionValue<T> {
                 }
             }
             if (!this.overrides.isEmpty()) {
-                setOverrideScope(this);
+                overrideScopes.set(this);
             }
         }
 
@@ -446,17 +437,13 @@ public class OptionValue<T> {
         @Override
         public void close() {
             if (!overrides.isEmpty()) {
-                setOverrideScope(parent);
+                overrideScopes.set(parent);
             }
         }
     }
 
     static {
         if (ShowReadsHistogram) {
-            // Trigger initialization of OptionsLoader to ensure all option values have
-            // a descriptor which is required for them to have meaningful names.
-            OptionsLoader.options.hashCode();
-
             Runtime.getRuntime().addShutdownHook(new Thread() {
                 @Override
                 public void run() {
