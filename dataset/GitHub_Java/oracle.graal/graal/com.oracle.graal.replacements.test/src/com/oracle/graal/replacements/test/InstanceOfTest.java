@@ -30,6 +30,7 @@ import com.oracle.graal.api.code.CompilationResult.Site;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.replacements.test.CheckCastTest.Depth12;
 import com.oracle.graal.replacements.test.CheckCastTest.Depth13;
@@ -43,6 +44,11 @@ public class InstanceOfTest extends TypeCheckTest {
 
     public InstanceOfTest() {
         suites.getHighTier().findPhase(AbstractInliningPhase.class).remove();
+    }
+
+    @Override
+    protected void editPhasePlan(ResolvedJavaMethod method, StructuredGraph graph, PhasePlan phasePlan) {
+        phasePlan.disablePhase(InliningPhase.class);
     }
 
     @Override
