@@ -23,10 +23,10 @@
 package com.oracle.graal.hotspot.stubs;
 
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
+import static com.oracle.graal.api.meta.MetaUtil.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition;
@@ -34,6 +34,7 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
@@ -62,7 +63,7 @@ public class ForeignCallStub extends Stub {
 
     /**
      * Creates a stub for a call to code at a given address.
-     *
+     * 
      * @param address the address of the code to call
      * @param descriptor the signature of the call to this stub
      * @param prependThread true if the JavaThread value for the current thread is to be prepended
@@ -77,7 +78,7 @@ public class ForeignCallStub extends Stub {
         super(providers, HotSpotForeignCallLinkage.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getForeignCalls(), descriptor, 0L, PRESERVES_REGISTERS, JavaCall, JavaCallee,
                         transition, reexecutable, killedLocations));
         this.prependThread = prependThread;
-        Class<?>[] targetParameterTypes = createTargetParameters(descriptor);
+        Class[] targetParameterTypes = createTargetParameters(descriptor);
         ForeignCallDescriptor targetSig = new ForeignCallDescriptor(descriptor.getName() + ":C", descriptor.getResultType(), targetParameterTypes);
         target = HotSpotForeignCallLinkage.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getForeignCalls(), targetSig, address, DESTROYS_REGISTERS, NativeCall, NativeCall,
                         transition, reexecutable, killedLocations);
@@ -90,10 +91,10 @@ public class ForeignCallStub extends Stub {
         return target;
     }
 
-    private Class<?>[] createTargetParameters(ForeignCallDescriptor descriptor) {
-        Class<?>[] parameters = descriptor.getArgumentTypes();
+    private Class[] createTargetParameters(ForeignCallDescriptor descriptor) {
+        Class[] parameters = descriptor.getArgumentTypes();
         if (prependThread) {
-            Class<?>[] newParameters = new Class[parameters.length + 1];
+            Class[] newParameters = new Class[parameters.length + 1];
             System.arraycopy(parameters, 0, newParameters, 1, parameters.length);
             newParameters[0] = Word.class;
             return newParameters;
@@ -114,7 +115,7 @@ public class ForeignCallStub extends Stub {
                 ForeignCallDescriptor d = linkage.getDescriptor();
                 MetaAccessProvider metaAccess = providers.getMetaAccess();
                 Class<?>[] arguments = d.getArgumentTypes();
-                ResolvedJavaType[] parameters = new ResolvedJavaType[arguments.length];
+                JavaType[] parameters = new JavaType[arguments.length];
                 for (int i = 0; i < arguments.length; i++) {
                     parameters[i] = metaAccess.lookupJavaType(arguments[i]);
                 }
@@ -131,7 +132,7 @@ public class ForeignCallStub extends Stub {
 
             @Override
             public String toString() {
-                return format("ForeignCallStub<%n(%p)>");
+                return format("ForeignCallStub<%n(%p)>", this);
             }
         };
     }
@@ -140,7 +141,7 @@ public class ForeignCallStub extends Stub {
      * Creates a graph for this stub.
      * <p>
      * If the stub returns an object, the graph created corresponds to this pseudo code:
-     *
+     * 
      * <pre>
      *     Object foreignFunctionStub(args...) {
      *         foreignFunction(currentThread,  args);
@@ -151,10 +152,10 @@ public class ForeignCallStub extends Stub {
      *         return verifyObject(getAndClearObjectResult(thread()));
      *     }
      * </pre>
-     *
+     * 
      * If the stub returns a primitive or word, the graph created corresponds to this pseudo code
      * (using {@code int} as the primitive return type):
-     *
+     * 
      * <pre>
      *     int foreignFunctionStub(args...) {
      *         int result = foreignFunction(currentThread,  args);
@@ -164,9 +165,9 @@ public class ForeignCallStub extends Stub {
      *         return result;
      *     }
      * </pre>
-     *
+     * 
      * If the stub is void, the graph created corresponds to this pseudo code:
-     *
+     * 
      * <pre>
      *     void foreignFunctionStub(args...) {
      *         foreignFunction(currentThread,  args);
@@ -175,7 +176,7 @@ public class ForeignCallStub extends Stub {
      *         }
      *     }
      * </pre>
-     *
+     * 
      * In each example above, the {@code currentThread} argument is the C++ JavaThread value (i.e.,
      * %r15 on AMD64) and is only prepended if {@link #prependThread} is true.
      */
@@ -202,8 +203,8 @@ public class ForeignCallStub extends Stub {
             Debug.dump(graph, "Initial stub graph");
         }
 
-        kit.rewriteWordTypes(providers.getSnippetReflection());
-        kit.inlineInvokes(providers.getSnippetReflection());
+        kit.rewriteWordTypes();
+        kit.inlineInvokes();
 
         if (Debug.isDumpEnabled()) {
             Debug.dump(graph, "Stub graph before compilation");

@@ -204,7 +204,7 @@ public final class GraalTruffleRuntime implements TruffleRuntime {
         Backend backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
         CompilationResultBuilderFactory factory = getOptimizedCallTargetInstrumentationFactory(backend.getTarget().arch.getName(), javaMethod);
         return compileGraph(graph, null, cc, javaMethod, providers, backend, providers.getCodeCache().getTarget(), null, graphBuilderSuite, OptimisticOptimizations.ALL, getProfilingInfo(graph), null,
-                        suites, new CompilationResult(), factory);
+                        suites, true, new CompilationResult(), factory);
     }
 
     private static Providers getGraalProviders() {

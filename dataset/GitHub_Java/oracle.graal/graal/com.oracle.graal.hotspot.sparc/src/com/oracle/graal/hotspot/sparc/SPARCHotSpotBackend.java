@@ -154,7 +154,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     @Override
     public CompilationResultBuilder newCompilationResultBuilder(LIRGenerator lirGen, CompilationResult compilationResult, CompilationResultBuilderFactory factory) {
         SPARCHotSpotLIRGenerator gen = (SPARCHotSpotLIRGenerator) lirGen;
-        FrameMap frameMap = gen.getFrameMap();
+        FrameMap frameMap = gen.frameMap;
         assert gen.deoptimizationRescueSlot == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
 
         Stub stub = gen.getStub();
