@@ -78,7 +78,7 @@ class JavaObjectMessageResolution {
 
     @Resolve(message = "INVOKE")
     abstract static class InvokeNode extends Node {
-        private static final Message INVOKE = Message.INVOKE;
+        private static final Message INVOKE = Message.createInvoke(0);
         @Child private LookupMethodNode lookupMethod;
         @Child private ExecuteMethodNode executeMethod;
         @Child private LookupFieldNode lookupField;
@@ -114,7 +114,7 @@ class JavaObjectMessageResolution {
                     if (isExecutable) {
                         if (sendExecuteNode == null) {
                             CompilerDirectives.transferToInterpreterAndInvalidate();
-                            sendExecuteNode = insert(Message.EXECUTE.createNode());
+                            sendExecuteNode = insert(Message.createExecute(args.length).createNode());
                         }
                         try {
                             return ForeignAccess.sendExecute(sendExecuteNode, fieldObject, args);
@@ -183,7 +183,7 @@ class JavaObjectMessageResolution {
 
     @Resolve(message = "NEW")
     abstract static class NewNode extends Node {
-        private static final Message NEW = Message.NEW;
+        private static final Message NEW = Message.createNew(0);
         @Child private LookupConstructorNode lookupConstructor;
         @Child private ExecuteMethodNode executeMethod;
         @Child private ToJavaNode toJava;
@@ -257,7 +257,7 @@ class JavaObjectMessageResolution {
         @Child private ToPrimitiveNode primitive = ToPrimitiveNode.create();
 
         public Object access(JavaObject object) {
-            return JavaInteropAccessor.isGuestPrimitive(object.obj);
+            return JavaInterop.isPrimitive(object.obj);
         }
 
     }
@@ -267,7 +267,7 @@ class JavaObjectMessageResolution {
         @Child private ToPrimitiveNode primitive = ToPrimitiveNode.create();
 
         public Object access(JavaObject object) {
-            if (JavaInteropAccessor.isGuestPrimitive(object.obj)) {
+            if (JavaInterop.isPrimitive(object.obj)) {
                 return object.obj;
             } else {
                 return UnsupportedMessageException.raise(Message.UNBOX);
@@ -528,7 +528,7 @@ class JavaObjectMessageResolution {
 
     @Resolve(message = "EXECUTE")
     abstract static class ExecuteObjectNode extends Node {
-        private static final Message EXECUTE = Message.EXECUTE;
+        private static final Message EXECUTE = Message.createExecute(0);
         @Child private LookupFunctionalMethodNode lookupMethod;
         @Child private ExecuteMethodNode doExecute;
 
