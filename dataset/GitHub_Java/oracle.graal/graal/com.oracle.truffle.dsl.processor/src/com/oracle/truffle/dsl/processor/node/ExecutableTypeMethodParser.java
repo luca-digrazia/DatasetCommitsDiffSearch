@@ -39,6 +39,7 @@ public class ExecutableTypeMethodParser extends NodeMethodParser<ExecutableTypeD
         super(context, node);
         setEmitErrors(false);
         setParseNullOnError(false);
+        setUseVarArgs(true);
     }
 
     @Override
@@ -47,12 +48,13 @@ public class ExecutableTypeMethodParser extends NodeMethodParser<ExecutableTypeD
         List<ParameterSpec> requiredSpecs = new ArrayList<>(spec.getRequired());
         spec.getRequired().clear();
 
+        List<TypeMirror> allowedTypes = getNode().getTypeSystem().getPrimitiveTypeMirrors();
         for (ParameterSpec originalSpec : requiredSpecs) {
-            spec.addRequired(new ParameterSpec(originalSpec, Arrays.asList(getNode().getTypeSystem().getGenericType())));
+            spec.addRequired(new ParameterSpec(originalSpec, allowedTypes));
         }
 
         spec.setVariableRequiredArguments(true);
-        ParameterSpec other = new ParameterSpec("other", Arrays.asList(getNode().getTypeSystem().getGenericType()));
+        ParameterSpec other = new ParameterSpec("other", allowedTypes);
         other.setCardinality(Cardinality.MANY);
         other.setSignature(true);
         other.setIndexed(true);
@@ -72,17 +74,13 @@ public class ExecutableTypeMethodParser extends NodeMethodParser<ExecutableTypeD
 
     @Override
     protected List<TypeMirror> nodeTypeMirrors(NodeData nodeData) {
-        // executable types not yet available
-        if (nodeData.getTypeSystem() == null) {
-            return Collections.emptyList();
-        }
-        List<TypeMirror> types = new ArrayList<>(nodeData.getTypeSystem().getPrimitiveTypeMirrors());
-        types.add(nodeData.getTypeSystem().getVoidType().getPrimitiveType());
+        List<TypeMirror> types = new ArrayList<>(getNode().getTypeSystem().getPrimitiveTypeMirrors());
+        types.add(getNode().getTypeSystem().getVoidType().getPrimitiveType());
         return types;
     }
 
     @Override
-    public ExecutableTypeData create(TemplateMethod method) {
+    public ExecutableTypeData create(TemplateMethod method, boolean invalid) {
         TypeData resolvedType = method.getReturnType().getTypeSystemType();
         return new ExecutableTypeData(method, method.getMethod(), getNode().getTypeSystem(), resolvedType);
     }
