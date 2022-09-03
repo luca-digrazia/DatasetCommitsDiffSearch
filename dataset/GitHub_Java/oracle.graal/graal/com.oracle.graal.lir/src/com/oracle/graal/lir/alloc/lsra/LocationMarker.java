@@ -42,7 +42,7 @@ import com.oracle.graal.options.*;
  * Mark all live references for a frame state. The frame state use this information to build the OOP
  * maps.
  */
-public final class LocationMarker extends LowLevelMidTierPhase {
+public final class LocationMarker<B extends AbstractBlock<B>> extends LowLevelMidTierPhase<B> {
 
     public static class Options {
         // @formatter:off
@@ -52,7 +52,7 @@ public final class LocationMarker extends LowLevelMidTierPhase {
     }
 
     @Override
-    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
         new Marker(lirGenRes.getLIR(), lirGenRes.getFrameMap()).build();
     }
 
