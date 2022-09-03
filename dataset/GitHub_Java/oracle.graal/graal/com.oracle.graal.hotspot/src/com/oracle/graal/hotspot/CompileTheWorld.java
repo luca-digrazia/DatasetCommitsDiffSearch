@@ -53,7 +53,6 @@ import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -72,6 +71,11 @@ import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.options.OptionDescriptor;
+import jdk.vm.ci.options.OptionValue;
+import jdk.vm.ci.options.OptionValue.OverrideScope;
+import jdk.vm.ci.options.OptionsParser;
+import jdk.vm.ci.options.OptionsParser.OptionConsumer;
 import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.runtime.JVMCICompiler;
 
@@ -85,11 +89,6 @@ import com.oracle.graal.debug.MethodFilter;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.debug.internal.DebugScope;
 import com.oracle.graal.debug.internal.MemUseTrackerImpl;
-import com.oracle.graal.options.OptionDescriptor;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.OptionValue.OverrideScope;
-import com.oracle.graal.options.OptionsParser;
-import com.oracle.graal.options.OptionsParser.OptionConsumer;
 
 /**
  * This class implements compile-the-world functionality with JVMCI.
@@ -126,17 +125,19 @@ public final class CompileTheWorld {
          */
         public Config(String options) {
             if (options != null) {
-                Map<String, String> optionSettings = new HashMap<>();
+                List<String> optionSettings = new ArrayList<>();
                 for (String optionSetting : options.split("\\s+|#")) {
                     if (optionSetting.charAt(0) == '-') {
-                        optionSettings.put(optionSetting.substring(1), "false");
+                        optionSettings.add(optionSetting.substring(1));
+                        optionSettings.add("false");
                     } else if (optionSetting.charAt(0) == '+') {
-                        optionSettings.put(optionSetting.substring(1), "true");
+                        optionSettings.add(optionSetting.substring(1));
+                        optionSettings.add("true");
                     } else {
                         OptionsParser.parseOptionSettingTo(optionSetting, optionSettings);
                     }
                 }
-                OptionsParser.parseOptions(optionSettings, this, null, null);
+                OptionsParser.parseOptions(optionSettings.toArray(new String[optionSettings.size()]), this, null, null);
             }
         }
 
@@ -227,6 +228,7 @@ public final class CompileTheWorld {
         // ...but we want to see exceptions.
         config.putIfAbsent(PrintBailout, true);
         config.putIfAbsent(PrintStackTraceOnException, true);
+        config.putIfAbsent(HotSpotResolvedJavaMethod.Options.UseProfilingInformation, false);
     }
 
     public CompileTheWorld(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalCompiler compiler) {
@@ -280,12 +282,6 @@ public final class CompileTheWorld {
     public void println(String s) {
         if (verbose) {
             TTY.println(s);
-        }
-    }
-
-    public void printStackTrace(Throwable t) {
-        if (verbose) {
-            t.printStackTrace(TTY.out);
         }
     }
 
@@ -485,12 +481,10 @@ public final class CompileTheWorld {
             HotSpotResolvedJavaMethod dummyMethod = (HotSpotResolvedJavaMethod) JVMCI.getRuntime().getHostJVMCIBackend().getMetaAccess().lookupJavaMethod(
                             CompileTheWorld.class.getDeclaredMethod("dummy"));
             int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
-            boolean useProfilingInfo = false;
-            boolean installAsDefault = false;
-            CompilationTask task = new CompilationTask(jvmciRuntime, compiler, new HotSpotCompilationRequest(dummyMethod, entryBCI, 0L), useProfilingInfo, installAsDefault);
+            CompilationTask task = new CompilationTask(jvmciRuntime, compiler, new HotSpotCompilationRequest(dummyMethod, entryBCI, 0L), false);
             task.runCompilation();
         } catch (NoSuchMethodException | SecurityException e1) {
-            printStackTrace(e1);
+            e1.printStackTrace();
         }
 
         /*
@@ -603,7 +597,7 @@ public final class CompileTheWorld {
                         }
                     } catch (Throwable t) {
                         println("CompileTheWorld (%d) : Skipping %s %s", classFileCounter, className, t.toString());
-                        printStackTrace(t);
+                        t.printStackTrace();
                     }
                 }
                 cpe.close();
@@ -682,10 +676,7 @@ public final class CompileTheWorld {
             long allocatedAtStart = MemUseTrackerImpl.getCurrentThreadAllocatedBytes();
             int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
             HotSpotCompilationRequest request = new HotSpotCompilationRequest(method, entryBCI, 0L);
-            // For more stable CTW execution, disable use of profiling information
-            boolean useProfilingInfo = false;
-            boolean installAsDefault = false;
-            CompilationTask task = new CompilationTask(jvmciRuntime, compiler, request, useProfilingInfo, installAsDefault);
+            CompilationTask task = new CompilationTask(jvmciRuntime, compiler, request, false);
             task.runCompilation();
 
             memoryUsed.getAndAdd(MemUseTrackerImpl.getCurrentThreadAllocatedBytes() - allocatedAtStart);
@@ -694,7 +685,7 @@ public final class CompileTheWorld {
         } catch (Throwable t) {
             // Catch everything and print a message
             println("CompileTheWorld (%d) : Error compiling method: %s", counter, method.format("%H.%n(%p):%r"));
-            printStackTrace(t);
+            t.printStackTrace(TTY.out);
         }
     }
 
