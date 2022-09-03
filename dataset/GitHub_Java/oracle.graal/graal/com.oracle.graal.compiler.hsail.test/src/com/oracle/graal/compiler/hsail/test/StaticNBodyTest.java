@@ -29,6 +29,7 @@ import org.junit.*;
 
 import com.oracle.graal.compiler.hsail.*;
 import com.oracle.graal.compiler.hsail.test.infra.*;
+import com.oracle.graal.graph.*;
 
 /**
  * Unit test of NBody demo app.
@@ -99,7 +100,7 @@ public class StaticNBodyTest extends GraalKernelTester {
     /**
      * Requires {@link HSAILLIRGenerator#emitDirectCall} to be implemented.
      */
-    @Test
+    @Test(expected = GraalInternalError.class)
     public void test() {
         testGeneratedHsail();
     }

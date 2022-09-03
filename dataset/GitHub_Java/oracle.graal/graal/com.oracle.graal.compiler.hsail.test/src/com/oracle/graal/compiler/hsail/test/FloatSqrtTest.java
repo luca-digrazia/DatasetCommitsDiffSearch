@@ -27,7 +27,9 @@ import java.util.*;
 
 import org.junit.*;
 
+import com.oracle.graal.compiler.hsail.*;
 import com.oracle.graal.compiler.hsail.test.infra.*;
+import com.oracle.graal.graph.*;
 
 /**
  * Tests floating point square root.
@@ -56,7 +58,10 @@ public class FloatSqrtTest extends GraalKernelTester {
         dispatchMethodKernel(64, input, output);
     }
 
-    @Test
+    /**
+     * Requires {@link HSAILLIRGenerator#emitDirectCall} to be implemented.
+     */
+    @Test(expected = GraalInternalError.class)
     public void test() {
         testGeneratedHsail();
     }
