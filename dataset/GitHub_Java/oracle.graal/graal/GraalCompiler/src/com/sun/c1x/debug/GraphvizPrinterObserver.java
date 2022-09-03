@@ -23,7 +23,6 @@
 package com.sun.c1x.debug;
 
 import java.io.*;
-import java.util.regex.*;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.vis.*;
@@ -38,8 +37,6 @@ import com.sun.c1x.value.*;
  * @author Peter Hofer
  */
 public class GraphvizPrinterObserver implements CompilationObserver {
-
-    private static final Pattern INVALID_CHAR = Pattern.compile("[^A-Za-z0-9_.-]");
 
     private final boolean pdf;
     private int n;
@@ -62,9 +59,7 @@ public class GraphvizPrinterObserver implements CompilationObserver {
             String name = event.getMethod().holder().name();
             name = name.substring(1, name.length() - 1).replace('/', '.');
             name = name + "." + event.getMethod().name();
-
             String filename = name + "_" + (n++) + "_" + event.getLabel();
-            filename = INVALID_CHAR.matcher(filename).replaceAll("_");
 
             OutputStream out = null;
             try {
