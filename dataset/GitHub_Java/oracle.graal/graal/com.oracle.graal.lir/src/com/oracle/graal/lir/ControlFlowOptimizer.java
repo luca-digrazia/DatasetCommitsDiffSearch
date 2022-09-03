@@ -45,8 +45,6 @@ public final class ControlFlowOptimizer {
     private ControlFlowOptimizer() {
     }
 
-    private static final DebugMetric BLOCKS_DELETED = Debug.metric("BlocksDeleted");
-
     /**
      * Checks whether a block can be deleted. Only blocks with exactly one successor and an
      * unconditional branch to this successor are eligable.
@@ -104,7 +102,7 @@ public final class ControlFlowOptimizer {
                     alignBlock(lir, other);
                 }
 
-                BLOCKS_DELETED.increment();
+                Debug.metric("BlocksDeleted").increment();
                 iterator.remove();
             }
         }
