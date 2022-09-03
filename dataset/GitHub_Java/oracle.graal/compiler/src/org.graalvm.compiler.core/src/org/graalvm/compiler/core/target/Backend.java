@@ -68,18 +68,18 @@ import java.util.ArrayList;
 public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKind> {
 
     private final Providers providers;
-    private final ArrayList<CodeInstallationTaskFactory> codeInstallationTaskFactories;
+    private final ArrayList<PostCodeInstallationTask> postCodeInstallationTasks;
 
     public static final ForeignCallDescriptor ARITHMETIC_FREM = new ForeignCallDescriptor("arithmeticFrem", float.class, float.class, float.class);
     public static final ForeignCallDescriptor ARITHMETIC_DREM = new ForeignCallDescriptor("arithmeticDrem", double.class, double.class, double.class);
 
     protected Backend(Providers providers) {
         this.providers = providers;
-        this.codeInstallationTaskFactories = new ArrayList<>();
+        this.postCodeInstallationTasks = new ArrayList<>();
     }
 
-    public synchronized void addCodeInstallationTask(CodeInstallationTaskFactory factory) {
-        this.codeInstallationTaskFactories.add(factory);
+    public void addPostCodeInstallationTask(PostCodeInstallationTask task) {
+        this.postCodeInstallationTasks.add(task);
     }
 
     public Providers getProviders() {
@@ -196,24 +196,16 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
     public InstalledCode createInstalledCode(ResolvedJavaMethod method, CompilationRequest compilationRequest, CompilationResult compilationResult,
                     SpeculationLog speculationLog, InstalledCode predefinedInstalledCode, boolean isDefault, Object[] context) {
         Object[] debugContext = context != null ? context : new Object[]{getProviders().getCodeCache(), method, compilationResult};
-        CodeInstallationTask[] tasks = new CodeInstallationTask[codeInstallationTaskFactories.size()];
-        for (int i = 0; i < codeInstallationTaskFactories.size(); i++) {
-            tasks[i] = codeInstallationTaskFactories.get(i).create();
-        }
         try (Scope s = Debug.scope("CodeInstall", debugContext)) {
-            for (CodeInstallationTask task : tasks) {
-                task.preProcess(compilationResult);
-            }
-
             CompiledCode compiledCode = createCompiledCode(method, compilationRequest, compilationResult);
             InstalledCode installedCode = getProviders().getCodeCache().installCode(method, compiledCode, predefinedInstalledCode, speculationLog, isDefault);
 
             // Run post-code installation tasks.
             try {
-                for (CodeInstallationTask task : tasks) {
+                for (PostCodeInstallationTask task : postCodeInstallationTasks) {
                     task.postProcess(installedCode);
                 }
-                for (CodeInstallationTask task : tasks) {
+                for (PostCodeInstallationTask task : postCodeInstallationTasks) {
                     task.releaseInstallation(installedCode);
                 }
             } catch (Throwable t) {
@@ -279,17 +271,7 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
         return CompilationIdentifier.INVALID_COMPILATION_ID;
     }
 
-    /**
-     * Encapsulates custom tasks done before and after code installation.
-     */
-    public abstract static class CodeInstallationTask {
-        /**
-         * Task to run before code installation.
-         */
-        @SuppressWarnings("unused")
-        public void preProcess(CompilationResult compilationResult) {
-        }
-
+    public abstract static class PostCodeInstallationTask {
         /**
          * Task to run after the code is installed.
          */
@@ -302,12 +284,5 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
          */
         public void releaseInstallation(InstalledCode installedCode) {
         }
-    }
-
-    /**
-     * Creates code installation tasks.
-     */
-    public abstract static class CodeInstallationTaskFactory {
-        public abstract CodeInstallationTask create();
     }
 }
