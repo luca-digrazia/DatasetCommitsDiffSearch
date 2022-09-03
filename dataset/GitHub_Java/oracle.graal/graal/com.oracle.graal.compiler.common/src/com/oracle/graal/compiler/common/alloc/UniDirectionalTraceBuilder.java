@@ -27,6 +27,7 @@ import java.util.BitSet;
 import java.util.List;
 import java.util.PriorityQueue;
 
+import com.oracle.graal.compiler.common.alloc.TraceBuilderResult.TrivialTracePredicate;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Indent;
@@ -34,66 +35,64 @@ import com.oracle.graal.debug.Indent;
 /**
  * Computes traces by starting at a trace head and keep adding predecessors as long as possible.
  */
-public final class UniDirectionalTraceBuilder<T extends AbstractBlockBase<T>> {
+public final class UniDirectionalTraceBuilder {
 
-    public static <T extends AbstractBlockBase<T>> TraceBuilderResult<T> computeTraces(T startBlock, List<T> blocks) {
-        TraceBuilderResult<T> traceBuilderResult = new UniDirectionalTraceBuilder<>(blocks).build(startBlock);
-        traceBuilderResult.numberTraces();
-        return traceBuilderResult;
+    public static TraceBuilderResult computeTraces(AbstractBlockBase<?> startBlock, AbstractBlockBase<?>[] blocks, TrivialTracePredicate pred) {
+        return new UniDirectionalTraceBuilder(blocks).build(startBlock, blocks, pred);
     }
 
-    private final PriorityQueue<T> worklist;
+    private final PriorityQueue<AbstractBlockBase<?>> worklist;
     private final BitSet processed;
     /**
      * Contains the number of unprocessed predecessors for every {@link AbstractBlockBase#getId()
      * block}.
      */
     private final int[] blocked;
-    private final int[] blockToTrace;
+    private final Trace[] blockToTrace;
 
-    private UniDirectionalTraceBuilder(List<T> blocks) {
-        processed = new BitSet(blocks.size());
-        worklist = createQueue();
+    private UniDirectionalTraceBuilder(AbstractBlockBase<?>[] blocks) {
+        processed = new BitSet(blocks.length);
+        worklist = new PriorityQueue<>(UniDirectionalTraceBuilder::compare);
         assert (worklist != null);
 
-        blocked = new int[blocks.size()];
-        blockToTrace = new int[blocks.size()];
-        for (T block : blocks) {
+        blocked = new int[blocks.length];
+        blockToTrace = new Trace[blocks.length];
+        for (AbstractBlockBase<?> block : blocks) {
             blocked[block.getId()] = block.getPredecessorCount();
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private PriorityQueue<T> createQueue() {
-        return (PriorityQueue<T>) new PriorityQueue<AbstractBlockBase<?>>(UniDirectionalTraceBuilder::compare);
     }
 
     private static int compare(AbstractBlockBase<?> a, AbstractBlockBase<?> b) {
         return Double.compare(b.probability(), a.probability());
     }
 
-    private boolean processed(T b) {
+    private boolean processed(AbstractBlockBase<?> b) {
         return processed.get(b.getId());
     }
 
     @SuppressWarnings("try")
-    private TraceBuilderResult<T> build(T startBlock) {
-        try (Indent indent = Debug.logAndIndent("start trace building: " + startBlock)) {
-            ArrayList<Trace<T>> traces = buildTraces(startBlock);
-            return new TraceBuilderResult<>(traces, blockToTrace);
+    private TraceBuilderResult build(AbstractBlockBase<?> startBlock, AbstractBlockBase<?>[] blocks, TrivialTracePredicate pred) {
+        try (Indent indent = Debug.logAndIndent("UniDirectionalTraceBuilder: start trace building: %s", startBlock)) {
+            ArrayList<Trace> traces = buildTraces(startBlock);
+            return TraceBuilderResult.create(blocks, traces, blockToTrace, pred);
         }
     }
 
-    protected ArrayList<Trace<T>> buildTraces(T startBlock) {
-        ArrayList<Trace<T>> traces = new ArrayList<>();
+    protected ArrayList<Trace> buildTraces(AbstractBlockBase<?> startBlock) {
+        ArrayList<Trace> traces = new ArrayList<>();
         // add start block
         worklist.add(startBlock);
         // process worklist
         while (!worklist.isEmpty()) {
-            T block = worklist.poll();
+            AbstractBlockBase<?> block = worklist.poll();
             assert block != null;
             if (!processed(block)) {
-                traces.add(new Trace<>(startTrace(block, traces.size())));
+                Trace trace = new Trace(startTrace(block));
+                for (AbstractBlockBase<?> traceBlock : trace.getBlocks()) {
+                    blockToTrace[traceBlock.getId()] = trace;
+                }
+                trace.setId(traces.size());
+                traces.add(trace);
             }
         }
         return traces;
@@ -103,26 +102,24 @@ public final class UniDirectionalTraceBuilder<T extends AbstractBlockBase<T>> {
      * Build a new trace starting at {@code block}.
      */
     @SuppressWarnings("try")
-    private List<T> startTrace(T block, int traceNumber) {
+    private List<AbstractBlockBase<?>> startTrace(AbstractBlockBase<?> block) {
         assert checkPredecessorsProcessed(block);
-        ArrayList<T> trace = new ArrayList<>();
+        ArrayList<AbstractBlockBase<?>> trace = new ArrayList<>();
         int blockNumber = 0;
-        try (Indent i = Debug.logAndIndent("StartTrace: " + block)) {
-            for (T currentBlock = block; currentBlock != null; currentBlock = selectNext(currentBlock)) {
+        try (Indent i = Debug.logAndIndent("StartTrace: %s", block)) {
+            for (AbstractBlockBase<?> currentBlock = block; currentBlock != null; currentBlock = selectNext(currentBlock)) {
                 Debug.log("add %s (prob: %f)", currentBlock, currentBlock.probability());
                 processed.set(currentBlock.getId());
                 trace.add(currentBlock);
                 unblock(currentBlock);
                 currentBlock.setLinearScanNumber(blockNumber++);
-                blockToTrace[currentBlock.getId()] = traceNumber;
             }
         }
         return trace;
     }
 
-    private boolean checkPredecessorsProcessed(T block) {
-        List<T> predecessors = block.getPredecessors();
-        for (T pred : predecessors) {
+    private boolean checkPredecessorsProcessed(AbstractBlockBase<?> block) {
+        for (AbstractBlockBase<?> pred : block.getPredecessors()) {
             if (!processed(pred)) {
                 assert false : "Predecessor unscheduled: " + pred;
                 return false;
@@ -136,8 +133,8 @@ public final class UniDirectionalTraceBuilder<T extends AbstractBlockBase<T>> {
      * Decrease the {@link #blocked} count for all predecessors and add them to the worklist once
      * the count reaches 0.
      */
-    private void unblock(T currentBlock) {
-        for (T successor : currentBlock.getSuccessors()) {
+    private void unblock(AbstractBlockBase<?> currentBlock) {
+        for (AbstractBlockBase<?> successor : currentBlock.getSuccessors()) {
             if (!processed(successor)) {
                 int blockCount = --blocked[successor.getId()];
                 assert blockCount >= 0;
@@ -151,9 +148,9 @@ public final class UniDirectionalTraceBuilder<T extends AbstractBlockBase<T>> {
     /**
      * @return The unprocessed predecessor with the highest probability, or {@code null}.
      */
-    private T selectNext(T currentBlock) {
-        T next = null;
-        for (T succ : currentBlock.getSuccessors()) {
+    private AbstractBlockBase<?> selectNext(AbstractBlockBase<?> currentBlock) {
+        AbstractBlockBase<?> next = null;
+        for (AbstractBlockBase<?> succ : currentBlock.getSuccessors()) {
             if (!processed(succ) && (next == null || succ.probability() > next.probability())) {
                 next = succ;
             }
