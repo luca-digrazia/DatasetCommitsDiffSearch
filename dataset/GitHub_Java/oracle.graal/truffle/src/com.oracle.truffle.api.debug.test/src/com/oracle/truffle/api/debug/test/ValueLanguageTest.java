@@ -60,8 +60,6 @@ import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
@@ -338,6 +336,11 @@ public class ValueLanguageTest extends AbstractDebugTest {
         }
 
         @Override
+        protected Object getLanguageGlobal(Context context) {
+            return null;
+        }
+
+        @Override
         protected boolean isObjectOfLanguage(Object object) {
             if (!(object instanceof PropertiesMapObject)) {
                 return false;
@@ -455,7 +458,6 @@ public class ValueLanguageTest extends AbstractDebugTest {
             private final String name;
             protected final Object value;
             protected final ContextReference<Context> contextReference;
-            @Child private Node writeNode = Message.WRITE.createNode();
             @CompilerDirectives.CompilationFinal protected FrameSlot slot;
 
             VarNode(String name, Object value, SourceSection sourceSection, ContextReference<Context> contextReference) {
@@ -500,13 +502,7 @@ public class ValueLanguageTest extends AbstractDebugTest {
                 } else {
                     frame.setObject(slot, value);
                 }
-                try {
-                    ForeignAccess.sendWrite(writeNode, (TruffleObject) contextReference.get().getEnv().getPolyglotBindings(), name, value);
-                } catch (UnknownIdentifierException | UnsupportedTypeException | UnsupportedMessageException e) {
-                    CompilerDirectives.transferToInterpreter();
-                    // should not happen for polyglot bindings.
-                    throw new AssertionError(e);
-                }
+                contextReference.get().getEnv().exportSymbol(name, value);
                 return value;
             }
 
@@ -521,7 +517,6 @@ public class ValueLanguageTest extends AbstractDebugTest {
 
             private final String var;
             private final String prop;
-            @Child private Node readNode = Message.READ.createNode();
 
             PropNode(String var, String prop, Object value, SourceSection sourceSection, ContextReference<Context> contextReference) {
                 super(null, value, sourceSection, contextReference);
@@ -560,14 +555,7 @@ public class ValueLanguageTest extends AbstractDebugTest {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     slot = frame.getFrameDescriptor().findFrameSlot(var);
                     if (slot == null) {
-                        try {
-                            varObj = ForeignAccess.sendRead(readNode, (TruffleObject) contextReference.get().getEnv().getPolyglotBindings(), var);
-                        } catch (UnknownIdentifierException e) {
-                            varObj = null;
-                        } catch (UnsupportedMessageException e) {
-                            CompilerDirectives.transferToInterpreter();
-                            throw new AssertionError(e);
-                        }
+                        varObj = contextReference.get().getEnv().importSymbol(var);
                         slot = frame.getFrameDescriptor().addFrameSlot(var);
                         frame.setObject(slot, varObj);
                     }
