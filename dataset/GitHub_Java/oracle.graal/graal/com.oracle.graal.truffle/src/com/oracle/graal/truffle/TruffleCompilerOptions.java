@@ -119,9 +119,6 @@ public class TruffleCompilerOptions {
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> TruffleArgumentTypeSpeculation = new StableOptionValue<>(true);
 
-    @Option(help = "", type = OptionType.Debug)
-    public static final StableOptionValue<Boolean> TruffleUseFrameWithoutBoxing = new StableOptionValue<>(true);
-
     // tracing
     @Option(help = "Print potential performance problems", type = OptionType.Debug)
     public static final OptionValue<Boolean> TraceTrufflePerformanceWarnings = new OptionValue<>(false);
@@ -184,6 +181,6 @@ public class TruffleCompilerOptions {
     public static final OptionValue<Boolean> TruffleCompilationStatisticDetails = new OptionValue<>(false);
 
     @Option(help = "Experimental new version of the partial evaluator.", type = OptionType.Debug)
-    public static final OptionValue<Boolean> FastPE = new OptionValue<>(true);
+    public static final OptionValue<Boolean> FastPE = new OptionValue<>(false);
     // @formatter:on
 }
