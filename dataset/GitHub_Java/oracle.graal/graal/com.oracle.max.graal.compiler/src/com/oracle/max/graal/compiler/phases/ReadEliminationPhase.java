@@ -22,16 +22,15 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.*;
-import com.oracle.max.graal.nodes.extended.*;
 
 public class ReadEliminationPhase extends Phase {
 
     @Override
-    protected void run(StructuredGraph graph) {
+    protected void run(Graph graph) {
         for (ReadNode n : graph.getNodes(ReadNode.class)) {
             if (n.dependencies().size() > 0) {
                 Node memoryInput = n.dependencies().get(0);

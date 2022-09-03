@@ -51,8 +51,8 @@ public abstract class Value extends Node {
      * @param successorCount
      * @param graph
      */
-    public Value(CiKind kind, Graph graph) {
-        super(graph);
+    public Value(CiKind kind, int inputCount, int successorCount, Graph graph) {
+        super(inputCount, successorCount, graph);
         assert kind != null && kind == kind.stackKind() : kind + " != " + kind.stackKind();
         this.kind = kind;
     }
@@ -154,7 +154,7 @@ public abstract class Value extends Node {
      * @param v the visitor to accept
      */
     public void accept(ValueVisitor v) {
-        throw new IllegalStateException("No visit method for this node");
+        throw new IllegalStateException("No visit method for this node (" + this.getClass().getSimpleName() + ")");
     }
 
     public void print(LogStream out) {
