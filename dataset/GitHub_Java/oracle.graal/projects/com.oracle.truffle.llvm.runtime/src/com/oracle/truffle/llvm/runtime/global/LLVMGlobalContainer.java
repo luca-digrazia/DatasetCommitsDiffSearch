@@ -147,6 +147,14 @@ public final class LLVMGlobalContainer implements LLVMObjectAccess, LLVMInternal
         contents = value;
     }
 
+    public boolean isInNative() {
+        return address != 0;
+    }
+
+    public long getAddress() {
+        return address;
+    }
+
     @SuppressWarnings("static-method")
     public int getSize() {
         return 1;
@@ -174,25 +182,19 @@ public final class LLVMGlobalContainer implements LLVMObjectAccess, LLVMInternal
     }
 
     @Override
-    public LLVMObjectReadNode createReadNode(ForeignToLLVMType type) {
-        return new LLVMGlobalContainerReadNode(type);
+    public LLVMObjectReadNode createReadNode() {
+        return new LLVMGlobalContainerReadNode();
     }
 
     @Override
-    public LLVMObjectWriteNode createWriteNode(ForeignToLLVMType type) {
-        return new LLVMGlobalContainerWriteNode(type);
+    public LLVMObjectWriteNode createWriteNode() {
+        return new LLVMGlobalContainerWriteNode();
     }
 
     static class LLVMGlobalContainerReadNode extends LLVMObjectReadNode {
 
-        private final ForeignToLLVMType type;
-
         @Child private LLVMToNativeNode toNative;
         @CompilationFinal private LLVMMemory memory;
-
-        LLVMGlobalContainerReadNode(ForeignToLLVMType type) {
-            this.type = type;
-        }
 
         @Override
         public boolean canAccess(Object obj) {
@@ -200,7 +202,7 @@ public final class LLVMGlobalContainer implements LLVMObjectAccess, LLVMInternal
         }
 
         @Override
-        public Object executeRead(Object obj, long offset) throws InteropException {
+        public Object executeRead(Object obj, long offset, ForeignToLLVMType type) throws InteropException {
             LLVMGlobalContainer container = (LLVMGlobalContainer) obj;
 
             if (container.address == 0) {
@@ -241,16 +243,15 @@ public final class LLVMGlobalContainer implements LLVMObjectAccess, LLVMInternal
         }
     }
 
+    @Override
+    @TruffleBoundary
+    public String toString() {
+        return String.format("LLVMGlobalContainer (address = 0x%x, contents = %s)", address, contents);
+    }
+
     static class LLVMGlobalContainerWriteNode extends LLVMObjectWriteNode {
-
-        private final ForeignToLLVMType type;
-
         @Child private LLVMToNativeNode toNative;
         @CompilationFinal private LLVMMemory memory;
-
-        LLVMGlobalContainerWriteNode(ForeignToLLVMType type) {
-            this.type = type;
-        }
 
         @Override
         public boolean canAccess(Object obj) {
@@ -258,7 +259,7 @@ public final class LLVMGlobalContainer implements LLVMObjectAccess, LLVMInternal
         }
 
         @Override
-        public void executeWrite(Object obj, long offset, Object value) throws InteropException {
+        public void executeWrite(Object obj, long offset, Object value, ForeignToLLVMType type) throws InteropException {
             LLVMGlobalContainer container = (LLVMGlobalContainer) obj;
 
             if (container.address == 0) {
@@ -318,6 +319,7 @@ public final class LLVMGlobalContainer implements LLVMObjectAccess, LLVMInternal
         if (address != 0) {
             LLVMMemory memory = LLVMLanguage.getLanguage().getCapability(LLVMMemory.class);
             memory.free(address);
+            address = 0;
         }
     }
 }

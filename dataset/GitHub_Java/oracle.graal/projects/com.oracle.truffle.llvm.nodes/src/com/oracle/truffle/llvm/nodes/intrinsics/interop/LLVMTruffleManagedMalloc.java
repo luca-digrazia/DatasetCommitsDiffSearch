@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,19 +34,24 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.CanResolve;
 import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMAddressIntrinsic;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
+import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectReadNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectWriteNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
 @NodeChild(type = LLVMExpressionNode.class)
-public abstract class LLVMTruffleManagedMalloc extends LLVMAddressIntrinsic {
+public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
 
-    @MessageResolution(receiverType = ManagedMallocObject.class, language = LLVMLanguage.class)
+    @MessageResolution(receiverType = ManagedMallocObject.class)
     public static class ManagedMallocForeignAccess {
 
         @CanResolve
@@ -55,7 +60,6 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMAddressIntrinsic {
             protected static boolean test(TruffleObject receiver) {
                 return receiver instanceof ManagedMallocObject;
             }
-
         }
 
         @Resolve(message = "HAS_SIZE")
@@ -64,7 +68,6 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMAddressIntrinsic {
             protected Object access(@SuppressWarnings("unused") ManagedMallocObject malloc) {
                 return true;
             }
-
         }
 
         @Resolve(message = "GET_SIZE")
@@ -73,7 +76,6 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMAddressIntrinsic {
             protected Object access(ManagedMallocObject malloc) {
                 return malloc.getSize();
             }
-
         }
 
         @Resolve(message = "READ")
@@ -82,7 +84,6 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMAddressIntrinsic {
             protected Object access(ManagedMallocObject malloc, int index) {
                 return malloc.get(index);
             }
-
         }
 
         @Resolve(message = "WRITE")
@@ -92,12 +93,11 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMAddressIntrinsic {
                 malloc.set(index, value);
                 return value;
             }
-
         }
 
     }
 
-    public static class ManagedMallocObject implements TruffleObject {
+    public static class ManagedMallocObject implements LLVMObjectAccess, LLVMInternalTruffleObject {
 
         private final Object[] contents;
 
@@ -122,23 +122,60 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMAddressIntrinsic {
             return ManagedMallocForeignAccessForeign.ACCESS;
         }
 
+        @Override
+        public LLVMObjectReadNode createReadNode() {
+            return new ManagedReadNode();
+        }
+
+        @Override
+        public LLVMObjectWriteNode createWriteNode() {
+            return new ManagedWriteNode();
+        }
+    }
+
+    static class ManagedReadNode extends LLVMObjectReadNode {
+
+        @Override
+        public boolean canAccess(Object obj) {
+            return obj instanceof ManagedMallocObject;
+        }
+
+        @Override
+        public Object executeRead(Object obj, long offset, ForeignToLLVMType type) throws InteropException {
+            assert offset % LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES == 0 : "invalid offset";
+            long idx = offset / LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES;
+            return ((ManagedMallocObject) obj).get((int) idx);
+        }
+    }
+
+    static class ManagedWriteNode extends LLVMObjectWriteNode {
+
+        @Override
+        public boolean canAccess(Object obj) {
+            return obj instanceof ManagedMallocObject;
+        }
+
+        @Override
+        public void executeWrite(Object obj, long offset, Object value, ForeignToLLVMType type) throws InteropException {
+            assert offset % LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES == 0 : "invalid offset";
+            long idx = offset / LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES;
+            ((ManagedMallocObject) obj).set((int) idx, value);
+        }
     }
 
     @Specialization
-    public Object executeIntrinsic(long size) {
+    protected Object doIntrinsic(long size) {
         if (size < 0) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalArgumentException("Can't truffle_managed_malloc less than zero bytes");
         }
 
-        long roundedSize = size + ((LLVMAddressNode.BYTE_SIZE - size) % LLVMAddressNode.BYTE_SIZE);
-
-        if (roundedSize / LLVMAddressNode.BYTE_SIZE > Integer.MAX_VALUE) {
+        long sizeInWords = (size + LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES - 1) / LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES;
+        if (sizeInWords > Integer.MAX_VALUE) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalArgumentException("Can't truffle_managed_malloc for more than 2^31 objects");
         }
 
-        return new ManagedMallocObject((int) (roundedSize / LLVMAddressNode.BYTE_SIZE));
+        return LLVMManagedPointer.create(new ManagedMallocObject((int) sizeInWords));
     }
-
 }

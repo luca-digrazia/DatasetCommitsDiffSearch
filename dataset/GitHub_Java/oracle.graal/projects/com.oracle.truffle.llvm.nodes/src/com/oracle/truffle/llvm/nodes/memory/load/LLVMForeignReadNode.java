@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,33 +30,29 @@
 package com.oracle.truffle.llvm.nodes.memory.load;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.nodes.memory.LLVMOffsetToNameNode;
-import com.oracle.truffle.llvm.nodes.memory.LLVMOffsetToNameNodeGen;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectReadNode;
 import com.oracle.truffle.llvm.runtime.nodes.factories.LLVMObjectAccessFactory;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
-public class LLVMForeignReadNode extends Node {
-
-    @Child private LLVMOffsetToNameNode offsetToName;
+public class LLVMForeignReadNode extends LLVMNode {
     @Child private LLVMObjectReadNode read;
 
-    protected LLVMForeignReadNode(ForeignToLLVMType type, int elementAccessSize) {
-        this.offsetToName = LLVMOffsetToNameNodeGen.create(elementAccessSize);
-        this.read = LLVMObjectAccessFactory.createRead(type);
+    private final ForeignToLLVMType type;
+
+    protected LLVMForeignReadNode(ForeignToLLVMType type) {
+        this.read = LLVMObjectAccessFactory.createRead();
+        this.type = type;
     }
 
-    public Object execute(VirtualFrame frame, LLVMTruffleObject addr) {
-        Object key = offsetToName.execute(addr.getBaseType(), addr.getOffset());
+    public Object execute(LLVMManagedPointer addr) {
         try {
-            return read.executeRead(frame, addr.getObject(), key, addr.getOffset());
+            return read.executeRead(addr.getObject(), addr.getOffset(), type);
         } catch (InteropException e) {
             CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException(e);
+            throw e.raise();
         }
     }
 }

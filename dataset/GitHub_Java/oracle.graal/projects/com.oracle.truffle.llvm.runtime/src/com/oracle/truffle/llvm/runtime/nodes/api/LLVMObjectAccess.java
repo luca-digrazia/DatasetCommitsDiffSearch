@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,10 +29,8 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.api;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.ObjectType;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
@@ -46,11 +44,11 @@ import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLL
  */
 public interface LLVMObjectAccess {
 
-    LLVMObjectReadNode createReadNode(ForeignToLLVMType type);
+    LLVMObjectReadNode createReadNode();
 
     LLVMObjectWriteNode createWriteNode();
 
-    abstract class LLVMObjectAccessNode extends Node {
+    abstract class LLVMObjectAccessNode extends LLVMNode {
 
         public abstract boolean canAccess(Object obj);
     }
@@ -60,13 +58,11 @@ public interface LLVMObjectAccess {
         /**
          * Do a native memory read on an object.
          *
-         * @param frame the Truffle frame
          * @param obj the object that is the base of the read pointer
-         * @param identifier the struct element name or array index
          * @param offset the byte offset into the object
          * @return the read value
          */
-        public abstract Object executeRead(VirtualFrame frame, Object obj, Object identifier, long offset) throws InteropException;
+        public abstract Object executeRead(Object obj, long offset, ForeignToLLVMType type) throws InteropException;
     }
 
     abstract class LLVMObjectWriteNode extends LLVMObjectAccessNode {
@@ -74,12 +70,10 @@ public interface LLVMObjectAccess {
         /**
          * Do a native memory write on an object.
          *
-         * @param frame the Truffle frame
          * @param obj the object that is the base of the written pointer
-         * @param identifier the struct element name or array index
          * @param offset the byte offset into the object
          * @param value the written value
          */
-        public abstract void executeWrite(VirtualFrame frame, Object obj, Object identifier, long offset, Object value) throws InteropException;
+        public abstract void executeWrite(Object obj, long offset, Object value, ForeignToLLVMType type) throws InteropException;
     }
 }

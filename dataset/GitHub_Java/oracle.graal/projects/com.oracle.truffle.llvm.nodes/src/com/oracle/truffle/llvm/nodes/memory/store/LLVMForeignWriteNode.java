@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,36 +31,32 @@ package com.oracle.truffle.llvm.nodes.memory.store;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.llvm.nodes.memory.LLVMOffsetToNameNode;
-import com.oracle.truffle.llvm.nodes.memory.LLVMOffsetToNameNodeGen;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectWriteNode;
 import com.oracle.truffle.llvm.runtime.nodes.factories.LLVMObjectAccessFactory;
-import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
 public abstract class LLVMForeignWriteNode extends LLVMNode {
-
-    @Child private LLVMOffsetToNameNode offsetToName;
     @Child private LLVMObjectWriteNode write;
 
-    protected LLVMForeignWriteNode(Type valueType, int elementAccessSize) {
-        this.offsetToName = LLVMOffsetToNameNodeGen.create(elementAccessSize);
-        this.write = LLVMObjectAccessFactory.createWrite(valueType);
+    private final ForeignToLLVMType type;
+
+    protected LLVMForeignWriteNode(ForeignToLLVMType type) {
+        this.write = LLVMObjectAccessFactory.createWrite();
+        this.type = type;
     }
 
-    public abstract void execute(VirtualFrame frame, LLVMTruffleObject addr, Object value);
+    public abstract void execute(LLVMManagedPointer addr, Object value);
 
     @Specialization
-    protected void doForeignAccess(VirtualFrame frame, LLVMTruffleObject addr, Object value) {
-        Object key = offsetToName.execute(addr.getBaseType(), addr.getOffset());
+    protected void doForeignAccess(LLVMManagedPointer addr, Object value) {
         try {
-            write.executeWrite(frame, addr.getObject(), key, addr.getOffset(), value);
+            write.executeWrite(addr.getObject(), addr.getOffset(), value, type);
         } catch (InteropException e) {
             CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException(e);
+            throw e.raise();
         }
     }
 }
