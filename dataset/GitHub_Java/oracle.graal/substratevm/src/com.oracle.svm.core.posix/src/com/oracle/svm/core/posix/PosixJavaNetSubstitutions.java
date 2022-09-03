@@ -422,11 +422,6 @@ class Util_java_net_Inet4Address {
 @Platforms({LINUX.class, DARWIN.class})
 final class Target_java_net_Inet4AddressImpl {
 
-    @Alias @RecomputeFieldValue(kind = Kind.Reset)//
-    InetAddress anyLocalAddress;
-    @Alias @RecomputeFieldValue(kind = Kind.Reset)//
-    InetAddress loopbackAddress;
-
     @Substitute
     // 348 /*
     // 349  * Class:     java_net_Inet4AddressImpl
@@ -880,11 +875,6 @@ final class Target_java_net_Inet6Address_Inet6AddressHolder {
 @TargetClass(className = "java.net.Inet6AddressImpl")
 @Platforms({LINUX.class, DARWIN.class})
 final class Target_java_net_Inet6AddressImpl {
-
-    @Alias @RecomputeFieldValue(kind = Kind.Reset)//
-    InetAddress anyLocalAddress;
-    @Alias @RecomputeFieldValue(kind = Kind.Reset)//
-    InetAddress loopbackAddress;
 
     @Substitute
     @SuppressWarnings({"static-method"})
