@@ -127,12 +127,7 @@ final class ToPrimitiveNode extends Node {
     }
 
     Object unbox(TruffleObject ret) throws UnsupportedMessageException {
-        Object result = ForeignAccess.sendUnbox(unboxNode, ret);
-        if (result instanceof TruffleObject && isNull((TruffleObject) result)) {
-            return null;
-        } else {
-            return result;
-        }
+        return ForeignAccess.sendUnbox(unboxNode, ret);
     }
 
     boolean isBoxed(TruffleObject foreignObject) {
