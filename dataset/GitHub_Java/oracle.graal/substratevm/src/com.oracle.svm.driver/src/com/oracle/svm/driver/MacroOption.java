@@ -58,23 +58,6 @@ final class MacroOption {
             }
             throw new InvalidMacroException("No MacroOptionKind for subDir: " + subdir);
         }
-
-        static MacroOptionKind fromString(String kindName) {
-            /* TODO: Remove once all .properties files use lowercase */
-            String kindNameLowercase = kindName.toLowerCase();
-
-            for (MacroOptionKind kind : MacroOptionKind.values()) {
-                if (kind.toString().equals(kindNameLowercase)) {
-                    return kind;
-                }
-            }
-            throw new InvalidMacroException("No MacroOptionKind for kindName: " + kindName);
-        }
-
-        @Override
-        public String toString() {
-            return name().toLowerCase();
-        }
     }
 
     Path getImageJarsDirectory() {
@@ -96,7 +79,7 @@ final class MacroOption {
         if (commandLineStyle) {
             sb.append(macroOptionPrefix);
         }
-        sb.append(kind.toString()).append(":").append(getOptionName());
+        sb.append(kind.name()).append(":").append(getOptionName());
         return sb.toString();
     }
 
@@ -299,7 +282,7 @@ final class MacroOption {
             if (!optionsToShow.isEmpty()) {
                 StringBuilder sb = new StringBuilder().append("Available ");
                 if (forKind != null) {
-                    sb.append(forKind.toString()).append(' ');
+                    sb.append(forKind.name()).append(' ');
                 } else {
                     sb.append("macro-");
                 }
@@ -331,7 +314,7 @@ final class MacroOption {
 
             MacroOptionKind kindPart;
             try {
-                kindPart = MacroOptionKind.fromString(specParts[0]);
+                kindPart = MacroOptionKind.valueOf(specParts[0]);
             } catch (Exception e) {
                 if (context == null) {
                     return false;
@@ -371,15 +354,6 @@ final class MacroOption {
                 for (String specString : requires.split(" ")) {
                     enableOption(specString, addedCheck, option);
                 }
-            }
-
-            MacroOption truffleOption = supported.get(MacroOptionKind.Tool).get("truffle");
-            if (option.kind.equals(MacroOptionKind.Language) && !addedCheck.contains(truffleOption)) {
-                /*
-                 * Every language requires Truffle. If it is not specified explicitly as a
-                 * requirement, add it automatically.
-                 */
-                enableResolved(truffleOption, null, addedCheck, context);
             }
             enabled.add(enabledOption);
         }
