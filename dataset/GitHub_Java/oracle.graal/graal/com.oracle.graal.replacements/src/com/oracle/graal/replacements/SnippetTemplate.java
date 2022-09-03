@@ -72,20 +72,8 @@ public class SnippetTemplate {
         protected final ResolvedJavaMethod method;
         protected final boolean[] constantParameters;
         protected final boolean[] varargsParameters;
-
-        /**
-         * Times instantiations of all templates derived form this snippet.
-         * 
-         * @see SnippetTemplate#instantiationTimer
-         */
-        private final DebugTimer instantiationTimer;
-
-        /**
-         * Counts instantiations of all templates derived from this snippet.
-         * 
-         * @see SnippetTemplate#instantiationCounter
-         */
         private final DebugMetric instantiationCounter;
+        private final DebugTimer instantiationTimer;
 
         /**
          * The parameter names, taken from the local variables table. Only used for assertion
@@ -345,9 +333,9 @@ public class SnippetTemplate {
         }
     }
 
-    private static final DebugTimer SnippetTemplateCreationTime = Debug.timer("SnippetTemplateCreationTime");
-    private static final DebugMetric SnippetTemplates = Debug.metric("SnippetTemplateCount");
-    private static final DebugMetric SnippetTemplatesNodeCount = Debug.metric("SnippetTemplatesNodeCount");
+    private static final DebugTimer SnippetCreationAndSpecialization = Debug.timer("SnippetCreationAndSpecialization");
+    private static final DebugMetric SnippetSpecializations = Debug.metric("SnippetSpecializations");
+    private static final DebugMetric SnippetSpecializationsNodeCount = Debug.metric("SnippetSpecializationsNodeCount");
     private static final DebugMetric SnippetGraphsNodeCount = Debug.metric("SnippetGraphsNodeCount");
 
     private static final boolean UseSnippetTemplateCache = Boolean.parseBoolean(System.getProperty("graal.useSnippetTemplateCache", "true"));
@@ -394,8 +382,8 @@ public class SnippetTemplate {
         protected SnippetTemplate template(final Arguments args) {
             SnippetTemplate template = UseSnippetTemplateCache ? templates.get(args.cacheKey) : null;
             if (template == null) {
-                SnippetTemplates.increment();
-                try (TimerCloseable a = SnippetTemplateCreationTime.start()) {
+                SnippetSpecializations.increment();
+                try (TimerCloseable a = SnippetCreationAndSpecialization.start()) {
                     template = Debug.scope("SnippetSpecialization", args.info.method, new Callable<SnippetTemplate>() {
 
                         @Override
@@ -620,9 +608,7 @@ public class SnippetTemplate {
         this.stampNodes = curStampNodes;
         this.returnNode = retNode;
 
-        SnippetTemplatesNodeCount.add(nodes.size());
-        instantiationTimer = Debug.timer("SnippetTemplateInstantiationTime[" + args.info.method.getName() + "]@" + hashCode());
-        instantiationCounter = Debug.metric("SnippetTemplateInstantiationCount[" + args.info.method.getName() + "]@" + hashCode());
+        SnippetSpecializationsNodeCount.add(nodes.size());
     }
 
     private static boolean checkAllVarargPlaceholdersAreDeleted(int parameterCount, VarargsPlaceholderNode[] placeholders) {
@@ -701,20 +687,6 @@ public class SnippetTemplate {
      * map of killing locations to memory checkpoints (nodes).
      */
     private MemoryMapNode memoryMap;
-
-    /**
-     * Times instantiations of this template.
-     * 
-     * @see SnippetInfo#instantiationTimer
-     */
-    private final DebugTimer instantiationTimer;
-
-    /**
-     * Counts instantiations of this template.
-     * 
-     * @see SnippetInfo#instantiationCounter
-     */
-    private final DebugMetric instantiationCounter;
 
     /**
      * Gets the instantiation-time bindings to this template's parameters.
@@ -919,9 +891,8 @@ public class SnippetTemplate {
      */
     public Map<Node, Node> instantiate(MetaAccessProvider metaAccess, FixedNode replacee, UsageReplacer replacer, Arguments args) {
         assert checkSnippetKills(replacee);
-        try (TimerCloseable a = args.info.instantiationTimer.start(); TimerCloseable b = instantiationTimer.start()) {
+        try (TimerCloseable a = args.info.instantiationTimer.start()) {
             args.info.instantiationCounter.increment();
-            instantiationCounter.increment();
             // Inline the snippet nodes, replacing parameters with the given args in the process
             StartNode entryPointNode = snippet.start();
             FixedNode firstCFGNode = entryPointNode.next();
@@ -1015,7 +986,6 @@ public class SnippetTemplate {
         assert checkSnippetKills(replacee);
         try (TimerCloseable a = args.info.instantiationTimer.start()) {
             args.info.instantiationCounter.increment();
-            instantiationCounter.increment();
 
             // Inline the snippet nodes, replacing parameters with the given args in the process
             String name = snippet.name == null ? "{copy}" : snippet.name + "{copy}";
