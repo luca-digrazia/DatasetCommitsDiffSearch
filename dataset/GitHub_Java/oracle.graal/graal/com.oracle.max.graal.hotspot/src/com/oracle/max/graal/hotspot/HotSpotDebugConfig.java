@@ -22,25 +22,38 @@
  */
 package com.oracle.max.graal.hotspot;
 
+import java.util.*;
+import java.util.regex.*;
+
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.printer.*;
 
 
 public class HotSpotDebugConfig implements DebugConfig {
 
-    public final String logFilter;
-    public final String meterFilter;
-    public final String timerFilter;
-    public final String dumpFilter;
-    public final String methodFilter;
+    private final String logFilter;
+    private final String meterFilter;
+    private final String timerFilter;
+    private final String dumpFilter;
+    private final String[] methodFilter;
+    private final List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
 
     public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter) {
         this.logFilter = logFilter;
         this.meterFilter = meterFilter;
         this.timerFilter = timerFilter;
         this.dumpFilter = dumpFilter;
-        this.methodFilter = methodFilter;
+        this.methodFilter = methodFilter == null ? null : methodFilter.split(",");
+        if (GraalOptions.PrintIdealGraphFile) {
+            dumpHandlers.add(new IdealGraphPrinterDumpHandler());
+        } else {
+            dumpHandlers.add(new IdealGraphPrinterDumpHandler(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintIdealGraphPort));
+        }
+        dumpHandlers.add(new CFGPrinterObserver());
     }
 
     public boolean isLogEnabled() {
@@ -55,12 +68,23 @@ public class HotSpotDebugConfig implements DebugConfig {
         return isEnabled(dumpFilter);
     }
 
-    public boolean isTimerEnabled() {
+    public boolean isTimeEnabled() {
         return isEnabled(timerFilter);
     }
 
     private boolean isEnabled(String filter) {
-        return filter != null && Debug.currentScope().contains(filter) && checkMethodFilter();
+        return filter != null && checkContains(Debug.currentScope(), filter) && checkMethodFilter();
+    }
+
+    private static boolean checkContains(String currentScope, String filter) {
+        if (filter.contains("*")) {
+            /*filter = filter.replace("*", ".*");
+            filter = filter.replace("[", "\\[");
+            filter = filter.replace("]", "\\]");
+            filter = filter.replace(":", "\\:");*/
+            return Pattern.matches(filter, currentScope);
+        }
+        return currentScope.contains(filter);
     }
 
     private boolean checkMethodFilter() {
@@ -69,9 +93,11 @@ public class HotSpotDebugConfig implements DebugConfig {
         } else {
             for (Object o : Debug.context()) {
                 if (o instanceof RiMethod) {
-                    RiMethod riMethod = (RiMethod) o;
-                    if (riMethod.toString().contains(methodFilter)) {
-                        return true;
+                    String methodName = CiUtil.format("%H.%n", (RiMethod) o);
+                    for (String filter : methodFilter) {
+                        if (methodName.contains(filter)) {
+                            return true;
+                        }
                     }
                 }
             }
@@ -87,7 +113,7 @@ public class HotSpotDebugConfig implements DebugConfig {
         add(sb, "Meter", meterFilter);
         add(sb, "Time", timerFilter);
         add(sb, "Dump", dumpFilter);
-        add(sb, "MethodFilter", methodFilter);
+        add(sb, "MethodFilter", Arrays.toString(methodFilter));
         return sb.toString();
     }
 
@@ -101,8 +127,12 @@ public class HotSpotDebugConfig implements DebugConfig {
     }
 
     @Override
-    public RuntimeException interceptException(RuntimeException e) {
-        Debug.setConfig(Debug.fixedConfix(true, true, false, false));
+    public RuntimeException interceptException(Throwable e) {
+        if (e instanceof CiBailout) {
+            return null;
+        }
+        Debug.setConfig(Debug.fixedConfig(true, true, false, false, dumpHandlers));
+        // sync "Exception occured in scope: " with mx/sanitycheck.py::Test.__init__
         Debug.log(String.format("Exception occured in scope: %s", Debug.currentScope()));
         for (Object o : Debug.context()) {
             Debug.log("Context obj %s", o);
@@ -112,6 +142,11 @@ public class HotSpotDebugConfig implements DebugConfig {
                 Debug.dump(o, "Exception graph");
             }
         }
-        return e;
+        return null;
+    }
+
+    @Override
+    public Collection<? extends DebugDumpHandler> dumpHandlers() {
+        return dumpHandlers;
     }
 }
