@@ -38,7 +38,7 @@ public abstract class LLVMStackSave extends LLVMBuiltin {
 
     @Specialization
     public LLVMAddress executePointee(@Cached("getContext().getStack()") LLVMStack stack) {
-        return LLVMAddress.fromLong(stack.getStackPointer());
+        return stack.getStackPointer();
     }
 
 }

@@ -32,11 +32,8 @@ package com.oracle.truffle.llvm.nodes.base;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack.AllocationResult;
 
 public class LLVMFrameUtil {
 
@@ -68,8 +65,8 @@ public class LLVMFrameUtil {
         return FrameUtil.getDoubleSafe(frame, frameSlot);
     }
 
-    public static LLVMAddress getAddress(VirtualFrame frame, FrameSlot frameSlot) {
-        return (LLVMAddress) FrameUtil.getObjectSafe(frame, frameSlot);
+    public static Object getAddress(VirtualFrame frame, FrameSlot frameSlot) {
+        return FrameUtil.getObjectSafe(frame, frameSlot);
     }
 
     public static LLVMIVarBit getIVarbit(VirtualFrame frame, FrameSlot frameSlot) {
@@ -78,13 +75,6 @@ public class LLVMFrameUtil {
 
     public static LLVM80BitFloat get80BitFloat(VirtualFrame frame, FrameSlot frameSlot) {
         return (LLVM80BitFloat) FrameUtil.getObjectSafe(frame, frameSlot);
-    }
-
-    public static LLVMAddress allocateMemory(LLVMStack stack, VirtualFrame frame, FrameSlot stackPointerSlot, int size, int alignment) {
-        LLVMAddress stackPointer = LLVMFrameUtil.getAddress(frame, stackPointerSlot);
-        AllocationResult allocResult = stack.allocateMemory(stackPointer, size, alignment);
-        frame.setObject(stackPointerSlot, allocResult.getStackPointer());
-        return allocResult.getAllocatedMemory();
     }
 
 }

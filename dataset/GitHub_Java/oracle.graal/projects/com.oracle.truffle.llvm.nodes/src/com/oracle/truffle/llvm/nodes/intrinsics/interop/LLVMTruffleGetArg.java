@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,31 +34,22 @@ import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.func.LLVMCallNode;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-@NodeField(name = "sourceLocation", type = LLVMSourceLocation.class)
+@NodeField(name = "sourceSection", type = SourceSection.class)
 public abstract class LLVMTruffleGetArg extends LLVMIntrinsic {
 
     @Override
-    public abstract LLVMSourceLocation getSourceLocation();
-
-    @Specialization(rewriteOn = ArrayIndexOutOfBoundsException.class)
-    protected Object doIntrinsic(VirtualFrame frame, int index) {
-        Object[] arguments = frame.getArguments();
-        return arguments[LLVMCallNode.USER_ARGUMENT_OFFSET + index];
-    }
+    public abstract SourceSection getSourceSection();
 
     @Specialization
-    protected Object doWithBoundsCheck(VirtualFrame frame, int index) {
+    public Object doIntrinsic(VirtualFrame frame, int index) {
+        assert index >= 0;
         Object[] arguments = frame.getArguments();
-        if (index < 0 || index + LLVMCallNode.USER_ARGUMENT_OFFSET >= arguments.length) {
-            throw new LLVMPolyglotException(this, "Argument index %d out of bounds.", index);
-        }
-        return arguments[LLVMCallNode.USER_ARGUMENT_OFFSET + index];
+        return arguments[index];
     }
+
 }
