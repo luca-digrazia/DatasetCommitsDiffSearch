@@ -39,13 +39,8 @@ public final class InlineDuringParsingPlugin implements InlineInvokePlugin {
         return null;
     }
 
-    private static boolean checkSize(ResolvedJavaMethod method, ValueNode[] args) {
+    private static boolean checkSize(ResolvedJavaMethod method, @SuppressWarnings("unused") ValueNode[] args) {
         int bonus = 1;
-        for (ValueNode v : args) {
-            if (v.isConstant()) {
-                bonus++;
-            }
-        }
         return method.getCode().length <= TrivialInliningSize.getValue() * bonus;
     }
 }
