@@ -204,8 +204,8 @@ public abstract class Accessor {
         return API.createWrapperNode(node, language);
     }
 
-    protected boolean isMimeTypeSupported(Object vm, String mimeType) {
-        return SPI.isMimeTypeSupported(vm, mimeType);
+    protected String[] getSupportedMimeTypes(Object obj) {
+        return SPI.getSupportedMimeTypes(obj);
     }
 
     @SuppressWarnings("rawtypes")
