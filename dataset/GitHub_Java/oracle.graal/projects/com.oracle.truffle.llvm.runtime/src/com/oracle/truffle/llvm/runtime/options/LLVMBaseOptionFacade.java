@@ -125,8 +125,4 @@ public final class LLVMBaseOptionFacade {
         return LLVMOptions.getParsedProperty(LLVMBaseOption.DYN_BITCODE_LIBRARIES);
     }
 
-    public static boolean printExecutionTime() {
-        return LLVMOptions.getParsedProperty(LLVMBaseOption.PRINT_EXECUTION_TIME);
-    }
-
 }
