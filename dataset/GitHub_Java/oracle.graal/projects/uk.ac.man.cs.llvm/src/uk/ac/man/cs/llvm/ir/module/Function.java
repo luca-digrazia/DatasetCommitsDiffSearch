@@ -50,8 +50,6 @@ import uk.ac.man.cs.llvm.ir.types.VectorType;
 
 public class Function implements ParserListener {
 
-    private static final int INSERT_VALUE_MAX_ARGS = 3;
-
     private final ModuleVersion version;
 
     protected final FunctionGenerator generator;
@@ -396,11 +394,6 @@ public class Function implements ParserListener {
         int aggregate = getIndex(args[0]);
         int index = (int) args[2];
         int value = getIndex(args[1]);
-
-        if (args.length != INSERT_VALUE_MAX_ARGS) {
-            // This is supported in neither parser.
-            throw new UnsupportedOperationException("Multiple indices are not yet supported!");
-        }
 
         Type symbol = symbols.get(aggregate);
 
