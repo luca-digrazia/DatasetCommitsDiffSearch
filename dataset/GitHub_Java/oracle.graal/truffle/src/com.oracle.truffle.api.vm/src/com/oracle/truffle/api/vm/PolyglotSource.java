@@ -43,6 +43,7 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractSourceImpl;
 
 import com.oracle.truffle.api.TruffleOptions;
+import com.oracle.truffle.api.source.impl.SourceAccessor;
 
 class PolyglotSource extends AbstractSourceImpl {
 
@@ -195,7 +196,7 @@ class PolyglotSource extends AbstractSourceImpl {
 
     static String getMimeType(Path filePath) throws IOException {
         if (!TruffleOptions.AOT) {
-            Collection<ClassLoader> loaders = VMAccessor.allLoaders();
+            Collection<ClassLoader> loaders = SourceAccessor.allLoaders();
             for (ClassLoader l : loaders) {
                 for (FileTypeDetector detector : ServiceLoader.load(FileTypeDetector.class, l)) {
                     String mimeType = detector.probeContentType(filePath);
@@ -262,7 +263,7 @@ class PolyglotSource extends AbstractSourceImpl {
             builder.interactive();
         }
 
-        builder.language(language);
+        builder.mimeType("x-unknown");
 
         try {
             return engineImpl.getAPIAccess().newSource(language, ((com.oracle.truffle.api.source.Source.Builder<IOException, ?, ?>) builder).build());
