@@ -27,27 +27,6 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (c) 2016 University of Manchester
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package uk.ac.man.cs.llvm.ir.module;
 
 import java.util.List;
@@ -70,6 +49,8 @@ import uk.ac.man.cs.llvm.ir.types.Type;
 import uk.ac.man.cs.llvm.ir.types.VectorType;
 
 public class Function implements ParserListener {
+
+    private static final int INSERT_VALUE_MAX_ARGS = 3;
 
     private final ModuleVersion version;
 
@@ -100,7 +81,14 @@ public class Function implements ParserListener {
             case VALUE_SYMTAB:
                 return new ValueSymbolTable(generator);
 
+            case METADATA:
+                return version.createMetadata(types, symbols, generator); // TODO
+
+            case METADATA_ATTACHMENT:
+                return version.createMetadata(types, symbols, generator); // TODO
+
             default:
+                System.out.printf("ENTER #12-FUNCTION-BLOCK: %s%n", block);
                 return ParserListener.DEFAULT;
         }
     }
@@ -116,6 +104,37 @@ public class Function implements ParserListener {
 
         if (record == FunctionRecord.DECLAREBLOCKS) {
             generator.allocateBlocks((int) args[0]);
+            return;
+        }
+
+        /*
+         * FUNC_CODE_DEBUG_LOC as well as FUNC_CODE_DEBUG_LOC_AGAIN also occur after the RET
+         * Instruction, where the InstructionGenerator would already been deleted. This has to be
+         * improved in the future, but for now we simply parse those instructions before checking
+         * for an existing InstructionGenerator. Otherwise we would cause an RuntimeException.
+         */
+        if (record == FunctionRecord.FUNC_CODE_DEBUG_LOC) {
+            /*
+             * TODO: implement intial debugging support
+             *
+             * http://llvm.org/releases/3.2/docs/SourceLevelDebugging.html#format_common_lifetime
+             * http://llvm.org/releases/3.4/docs/SourceLevelDebugging.html#object-lifetimes-and-scoping
+             *
+             * @formatter:off
+             *
+             * metadata !{
+             *  i32 4,          ;; line number
+             *  i32 0,          ;; column number
+             *  metadata !12,   ;; scope
+             *  null            ;; original scope
+             * }
+             *
+             * @formatter:on
+             */
+            return;
+        }
+
+        if (record == FunctionRecord.FUNC_CODE_DEBUG_LOC_AGAIN) {
             return;
         }
 
@@ -205,7 +224,7 @@ public class Function implements ParserListener {
                 break;
 
             case CALL:
-                crateCall(args);
+                createCall(args);
                 break;
 
             case GEP:
@@ -217,7 +236,7 @@ public class Function implements ParserListener {
                 break;
 
             default:
-                System.out.printf("BLOCK #12-METHOD: INSTRUCTION %s%n", record);
+                System.out.printf("BLOCK #12-FUNCTION: INSTRUCTION %s%n", record);
                 break;
         }
     }
@@ -263,24 +282,23 @@ public class Function implements ParserListener {
         code = null;
     }
 
-    protected void crateCall(long[] args) {
-        int i = 2;
+    protected void createCall(long[] args) {
+        int i = 0;
+        final long linkage = args[i++];
+        final long visibility = args[i++];
+        final FunctionType function = (FunctionType) types.get(args[i++]);
+        final int target = getIndex(args[i++]);
 
-        FunctionType method = types.type(args[i++], FunctionType.class);
-
-        int target = getIndex(args[i++]);
-        int[] arguments = new int[args.length - i];
-        int j = 0;
-        while (i < arguments.length) {
-            arguments[j++] = getIndex(args[i++]);
+        final int[] arguments = new int[args.length - i];
+        for (int j = 0; i < args.length; i++, j++) {
+            arguments[j] = getIndex(args[i]);
         }
 
-        Type type = method.getReturnType();
+        final Type returnType = function.getReturnType();
+        code.createCall(returnType, target, arguments, visibility, linkage);
 
-        code.createCall(type, target, arguments);
-
-        if (type != MetaType.VOID) {
-            symbols.add(type);
+        if (returnType != MetaType.VOID) {
+            symbols.add(returnType);
         }
     }
 
@@ -333,6 +351,11 @@ public class Function implements ParserListener {
     protected void createExtractValue(long[] args) {
         int aggregate = getIndex(args[0]);
         int index = (int) args[1];
+
+        if (args.length != 2) {
+            // This is supported in neither parser.
+            throw new UnsupportedOperationException("Multiple indices are not yet supported!");
+        }
 
         Type type = ((AggregateType) symbols.get(aggregate).getType()).getElementType(index);
 
@@ -410,6 +433,11 @@ public class Function implements ParserListener {
         int aggregate = getIndex(args[0]);
         int index = (int) args[2];
         int value = getIndex(args[1]);
+
+        if (args.length != INSERT_VALUE_MAX_ARGS) {
+            // This is supported in neither parser.
+            throw new UnsupportedOperationException("Multiple indices are not yet supported!");
+        }
 
         Type symbol = symbols.get(aggregate);
 
@@ -539,7 +567,7 @@ public class Function implements ParserListener {
         code = null;
     }
 
-    protected void createUnreachable(long[] args) {
+    protected void createUnreachable(@SuppressWarnings("unused") long[] args) {
         code.createUnreachable();
 
         code.exitBlock();
@@ -551,21 +579,22 @@ public class Function implements ParserListener {
     }
 
     protected Type getElementPointerType(Type type, int[] indices) {
+        Type elementType = type;
         for (int i = 0; i < indices.length; i++) {
-            if (type instanceof PointerType) {
-                type = ((PointerType) type).getPointeeType();
-            } else if (type instanceof ArrayType) {
-                type = ((ArrayType) type).getElementType();
+            if (elementType instanceof PointerType) {
+                elementType = ((PointerType) elementType).getPointeeType();
+            } else if (elementType instanceof ArrayType) {
+                elementType = ((ArrayType) elementType).getElementType();
             } else {
-                StructureType structure = (StructureType) type;
+                StructureType structure = (StructureType) elementType;
                 Type idx = symbols.get(indices[i]);
                 if (!(idx instanceof IntegerConstantType)) {
                     throw new IllegalStateException("Cannot infer structure element from " + idx);
                 }
-                type = structure.getElementType((int) ((IntegerConstantType) idx).getValue());
+                elementType = structure.getElementType((int) ((IntegerConstantType) idx).getValue());
             }
         }
-        return type;
+        return elementType;
     }
 
     protected int getIndex(long index) {

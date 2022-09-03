@@ -27,27 +27,6 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (c) 2016 University of Manchester
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package uk.ac.man.cs.llvm.ir.module;
 
 import java.util.List;
@@ -67,7 +46,7 @@ public class FunctionV32 extends FunctionV38 {
     @Override
     protected void createAllocation(long[] args) {
         int i = 0;
-        Type type = types.get(args[0]);
+        Type type = types.get(args[i++]);
         i++; // Unused parameter
         int count = getIndexV0(args[i++]);
         int align = getAlign(args[i++]);
@@ -78,24 +57,23 @@ public class FunctionV32 extends FunctionV38 {
     }
 
     @Override
-    protected void crateCall(long[] args) {
-        int i = 2;
-        int target = getIndex(args[i++]);
-        int[] arguments = new int[args.length - i];
-        int j = 0;
-        while (i < arguments.length) {
-            arguments[j++] = getIndex(args[i++]);
+    protected void createCall(long[] args) {
+        int i = 0;
+        final long linkage = args[i++];
+        final long visibility = args[i++];
+        final int target = getIndex(args[i++]);
+        final int[] arguments = new int[args.length - i];
+        for (int j = 0; i < args.length; j++, i++) {
+            arguments[j] = getIndex(args[i]);
         }
 
         Type type = symbols.get(target).getType();
-
         if (type instanceof PointerType) {
             type = ((PointerType) type).getPointeeType();
         }
 
-        Type returnType = ((FunctionType) type).getReturnType();
-
-        code.createCall(returnType, target, arguments);
+        final Type returnType = ((FunctionType) type).getReturnType();
+        code.createCall(returnType, target, arguments, visibility, linkage);
 
         if (returnType != MetaType.VOID) {
             symbols.add(returnType);
