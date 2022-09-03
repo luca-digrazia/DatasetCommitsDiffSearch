@@ -119,7 +119,7 @@ public final class LLVMAggregateFactory {
         LLVMStructWriteNode[] nodes = new LLVMStructWriteNode[types.length];
         int currentOffset = 0;
         int structSize = runtime.getByteSize(structType);
-        int structAlignment = runtime.getByteAlignment(structType);
+        int structAlignment = runtime.getTypeHelper().getAlignmentByte(structType);
         LLVMExpressionNode alloc = runtime.allocateFunctionLifetime(LLVMToBitcodeAdapter.unresolveType(structType), structSize, structAlignment);
         for (int i = 0; i < types.length; i++) {
             Type resolvedType = types[i];

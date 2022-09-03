@@ -92,6 +92,7 @@ import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
 import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.base.model.types.ArrayType;
+import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
 import com.oracle.truffle.llvm.parser.base.model.types.Type;
 import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.base.util.LLVMTypeHelper;
@@ -180,8 +181,8 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMNode createLLVMIntrinsic(FunctionDeclaration declaration, Object[] argNodes, int argCount) {
-        return LLVMIntrinsicFactory.create(declaration, argNodes, argCount, runtime);
+    public LLVMNode createLLVMIntrinsic(String functionName, Object[] argNodes, FunctionType def) {
+        return LLVMIntrinsicFactory.create(functionName, argNodes, def, runtime);
     }
 
     @Override
