@@ -25,6 +25,7 @@ package com.oracle.graal.hotspot.amd64;
 import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
 
@@ -104,7 +105,7 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         @Override
         public void visitSafepointNode(SafepointNode i) {
             LIRFrameState info = state();
-            append(new AMD64SafepointOp(info, runtime().config, this));
+            append(new AMD64SafepointOp(info, runtime().config));
         }
 
         @Override
@@ -224,6 +225,7 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
             int frameSize = tasm.frameMap.frameSize();
             AMD64MacroAssembler asm = (AMD64MacroAssembler) tasm.asm;
             CalleeSaveLayout csl = tasm.frameMap.registerConfig.getCalleeSaveLayout();
+            RegisterConfig regConfig = tasm.frameMap.registerConfig;
 
             if (csl != null && csl.size != 0) {
                 tasm.compilationResult.setRegisterRestoreEpilogueOffset(asm.codeBuffer.position());
@@ -234,6 +236,27 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
 
             asm.incrementq(rsp, frameSize - 8); // account for the pop of RBP below
             asm.pop(rbp);
+
+            if (GraalOptions.GenSafepoints) {
+                HotSpotVMConfig config = runtime().config;
+
+                // If at the return point, then the frame has already been popped
+                // so deoptimization cannot be performed here. The HotSpot runtime
+                // detects this case - see the definition of frame::should_be_deoptimized()
+
+                Register scratch = regConfig.getScratchRegister();
+                int offset = SafepointPollOffset % unsafe.pageSize();
+                if (config.isPollingPageFar) {
+                    asm.movq(scratch, config.safepointPollingAddress + offset);
+                    tasm.recordMark(Marks.MARK_POLL_RETURN_FAR);
+                    asm.movq(scratch, new AMD64Address(tasm.target.wordKind, scratch.asValue()));
+                } else {
+                    tasm.recordMark(Marks.MARK_POLL_RETURN_NEAR);
+                    // The C++ code transforms the polling page offset into an RIP displacement
+                    // to the real address at that offset in the polling page.
+                    asm.movq(scratch, new AMD64Address(tasm.target.wordKind, rip.asValue(), offset));
+                }
+            }
         }
     }
 

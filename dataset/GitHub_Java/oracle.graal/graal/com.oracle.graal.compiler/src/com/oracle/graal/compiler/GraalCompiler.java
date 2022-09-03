@@ -48,37 +48,34 @@ import com.oracle.graal.virtual.phases.ea.*;
 public class GraalCompiler {
 
     public static CompilationResult compileMethod(final GraalCodeCacheProvider runtime, final Backend backend, final TargetDescription target, final ResolvedJavaMethod method,
-                    final StructuredGraph graph, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog) {
+                    final StructuredGraph graph, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts) {
         assert (method.getModifiers() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
 
-        final CompilationResult compilationResult = new CompilationResult();
-        Debug.scope("GraalCompiler", new Object[]{graph, method, runtime}, new Runnable() {
+        return Debug.scope("GraalCompiler", new Object[]{graph, method}, new Callable<CompilationResult>() {
 
-            public void run() {
+            public CompilationResult call() {
                 final Assumptions assumptions = new Assumptions(GraalOptions.OptAssumptions);
                 final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
 
                     public LIR call() {
-                        return emitHIR(runtime, target, graph, assumptions, cache, plan, optimisticOpts, speculationLog);
+                        return emitHIR(runtime, target, graph, assumptions, cache, plan, optimisticOpts);
                     }
                 });
-                final LIRGenerator lirGen = Debug.scope("BackEnd", lir, new Callable<LIRGenerator>() {
+                final FrameMap frameMap = Debug.scope("BackEnd", lir, new Callable<FrameMap>() {
 
-                    public LIRGenerator call() {
+                    public FrameMap call() {
                         return emitLIR(backend, target, lir, graph, method);
                     }
                 });
-                Debug.scope("CodeGen", lirGen, new Runnable() {
+                return Debug.scope("CodeGen", frameMap, new Callable<CompilationResult>() {
 
-                    public void run() {
-                        emitCode(backend, getLeafGraphIdArray(graph), assumptions, method, lirGen, compilationResult);
+                    public CompilationResult call() {
+                        return emitCode(backend, getLeafGraphIdArray(graph), assumptions, method, lir, frameMap);
                     }
 
                 });
             }
         });
-
-        return compilationResult;
     }
 
     private static long[] getLeafGraphIdArray(StructuredGraph graph) {
@@ -99,11 +96,7 @@ public class GraalCompiler {
      * @param target
      */
     public static LIR emitHIR(GraalCodeCacheProvider runtime, TargetDescription target, StructuredGraph graph, Assumptions assumptions, GraphCache cache, PhasePlan plan,
-                    OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog) {
-
-        if (speculationLog != null) {
-            speculationLog.snapshot();
-        }
+                    OptimisticOptimizations optimisticOpts) {
 
         if (graph.start().next() == null) {
             plan.runPhases(PhasePosition.AFTER_PARSING, graph);
@@ -121,11 +114,7 @@ public class GraalCompiler {
         }
 
         if (GraalOptions.Inline && !plan.isPhaseDisabled(InliningPhase.class)) {
-            if (GraalOptions.IterativeInlining) {
-                new IterativeInliningPhase(runtime, assumptions, cache, plan, optimisticOpts).apply(graph);
-            } else {
-                new InliningPhase(runtime, null, assumptions, cache, plan, optimisticOpts).apply(graph);
-            }
+            new InliningPhase(runtime, null, assumptions, cache, plan, optimisticOpts).apply(graph);
             new DeadCodeEliminationPhase().apply(graph);
 
             if (GraalOptions.ConditionalElimination && GraalOptions.OptCanonicalizer) {
@@ -154,10 +143,6 @@ public class GraalCompiler {
 
         if (GraalOptions.PartialEscapeAnalysis && !plan.isPhaseDisabled(PartialEscapeAnalysisPhase.class)) {
             new PartialEscapeAnalysisPhase(runtime, assumptions, true).apply(graph);
-        }
-
-        if (GraalOptions.OptConvertDeoptsToGuards) {
-            new ConvertDeoptimizeToGuardPhase().apply(graph);
         }
 
         new LockEliminationPhase().apply(graph);
@@ -208,8 +193,6 @@ public class GraalCompiler {
 
         plan.runPhases(PhasePosition.LOW_LEVEL, graph);
 
-        new GuardLoweringPhase(target).apply(graph);
-
         // Add safepoints to loops
         new SafepointInsertionPhase().apply(graph);
 
@@ -231,7 +214,7 @@ public class GraalCompiler {
                 List<Block> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock);
                 List<Block> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock);
 
-                LIR lir = new LIR(schedule.getCFG(), schedule.getBlockToNodesMap(), linearScanOrder, codeEmittingOrder, speculationLog);
+                LIR lir = new LIR(schedule.getCFG(), schedule.getBlockToNodesMap(), linearScanOrder, codeEmittingOrder);
                 Debug.dump(lir, "After linear scan order");
                 return lir;
 
@@ -240,11 +223,11 @@ public class GraalCompiler {
 
     }
 
-    public static LIRGenerator emitLIR(Backend backend, final TargetDescription target, final LIR lir, StructuredGraph graph, final ResolvedJavaMethod method) {
+    public static FrameMap emitLIR(Backend backend, final TargetDescription target, final LIR lir, StructuredGraph graph, final ResolvedJavaMethod method) {
         final FrameMap frameMap = backend.newFrameMap();
-        final LIRGenerator lirGen = backend.newLIRGenerator(graph, frameMap, method, lir);
+        final LIRGenerator lirGenerator = backend.newLIRGenerator(graph, frameMap, method, lir);
 
-        Debug.scope("LIRGen", lirGen, new Runnable() {
+        Debug.scope("LIRGen", lirGenerator, new Runnable() {
 
             public void run() {
                 for (Block b : lir.linearScanOrder()) {
@@ -261,25 +244,23 @@ public class GraalCompiler {
                             emitBlock(pred);
                         }
                     }
-                    lirGen.doBlock(b);
+                    lirGenerator.doBlock(b);
                 }
             }
         });
 
-        lirGen.beforeRegisterAllocation();
-
         Debug.scope("Allocator", new Runnable() {
 
             public void run() {
-                new LinearScan(target, method, lir, lirGen, frameMap).allocate();
+                new LinearScan(target, method, lir, lirGenerator, frameMap).allocate();
             }
         });
-        return lirGen;
+        return frameMap;
     }
 
-    public static void emitCode(Backend backend, long[] leafGraphIds, Assumptions assumptions, ResolvedJavaMethod method, LIRGenerator lirGen, CompilationResult compilationResult) {
-        TargetMethodAssembler tasm = backend.newAssembler(lirGen, compilationResult);
-        backend.emitCode(tasm, method, lirGen);
+    public static CompilationResult emitCode(Backend backend, long[] leafGraphIds, Assumptions assumptions, ResolvedJavaMethod method, LIR lir, FrameMap frameMap) {
+        TargetMethodAssembler tasm = backend.newAssembler(frameMap, lir);
+        backend.emitCode(tasm, method, lir);
         CompilationResult result = tasm.finishTargetMethod(method, false);
         if (!assumptions.isEmpty()) {
             result.setAssumptions(assumptions);
@@ -287,5 +268,6 @@ public class GraalCompiler {
         result.setLeafGraphIds(leafGraphIds);
 
         Debug.dump(result, "After code generation");
+        return result;
     }
 }
