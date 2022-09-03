@@ -68,11 +68,13 @@ import com.oracle.graal.test.*;
 public abstract class GraalCompilerTest extends GraalTest {
 
     protected final GraalCodeCacheProvider runtime;
+    protected final GraalCompiler graalCompiler;
     protected final Backend backend;
 
     public GraalCompilerTest() {
         DebugEnvironment.initialize(System.out);
         this.runtime = Graal.getRequiredCapability(GraalCodeCacheProvider.class);
+        this.graalCompiler = Graal.getRequiredCapability(GraalCompiler.class);
         this.backend = Graal.getRequiredCapability(Backend.class);
     }
 
@@ -348,7 +350,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
         final int id = compilationId++;
 
-        InstalledCode installedCode = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true), new Callable<InstalledCode>() {
+        InstalledCode installedCode = Debug.scope("Compiling", new Object[]{runtime, new DebugDumpScope(String.valueOf(id), true)}, new Callable<InstalledCode>() {
 
             public InstalledCode call() throws Exception {
                 final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
@@ -375,7 +377,8 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected InstalledCode addMethod(final ResolvedJavaMethod method, final CompilationResult compResult) {
-        return Debug.scope("CodeInstall", new Object[]{runtime, method}, new Callable<InstalledCode>() {
+        assert graalCompiler != null;
+        return Debug.scope("CodeInstall", new Object[]{graalCompiler, method}, new Callable<InstalledCode>() {
 
             @Override
             public InstalledCode call() throws Exception {
