@@ -36,9 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.InfopointReason;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.common.JVMCIError;
@@ -50,7 +48,6 @@ import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.Value;
 
-import com.oracle.graal.compiler.common.GraalOptions;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.cfg.BlockMap;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -67,7 +64,6 @@ import com.oracle.graal.graph.NodeMap;
 import com.oracle.graal.lir.FullInfopointOp;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.LIRValueUtil;
 import com.oracle.graal.lir.LabelRef;
 import com.oracle.graal.lir.SimpleInfopointOp;
 import com.oracle.graal.lir.StandardOp.JumpOp;
@@ -82,6 +78,7 @@ import com.oracle.graal.lir.gen.PhiResolver;
 import com.oracle.graal.nodes.AbstractBeginNode;
 import com.oracle.graal.nodes.AbstractEndNode;
 import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.DeoptimizingNode;
 import com.oracle.graal.nodes.DirectCallTargetNode;
 import com.oracle.graal.nodes.FixedNode;
@@ -97,6 +94,7 @@ import com.oracle.graal.nodes.LoopEndNode;
 import com.oracle.graal.nodes.LoweredCallTargetNode;
 import com.oracle.graal.nodes.ParameterNode;
 import com.oracle.graal.nodes.PhiNode;
+import com.oracle.graal.nodes.SimpleInfopointNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.ValuePhiNode;
@@ -126,8 +124,6 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     private ValueNode currentInstruction;
     private ValueNode lastInstructionPrinted; // Debugging only
 
-    private BytecodePosition lastPosition;
-
     private final NodeMatchRules nodeMatchRules;
     private Map<Class<? extends Node>, List<MatchStatement>> matchRules;
 
@@ -142,6 +138,13 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
         assert nodeMatchRules.lirBuilder == null;
         nodeMatchRules.lirBuilder = this;
+    }
+
+    /**
+     * @return {@code true} if object constant to stack moves are supported.
+     */
+    protected boolean allowObjectConstantToStackMove() {
+        return true;
     }
 
     public NodeMatchRules getNodeMatchRules() {
@@ -293,11 +296,10 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
                  * new Variable.
                  */
                 value = gen.emitMove(value);
-            } else if (LIRValueUtil.isConstantValue(value) && !gen.getMoveFactory().allowConstantToStackMove(LIRValueUtil.asConstant(value))) {
+            } else if (!allowObjectConstantToStackMove() && node instanceof ConstantNode && !value.getLIRKind().isValue()) {
                 /*
-                 * Some constants are not allowed as inputs for PHIs in certain backends. Explicitly
-                 * create a copy of this value to force it into a register. The new variable is only
-                 * used in the PHI.
+                 * Object constants are not allowed as inputs for PHIs. Explicitly create a copy of
+                 * this value to force it into a register. The new variable is only used in the PHI.
                  */
                 Variable result = gen.newVariable(value.getLIRKind());
                 gen.emitMove(result, value);
@@ -311,7 +313,6 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     @SuppressWarnings("try")
     public void doBlock(Block block, StructuredGraph graph, BlockMap<List<Node>> blockMap) {
         try (BlockScope blockScope = gen.getBlockScope(block)) {
-            lastPosition = null;
 
             if (block == gen.getResult().getLIR().getControlFlowGraph().getStartBlock()) {
                 assert block.getPredecessorCount() == 0;
@@ -439,13 +440,6 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     protected void emitNode(ValueNode node) {
         if (Debug.isLogEnabled() && node.stamp().isEmpty()) {
             Debug.log("This node has an empty stamp, we are emitting dead code(?): %s", node);
-        }
-        if (GraalOptions.NewInfopoints.getValue()) {
-            BytecodePosition position = node.getNodeContext(BytecodePosition.class);
-            if (position != null && (lastPosition == null || !lastPosition.equals(position))) {
-                lastPosition = position;
-                recordSimpleInfopoint(InfopointReason.LINE_NUMBER, position);
-            }
         }
         if (node instanceof LIRLowerable) {
             ((LIRLowerable) node).generate(this);
@@ -764,8 +758,8 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     @Override
-    public void recordSimpleInfopoint(InfopointReason reason, BytecodePosition position) {
-        append(new SimpleInfopointOp(reason, position));
+    public void visitSimpleInfopointNode(SimpleInfopointNode i) {
+        append(new SimpleInfopointOp(i.getReason(), i.getPosition()));
     }
 
     @Override

@@ -22,13 +22,11 @@
  */
 package com.oracle.graal.compiler.common;
 
-import static com.oracle.graal.compiler.common.BackendOptions.UserOptions.LIREagerSSADestruction;
-import jdk.internal.jvmci.options.DerivedOptionValue;
-import jdk.internal.jvmci.options.DerivedOptionValue.OptionSupplier;
-import jdk.internal.jvmci.options.Option;
-import jdk.internal.jvmci.options.OptionType;
-import jdk.internal.jvmci.options.OptionValue;
-import jdk.internal.jvmci.options.StableOptionValue;
+import jdk.vm.ci.options.DerivedOptionValue;
+import jdk.vm.ci.options.DerivedOptionValue.OptionSupplier;
+import jdk.vm.ci.options.Option;
+import jdk.vm.ci.options.OptionType;
+import jdk.vm.ci.options.OptionValue;
 
 /**
  * Options to control the backend configuration.
@@ -43,8 +41,6 @@ public final class BackendOptions {
         public static final OptionValue<Boolean> LIROptSSILinearScan = new OptionValue<>(false);
         @Option(help = "Enable experimental Trace Register Allocation.", type = OptionType.Debug)
         public static final OptionValue<Boolean> TraceRA = new OptionValue<>(false);
-        @Option(help = "Never spill constant intervals.", type = OptionType.Debug)
-        public static final OptionValue<Boolean> NeverSpillConstants = new StableOptionValue<>(false);
         // @formatter:on
     }
 
@@ -79,7 +75,7 @@ public final class BackendOptions {
             if (UserOptions.LIROptSSILinearScan.getValue()) {
                 return LSRAVariant.SSI_LSRA;
             }
-            if (GraalOptions.SSA_LIR.getValue() && !LIREagerSSADestruction.getValue()) {
+            if (GraalOptions.SSA_LIR.getValue() && !UserOptions.LIREagerSSADestruction.getValue()) {
                 return LSRAVariant.SSA_LSRA;
             }
             return LSRAVariant.NONSSA_LSAR;
