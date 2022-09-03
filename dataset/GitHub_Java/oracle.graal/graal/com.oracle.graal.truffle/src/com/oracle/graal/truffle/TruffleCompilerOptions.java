@@ -68,11 +68,13 @@ public class TruffleCompilerOptions {
     @Option(help = "")
     public static final OptionValue<Double> TruffleInliningMinFrequency = new OptionValue<>(0.3);
     @Option(help = "")
+    public static final OptionValue<Boolean> TruffleSplittingEnabled = new OptionValue<>(true);
+    @Option(help = "")
+    public static final OptionValue<Integer> TruffleSplittingMaxCalleeSize = new OptionValue<>(50);
+    @Option(help = "")
     public static final OptionValue<Boolean> TruffleUseTimeForCompilationDecision = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<Integer> TruffleCompilationDecisionTime = new OptionValue<>(100);
-    @Option(help = "")
-    public static final OptionValue<Integer> TruffleMaxCompilationCacheSize = new OptionValue<>(512);
     @Option(help = "")
     public static final OptionValue<Boolean> TruffleCompilationDecisionTimePrintFail = new OptionValue<>(false);
     @Option(help = "")
@@ -94,7 +96,7 @@ public class TruffleCompilerOptions {
     @Option(help = "")
     public static final OptionValue<Boolean> TruffleCompilationExceptionsAreFatal = new OptionValue<>(true);
     @Option(help = "")
-    public static final OptionValue<Boolean> TraceTruffleInlining = new OptionValue<>(true);
+    public static final OptionValue<Boolean> TraceTruffleInlining = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<Boolean> TraceTruffleInliningTree = new OptionValue<>(false);
     @Option(help = "")
