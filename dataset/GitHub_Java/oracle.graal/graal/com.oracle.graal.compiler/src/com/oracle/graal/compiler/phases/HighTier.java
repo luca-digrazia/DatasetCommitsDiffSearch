@@ -31,7 +31,6 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.common.cfs.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.phases.ea.*;
@@ -47,7 +46,10 @@ public class HighTier extends PhaseSuite<HighTierContext> {
     }
 
     public HighTier() {
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue());
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
+        if (ImmutableCode.getValue()) {
+            canonicalizer.disableReadCanonicalization();
+        }
 
         if (OptCanonicalizer.getValue()) {
             appendPhase(canonicalizer);
@@ -60,14 +62,9 @@ public class HighTier extends PhaseSuite<HighTierContext> {
                 appendPhase(new InliningPhase(canonicalizer));
                 appendPhase(new DeadCodeEliminationPhase(Optional));
 
-                boolean reduceOrEliminate = FlowSensitiveReduction.getValue() || ConditionalElimination.getValue();
-                if (reduceOrEliminate && OptCanonicalizer.getValue()) {
+                if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
                     appendPhase(canonicalizer);
-                    if (FlowSensitiveReduction.getValue()) {
-                        appendPhase(new IterativeFlowSensitiveReductionPhase(canonicalizer));
-                    } else {
-                        appendPhase(new IterativeConditionalEliminationPhase(canonicalizer));
-                    }
+                    appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, false));
                 }
             }
         }
@@ -76,10 +73,6 @@ public class HighTier extends PhaseSuite<HighTierContext> {
 
         if (FullUnroll.getValue()) {
             appendPhase(new LoopFullUnrollPhase(canonicalizer));
-        }
-
-        if (OptTailDuplication.getValue()) {
-            appendPhase(new TailDuplicationPhase(canonicalizer));
         }
 
         if (PartialEscapeAnalysis.getValue()) {
@@ -91,8 +84,12 @@ public class HighTier extends PhaseSuite<HighTierContext> {
         }
 
         if (OptLoopTransform.getValue()) {
-            appendPhase(new LoopTransformHighPhase());
-            appendPhase(new LoopTransformLowPhase());
+            if (LoopPeeling.getValue()) {
+                appendPhase(new LoopPeelingPhase());
+            }
+            if (LoopUnswitch.getValue()) {
+                appendPhase(new LoopUnswitchingPhase());
+            }
         }
         appendPhase(new RemoveValueProxyPhase());
 
