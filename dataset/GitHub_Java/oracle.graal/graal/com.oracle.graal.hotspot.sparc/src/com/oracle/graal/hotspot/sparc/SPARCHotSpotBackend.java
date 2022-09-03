@@ -24,8 +24,10 @@ package com.oracle.graal.hotspot.sparc;
 
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.sparc.SPARC.*;
+import static java.lang.reflect.Modifier.*;
+
 import java.util.*;
 
 import sun.misc.*;
@@ -43,7 +45,8 @@ import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Cmp;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Nop;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.RestoreWindow;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.HotSpotCodeCacheProvider.MarkId;
 import com.oracle.graal.hotspot.meta.*;
@@ -51,10 +54,8 @@ import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
 
 /**
  * HotSpot SPARC specific backend.
@@ -78,12 +79,12 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public LIRGeneratorTool newLIRGenerator(CallingConvention cc, LIRGenerationResult lirGenRes) {
+    public LIRGenerator newLIRGenerator(CallingConvention cc, LIRGenerationResult lirGenRes) {
         return new SPARCHotSpotLIRGenerator(getProviders(), getRuntime().getConfig(), cc, lirGenRes);
     }
 
     @Override
-    public NodeLIRBuilderTool newNodeLIRGenerator(StructuredGraph graph, LIRGeneratorTool lirGen) {
+    public NodeLIRBuilder newNodeLIRGenerator(StructuredGraph graph, LIRGenerator lirGen) {
         return new SPARCHotSpotNodeLIRBuilder(graph, lirGen);
     }
 
@@ -200,7 +201,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         FrameMap frameMap = crb.frameMap;
         RegisterConfig regConfig = frameMap.registerConfig;
         HotSpotVMConfig config = getRuntime().getConfig();
-        Label unverifiedStub = installedCodeOwner == null || installedCodeOwner.isStatic() ? null : new Label();
+        Label unverifiedStub = installedCodeOwner == null || isStatic(installedCodeOwner.getModifiers()) ? null : new Label();
 
         // Emit the prefix
 
