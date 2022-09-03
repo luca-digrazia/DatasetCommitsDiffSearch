@@ -530,12 +530,9 @@ final class TraceInterval extends IntervalHint {
         splitParent().spillDefinitionPos = pos;
     }
 
-    /**
-     * Returns true if this interval has a shadow copy on the stack that is correct after
-     * {@code opId}.
-     */
-    public boolean inMemoryAt(int opId) {
-        return SpillState.ALWAYS_IN_MEMORY.contains(spillState()) && !canMaterialize() && opId > spillDefinitionPos();
+    // returns true if this interval has a shadow copy on the stack that is always correct
+    public boolean alwaysInMemory() {
+        return SpillState.ALWAYS_IN_MEMORY.contains(spillState()) && !canMaterialize();
     }
 
     void removeFirstUsePos() {
