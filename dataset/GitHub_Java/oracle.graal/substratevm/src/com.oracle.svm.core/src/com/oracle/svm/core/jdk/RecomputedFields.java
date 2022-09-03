@@ -90,9 +90,7 @@ final class Target_sun_util_calendar_ZoneInfoFile {
 @TargetClass(className = "java.nio.DirectByteBuffer")
 @SuppressWarnings("unused")
 final class Target_java_nio_DirectByteBuffer {
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    @RecomputeFieldValue(kind = ArrayBaseOffset, declClass = byte[].class) //
+    @Alias @RecomputeFieldValue(kind = ArrayBaseOffset, declClass = byte[].class) //
     static long arrayBaseOffset;
 
     @Alias
