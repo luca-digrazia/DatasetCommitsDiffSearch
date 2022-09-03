@@ -653,36 +653,33 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Value emitURem(Value a, Value b, LIRFrameState state) {
-        Variable result = newVariable(LIRKind.derive(a, b));
+    public Value emitUDiv(Value a, Value b, LIRFrameState state) {
+        // LIRFrameState state = state(deopting);
         switch (a.getKind().getStackKind()) {
             case Int:
-                append(new RemOp(IUREM, result, a, loadNonConst(b), state, this));
-                break;
+                // emitDivRem(IUDIV, a, b, state);
+                // return emitMove(RAX_I);
             case Long:
-                append(new RemOp(LUREM, result, a, loadNonConst(b), state, this));
-                break;
+                // emitDivRem(LUDIV, a, b, state);
+                // return emitMove(RAX_L);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
-        return result;
-
     }
 
     @Override
-    public Value emitUDiv(Value a, Value b, LIRFrameState state) {
-        SPARCArithmetic op;
+    public Value emitURem(Value a, Value b, LIRFrameState state) {
+        // LIRFrameState state = state(deopting);
         switch (a.getKind().getStackKind()) {
             case Int:
-                op = IUDIV;
-                break;
+                // emitDivRem(IUREM, a, b, state);
+                // return emitMove(RDX_I);
             case Long:
-                op = LUDIV;
-                break;
+                // emitDivRem(LUREM, a, b, state);
+                // return emitMove(RDX_L);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
-        return emitBinary(op, false, a, b, state);
     }
 
     @Override
