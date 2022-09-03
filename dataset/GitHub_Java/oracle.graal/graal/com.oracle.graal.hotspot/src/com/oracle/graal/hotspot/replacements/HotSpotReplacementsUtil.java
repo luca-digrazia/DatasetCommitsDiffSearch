@@ -35,7 +35,6 @@ import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
@@ -540,7 +539,7 @@ public class HotSpotReplacementsUtil {
     private static native Object verifyOopStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object);
 
     public static Word loadWordFromObject(Object object, int offset) {
-        ReplacementsUtil.staticAssert(offset != hubOffset(), "Use loadHubIntrinsic instead of loadWordFromObject");
+        assert offset != hubOffset() : "Use loadHubIntrinsic instead";
         return loadWordFromObjectIntrinsic(object, offset, getWordKind(), LocationIdentity.ANY_LOCATION);
     }
 
@@ -586,26 +585,21 @@ public class HotSpotReplacementsUtil {
     public static final LocationIdentity CLASS_STATE_LOCATION = new NamedLocationIdentity("ClassState");
 
     @Fold
-    public static int instanceKlassInitStateOffset() {
-        return config().instanceKlassInitStateOffset;
+    public static int klassStateOffset() {
+        return config().klassStateOffset;
     }
 
     @Fold
-    public static int instanceKlassStateFullyInitialized() {
-        return config().instanceKlassStateFullyInitialized;
+    public static int klassStateFullyInitialized() {
+        return config().klassStateFullyInitialized;
     }
 
-    /**
-     *
-     * @param hub the hub of an InstanceKlass
-     * @return true is the InstanceKlass represented by hub is fully initialized
-     */
-    public static boolean isInstanceKlassFullyInitialized(Word hub) {
-        return readInstanceKlassState(hub) == instanceKlassStateFullyInitialized();
+    public static boolean isKlassFullyInitialized(Word hub) {
+        return readKlassState(hub) == klassStateFullyInitialized();
     }
 
-    private static byte readInstanceKlassState(Word hub) {
-        return hub.readByte(instanceKlassInitStateOffset(), CLASS_STATE_LOCATION);
+    public static byte readKlassState(Word hub) {
+        return hub.readByte(klassStateOffset(), CLASS_STATE_LOCATION);
     }
 
     @Fold
@@ -626,8 +620,8 @@ public class HotSpotReplacementsUtil {
     public static final LocationIdentity KLASS_NODE_CLASS = new NamedLocationIdentity("KlassNodeClass");
 
     @Fold
-    public static int instanceKlassNodeClassOffset() {
-        return config().instanceKlassNodeClassOffset;
+    public static int klassNodeClassOffset() {
+        return config().klassNodeClassOffset;
     }
 
     @Fold
