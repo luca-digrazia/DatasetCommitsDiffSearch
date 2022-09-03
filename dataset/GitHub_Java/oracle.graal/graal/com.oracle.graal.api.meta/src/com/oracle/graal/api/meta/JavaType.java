@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,43 +23,82 @@
 package com.oracle.graal.api.meta;
 
 /**
- * Represents a resolved or unresolved type. Types include primitives, objects, {@code void}, and
- * arrays thereof.
+ * Represents a resolved or unresolved type in the compiler-runtime interface. Types include primitives, objects, {@code void},
+ * and arrays thereof.
  */
 public interface JavaType {
 
     /**
-     * Returns the name of this type in internal form. The following are examples of strings
-     * returned by this method:
-     * 
+     * Represents each of the several different parts of the runtime representation of
+     * a type which compiled code may need to reference individually. These may or may not be
+     * different objects or data structures, depending on the runtime system.
+     */
+    public enum Representation {
+        /**
+         * The runtime representation of the data structure containing the static primitive fields of this type.
+         */
+        StaticPrimitiveFields,
+
+        /**
+         * The runtime representation of the data structure containing the static object fields of this type.
+         */
+        StaticObjectFields,
+
+        /**
+         * The runtime representation of the Java class object of this type.
+         */
+        JavaClass,
+
+        /**
+         * The runtime representation of the "hub" of this type--that is, the closest part of the type
+         * representation which is typically stored in the object header. For example, in the HotSpot
+         * VM the hub correlates with the C++ <code>klassOop</code> type.
+         */
+        ObjectHub
+    }
+
+    /**
+     * Gets the name of this type in internal form. The following are examples of strings returned by this method:
      * <pre>
      *     "Ljava/lang/Object;"
      *     "I"
      *     "[[B"
      * </pre>
+     *
+     * @return the name of this type in internal form
      */
-    String getName();
+    String name();
 
     /**
-     * For array types, gets the type of the components, or {@code null} if this is not an array
-     * type. This method is analogous to {@link Class#getComponentType()}.
+     * For array types, gets the type of the components.
+     * This will be null if this is not an array type.
+     * This method is analogous to {@link Class#getComponentType()}.
+     *
+     * @return the component type of this type if it is an array type otherwise null
      */
-    JavaType getComponentType();
+    JavaType componentType();
 
     /**
-     * Gets the array class type representing an array with elements of this type.
+     * Gets the type representing an array with elements of this type.
+     * @return a new compiler interface type representing an array of this type
      */
-    JavaType getArrayClass();
+    JavaType arrayOf();
 
     /**
-     * Gets the kind of this type.
+     * Gets the kind of this compiler interface type.
+     * @return the kind
      */
-    Kind getKind();
+    Kind kind();
 
     /**
-     * Resolved this type and returns a {@link ResolvedJavaType}. If this type is already a
-     * {@link ResolvedJavaType}, it returns this type.
-     * 
+     * Gets the kind used to represent the specified part of this type.
+     * @param r the part of the this type
+     * @return the kind of constants for the specified part of the type
+     */
+    Kind getRepresentationKind(Representation r);
+
+    /**
+     * Resolved this Java type and returns the result.
      * @param accessingClass the class that requests resolving this type
      * @return the resolved Java type
      */
