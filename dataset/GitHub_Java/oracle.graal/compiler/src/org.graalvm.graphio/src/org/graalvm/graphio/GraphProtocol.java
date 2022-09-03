@@ -150,10 +150,11 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
     protected abstract NodeClass findNodeClass(Object obj);
 
     /**
-     * Returns NodeClass for given Node {@code obj}.
+     * Returns NodeClass for given Node {@code obj}. It is a failure to return <code>null</code>.
+     * Returning <code>null</code> will result in an exception being thrown at runtime.
      * 
      * @param obj instance of node
-     * @return non-{@code null} instance of the node's class object
+     * @return non-null instance of the node's class object
      */
     protected abstract NodeClass findClassForNode(Node obj);
 
@@ -405,7 +406,10 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         writeInt(size);
         int cnt = 0;
         for (Node node : findNodes(info)) {
-            NodeClass nodeClass = classForNode(node);
+            NodeClass nodeClass = findClassForNode(node);
+            if (nodeClass == null) {
+                throw new IOException("No class for " + node);
+            }
             findNodeProperties(node, props, info);
 
             writeInt(findNodeId(node));
@@ -424,7 +428,10 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
     }
 
     private void writeEdges(Graph graph, Node node, boolean dumpInputs) throws IOException {
-        NodeClass clazz = classForNode(node);
+        NodeClass clazz = findClassForNode(node);
+        if (clazz == null) {
+            throw new IOException("No class for " + node);
+        }
         Edges edges = findClassEdges(clazz, dumpInputs);
         int size = findSize(edges);
         for (int i = 0; i < size; i++) {
@@ -451,14 +458,6 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
                 }
             }
         }
-    }
-
-    private NodeClass classForNode(Node node) throws IOException {
-        NodeClass clazz = findClassForNode(node);
-        if (clazz == null) {
-            throw new IOException("No class for " + node);
-        }
-        return clazz;
     }
 
     private void writeNodeRef(Node node) throws IOException {
@@ -551,11 +550,14 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
                 if (versionMajor >= 5) {
                     writeByte(POOL_NODE);
                     writeInt(findNodeId(node));
-                    writePoolObject(classForNode(node));
+                    writePoolObject(findClassForNode(node));
                     return;
                 }
                 if (versionMajor == 4) {
-                    object = classForNode(node);
+                    object = findClassForNode(node);
+                    if (object == null) {
+                        throw new IOException("class node for " + node + " is null");
+                    }
                 }
             }
             NodeClass nodeClass = findNodeClass(object);
