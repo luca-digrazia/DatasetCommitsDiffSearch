@@ -24,10 +24,8 @@
 package com.oracle.graal.compiler.hsail.test;
 
 import java.util.*;
-
 import org.junit.*;
-
-import com.oracle.graal.compiler.hsail.test.infra.*;
+import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
 
 /**
  * Tests integer to short conversion.

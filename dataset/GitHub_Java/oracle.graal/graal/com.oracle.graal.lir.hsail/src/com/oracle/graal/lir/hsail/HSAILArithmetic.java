@@ -35,89 +35,85 @@ import com.oracle.graal.lir.asm.*;
  * Defines arithmetic instruction nodes.
  */
 public enum HSAILArithmetic {
-    CALL,
-    FDIV,
-    FREM,
-    D2F,
-    D2I,
-    D2L,
-    DADD,
-    DDIV,
-    DMUL,
-    DNEG,
-    DREM,
+    IADD,
+    OADD,
+    ISUB,
+    FSUB,
     DSUB,
+    IMUL,
+    FMUL,
+    DMUL,
+    IDIV,
+    FDIV,
+    DDIV,
+    IUADD,
+    IUSUB,
+    IUMUL,
+    IUDIV,
+    LADD,
+    DADD,
+    FADD,
+    LSUB,
+    LMUL,
+    LDIV,
+    LUADD,
+    LUSUB,
+    LUMUL,
+    LUDIV,
+    IMAX,
+    LMAX,
+    IUMAX,
+    LUMAX,
+    IMIN,
+    LMIN,
+    IUMIN,
+    LUMIN,
+    IREM,
+    LREM,
+    FREM,
+    DREM,
+    IUREM,
+    LUREM,
+    ICARRY,
+    LCARRY,
+    IUCARRY,
+    LUCARRY,
+    IAND,
+    LAND,
+    INEG,
+    INOT,
+    I2B,
+    I2S,
+    I2L,
+    I2C,
     F2D,
     F2I,
     F2L,
-    FADD,
-    FMUL,
-    FNEG,
-    FSUB,
-    I2B,
-    I2C,
-    I2D,
+    D2F,
     I2F,
-    I2L,
-    I2S,
-    IADD,
-    IAND,
-    ICARRY,
-    IDIV,
-    IMAX,
-    IMIN,
-    IMUL,
-    INEG,
-    INOT,
-    IOR,
-    IREM,
-    ISHL,
-    ISHR,
-    ISUB,
-    IUADD,
-    IUCARRY,
-    IUDIV,
-    IUMAX,
-    IUMIN,
-    IUMUL,
-    IUREM,
-    IUSHR,
-    IUSUB,
-    IXOR,
-    L2D,
+    I2D,
+    D2I,
     L2F,
-    L2I,
-    LADD,
-    LAND,
-    LCARRY,
-    LDIV,
-    LMAX,
-    LMIN,
-    LMUL,
-    LNEG,
-    LNOT,
-    LOR,
-    LREM,
-    LSHL,
-    LSHR,
-    LSUB,
-    LUADD,
-    LUCARRY,
-    LUDIV,
-    LUMAX,
-    LUMIN,
-    LUMUL,
-    LUREM,
-    LUSHR,
-    LUSUB,
-    LXOR,
+    D2L,
     MOV_F2I,
     MOV_D2L,
+    L2D,
     MOV_I2F,
     MOV_L2D,
-    OADD,
+    ISHL,
+    LSHL,
+    ISHR,
+    LSHR,
+    IUSHR,
+    LUSHR,
     SQRT,
-    UNDEF;
+    UNDEF,
+    CALL,
+    L2I,
+    IXOR,
+    LXOR,
+    IOR,
+    LOR;
 
     public static class Op1Stack extends HSAILLIRInstruction {
         @Opcode private final HSAILArithmetic opcode;
@@ -317,7 +313,7 @@ public enum HSAILArithmetic {
                     masm.emitConvertIntToByte(dst, src);
                     break;
                 case SQRT:
-                    masm.emit("sqrt", dst, src);
+                    masm.emitArg1("sqrt", dst, src);
                     break;
                 case UNDEF:
                     masm.undefined("undefined node");
@@ -326,16 +322,7 @@ public enum HSAILArithmetic {
                     masm.undefined("undefined node CALL");
                     break;
                 case INOT:
-                case LNOT:
-                    // Emit the HSAIL instruction for a bitwise not.
-                    masm.emitForceBitwise("not", dst, src);
-                    break;
-                case INEG:
-                case LNEG:
-                case FNEG:
-                case DNEG:
-                    // Emit the HSAIL instruction for a negate operation.
-                    masm.emit("neg", dst, src);
+                    masm.emitArg1("not", dst, src);
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
@@ -415,15 +402,15 @@ public enum HSAILArithmetic {
                 break;
             case IAND:
             case LAND:
-                masm.emitForceBitwise("and", dst, src1, src2);
+                masm.emitBitwiseLogical("and", dst, src1, src2);
                 break;
             case IXOR:
             case LXOR:
-                masm.emitForceBitwise("xor", dst, src1, src2);
+                masm.emitBitwiseLogical("xor", dst, src1, src2);
                 break;
             case IOR:
             case LOR:
-                masm.emitForceBitwise("or", dst, src1, src2);
+                masm.emitBitwiseLogical("or", dst, src1, src2);
                 break;
             case IREM:
                 masm.emit("rem", dst, src1, src2);

@@ -24,7 +24,6 @@
 package com.oracle.graal.compiler.hsail.test;
 
 import java.util.*;
-
 import com.oracle.graal.compiler.hsail.test.infra.*;
 
 /**

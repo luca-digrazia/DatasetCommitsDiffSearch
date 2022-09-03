@@ -24,48 +24,48 @@
 package com.oracle.graal.compiler.hsail.test;
 
 import java.util.*;
-import org.junit.*;
-import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
+
+import com.oracle.graal.compiler.hsail.test.infra.*;
 
 /**
- * Tests integer to long conversion.
+ * Tests integer to float conversion.
  */
-public class IntLongConvertTest extends GraalKernelTester {
+public class IntFloatConvertTest extends GraalKernelTester {
 
     static final int size = 128;
     static final int[] inputInt = new int[size];
-    static final long[] inputLong = new long[size];
+    static final float[] inputFloat = new float[size];
     @Result static final int[] outputInt = new int[size];
-    @Result static final long[] outputLong = new long[size];
+    @Result static final float[] outputFloat = new float[size];
     static int[] seedInt = new int[size];
     {
         for (int i = 0; i < seedInt.length; i++) {
             seedInt[i] = (int) Math.random();
         }
     }
-    static long[] seedLong = new long[size];
+    static float[] seedFloat = new float[size];
     {
-        for (int i = 0; i < seedLong.length; i++) {
-            seedLong[i] = (long) Math.random();
+        for (int i = 0; i < seedFloat.length; i++) {
+            seedFloat[i] = (float) Math.random();
         }
     }
 
-    public static void run(int[] inInt, long[] inLong, int[] outInt, long[] outLong, int gid) {
-        outInt[gid] = (int) inLong[gid];
-        outLong[gid] = inInt[gid];
+    public static void run(int[] inInt, float[] inFloat, int[] outInt, float[] outFloat, int gid) {
+        outInt[gid] = (int) inFloat[gid];
+        outFloat[gid] = inInt[gid];
     }
 
     @Override
     public void runTest() {
-        System.arraycopy(seedLong, 0, inputLong, 0, seedLong.length);
-        Arrays.fill(outputLong, 0);
+        System.arraycopy(seedFloat, 0, inputFloat, 0, seedFloat.length);
+        Arrays.fill(outputFloat, 0);
         System.arraycopy(seedInt, 0, inputInt, 0, seedInt.length);
         Arrays.fill(outputInt, 0);
-        dispatchMethodKernel(64, inputInt, inputLong, outputInt, outputLong);
+        dispatchMethodKernel(64, inputInt, inputFloat, outputInt, outputFloat);
     }
 
-    @Test
     public void test() {
-        testGeneratedHsail();
+        super.testGeneratedHsail();
     }
+
 }
