@@ -39,7 +39,7 @@ final class SourceImpl extends Source {
          * SourceImpl instances are interned so a single instance can identify it. We cannot use
          * SourceImpl directly as the sourceId needs to be shared when a source is cloned.
          */
-        this.sourceId = new SourceId(key.hashCode());
+        this.sourceId = new Object();
     }
 
     private SourceImpl(Key key, Object sourceId) {
@@ -109,29 +109,6 @@ final class SourceImpl extends Source {
 
     Key toKey() {
         return key;
-    }
-
-    private static final class SourceId {
-
-        /*
-         * We store the hash of the key to have stable source hashCode for each run.
-         */
-        final int hash;
-
-        SourceId(int hash) {
-            this.hash = hash;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            return this == obj;
-        }
-
-        @Override
-        public int hashCode() {
-            return hash;
-        }
-
     }
 
     static final class Key {
@@ -214,14 +191,8 @@ final class SourceImpl extends Source {
             }
         }
 
-        SourceImpl toSourceInterned() {
-            assert cached;
+        SourceImpl toSource() {
             return new SourceImpl(this);
-        }
-
-        SourceImpl toSourceNotInterned() {
-            assert !cached;
-            return new SourceImpl(this, this);
         }
 
     }
