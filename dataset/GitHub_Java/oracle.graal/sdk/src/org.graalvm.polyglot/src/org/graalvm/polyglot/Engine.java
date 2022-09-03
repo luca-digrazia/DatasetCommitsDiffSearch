@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Handler;
 
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
@@ -170,7 +169,7 @@ public final class Engine implements AutoCloseable {
      * @since 1.0
      */
     public void close(boolean cancelIfExecuting) {
-        impl.close(this, cancelIfExecuting);
+        impl.ensureClosed(cancelIfExecuting, false);
     }
 
     /**
@@ -247,7 +246,6 @@ public final class Engine implements AutoCloseable {
         private Map<String, String> options = new HashMap<>();
         private boolean useSystemProperties = true;
         private boolean boundEngine;
-        private Handler customLogHandler;
 
         Builder() {
         }
@@ -355,18 +353,6 @@ public final class Engine implements AutoCloseable {
             return this;
         }
 
-        public Builder logHandler(final Handler logHandler) {
-            Objects.requireNonNull(logHandler, "Hanlder must be non null.");
-            this.customLogHandler = logHandler;
-            return this;
-        }
-
-        public Builder logOut(final OutputStream out) {
-            Objects.requireNonNull(out, "out must be non null.");
-            this.customLogHandler = new PolyglotStreamHandler(out);
-            return this;
-        }
-
         /**
          *
          *
@@ -378,7 +364,7 @@ public final class Engine implements AutoCloseable {
                 throw new IllegalStateException("The Polyglot API implementation failed to load.");
             }
             return loadedImpl.buildEngine(out, err, in, options, 0, null,
-                            false, 0, useSystemProperties, boundEngine, customLogHandler);
+                            false, 0, useSystemProperties, boundEngine);
         }
 
     }
@@ -460,10 +446,6 @@ public final class Engine implements AutoCloseable {
             return e.new StackFrame(impl);
         }
 
-        @Override
-        public Handler newStreamLogHandler(OutputStream out) {
-            return new PolyglotStreamHandler(out);
-        }
     }
 
     private static final boolean JDK8_OR_EARLIER = System.getProperty("java.specification.version").compareTo("1.9") < 0;
@@ -556,7 +538,7 @@ public final class Engine implements AutoCloseable {
 
         @Override
         public Engine buildEngine(OutputStream out, OutputStream err, InputStream in, Map<String, String> arguments, long timeout, TimeUnit timeoutUnit, boolean sandbox,
-                        long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean boundEngine, Handler logHandler) {
+                        long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean boundEngine) {
             throw noPolyglotImplementationFound();
         }
 
@@ -600,7 +582,7 @@ public final class Engine implements AutoCloseable {
             }
 
             @Override
-            public Source build(String language, Object origin, URI uri, String name, CharSequence content, boolean interactive, boolean internal, boolean cached) throws IOException {
+            public Source build(String language, Object origin, URI uri, String name, CharSequence content, boolean interactive, boolean internal) throws IOException {
                 throw noPolyglotImplementationFound();
             }
 
