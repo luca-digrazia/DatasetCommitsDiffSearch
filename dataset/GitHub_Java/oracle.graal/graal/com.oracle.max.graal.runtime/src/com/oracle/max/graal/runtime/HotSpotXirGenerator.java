@@ -1043,6 +1043,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
            asm.pload(CiKind.Object, objHub, object, asm.i(config.hubOffset), false);
            // if we get an exact match: continue
            asm.jneq(slowPath, objHub, hub);
+           asm.shouldNotReachHere();
 
            // -- out of line -------------------------------------------------------
            asm.bindOutOfLine(slowPath);
@@ -1179,6 +1180,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
     @Override
     public XirSnippet genCheckCast(XirSite site, XirArgument receiver, XirArgument hub, RiType type) {
+        assert type.isResolved();
         return new XirSnippet(checkCastTemplates.get(site), receiver, hub);
     }
 
