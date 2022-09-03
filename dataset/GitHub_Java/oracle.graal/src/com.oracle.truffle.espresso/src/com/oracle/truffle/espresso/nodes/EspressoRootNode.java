@@ -252,7 +252,6 @@ import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.DoubleConstant;
 import com.oracle.truffle.espresso.classfile.FloatConstant;
 import com.oracle.truffle.espresso.classfile.IntegerConstant;
-import com.oracle.truffle.espresso.classfile.InvokeDynamicConstant;
 import com.oracle.truffle.espresso.classfile.LongConstant;
 import com.oracle.truffle.espresso.classfile.PoolConstant;
 import com.oracle.truffle.espresso.classfile.StringConstant;
@@ -1008,13 +1007,13 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
                                                         bs.readUByte(bs.currentBCI(curBCI) + 3)));
                         break;
                     case IFNULL:
-                        if (StaticObject.isNull(stack.popObject())) {
+                        if (stack.popObject() == StaticObject.NULL) {
                             curBCI = bs.readBranchDest(curBCI);
                             continue loop;
                         }
                         break;
                     case IFNONNULL:
-                        if (StaticObject.notNull(stack.popObject())) {
+                        if (stack.popObject() != StaticObject.NULL) {
                             curBCI = bs.readBranchDest(curBCI);
                             continue loop;
                         }
@@ -1022,7 +1021,6 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
                     case BREAKPOINT:
                         throw new UnsupportedOperationException("breakpoints not supported.");
                     case INVOKEDYNAMIC:
-                        //resolveInvokeDynamic(bs.currentBC(curBCI), bs.readCPI(curBCI));
                         throw new UnsupportedOperationException("invokedynamic not supported.");
 
                 }
@@ -1056,15 +1054,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         }
     }
 
-    private Object resolveInvokeDynamic(int currentBC, char cpi) {
-        ConstantPool pool = getConstantPool();
-        InvokeDynamicConstant indy = pool.indyAt(cpi);
-        return pool.classAt(cpi).resolve(pool, cpi);
-    }
-
-    @ExplodeLoop
     private ExceptionHandler resolveExceptionHandlers(int bci, StaticObject ex) {
-        CompilerAsserts.partialEvaluationConstant(bci);
         ExceptionHandler[] handlers = getMethod().getExceptionHandlers();
         for (ExceptionHandler handler : handlers) {
             if (bci >= handler.getStartBCI() && bci < handler.getEndBCI()) {
@@ -1222,7 +1212,7 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
     private void invokeSpecial(OperandStack stack, MethodInfo method) {
         if (!Modifier.isStatic(method.getModifiers())) {
             // TODO(peterssen): Intercept/hook methods on primitive arrays e.g. int[].clone().
-            Object receiver = nullCheck(stack.peekReceiver(method));
+            StaticObject receiver = (StaticObject) nullCheck(stack.peekReceiver(method));
             invoke(stack, method, receiver, !method.isStatic(), method.getSignature());
         } else {
             invoke(stack, method, null, !method.isStatic(), method.getSignature());
@@ -1246,16 +1236,13 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
     }
 
     private MethodInfo resolveMethod(int opcode, char cpi) {
-        CompilerAsserts.partialEvaluationConstant(cpi);
-        CompilerAsserts.partialEvaluationConstant(opcode);
         ConstantPool pool = getConstantPool();
         MethodInfo methodInfo = pool.methodAt(cpi).resolve(pool, cpi);
         return methodInfo;
     }
 
     private MethodInfo resolveInterfaceMethod(int opcode, char cpi) {
-        CompilerAsserts.partialEvaluationConstant(cpi);
-        CompilerAsserts.partialEvaluationConstant(opcode);
+        assert opcode == INVOKEINTERFACE;
         ConstantPool pool = getConstantPool();
         MethodInfo methodInfo = pool.interfaceMethodAt(cpi).resolve(pool, cpi);
         CompilerAsserts.partialEvaluationConstant(methodInfo);
@@ -1297,13 +1284,11 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
         return clazz.getMirror().findConcreteMethod(originalMethod.getName(), originalMethod.getSignature());
     }
 
-    @CompilerDirectives.TruffleBoundary
     private StaticObject allocateArray(Klass componentType, int length) {
         assert !componentType.isPrimitive();
         return vm.newArray(componentType, length);
     }
 
-    @CompilerDirectives.TruffleBoundary
     private StaticObject allocateMultiArray(OperandStack stack, Klass klass, int allocatedDimensions) {
         assert klass.isArray();
         int[] dimensions = new int[allocatedDimensions];
@@ -1441,7 +1426,6 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
     /**
      * Binary search implementation for the lookup switch.
      */
-    @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.FULL_EXPLODE)
     private static int lookupSearch(BytecodeLookupSwitch switchHelper, int key) {
         int low = 0;
         int high = switchHelper.numberOfCases() - 1;
@@ -1514,7 +1498,8 @@ public class EspressoRootNode extends RootNode implements LinkedNode {
     }
 
     private Object nullCheck(Object value) {
-        if (StaticObject.isNull(value)) {
+        assert value != null;
+        if (value == StaticObject.NULL) {
             CompilerDirectives.transferToInterpreter();
             // TODO(peterssen): Profile whether null was hit or not.
             Meta meta = method.getDeclaringClass().getContext().getMeta();
