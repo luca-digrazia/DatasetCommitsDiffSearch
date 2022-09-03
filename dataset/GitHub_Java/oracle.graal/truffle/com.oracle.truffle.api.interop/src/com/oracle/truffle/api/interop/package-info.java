@@ -22,13 +22,6 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-
-/*
- @ApiInfo(
- group="Stable"
- )
- */
-
 /**
  * This package provides inter-operability between different
  * {@link com.oracle.truffle.api.TruffleLanguage Truffle languages}.
