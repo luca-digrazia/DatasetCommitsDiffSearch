@@ -36,12 +36,10 @@ import com.oracle.graal.nodes.spi.*;
 public final class CommitAllocationNode extends FixedWithNextNode implements VirtualizableAllocation, Lowerable, Simplifiable {
 
     public static final NodeClass<CommitAllocationNode> TYPE = NodeClass.create(CommitAllocationNode.class);
-
     @Input NodeInputList<VirtualObjectNode> virtualObjects = new NodeInputList<>(this);
     @Input NodeInputList<ValueNode> values = new NodeInputList<>(this);
     @Input(InputType.Association) NodeInputList<MonitorIdNode> locks = new NodeInputList<>(this);
     protected ArrayList<Integer> lockIndexes = new ArrayList<>(Arrays.asList(0));
-    protected ArrayList<Boolean> ensureVirtual = new ArrayList<>();
 
     public CommitAllocationNode() {
         super(TYPE, StampFactory.forVoid());
@@ -59,10 +57,6 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
         return locks.subList(lockIndexes.get(objIndex), lockIndexes.get(objIndex + 1));
     }
 
-    public List<Boolean> getEnsureVirtual() {
-        return ensureVirtual;
-    }
-
     @Override
     public boolean verify() {
         assertTrue(virtualObjects.size() + 1 == lockIndexes.size(), "lockIndexes size doesn't match " + virtualObjects + ", " + lockIndexes);
@@ -72,17 +66,11 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
             valueCount += virtual.entryCount();
         }
         assertTrue(values.size() == valueCount, "values size doesn't match");
-        assertTrue(virtualObjects.size() == ensureVirtual.size(), "ensureVirtual size doesn't match");
         return super.verify();
     }
 
     @Override
     public void lower(LoweringTool tool) {
-        for (int i = 0; i < virtualObjects.size(); i++) {
-            if (ensureVirtual.get(i)) {
-                EnsureVirtualizedNode.ensureVirtualFailure(this, virtualObjects.get(i).stamp());
-            }
-        }
         tool.getLowerer().lower(this, tool);
     }
 
@@ -102,7 +90,7 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
         for (int i = 0; i < virtualObjects.size(); i++) {
             VirtualObjectNode virtualObject = virtualObjects.get(i);
             int entryCount = virtualObject.entryCount();
-            tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), getLocks(i), ensureVirtual.get(i));
+            tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), getLocks(i));
             pos += entryCount;
         }
         tool.delete();
@@ -178,7 +166,6 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
             List<VirtualObjectNode> newVirtualObjects = new ArrayList<>(usedCount);
             List<MonitorIdNode> newLocks = new ArrayList<>(usedCount);
             ArrayList<Integer> newLockIndexes = new ArrayList<>(usedCount + 1);
-            ArrayList<Boolean> newEnsureVirtual = new ArrayList<>(usedCount);
             newLockIndexes.add(0);
             List<ValueNode> newValues = new ArrayList<>();
             int valuePos = 0;
@@ -189,7 +176,6 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
                     newLocks.addAll(getLocks(objIndex));
                     newLockIndexes.add(newLocks.size());
                     newValues.addAll(values.subList(valuePos, valuePos + virtualObject.entryCount()));
-                    newEnsureVirtual.add(ensureVirtual.get(objIndex));
                 }
                 valuePos += virtualObject.entryCount();
             }
@@ -200,7 +186,6 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
             values.clear();
             values.addAll(newValues);
             lockIndexes = newLockIndexes;
-            ensureVirtual = newEnsureVirtual;
         }
     }
 

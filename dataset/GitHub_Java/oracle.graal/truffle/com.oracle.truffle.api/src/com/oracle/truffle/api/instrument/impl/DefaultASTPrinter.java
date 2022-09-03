@@ -24,18 +24,14 @@
  */
 package com.oracle.truffle.api.instrument.impl;
 
-import com.oracle.truffle.api.instrument.ASTPrinter;
-import com.oracle.truffle.api.instrument.InstrumentationNode;
+import java.io.*;
+import java.util.*;
+
+import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeClass;
-import com.oracle.truffle.api.nodes.NodeFieldAccessor;
+import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind;
-import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.api.source.SourceSection;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.util.ArrayList;
+import com.oracle.truffle.api.source.*;
 
 /**
  * A language-agnostic for printing out various pieces of a Truffle AST.
