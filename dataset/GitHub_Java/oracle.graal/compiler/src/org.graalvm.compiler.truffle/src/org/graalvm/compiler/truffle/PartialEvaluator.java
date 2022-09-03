@@ -114,7 +114,6 @@ import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrum
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrumentBranches;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleIterativePartialEscape;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TrufflePerformanceWarningsAreFatal;
-import org.graalvm.graphio.GraphOutput;
 
 /**
  * Class performing the partial evaluation starting from the root node of an AST.
@@ -207,17 +206,10 @@ public abstract class PartialEvaluator {
                         build();
         // @formatter:on
 
-        try (DebugContext.Scope s = debug.scope("CreateGraph", graph);
-                        Indent indent = debug.logAndIndent("createGraph %s", graph);) {
-
-            GraphOutput<Void, ?> output = null;
+        try (DebugContext.Scope s = debug.scope("CreateGraph", graph); Indent indent = debug.logAndIndent("createGraph %s", graph)) {
 
             try (Scope c = debug.scope("TruffleTree")) {
-                if (debug.isDumpEnabled(DebugContext.BASIC_LEVEL)) {
-                    output = debug.buildOutput(GraphOutput.newBuilder(VoidGraphStructure.INSTANCE));
-                    output.beginGroup(null, callTarget.toString(), callTarget.toString(), null, 0, null);
-                    debug.dump(DebugContext.BASIC_LEVEL, new TruffleTreeDumpHandler.TruffleTreeDump(callTarget), "TruffleTree");
-                }
+                debug.dump(DebugContext.BASIC_LEVEL, new TruffleTreeDumpHandler.TruffleTreeDump(callTarget), "%s", callTarget);
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
@@ -234,10 +226,6 @@ public abstract class PartialEvaluator {
             new VerifyFrameDoesNotEscapePhase().apply(graph, false);
             postPartialEvaluation(graph);
 
-            if (output != null) {
-                output.endGroup();
-                output.close();
-            }
         } catch (Throwable e) {
             throw debug.handle(e);
         }
