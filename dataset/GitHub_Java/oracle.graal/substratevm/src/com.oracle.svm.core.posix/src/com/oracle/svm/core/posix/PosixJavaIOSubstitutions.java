@@ -64,6 +64,8 @@ import static com.oracle.svm.core.posix.headers.Stat.S_IXUSR;
 import static com.oracle.svm.core.posix.headers.Stat.chmod;
 import static com.oracle.svm.core.posix.headers.Stat.fstat;
 import static com.oracle.svm.core.posix.headers.Stat.mkdir;
+import static com.oracle.svm.core.posix.headers.Stat.stat;
+import static com.oracle.svm.core.posix.headers.Statvfs.statvfs;
 import static com.oracle.svm.core.posix.headers.Stdio.remove;
 import static com.oracle.svm.core.posix.headers.Stdio.rename;
 import static com.oracle.svm.core.posix.headers.Stdlib.realpath;
@@ -79,6 +81,7 @@ import static com.oracle.svm.core.posix.headers.Unistd.close;
 import static com.oracle.svm.core.posix.headers.Unistd.ftruncate;
 import static com.oracle.svm.core.posix.headers.Unistd.lseek;
 
+import java.io.Console;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
@@ -89,6 +92,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -108,13 +112,12 @@ import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
+import com.oracle.svm.core.jdk.JDK9OrLater;
 import com.oracle.svm.core.posix.headers.Dirent.DIR;
 import com.oracle.svm.core.posix.headers.Dirent.dirent;
 import com.oracle.svm.core.posix.headers.Dirent.direntPointer;
 import com.oracle.svm.core.posix.headers.LibC;
-import com.oracle.svm.core.posix.headers.Stat;
 import com.oracle.svm.core.posix.headers.Stat.stat;
-import com.oracle.svm.core.posix.headers.Statvfs;
 import com.oracle.svm.core.posix.headers.Statvfs.statvfs;
 import com.oracle.svm.core.posix.headers.Termios;
 import com.oracle.svm.core.posix.headers.Time.timeval;
@@ -152,10 +155,10 @@ final class Target_java_io_UnixFileSystem {
 
     @Substitute
     public int getBooleanAttributes0(File f) {
-        Stat.stat stat = StackValue.get(Stat.stat.class);
+        stat stat = StackValue.get(stat.class);
         try (CCharPointerHolder pathPin = CTypeConversion.toCString(f.getPath())) {
             CCharPointer pathPtr = pathPin.get();
-            if (Stat.stat(pathPtr, stat) == 0) {
+            if (stat(pathPtr, stat) == 0) {
                 int fmt = stat.st_mode() & S_IFMT();
                 return Target_java_io_FileSystem.BA_EXISTS | ((fmt == S_IFREG()) ? Target_java_io_FileSystem.BA_REGULAR : 0) | ((fmt == S_IFDIR()) ? Target_java_io_FileSystem.BA_DIRECTORY : 0);
             } else {
@@ -185,10 +188,10 @@ final class Target_java_io_UnixFileSystem {
 
     @Substitute
     private long getLength(File f) {
-        Stat.stat stat = StackValue.get(Stat.stat.class);
+        stat stat = StackValue.get(stat.class);
         try (CCharPointerHolder pathPin = CTypeConversion.toCString(f.getPath())) {
             CCharPointer pathPtr = pathPin.get();
-            if (Stat.stat(pathPtr, stat) == 0) {
+            if (stat(pathPtr, stat) == 0) {
                 return stat.st_size();
             } else {
                 return 0;
@@ -323,7 +326,7 @@ final class Target_java_io_UnixFileSystem {
 
         try (CCharPointerHolder pathPin = CTypeConversion.toCString(f.getPath())) {
             CCharPointer pathPtr = pathPin.get();
-            if (Statvfs.statvfs(pathPtr, statvfs) == 0) {
+            if (statvfs(pathPtr, statvfs) == 0) {
                 final long frsize = statvfs.f_frsize();
                 if (t == Target_java_io_FileSystem.SPACE_TOTAL) {
                     return frsize * statvfs.f_blocks();
@@ -344,7 +347,7 @@ final class Target_java_io_UnixFileSystem {
         stat stat = StackValue.get(stat.class);
         try (CCharPointerHolder pathPin = CTypeConversion.toCString(f.getPath())) {
             CCharPointer pathPtr = pathPin.get();
-            if (Stat.stat(pathPtr, stat) == 0) {
+            if (stat(pathPtr, stat) == 0) {
                 if (chmod(pathPtr, stat.st_mode() & ~(S_IWUSR() | S_IWGRP() | S_IWOTH())) >= 0) {
                     return true;
                 }
@@ -369,7 +372,7 @@ final class Target_java_io_UnixFileSystem {
         stat stat = StackValue.get(stat.class);
         try (CCharPointerHolder pathPin = CTypeConversion.toCString(f.getPath())) {
             CCharPointer pathPtr = pathPin.get();
-            if (Stat.stat(pathPtr, stat) == 0) {
+            if (stat(pathPtr, stat) == 0) {
                 int newMode;
                 if (enable) {
                     newMode = stat.st_mode() | amode;
@@ -411,7 +414,7 @@ final class Target_java_io_UnixFileSystem {
         stat stat = StackValue.get(stat.class);
         try (CCharPointerHolder pathPin = CTypeConversion.toCString(f.getPath())) {
             CCharPointer pathPtr = pathPin.get();
-            if (Stat.stat(pathPtr, stat) == 0) {
+            if (stat(pathPtr, stat) == 0) {
                 return 1000 * stat.st_mtime();
             }
         }
@@ -423,7 +426,7 @@ final class Target_java_io_UnixFileSystem {
         stat stat = StackValue.get(stat.class);
         try (CCharPointerHolder pathPin = CTypeConversion.toCString(f.getPath())) {
             CCharPointer pathPtr = pathPin.get();
-            if (Stat.stat(pathPtr, stat) == 0) {
+            if (stat(pathPtr, stat) == 0) {
                 timeval timeval = StackValue.get(2, timeval.class);
 
                 // preserve access time
