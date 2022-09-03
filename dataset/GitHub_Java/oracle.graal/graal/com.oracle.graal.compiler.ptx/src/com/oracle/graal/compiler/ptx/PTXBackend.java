@@ -40,7 +40,6 @@ import com.oracle.graal.nodes.cfg.Block;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
-import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.graph.GraalInternalError;
 
 /**
@@ -166,9 +165,6 @@ public class PTXBackend extends Backend {
                        case Double:
                            float64.add(regVal.getRegister().encoding());
                            break;
-                       case Object:
-                           signed64.add(regVal.getRegister().encoding());
-                           break;
                        default :
                            throw GraalInternalError.shouldNotReachHere("unhandled register type "  + value.toString());
                     }
@@ -179,12 +175,7 @@ public class PTXBackend extends Backend {
 
         for (Block b : lirGen.lir.codeEmittingOrder()) {
             for (LIRInstruction op : lirGen.lir.lir(b)) {
-                if (op instanceof LabelOp) {
-                    // Don't consider this as a definition
-                } else {
-                    op.forEachTemp(trackRegisterKind);
-                    op.forEachOutput(trackRegisterKind);
-                }
+                op.forEachOutput(trackRegisterKind);
             }
         }
 
@@ -213,7 +204,6 @@ public class PTXBackend extends Backend {
         try {
             emitRegisterDecl(tasm, lirGen, codeCacheOwner);
         } catch (GraalInternalError e) {
-            e.printStackTrace();
             // TODO : Better error handling needs to be done once
             //        all types of parameters are handled.
             codeBuffer.setPosition(0);
@@ -224,7 +214,6 @@ public class PTXBackend extends Backend {
         try {
             lirGen.lir.emitCode(tasm);
         } catch (GraalInternalError e) {
-            e.printStackTrace();
             // TODO : Better error handling needs to be done once
             //        all types of parameters are handled.
             codeBuffer.setPosition(0);

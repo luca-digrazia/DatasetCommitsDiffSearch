@@ -23,34 +23,49 @@
 
 package com.oracle.graal.lir.ptx;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.ptx.*;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Param;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
 public class PTXParameterOp extends LIRInstruction {
 
     @Def({REG}) protected Value[] params;
-    // True if the parameter list has return argument as the last
-    // item of the array params.
-    private boolean hasReturnParam;
 
-    public PTXParameterOp(Value[] params, boolean hasReturn) {
+    public PTXParameterOp(Value[] params) {
         this.params = params;
-        hasReturnParam = hasReturn;
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb) {
-        PTXMacroAssembler masm = (PTXMacroAssembler) crb.asm;
+    public void emitCode(TargetMethodAssembler tasm) {
+        PTXAssembler masm = (PTXAssembler) tasm.asm;
         // Emit parameter directives for arguments
         int argCount = params.length;
         for (int i = 0; i < argCount; i++) {
-            boolean isReturnParam = (hasReturnParam && (i == (argCount - 1)));
-            new Param((Variable) params[i], isReturnParam).emit(masm, (i == (argCount - 1)));
+            Kind paramKind = params[i].getKind();
+            switch (paramKind) {
+            case Byte :
+                masm.param_8_decl(asRegister(params[i]), (i == (argCount - 1)));
+                break;
+            case Int :
+                masm.param_32_decl(asIntReg(params[i]), (i == (argCount - 1)));
+                break;
+            case Long :
+                masm.param_64_decl(asLongReg(params[i]), (i == (argCount - 1)));
+                break;
+            case Float :
+                masm.param_32_decl(asFloatReg(params[i]), (i == (argCount - 1)));
+                break;
+            case Double :
+                masm.param_64_decl(asDoubleReg(params[i]), (i == (argCount - 1)));
+                break;
+            default :
+                throw GraalInternalError.shouldNotReachHere("unhandled parameter type "  + paramKind.toString());
+            }
         }
     }
 }

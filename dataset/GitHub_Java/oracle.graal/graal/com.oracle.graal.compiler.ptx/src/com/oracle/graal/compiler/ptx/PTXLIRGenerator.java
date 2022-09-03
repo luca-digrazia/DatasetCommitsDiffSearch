@@ -32,7 +32,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.debug.Debug;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
@@ -60,7 +59,6 @@ import com.oracle.graal.lir.ptx.PTXMemOp.LoadReturnAddrOp;
 import com.oracle.graal.lir.ptx.PTXMemOp.StoreReturnValOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.calc.ConvertNode.Op;
 import com.oracle.graal.nodes.java.*;
 
 /**
@@ -170,25 +168,26 @@ public class PTXLIRGenerator extends LIRGenerator {
             baseRegister = asAllocatable(base);
         }
 
-        @SuppressWarnings("unused") Value indexRegister;
-        if (!index.equals(Value.ILLEGAL) && scale != 0) {
+        if (index != Value.ILLEGAL && scale != 0) {
             if (isConstant(index)) {
                 finalDisp += asConstant(index).asLong() * scale;
-                indexRegister = Value.ILLEGAL;
             } else {
+                Value indexRegister;
                 if (scale != 1) {
-                    Variable longIndex = emitConvert(Op.I2L, index);
-                    if (CodeUtil.isPowerOf2(scale)) {
-                        indexRegister = emitShl(longIndex, Constant.forLong(CodeUtil.log2(scale)));
-                    } else {
-                        indexRegister = emitMul(longIndex, Constant.forLong(scale));
-                    }
+                    indexRegister = emitMul(index, Constant.forInt(scale));
                 } else {
-                    indexRegister = asAllocatable(index);
+                    indexRegister = index;
+                }
+
+                if (baseRegister == Value.ILLEGAL) {
+                    baseRegister = asAllocatable(indexRegister);
+                } else {
+                    Variable newBase = newVariable(Kind.Int);
+                    emitMove(newBase, baseRegister);
+                    baseRegister = newBase;
+                    baseRegister = emitAdd(baseRegister, indexRegister);
                 }
             }
-        } else {
-            indexRegister = Value.ILLEGAL;
         }
 
         return new PTXAddressValue(target().wordKind, baseRegister, finalDisp);
@@ -787,9 +786,9 @@ public class PTXLIRGenerator extends LIRGenerator {
 
     @Override
     public void visitSafepointNode(SafepointNode i) {
-        // LIRFrameState info = state(i);
+        // LIRFrameState info = state();
         // append(new PTXSafepointOp(info, runtime().config, this));
-        Debug.log("visitSafePointNode unimplemented");
+        throw new InternalError("NYI");
     }
 
     @Override

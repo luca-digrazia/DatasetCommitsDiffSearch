@@ -37,13 +37,8 @@ import com.oracle.graal.nodes.*;
  */
 public class PTXHotSpotBackend extends HotSpotBackend {
 
-    public PTXHotSpotBackend(HotSpotGraalRuntime runtime, HotSpotProviders providers) {
-        super(runtime, providers);
-    }
-
-    @Override
-    public boolean shouldAllocateRegisters() {
-        throw new InternalError("NYI");
+    public PTXHotSpotBackend(HotSpotRuntime runtime, TargetDescription target) {
+        super(runtime, target);
     }
 
     @Override
