@@ -43,10 +43,9 @@ public abstract class Phase {
 
         int startDeletedNodeCount = graph.getDeletedNodeCount();
         int startNodeCount = graph.getNodeCount();
-        Phase oldCurrentPhase = null;
+        Phase oldCurrentPhase = currentPhase.get();
+        currentPhase.set(this);
         if (GraalOptions.Time) {
-            oldCurrentPhase = currentPhase.get();
-            currentPhase.set(this);
             if (oldCurrentPhase != null) {
                 GraalTimers.get(oldCurrentPhase.getName()).stop();
             }
@@ -58,15 +57,10 @@ public abstract class Phase {
             if (oldCurrentPhase != null) {
                 GraalTimers.get(oldCurrentPhase.getName()).start();
             }
-            currentPhase.set(oldCurrentPhase);
         }
-        if (GraalOptions.Meter) {
-            int deletedNodeCount = graph.getDeletedNodeCount() - startDeletedNodeCount;
-            int createdNodeCount = graph.getNodeCount() - startNodeCount;
-            GraalMetrics.get(getName().concat(".executed")).increment();
-            GraalMetrics.get(getName().concat(".deletedNodes")).increment(deletedNodeCount);
-            GraalMetrics.get(getName().concat(".createdNodes")).increment(createdNodeCount);
-        }
+        currentPhase.set(oldCurrentPhase);
+        int deletedNodeCount = graph.getDeletedNodeCount() - startDeletedNodeCount;
+        int nodeCount = graph.getNodeCount() - startNodeCount;
 
         // (Item|Graph|Phase|Value)
     }
