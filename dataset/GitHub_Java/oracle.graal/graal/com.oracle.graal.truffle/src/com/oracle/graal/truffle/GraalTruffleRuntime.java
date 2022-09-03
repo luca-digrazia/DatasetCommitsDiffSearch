@@ -121,7 +121,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         }
     }
 
-    private Object cachedIncludesExcludes;
+    private String cachedIncludesExcludes;
     private ArrayList<String> includes;
     private ArrayList<String> excludes;
 
@@ -376,8 +376,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     final boolean acceptForCompilation(RootNode rootNode) {
         String includesExcludes = TruffleCompileOnly.getValue();
         if (includesExcludes != null) {
-            // unneccesary method to make findbugs happy
-            if (!compare(cachedIncludesExcludes, includesExcludes)) {
+            if (cachedIncludesExcludes != includesExcludes) {
                 parseCompileOnly();
                 this.cachedIncludesExcludes = includesExcludes;
             }
@@ -403,10 +402,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
             }
         }
         return true;
-    }
-
-    private static boolean compare(Object o1, Object o2) {
-        return o1 == o2;
     }
 
     protected void parseCompileOnly() {
