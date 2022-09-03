@@ -36,7 +36,6 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -49,11 +48,11 @@ import java.util.function.Predicate;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Value;
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -62,18 +61,19 @@ import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.vm.PolyglotImpl.VMObject;
+import java.util.Collections;
 
 final class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
 
-    private static final ContextThreadLocal CURRENT = new ContextThreadLocal();
+    @CompilationFinal private static ContextThreadLocal CURRENT = new ContextThreadLocal();
 
     private final Assumption singleThreaded = Truffle.getRuntime().createAssumption("Single threaded");
     private final Map<Thread, PolyglotThreadInfo> threads = new HashMap<>();
     private volatile PolyglotThreadInfo lastThread = PolyglotThreadInfo.NULL;
 
     /*
-     * While canceling the context can no longer be entered. The context goes from canceling into closed
-     * state.
+     * While canceling the context can no longer be entered. The context goes from canceling into
+     * closed state.
      */
     volatile boolean cancelling;
     private volatile Thread closingThread;
@@ -87,21 +87,22 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
     Context api;
     final TruffleContext truffleContext;
     final PolyglotContextImpl parent;
-    final OutputStream out;
-    final OutputStream err;
-    final InputStream in;
+    OutputStream out;   // effectively final
+    OutputStream err;   // effectively final
+    InputStream in;     // effectively final
     final Map<String, Value> polyglotScope = new HashMap<>();
-    final Predicate<String> classFilter;
-    final boolean hostAccessAllowed;
-    final boolean createThreadAllowed;
+    Predicate<String> classFilter;  // effectively final
+    boolean hostAccessAllowed;      // effectively final
+    @CompilationFinal boolean createThreadAllowed;
 
     // map from class to language index
     private final FinalIntMap languageIndexMap = new FinalIntMap();
 
     final Map<Object, CallTarget> javaInteropCache = new HashMap<>();
-    final Set<String> allowedPublicLanguages;
-    private final Map<String, String[]> applicationArguments;
+    Set<String> allowedPublicLanguages;     // effectively final
+    Map<String, String[]> applicationArguments;  // effectively final
     private final Set<PolyglotContextImpl> childContexts = new LinkedHashSet<>();
+    boolean inContextPreInitialization; // effectively final
 
     /*
      * Constructor for outer contexts.
@@ -117,32 +118,15 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
                     Set<String> allowedPublicLanguages) {
         super(engine.impl);
         this.parent = null;
-        this.hostAccessAllowed = hostAccessAllowed;
-        this.createThreadAllowed = createThreadAllowed;
-        this.applicationArguments = applicationArguments;
-        this.classFilter = classFilter;
-
-        if (out == null || out == INSTRUMENT.getOut(engine.out)) {
-            this.out = engine.out;
-        } else {
-            this.out = INSTRUMENT.createDelegatingOutput(out, engine.out);
-        }
-        if (err == null || err == INSTRUMENT.getOut(engine.err)) {
-            this.err = engine.err;
-        } else {
-            this.err = INSTRUMENT.createDelegatingOutput(err, engine.err);
-        }
-        this.in = in == null ? engine.in : in;
-        this.allowedPublicLanguages = allowedPublicLanguages;
         this.engine = engine;
+        patchInstance(out, err, in, hostAccessAllowed, createThreadAllowed, classFilter, applicationArguments, allowedPublicLanguages);
         Collection<PolyglotLanguage> languages = engine.idToLanguage.values();
         this.contexts = new PolyglotLanguageContext[languages.size() + 1];
-        PolyglotLanguageContext hostContext = new PolyglotLanguageContext(this, engine.hostLanguage, null, applicationArguments.get(PolyglotEngineImpl.HOST_LANGUAGE_ID),
-                        Collections.emptyMap(), false);
-        this.contexts[PolyglotEngineImpl.HOST_LANGUAGE_INDEX] = hostContext;
+        this.contexts[PolyglotEngineImpl.HOST_LANGUAGE_INDEX] = new PolyglotLanguageContext(this, engine.hostLanguage, null, applicationArguments.get(PolyglotEngineImpl.HOST_LANGUAGE_ID),
+                        Collections.emptyMap());
 
         for (PolyglotLanguage language : languages) {
-            PolyglotLanguageContext languageContext = new PolyglotLanguageContext(this, language, null, applicationArguments.get(language.getId()), Collections.emptyMap(), true);
+            PolyglotLanguageContext languageContext = new PolyglotLanguageContext(this, language, null, applicationArguments.get(language.getId()), Collections.emptyMap());
             this.contexts[language.index] = languageContext;
         }
 
@@ -169,7 +153,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         }
         this.truffleContext = VMAccessor.LANGUAGE.createTruffleContext(this);
         VMAccessor.INSTRUMENT.notifyContextCreated(engine, truffleContext);
-        hostContext.ensureInitialized(null);
     }
 
     /*
@@ -191,9 +174,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         this.engine = parent.engine;
         Collection<PolyglotLanguage> languages = engine.idToLanguage.values();
         this.contexts = new PolyglotLanguageContext[languages.size() + 1];
-        PolyglotLanguageContext hostContext = new PolyglotLanguageContext(this, engine.hostLanguage, null, applicationArguments.get(PolyglotEngineImpl.HOST_LANGUAGE_ID),
-                        Collections.emptyMap(), false);
-        this.contexts[PolyglotEngineImpl.HOST_LANGUAGE_INDEX] = hostContext;
+        this.contexts[PolyglotEngineImpl.HOST_LANGUAGE_INDEX] = new PolyglotLanguageContext(this, engine.hostLanguage, null, applicationArguments.get(PolyglotEngineImpl.HOST_LANGUAGE_ID),
+                        Collections.emptyMap());
 
         for (PolyglotLanguage language : languages) {
             OptionValuesImpl values = parent.contexts[language.index].optionValues;
@@ -207,12 +189,11 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
                 languageConfig = new HashMap<>();
             }
 
-            PolyglotLanguageContext languageContext = new PolyglotLanguageContext(this, language, values, applicationArguments.get(language.getId()), languageConfig, true);
+            PolyglotLanguageContext languageContext = new PolyglotLanguageContext(this, language, values, applicationArguments.get(language.getId()), languageConfig);
             this.contexts[language.index] = languageContext;
         }
         this.parent.addChildContext(this);
         this.truffleContext = spiContext;
-        hostContext.ensureInitialized(null);
         // notifyContextCreated() is called after spiContext.impl is set to this.
     }
 
@@ -286,7 +267,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
                 threadInfo = threads.get(current);
                 if (threadInfo == null) {
                     threadInfo = createThreadInfo(current);
-                    needsInitialization = true;
+                    needsInitialization = !inContextPreInitialization;
                 }
 
                 boolean transitionToMultiThreading = singleThreaded.isValid() && hasActiveOtherThread(true);
@@ -742,16 +723,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         }
     }
 
-    @Override
-    public Value asValue(Object hostValue) {
-        if (hostValue instanceof Value) {
-            return (Value) hostValue;
-        }
-        PolyglotLanguageContext hostContext = getHostContext();
-        hostContext.ensureInitialized(null);
-        return hostContext.toHostValue(hostContext.toGuestValue(hostValue));
-    }
-
     void waitForClose() {
         while (!closeImpl(false, true)) {
             try {
@@ -933,8 +904,9 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         for (PolyglotThreadInfo threadInfo : threads.values()) {
             if (!threadInfo.isCurrent() && threadInfo.isActive()) {
                 /*
-                 * We send an interrupt to the thread to wake up and to run some guest language code in case they
-                 * are waiting in some async primitive. The interrupt is then cleared when the closed is performed.
+                 * We send an interrupt to the thread to wake up and to run some guest language code
+                 * in case they are waiting in some async primitive. The interrupt is then cleared
+                 * when the closed is performed.
                  */
                 threadInfo.thread.interrupt();
             }
@@ -967,6 +939,87 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         } finally {
             leave(prev);
         }
+    }
+
+    boolean patch(OutputStream newOut, OutputStream newErr, InputStream newIn, boolean newHostAccessAllowed,
+                    boolean newCreateThreadAllowed, Predicate<String> newClassFilter,
+                    Map<String, String> newOptions, Map<String, String[]> newApplicationArguments, Set<String> newAllowedPublicLanguages) {
+        CompilerAsserts.neverPartOfCompilation();
+        patchInstance(newOut, newErr, newIn, newHostAccessAllowed, newCreateThreadAllowed, newClassFilter, newApplicationArguments, newAllowedPublicLanguages);
+        for (int i = 1; i < this.contexts.length; i++) {
+            final PolyglotLanguageContext context = this.contexts[i];
+            if (context.isInitialized()) {
+                OptionValuesImpl values = context.language.getOptionValues().copy();
+                values.putAll(newOptions);
+                if (!context.patch(values, newApplicationArguments.get(context.language.getId()))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private void patchInstance(OutputStream newOut, OutputStream newErr, InputStream newIn, boolean newHostAccessAllowed,
+                    boolean newCreateThreadAllowed, Predicate<String> newClassFilter,
+                    Map<String, String[]> newApplicationArguments, Set<String> newAllowedPublicLanguages) {
+        this.hostAccessAllowed = newHostAccessAllowed;
+        this.createThreadAllowed = newCreateThreadAllowed;
+        this.applicationArguments = newApplicationArguments;
+        this.classFilter = newClassFilter;
+
+        if (newOut == null || newOut == INSTRUMENT.getOut(engine.out)) {
+            this.out = engine.out;
+        } else {
+            this.out = INSTRUMENT.createDelegatingOutput(newOut, engine.out);
+        }
+        if (newErr == null || newErr == INSTRUMENT.getOut(engine.err)) {
+            this.err = engine.err;
+        } else {
+            this.err = INSTRUMENT.createDelegatingOutput(newErr, engine.err);
+        }
+        this.in = newIn == null ? engine.in : newIn;
+        this.allowedPublicLanguages = newAllowedPublicLanguages;
+    }
+
+    static PolyglotContextImpl preInitialize(final PolyglotEngineImpl engine) {
+        PolyglotContextImpl context = new PolyglotContextImpl(
+                        engine,
+                        null,
+                        null,
+                        null,
+                        false,
+                        false,
+                        null,
+                        Collections.emptyMap(),
+                        Collections.emptyMap(),
+                        engine.getLanguages().keySet());
+        final String optionValue = engine.engineOptionValues.get(PolyglotEngineOptions.PreinitializeContexts);
+        if (optionValue != null && !optionValue.isEmpty()) {
+            final Set<String> languagesToPreinitialize = new HashSet<>();
+            Collections.addAll(languagesToPreinitialize, optionValue.split(","));
+            context.inContextPreInitialization = true;
+            try {
+                Object prev = context.enter();
+                try {
+                    for (String languageId : engine.getLanguages().keySet()) {
+                        if (languagesToPreinitialize.contains(languageId)) {
+                            final PolyglotLanguageContext languageContext = context.findLanguageContext(languageId, null, false);
+                            if (languageContext != null) {
+                                languageContext.preInitialize();
+                            }
+                        }
+                    }
+                } finally {
+                    context.leave(prev);
+                }
+            } finally {
+                context.inContextPreInitialization = false;
+            }
+        }
+        // Need to clean up Threads before storing SVM image
+        context.lastThread = PolyglotThreadInfo.NULL;
+        CURRENT = new ContextThreadLocal();
+        return context;
     }
 
 }

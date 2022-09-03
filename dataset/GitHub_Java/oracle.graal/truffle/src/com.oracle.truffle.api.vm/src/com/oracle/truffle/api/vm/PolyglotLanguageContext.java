@@ -62,12 +62,11 @@ final class PolyglotLanguageContext implements VMObject {
     final PolyglotLanguage language;
     final Map<Object, CallTarget> sourceCache = new ConcurrentHashMap<>();
     final Map<String, Object> config;
-    final boolean eventsEnabled;
     volatile Map<Class<?>, PolyglotValue> valueCache;
     volatile PolyglotValue defaultValueCache;
     volatile OptionValuesImpl optionValues;
     volatile Value nullValue;
-    final String[] applicationArguments;
+    String[] applicationArguments;    // effectively final
     final Set<PolyglotThread> activePolyglotThreads = new HashSet<>();
     volatile boolean creating; // true when context is currently being created.
     volatile boolean initialized;
@@ -76,13 +75,11 @@ final class PolyglotLanguageContext implements VMObject {
     private final Node keyInfoNode = Message.KEY_INFO.createNode();
     private final Node readNode = Message.READ.createNode();
 
-    PolyglotLanguageContext(PolyglotContextImpl context, PolyglotLanguage language, OptionValuesImpl optionValues, String[] applicationArguments, Map<String, Object> config, boolean eventsEnabled) {
+    PolyglotLanguageContext(PolyglotContextImpl context, PolyglotLanguage language, OptionValuesImpl optionValues, String[] applicationArguments, Map<String, Object> config) {
         this.context = context;
         this.language = language;
-        this.optionValues = optionValues;
-        this.applicationArguments = applicationArguments == null ? EMPTY_STRING_ARRAY : applicationArguments;
         this.config = config;
-        this.eventsEnabled = eventsEnabled;
+        patchInstance(optionValues, applicationArguments);
     }
 
     /**
@@ -136,9 +133,7 @@ final class PolyglotLanguageContext implements VMObject {
         if (localEnv != null && !finalized) {
             finalized = true;
             LANGUAGE.finalizeContext(localEnv);
-            if (eventsEnabled) {
-                VMAccessor.INSTRUMENT.notifyLanguageContextFinalized(context.engine, context.truffleContext, language.info);
-            }
+            VMAccessor.INSTRUMENT.notifyLanguageContextFinalized(context.engine, context.truffleContext, language.info);
             return true;
         }
         return false;
@@ -172,9 +167,7 @@ final class PolyglotLanguageContext implements VMObject {
     }
 
     void notifyDisposed() {
-        if (eventsEnabled) {
-            VMAccessor.INSTRUMENT.notifyLanguageContextDisposed(context.engine, context.truffleContext, language.info);
-        }
+        VMAccessor.INSTRUMENT.notifyLanguageContextDisposed(context.engine, context.truffleContext, language.info);
     }
 
     Object enterThread(PolyglotThread thread) {
@@ -253,7 +246,7 @@ final class PolyglotLanguageContext implements VMObject {
                 }
             }
         }
-        if (created && eventsEnabled) {
+        if (created) {
             VMAccessor.INSTRUMENT.notifyLanguageContextCreated(context.engine, context.truffleContext, language.info);
         }
     }
@@ -266,7 +259,9 @@ final class PolyglotLanguageContext implements VMObject {
                 if (!initialized) {
                     initialized = true; // Allow language use during initialization
                     try {
-                        LANGUAGE.initializeThread(env, Thread.currentThread());
+                        if (!context.inContextPreInitialization) {
+                            LANGUAGE.initializeThread(env, Thread.currentThread());
+                        }
 
                         LANGUAGE.postInitEnv(env);
 
@@ -290,7 +285,7 @@ final class PolyglotLanguageContext implements VMObject {
                 }
             }
         }
-        if (wasInitialized && eventsEnabled) {
+        if (wasInitialized) {
             VMAccessor.INSTRUMENT.notifyLanguageContextInitialized(context.engine, context.truffleContext, language.info);
         }
         return wasInitialized;
@@ -344,6 +339,32 @@ final class PolyglotLanguageContext implements VMObject {
 
     ToGuestValuesNode createToGuestValues() {
         return new ToGuestValuesNode();
+    }
+
+    void preInitialize() {
+        ensureInitialized(null);
+    }
+
+    boolean patch(OptionValuesImpl newOptionValues, String[] newApplicationArguments) {
+        patchInstance(newOptionValues, newApplicationArguments);
+        try {
+            final Env newEnv = LANGUAGE.patchEnvContext(env, context.out, context.err, context.in, config, getOptionValues(), newApplicationArguments);
+            if (newEnv != null) {
+                env = newEnv;
+                return true;
+            }
+            return false;
+        } catch (Throwable t) {
+            if (t instanceof ThreadDeath) {
+                throw t;
+            }
+            return false;
+        }
+    }
+
+    private void patchInstance(OptionValuesImpl newOptionValues, String[] newApplicationArguments) {
+        this.optionValues = newOptionValues;
+        this.applicationArguments = newApplicationArguments == null ? EMPTY_STRING_ARRAY : newApplicationArguments;
     }
 
     final class ToGuestValuesNode {
