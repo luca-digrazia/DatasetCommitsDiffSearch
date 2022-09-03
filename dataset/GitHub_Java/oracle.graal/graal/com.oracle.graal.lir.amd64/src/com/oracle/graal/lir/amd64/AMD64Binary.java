@@ -67,11 +67,7 @@ public class AMD64Binary {
         private final OperandSize size;
 
         @Def({REG, HINT}) protected AllocatableValue result;
-        @Use({REG}) protected AllocatableValue x;
-        /**
-         * This argument must be Alive to ensure that result and y are not assigned to the same
-         * register, which would break the code generation by destroying y too early.
-         */
+        @Use({REG, STACK}) protected AllocatableValue x;
         @Alive({REG, STACK}) protected AllocatableValue y;
 
         public TwoOp(AMD64RMOp opcode, OperandSize size, AllocatableValue result, AllocatableValue x, AllocatableValue y) {
@@ -106,7 +102,7 @@ public class AMD64Binary {
         private final OperandSize size;
 
         @Def({REG, HINT}) protected AllocatableValue result;
-        @Use({REG}) protected AllocatableValue x;
+        @Use({REG, STACK}) protected AllocatableValue x;
         @Alive({REG, STACK}) protected AllocatableValue y;
 
         public ThreeOp(AMD64RRMOp opcode, OperandSize size, AllocatableValue result, AllocatableValue x, AllocatableValue y) {
@@ -122,10 +118,20 @@ public class AMD64Binary {
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
             if (isRegister(y)) {
-                opcode.emit(masm, size, asRegister(result), asRegister(x), asRegister(y));
+                AllocatableValue input = x;
+                if (isStackSlot(x)) {
+                    input = result;
+                    AMD64Move.move(crb, masm, input, x);
+                }
+                opcode.emit(masm, size, asRegister(result), asRegister(input), asRegister(y));
             } else {
+                AllocatableValue input = x;
                 assert isStackSlot(y);
-                opcode.emit(masm, size, asRegister(result), asRegister(x), (AMD64Address) crb.asAddress(y));
+                if (isStackSlot(x)) {
+                    input = result;
+                    AMD64Move.move(crb, masm, input, x);
+                }
+                opcode.emit(masm, size, asRegister(result), asRegister(input), (AMD64Address) crb.asAddress(y));
             }
         }
     }
@@ -182,7 +188,7 @@ public class AMD64Binary {
         private final OperandSize size;
 
         @Def({REG, HINT}) protected AllocatableValue result;
-        @Use({REG}) protected AllocatableValue x;
+        @Use({REG, STACK}) protected AllocatableValue x;
         @Use({REG, STACK}) protected AllocatableValue y;
 
         public CommutativeThreeOp(AMD64RRMOp opcode, OperandSize size, AllocatableValue result, AllocatableValue x, AllocatableValue y) {
@@ -198,10 +204,20 @@ public class AMD64Binary {
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
             if (isRegister(y)) {
-                opcode.emit(masm, size, asRegister(result), asRegister(x), asRegister(y));
+                // check for stack slot in non canonical location and commute if needed
+                if (isStackSlot(x)) {
+                    opcode.emit(masm, size, asRegister(result), asRegister(y), (AMD64Address) crb.asAddress(x));
+                } else {
+                    opcode.emit(masm, size, asRegister(result), asRegister(x), asRegister(y));
+                }
             } else {
+                AllocatableValue input = x;
                 assert isStackSlot(y);
-                opcode.emit(masm, size, asRegister(result), asRegister(x), (AMD64Address) crb.asAddress(y));
+                if (isStackSlot(x)) {
+                    input = result;
+                    AMD64Move.move(crb, masm, input, x);
+                }
+                opcode.emit(masm, size, asRegister(result), asRegister(input), (AMD64Address) crb.asAddress(y));
             }
         }
     }
@@ -216,7 +232,7 @@ public class AMD64Binary {
         private final OperandSize size;
 
         @Def({REG, HINT}) protected AllocatableValue result;
-        @Use({REG}) protected AllocatableValue x;
+        @Use({REG, STACK}) protected AllocatableValue x;
         private final int y;
 
         public ConstOp(AMD64BinaryArithmetic opcode, OperandSize size, AllocatableValue result, AllocatableValue x, int y) {
@@ -251,7 +267,7 @@ public class AMD64Binary {
         private final OperandSize size;
 
         @Def({REG, HINT}) protected AllocatableValue result;
-        @Use({REG}) protected AllocatableValue x;
+        @Use({REG, STACK}) protected AllocatableValue x;
         private final JavaConstant y;
 
         private final int alignment;
@@ -290,7 +306,7 @@ public class AMD64Binary {
         private final OperandSize size;
 
         @Def({REG, HINT}) protected AllocatableValue result;
-        @Use({REG}) protected AllocatableValue x;
+        @Use({REG, STACK}) protected AllocatableValue x;
         private final JavaConstant y;
 
         private final int alignment;
@@ -313,7 +329,12 @@ public class AMD64Binary {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            opcode.emit(masm, size, asRegister(result), asRegister(x), (AMD64Address) crb.recordDataReferenceInCode(y, alignment));
+            AllocatableValue input = x;
+            if (isStackSlot(x)) {
+                input = result;
+                AMD64Move.move(crb, masm, input, x);
+            }
+            opcode.emit(masm, size, asRegister(result), asRegister(input), (AMD64Address) crb.recordDataReferenceInCode(y, alignment));
         }
     }
 
@@ -328,7 +349,7 @@ public class AMD64Binary {
         private final OperandSize size;
 
         @Def({REG, HINT}) protected AllocatableValue result;
-        @Use({REG}) protected AllocatableValue x;
+        @Use({REG, STACK}) protected AllocatableValue x;
         @Alive({COMPOSITE}) protected AMD64AddressValue y;
 
         @State protected LIRFrameState state;
@@ -381,7 +402,7 @@ public class AMD64Binary {
         private final OperandSize size;
 
         @Def({REG, HINT}) protected AllocatableValue result;
-        @Use({REG}) protected AllocatableValue x;
+        @Use({REG, STACK}) protected AllocatableValue x;
         @Alive({COMPOSITE}) protected AMD64AddressValue y;
 
         @State protected LIRFrameState state;
@@ -403,7 +424,12 @@ public class AMD64Binary {
             if (state != null) {
                 crb.recordImplicitException(masm.position(), state);
             }
-            opcode.emit(masm, size, asRegister(result), asRegister(x), y.toAddress());
+            AllocatableValue input = x;
+            if (isStackSlot(x)) {
+                input = result;
+                AMD64Move.move(crb, masm, input, x);
+            }
+            opcode.emit(masm, size, asRegister(result), asRegister(input), y.toAddress());
         }
 
         @Override
