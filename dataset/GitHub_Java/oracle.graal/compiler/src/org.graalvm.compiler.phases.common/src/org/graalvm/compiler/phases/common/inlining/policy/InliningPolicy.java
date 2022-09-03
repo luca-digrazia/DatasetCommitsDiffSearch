@@ -28,8 +28,8 @@ import org.graalvm.compiler.phases.common.inlining.walker.MethodInvocation;
 
 public interface InliningPolicy {
     class Decision {
-        public static final Decision YES = new Decision(true, "(unknown reason)");
-        public static final Decision NO = new Decision(false, "(unknown reason)");
+        public static final Decision YES = new Decision(true, null);
+        public static final Decision NO = new Decision(false, null);
 
         private final boolean shouldInline;
         private final String reason;
