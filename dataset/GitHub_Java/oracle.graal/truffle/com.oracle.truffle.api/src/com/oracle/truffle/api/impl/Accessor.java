@@ -30,7 +30,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
@@ -41,100 +43,24 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.Probe;
+import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Communication between PolyglotEngine, TruffleLanguage API/SPI, and other services.
  */
 public abstract class Accessor {
-    public abstract static class Nodes {
-        @SuppressWarnings("rawtypes")
-        public abstract Class<? extends TruffleLanguage> findLanguage(RootNode n);
-
-        public abstract boolean isInstrumentable(RootNode rootNode);
-
-        public abstract boolean isTaggedWith(Node node, Class<?> tag);
-    }
-
-    public abstract static class EngineSupport {
-        @SuppressWarnings("rawtypes")
-        public abstract Env findEnv(Object vm, Class<? extends TruffleLanguage> languageClass);
-
-        @SuppressWarnings("rawtypes")
-        public abstract TruffleLanguage<?> findLanguageImpl(Object known, Class<? extends TruffleLanguage> languageClass, String mimeType);
-
-        @SuppressWarnings("static-method")
-        protected final Object findVM() {
-            return CURRENT_VM.get();
-        }
-
-        public abstract Object getInstrumentationHandler(Object vm);
-
-        public abstract Object getInstrumenter(Object vm);
-
-        public abstract Object importSymbol(Object vm, TruffleLanguage<?> queryingLang, String globalName);
-
-        public abstract void dispatchEvent(Object vm, Object event);
-
-        public abstract boolean isMimeTypeSupported(Object vm, String mimeType);
-    }
-
-    public abstract static class LanguageSupport {
-        public abstract Env attachEnv(Object vm, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Object instrumenter, Map<String, Object> config);
-
-        public abstract Object eval(TruffleLanguage<?> l, Source s, Map<Source, CallTarget> cache) throws IOException;
-
-        public abstract Object evalInContext(Object vm, Object ev, String code, Node node, MaterializedFrame frame) throws IOException;
-
-        public abstract Object findExportedSymbol(TruffleLanguage.Env env, String globalName, boolean onlyExplicit);
-
-        public abstract Object languageGlobal(TruffleLanguage.Env env);
-
-        public abstract boolean isInstrumentable(Node node, TruffleLanguage<?> language);
-
-        public abstract Object createWrapperNode(Node node, TruffleLanguage<?> language);
-
-        public abstract void dispose(TruffleLanguage<?> impl, Env env);
-
-        public abstract TruffleLanguage<?> findLanguage(Env env);
-
-        public abstract CallTarget parse(TruffleLanguage<?> truffleLanguage, Source code, Node context, String... argumentNames) throws IOException;
-
-        public abstract String toString(TruffleLanguage<?> language, Env env, Object obj);
-
-        public abstract Object findContext(Env env);
-    }
-
-    public abstract static class InstrumentSupport {
-        public abstract void addInstrument(Object instrumentationHandler, Object key, Class<?> instrumentClass);
-
-        public abstract void disposeInstrument(Object instrumentationHandler, Object key, boolean cleanupRequired);
-
-        public abstract <T> T getInstrumentationHandlerService(Object handler, Object key, Class<T> type);
-
-        public abstract Object createInstrumentationHandler(Object vm, OutputStream out, OutputStream err, InputStream in);
-
-        public abstract void collectEnvServices(Set<Object> collectTo, Object vm, TruffleLanguage<?> impl, Env context);
-
-        public abstract void detachLanguageFromInstrumentation(Object vm, Env context);
-
-        public abstract void onFirstExecution(RootNode rootNode);
-    }
-
-    public abstract static class OldInstrumentSupport {
-        public abstract void probeAST(RootNode rootNode);
-    }
-
-    private static Accessor.LanguageSupport API;
-    private static Accessor.EngineSupport SPI;
-    private static Accessor.Nodes NODES;
-    private static Accessor.OldInstrumentSupport INSTRUMENT;
-    private static Accessor.InstrumentSupport INSTRUMENTHANDLER;
+    private static Accessor API;
+    static Accessor SPI;
+    static Accessor NODES;
+    private static Accessor INSTRUMENT;
+    static Accessor INSTRUMENTHANDLER;
     private static Accessor DEBUG;
+    private static final ThreadLocal<Object> CURRENT_VM = new ThreadLocal<>();
 
     static {
         TruffleLanguage<?> lng = new TruffleLanguage<Object>() {
@@ -163,15 +89,13 @@ public abstract class Accessor {
                 return null;
             }
 
-            @SuppressWarnings("deprecation")
             @Override
             protected boolean isInstrumentable(Node node) {
                 return false;
             }
 
-            @SuppressWarnings("deprecation")
             @Override
-            protected com.oracle.truffle.api.instrument.WrapperNode createWrapperNode(Node node) {
+            protected WrapperNode createWrapperNode(Node node) {
                 return null;
             }
 
@@ -189,11 +113,6 @@ public abstract class Accessor {
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException(ex);
         }
-        try {
-            Class.forName("com.oracle.truffle.api.debug.Debugger", true, Accessor.class.getClassLoader());
-        } catch (ClassNotFoundException ex) {
-            throw new IllegalStateException(ex);
-        }
     }
 
     protected Accessor() {
@@ -204,22 +123,22 @@ public abstract class Accessor {
             if (API != null) {
                 throw new IllegalStateException();
             }
-            API = this.languageSupport();
+            API = this;
         } else if (this.getClass().getSimpleName().endsWith("Nodes")) {
             if (NODES != null) {
                 throw new IllegalStateException();
             }
-            NODES = this.nodes();
+            NODES = this;
         } else if (this.getClass().getSimpleName().endsWith("Instrument")) {
             if (INSTRUMENT != null) {
                 throw new IllegalStateException();
             }
-            INSTRUMENT = this.oldInstrumentSupport();
+            INSTRUMENT = this;
         } else if (this.getClass().getSimpleName().endsWith("InstrumentHandler")) {
             if (INSTRUMENTHANDLER != null) {
                 throw new IllegalStateException();
             }
-            INSTRUMENTHANDLER = this.instrumentSupport();
+            INSTRUMENTHANDLER = this;
         } else if (this.getClass().getSimpleName().endsWith("Debug")) {
             if (DEBUG != null) {
                 throw new IllegalStateException();
@@ -229,43 +148,161 @@ public abstract class Accessor {
             if (SPI != null) {
                 throw new IllegalStateException();
             }
-            SPI = this.engineSupport();
+            SPI = this;
         }
     }
 
-    protected Accessor.Nodes nodes() {
-        return NODES;
+    protected Env attachEnv(Object vm, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Instrumenter instrumenter, Map<String, Object> config) {
+        return API.attachEnv(vm, language, stdOut, stdErr, stdIn, instrumenter, config);
     }
 
-    protected OldInstrumentSupport oldInstrumentSupport() {
-        return INSTRUMENT;
+    protected Object eval(TruffleLanguage<?> l, Source s, Map<Source, CallTarget> cache) throws IOException {
+        return API.eval(l, s, cache);
     }
 
-    protected LanguageSupport languageSupport() {
-        return API;
+    protected Object evalInContext(Object vm, Object ev, String code, Node node, MaterializedFrame frame) throws IOException {
+        return API.evalInContext(vm, ev, code, node, frame);
     }
 
-    protected EngineSupport engineSupport() {
-        return SPI;
+    protected Object importSymbol(Object vm, TruffleLanguage<?> queryingLang, String globalName) {
+        return SPI.importSymbol(vm, queryingLang, globalName);
     }
 
-    protected InstrumentSupport instrumentSupport() {
-        return INSTRUMENTHANDLER;
+    protected Object findExportedSymbol(TruffleLanguage.Env env, String globalName, boolean onlyExplicit) {
+        return API.findExportedSymbol(env, globalName, onlyExplicit);
     }
 
-    static InstrumentSupport instrumentAccess() {
-        return INSTRUMENTHANDLER;
+    protected Object languageGlobal(TruffleLanguage.Env env) {
+        return API.languageGlobal(env);
     }
 
-    static Accessor.Nodes nodesAccess() {
-        return NODES;
+    /**
+     * Provided by each {@linkplain TruffleLanguage language implementation}.
+     */
+    @SuppressWarnings("rawtypes")
+    protected boolean isInstrumentable(Object vm, Node node) {
+        final RootNode rootNode = node.getRootNode();
+        Class<? extends TruffleLanguage> languageClazz = findLanguage(rootNode);
+        TruffleLanguage language = findLanguageImpl(vm, languageClazz, null);
+        return isInstrumentable(node, language);
     }
 
-    //
-    // execution
-    //
+    protected boolean isInstrumentable(Node node, TruffleLanguage<?> language) {
+        return API.isInstrumentable(node, language);
+    }
 
-    private static final ThreadLocal<Object> CURRENT_VM = new ThreadLocal<>();
+    /**
+     * Provided by each {@linkplain TruffleLanguage language implementation}.
+     */
+    @SuppressWarnings("rawtypes")
+    protected WrapperNode createWrapperNode(Object vm, Node node) {
+        final RootNode rootNode = node.getRootNode();
+        Class<? extends TruffleLanguage> languageClazz = findLanguage(rootNode);
+        TruffleLanguage language = findLanguageImpl(vm, languageClazz, null);
+        return createWrapperNode(node, language);
+    }
+
+    protected WrapperNode createWrapperNode(Node node, TruffleLanguage<?> language) {
+        return API.createWrapperNode(node, language);
+    }
+
+    protected boolean isMimeTypeSupported(Object vm, String mimeType) {
+        return SPI.isMimeTypeSupported(vm, mimeType);
+    }
+
+    @SuppressWarnings("rawtypes")
+    protected Class<? extends TruffleLanguage> findLanguage(RootNode n) {
+        return NODES.findLanguage(n);
+    }
+
+    @SuppressWarnings("rawtypes")
+    protected Class<? extends TruffleLanguage> findLanguage(Probe probe) {
+        return INSTRUMENT.findLanguage(probe);
+    }
+
+    @SuppressWarnings("rawtypes")
+    protected Class<? extends TruffleLanguage> findLanguage(Node node) {
+        return NODES.findLanguage(node);
+    }
+
+    @SuppressWarnings("rawtypes")
+    protected Env findLanguage(Object known, Class<? extends TruffleLanguage> languageClass) {
+        Object vm;
+        if (known == null) {
+            vm = CURRENT_VM.get();
+            if (vm == null) {
+                throw new IllegalStateException("Accessor.findLanguage access to vm");
+            }
+            if (languageClass == null) {
+                return null;
+            }
+        } else {
+            vm = known;
+        }
+        return SPI.findLanguage(vm, languageClass);
+    }
+
+    @SuppressWarnings("rawtypes")
+    protected TruffleLanguage<?> findLanguageImpl(Object known, Class<? extends TruffleLanguage> languageClass, String mimeType) {
+        Object vm;
+        if (known == null) {
+            vm = CURRENT_VM.get();
+            if (vm == null) {
+                throw new IllegalStateException("Accessor.findLanguageImpl access to vm");
+            }
+        } else {
+            vm = known;
+        }
+        return SPI.findLanguageImpl(vm, languageClass, mimeType);
+    }
+
+    protected Instrumenter getInstrumenter(Object known) {
+        Object vm;
+        if (known == null) {
+            vm = CURRENT_VM.get();
+            if (vm == null) {
+                return null;
+            }
+        } else {
+            vm = known;
+        }
+        return SPI.getInstrumenter(vm);
+    }
+
+    protected Instrumenter createInstrumenter(Object vm) {
+        return INSTRUMENT.createInstrumenter(vm);
+    }
+
+    protected void addInstrumentation(Object instrumentationHandler, Object key, Class<?> instrumentationClass) {
+        INSTRUMENTHANDLER.addInstrumentation(instrumentationHandler, key, instrumentationClass);
+    }
+
+    protected void disposeInstrumentation(Object instrumentationHandler, Object key, boolean cleanupRequired) {
+        INSTRUMENTHANDLER.disposeInstrumentation(instrumentationHandler, key, cleanupRequired);
+    }
+
+    protected Object getInstrumentationHandler(Object known) {
+        Object vm;
+        if (known == null) {
+            vm = CURRENT_VM.get();
+            if (vm == null) {
+                return null;
+            }
+        } else {
+            vm = known;
+        }
+        return SPI.getInstrumentationHandler(vm);
+    }
+
+    protected <T> T getInstrumentationHandlerService(Object handler, Object key, Class<T> type) {
+        return INSTRUMENTHANDLER.getInstrumentationHandlerService(handler, key, type);
+    }
+
+    // new instrumentation
+    protected Object createInstrumentationHandler(Object vm, OutputStream out, OutputStream err, InputStream in) {
+        return INSTRUMENTHANDLER.createInstrumentationHandler(vm, out, err, in);
+    }
+
     private static Reference<Object> previousVM = new WeakReference<>(null);
     private static Assumption oneVM = Truffle.getRuntime().createAssumption();
 
@@ -295,13 +332,17 @@ public abstract class Accessor {
         return new ContextCloseable();
     }
 
+    protected void dispatchEvent(Object vm, Object event) {
+        SPI.dispatchEvent(vm, event);
+    }
+
     static Assumption oneVMAssumption() {
         return oneVM;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     static <C> C findContext(Class<? extends TruffleLanguage> type) {
-        Env env = SPI.findEnv(CURRENT_VM.get(), type);
+        Env env = SPI.findLanguage(CURRENT_VM.get(), type);
         return (C) API.findContext(env);
     }
 
@@ -312,6 +353,56 @@ public abstract class Accessor {
      */
     public static void main(String... args) {
         throw new IllegalStateException();
+    }
+
+    protected Object findContext(Env env) {
+        return API.findContext(env);
+    }
+
+    /** RootNode#isInstrumentable is protected so we need to use accessor. */
+    protected boolean isInstrumentable(RootNode rootNode) {
+        return NODES.isInstrumentable(rootNode);
+    }
+
+    protected void onFirstExecution(RootNode node) {
+        Accessor accessor = INSTRUMENTHANDLER;
+        if (accessor != null) {
+            accessor.onFirstExecution(node);
+        }
+    }
+
+    protected void collectEnvServices(Set<Object> collectTo, Object vm, TruffleLanguage<?> impl, Env context) {
+        INSTRUMENTHANDLER.collectEnvServices(collectTo, vm, impl, context);
+    }
+
+    protected void detachFromInstrumentation(Object vm, Env context) {
+        INSTRUMENTHANDLER.detachFromInstrumentation(vm, context);
+    }
+
+    protected void dispose(TruffleLanguage<?> impl, Env env) {
+        API.dispose(impl, env);
+    }
+
+    protected void probeAST(RootNode rootNode) {
+        INSTRUMENT.probeAST(rootNode);
+    }
+
+    @SuppressWarnings("rawtypes")
+    protected CallTarget parse(Class<? extends TruffleLanguage> languageClass, Source code, Node context, String... argumentNames) throws IOException {
+        final TruffleLanguage<?> truffleLanguage = findLanguageImpl(null, languageClass, code.getMimeType());
+        return parse(truffleLanguage, code, context, argumentNames);
+    }
+
+    protected TruffleLanguage<?> findLanguage(Env env) {
+        return API.findLanguage(env);
+    }
+
+    protected CallTarget parse(TruffleLanguage<?> truffleLanguage, Source code, Node context, String... argumentNames) throws IOException {
+        return API.parse(truffleLanguage, code, context, argumentNames);
+    }
+
+    protected String toString(TruffleLanguage<?> language, Env env, Object obj) {
+        return API.toString(language, env, obj);
     }
 
     private static final TVMCI SUPPORT = Truffle.getRuntime().getCapability(TVMCI.class);
@@ -334,8 +425,9 @@ public abstract class Accessor {
     }
 
     static <T extends TruffleLanguage<?>> T findLanguageByClass(Object vm, Class<T> languageClass) {
-        Env env = SPI.findEnv(vm, languageClass);
+        Env env = API.findLanguage(vm, languageClass);
         TruffleLanguage<?> language = API.findLanguage(env);
         return languageClass.cast(language);
     }
+
 }

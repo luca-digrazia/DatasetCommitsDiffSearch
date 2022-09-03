@@ -28,7 +28,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.Objects;
 import java.util.WeakHashMap;
 
 import com.oracle.truffle.api.Assumption;
@@ -85,7 +84,6 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
 
     @Override
     public DirectCallNode createDirectCallNode(CallTarget target) {
-        Objects.requireNonNull(target);
         return new DefaultDirectCallNode(target);
     }
 

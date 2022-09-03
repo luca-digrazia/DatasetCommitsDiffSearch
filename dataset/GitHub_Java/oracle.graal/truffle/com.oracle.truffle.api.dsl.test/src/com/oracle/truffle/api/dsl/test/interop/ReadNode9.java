@@ -22,12 +22,15 @@
  */
 package com.oracle.truffle.api.dsl.test.interop;
 
-import com.oracle.truffle.api.dsl.test.ExpectError;
-import com.oracle.truffle.api.dsl.test.interop.ValidTruffleObjectC.Nested3TruffleObject;
+import com.oracle.truffle.api.dsl.test.interop.ValidTruffleObjectC.Nested2TruffleObject;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.AcceptMessage;
 
-@ExpectError({"com.oracle.truffle.api.dsl.test.interop.ValidTruffleObjectC.Nested3TruffleObject cannot be used as receiverType as it is not a static inner class."})
-@AcceptMessage(value = "READ", receiverType = Nested3TruffleObject.class, language = TestTruffleLanguage.class)
-public final class ReadNode10 extends BaseReadNode10 {
+@AcceptMessage(value = "READ", receiverType = Nested2TruffleObject.class, language = TestTruffleLanguage.class)
+public final class ReadNode9 extends BaseReadNode9 {
 
+    @Override
+    protected Object access(VirtualFrame frame, Object receiver, Object name) {
+        return 0;
+    }
 }
