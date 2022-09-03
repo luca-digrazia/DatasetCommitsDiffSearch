@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -360,6 +360,7 @@ public final class LLVMInteropTest {
     // implicit interop
     // structs not yet implemented
     @Test
+    @Ignore
     public void test030() throws Exception {
         Runner runner = new Runner("interop030");
         runner.run();
@@ -659,13 +660,11 @@ public final class LLVMInteropTest {
     @Test
     public void test057() {
         Runner runner = new Runner("interop057");
-        Map<String, Object> a = new HashMap<>();
-        a.put("a", 0);
-        a.put("b", 1);
+        Object[] a = new Object[]{0, 1, 2, 3, 4, 5, 6, 7, 8};
         runner.export(a, "foreign");
         Assert.assertEquals(0, runner.run());
-        Assert.assertEquals(101, a.get("a"));
-        Assert.assertEquals(102, a.get("b"));
+        Assert.assertEquals(101, a[0]);
+        Assert.assertEquals(102, a[1]);
     }
 
     @Test
@@ -691,13 +690,11 @@ public final class LLVMInteropTest {
     @Test
     public void test060() {
         Runner runner = new Runner("interop060");
-        Map<String, Object> a = new HashMap<>();
-        a.put("a", 0);
-        a.put("b", 1);
+        Object[] a = new Object[]{0, 1, 2, 3, 4, 5, 6, 7, 8};
         runner.export(a, "foreign");
         Assert.assertEquals(0, runner.run());
-        long a0 = ((Value) a.get("a")).asNativePointer();
-        long a1 = ((Value) a.get("b")).asNativePointer();
+        long a0 = ((Value) a[0]).asNativePointer();
+        long a1 = ((Value) a[1]).asNativePointer();
         Assert.assertEquals(101, a0);
         Assert.assertEquals(102, a1);
     }
@@ -964,147 +961,6 @@ public final class LLVMInteropTest {
         Assert.assertEquals(42, result);
     }
 
-    @Test
-    public void testVirtualMallocArray() throws Exception {
-        Runner runner = new Runner("virtualMallocArray");
-        runner.load();
-        Value test = runner.findGlobalSymbol("test");
-        Assert.assertEquals(test.execute().asInt(), 42);
-    }
-
-    @Test
-    public void testVirtualMallocArray2() throws Exception {
-        Runner runner = new Runner("virtualMallocArray2");
-        runner.load();
-        Value test = runner.findGlobalSymbol("test");
-        Assert.assertEquals(test.execute().asInt(), 42);
-    }
-
-    @Test
-    public void testVirtualMallocArrayPointer() throws Exception {
-        Runner runner = new Runner("virtualMallocArrayPointer");
-        runner.load();
-        Value test1 = runner.findGlobalSymbol("test1");
-        Value test2 = runner.findGlobalSymbol("test2");
-        Assert.assertEquals(test1.execute().asInt(), 42);
-        Assert.assertEquals(test2.execute().asInt(), 43);
-    }
-
-    @Test
-    public void testVirtualMallocGlobal() throws Exception {
-        Runner runner = new Runner("virtualMallocGlobal");
-        runner.load();
-        Value test = runner.findGlobalSymbol("test");
-        Assert.assertEquals(test.execute().asLong(), 42);
-    }
-
-    @Test
-    public void testVirtualMallocGlobaAssignl() throws Exception {
-        Runner runner = new Runner("virtualMallocGlobalAssign");
-        runner.load();
-        Value test = runner.findGlobalSymbol("test");
-        Assert.assertEquals(test.execute().asLong(), 42);
-    }
-
-    @Test
-    public void testVirtualMallocObject() throws Exception {
-        Runner runner = new Runner("virtualMallocObject");
-        runner.load();
-        Value setA = runner.findGlobalSymbol("testGetA");
-        Value setB = runner.findGlobalSymbol("testGetB");
-        Value setC = runner.findGlobalSymbol("testGetC");
-        Value setD = runner.findGlobalSymbol("testGetD");
-        Value setE = runner.findGlobalSymbol("testGetE");
-        Value setF = runner.findGlobalSymbol("testGetF");
-        Assert.assertEquals(setA.execute().asLong(), 42);
-        Assert.assertEquals(setB.execute().asDouble(), 13.4, 0.1);
-        Assert.assertEquals(setC.execute().asFloat(), 13.5f, 0.1);
-        Assert.assertEquals(setD.execute().asInt(), 56);
-        Assert.assertEquals(setE.execute().asByte(), 5);
-        Assert.assertEquals(setF.execute().asBoolean(), true);
-    }
-
-    @Test
-    public void testVirtualMallocObjectCopy() throws Exception {
-        Runner runner = new Runner("virtualMallocObjectCopy");
-        runner.load();
-        Value setA = runner.findGlobalSymbol("testGetA");
-        Value setB = runner.findGlobalSymbol("testGetB");
-        Value setC = runner.findGlobalSymbol("testGetC");
-        Value setD = runner.findGlobalSymbol("testGetD");
-        Value setE = runner.findGlobalSymbol("testGetE");
-        Value setF = runner.findGlobalSymbol("testGetF");
-        Assert.assertEquals(setA.execute().asLong(), 42);
-        Assert.assertEquals(setB.execute().asDouble(), 13.4, 0.1);
-        Assert.assertEquals(setC.execute().asFloat(), 13.5f, 0.1);
-        Assert.assertEquals(setD.execute().asInt(), 56);
-        Assert.assertEquals(setE.execute().asByte(), 5);
-        Assert.assertEquals(setF.execute().asBoolean(), true);
-    }
-
-    @Test
-    @Ignore // TODO: re-enable GR-6632
-    public void testVirtualMallocCompare1() throws Exception {
-        Runner runner = new Runner("virtualMallocCompare1");
-        runner.load();
-        Value test1 = runner.findGlobalSymbol("test1");
-        Value test2 = runner.findGlobalSymbol("test2");
-        Value test3 = runner.findGlobalSymbol("test3");
-        Value test4 = runner.findGlobalSymbol("test4");
-        Value test5 = runner.findGlobalSymbol("test5");
-        Value test6 = runner.findGlobalSymbol("test6");
-        Assert.assertTrue(test1.execute().asInt() == 0);
-        Assert.assertTrue(test2.execute().asInt() != 0);
-        Assert.assertTrue(test3.execute().asInt() == 0);
-        Assert.assertTrue(test4.execute().asInt() != 0);
-        Assert.assertTrue(test5.execute().asInt() == 0);
-        Assert.assertTrue(test6.execute().asInt() != 0);
-    }
-
-    @Test
-    public void testConstruct001() {
-        Runner runner = new Runner("construct001");
-        final StringBuilder buf = new StringBuilder();
-        runner.export(new ProxyExecutable() {
-            @Override
-            public Object execute(Value... t) {
-                Assert.assertEquals("argument count", 1, t.length);
-                if (t[0].isString()) {
-                    buf.append(t[0].asString());
-                } else {
-                    Assert.fail("unexpected value type");
-                }
-                return 0;
-            }
-        }, "callback");
-        runner.load();
-        Assert.assertEquals("construct\n", buf.toString());
-        runner.close();
-        Assert.assertEquals("construct\ndestruct\n", buf.toString());
-    }
-
-    @Test
-    public void testConstruct002() {
-        Runner runner = new Runner("construct002");
-        final StringBuilder buf = new StringBuilder();
-        runner.export(new ProxyExecutable() {
-            @Override
-            public Object execute(Value... t) {
-                Assert.assertEquals("argument count", 1, t.length);
-                if (t[0].isString()) {
-                    buf.append(t[0].asString());
-                } else {
-                    Assert.fail("unexpected value type");
-                }
-                return 0;
-            }
-        }, "callback");
-        runner.load();
-        Assert.assertEquals("construct\n", buf.toString());
-        runner.close();
-        Assert.assertEquals("construct\natexit\ndestruct\n", buf.toString());
-    }
-
     private static Map<String, Object> makeObjectA() {
         HashMap<String, Object> values = new HashMap<>();
         values.put("valueBool", true);
@@ -1202,15 +1058,11 @@ public final class LLVMInteropTest {
             context.exportSymbol(name, foreignObject);
         }
 
-        void close() {
-            context.close();
-        }
-
-        Value load() {
+        int run() {
             try {
                 File file = new File(TEST_DIR.toFile(), testName + "/" + FILENAME);
                 Source source = Source.newBuilder("llvm", file).build();
-                return context.eval(source);
+                return context.eval(source).asInt();
             } catch (RuntimeException e) {
                 throw e;
             } catch (Exception e) {
@@ -1218,8 +1070,5 @@ public final class LLVMInteropTest {
             }
         }
 
-        int run() {
-            return load().asInt();
-        }
     }
 }
