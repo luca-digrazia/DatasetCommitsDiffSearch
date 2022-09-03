@@ -110,7 +110,7 @@ public abstract class Accessor {
             }
         };
         lng.hashCode();
-        new Node() {
+        new Node(null) {
         }.getRootNode();
 
         try {
