@@ -54,7 +54,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
      */
     @Test
     public void testVMCompilation1() throws IOException, InterruptedException {
-        assumeManagementLibraryIsLoadable();
         testHelper(Collections.emptyList(), Arrays.asList("-XX:-TieredCompilation",
                         "-XX:+UseJVMCICompiler",
                         "-Dgraal.CompilationFailureAction=ExitVM",
@@ -70,7 +69,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
      */
     @Test
     public void testVMCompilation2() throws IOException, InterruptedException {
-        assumeManagementLibraryIsLoadable();
         testHelper(Collections.emptyList(), Arrays.asList("-XX:-TieredCompilation",
                         "-XX:+UseJVMCICompiler",
                         "-Dgraal.ExitVMOnException=true",
@@ -111,7 +109,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
      */
     @Test
     public void testVMCompilation3() throws IOException, InterruptedException {
-        assumeManagementLibraryIsLoadable();
         final int maxProblems = 2;
         Probe retryingProbe = new Probe("Retrying compilation of", maxProblems) {
             @Override
@@ -149,7 +146,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
      */
     @Test
     public void testTruffleCompilation1() throws IOException, InterruptedException {
-        assumeManagementLibraryIsLoadable();
         testHelper(Collections.emptyList(),
                         Arrays.asList(
                                         "-Dgraal.CompilationFailureAction=ExitVM",
@@ -179,7 +175,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
      */
     @Test
     public void testTruffleCompilation3() throws IOException, InterruptedException {
-        assumeManagementLibraryIsLoadable();
         Probe[] probes = {
                         new Probe("Exiting VM due to TrufflePerformanceWarningsAreFatal=true", 1),
         };
