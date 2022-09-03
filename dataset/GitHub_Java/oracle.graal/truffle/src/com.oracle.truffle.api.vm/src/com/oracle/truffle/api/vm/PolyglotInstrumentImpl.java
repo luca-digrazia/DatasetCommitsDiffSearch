@@ -123,16 +123,16 @@ class PolyglotInstrumentImpl extends AbstractInstrumentImpl implements VMObject 
         }
     }
 
-    @Override
-    public <T> T lookup(Class<T> serviceClass) {
+    <T> T lookup(Class<T> serviceClass) {
         if (engine.closed) {
             return null;
-        } else if (cache.supportsService(serviceClass)) {
+        }
+        if (cache.supportsService(serviceClass)) {
             ensureCreated();
-            return INSTRUMENT.getInstrumentationHandlerService(engine.instrumentationHandler, this, serviceClass);
         } else {
             return null;
         }
+        return INSTRUMENT.getInstrumentationHandlerService(engine.instrumentationHandler, this, serviceClass);
     }
 
     @Override
