@@ -24,9 +24,8 @@ package com.oracle.graal.nodes.util;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
@@ -152,18 +151,8 @@ public class GraphUtil {
     public static void killWithUnusedFloatingInputs(Node node) {
         node.safeDelete();
         node.acceptInputs((n, in) -> {
-            if (in.isAlive() && !(in instanceof FixedNode)) {
-                if (in.hasNoUsages()) {
-                    killWithUnusedFloatingInputs(in);
-                } else if (in instanceof PhiNode) {
-                    for (Node use : in.usages()) {
-                        if (use != in) {
-                            return;
-                        }
-                    }
-                    in.replaceAtUsages(null);
-                    killWithUnusedFloatingInputs(in);
-                }
+            if (in.isAlive() && in.hasNoUsages() && !(in instanceof FixedNode)) {
+                killWithUnusedFloatingInputs(in);
             }
         });
     }

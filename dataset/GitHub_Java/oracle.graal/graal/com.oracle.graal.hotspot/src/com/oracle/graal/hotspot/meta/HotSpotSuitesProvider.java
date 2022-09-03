@@ -25,21 +25,18 @@ package com.oracle.graal.hotspot.meta;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.DebugInfoMode;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.StructuredGraph.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.options.DerivedOptionValue.OptionSupplier;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.common.AddressLoweringPhase.AddressLowering;
 import com.oracle.graal.phases.tiers.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.options.*;
-import com.oracle.jvmci.options.DerivedOptionValue.OptionSupplier;
 
 /**
  * HotSpot implementation of {@link SuitesProvider}.
@@ -50,8 +47,6 @@ public class HotSpotSuitesProvider implements SuitesProvider {
     protected final PhaseSuite<HighTierContext> defaultGraphBuilderSuite;
     private final DerivedOptionValue<LIRSuites> defaultLIRSuites;
     protected final HotSpotGraalRuntimeProvider runtime;
-
-    private final AddressLowering addressLowering;
 
     private class SuitesSupplier implements OptionSupplier<Suites> {
 
@@ -73,9 +68,8 @@ public class HotSpotSuitesProvider implements SuitesProvider {
 
     }
 
-    public HotSpotSuitesProvider(HotSpotGraalRuntimeProvider runtime, Plugins plugins, AddressLowering addressLowering) {
+    public HotSpotSuitesProvider(HotSpotGraalRuntimeProvider runtime, Plugins plugins) {
         this.runtime = runtime;
-        this.addressLowering = addressLowering;
         this.defaultGraphBuilderSuite = createGraphBuilderSuite(plugins);
         this.defaultSuites = new DerivedOptionValue<>(new SuitesSupplier());
         this.defaultLIRSuites = new DerivedOptionValue<>(new LIRSuitesSupplier());
@@ -105,8 +99,6 @@ public class HotSpotSuitesProvider implements SuitesProvider {
             ret.getMidTier().appendPhase(new WriteBarrierVerificationPhase());
         }
 
-        ret.getLowTier().findPhase(ExpandLogicPhase.class).add(new AddressLoweringPhase(addressLowering));
-
         return ret;
     }
 
@@ -127,7 +119,7 @@ public class HotSpotSuitesProvider implements SuitesProvider {
      * for equality.
      */
     private boolean appendGraphEncoderTest(PhaseSuite<HighTierContext> suite) {
-        suite.appendPhase(new BasePhase<HighTierContext>("VerifyEncodingDecoding") {
+        suite.appendPhase(new BasePhase<HighTierContext>() {
             @Override
             protected void run(StructuredGraph graph, HighTierContext context) {
                 EncodedGraph encodedGraph = GraphEncoder.encodeSingleGraph(graph, runtime.getTarget().arch);
