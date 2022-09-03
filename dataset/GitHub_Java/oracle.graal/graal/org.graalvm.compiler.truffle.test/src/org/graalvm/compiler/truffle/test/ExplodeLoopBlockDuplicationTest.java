@@ -22,6 +22,9 @@
  */
 package org.graalvm.compiler.truffle.test;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+
 import org.graalvm.compiler.truffle.OptimizedCallTarget;
 import org.junit.Test;
 
@@ -43,7 +46,7 @@ public class ExplodeLoopBlockDuplicationTest extends TestWithSynchronousCompilin
      * abstract method call and resolve the result to a constant.
      */
     @Test
-    public void testBlockDuplication() {
+    public void testBlockDuplication() throws TimeoutException, ExecutionException {
         OptimizedCallTarget target = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(new ObjectCacheTestRootNode());
         AbstractType value1 = new ConcreteType1();
         AbstractType value2 = new ConcreteType2();
