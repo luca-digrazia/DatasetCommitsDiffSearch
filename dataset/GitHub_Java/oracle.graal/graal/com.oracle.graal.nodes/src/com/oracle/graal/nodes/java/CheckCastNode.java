@@ -155,7 +155,7 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
         }
         GuardingNode guard = tool.createGuard(next(), condition, forStoreCheck ? ArrayStoreException : ClassCastException, InvalidateReprofile, false);
         ValueAnchorNode valueAnchor = graph().add(new ValueAnchorNode((ValueNode) guard));
-        PiNode piNode = graph().unique(new PiNode(theValue, newStamp, (ValueNode) guard));
+        PiNode piNode = graph().unique(new PiNode(theValue, newStamp, valueAnchor));
         this.replaceAtUsages(piNode);
         graph().replaceFixedWithFixed(this, valueAnchor);
 
