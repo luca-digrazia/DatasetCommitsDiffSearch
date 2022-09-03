@@ -25,20 +25,20 @@
 package com.oracle.graalvm.locator;
 
 import com.oracle.truffle.api.TruffleOptions;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.Callable;
 
 import com.oracle.truffle.api.impl.TruffleLocator;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Map;
+import java.util.Collection;
+import java.util.Collections;
 
 public final class GraalVMLocator extends TruffleLocator
                 implements Callable<ClassLoader> {
@@ -51,31 +51,86 @@ public final class GraalVMLocator extends TruffleLocator
     }
 
     private static List<URL> collectClassPath() {
+        final boolean aot = TruffleOptions.AOT;
+        File home;
+        File jre;
+        File releaseFile;
+        if (aot) {
+            String graalvmHomeValue = System.getProperty("graalvm.home");
+            if (graalvmHomeValue == null) {
+                graalvmHomeValue = System.getProperty("org.graalvm.home");
+            }
+            if (graalvmHomeValue == null) {
+                return Collections.emptyList();
+            }
+            home = new File(graalvmHomeValue);
+            if (!home.exists()) {
+                throw new AssertionError("GraalVM home is not reachable.");
+            }
+            releaseFile = new File(home, "release");
+            jre = new File(home, "jre");
+        } else {
+            File javaHome = new File(System.getProperty("java.home"));
+            if (!javaHome.exists()) {
+                throw new AssertionError("Java home is not reachable.");
+            }
+            jre = new File(javaHome, "jre");
+            if (jre.exists()) {
+                home = javaHome;
+            } else {
+                jre = javaHome;
+                home = javaHome.getParentFile();
+            }
+            releaseFile = new File(home, "release");
+        }
 
-        HomeFinder homeFinder = HomeFinder.getDefault();
-        String home = homeFinder.getHomeFolder().toString();
         if (System.getProperty("graalvm.home") == null) {
             // automatically set graalvm.home
-            System.setProperty("graalvm.home", home);
+            System.setProperty("graalvm.home", home.getAbsolutePath());
         }
         if (System.getProperty("org.graalvm.home") == null) {
             // automatically set graalvm.home
-            System.setProperty("org.graalvm.home", home);
+            System.setProperty("org.graalvm.home", home.getAbsolutePath());
         }
 
-        String version = homeFinder.getVersion();
+        String version = "snapshot";
+        if (releaseFile.exists()) {
+            Properties properties = new Properties();
+            try {
+                properties.load(new FileInputStream(releaseFile));
+                Object loadedVersion = properties.get("GRAALVM_VERSION");
+                if (loadedVersion != null) {
+                    version = loadedVersion.toString();
+                    if (version.startsWith("\"")) {
+                        version = version.substring(1, version.length());
+                    }
+                    if (version.endsWith("\"")) {
+                        version = version.substring(0, version.length() - 1);
+                    }
+                }
+            } catch (IOException e) {
+            }
+        }
         System.setProperty("graalvm.version", version);
         System.setProperty("org.graalvm.version", version);
 
         List<URL> classPath = new ArrayList<>();
-        collectLanguageJars(homeFinder.getLanguageHomes(), classPath);
-        collectLanguageJars(homeFinder.getToolHomes(), classPath);
+        Collection<File> homeFolders = new ArrayList<>();
+        collectLanguageJars(new File(jre, "languages"), classPath, homeFolders);
+        collectLanguageJars(new File(jre, "tools"), classPath, homeFolders);
+
+        for (File homeFolder : homeFolders) {
+            final String homeFolderKey = homeFolder.getName() + ".home";
+            if (System.getProperty(homeFolderKey) == null) {
+                System.setProperty(homeFolderKey, homeFolder.getAbsolutePath());
+            }
+        }
 
         String append = System.getProperty("truffle.class.path.append");
         if (append != null) {
             String[] files = append.split(System.getProperty("path.separator"));
             for (String file : files) {
-                addJarOrDir(classPath, Paths.get(file));
+                addJarOrDir(classPath, new File(file));
             }
         }
         if (LOCATOR_TRACE) {
@@ -103,32 +158,28 @@ public final class GraalVMLocator extends TruffleLocator
 
     }
 
-    private static void collectLanguageJars(Map<String, Path> homes, List<URL> classPath) {
-        for (Map.Entry<String, Path> languageHome : homes.entrySet()) {
-            final String languageId = languageHome.getKey();
-            final Path languageLocation = languageHome.getValue();
-            if (Files.isDirectory(languageLocation)) {
-                final String homeFolderKey = languageId + ".home";
-                if (System.getProperty(homeFolderKey) == null) {
-                    System.setProperty(homeFolderKey, languageLocation.toString());
+    private static void collectLanguageJars(File languages, List<URL> classPath, Collection<? super File> homeFolders) {
+        if (languages.exists()) {
+            for (File language : languages.listFiles()) {
+                if (language.getName().startsWith(".")) {
+                    continue;
                 }
-                try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(languageLocation)) {
-                    for (Path file : dirStream) {
-                        addJar(classPath, file);
+                if (language.isDirectory()) {
+                    homeFolders.add(language);
+                    for (File jar : language.listFiles()) {
+                        addJar(classPath, jar);
                     }
-                } catch (IOException ioe) {
-                    throw new RuntimeException(ioe);
+                } else {
+                    addJar(classPath, language);
                 }
-            } else {
-                addJar(classPath, languageLocation);
             }
         }
     }
 
-    private static void addJarOrDir(List<URL> classPath, Path file) {
-        if (Files.isDirectory(file)) {
+    private static void addJarOrDir(List<URL> classPath, File file) {
+        if (file.isDirectory()) {
             try {
-                classPath.add(file.toUri().toURL());
+                classPath.add(file.toURI().toURL());
             } catch (MalformedURLException ex) {
                 throw new IllegalStateException(ex);
             }
@@ -137,10 +188,10 @@ public final class GraalVMLocator extends TruffleLocator
         }
     }
 
-    private static void addJar(List<URL> classPath, Path jar) {
-        if (jar.getFileName().toString().endsWith(".jar") && Files.exists(jar)) {
+    private static void addJar(List<URL> classPath, File jar) {
+        if (jar.exists() && jar.getName().endsWith(".jar")) {
             try {
-                classPath.add(jar.toUri().toURL());
+                classPath.add(jar.toURI().toURL());
             } catch (MalformedURLException ex) {
                 throw new IllegalStateException(ex);
             }

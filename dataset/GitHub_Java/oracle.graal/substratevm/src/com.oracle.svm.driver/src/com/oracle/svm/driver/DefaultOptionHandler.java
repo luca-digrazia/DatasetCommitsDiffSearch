@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -88,7 +86,7 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                     NativeImage.showError(headArg + " requires a " + File.pathSeparator + " separated list of directories");
                 }
                 for (String configDir : configPath.split(File.pathSeparator)) {
-                    nativeImage.addMacroOptionRoot(nativeImage.canonicalize(Paths.get(configDir)));
+                    nativeImage.addMacroOptionRoot(Paths.get(configDir));
                 }
                 return true;
             case "-jar":
@@ -109,11 +107,14 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                 return true;
             case "--expert-options":
                 args.poll();
-                nativeImage.setQueryOption(OptionType.User.name());
+                String expertUserOption = OptionType.User.name();
+                nativeImage.addImageBuilderArg(NativeImage.oH + NativeImage.enablePrintFlags + expertUserOption);
+                nativeImage.addImageBuilderArg(NativeImage.oR + NativeImage.enablePrintFlags + expertUserOption);
                 return true;
             case "--expert-options-all":
                 args.poll();
-                nativeImage.setQueryOption("");
+                nativeImage.addImageBuilderArg(NativeImage.oH + NativeImage.enablePrintFlags);
+                nativeImage.addImageBuilderArg(NativeImage.oR + NativeImage.enablePrintFlags);
                 return true;
         }
 
