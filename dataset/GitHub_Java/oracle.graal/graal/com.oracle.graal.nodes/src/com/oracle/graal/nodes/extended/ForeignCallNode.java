@@ -40,9 +40,9 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
 
     @Input protected NodeInputList<ValueNode> arguments;
     @OptionalInput(InputType.State) protected FrameState stateDuring;
-    protected final ForeignCallsProvider foreignCalls;
+    private final ForeignCallsProvider foreignCalls;
 
-    protected final ForeignCallDescriptor descriptor;
+    private final ForeignCallDescriptor descriptor;
 
     public static ForeignCallNode create(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, ValueNode... arguments) {
         return USE_GENERATED_NODES ? new ForeignCallNodeGen(foreignCalls, descriptor, arguments) : new ForeignCallNode(foreignCalls, descriptor, arguments);
@@ -59,7 +59,7 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
         return USE_GENERATED_NODES ? new ForeignCallNodeGen(foreignCalls, descriptor, arguments) : new ForeignCallNode(foreignCalls, descriptor, arguments);
     }
 
-    protected ForeignCallNode(ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, List<ValueNode> arguments) {
+    ForeignCallNode(ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, List<ValueNode> arguments) {
         this(foreignCalls, descriptor, StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())), arguments);
     }
 
@@ -67,7 +67,7 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
         return USE_GENERATED_NODES ? new ForeignCallNodeGen(foreignCalls, descriptor, stamp, arguments) : new ForeignCallNode(foreignCalls, descriptor, stamp, arguments);
     }
 
-    protected ForeignCallNode(ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp, List<ValueNode> arguments) {
+    ForeignCallNode(ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp, List<ValueNode> arguments) {
         super(stamp);
         this.arguments = new NodeInputList<>(this, arguments);
         this.descriptor = descriptor;
