@@ -24,7 +24,7 @@ package com.oracle.graal.compiler.common.spi;
 
 import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.options.OptionKey;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaType;
@@ -39,13 +39,12 @@ public abstract class JavaConstantFieldProvider implements ConstantFieldProvider
 
     static class Options {
         @Option(help = "Determines whether to treat final fields with default values as constant.")//
-        public static final OptionValue<Boolean> TrustFinalDefaultFields = new OptionValue<>(true);
+        public static final OptionKey<Boolean> TrustFinalDefaultFields = new OptionKey<>(true);
     }
 
     protected JavaConstantFieldProvider(MetaAccessProvider metaAccess) {
         try {
             this.stringValueField = metaAccess.lookupJavaField(String.class.getDeclaredField("value"));
-            this.stringHashField = metaAccess.lookupJavaField(String.class.getDeclaredField("hash"));
         } catch (NoSuchFieldException | SecurityException e) {
             throw new GraalError(e);
         }
@@ -93,7 +92,7 @@ public abstract class JavaConstantFieldProvider implements ConstantFieldProvider
 
     @SuppressWarnings("unused")
     protected boolean isFinalFieldValueConstant(ResolvedJavaField field, JavaConstant value, ConstantFieldTool<?> tool) {
-        return !value.isDefaultForKind() || Options.TrustFinalDefaultFields.getValue();
+        return !value.isDefaultForKind() || Options.TrustFinalDefaultFields.getValue(tool.getOptions());
     }
 
     @SuppressWarnings("unused")
@@ -102,9 +101,6 @@ public abstract class JavaConstantFieldProvider implements ConstantFieldProvider
             return true;
         }
         if (isWellKnownImplicitStableField(field)) {
-            return true;
-        }
-        if (field == stringHashField) {
             return true;
         }
         return false;
@@ -139,7 +135,6 @@ public abstract class JavaConstantFieldProvider implements ConstantFieldProvider
     }
 
     private final ResolvedJavaField stringValueField;
-    private final ResolvedJavaField stringHashField;
 
     protected boolean isWellKnownImplicitStableField(ResolvedJavaField field) {
         return field.equals(stringValueField);

@@ -41,7 +41,6 @@ import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler.ScratchRegister;
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.aarch64.AArch64NodeMatchRules;
-import com.oracle.graal.compiler.common.CompilationIdentifier;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
 import com.oracle.graal.hotspot.HotSpotDataBuilder;
@@ -102,8 +101,8 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public LIRGenerationResult newLIRGenerationResult(String compilationUnitName, CompilationIdentifier compilationId, LIR lir, FrameMapBuilder frameMapBuilder, StructuredGraph graph, Object stub) {
-        return new HotSpotLIRGenerationResult(compilationUnitName, compilationId, lir, frameMapBuilder, makeCallingConvention(graph, (Stub) stub), stub);
+    public LIRGenerationResult newLIRGenerationResult(String compilationUnitName, LIR lir, FrameMapBuilder frameMapBuilder, StructuredGraph graph, Object stub) {
+        return new HotSpotLIRGenerationResult(compilationUnitName, lir, frameMapBuilder, makeCallingConvention(graph, (Stub) stub), stub);
     }
 
     @Override
@@ -315,9 +314,9 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig) {
+    public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        return new AArch64HotSpotRegisterAllocationConfig(registerConfigNonNull);
+        return new AArch64HotSpotRegisterAllocationConfig(registerConfigNonNull, allocationRestrictedTo);
     }
 
     @Override

@@ -56,7 +56,6 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -87,7 +86,6 @@ import com.oracle.graal.debug.TTY;
 import com.oracle.graal.debug.internal.DebugScope;
 import com.oracle.graal.debug.internal.MemUseTrackerImpl;
 import com.oracle.graal.options.OptionDescriptors;
-import com.oracle.graal.options.OptionKey;
 import com.oracle.graal.options.OptionValues;
 import com.oracle.graal.options.OptionsParser;
 
@@ -120,18 +118,18 @@ public final class CompileTheWorld {
      *            {@code -Dgraal.<name>=<value>} format but without the leading {@code -Dgraal.}.
      *            Ignored if null.
      */
-    public static Map<OptionKey<?>, Object> parseOptions(String options) {
+    public static OptionValues parseOptions(String options, OptionValues initialOptions) {
         if (options != null) {
             Map<String, String> optionSettings = new HashMap<>();
             for (String optionSetting : options.split("\\s+|#")) {
                 OptionsParser.parseOptionSettingTo(optionSetting, optionSettings);
             }
-            Map<OptionKey<?>, Object> values = new HashMap<>();
+            OptionValues values = new OptionValues(initialOptions);
             ServiceLoader<OptionDescriptors> loader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
             OptionsParser.parseOptions(optionSettings, values, loader);
             return values;
         }
-        return Collections.emptyMap();
+        return initialOptions;
     }
 
     private final HotSpotJVMCIRuntimeProvider jvmciRuntime;
@@ -181,11 +179,10 @@ public final class CompileTheWorld {
     private ThreadPoolExecutor threadPool;
 
     private OptionValues currentOptions;
-    private final Map<OptionKey<?>, Object> compilationOptions;
+    private final OptionValues compilationOptions;
 
     /**
      * Creates a compile-the-world instance.
-     *
      * @param files {@link File#pathSeparator} separated list of Zip/Jar files to compile
      * @param startAt index of the class file to start compilation at
      * @param stopAt index of the class file to stop compilation at
@@ -193,7 +190,7 @@ public final class CompileTheWorld {
      * @param excludeMethodFilters
      */
     public CompileTheWorld(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalCompiler compiler, String files, int startAt, int stopAt, String methodFilters, String excludeMethodFilters,
-                    boolean verbose, OptionValues initialOptions, Map<OptionKey<?>, Object> compilationOptions) {
+                    boolean verbose, OptionValues initialOptions, OptionValues compilationOptions) {
         this.jvmciRuntime = jvmciRuntime;
         this.compiler = compiler;
         this.inputClassPath = files;
@@ -206,11 +203,11 @@ public final class CompileTheWorld {
         this.currentOptions = initialOptions;
 
         // We don't want the VM to exit when a method fails to compile...
-        ExitVMOnException.update(compilationOptions, false);
+        ExitVMOnException.setValue(compilationOptions, false);
 
         // ...but we want to see exceptions.
-        PrintBailout.update(compilationOptions, true);
-        PrintStackTraceOnException.update(compilationOptions, true);
+        PrintBailout.setValue(compilationOptions, true);
+        PrintStackTraceOnException.setValue(compilationOptions, true);
     }
 
     public CompileTheWorld(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalCompiler compiler, OptionValues options) {
@@ -221,7 +218,7 @@ public final class CompileTheWorld {
                         CompileTheWorldExcludeMethodFilter.getValue(options),
                         CompileTheWorldVerbose.getValue(options),
                         options,
-                        parseOptions(CompileTheWorldConfig.getValue(options)));
+                        parseOptions(CompileTheWorldConfig.getValue(options), options));
     }
 
     /**
@@ -230,7 +227,7 @@ public final class CompileTheWorld {
      */
     public void compile() throws Throwable {
         // By default only report statistics for the CTW threads themselves
-        if (!GraalDebugConfig.Options.DebugValueThreadFilter.hasBeenSet(currentOptions)) {
+        if (!GraalDebugConfig.Options.DebugValueThreadFilter.hasBeenSet()) {
             GraalDebugConfig.Options.DebugValueThreadFilter.setValue("^CompileTheWorld");
         }
         if (SUN_BOOT_CLASS_PATH.equals(inputClassPath)) {
@@ -535,7 +532,7 @@ public final class CompileTheWorld {
         threadPool = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), factory);
 
         OptionValues savedOptions = currentOptions;
-        currentOptions = new OptionValues(savedOptions, compilationOptions);
+        currentOptions = compilationOptions;
         try {
             for (int i = 0; i < entries.length; i++) {
                 final String entry = entries[i];
@@ -700,7 +697,7 @@ public final class CompileTheWorld {
             public void run() {
                 waitToRun();
                 OptionValues savedOptions = currentOptions;
-                currentOptions = new OptionValues(savedOptions, compilationOptions);
+                currentOptions = compilationOptions;
                 try {
                     compileMethod(method, classFileCounter);
                 } finally {

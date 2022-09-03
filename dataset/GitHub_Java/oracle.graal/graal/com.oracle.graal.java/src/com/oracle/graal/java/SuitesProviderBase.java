@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,26 +20,37 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.compiler.phases;
+package com.oracle.graal.java;
 
-import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
-
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.lir.phases.LIRSuites;
 import com.oracle.graal.options.OptionValues;
 import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
 import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.phases.tiers.Suites;
+import com.oracle.graal.phases.tiers.SuitesCreator;
 
-public class EconomyHighTier extends PhaseSuite<HighTierContext> {
+public abstract class SuitesProviderBase implements SuitesCreator {
 
-    public EconomyHighTier(OptionValues options) {
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        if (ImmutableCode.getValue(options)) {
-            canonicalizer.disableReadCanonicalization();
-        }
+    protected PhaseSuite<HighTierContext> defaultGraphBuilderSuite;
 
-        appendPhase(canonicalizer);
-        appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER));
+    @Override
+    public final Suites getDefaultSuites(OptionValues options) {
+        return createSuites(options);
     }
+
+    @Override
+    public PhaseSuite<HighTierContext> getDefaultGraphBuilderSuite() {
+        return defaultGraphBuilderSuite;
+    }
+
+    @Override
+    public final LIRSuites getDefaultLIRSuites(OptionValues options) {
+        return createLIRSuites(options);
+    }
+
+    @Override
+    public abstract LIRSuites createLIRSuites(OptionValues options);
+
+    @Override
+    public abstract Suites createSuites(OptionValues options);
 }

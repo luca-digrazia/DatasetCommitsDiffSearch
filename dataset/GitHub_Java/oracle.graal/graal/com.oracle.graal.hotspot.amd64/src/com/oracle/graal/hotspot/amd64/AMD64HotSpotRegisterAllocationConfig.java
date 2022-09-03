@@ -22,12 +22,45 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.amd64.AMD64.*;
+import static jdk.vm.ci.amd64.AMD64.r10;
+import static jdk.vm.ci.amd64.AMD64.r11;
+import static jdk.vm.ci.amd64.AMD64.r12;
+import static jdk.vm.ci.amd64.AMD64.r13;
+import static jdk.vm.ci.amd64.AMD64.r14;
+import static jdk.vm.ci.amd64.AMD64.r8;
+import static jdk.vm.ci.amd64.AMD64.r9;
+import static jdk.vm.ci.amd64.AMD64.rax;
+import static jdk.vm.ci.amd64.AMD64.rbp;
+import static jdk.vm.ci.amd64.AMD64.rbx;
+import static jdk.vm.ci.amd64.AMD64.rcx;
+import static jdk.vm.ci.amd64.AMD64.rdi;
+import static jdk.vm.ci.amd64.AMD64.rdx;
+import static jdk.vm.ci.amd64.AMD64.rsi;
+import static jdk.vm.ci.amd64.AMD64.xmm0;
+import static jdk.vm.ci.amd64.AMD64.xmm1;
+import static jdk.vm.ci.amd64.AMD64.xmm10;
+import static jdk.vm.ci.amd64.AMD64.xmm11;
+import static jdk.vm.ci.amd64.AMD64.xmm12;
+import static jdk.vm.ci.amd64.AMD64.xmm13;
+import static jdk.vm.ci.amd64.AMD64.xmm14;
+import static jdk.vm.ci.amd64.AMD64.xmm15;
+import static jdk.vm.ci.amd64.AMD64.xmm2;
+import static jdk.vm.ci.amd64.AMD64.xmm3;
+import static jdk.vm.ci.amd64.AMD64.xmm4;
+import static jdk.vm.ci.amd64.AMD64.xmm5;
+import static jdk.vm.ci.amd64.AMD64.xmm6;
+import static jdk.vm.ci.amd64.AMD64.xmm7;
+import static jdk.vm.ci.amd64.AMD64.xmm8;
+import static jdk.vm.ci.amd64.AMD64.xmm9;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.BitSet;
 
-import com.oracle.graal.compiler.common.alloc.*;
-import com.oracle.jvmci.code.*;
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterArray;
+import jdk.vm.ci.code.RegisterConfig;
 
 class AMD64HotSpotRegisterAllocationConfig extends RegisterAllocationConfig {
     /**
@@ -48,43 +81,24 @@ class AMD64HotSpotRegisterAllocationConfig extends RegisterAllocationConfig {
     };
     // @formatter:on
 
-    public AMD64HotSpotRegisterAllocationConfig(RegisterConfig registerConfig) {
-        super(registerConfig);
+    AMD64HotSpotRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo) {
+        super(registerConfig, allocationRestrictedTo);
     }
 
     @Override
-    protected Register[] initAllocatable(Register[] registers) {
-        BitSet regMap = new BitSet(registerConfig.getAllocatableRegisters().length);
+    protected RegisterArray initAllocatable(RegisterArray registers) {
+        BitSet regMap = new BitSet(registerConfig.getAllocatableRegisters().size());
         for (Register reg : registers) {
             regMap.set(reg.number);
         }
 
-        Register[] allocatableRegisters = new Register[registers.length];
-        int i = 0;
+        ArrayList<Register> allocatableRegisters = new ArrayList<>(registers.size());
         for (Register reg : registerAllocationOrder) {
             if (regMap.get(reg.number)) {
-                allocatableRegisters[i++] = reg;
+                allocatableRegisters.add(reg);
             }
         }
 
-        assert i == allocatableRegisters.length;
-        return super.initAllocatable(allocatableRegisters);
-    }
-
-    @Override
-    protected AllocatableRegisters createAllocatableRegisters(Register[] registers) {
-        int min = Integer.MAX_VALUE;
-        int max = Integer.MIN_VALUE;
-        for (Register reg : registers) {
-            int number = reg.number;
-            if (number < min) {
-                min = number;
-            }
-            if (number > max) {
-                max = number;
-            }
-        }
-        assert min < max;
-        return new AllocatableRegisters(registers, min, max);
+        return super.initAllocatable(new RegisterArray(allocatableRegisters));
     }
 }

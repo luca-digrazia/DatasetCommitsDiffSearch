@@ -22,18 +22,19 @@
  */
 package com.oracle.graal.jtt.lang;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.EnumSet;
+import java.util.function.IntBinaryOperator;
 
-import org.junit.*;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.options.*;
-import com.oracle.graal.options.OptionValue.OverrideScope;
-import com.oracle.graal.phases.*;
+import org.junit.Test;
+
+import com.oracle.graal.compiler.common.GraalOptions;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.options.OptionValues.OverrideScope;
 
 public class LambdaEagerTest extends GraalCompilerTest {
 
@@ -62,25 +63,26 @@ public class LambdaEagerTest extends GraalCompilerTest {
     @Test
     public void testEagerResolveNonCapturing01() {
         Result expected = new Result(3, null);
-        testAgainstExpected(getMethod("nonCapturing"), expected, UNRESOLVED_UNREACHED, 1, 2);
+        testAgainstExpected(getResolvedJavaMethod("nonCapturing"), expected, UNRESOLVED_UNREACHED, 1, 2);
     }
 
     @Test
     public void testEagerResolveNonCapturing02() {
         Result expected = new Result(3, null);
-        testAgainstExpected(getMethod("nonCapturing2"), expected, UNRESOLVED_UNREACHED, 1, 2);
+        testAgainstExpected(getResolvedJavaMethod("nonCapturing2"), expected, UNRESOLVED_UNREACHED, 1, 2);
     }
 
     @Test
     public void testEagerResolveCapturing() {
         Result expected = new Result(0, null);
-        testAgainstExpected(getMethod("capturing"), expected, UNRESOLVED_UNREACHED, 1, 2, 3);
+        testAgainstExpected(getResolvedJavaMethod("capturing"), expected, UNRESOLVED_UNREACHED, 1, 2, 3);
     }
 
     @Override
-    protected InstalledCode getCode(ResolvedJavaMethod method, StructuredGraph graph, boolean forceCompile) {
-        try (OverrideScope scope = OptionValue.override(GraalOptions.InlineEverything, true)) {
-            return super.getCode(method, graph, forceCompile);
+    @SuppressWarnings("try")
+    protected InstalledCode getCode(ResolvedJavaMethod installedCodeOwner, StructuredGraph graph, boolean forceCompile) {
+        try (OverrideScope scope = overrideOptions(GraalOptions.InlineEverything, true)) {
+            return super.getCode(installedCodeOwner, graph, forceCompile);
         }
     }
 }

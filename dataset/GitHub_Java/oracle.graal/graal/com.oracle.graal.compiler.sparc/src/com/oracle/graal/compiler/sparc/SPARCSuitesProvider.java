@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,10 +24,12 @@ package com.oracle.graal.compiler.sparc;
 
 import java.util.ListIterator;
 
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.java.DefaultSuitesProvider;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.options.OptionValues;
 import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.common.LoweringPhase;
+import com.oracle.graal.phases.PhaseSuite;
+import com.oracle.graal.phases.common.ExpandLogicPhase;
 import com.oracle.graal.phases.tiers.CompilerConfiguration;
 import com.oracle.graal.phases.tiers.LowTierContext;
 import com.oracle.graal.phases.tiers.Suites;
@@ -38,10 +40,14 @@ public class SPARCSuitesProvider extends DefaultSuitesProvider {
     }
 
     @Override
-    public Suites createSuites() {
-        Suites s = super.createSuites();
-        ListIterator<BasePhase<? super LowTierContext>> it = s.getLowTier().findPhase(LoweringPhase.class);
-        it.add(new SPARCSubIntCompareCanonicalizationPhase());
+    public Suites createSuites(OptionValues options) {
+        Suites s = super.createSuites(options);
+        ListIterator<BasePhase<? super LowTierContext>> l = s.getLowTier().findPhase(ExpandLogicPhase.class);
+        while (PhaseSuite.findNextPhase(l, ExpandLogicPhase.class)) {
+            // Search for last occurrence of ExpandLogicPhase
+        }
+        l.previous();
+        l.add(new SPARCIntegerCompareCanonicalizationPhase());
         return s;
     }
 }

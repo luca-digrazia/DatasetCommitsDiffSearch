@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,72 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.jvmci.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.replacements.nodes.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 
-@NodeInfo
-public final class IdentityHashCodeNode extends PureFunctionMacroNode {
+import jdk.vm.ci.hotspot.HotSpotObjectConstant;
+import jdk.vm.ci.meta.JavaConstant;
+
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public class IdentityHashCodeNode extends FixedWithNextNode implements Canonicalizable, Lowerable, MemoryCheckpoint.Single {
 
     public static final NodeClass<IdentityHashCodeNode> TYPE = NodeClass.create(IdentityHashCodeNode.class);
 
-    public IdentityHashCodeNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, JavaType returnType, ValueNode object) {
-        super(TYPE, invokeKind, targetMethod, bci, returnType, object);
+    @Input ValueNode object;
+
+    public IdentityHashCodeNode(ValueNode object) {
+        super(TYPE, StampFactory.forInteger(32));
+        this.object = object;
+
     }
 
     @Override
-    protected JavaConstant evaluate(JavaConstant param, MetaAccessProvider metaAccess) {
-        if (ImmutableCode.getValue() || param.isNull()) {
-            return null;
-        }
-        HotSpotObjectConstant c = (HotSpotObjectConstant) param;
-        return JavaConstant.forInt(c.getIdentityHashCode());
+    public LocationIdentity getLocationIdentity() {
+        return HotSpotReplacementsUtil.MARK_WORD_LOCATION;
     }
+
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (object.isConstant()) {
+            assert object.stamp() instanceof AbstractObjectStamp;
+            JavaConstant c = (JavaConstant) object.asConstant();
+            if (ImmutableCode.getValue(graph().getOptions())) {
+                return this;
+            }
+            JavaConstant identityHashCode = null;
+            if (c.isNull()) {
+                identityHashCode = JavaConstant.forInt(0);
+            } else {
+                identityHashCode = JavaConstant.forInt(((HotSpotObjectConstant) c).getIdentityHashCode());
+            }
+
+            return new ConstantNode(identityHashCode, StampFactory.forConstant(identityHashCode));
+        }
+        return this;
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @NodeIntrinsic
+    public static native int identityHashCode(Object object);
+
 }

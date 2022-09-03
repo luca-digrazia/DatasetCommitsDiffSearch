@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,74 +22,204 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static com.oracle.graal.api.code.CodeUtil.*;
-import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.compiler.GraalCompiler.compileGraph;
+import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
+import static com.oracle.graal.nodes.ConstantNode.getConstantNodes;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Ignore;
+import org.junit.Test;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.Type;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.hotspot.phases.*;
-import com.oracle.graal.java.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.PhasePlan.PhasePosition;
+import com.oracle.graal.api.test.Graal;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
+import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
+import com.oracle.graal.lir.phases.LIRSuites;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.PiNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.memory.FloatingReadNode;
+import com.oracle.graal.nodes.memory.ReadNode;
+import com.oracle.graal.options.OptionValues.OverrideScope;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.tiers.Suites;
+import com.oracle.graal.phases.tiers.SuitesProvider;
+import com.oracle.graal.runtime.RuntimeProvider;
+
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * use
- * 
+ *
  * <pre>
  * mx unittest AheadOfTimeCompilationTest @-XX:CompileCommand='print,*AheadOfTimeCompilationTest.*'
  * </pre>
- * 
+ *
  * to print disassembly.
  */
 public class AheadOfTimeCompilationTest extends GraalCompilerTest {
 
     public static final Object STATICFINALOBJECT = new Object();
+    public static final String STATICFINALSTRING = "test string";
 
     public static Object getStaticFinalObject() {
         return AheadOfTimeCompilationTest.STATICFINALOBJECT;
     }
 
     @Test
-    @Ignore
-    public void testStaticFinalObject1() {
-        StructuredGraph result2 = compile("getStaticFinalObject", true);
-        assert result2.getNodes().filter(ConstantNode.class).count() == 1;
-        assert result2.getNodes(FloatingReadNode.class).count() == 1;
+    public void testStaticFinalObjectAOT() {
+        StructuredGraph result = compile("getStaticFinalObject", true);
+        assertDeepEquals(1, getConstantNodes(result).count());
+        Stamp constantStamp = getConstantNodes(result).first().stamp();
+        Assert.assertTrue(constantStamp.toString(), constantStamp instanceof KlassPointerStamp);
+        assertDeepEquals(2, result.getNodes().filter(FloatingReadNode.class).count());
+        assertDeepEquals(0, result.getNodes().filter(ReadNode.class).count());
     }
 
     @Test
-    public void testStaticFinalObject2() {
-        StructuredGraph result1 = compile("getStaticFinalObject", false);
-        assert result1.getNodes().filter(ConstantNode.class).count() == 1;
-        assert result1.getNodes(FloatingReadNode.class).count() == 0;
+    public void testStaticFinalObject() {
+        StructuredGraph result = compile("getStaticFinalObject", false);
+        assertDeepEquals(1, getConstantNodes(result).count());
+        assertDeepEquals(JavaKind.Object, getConstantNodes(result).first().getStackKind());
+        assertDeepEquals(0, result.getNodes().filter(FloatingReadNode.class).count());
+        assertDeepEquals(0, result.getNodes().filter(ReadNode.class).count());
     }
 
+    public static Class<AheadOfTimeCompilationTest> getClassObject() {
+        return AheadOfTimeCompilationTest.class;
+    }
+
+    @Test
+    public void testClassObjectAOT() {
+        StructuredGraph result = compile("getClassObject", true);
+
+        NodeIterable<ConstantNode> filter = getConstantNodes(result);
+        assertDeepEquals(1, filter.count());
+        HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) getMetaAccess().lookupJavaType(AheadOfTimeCompilationTest.class);
+        assertDeepEquals(type.klass(), filter.first().asConstant());
+
+        assertDeepEquals(1, result.getNodes().filter(FloatingReadNode.class).count());
+        assertDeepEquals(0, result.getNodes().filter(ReadNode.class).count());
+    }
+
+    @Test
+    public void testClassObject() {
+        StructuredGraph result = compile("getClassObject", false);
+
+        NodeIterable<ConstantNode> filter = getConstantNodes(result);
+        assertDeepEquals(1, filter.count());
+        JavaConstant c = filter.first().asJavaConstant();
+        Assert.assertEquals(getSnippetReflection().asObject(Class.class, c), AheadOfTimeCompilationTest.class);
+
+        assertDeepEquals(0, result.getNodes().filter(FloatingReadNode.class).count());
+        assertDeepEquals(0, result.getNodes().filter(ReadNode.class).count());
+    }
+
+    public static Class<Integer> getPrimitiveClassObject() {
+        return int.class;
+    }
+
+    @Test
+    public void testPrimitiveClassObjectAOT() {
+        StructuredGraph result = compile("getPrimitiveClassObject", true);
+        NodeIterable<ConstantNode> filter = getConstantNodes(result);
+        assertDeepEquals(1, filter.count());
+        Stamp constantStamp = filter.first().stamp();
+        Assert.assertTrue(constantStamp instanceof KlassPointerStamp);
+
+        assertDeepEquals(2, result.getNodes().filter(FloatingReadNode.class).count());
+        assertDeepEquals(0, result.getNodes().filter(ReadNode.class).count());
+    }
+
+    @Test
+    public void testPrimitiveClassObject() {
+        StructuredGraph result = compile("getPrimitiveClassObject", false);
+        NodeIterable<ConstantNode> filter = getConstantNodes(result);
+        assertDeepEquals(1, filter.count());
+        JavaConstant c = filter.first().asJavaConstant();
+        Assert.assertEquals(getSnippetReflection().asObject(Class.class, c), Integer.TYPE);
+
+        assertDeepEquals(0, result.getNodes().filter(FloatingReadNode.class).count());
+        assertDeepEquals(0, result.getNodes().filter(ReadNode.class).count());
+    }
+
+    public static String getStringObject() {
+        return AheadOfTimeCompilationTest.STATICFINALSTRING;
+    }
+
+    @Test
+    public void testStringObjectAOT() {
+        // embedded strings are fine
+        testStringObjectCommon(true);
+    }
+
+    @Test
+    public void testStringObject() {
+        testStringObjectCommon(false);
+    }
+
+    private void testStringObjectCommon(boolean compileAOT) {
+        StructuredGraph result = compile("getStringObject", compileAOT);
+
+        NodeIterable<ConstantNode> filter = getConstantNodes(result);
+        assertDeepEquals(1, filter.count());
+        JavaConstant c = filter.first().asJavaConstant();
+        Assert.assertEquals(getSnippetReflection().asObject(String.class, c), "test string");
+
+        assertDeepEquals(0, result.getNodes().filter(FloatingReadNode.class).count());
+        assertDeepEquals(0, result.getNodes().filter(ReadNode.class).count());
+    }
+
+    public static Boolean getBoxedBoolean() {
+        return Boolean.valueOf(true);
+    }
+
+    @Ignore("ImmutableCode override may not work reliably in non-hosted mode")
+    @Test
+    public void testBoxedBooleanAOT() {
+        StructuredGraph result = compile("getBoxedBoolean", true);
+
+        assertDeepEquals(2, result.getNodes().filter(FloatingReadNode.class).count());
+        assertDeepEquals(1, result.getNodes(PiNode.TYPE).count());
+        assertDeepEquals(1, getConstantNodes(result).count());
+        ConstantNode constant = getConstantNodes(result).first();
+        assertDeepEquals(JavaKind.Long, constant.getStackKind());
+        assertDeepEquals(((HotSpotResolvedObjectType) getMetaAccess().lookupJavaType(Boolean.class)).klass(), constant.asConstant());
+    }
+
+    @Test
+    public void testBoxedBoolean() {
+        StructuredGraph result = compile("getBoxedBoolean", false);
+        assertDeepEquals(0, result.getNodes().filter(FloatingReadNode.class).count());
+        assertDeepEquals(0, result.getNodes(PiNode.TYPE).count());
+        assertDeepEquals(1, getConstantNodes(result).count());
+        ConstantNode constant = getConstantNodes(result).first();
+        assertDeepEquals(JavaKind.Object, constant.getStackKind());
+
+        JavaConstant c = constant.asJavaConstant();
+        Assert.assertEquals(getSnippetReflection().asObject(Boolean.class, c), Boolean.TRUE);
+    }
+
+    @SuppressWarnings("try")
     private StructuredGraph compile(String test, boolean compileAOT) {
-        StructuredGraph graph = parse(test);
-        ResolvedJavaMethod method = graph.method();
-
-        boolean originalSetting = OptCanonicalizeReads.getValue();
-        OptCanonicalizeReads.setValue(!compileAOT);
-        PhasePlan phasePlan = new PhasePlan();
-        final StructuredGraph graphCopy = graph.copy();
-        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
-        phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
-        phasePlan.addPhase(PhasePosition.LOW_LEVEL, new WriteBarrierAdditionPhase());
-        editPhasePlan(method, graph, phasePlan);
-        CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
-        final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, method, runtime, replacements, backend, runtime().getTarget(), null, phasePlan, OptimisticOptimizations.ALL,
-                        new SpeculationLog());
-        addMethod(method, compResult, graphCopy);
-
-        OptCanonicalizeReads.setValue(originalSetting);
-
-        return graph;
+        try (OverrideScope mark = overrideOptions(ImmutableCode, compileAOT)) {
+            StructuredGraph graph = parseEager(test, AllowAssumptions.YES);
+            ResolvedJavaMethod method = graph.method();
+            // create suites every time, as we modify options for the compiler
+            SuitesProvider suitesProvider = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getSuites();
+            final Suites suitesLocal = suitesProvider.getDefaultSuites(options);
+            final LIRSuites lirSuitesLocal = suitesProvider.getDefaultLIRSuites(options);
+            final CompilationResult compResult = compileGraph(graph, method, getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, graph.getProfilingInfo(),
+                            suitesLocal, lirSuitesLocal, new CompilationResult(), CompilationResultBuilderFactory.Default);
+            addMethod(method, compResult);
+            return graph;
+        }
     }
 }

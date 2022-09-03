@@ -22,51 +22,79 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.java.*;
-import com.oracle.graal.java.GraphBuilderPlugin.*;
-import com.oracle.graal.replacements.StandardGraphBuilderPlugins.*;
+import java.lang.reflect.Type;
+
+import com.oracle.graal.compiler.common.GraalOptions;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.hotspot.phases.AheadOfTimeVerificationPhase;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.replacements.nodes.MacroNode;
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Extension of {@link InvocationPlugins} that disables plugins based on runtime configuration.
  */
 final class HotSpotInvocationPlugins extends InvocationPlugins {
-    final HotSpotVMConfig config;
-    final MetaAccessProvider metaAccess;
+    final GraalHotSpotVMConfig config;
 
-    public HotSpotInvocationPlugins(HotSpotVMConfig config, MetaAccessProvider metaAccess) {
+    HotSpotInvocationPlugins(GraalHotSpotVMConfig config, MetaAccessProvider metaAccess) {
+        super(metaAccess);
         this.config = config;
-        this.metaAccess = metaAccess;
     }
 
     @Override
-    public void register(ResolvedJavaMethod method, InvocationPlugin plugin) {
+    public void register(InvocationPlugin plugin, Type declaringClass, String name, Type... argumentTypes) {
         if (!config.usePopCountInstruction) {
-            if (method.getName().equals("bitCount")) {
-                assert method.getDeclaringClass().equals(metaAccess.lookupJavaType(Integer.class)) || method.getDeclaringClass().equals(metaAccess.lookupJavaType(Long.class));
+            if (name.equals("bitCount")) {
+                assert declaringClass.equals(Integer.class) || declaringClass.equals(Long.class);
                 return;
             }
         }
-        if (!config.useCountLeadingZerosInstruction) {
-            if (method.getName().equals("numberOfLeadingZeros")) {
-                assert method.getDeclaringClass().equals(metaAccess.lookupJavaType(Integer.class)) || method.getDeclaringClass().equals(metaAccess.lookupJavaType(Long.class));
-                return;
-            }
-        }
-        if (!config.useCountTrailingZerosInstruction) {
-            if (method.getName().equals("numberOfTrailingZeros")) {
-                assert method.getDeclaringClass().equals(metaAccess.lookupJavaType(Integer.class));
-                return;
-            }
-        }
+        super.register(plugin, declaringClass, name, argumentTypes);
+    }
 
-        if (config.useHeapProfiler) {
-            if (plugin instanceof BoxPlugin) {
-                // The heap profiler wants to see all allocations related to boxing
-                return;
+    @Override
+    public void checkNewNodes(GraphBuilderContext b, InvocationPlugin plugin, NodeIterable<Node> newNodes) {
+        for (Node node : newNodes) {
+            if (node instanceof MacroNode) {
+                // MacroNode based plugins can only be used for inlining since they
+                // require a valid bci should they need to replace themselves with
+                // an InvokeNode during lowering.
+                assert plugin.inlineOnly() : String.format("plugin that creates a %s (%s) must return true for inlineOnly(): %s", MacroNode.class.getSimpleName(), node, plugin);
             }
         }
-        super.register(method, plugin);
+        if (GraalOptions.ImmutableCode.getValue(b.getOptions())) {
+            for (Node node : newNodes) {
+                if (node.hasUsages() && node instanceof ConstantNode) {
+                    ConstantNode c = (ConstantNode) node;
+                    if (c.getStackKind() == JavaKind.Object && AheadOfTimeVerificationPhase.isIllegalObjectConstant(c)) {
+                        if (isClass(c)) {
+                            // This will be handled later by LoadJavaMirrorWithKlassPhase
+                        } else {
+                            // Tolerate uses in unused FrameStates
+                            if (node.usages().filter((n) -> !(n instanceof FrameState) || n.hasUsages()).isNotEmpty()) {
+                                throw new AssertionError("illegal constant node in AOT: " + node);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        super.checkNewNodes(b, plugin, newNodes);
+    }
+
+    private static boolean isClass(ConstantNode node) {
+        ResolvedJavaType type = StampTool.typeOrNull(node);
+        return type != null && "Ljava/lang/Class;".equals(type.getName());
     }
 }

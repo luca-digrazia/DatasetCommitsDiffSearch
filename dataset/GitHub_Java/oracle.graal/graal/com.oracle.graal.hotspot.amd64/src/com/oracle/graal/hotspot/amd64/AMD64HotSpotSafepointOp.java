@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,48 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.amd64.AMD64.*;
-import static com.oracle.graal.asm.NumUtil.*;
-import static com.oracle.graal.hotspot.bridge.Marks.*;
+import static com.oracle.graal.asm.NumUtil.isInt;
+import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
+import static jdk.vm.ci.amd64.AMD64.rax;
+import static jdk.vm.ci.amd64.AMD64.rip;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.amd64.*;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.asm.amd64.AMD64Address;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.amd64.AMD64LIRInstruction;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.site.InfopointReason;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
 
 /**
  * Emits a safepoint poll.
  */
 @Opcode("SAFEPOINT")
-public class AMD64HotSpotSafepointOp extends AMD64LIRInstruction {
+public final class AMD64HotSpotSafepointOp extends AMD64LIRInstruction {
+    public static final LIRInstructionClass<AMD64HotSpotSafepointOp> TYPE = LIRInstructionClass.create(AMD64HotSpotSafepointOp.class);
 
     @State protected LIRFrameState state;
     @Temp({OperandFlag.REG, OperandFlag.ILLEGAL}) private AllocatableValue temp;
 
-    private final HotSpotVMConfig config;
+    private final GraalHotSpotVMConfig config;
 
-    public AMD64HotSpotSafepointOp(LIRFrameState state, HotSpotVMConfig config, LIRGeneratorTool tool) {
+    public AMD64HotSpotSafepointOp(LIRFrameState state, GraalHotSpotVMConfig config, NodeLIRBuilderTool tool) {
+        super(TYPE);
         this.state = state;
         this.config = config;
-        if (isPollingPageFar(config)) {
-            temp = tool.newVariable(tool.target().wordKind);
+        if (isPollingPageFar(config) || ImmutableCode.getValue(tool.getOptions())) {
+            temp = tool.getLIRGeneratorTool().newVariable(LIRKind.value(tool.getLIRGeneratorTool().target().arch.getWordKind()));
         } else {
             // Don't waste a register if it's unneeded
             temp = Value.ILLEGAL;
@@ -66,23 +79,37 @@ public class AMD64HotSpotSafepointOp extends AMD64LIRInstruction {
      * Tests if the polling page address can be reached from the code cache with 32-bit
      * displacements.
      */
-    private static boolean isPollingPageFar(HotSpotVMConfig config) {
+    private static boolean isPollingPageFar(GraalHotSpotVMConfig config) {
         final long pollingPageAddress = config.safepointPollingAddress;
-        return config.forceUnreachable || !isInt(pollingPageAddress - config.codeCacheLowBoundary()) || !isInt(pollingPageAddress - config.codeCacheHighBoundary());
+        return config.forceUnreachable || !isInt(pollingPageAddress - config.codeCacheLowBound) || !isInt(pollingPageAddress - config.codeCacheHighBound);
     }
 
-    public static void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler asm, HotSpotVMConfig config, boolean atReturn, LIRFrameState state, Register scratch) {
-        if (isPollingPageFar(config)) {
+    public static void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler asm, GraalHotSpotVMConfig config, boolean atReturn, LIRFrameState state, Register scratch) {
+        assert !atReturn || state == null : "state is unneeded at return";
+        if (ImmutableCode.getValue(crb.getOptions())) {
+            JavaKind hostWordKind = JavaKind.Long;
+            int alignment = hostWordKind.getBitCount() / Byte.SIZE;
+            JavaConstant pollingPageAddress = JavaConstant.forIntegerKind(hostWordKind, config.safepointPollingAddress);
+            // This move will be patched to load the safepoint page from a data segment
+            // co-located with the immutable code.
+            asm.movq(scratch, (AMD64Address) crb.recordDataReferenceInCode(pollingPageAddress, alignment));
+            final int pos = asm.position();
+            crb.recordMark(atReturn ? config.MARKID_POLL_RETURN_FAR : config.MARKID_POLL_FAR);
+            if (state != null) {
+                crb.recordInfopoint(pos, state, InfopointReason.SAFEPOINT);
+            }
+            asm.testl(rax, new AMD64Address(scratch));
+        } else if (isPollingPageFar(config)) {
             asm.movq(scratch, config.safepointPollingAddress);
-            crb.recordMark(atReturn ? MARK_POLL_RETURN_FAR : MARK_POLL_FAR);
-            final int pos = asm.codeBuffer.position();
+            crb.recordMark(atReturn ? config.MARKID_POLL_RETURN_FAR : config.MARKID_POLL_FAR);
+            final int pos = asm.position();
             if (state != null) {
                 crb.recordInfopoint(pos, state, InfopointReason.SAFEPOINT);
             }
             asm.testl(rax, new AMD64Address(scratch));
         } else {
-            crb.recordMark(atReturn ? MARK_POLL_RETURN_NEAR : MARK_POLL_NEAR);
-            final int pos = asm.codeBuffer.position();
+            crb.recordMark(atReturn ? config.MARKID_POLL_RETURN_NEAR : config.MARKID_POLL_NEAR);
+            final int pos = asm.position();
             if (state != null) {
                 crb.recordInfopoint(pos, state, InfopointReason.SAFEPOINT);
             }

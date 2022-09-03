@@ -25,24 +25,26 @@ package com.oracle.graal.compiler.phases;
 import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
 
 import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.options.OptionValues;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.ExpandLogicPhase;
 import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.common.RemoveValueProxyPhase;
+import com.oracle.graal.phases.schedule.SchedulePhase;
 import com.oracle.graal.phases.tiers.LowTierContext;
 
 public class EconomyLowTier extends PhaseSuite<LowTierContext> {
 
-    public EconomyLowTier() {
+    public EconomyLowTier(OptionValues options) {
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        if (ImmutableCode.getValue()) {
+        if (ImmutableCode.getValue(options)) {
             canonicalizer.disableReadCanonicalization();
         }
 
         appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.LOW_TIER));
 
         appendPhase(new ExpandLogicPhase());
-        appendPhase(new RemoveValueProxyPhase());
+
+        appendPhase(new SchedulePhase(SchedulePhase.SchedulingStrategy.FINAL_SCHEDULE));
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,26 +20,35 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.compiler.phases;
+package com.oracle.graal.compiler.common.spi;
 
-import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
-
-import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.options.OptionValues;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.tiers.HighTierContext;
 
-public class EconomyHighTier extends PhaseSuite<HighTierContext> {
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.ResolvedJavaField;
 
-    public EconomyHighTier(OptionValues options) {
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        if (ImmutableCode.getValue(options)) {
-            canonicalizer.disableReadCanonicalization();
-        }
+/**
+ * Implements the logic that decides whether a field read should be constant folded.
+ */
+public interface ConstantFieldProvider {
 
-        appendPhase(canonicalizer);
-        appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER));
+    public interface ConstantFieldTool<T> {
+
+        OptionValues getOptions();
+
+        JavaConstant readValue();
+
+        JavaConstant getReceiver();
+
+        T foldConstant(JavaConstant ret);
+
+        T foldStableArray(JavaConstant ret, int stableDimensions, boolean isDefaultStable);
     }
+
+    /**
+     * Decide whether a read from the {@code field} should be constant folded. This should return
+     * {@link ConstantFieldTool#foldConstant} or {@link ConstantFieldTool#foldStableArray} if the
+     * read should be constant folded, or {@code null} otherwise.
+     */
+    <T> T readConstantField(ResolvedJavaField field, ConstantFieldTool<T> tool);
 }

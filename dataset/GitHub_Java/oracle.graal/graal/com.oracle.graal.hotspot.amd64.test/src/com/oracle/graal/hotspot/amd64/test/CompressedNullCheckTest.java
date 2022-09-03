@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,82 @@
  */
 package com.oracle.graal.hotspot.amd64.test;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Assume;
+import org.junit.Test;
 
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.compiler.common.GraalOptions;
+import com.oracle.graal.hotspot.nodes.CompressionNode;
+import com.oracle.graal.hotspot.test.HotSpotGraalCompilerTest;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.IsNullNode;
+import com.oracle.graal.options.OptionValues.OverrideScope;
+
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Ensures that frame omission works in cases where it is expected to.
  */
-public class CompressedNullCheckTest extends GraalCompilerTest {
+public class CompressedNullCheckTest extends HotSpotGraalCompilerTest {
 
     private static final class Container {
-        Integer i = new Integer(1);
+        Integer i;
     }
 
     public static void testSnippet(Container c) {
         c.i.intValue();
     }
 
+    @SuppressWarnings("try")
+    private void testImplicit(Integer i) {
+        Assume.assumeTrue(runtime().getVMConfig().useCompressedOops);
+
+        Container c = new Container();
+        c.i = i;
+
+        try (OverrideScope s = overrideOptions(GraalOptions.OptImplicitNullChecks, true)) {
+            ResolvedJavaMethod method = getResolvedJavaMethod("testSnippet");
+            Result expect = executeExpected(method, null, c);
+
+            // make sure we don't get a profile that removes the implicit null check
+            method.reprofile();
+
+            Result actual = executeActual(method, null, c);
+            assertEquals(expect, actual);
+        }
+    }
+
+    @SuppressWarnings("try")
+    private void testExplicit(Integer i) {
+        Assume.assumeTrue(runtime().getVMConfig().useCompressedOops);
+
+        Container c = new Container();
+        c.i = i;
+
+        try (OverrideScope s = overrideOptions(GraalOptions.OptImplicitNullChecks, false)) {
+            test("testSnippet", c);
+        }
+    }
+
     @Test
-    public void test() {
-        test("testSnippet", new Container());
+    public void implicit() {
+        testImplicit(new Integer(1));
+    }
+
+    @Test
+    public void implicitNull() {
+        testImplicit(null);
+    }
+
+    @Test
+    public void explicit() {
+        testExplicit(new Integer(1));
+    }
+
+    @Test
+    public void explicitNull() {
+        testExplicit(null);
     }
 
     @Override

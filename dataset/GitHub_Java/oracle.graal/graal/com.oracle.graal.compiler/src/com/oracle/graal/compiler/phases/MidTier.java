@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,48 +22,108 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
+import static com.oracle.graal.compiler.common.GraalOptions.ConditionalElimination;
+import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
+import static com.oracle.graal.compiler.common.GraalOptions.OptDeoptimizationGrouping;
+import static com.oracle.graal.compiler.common.GraalOptions.OptEliminatePartiallyRedundantGuards;
+import static com.oracle.graal.compiler.common.GraalOptions.OptFloatingReads;
+import static com.oracle.graal.compiler.common.GraalOptions.OptPushThroughPi;
+import static com.oracle.graal.compiler.common.GraalOptions.OptReadElimination;
+import static com.oracle.graal.compiler.common.GraalOptions.ReassociateInvariants;
+import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
+import static com.oracle.graal.compiler.common.GraalOptions.VerifyHeapAtReturn;
+
+import com.oracle.graal.loop.phases.LoopSafepointEliminationPhase;
+import com.oracle.graal.loop.phases.ReassociateInvariantPhase;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.options.OptionValues;
+import com.oracle.graal.phases.PhaseSuite;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.DeoptimizationGroupingPhase;
+import com.oracle.graal.phases.common.FloatingReadPhase;
+import com.oracle.graal.phases.common.FrameStateAssignmentPhase;
+import com.oracle.graal.phases.common.GuardLoweringPhase;
+import com.oracle.graal.phases.common.IncrementalCanonicalizerPhase;
+import com.oracle.graal.phases.common.IterativeConditionalEliminationPhase;
+import com.oracle.graal.phases.common.LockEliminationPhase;
+import com.oracle.graal.phases.common.LoopSafepointInsertionPhase;
+import com.oracle.graal.phases.common.LoweringPhase;
+import com.oracle.graal.phases.common.OptimizeGuardAnchorsPhase;
+import com.oracle.graal.phases.common.PushThroughPiPhase;
+import com.oracle.graal.phases.common.RemoveValueProxyPhase;
+import com.oracle.graal.phases.common.ValueAnchorCleanupPhase;
+import com.oracle.graal.phases.common.VerifyHeapAtReturnPhase;
+import com.oracle.graal.phases.common.instrumentation.MidTierReconcileInstrumentationPhase;
+import com.oracle.graal.phases.tiers.MidTierContext;
+import com.oracle.graal.virtual.phases.ea.EarlyReadEliminationPhase;
 
 public class MidTier extends PhaseSuite<MidTierContext> {
 
-    public MidTier() {
-        if (GraalOptions.OptPushThroughPi) {
-            addPhase(new PushThroughPiPhase());
-            if (GraalOptions.OptCanonicalizer) {
-                addPhase(new CanonicalizerPhase());
-            }
+    public MidTier(OptionValues options) {
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
+        if (ImmutableCode.getValue(options)) {
+            canonicalizer.disableReadCanonicalization();
         }
 
-        if (GraalOptions.OptFloatingReads) {
-            PartialCanonicalizerPhase<MidTierContext> canonicalizer = new PartialCanonicalizerPhase<>();
-            canonicalizer.addPhase(new FloatingReadPhase());
-            addPhase(canonicalizer);
-            if (GraalOptions.OptReadElimination) {
-                addPhase(new ReadEliminationPhase());
-            }
-        }
-        addPhase(new RemoveValueProxyPhase());
-
-        if (GraalOptions.OptCanonicalizer) {
-            addPhase(new CanonicalizerPhase());
+        if (OptPushThroughPi.getValue(options)) {
+            appendPhase(new PushThroughPiPhase());
         }
 
-        if (GraalOptions.OptEliminatePartiallyRedundantGuards) {
-            addPhase(new EliminatePartiallyRedundantGuardsPhase(false, true));
+        appendPhase(canonicalizer);
+
+        appendPhase(new ValueAnchorCleanupPhase());
+        appendPhase(new LockEliminationPhase());
+
+        if (OptReadElimination.getValue(options)) {
+            appendPhase(new EarlyReadEliminationPhase(canonicalizer));
         }
 
-        if (GraalOptions.ConditionalElimination && GraalOptions.OptCanonicalizer) {
-            addPhase(new IterativeConditionalEliminationPhase());
+        if (OptFloatingReads.getValue(options)) {
+            appendPhase(new IncrementalCanonicalizerPhase<>(canonicalizer, new FloatingReadPhase()));
+        }
+        appendPhase(new RemoveValueProxyPhase());
+
+        appendPhase(canonicalizer);
+
+        if (OptEliminatePartiallyRedundantGuards.getValue(options)) {
+            appendPhase(new OptimizeGuardAnchorsPhase());
         }
 
-        if (GraalOptions.OptEliminatePartiallyRedundantGuards) {
-            addPhase(new EliminatePartiallyRedundantGuardsPhase(true, true));
+        if (ConditionalElimination.getValue(options)) {
+            appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, true));
         }
 
-        if (GraalOptions.OptCanonicalizer) {
-            addPhase(new CanonicalizerPhase());
+        if (OptEliminatePartiallyRedundantGuards.getValue(options)) {
+            appendPhase(new OptimizeGuardAnchorsPhase());
         }
+
+        appendPhase(canonicalizer);
+
+        appendPhase(new IncrementalCanonicalizerPhase<>(canonicalizer, new LoopSafepointEliminationPhase()));
+
+        appendPhase(new LoopSafepointInsertionPhase());
+
+        appendPhase(new IncrementalCanonicalizerPhase<>(canonicalizer, new GuardLoweringPhase()));
+
+        if (VerifyHeapAtReturn.getValue(options)) {
+            appendPhase(new VerifyHeapAtReturnPhase());
+        }
+
+        appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.MID_TIER));
+        if (UseGraalInstrumentation.getValue(options)) {
+            appendPhase(new MidTierReconcileInstrumentationPhase());
+        }
+
+        appendPhase(new FrameStateAssignmentPhase());
+
+        if (ReassociateInvariants.getValue(options)) {
+            appendPhase(new ReassociateInvariantPhase());
+        }
+
+        if (OptDeoptimizationGrouping.getValue(options)) {
+            appendPhase(new DeoptimizationGroupingPhase());
+        }
+
+        appendPhase(canonicalizer);
     }
 }

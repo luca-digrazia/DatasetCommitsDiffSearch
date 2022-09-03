@@ -34,7 +34,6 @@ import java.util.Formatter;
 import com.oracle.graal.api.runtime.GraalJVMCICompiler;
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.GraalCompiler;
-import com.oracle.graal.compiler.common.CompilationIdentifier;
 import com.oracle.graal.compiler.common.util.CompilationAlarm;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugConfigScope;
@@ -55,6 +54,7 @@ import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
 import com.oracle.graal.nodes.spi.Replacements;
+import com.oracle.graal.options.OptionValues;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.OptimisticOptimizations.Optimization;
 import com.oracle.graal.phases.PhaseSuite;
@@ -98,6 +98,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
     @Override
     @SuppressWarnings("try")
     public CompilationRequestResult compileMethod(CompilationRequest request) {
+        OptionValues options = OptionValues.GLOBAL;
         if (bootstrapWatchDog != null && graalRuntime.isBootstrapping()) {
             if (bootstrapWatchDog.hitCriticalCompilationRateOrTimeout()) {
                 // Drain the compilation queue to expedite completion of the bootstrap
@@ -116,7 +117,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
             if (Debug.isEnabled() && DebugScope.getConfig() == null) {
                 DebugEnvironment.initialize(TTY.out, graalRuntime.getHostProviders().getSnippetReflection());
             }
-            CompilationTask task = new CompilationTask(jvmciRuntime, this, hsRequest, true, true);
+            CompilationTask task = new CompilationTask(jvmciRuntime, this, hsRequest, true, true, options);
             CompilationRequestResult r = null;
             try (DebugConfigScope dcs = Debug.setConfig(new TopLevelDebugConfig());
                             Debug.Scope s = Debug.methodMetricsScope("HotSpotGraalCompiler", MethodMetricsRootScopeInfo.create(method), true, method)) {
@@ -133,28 +134,28 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
         for (int i = 0; i < iterations; i++) {
             codeCache.resetCompilationStatistics();
             TTY.println("CompileTheWorld : iteration " + i);
-            CompileTheWorld ctw = new CompileTheWorld(jvmciRuntime, this);
+            CompileTheWorld ctw = new CompileTheWorld(jvmciRuntime, this, OptionValues.GLOBAL);
             ctw.compile();
         }
         System.exit(0);
     }
 
-    public CompilationResult compile(ResolvedJavaMethod method, int entryBCI, boolean useProfilingInfo, CompilationIdentifier compilationId) {
+    public CompilationResult compile(ResolvedJavaMethod method, int entryBCI, boolean useProfilingInfo, OptionValues options) {
         HotSpotBackend backend = graalRuntime.getHostBackend();
         HotSpotProviders providers = backend.getProviders();
         final boolean isOSR = entryBCI != JVMCICompiler.INVOCATION_ENTRY_BCI;
-        StructuredGraph graph = method.isNative() || isOSR ? null : getIntrinsicGraph(method, providers, compilationId);
+        StructuredGraph graph = method.isNative() || isOSR ? null : getIntrinsicGraph(method, providers);
 
         if (graph == null) {
             SpeculationLog speculationLog = method.getSpeculationLog();
             if (speculationLog != null) {
                 speculationLog.collectFailedSpeculations();
             }
-            graph = new StructuredGraph(method, entryBCI, AllowAssumptions.from(OptAssumptions.getValue()), speculationLog, useProfilingInfo, compilationId);
+            graph = new StructuredGraph(method, entryBCI, AllowAssumptions.from(OptAssumptions.getValue(options)), speculationLog, useProfilingInfo, options);
         }
 
-        Suites suites = getSuites(providers);
-        LIRSuites lirSuites = getLIRSuites(providers);
+        Suites suites = getSuites(providers, options);
+        LIRSuites lirSuites = getLIRSuites(providers, options);
         ProfilingInfo profilingInfo = useProfilingInfo ? method.getProfilingInfo(!isOSR, isOSR) : DefaultProfilingInfo.get(TriState.FALSE);
         OptimisticOptimizations optimisticOpts = getOptimisticOpts(profilingInfo);
         if (isOSR) {
@@ -181,15 +182,14 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
      * installed for the method.
      *
      * @param method
-     * @param compilationId
      * @return an intrinsic graph that can be compiled and installed for {@code method} or null
      */
-    protected StructuredGraph getIntrinsicGraph(ResolvedJavaMethod method, HotSpotProviders providers, CompilationIdentifier compilationId) {
+    protected StructuredGraph getIntrinsicGraph(ResolvedJavaMethod method, HotSpotProviders providers) {
         Replacements replacements = providers.getReplacements();
         ResolvedJavaMethod substMethod = replacements.getSubstitutionMethod(method);
         if (substMethod != null) {
             assert !substMethod.equals(method);
-            StructuredGraph graph = new StructuredGraph(substMethod, AllowAssumptions.YES, NO_PROFILING_INFO, compilationId);
+            StructuredGraph graph = new StructuredGraph(substMethod, AllowAssumptions.YES, NO_PROFILING_INFO);
             Plugins plugins = new Plugins(providers.getGraphBuilderPlugins());
             GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
             IntrinsicContext initialReplacementContext = new IntrinsicContext(method, substMethod, replacements.getReplacementBytecodeProvider(), ROOT_COMPILATION);
@@ -205,12 +205,12 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
         return new OptimisticOptimizations(profilingInfo);
     }
 
-    protected Suites getSuites(HotSpotProviders providers) {
-        return providers.getSuites().getDefaultSuites();
+    protected Suites getSuites(HotSpotProviders providers, OptionValues options) {
+        return providers.getSuites().getDefaultSuites(options);
     }
 
-    protected LIRSuites getLIRSuites(HotSpotProviders providers) {
-        return providers.getSuites().getDefaultLIRSuites();
+    protected LIRSuites getLIRSuites(HotSpotProviders providers, OptionValues options) {
+        return providers.getSuites().getDefaultLIRSuites(options);
     }
 
     /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,53 +22,60 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.hotspot.meta.HotSpotGraalConstantReflectionProvider.*;
+import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
+import static com.oracle.graal.hotspot.meta.HotSpotGraalConstantFieldProvider.FieldReadEnabledInImmutableCode;
 
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.Node.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.word.*;
-import com.oracle.jvmci.meta.*;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderTool;
+import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
+import com.oracle.graal.nodes.graphbuilderconf.NodePlugin;
+import com.oracle.graal.nodes.graphbuilderconf.TypePlugin;
+import com.oracle.graal.nodes.util.ConstantFoldUtil;
+import com.oracle.graal.replacements.WordOperationPlugin;
+import com.oracle.graal.word.Word;
+
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.JavaTypeProfile;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * This plugin handles the HotSpot-specific customizations of bytecode parsing:
  * <p>
  * {@link Word}-type rewriting for {@link GraphBuilderContext#parsingIntrinsic intrinsic} functions
  * (snippets and method substitutions), by forwarding to the {@link WordOperationPlugin}. Note that
- * we forward the {@link NodePlugin} and {@link ParameterPlugin} methods, but not the
+ * we forward the {@link NodePlugin} and {@link TypePlugin} methods, but not the
  * {@link InlineInvokePlugin} methods implemented by {@link WordOperationPlugin}. The latter is not
  * necessary because HotSpot only uses the {@link Word} type in methods that are force-inlined,
  * i.e., there are never non-inlined invokes that involve the {@link Word} type.
  * <p>
- * Handling of {@link Fold} and {@link NodeIntrinsic} annotated methods, by forwarding to the
- * {@link NodeIntrinsificationPlugin} when parsing intrinsic functions.
- * <p>
  * Constant folding of field loads.
  */
-public final class HotSpotNodePlugin implements NodePlugin, ParameterPlugin {
-    private final MetaAccessProvider metaAccess;
-    private final ConstantReflectionProvider constantReflection;
-
+public final class HotSpotNodePlugin implements NodePlugin, TypePlugin {
     protected final WordOperationPlugin wordOperationPlugin;
-    protected final NodeIntrinsificationPlugin nodeIntrinsificationPlugin;
 
-    public HotSpotNodePlugin(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, WordOperationPlugin wordOperationPlugin,
-                    NodeIntrinsificationPlugin nodeIntrinsificationPlugin) {
-        this.metaAccess = metaAccess;
-        this.constantReflection = constantReflection;
+    public HotSpotNodePlugin(WordOperationPlugin wordOperationPlugin) {
         this.wordOperationPlugin = wordOperationPlugin;
-        this.nodeIntrinsificationPlugin = nodeIntrinsificationPlugin;
     }
 
     @Override
-    public FloatingNode interceptParameter(GraphBuilderContext b, int index, Stamp stamp) {
+    public boolean canChangeStackKind(GraphBuilderContext b) {
         if (b.parsingIntrinsic()) {
-            return wordOperationPlugin.interceptParameter(b, index, stamp);
+            return wordOperationPlugin.canChangeStackKind(b);
+        }
+        return false;
+    }
+
+    @Override
+    public StampPair interceptType(GraphBuilderTool b, JavaType declaredType, boolean nonNull) {
+        if (b.parsingIntrinsic()) {
+            return wordOperationPlugin.interceptType(b, declaredType, nonNull);
         }
         return null;
     }
@@ -78,15 +85,12 @@ public final class HotSpotNodePlugin implements NodePlugin, ParameterPlugin {
         if (b.parsingIntrinsic() && wordOperationPlugin.handleInvoke(b, method, args)) {
             return true;
         }
-        if (b.parsingIntrinsic() && nodeIntrinsificationPlugin.handleInvoke(b, method, args)) {
-            return true;
-        }
         return false;
     }
 
     @Override
     public boolean handleLoadField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
-        if (!ImmutableCode.getValue() || b.parsingIntrinsic()) {
+        if (!ImmutableCode.getValue(b.getOptions()) || b.parsingIntrinsic()) {
             if (object.isConstant()) {
                 JavaConstant asJavaConstant = object.asJavaConstant();
                 if (tryReadField(b, field, asJavaConstant)) {
@@ -102,7 +106,7 @@ public final class HotSpotNodePlugin implements NodePlugin, ParameterPlugin {
 
     @Override
     public boolean handleLoadStaticField(GraphBuilderContext b, ResolvedJavaField field) {
-        if (!ImmutableCode.getValue() || b.parsingIntrinsic()) {
+        if (!ImmutableCode.getValue(b.getOptions()) || b.parsingIntrinsic()) {
             if (tryReadField(b, field, null)) {
                 return true;
             }
@@ -113,9 +117,9 @@ public final class HotSpotNodePlugin implements NodePlugin, ParameterPlugin {
         return false;
     }
 
-    private boolean tryReadField(GraphBuilderContext b, ResolvedJavaField field, JavaConstant object) {
+    private static boolean tryReadField(GraphBuilderContext b, ResolvedJavaField field, JavaConstant object) {
         // FieldReadEnabledInImmutableCode is non null only if assertions are enabled
-        if (FieldReadEnabledInImmutableCode != null && ImmutableCode.getValue()) {
+        if (FieldReadEnabledInImmutableCode != null && ImmutableCode.getValue(b.getOptions())) {
             FieldReadEnabledInImmutableCode.set(Boolean.TRUE);
             try {
                 return tryConstantFold(b, field, object);
@@ -127,11 +131,11 @@ public final class HotSpotNodePlugin implements NodePlugin, ParameterPlugin {
         }
     }
 
-    private boolean tryConstantFold(GraphBuilderContext b, ResolvedJavaField field, JavaConstant object) {
-        JavaConstant result = constantReflection.readConstantFieldValue(field, object);
+    private static boolean tryConstantFold(GraphBuilderContext b, ResolvedJavaField field, JavaConstant object) {
+        ConstantNode result = ConstantFoldUtil.tryConstantFold(b.getConstantFieldProvider(), b.getConstantReflection(), b.getMetaAccess(), field, object, b.getOptions());
         if (result != null) {
-            ConstantNode constantNode = ConstantNode.forConstant(result, metaAccess, b.getGraph());
-            b.push(field.getKind(), constantNode);
+            result = b.getGraph().unique(result);
+            b.push(field.getJavaKind(), result);
             return true;
         }
         return false;
@@ -154,7 +158,7 @@ public final class HotSpotNodePlugin implements NodePlugin, ParameterPlugin {
     }
 
     @Override
-    public boolean handleLoadIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, Kind elementKind) {
+    public boolean handleLoadIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, JavaKind elementKind) {
         if (b.parsingIntrinsic() && wordOperationPlugin.handleLoadIndexed(b, array, index, elementKind)) {
             return true;
         }
@@ -162,7 +166,7 @@ public final class HotSpotNodePlugin implements NodePlugin, ParameterPlugin {
     }
 
     @Override
-    public boolean handleStoreIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, Kind elementKind, ValueNode value) {
+    public boolean handleStoreIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, JavaKind elementKind, ValueNode value) {
         if (b.parsingIntrinsic() && wordOperationPlugin.handleStoreIndexed(b, array, index, elementKind, value)) {
             return true;
         }

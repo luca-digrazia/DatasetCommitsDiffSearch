@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,181 +21,349 @@
  * questions.
  */
 package com.oracle.graal.graph;
+
+import static com.oracle.graal.compiler.common.Fields.translateInto;
+import static com.oracle.graal.debug.GraalError.shouldNotReachHere;
+import static com.oracle.graal.graph.Edges.translateInto;
+import static com.oracle.graal.graph.Graph.isModificationCountsEnabled;
+import static com.oracle.graal.graph.InputEdges.translateInto;
+import static com.oracle.graal.graph.Node.WithAllEdges;
+import static com.oracle.graal.graph.Node.newIdentityMap;
+import static com.oracle.graal.graph.UnsafeAccess.UNSAFE;
+import static com.oracle.graal.options.OptionValues.GLOBAL;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.*;
-import java.util.Map.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import com.oracle.graal.graph.Node.Data;
+import com.oracle.graal.compiler.common.FieldIntrospection;
+import com.oracle.graal.compiler.common.Fields;
+import com.oracle.graal.compiler.common.FieldsScanner;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugCloseable;
+import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugTimer;
+import com.oracle.graal.debug.Fingerprint;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.Edges.Type;
+import com.oracle.graal.graph.Graph.DuplicationReplacement;
+import com.oracle.graal.graph.Node.EdgeVisitor;
+import com.oracle.graal.graph.Node.Input;
+import com.oracle.graal.graph.Node.OptionalInput;
+import com.oracle.graal.graph.Node.Successor;
+import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
+import com.oracle.graal.graph.spi.Simplifiable;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeCycles;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodeinfo.NodeSize;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionKey;
+import com.oracle.graal.options.StableOptionKey;
 
-import sun.misc.Unsafe;
+/**
+ * Metadata for every {@link Node} type. The metadata includes:
+ * <ul>
+ * <li>The offsets of fields annotated with {@link Input} and {@link Successor} as well as methods
+ * for iterating over such fields.</li>
+ * <li>The identifier for an {@link IterableNodeType} class.</li>
+ * </ul>
+ */
+public final class NodeClass<T> extends FieldIntrospection<T> {
 
-public class NodeClass {
+    public static class Options {
+        // @formatter:off
+        @Option(help = "Verifies that receivers of NodeInfo#size() and NodeInfo#cycles() do not have UNSET values.")
+        public static final OptionKey<Boolean> VerifyNodeCostOnAccess = new StableOptionKey<>(false);
+        // @formatter:on
+    }
 
-    public static final int NOT_ITERABLE = -1;
+    // Timers for creation of a NodeClass instance
+    private static final DebugTimer Init_FieldScanning = Debug.timer("NodeClass.Init.FieldScanning");
+    private static final DebugTimer Init_FieldScanningInner = Debug.timer("NodeClass.Init.FieldScanning.Inner");
+    private static final DebugTimer Init_AnnotationParsing = Debug.timer("NodeClass.Init.AnnotationParsing");
+    private static final DebugTimer Init_Edges = Debug.timer("NodeClass.Init.Edges");
+    private static final DebugTimer Init_Data = Debug.timer("NodeClass.Init.Data");
+    private static final DebugTimer Init_AllowedUsages = Debug.timer("NodeClass.Init.AllowedUsages");
+    private static final DebugTimer Init_IterableIds = Debug.timer("NodeClass.Init.IterableIds");
+
+    public static final long MAX_EDGES = 8;
+    public static final long MAX_LIST_EDGES = 6;
+    public static final long OFFSET_MASK = 0xFC;
+    public static final long LIST_MASK = 0x01;
+    public static final long NEXT_EDGE = 0x08;
+
+    @SuppressWarnings("try")
+    private static <T extends Annotation> T getAnnotationTimed(AnnotatedElement e, Class<T> annotationClass) {
+        try (DebugCloseable s = Init_AnnotationParsing.start()) {
+            return e.getAnnotation(annotationClass);
+        }
+    }
 
     /**
-     * Interface used by {@link NodeClass#rescanAllFieldOffsets(CalcOffset)} to determine the offset (in bytes) of a field.
+     * Gets the {@link NodeClass} associated with a given {@link Class}.
      */
-    public interface CalcOffset {
-        long getOffset(Field field);
+    public static <T> NodeClass<T> create(Class<T> c) {
+        assert get(c) == null;
+        Class<? super T> superclass = c.getSuperclass();
+        NodeClass<? super T> nodeSuperclass = null;
+        if (superclass != NODE_CLASS) {
+            nodeSuperclass = get(superclass);
+        }
+        return new NodeClass<>(c, nodeSuperclass);
     }
 
-    private static final Class< ? > NODE_CLASS = Node.class;
-    private static final Class< ? > INPUT_LIST_CLASS = NodeInputList.class;
-    private static final Class< ? > SUCCESSOR_LIST_CLASS = NodeSuccessorList.class;
-
-    private static final Unsafe unsafe = getUnsafe();
-
-    private static Unsafe getUnsafe() {
+    @SuppressWarnings("unchecked")
+    public static <T> NodeClass<T> get(Class<T> superclass) {
         try {
-            // this will only fail if graal is not part of the boot class path
-            return Unsafe.getUnsafe();
-        } catch (SecurityException e) {
-            // nothing to do
-        }
-        try {
-            Field theUnsafeInstance = Unsafe.class.getDeclaredField("theUnsafe");
-            theUnsafeInstance.setAccessible(true);
-            return (Unsafe) theUnsafeInstance.get(Unsafe.class);
-        } catch (Exception e) {
-            // currently we rely on being able to use Unsafe...
-            throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e);
+            Field field = superclass.getDeclaredField("TYPE");
+            field.setAccessible(true);
+            return (NodeClass<T>) field.get(null);
+        } catch (IllegalArgumentException | IllegalAccessException | NoSuchFieldException | SecurityException e) {
+            throw new RuntimeException(e);
         }
     }
 
-    private static final Map<Class< ? >, NodeClass> nodeClasses = new ConcurrentHashMap<>();
-    private static int nextIterableId = 0;
+    private static final Class<?> NODE_CLASS = Node.class;
+    private static final Class<?> INPUT_LIST_CLASS = NodeInputList.class;
+    private static final Class<?> SUCCESSOR_LIST_CLASS = NodeSuccessorList.class;
 
-    private final Class< ? > clazz;
-    private final int directInputCount;
-    private final long[] inputOffsets;
-    private final Class<?>[] inputTypes;
-    private final String[] inputNames;
-    private final int directSuccessorCount;
-    private final long[] successorOffsets;
-    private final Class<?>[] successorTypes;
-    private final String[] successorNames;
-    private final long[] dataOffsets;
-    private final Class<?>[] dataTypes;
-    private final String[] dataNames;
+    private static AtomicInteger nextIterableId = new AtomicInteger();
+
+    private final InputEdges inputs;
+    private final SuccessorEdges successors;
+    private final NodeClass<? super T> superNodeClass;
+
     private final boolean canGVN;
     private final int startGVNNumber;
-    private final String shortName;
+    private final String nameTemplate;
     private final int iterableId;
-    private final boolean hasOutgoingEdges;
+    private final EnumSet<InputType> allowedUsageTypes;
+    private int[] iterableIds;
+    private final long inputsIteration;
+    private final long successorIteration;
 
-    static class DefaultCalcOffset implements CalcOffset {
-        @Override
-        public long getOffset(Field field) {
-            return unsafe.objectFieldOffset(field);
-        }
+    private static final DebugCounter ITERABLE_NODE_TYPES = Debug.counter("IterableNodeTypes");
+    private final DebugCounter nodeIterableCount;
+
+    /**
+     * Determines if this node type implements {@link Canonicalizable}.
+     */
+    private final boolean isCanonicalizable;
+
+    /**
+     * Determines if this node type implements {@link BinaryCommutative}.
+     */
+    private final boolean isCommutative;
+
+    /**
+     * Determines if this node type implements {@link Simplifiable}.
+     */
+    private final boolean isSimplifiable;
+    private final boolean isLeafNode;
+
+    public NodeClass(Class<T> clazz, NodeClass<? super T> superNodeClass) {
+        this(clazz, superNodeClass, new FieldsScanner.DefaultCalcOffset(), null, 0);
     }
 
-    public NodeClass(Class< ? > clazz) {
+    @SuppressWarnings("try")
+    public NodeClass(Class<T> clazz, NodeClass<? super T> superNodeClass, FieldsScanner.CalcOffset calcOffset, int[] presetIterableIds, int presetIterableId) {
+        super(clazz);
+        this.superNodeClass = superNodeClass;
         assert NODE_CLASS.isAssignableFrom(clazz);
-        this.clazz = clazz;
 
-        FieldScanner scanner = new FieldScanner(new DefaultCalcOffset());
-        scanner.scan(clazz);
-
-        directInputCount = scanner.inputOffsets.size();
-        inputOffsets = sortedLongCopy(scanner.inputOffsets, scanner.inputListOffsets);
-        directSuccessorCount = scanner.successorOffsets.size();
-        successorOffsets = sortedLongCopy(scanner.successorOffsets, scanner.successorListOffsets);
-        dataOffsets = new long[scanner.dataOffsets.size()];
-        for (int i = 0; i < scanner.dataOffsets.size(); ++i) {
-            dataOffsets[i] = scanner.dataOffsets.get(i);
+        this.isCanonicalizable = Canonicalizable.class.isAssignableFrom(clazz);
+        this.isCommutative = BinaryCommutative.class.isAssignableFrom(clazz);
+        if (Canonicalizable.Unary.class.isAssignableFrom(clazz) || Canonicalizable.Binary.class.isAssignableFrom(clazz)) {
+            assert Canonicalizable.Unary.class.isAssignableFrom(clazz) ^ Canonicalizable.Binary.class.isAssignableFrom(clazz) : clazz + " should implement either Unary or Binary, not both";
         }
-        dataTypes = scanner.dataTypes.toArray(new Class[0]);
-        dataNames = scanner.dataNames.toArray(new String[0]);
-        inputTypes = arrayUsingSortedOffsets(scanner.inputTypesMap, inputOffsets, new Class<?>[inputOffsets.length]);
-        inputNames = arrayUsingSortedOffsets(scanner.inputNamesMap, inputOffsets, new String[inputOffsets.length]);
-        successorTypes = arrayUsingSortedOffsets(scanner.successorTypesMap, successorOffsets, new Class<?>[successorOffsets.length]);
-        successorNames = arrayUsingSortedOffsets(scanner.successorNamesMap, successorOffsets, new String[successorOffsets.length]);
+
+        this.isSimplifiable = Simplifiable.class.isAssignableFrom(clazz);
+
+        NodeFieldsScanner fs = new NodeFieldsScanner(calcOffset, superNodeClass);
+        try (DebugCloseable t = Init_FieldScanning.start()) {
+            fs.scan(clazz, clazz.getSuperclass(), false);
+        }
+
+        try (DebugCloseable t1 = Init_Edges.start()) {
+            successors = new SuccessorEdges(fs.directSuccessors, fs.successors);
+            successorIteration = computeIterationMask(successors.type(), successors.getDirectCount(), successors.getOffsets());
+            inputs = new InputEdges(fs.directInputs, fs.inputs);
+            inputsIteration = computeIterationMask(inputs.type(), inputs.getDirectCount(), inputs.getOffsets());
+        }
+        try (DebugCloseable t1 = Init_Data.start()) {
+            data = new Fields(fs.data);
+        }
+
+        isLeafNode = inputs.getCount() + successors.getCount() == 0;
 
         canGVN = Node.ValueNumberable.class.isAssignableFrom(clazz);
-        startGVNNumber = clazz.hashCode();
+        startGVNNumber = clazz.getName().hashCode();
 
-        String newShortName = clazz.getSimpleName();
-        if (newShortName.endsWith("Node") && !newShortName.equals("StartNode") && !newShortName.equals("EndNode")) {
-            newShortName = newShortName.substring(0, newShortName.length() - 4);
+        NodeInfo info = getAnnotationTimed(clazz, NodeInfo.class);
+        assert info != null : "Missing NodeInfo annotation on " + clazz;
+        this.nameTemplate = info.nameTemplate();
+
+        try (DebugCloseable t1 = Init_AllowedUsages.start()) {
+            allowedUsageTypes = superNodeClass == null ? EnumSet.noneOf(InputType.class) : superNodeClass.allowedUsageTypes.clone();
+            allowedUsageTypes.addAll(Arrays.asList(info.allowedUsageTypes()));
         }
-        NodeInfo info = clazz.getAnnotation(NodeInfo.class);
-        if (info != null) {
-            if (!info.shortName().isEmpty()) {
-                newShortName = info.shortName();
+
+        if (presetIterableIds != null) {
+            this.iterableIds = presetIterableIds;
+            this.iterableId = presetIterableId;
+        } else if (IterableNodeType.class.isAssignableFrom(clazz)) {
+            ITERABLE_NODE_TYPES.increment();
+            try (DebugCloseable t1 = Init_IterableIds.start()) {
+                this.iterableId = nextIterableId.getAndIncrement();
+
+                NodeClass<?> snc = superNodeClass;
+                while (snc != null && IterableNodeType.class.isAssignableFrom(snc.getClazz())) {
+                    snc.addIterableId(iterableId);
+                    snc = snc.superNodeClass;
+                }
+
+                this.iterableIds = new int[]{iterableId};
+            }
+        } else {
+            this.iterableId = Node.NOT_ITERABLE;
+            this.iterableIds = null;
+        }
+        nodeIterableCount = Debug.counter("NodeIterable_%s", clazz);
+        assert verifyIterableIds();
+
+        try (Debug.Scope scope = Debug.scope("NodeCosts")) {
+            /*
+             * Note: We do not check for the existence of the node cost annotations during
+             * construction as not every node needs to have them set. However if costs are queried,
+             * after the construction of the node class, they must be properly set. This is
+             * important as we can not trust our cost model if there are unspecified nodes. Nodes
+             * that do not need cost annotations are e.g. abstractions like FixedNode or
+             * FloatingNode or ValueNode. Sub classes where costs are not specified will ask the
+             * superclass for their costs during node class initialization. Therefore getters for
+             * cycles and size can omit verification during creation.
+             */
+            NodeCycles c = info.cycles();
+            if (c == NodeCycles.CYCLES_UNSET) {
+                cycles = superNodeClass != null ? superNodeClass.cycles : NodeCycles.CYCLES_UNSET;
+            } else {
+                cycles = c;
+            }
+            assert cycles != null;
+            NodeSize s = info.size();
+            if (s == NodeSize.SIZE_UNSET) {
+                size = superNodeClass != null ? superNodeClass.size : NodeSize.SIZE_UNSET;
+            } else {
+                size = s;
+            }
+            assert size != null;
+            Debug.log("Node cost for node of type __| %s |_, cycles:%s,size:%s", clazz, cycles, size);
+        }
+
+    }
+
+    private final NodeCycles cycles;
+    private final NodeSize size;
+
+    public NodeCycles cycles() {
+        if (Options.VerifyNodeCostOnAccess.getValue(GLOBAL) && cycles == NodeCycles.CYCLES_UNSET) {
+            throw new GraalError("Missing NodeCycles specification in the @NodeInfo annotation of the node %s", this);
+        }
+        return cycles;
+    }
+
+    public NodeSize size() {
+        if (Options.VerifyNodeCostOnAccess.getValue(GLOBAL) && size == NodeSize.SIZE_UNSET) {
+            throw new GraalError("Missing NodeSize specification in the @NodeInfo annotation of the node %s", this);
+        }
+        return size;
+    }
+
+    public static long computeIterationMask(Type type, int directCount, long[] offsets) {
+        long mask = 0;
+        if (offsets.length > NodeClass.MAX_EDGES) {
+            throw new GraalError("Exceeded maximum of %d edges (%s)", NodeClass.MAX_EDGES, type);
+        }
+        if (offsets.length - directCount > NodeClass.MAX_LIST_EDGES) {
+            throw new GraalError("Exceeded maximum of %d list edges (%s)", NodeClass.MAX_LIST_EDGES, type);
+        }
+
+        for (int i = offsets.length - 1; i >= 0; i--) {
+            long offset = offsets[i];
+            assert ((offset & 0xFF) == offset) : "field offset too large!";
+            mask <<= NodeClass.NEXT_EDGE;
+            mask |= offset;
+            if (i >= directCount) {
+                mask |= 0x3;
             }
         }
-        this.shortName = newShortName;
-        if (Node.IterableNodeType.class.isAssignableFrom(clazz)) {
-            this.iterableId = nextIterableId++;
-            // TODO (lstadler) add type hierarchy - based node iteration
-//            for (NodeClass nodeClass : nodeClasses.values()) {
-//                if (clazz.isAssignableFrom(nodeClass.clazz)) {
-//                    throw new UnsupportedOperationException("iterable non-final Node classes not supported: " + clazz);
-//                }
-//            }
-        } else {
-            this.iterableId = NOT_ITERABLE;
+        return mask;
+    }
+
+    private synchronized void addIterableId(int newIterableId) {
+        assert !containsId(newIterableId, iterableIds);
+        int[] copy = Arrays.copyOf(iterableIds, iterableIds.length + 1);
+        copy[iterableIds.length] = newIterableId;
+        iterableIds = copy;
+    }
+
+    private boolean verifyIterableIds() {
+        NodeClass<?> snc = superNodeClass;
+        while (snc != null && IterableNodeType.class.isAssignableFrom(snc.getClazz())) {
+            assert containsId(iterableId, snc.iterableIds);
+            snc = snc.superNodeClass;
         }
-        this.hasOutgoingEdges = this.inputOffsets.length > 0 || this.successorOffsets.length > 0;
+        return true;
     }
 
-    public static void rescanAllFieldOffsets(CalcOffset calc) {
-        for (NodeClass nodeClass : nodeClasses.values()) {
-            nodeClass.rescanFieldOffsets(calc);
+    private static boolean containsId(int iterableId, int[] iterableIds) {
+        for (int i : iterableIds) {
+            if (i == iterableId) {
+                return true;
+            }
         }
+        return false;
     }
 
-    private void rescanFieldOffsets(CalcOffset calc) {
-        FieldScanner scanner = new FieldScanner(calc);
-        scanner.scan(clazz);
-        assert directInputCount == scanner.inputOffsets.size();
-        copyInto(inputOffsets, sortedLongCopy(scanner.inputOffsets, scanner.inputListOffsets));
-        assert directSuccessorCount == scanner.successorOffsets.size();
-        copyInto(successorOffsets, sortedLongCopy(scanner.successorOffsets, scanner.successorListOffsets));
-        assert dataOffsets.length == scanner.dataOffsets.size();
-        for (int i = 0; i < scanner.dataOffsets.size(); ++i) {
-            dataOffsets[i] = scanner.dataOffsets.get(i);
-        }
-        copyInto(dataTypes, scanner.dataTypes);
-        copyInto(dataNames, scanner.dataNames);
-
-        copyInto(inputTypes, arrayUsingSortedOffsets(scanner.inputTypesMap, this.inputOffsets, new Class<?>[this.inputOffsets.length]));
-        copyInto(inputNames, arrayUsingSortedOffsets(scanner.inputNamesMap, this.inputOffsets, new String[this.inputOffsets.length]));
-        copyInto(successorTypes, arrayUsingSortedOffsets(scanner.successorTypesMap, this.successorOffsets, new Class<?>[this.successorOffsets.length]));
-        copyInto(successorNames, arrayUsingSortedOffsets(scanner.successorNamesMap, this.successorOffsets, new String[this.successorNames.length]));
-    }
-
-    private static void copyInto(long[] dest, long[] src) {
-        assert dest.length == src.length;
-        for (int i = 0; i < dest.length; i++) {
-            dest[i] = src[i];
-        }
-    }
-
-    private static <T> void copyInto(T[] dest, T[] src) {
-        assert dest.length == src.length;
-        for (int i = 0; i < dest.length; i++) {
-            dest[i] = src[i];
-        }
-    }
-
-    private static <T> void copyInto(T[] dest, List<T> src) {
-        assert dest.length == src.size();
-        for (int i = 0; i < dest.length; i++) {
-            dest[i] = src.get(i);
-        }
-    }
-
-    public boolean hasOutgoingEdges() {
-        return hasOutgoingEdges;
-    }
+    private String shortName;
 
     public String shortName() {
+        if (shortName == null) {
+            NodeInfo info = getClazz().getAnnotation(NodeInfo.class);
+            if (!info.shortName().isEmpty()) {
+                shortName = info.shortName();
+            } else {
+                String localShortName = getClazz().getSimpleName();
+                if (localShortName.endsWith("Node") && !localShortName.equals("StartNode") && !localShortName.equals("EndNode")) {
+                    shortName = localShortName.substring(0, localShortName.length() - 4);
+                } else {
+                    shortName = localShortName;
+                }
+            }
+        }
         return shortName;
+    }
+
+    @Override
+    public Fields[] getAllFields() {
+        return new Fields[]{data, inputs, successors};
+    }
+
+    public int[] iterableIds() {
+        nodeIterableCount.increment();
+        return iterableIds;
     }
 
     public int iterableId() {
@@ -206,313 +374,187 @@ public class NodeClass {
         return canGVN;
     }
 
-    private static synchronized NodeClass getSynchronized(Class< ? > c) {
-        NodeClass clazz = nodeClasses.get(c);
-        if (clazz == null) {
-            clazz = new NodeClass(c);
-            nodeClasses.put(c, clazz);
+    /**
+     * Determines if this node type implements {@link Canonicalizable}.
+     */
+    public boolean isCanonicalizable() {
+        return isCanonicalizable;
+    }
+
+    /**
+     * Determines if this node type implements {@link BinaryCommutative}.
+     */
+    public boolean isCommutative() {
+        return isCommutative;
+    }
+
+    /**
+     * Determines if this node type implements {@link Simplifiable}.
+     */
+    public boolean isSimplifiable() {
+        return isSimplifiable;
+    }
+
+    static int allocatedNodeIterabledIds() {
+        return nextIterableId.get();
+    }
+
+    public EnumSet<InputType> getAllowedUsageTypes() {
+        return allowedUsageTypes;
+    }
+
+    /**
+     * Describes a field representing an input or successor edge in a node.
+     */
+    protected static class EdgeInfo extends FieldsScanner.FieldInfo {
+
+        public EdgeInfo(long offset, String name, Class<?> type, Class<?> declaringClass) {
+            super(offset, name, type, declaringClass);
         }
-        return clazz;
-    }
 
-    public static final NodeClass get(Class< ? > c) {
-        NodeClass clazz = nodeClasses.get(c);
-        return clazz == null ? getSynchronized(c) : clazz;
-    }
-
-    public static int cacheSize() {
-        return nextIterableId;
-    }
-
-    private static class FieldScanner {
-        public final ArrayList<Long> inputOffsets = new ArrayList<>();
-        public final ArrayList<Long> inputListOffsets = new ArrayList<>();
-        public final Map<Long, Class< ? >> inputTypesMap = new HashMap<>();
-        public final Map<Long, String> inputNamesMap = new HashMap<>();
-        public final ArrayList<Long> successorOffsets = new ArrayList<>();
-        public final ArrayList<Long> successorListOffsets = new ArrayList<>();
-        public final Map<Long, Class< ? >> successorTypesMap = new HashMap<>();
-        public final Map<Long, String> successorNamesMap = new HashMap<>();
-        public final ArrayList<Long> dataOffsets = new ArrayList<>();
-        public final ArrayList<Class< ? >> dataTypes = new ArrayList<>();
-        public final ArrayList<String> dataNames = new ArrayList<>();
-        public final CalcOffset calc;
-
-        public FieldScanner(CalcOffset calc) {
-            this.calc = calc;
-        }
-
-        public void scan(Class< ? > clazz) {
-            Class< ? > currentClazz = clazz;
-            do {
-                for (Field field : currentClazz.getDeclaredFields()) {
-                    if (!Modifier.isStatic(field.getModifiers())) {
-                        Class< ? > type = field.getType();
-                        long offset = calc.getOffset(field);
-                        String name = field.getName();
-                        if (field.isAnnotationPresent(Node.Input.class)) {
-                            assert !field.isAnnotationPresent(Node.Successor.class) : "field cannot be both input and successor";
-                            if (INPUT_LIST_CLASS.isAssignableFrom(type)) {
-                                inputListOffsets.add(offset);
-                            } else {
-                                assert NODE_CLASS.isAssignableFrom(type) : "invalid input type: " + type;
-                                inputOffsets.add(offset);
-                                inputTypesMap.put(offset, type);
-                            }
-                            if (field.getAnnotation(Node.Input.class).notDataflow()) {
-                                inputNamesMap.put(offset, name + "#NDF");
-                            } else {
-                                inputNamesMap.put(offset, name);
-                            }
-                        } else if (field.isAnnotationPresent(Node.Successor.class)) {
-                            if (SUCCESSOR_LIST_CLASS.isAssignableFrom(type)) {
-                                successorListOffsets.add(offset);
-                            } else {
-                                assert NODE_CLASS.isAssignableFrom(type) : "invalid successor type: " + type;
-                                successorOffsets.add(offset);
-                                successorTypesMap.put(offset, type);
-                            }
-                            successorNamesMap.put(offset, name);
-                        } else if (field.isAnnotationPresent(Node.Data.class)) {
-                            dataOffsets.add(offset);
-                            dataTypes.add(type);
-                            dataNames.add(name);
-                        } else {
-                            assert !NODE_CLASS.isAssignableFrom(type) || name.equals("Null") : "suspicious node field: " + field;
-                            assert !INPUT_LIST_CLASS.isAssignableFrom(type) : "suspicious node input list field: " + field;
-                            assert !SUCCESSOR_LIST_CLASS.isAssignableFrom(type) : "suspicious node successor list field: " + field;
-                        }
-                    }
+        /**
+         * Sorts non-list edges before list edges.
+         */
+        @Override
+        public int compareTo(FieldsScanner.FieldInfo o) {
+            if (NodeList.class.isAssignableFrom(o.type)) {
+                if (!NodeList.class.isAssignableFrom(type)) {
+                    return -1;
                 }
-                currentClazz = currentClazz.getSuperclass();
-            } while (currentClazz != Node.class);
+            } else {
+                if (NodeList.class.isAssignableFrom(type)) {
+                    return 1;
+                }
+            }
+            return super.compareTo(o);
         }
     }
 
-    private static <T> T[] arrayUsingSortedOffsets(Map<Long, T> map, long[] sortedOffsets, T[] result) {
-        for (int i = 0; i < sortedOffsets.length; i++) {
-            result[i] = map.get(sortedOffsets[i]);
+    /**
+     * Describes a field representing an {@linkplain Type#Inputs input} edge in a node.
+     */
+    protected static class InputInfo extends EdgeInfo {
+        final InputType inputType;
+        final boolean optional;
+
+        public InputInfo(long offset, String name, Class<?> type, Class<?> declaringClass, InputType inputType, boolean optional) {
+            super(offset, name, type, declaringClass);
+            this.inputType = inputType;
+            this.optional = optional;
         }
-        return result;
+
+        @Override
+        public String toString() {
+            return super.toString() + "{inputType=" + inputType + ", optional=" + optional + "}";
+        }
     }
 
-    private static long[] sortedLongCopy(ArrayList<Long> list1, ArrayList<Long> list2) {
-        Collections.sort(list1);
-        Collections.sort(list2);
-        long[] result = new long[list1.size() + list2.size()];
-        for (int i = 0; i < list1.size(); i++) {
-            result[i] = list1.get(i);
+    protected static class NodeFieldsScanner extends FieldsScanner {
+
+        public final ArrayList<InputInfo> inputs = new ArrayList<>();
+        public final ArrayList<EdgeInfo> successors = new ArrayList<>();
+        int directInputs;
+        int directSuccessors;
+
+        protected NodeFieldsScanner(FieldsScanner.CalcOffset calc, NodeClass<?> superNodeClass) {
+            super(calc);
+            if (superNodeClass != null) {
+                translateInto(superNodeClass.inputs, inputs);
+                translateInto(superNodeClass.successors, successors);
+                translateInto(superNodeClass.data, data);
+                directInputs = superNodeClass.inputs.getDirectCount();
+                directSuccessors = superNodeClass.successors.getDirectCount();
+            }
         }
-        for (int i = 0; i < list2.size(); i++) {
-            result[list1.size() + i] = list2.get(i);
+
+        @SuppressWarnings("try")
+        @Override
+        protected void scanField(Field field, long offset) {
+            Input inputAnnotation = getAnnotationTimed(field, Node.Input.class);
+            OptionalInput optionalInputAnnotation = getAnnotationTimed(field, Node.OptionalInput.class);
+            Successor successorAnnotation = getAnnotationTimed(field, Successor.class);
+            try (DebugCloseable s = Init_FieldScanningInner.start()) {
+                Class<?> type = field.getType();
+                int modifiers = field.getModifiers();
+
+                if (inputAnnotation != null || optionalInputAnnotation != null) {
+                    assert successorAnnotation == null : "field cannot be both input and successor";
+                    if (INPUT_LIST_CLASS.isAssignableFrom(type)) {
+                        // NodeInputList fields should not be final since they are
+                        // written (via Unsafe) in clearInputs()
+                        GraalError.guarantee(!Modifier.isFinal(modifiers), "NodeInputList input field %s should not be final", field);
+                        GraalError.guarantee(!Modifier.isPublic(modifiers), "NodeInputList input field %s should not be public", field);
+                    } else {
+                        GraalError.guarantee(NODE_CLASS.isAssignableFrom(type) || type.isInterface(), "invalid input type: %s", type);
+                        GraalError.guarantee(!Modifier.isFinal(modifiers), "Node input field %s should not be final", field);
+                        directInputs++;
+                    }
+                    InputType inputType;
+                    if (inputAnnotation != null) {
+                        assert optionalInputAnnotation == null : "inputs can either be optional or non-optional";
+                        inputType = inputAnnotation.value();
+                    } else {
+                        inputType = optionalInputAnnotation.value();
+                    }
+                    inputs.add(new InputInfo(offset, field.getName(), type, field.getDeclaringClass(), inputType, field.isAnnotationPresent(Node.OptionalInput.class)));
+                } else if (successorAnnotation != null) {
+                    if (SUCCESSOR_LIST_CLASS.isAssignableFrom(type)) {
+                        // NodeSuccessorList fields should not be final since they are
+                        // written (via Unsafe) in clearSuccessors()
+                        GraalError.guarantee(!Modifier.isFinal(modifiers), "NodeSuccessorList successor field % should not be final", field);
+                        GraalError.guarantee(!Modifier.isPublic(modifiers), "NodeSuccessorList successor field %s should not be public", field);
+                    } else {
+                        GraalError.guarantee(NODE_CLASS.isAssignableFrom(type), "invalid successor type: %s", type);
+                        GraalError.guarantee(!Modifier.isFinal(modifiers), "Node successor field %s should not be final", field);
+                        directSuccessors++;
+                    }
+                    successors.add(new EdgeInfo(offset, field.getName(), type, field.getDeclaringClass()));
+                } else {
+                    GraalError.guarantee(!NODE_CLASS.isAssignableFrom(type) || field.getName().equals("Null"), "suspicious node field: %s", field);
+                    GraalError.guarantee(!INPUT_LIST_CLASS.isAssignableFrom(type), "suspicious node input list field: %s", field);
+                    GraalError.guarantee(!SUCCESSOR_LIST_CLASS.isAssignableFrom(type), "suspicious node successor list field: %s", field);
+                    super.scanField(field, offset);
+                }
+            }
         }
-        return result;
     }
 
     @Override
     public String toString() {
         StringBuilder str = new StringBuilder();
-        str.append("NodeClass ").append(clazz.getSimpleName()).append(" [");
-        for (int i = 0; i < inputOffsets.length; i++) {
-            str.append(i == 0 ? "" : ", ").append(inputOffsets[i]);
-        }
+        str.append("NodeClass ").append(getClazz().getSimpleName()).append(" [");
+        inputs.appendFields(str);
         str.append("] [");
-        for (int i = 0; i < successorOffsets.length; i++) {
-            str.append(i == 0 ? "" : ", ").append(successorOffsets[i]);
-        }
+        successors.appendFields(str);
         str.append("] [");
-        for (int i = 0; i < dataOffsets.length; i++) {
-            str.append(i == 0 ? "" : ", ").append(dataOffsets[i]);
-        }
+        data.appendFields(str);
         str.append("]");
         return str.toString();
     }
 
-    public static final class Position {
-        public final boolean input;
-        public final int index;
-        public final int subIndex;
-
-        public Position(boolean input, int index, int subIndex) {
-            this.input = input;
-            this.index = index;
-            this.subIndex = subIndex;
-        }
-
-        @Override
-        public String toString() {
-            return (input ? "input " : "successor ") + index + "/" + subIndex;
-        }
-
-        public Node get(Node node) {
-            return node.getNodeClass().get(node, this);
-        }
-
-        public void set(Node node, Node value) {
-            node.getNodeClass().set(node, this, value);
-        }
-
-        public boolean isValidFor(Node node, Node from) {
-            return node.getNodeClass().isValid(this, from.getNodeClass());
-        }
-
-        @Override
-        public int hashCode() {
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + index;
-            result = prime * result + (input ? 1231 : 1237);
-            result = prime * result + subIndex;
-            return result;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj == null) {
-                return false;
-            }
-            if (getClass() != obj.getClass()) {
-                return false;
-            }
-            Position other = (Position) obj;
-            if (index != other.index) {
-                return false;
-            }
-            if (input != other.input) {
-                return false;
-            }
-            if (subIndex != other.subIndex) {
-                return false;
-            }
-            return true;
-        }
-    }
-
-    private static Node getNode(Node node, long offset) {
-        return (Node) unsafe.getObject(node, offset);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static NodeList<Node> getNodeList(Node node, long offset) {
-        return (NodeList<Node>) unsafe.getObject(node, offset);
-    }
-
-    private static void putNode(Node node, long offset, Node value) {
-        unsafe.putObject(node, offset, value);
-    }
-
-    private static void putNodeList(Node node, long offset, NodeList value) {
-        unsafe.putObject(node, offset, value);
-    }
-
-    /**
-     * An iterator that will iterate over the fields given in {@link offsets}.
-     * The first {@ directCount} offsets are treated as fields of type {@link Node}, while the rest of the fields are treated as {@link NodeList}s.
-     * All elements of these NodeLists will be visited by the iterator as well.
-     * This iterator can be used to iterate over the inputs or successors of a node.
-     *
-     * An iterator of this type will not return null values, unless the field values are modified concurrently.
-     * Concurrent modifications are detected by an assertion on a best-effort basis.
-     */
-    public static final class NodeClassIterator implements Iterator<Node> {
-
-        private final Node node;
-        private final int modCount;
-        private final int directCount;
-        private final long[] offsets;
-        private int index;
-        private int subIndex;
-
-        /**
-         * Creates an iterator that will iterate over fields in the given node.
-         * @param node the node which contains the fields.
-         * @param offsets the offsets of the fields.
-         * @param directCount the number of fields that should be treated as fields of type {@link Node}, the rest are treated as {@link NodeList}s.
-         */
-        private NodeClassIterator(Node node, long[] offsets, int directCount) {
-            this.node = node;
-            this.modCount = node.modCount();
-            this.offsets = offsets;
-            this.directCount = directCount;
-            index = NOT_ITERABLE;
-            subIndex = 0;
-            forward();
-        }
-
-        private void forward() {
-            if (index < directCount) {
-                index++;
-                while (index < directCount) {
-                    Node element = getNode(node, offsets[index]);
-                    if (element != null) {
-                        return;
-                    }
-                    index++;
-                }
-            } else {
-                subIndex++;
-            }
-            while (index < offsets.length) {
-                NodeList<Node> list = getNodeList(node, offsets[index]);
-                while (subIndex < list.size()) {
-                    if (list.get(subIndex) != null) {
-                        return;
-                    }
-                    subIndex++;
-                }
-                subIndex = 0;
-                index++;
-            }
-        }
-
-        private Node nextElement() {
-            if (index < directCount) {
-                return getNode(node, offsets[index]);
-            } else  if (index < offsets.length) {
-                NodeList<Node> list = getNodeList(node, offsets[index]);
-                return list.get(subIndex);
-            }
-            return null;
-        }
-
-        @Override
-        public boolean hasNext() {
-            try {
-                return index < offsets.length;
-            } finally {
-                assert modCount == node.modCount() : "must not be modified";
-            }
-        }
-
-        @Override
-        public Node next() {
-            try {
-                return nextElement();
-            } finally {
-                forward();
-                assert modCount == node.modCount();
-            }
-        }
-
-        public Position nextPosition() {
-            try {
-                if (index < directCount) {
-                    return new Position(offsets == node.getNodeClass().inputOffsets, index, NOT_ITERABLE);
-                } else {
-                    return new Position(offsets == node.getNodeClass().inputOffsets, index, subIndex);
-                }
-            } finally {
-                forward();
-                assert modCount == node.modCount();
-            }
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
+    private static int deepHashCode0(Object o) {
+        if (o instanceof Object[]) {
+            return Arrays.deepHashCode((Object[]) o);
+        } else if (o instanceof byte[]) {
+            return Arrays.hashCode((byte[]) o);
+        } else if (o instanceof short[]) {
+            return Arrays.hashCode((short[]) o);
+        } else if (o instanceof int[]) {
+            return Arrays.hashCode((int[]) o);
+        } else if (o instanceof long[]) {
+            return Arrays.hashCode((long[]) o);
+        } else if (o instanceof char[]) {
+            return Arrays.hashCode((char[]) o);
+        } else if (o instanceof float[]) {
+            return Arrays.hashCode((float[]) o);
+        } else if (o instanceof double[]) {
+            return Arrays.hashCode((double[]) o);
+        } else if (o instanceof boolean[]) {
+            return Arrays.hashCode((boolean[]) o);
+        } else if (o != null) {
+            return o.hashCode();
+        } else {
+            return 0;
         }
     }
 
@@ -520,25 +562,42 @@ public class NodeClass {
         int number = 0;
         if (canGVN) {
             number = startGVNNumber;
-            for (int i = 0; i < dataOffsets.length; ++i) {
-                Class<?> type = dataTypes[i];
+            for (int i = 0; i < data.getCount(); ++i) {
+                Class<?> type = data.getType(i);
                 if (type.isPrimitive()) {
                     if (type == Integer.TYPE) {
-                        int intValue = unsafe.getInt(n, dataOffsets[i]);
+                        int intValue = data.getInt(n, i);
                         number += intValue;
+                    } else if (type == Long.TYPE) {
+                        long longValue = data.getLong(n, i);
+                        number += longValue ^ (longValue >>> 32);
                     } else if (type == Boolean.TYPE) {
-                        boolean booleanValue = unsafe.getBoolean(n, dataOffsets[i]);
+                        boolean booleanValue = data.getBoolean(n, i);
                         if (booleanValue) {
                             number += 7;
                         }
+                    } else if (type == Float.TYPE) {
+                        float floatValue = data.getFloat(n, i);
+                        number += Float.floatToRawIntBits(floatValue);
+                    } else if (type == Double.TYPE) {
+                        double doubleValue = data.getDouble(n, i);
+                        long longValue = Double.doubleToRawLongBits(doubleValue);
+                        number += longValue ^ (longValue >>> 32);
+                    } else if (type == Short.TYPE) {
+                        short shortValue = data.getShort(n, i);
+                        number += shortValue;
+                    } else if (type == Character.TYPE) {
+                        char charValue = data.getChar(n, i);
+                        number += charValue;
+                    } else if (type == Byte.TYPE) {
+                        byte byteValue = data.getByte(n, i);
+                        number += byteValue;
                     } else {
-                        assert false;
+                        assert false : "unhandled property type: " + type;
                     }
                 } else {
-                    Object o = unsafe.getObject(n, dataOffsets[i]);
-                    if (o != null) {
-                        number += o.hashCode();
-                    }
+                    Object o = data.getObject(n, i);
+                    number += deepHashCode0(o);
                 }
                 number *= 13;
             }
@@ -546,58 +605,95 @@ public class NodeClass {
         return number;
     }
 
-    /**
-     * Populates a given map with the names and values of all fields marked with @{@link Data}.
-     * @param node the node from which to take the values.
-     * @param properties a map that will be populated.
-     */
-    public void getDebugProperties(Node node, Map<Object, Object> properties) {
-        for (int i = 0; i < dataOffsets.length; ++i) {
-            Class<?> type = dataTypes[i];
-            Object value = null;
-            if (type.isPrimitive()) {
-                if (type == Integer.TYPE) {
-                    value = unsafe.getInt(node, dataOffsets[i]);
-                } else if (type == Boolean.TYPE) {
-                    value = unsafe.getBoolean(node, dataOffsets[i]);
-                } else {
-                    assert false;
-                }
-            } else {
-                value = unsafe.getObject(node, dataOffsets[i]);
-            }
-            properties.put("data." + dataNames[i], value);
+    private static boolean deepEquals0(Object e1, Object e2) {
+        assert e1 != null;
+        boolean eq;
+        if (e1 instanceof Object[] && e2 instanceof Object[]) {
+            eq = Arrays.deepEquals((Object[]) e1, (Object[]) e2);
+        } else if (e1 instanceof byte[] && e2 instanceof byte[]) {
+            eq = Arrays.equals((byte[]) e1, (byte[]) e2);
+        } else if (e1 instanceof short[] && e2 instanceof short[]) {
+            eq = Arrays.equals((short[]) e1, (short[]) e2);
+        } else if (e1 instanceof int[] && e2 instanceof int[]) {
+            eq = Arrays.equals((int[]) e1, (int[]) e2);
+        } else if (e1 instanceof long[] && e2 instanceof long[]) {
+            eq = Arrays.equals((long[]) e1, (long[]) e2);
+        } else if (e1 instanceof char[] && e2 instanceof char[]) {
+            eq = Arrays.equals((char[]) e1, (char[]) e2);
+        } else if (e1 instanceof float[] && e2 instanceof float[]) {
+            eq = Arrays.equals((float[]) e1, (float[]) e2);
+        } else if (e1 instanceof double[] && e2 instanceof double[]) {
+            eq = Arrays.equals((double[]) e1, (double[]) e2);
+        } else if (e1 instanceof boolean[] && e2 instanceof boolean[]) {
+            eq = Arrays.equals((boolean[]) e1, (boolean[]) e2);
+        } else {
+            eq = e1.equals(e2);
         }
+        return eq;
     }
 
-    public boolean valueEqual(Node a, Node b) {
-        if (!canGVN || a.getNodeClass() != b.getNodeClass()) {
-            return a == b;
-        }
-        for (int i = 0; i < dataOffsets.length; ++i) {
-            Class<?> type = dataTypes[i];
+    public boolean dataEquals(Node a, Node b) {
+        assert a.getClass() == b.getClass();
+        for (int i = 0; i < data.getCount(); ++i) {
+            Class<?> type = data.getType(i);
             if (type.isPrimitive()) {
                 if (type == Integer.TYPE) {
-                    int aInt = unsafe.getInt(a, dataOffsets[i]);
-                    int bInt = unsafe.getInt(b, dataOffsets[i]);
+                    int aInt = data.getInt(a, i);
+                    int bInt = data.getInt(b, i);
                     if (aInt != bInt) {
                         return false;
                     }
                 } else if (type == Boolean.TYPE) {
-                    boolean aBoolean = unsafe.getBoolean(a, dataOffsets[i]);
-                    boolean bBoolean = unsafe.getBoolean(b, dataOffsets[i]);
+                    boolean aBoolean = data.getBoolean(a, i);
+                    boolean bBoolean = data.getBoolean(b, i);
                     if (aBoolean != bBoolean) {
                         return false;
                     }
+                } else if (type == Long.TYPE) {
+                    long aLong = data.getLong(a, i);
+                    long bLong = data.getLong(b, i);
+                    if (aLong != bLong) {
+                        return false;
+                    }
+                } else if (type == Float.TYPE) {
+                    float aFloat = data.getFloat(a, i);
+                    float bFloat = data.getFloat(b, i);
+                    if (aFloat != bFloat) {
+                        return false;
+                    }
+                } else if (type == Double.TYPE) {
+                    double aDouble = data.getDouble(a, i);
+                    double bDouble = data.getDouble(b, i);
+                    if (aDouble != bDouble) {
+                        return false;
+                    }
+                } else if (type == Short.TYPE) {
+                    short aShort = data.getShort(a, i);
+                    short bShort = data.getShort(b, i);
+                    if (aShort != bShort) {
+                        return false;
+                    }
+                } else if (type == Character.TYPE) {
+                    char aChar = data.getChar(a, i);
+                    char bChar = data.getChar(b, i);
+                    if (aChar != bChar) {
+                        return false;
+                    }
+                } else if (type == Byte.TYPE) {
+                    byte aByte = data.getByte(a, i);
+                    byte bByte = data.getByte(b, i);
+                    if (aByte != bByte) {
+                        return false;
+                    }
                 } else {
-                    assert false;
+                    assert false : "unhandled type: " + type;
                 }
             } else {
-                Object objectA = unsafe.getObject(a, dataOffsets[i]);
-                Object objectB = unsafe.getObject(b, dataOffsets[i]);
+                Object objectA = data.getObject(a, i);
+                Object objectB = data.getObject(b, i);
                 if (objectA != objectB) {
                     if (objectA != null && objectB != null) {
-                        if (!(objectA.equals(objectB))) {
+                        if (!deepEquals0(objectA, objectB)) {
                             return false;
                         }
                     } else {
@@ -609,357 +705,657 @@ public class NodeClass {
         return true;
     }
 
-    public boolean isValid(Position pos, NodeClass from) {
-        long[] offsets = pos.input ? inputOffsets : successorOffsets;
-        if (pos.index >= offsets.length) {
+    public boolean isValid(Position pos, NodeClass<?> from, Edges fromEdges) {
+        if (this == from) {
+            return true;
+        }
+        Edges toEdges = getEdges(fromEdges.type());
+        if (pos.getIndex() >= toEdges.getCount()) {
             return false;
         }
-        long[] fromOffsets = pos.input ? from.inputOffsets : from.successorOffsets;
-        if (pos.index >= fromOffsets.length) {
+        if (pos.getIndex() >= fromEdges.getCount()) {
             return false;
         }
-        return offsets[pos.index] == fromOffsets[pos.index];
+        return toEdges.isSame(fromEdges, pos.getIndex());
     }
 
-    public Node get(Node node, Position pos) {
-        long offset = pos.input ? inputOffsets[pos.index] : successorOffsets[pos.index];
-        if (pos.subIndex == NOT_ITERABLE) {
-            return getNode(node, offset);
-        } else {
-            return getNodeList(node, offset).get(pos.subIndex);
-        }
-    }
-
-    public String getName(Position pos) {
-        return pos.input ? inputNames[pos.index] : successorNames[pos.index];
-    }
-
-    private void set(Node node, Position pos, Node x) {
-        long offset = pos.input ? inputOffsets[pos.index] : successorOffsets[pos.index];
-        if (pos.subIndex == NOT_ITERABLE) {
-            Node old = getNode(node,  offset);
-            assert x == null || (pos.input ? inputTypes : successorTypes)[pos.index].isAssignableFrom(x.getClass()) : this + ".set(node, pos, " + x + ") while type is " + (pos.input ? inputTypes : successorTypes)[pos.index];
-            putNode(node, offset, x);
-            if (pos.input) {
-                node.updateUsages(old, x);
-            } else {
-                node.updatePredecessors(old, x);
-            }
-        } else {
-            NodeList<Node> list = getNodeList(node, offset);
-            if (pos.subIndex < list.size()) {
-                list.set(pos.subIndex, x);
-            } else {
-                while (pos.subIndex < list.size() - 1) {
-                    list.add(null);
+    static void updateEdgesInPlace(Node node, InplaceUpdateClosure duplicationReplacement, Edges edges) {
+        int index = 0;
+        Type curType = edges.type();
+        int directCount = edges.getDirectCount();
+        final long[] curOffsets = edges.getOffsets();
+        while (index < directCount) {
+            Node edge = Edges.getNode(node, curOffsets, index);
+            if (edge != null) {
+                Node newEdge = duplicationReplacement.replacement(edge, curType);
+                if (curType == Edges.Type.Inputs) {
+                    node.updateUsages(null, newEdge);
+                } else {
+                    node.updatePredecessor(null, newEdge);
                 }
-                list.add(x);
+                edges.initializeNode(node, index, newEdge);
+            }
+            index++;
+        }
+
+        while (index < edges.getCount()) {
+            NodeList<Node> list = Edges.getNodeList(node, curOffsets, index);
+            if (list != null) {
+                edges.initializeList(node, index, updateEdgeListCopy(node, list, duplicationReplacement, curType));
+            }
+            index++;
+        }
+    }
+
+    void updateInputSuccInPlace(Node node, InplaceUpdateClosure duplicationReplacement) {
+        updateEdgesInPlace(node, duplicationReplacement, inputs);
+        updateEdgesInPlace(node, duplicationReplacement, successors);
+    }
+
+    private static NodeList<Node> updateEdgeListCopy(Node node, NodeList<Node> list, InplaceUpdateClosure duplicationReplacement, Edges.Type type) {
+        NodeList<Node> result = type == Edges.Type.Inputs ? new NodeInputList<>(node, list.size()) : new NodeSuccessorList<>(node, list.size());
+
+        for (int i = 0; i < list.count(); ++i) {
+            Node oldNode = list.get(i);
+            if (oldNode != null) {
+                Node newNode = duplicationReplacement.replacement(oldNode, type);
+                result.set(i, newNode);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Gets the input or successor edges defined by this node class.
+     */
+    public Edges getEdges(Edges.Type type) {
+        return type == Edges.Type.Inputs ? inputs : successors;
+    }
+
+    public Edges getInputEdges() {
+        return inputs;
+    }
+
+    public Edges getSuccessorEdges() {
+        return successors;
+    }
+
+    /**
+     * Returns a newly allocated node for which no subclass-specific constructor has been called.
+     */
+    @SuppressWarnings("unchecked")
+    public Node allocateInstance() {
+        try {
+            Node node = (Node) UNSAFE.allocateInstance(getJavaClass());
+            node.init((NodeClass<? extends Node>) this);
+            return node;
+        } catch (InstantiationException ex) {
+            throw shouldNotReachHere(ex);
+        }
+    }
+
+    public Class<T> getJavaClass() {
+        return getClazz();
+    }
+
+    /**
+     * The template used to build the {@link Verbosity#Name} version. Variable parts are specified
+     * using &#123;i#inputName&#125; or &#123;p#propertyName&#125;.
+     */
+    public String getNameTemplate() {
+        return nameTemplate.isEmpty() ? shortName() : nameTemplate;
+    }
+
+    interface InplaceUpdateClosure {
+
+        Node replacement(Node node, Edges.Type type);
+    }
+
+    static Map<Node, Node> addGraphDuplicate(final Graph graph, final Graph oldGraph, int estimatedNodeCount, Iterable<? extends Node> nodes, final DuplicationReplacement replacements) {
+        final Map<Node, Node> newNodes;
+        int denseThreshold = oldGraph.getNodeCount() + oldGraph.getNodesDeletedSinceLastCompression() >> 4;
+        if (estimatedNodeCount > denseThreshold) {
+            // Use dense map
+            newNodes = new NodeNodeMap(oldGraph);
+        } else {
+            // Use sparse map
+            newNodes = newIdentityMap();
+        }
+        createNodeDuplicates(graph, nodes, replacements, newNodes);
+
+        InplaceUpdateClosure replacementClosure = new InplaceUpdateClosure() {
+
+            @Override
+            public Node replacement(Node node, Edges.Type type) {
+                Node target = newNodes.get(node);
+                if (target == null) {
+                    Node replacement = node;
+                    if (replacements != null) {
+                        replacement = replacements.replacement(node);
+                    }
+                    if (replacement != node) {
+                        target = replacement;
+                    } else if (node.graph() == graph && type == Edges.Type.Inputs) {
+                        // patch to the outer world
+                        target = node;
+                    }
+
+                }
+                return target;
+            }
+
+        };
+
+        // re-wire inputs
+        for (Node oldNode : nodes) {
+            Node node = newNodes.get(oldNode);
+            NodeClass<?> nodeClass = node.getNodeClass();
+            if (replacements == null || replacements.replacement(oldNode) == oldNode) {
+                nodeClass.updateInputSuccInPlace(node, replacementClosure);
+            } else {
+                transferEdgesDifferentNodeClass(graph, replacements, newNodes, oldNode, node);
+            }
+        }
+
+        return newNodes;
+    }
+
+    private static void createNodeDuplicates(final Graph graph, Iterable<? extends Node> nodes, final DuplicationReplacement replacements, final Map<Node, Node> newNodes) {
+        for (Node node : nodes) {
+            if (node != null) {
+                assert !node.isDeleted() : "trying to duplicate deleted node: " + node;
+                Node replacement = node;
+                if (replacements != null) {
+                    replacement = replacements.replacement(node);
+                }
+                if (replacement != node) {
+                    if (Fingerprint.ENABLED) {
+                        Fingerprint.submit("replacing %s with %s", node, replacement);
+                    }
+                    assert replacement != null;
+                    newNodes.put(node, replacement);
+                } else {
+                    if (Fingerprint.ENABLED) {
+                        Fingerprint.submit("duplicating %s", node);
+                    }
+                    Node newNode = node.clone(graph, WithAllEdges);
+                    assert newNode.getNodeClass().isLeafNode() || newNode.hasNoUsages();
+                    assert newNode.getClass() == node.getClass();
+                    newNodes.put(node, newNode);
+                }
             }
         }
     }
 
-    public NodeInputsIterable getInputIterable(final Node node) {
-        assert clazz.isInstance(node);
-        return new NodeInputsIterable() {
+    private static void transferEdgesDifferentNodeClass(final Graph graph, final DuplicationReplacement replacements, final Map<Node, Node> newNodes, Node oldNode, Node node) {
+        transferEdges(graph, replacements, newNodes, oldNode, node, Edges.Type.Inputs);
+        transferEdges(graph, replacements, newNodes, oldNode, node, Edges.Type.Successors);
+    }
 
-            @Override
-            public NodeClassIterator iterator() {
-                return new NodeClassIterator(node, inputOffsets, directInputCount);
+    private static void transferEdges(final Graph graph, final DuplicationReplacement replacements, final Map<Node, Node> newNodes, Node oldNode, Node node, Edges.Type type) {
+        NodeClass<?> nodeClass = node.getNodeClass();
+        NodeClass<?> oldNodeClass = oldNode.getNodeClass();
+        Edges oldEdges = oldNodeClass.getEdges(type);
+        for (Position pos : oldEdges.getPositionsIterable(oldNode)) {
+            if (!nodeClass.isValid(pos, oldNodeClass, oldEdges)) {
+                continue;
             }
+            Node oldEdge = pos.get(oldNode);
+            if (oldEdge != null) {
+                Node target = newNodes.get(oldEdge);
+                if (target == null) {
+                    Node replacement = oldEdge;
+                    if (replacements != null) {
+                        replacement = replacements.replacement(oldEdge);
+                    }
+                    if (replacement != oldEdge) {
+                        target = replacement;
+                    } else if (type == Edges.Type.Inputs && oldEdge.graph() == graph) {
+                        // patch to the outer world
+                        target = oldEdge;
+                    }
+                }
+                pos.set(node, target);
+            }
+        }
+    }
+
+    /**
+     * @returns true if the node has no inputs and no successors
+     */
+    public boolean isLeafNode() {
+        return isLeafNode;
+    }
+
+    public long inputsIteration() {
+        return inputsIteration;
+    }
+
+    /**
+     * An iterator that will iterate over edges.
+     *
+     * An iterator of this type will not return null values, unless edges are modified concurrently.
+     * Concurrent modifications are detected by an assertion on a best-effort basis.
+     */
+    private static class RawEdgesIterator implements Iterator<Node> {
+        protected final Node node;
+        protected long mask;
+        protected Node nextValue;
+
+        RawEdgesIterator(Node node, long mask) {
+            this.node = node;
+            this.mask = mask;
+        }
+
+        @Override
+        public boolean hasNext() {
+            Node next = nextValue;
+            if (next != null) {
+                return true;
+            } else {
+                nextValue = forward();
+                return nextValue != null;
+            }
+        }
+
+        private Node forward() {
+            while (mask != 0) {
+                Node next = getInput();
+                mask = advanceInput();
+                if (next != null) {
+                    return next;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public Node next() {
+            Node next = nextValue;
+            if (next == null) {
+                next = forward();
+                if (next == null) {
+                    throw new NoSuchElementException();
+                } else {
+                    return next;
+                }
+            } else {
+                nextValue = null;
+                return next;
+            }
+        }
+
+        public final long advanceInput() {
+            int state = (int) mask & 0x03;
+            if (state == 0) {
+                // Skip normal field.
+                return mask >>> NEXT_EDGE;
+            } else if (state == 1) {
+                // We are iterating a node list.
+                if ((mask & 0xFFFF00) != 0) {
+                    // Node list count is non-zero, decrease by 1.
+                    return mask - 0x100;
+                } else {
+                    // Node list is finished => go to next input.
+                    return mask >>> 24;
+                }
+            } else {
+                // Need to expand node list.
+                NodeList<?> nodeList = Edges.getNodeListUnsafe(node, mask & 0xFC);
+                if (nodeList != null) {
+                    int size = nodeList.size();
+                    if (size != 0) {
+                        // Set pointer to upper most index of node list.
+                        return ((mask >>> NEXT_EDGE) << 24) | (mask & 0xFD) | ((size - 1) << NEXT_EDGE);
+                    }
+                }
+                // Node list is empty or null => skip.
+                return mask >>> NEXT_EDGE;
+            }
+        }
+
+        public Node getInput() {
+            int state = (int) mask & 0x03;
+            if (state == 0) {
+                return Edges.getNodeUnsafe(node, mask & 0xFC);
+            } else if (state == 1) {
+                // We are iterating a node list.
+                NodeList<?> nodeList = Edges.getNodeListUnsafe(node, mask & 0xFC);
+                return nodeList.nodes[nodeList.size() - 1 - (int) ((mask >>> NEXT_EDGE) & 0xFFFF)];
+            } else {
+                // Node list needs to expand first.
+                return null;
+            }
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
+
+        public Position nextPosition() {
+            return null;
+        }
+    }
+
+    private static final class RawEdgesWithModCountIterator extends RawEdgesIterator {
+        private final int modCount;
+
+        private RawEdgesWithModCountIterator(Node node, long mask) {
+            super(node, mask);
+            assert isModificationCountsEnabled();
+            this.modCount = node.modCount();
+        }
+
+        @Override
+        public boolean hasNext() {
+            try {
+                return super.hasNext();
+            } finally {
+                assert modCount == node.modCount() : "must not be modified";
+            }
+        }
+
+        @Override
+        public Node next() {
+            try {
+                return super.next();
+            } finally {
+                assert modCount == node.modCount() : "must not be modified";
+            }
+        }
+
+        @Override
+        public Position nextPosition() {
+            try {
+                return super.nextPosition();
+            } finally {
+                assert modCount == node.modCount();
+            }
+        }
+    }
+
+    public NodeIterable<Node> getSuccessorIterable(final Node node) {
+        long mask = this.successorIteration;
+        return new NodeIterable<Node>() {
 
             @Override
-            public boolean contains(Node other) {
-                return inputContains(node, other);
+            public Iterator<Node> iterator() {
+                if (isModificationCountsEnabled()) {
+                    return new RawEdgesWithModCountIterator(node, mask);
+                } else {
+                    return new RawEdgesIterator(node, mask);
+                }
             }
         };
     }
 
-    public NodeSuccessorsIterable getSuccessorIterable(final Node node) {
-        assert clazz.isInstance(node);
-        return new NodeSuccessorsIterable() {
-            @Override
-            public NodeClassIterator iterator() {
-                return new NodeClassIterator(node, successorOffsets, directSuccessorCount);
-            }
+    public NodeIterable<Node> getInputIterable(final Node node) {
+        long mask = this.inputsIteration;
+        return new NodeIterable<Node>() {
 
             @Override
-            public boolean contains(Node other) {
-                return successorContains(node, other);
+            public Iterator<Node> iterator() {
+                if (isModificationCountsEnabled()) {
+                    return new RawEdgesWithModCountIterator(node, mask);
+                } else {
+                    return new RawEdgesIterator(node, mask);
+                }
             }
         };
     }
 
-    public boolean replaceFirstInput(Node node, Node old, Node other) {
-        int index = 0;
-        while (index < directInputCount) {
-            Node input = getNode(node, inputOffsets[index]);
-            if (input == old) {
-                assert other == null || inputTypes[index].isAssignableFrom(other.getClass()); // : "Can not assign " + other.getClass() + " to " + inputTypes[index] + " in " + node;
-                putNode(node, inputOffsets[index], other);
-                return true;
-            }
-            index++;
-        }
-        while (index < inputOffsets.length) {
-            NodeList<Node> list = getNodeList(node, inputOffsets[index]);
-            assert list != null : clazz;
-            if (list.replaceFirst(old, other)) {
-                return true;
-            }
-            index++;
-        }
-        return false;
+    public boolean equalSuccessors(Node node, Node other) {
+        return equalEdges(node, other, successorIteration);
     }
 
-    public boolean replaceFirstSuccessor(Node node, Node old, Node other) {
-        int index = 0;
-        while (index < directSuccessorCount) {
-            Node successor = getNode(node, successorOffsets[index]);
-            if (successor == old) {
-                assert other == null || successorTypes[index].isAssignableFrom(other.getClass()); // : successorTypes[index] + " is not compatible with " + other.getClass();
-                putNode(node, successorOffsets[index], other);
-                return true;
-            }
-            index++;
-        }
-        while (index < successorOffsets.length) {
-            NodeList<Node> list = getNodeList(node, successorOffsets[index]);
-            assert list != null : clazz + " " + successorOffsets[index] + " " + node;
-            if (list.replaceFirst(old, other)) {
-                return true;
-            }
-            index++;
-        }
-        return false;
+    public boolean equalInputs(Node node, Node other) {
+        return equalEdges(node, other, inputsIteration);
     }
 
-    /**
-     * Clear all inputs in the given node. This is accomplished by setting input fields to null and replacing input lists with new lists.
-     * (which is important so that this method can be used to clear the inputs of cloned nodes.)
-     * @param node the node to be cleared
-     */
-    public void clearInputs(Node node) {
-        int index = 0;
-        while (index < directInputCount) {
-            putNode(node, inputOffsets[index++], null);
-        }
-        while (index < inputOffsets.length) {
-            long curOffset = inputOffsets[index++];
-            int size = (getNodeList(node, curOffset)).initialSize;
-            // replacing with a new list object is the expected behavior!
-            putNodeList(node, curOffset, new NodeInputList<>(node, size));
-        }
-    }
-
-    /**
-     * Clear all successors in the given node. This is accomplished by setting successor fields to null and replacing successor lists with new lists.
-     * (which is important so that this method can be used to clear the successors of cloned nodes.)
-     * @param node the node to be cleared
-     */
-    public void clearSuccessors(Node node) {
-        int index = 0;
-        while (index < directSuccessorCount) {
-            putNode(node, successorOffsets[index++], null);
-        }
-        while (index < successorOffsets.length) {
-            long curOffset = successorOffsets[index++];
-            int size = getNodeList(node, curOffset).initialSize;
-            // replacing with a new list object is the expected behavior!
-            putNodeList(node, curOffset, new NodeSuccessorList<>(node, size));
-        }
-    }
-
-    /**
-     * Copies the inputs from node to newNode. The nodes are expected to be of the exact same NodeClass type.
-     * @param node the node from which the inputs should be copied.
-     * @param newNode the node to which the inputs should be copied.
-     */
-    public void copyInputs(Node node, Node newNode) {
-        assert node.getClass() == clazz && newNode.getClass() == clazz;
-
-        int index = 0;
-        while (index < directInputCount) {
-            putNode(newNode, inputOffsets[index], getNode(node, inputOffsets[index]));
-            index++;
-        }
-        while (index < inputOffsets.length) {
-            NodeList<Node> list = getNodeList(newNode, inputOffsets[index]);
-            list.copy(getNodeList(node, inputOffsets[index]));
-            index++;
-        }
-    }
-
-    /**
-     * Copies the successors from node to newNode. The nodes are expected to be of the exact same NodeClass type.
-     * @param node the node from which the successors should be copied.
-     * @param newNode the node to which the successors should be copied.
-     */
-    public void copySuccessors(Node node, Node newNode) {
-        assert node.getClass() == clazz && newNode.getClass() == clazz;
-
-        int index = 0;
-        while (index < directSuccessorCount) {
-            putNode(newNode, successorOffsets[index], getNode(node, successorOffsets[index]));
-            index++;
-        }
-        while (index < successorOffsets.length) {
-            NodeList<Node> list = getNodeList(newNode, successorOffsets[index]);
-            list.copy(getNodeList(node, successorOffsets[index]));
-            index++;
-        }
-    }
-
-    public boolean edgesEqual(Node node, Node other) {
-        assert node.getClass() == clazz && other.getClass() == clazz;
-
-        int index = 0;
-        while (index < directInputCount) {
-            if (getNode(other, inputOffsets[index]) != getNode(node, inputOffsets[index])) {
-                return false;
+    private boolean equalEdges(Node node, Node other, long mask) {
+        long myMask = mask;
+        assert other.getNodeClass() == this;
+        while (myMask != 0) {
+            long offset = (myMask & OFFSET_MASK);
+            Object v1 = UNSAFE.getObject(node, offset);
+            Object v2 = UNSAFE.getObject(other, offset);
+            if ((myMask & LIST_MASK) == 0) {
+                if (v1 != v2) {
+                    return false;
+                }
+            } else {
+                if (!Objects.equals(v1, v2)) {
+                    return false;
+                }
             }
-            index++;
-        }
-        while (index < inputOffsets.length) {
-            NodeList<Node> list = getNodeList(other, inputOffsets[index]);
-            if (!list.equals(getNodeList(node, inputOffsets[index]))) {
-                return false;
-            }
-            index++;
-        }
-
-        index = 0;
-        while (index < directSuccessorCount) {
-            if (getNode(other, successorOffsets[index]) != getNode(node, successorOffsets[index])) {
-                return false;
-            }
-            index++;
-        }
-        while (index < successorOffsets.length) {
-            NodeList<Node> list = getNodeList(other, successorOffsets[index]);
-            if (!list.equals(getNodeList(node, successorOffsets[index]))) {
-                return false;
-            }
-            index++;
+            myMask >>>= NEXT_EDGE;
         }
         return true;
     }
 
-    public boolean inputContains(Node node, Node other) {
-        assert node.getClass() == clazz;
-
-        int index = 0;
-        while (index < directInputCount) {
-            if (getNode(node, inputOffsets[index]) == other) {
-                return true;
+    public void pushInputs(Node node, NodeStack stack) {
+        long myMask = this.inputsIteration;
+        while (myMask != 0) {
+            long offset = (myMask & OFFSET_MASK);
+            if ((myMask & LIST_MASK) == 0) {
+                Node curNode = Edges.getNodeUnsafe(node, offset);
+                if (curNode != null) {
+                    stack.push(curNode);
+                }
+            } else {
+                pushAllHelper(stack, node, offset);
             }
-            index++;
+            myMask >>>= NEXT_EDGE;
         }
-        while (index < inputOffsets.length) {
-            NodeList<Node> list = getNodeList(node, inputOffsets[index]);
-            if (list.contains(other)) {
-                return true;
+    }
+
+    private static void pushAllHelper(NodeStack stack, Node node, long offset) {
+        NodeList<Node> list = Edges.getNodeListUnsafe(node, offset);
+        if (list != null) {
+            for (int i = 0; i < list.size(); ++i) {
+                Node curNode = list.get(i);
+                if (curNode != null) {
+                    stack.push(curNode);
+                }
             }
-            index++;
+        }
+    }
+
+    public void applySuccessors(Node node, EdgeVisitor consumer) {
+        applyEdges(node, consumer, this.successorIteration);
+    }
+
+    public void applyInputs(Node node, EdgeVisitor consumer) {
+        applyEdges(node, consumer, this.inputsIteration);
+    }
+
+    private static void applyEdges(Node node, EdgeVisitor consumer, long mask) {
+        long myMask = mask;
+        while (myMask != 0) {
+            long offset = (myMask & OFFSET_MASK);
+            if ((myMask & LIST_MASK) == 0) {
+                Node curNode = Edges.getNodeUnsafe(node, offset);
+                if (curNode != null) {
+                    Node newNode = consumer.apply(node, curNode);
+                    if (newNode != curNode) {
+                        UNSAFE.putObject(node, offset, newNode);
+                    }
+                }
+            } else {
+                applyHelper(node, consumer, offset);
+            }
+            myMask >>>= NEXT_EDGE;
+        }
+    }
+
+    private static void applyHelper(Node node, EdgeVisitor consumer, long offset) {
+        NodeList<Node> list = Edges.getNodeListUnsafe(node, offset);
+        if (list != null) {
+            for (int i = 0; i < list.size(); ++i) {
+                Node curNode = list.get(i);
+                if (curNode != null) {
+                    Node newNode = consumer.apply(node, curNode);
+                    if (newNode != curNode) {
+                        list.initialize(i, newNode);
+                    }
+                }
+            }
+        }
+    }
+
+    public void unregisterAtSuccessorsAsPredecessor(Node node) {
+        long myMask = this.successorIteration;
+        while (myMask != 0) {
+            long offset = (myMask & OFFSET_MASK);
+            if ((myMask & LIST_MASK) == 0) {
+                Node curNode = Edges.getNodeUnsafe(node, offset);
+                if (curNode != null) {
+                    node.updatePredecessor(curNode, null);
+                    UNSAFE.putObject(node, offset, null);
+                }
+            } else {
+                unregisterAtSuccessorsAsPredecessorHelper(node, offset);
+            }
+            myMask >>>= NEXT_EDGE;
+        }
+    }
+
+    private static void unregisterAtSuccessorsAsPredecessorHelper(Node node, long offset) {
+        NodeList<Node> list = Edges.getNodeListUnsafe(node, offset);
+        if (list != null) {
+            for (int i = 0; i < list.size(); ++i) {
+                Node curNode = list.get(i);
+                if (curNode != null) {
+                    node.updatePredecessor(curNode, null);
+                }
+            }
+            list.clearWithoutUpdate();
+        }
+    }
+
+    public void registerAtSuccessorsAsPredecessor(Node node) {
+        long myMask = this.successorIteration;
+        while (myMask != 0) {
+            long offset = (myMask & OFFSET_MASK);
+            if ((myMask & LIST_MASK) == 0) {
+                Node curNode = Edges.getNodeUnsafe(node, offset);
+                if (curNode != null) {
+                    assert curNode.isAlive() : "Successor not alive";
+                    node.updatePredecessor(null, curNode);
+                }
+            } else {
+                registerAtSuccessorsAsPredecessorHelper(node, offset);
+            }
+            myMask >>>= NEXT_EDGE;
+        }
+    }
+
+    private static void registerAtSuccessorsAsPredecessorHelper(Node node, long offset) {
+        NodeList<Node> list = Edges.getNodeListUnsafe(node, offset);
+        if (list != null) {
+            for (int i = 0; i < list.size(); ++i) {
+                Node curNode = list.get(i);
+                if (curNode != null) {
+                    assert curNode.isAlive() : "Successor not alive";
+                    node.updatePredecessor(null, curNode);
+                }
+            }
+        }
+    }
+
+    public boolean replaceFirstInput(Node node, Node key, Node replacement) {
+        return replaceFirstEdge(node, key, replacement, this.inputsIteration);
+    }
+
+    public boolean replaceFirstSuccessor(Node node, Node key, Node replacement) {
+        return replaceFirstEdge(node, key, replacement, this.successorIteration);
+    }
+
+    public static boolean replaceFirstEdge(Node node, Node key, Node replacement, long mask) {
+        long myMask = mask;
+        while (myMask != 0) {
+            long offset = (myMask & OFFSET_MASK);
+            if ((myMask & LIST_MASK) == 0) {
+                Object curNode = UNSAFE.getObject(node, offset);
+                if (curNode == key) {
+                    UNSAFE.putObject(node, offset, replacement);
+                    return true;
+                }
+            } else {
+                NodeList<Node> list = Edges.getNodeListUnsafe(node, offset);
+                if (list != null && list.replaceFirst(key, replacement)) {
+                    return true;
+                }
+            }
+            myMask >>>= NEXT_EDGE;
         }
         return false;
     }
 
-    public boolean successorContains(Node node, Node other) {
-        assert node.getClass() == clazz;
-
-        int index = 0;
-        while (index < directSuccessorCount) {
-            if (getNode(node, successorOffsets[index]) == other) {
-                return true;
+    public void registerAtInputsAsUsage(Node node) {
+        long myMask = this.inputsIteration;
+        while (myMask != 0) {
+            long offset = (myMask & OFFSET_MASK);
+            if ((myMask & LIST_MASK) == 0) {
+                Node curNode = Edges.getNodeUnsafe(node, offset);
+                if (curNode != null) {
+                    assert curNode.isAlive() : "Input not alive " + curNode;
+                    curNode.addUsage(node);
+                }
+            } else {
+                registerAtInputsAsUsageHelper(node, offset);
             }
-            index++;
+            myMask >>>= NEXT_EDGE;
         }
-        while (index < successorOffsets.length) {
-            NodeList<Node> list = getNodeList(node, successorOffsets[index]);
-            if (list.contains(other)) {
-                return true;
-            }
-            index++;
-        }
-        return false;
     }
 
-    public int directInputCount() {
-        return directInputCount;
+    private static void registerAtInputsAsUsageHelper(Node node, long offset) {
+        NodeList<Node> list = Edges.getNodeListUnsafe(node, offset);
+        if (list != null) {
+            for (int i = 0; i < list.size(); ++i) {
+                Node curNode = list.get(i);
+                if (curNode != null) {
+                    assert curNode.isAlive() : "Input not alive";
+                    curNode.addUsage(node);
+                }
+            }
+        }
     }
 
-    public int directSuccessorCount() {
-        return directSuccessorCount;
+    public void unregisterAtInputsAsUsage(Node node) {
+        long myMask = this.inputsIteration;
+        while (myMask != 0) {
+            long offset = (myMask & OFFSET_MASK);
+            if ((myMask & LIST_MASK) == 0) {
+                Node curNode = Edges.getNodeUnsafe(node, offset);
+                if (curNode != null) {
+                    node.removeThisFromUsages(curNode);
+                    if (curNode.hasNoUsages()) {
+                        node.maybeNotifyZeroUsages(curNode);
+                    }
+                    UNSAFE.putObject(node, offset, null);
+                }
+            } else {
+                unregisterAtInputsAsUsageHelper(node, offset);
+            }
+            myMask >>>= NEXT_EDGE;
+        }
     }
 
-    static Map<Node, Node> addGraphDuplicate(Graph graph, Iterable<Node> nodes, Map<Node, Node> replacements) {
-        Map<Node, Node> newNodes = new IdentityHashMap<>();
-        // create node duplicates
-        for (Node node : nodes) {
-            if (node != null && !replacements.containsKey(node)) {
-                assert !node.isDeleted() : "trying to duplicate deleted node";
-                Node newNode = node.clone(graph);
-                assert newNode.getClass() == node.getClass();
-                newNodes.put(node, newNode);
-            }
-        }
-        // re-wire inputs
-        for (Entry<Node, Node> entry : newNodes.entrySet()) {
-            Node oldNode = entry.getKey();
-            Node node = entry.getValue();
-            for (NodeClassIterator iter = oldNode.inputs().iterator(); iter.hasNext();) {
-                Position pos = iter.nextPosition();
-                Node input = oldNode.getNodeClass().get(oldNode, pos);
-                Node target = replacements.get(input);
-                if (target == null) {
-                    target = newNodes.get(input);
-                }
-                node.getNodeClass().set(node, pos, target);
-            }
-        }
-        for (Entry<Node, Node> entry : replacements.entrySet()) {
-            Node oldNode = entry.getKey();
-            Node node = entry.getValue();
-            if (oldNode == node) {
-                continue;
-            }
-            for (NodeClassIterator iter = oldNode.inputs().iterator(); iter.hasNext();) {
-                Position pos = iter.nextPosition();
-                Node input = oldNode.getNodeClass().get(oldNode, pos);
-                if (newNodes.containsKey(input)) {
-                    node.getNodeClass().set(node, pos, newNodes.get(input));
+    private static void unregisterAtInputsAsUsageHelper(Node node, long offset) {
+        NodeList<Node> list = Edges.getNodeListUnsafe(node, offset);
+        if (list != null) {
+            for (int i = 0; i < list.size(); ++i) {
+                Node curNode = list.get(i);
+                if (curNode != null) {
+                    node.removeThisFromUsages(curNode);
+                    if (curNode.hasNoUsages()) {
+                        node.maybeNotifyZeroUsages(curNode);
+                    }
                 }
             }
+            list.clearWithoutUpdate();
         }
-
-        // re-wire successors
-        for (Entry<Node, Node> entry : newNodes.entrySet()) {
-            Node oldNode = entry.getKey();
-            Node node = entry.getValue();
-            for (NodeClassIterator iter = oldNode.successors().iterator(); iter.hasNext();) {
-                Position pos = iter.nextPosition();
-                Node succ = oldNode.getNodeClass().get(oldNode, pos);
-                Node target = replacements.get(succ);
-                if (target == null) {
-                    target = newNodes.get(succ);
-                }
-                node.getNodeClass().set(node, pos, target);
-            }
-        }
-        for (Entry<Node, Node> entry : replacements.entrySet()) {
-            Node oldNode = entry.getKey();
-            Node node = entry.getValue();
-            if (oldNode == node) {
-                continue;
-            }
-            for (NodeClassIterator iter = oldNode.successors().iterator(); iter.hasNext();) {
-                Position pos = iter.nextPosition();
-                Node succ = oldNode.getNodeClass().get(oldNode, pos);
-                if (newNodes.containsKey(succ)) {
-                    node.getNodeClass().set(node, pos, newNodes.get(succ));
-                }
-            }
-        }
-        return newNodes;
     }
 }

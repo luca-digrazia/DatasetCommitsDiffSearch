@@ -89,19 +89,20 @@ import static jdk.vm.ci.sparc.SPARC.o5;
 import java.util.ArrayList;
 import java.util.BitSet;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterArray;
+import jdk.vm.ci.code.RegisterConfig;
 
 public class SPARCHotSpotRegisterAllocationConfig extends RegisterAllocationConfig {
 
     // @formatter:off
     static final Register[] registerAllocationOrder = {
-      g1, g4, g5,
-      o0, o1, o2, o3, o4, o5, /*o6, o7,*/
       l0, l1, l2, l3, l4, l5, l6, l7,
       i0, i1, i2, i3, i4, i5, /*i6,*/ /*i7,*/
+      o0, o1, o2, o3, o4, o5, /*o6, o7,*/
+      g1, g4, g5,
       // f0, f1, f2, f3, f4, f5, f6, f7
       f8,  f9,  f10, f11, f12, f13, f14, f15,
       f16, f17, f18, f19, f20, f21, f22, f23,
@@ -111,41 +112,24 @@ public class SPARCHotSpotRegisterAllocationConfig extends RegisterAllocationConf
     };
     // @formatter:on
 
-    public SPARCHotSpotRegisterAllocationConfig(RegisterConfig registerConfig) {
-        super(registerConfig);
+    public SPARCHotSpotRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo) {
+        super(registerConfig, allocationRestrictedTo);
     }
 
     @Override
-    protected Register[] initAllocatable(Register[] registers) {
-        BitSet regMap = new BitSet(registerConfig.getAllocatableRegisters().length);
+    protected RegisterArray initAllocatable(RegisterArray registers) {
+        BitSet regMap = new BitSet(registerConfig.getAllocatableRegisters().size());
         for (Register reg : registers) {
             regMap.set(reg.number);
         }
 
-        ArrayList<Register> allocatableRegisters = new ArrayList<>(registers.length);
+        ArrayList<Register> allocatableRegisters = new ArrayList<>(registers.size());
         for (Register reg : registerAllocationOrder) {
             if (regMap.get(reg.number)) {
                 allocatableRegisters.add(reg);
             }
         }
 
-        return super.initAllocatable(allocatableRegisters.toArray(new Register[allocatableRegisters.size()]));
-    }
-
-    @Override
-    protected AllocatableRegisters createAllocatableRegisters(Register[] registers) {
-        int min = Integer.MAX_VALUE;
-        int max = Integer.MIN_VALUE;
-        for (Register reg : registers) {
-            int number = reg.number;
-            if (number < min) {
-                min = number;
-            }
-            if (number > max) {
-                max = number;
-            }
-        }
-        assert min < max;
-        return new AllocatableRegisters(registers, min, max);
+        return super.initAllocatable(new RegisterArray(allocatableRegisters));
     }
 }

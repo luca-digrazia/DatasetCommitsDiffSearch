@@ -31,14 +31,14 @@ import java.util.List;
 
 import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.options.StableOptionValue;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.options.OptionValues;
+import com.oracle.graal.options.StableOptionKey;
 import com.oracle.graal.replacements.ReplacementsImpl;
 import com.oracle.graal.replacements.SnippetCounter;
 import com.oracle.graal.replacements.SnippetTemplate;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 
-import jdk.vm.ci.hotspot.HotSpotResolvedJavaField;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -52,17 +52,17 @@ import jdk.vm.ci.runtime.JVMCI;
  */
 public class HotSpotGraalConstantFieldProvider extends HotSpotConstantFieldProvider {
 
-    public HotSpotGraalConstantFieldProvider(HotSpotVMConfig config, MetaAccessProvider metaAccess) {
-        super(config);
+    public HotSpotGraalConstantFieldProvider(GraalHotSpotVMConfig config, MetaAccessProvider metaAccess) {
+        super(config, metaAccess);
         this.metaAccess = metaAccess;
     }
 
     @Override
     public <T> T readConstantField(ResolvedJavaField field, ConstantFieldTool<T> tool) {
-        assert !ImmutableCode.getValue() || isCalledForSnippets(metaAccess) || SnippetGraphUnderConstruction.get() != null ||
+        assert !ImmutableCode.getValue(tool.getOptions()) || isCalledForSnippets(metaAccess) || SnippetGraphUnderConstruction.get() != null ||
                         FieldReadEnabledInImmutableCode.get() == Boolean.TRUE : tool.getReceiver();
         if (!field.isStatic() && field.getName().equals("value")) {
-            if (getStableOptionValueType().isInstance(tool.getReceiver())) {
+            if (getStableOptionKeyType().isInstance(tool.getReceiver())) {
                 JavaConstant ret = tool.readValue();
                 return tool.foldConstant(ret);
             }
@@ -75,37 +75,59 @@ public class HotSpotGraalConstantFieldProvider extends HotSpotConstantFieldProvi
      * In AOT mode, some fields should never be embedded even for snippets/replacements.
      */
     @Override
-    protected boolean isStaticFieldConstant(HotSpotResolvedJavaField field) {
-        return super.isStaticFieldConstant(field) && (!ImmutableCode.getValue() || ImmutableCodeLazy.isEmbeddable(field));
+    protected boolean isStaticFieldConstant(ResolvedJavaField field, OptionValues options) {
+        return super.isStaticFieldConstant(field, options) && (!ImmutableCode.getValue(options) || ImmutableCodeLazy.isEmbeddable(field));
     }
 
     @Override
-    protected boolean isFinalInstanceFieldValueConstant(JavaConstant value, JavaConstant receiver) {
-        return super.isFinalInstanceFieldValueConstant(value, receiver) || getSnippetCounterType().isInstance(receiver) || getNodeClassType().isInstance(receiver);
+    protected boolean isFinalFieldValueConstant(ResolvedJavaField field, JavaConstant value, ConstantFieldTool<?> tool) {
+        if (super.isFinalFieldValueConstant(field, value, tool)) {
+            return true;
+        }
+
+        if (!field.isStatic()) {
+            JavaConstant receiver = tool.getReceiver();
+            if (getSnippetCounterType().isInstance(receiver) || getNodeClassType().isInstance(receiver)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     @Override
-    protected boolean isStableInstanceFieldValueConstant(JavaConstant value, JavaConstant receiver) {
-        return super.isStableInstanceFieldValueConstant(value, receiver) || getHotSpotVMConfigType().isInstance(receiver);
+    protected boolean isStableFieldValueConstant(ResolvedJavaField field, JavaConstant value, ConstantFieldTool<?> tool) {
+        if (super.isStableFieldValueConstant(field, value, tool)) {
+            return true;
+        }
+
+        if (!field.isStatic()) {
+            JavaConstant receiver = tool.getReceiver();
+            if (getHotSpotVMConfigType().isInstance(receiver)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private final MetaAccessProvider metaAccess;
 
-    private ResolvedJavaType cachedStableOptionValueType;
+    private ResolvedJavaType cachedStableOptionKeyType;
     private ResolvedJavaType cachedHotSpotVMConfigType;
     private ResolvedJavaType cachedSnippetCounterType;
     private ResolvedJavaType cachedNodeClassType;
 
-    private ResolvedJavaType getStableOptionValueType() {
-        if (cachedStableOptionValueType == null) {
-            cachedStableOptionValueType = metaAccess.lookupJavaType(StableOptionValue.class);
+    private ResolvedJavaType getStableOptionKeyType() {
+        if (cachedStableOptionKeyType == null) {
+            cachedStableOptionKeyType = metaAccess.lookupJavaType(StableOptionKey.class);
         }
-        return cachedStableOptionValueType;
+        return cachedStableOptionKeyType;
     }
 
     private ResolvedJavaType getHotSpotVMConfigType() {
         if (cachedHotSpotVMConfigType == null) {
-            cachedHotSpotVMConfigType = metaAccess.lookupJavaType(HotSpotVMConfig.class);
+            cachedHotSpotVMConfigType = metaAccess.lookupJavaType(GraalHotSpotVMConfig.class);
         }
         return cachedHotSpotVMConfigType;
     }
@@ -142,7 +164,7 @@ public class HotSpotGraalConstantFieldProvider extends HotSpotConstantFieldProvi
     }
 
     /**
-     * Separate out the static initialization of {@linkplain #isEmbeddable(HotSpotResolvedJavaField)
+     * Separate out the static initialization of {@linkplain #isEmbeddable(ResolvedJavaField)
      * embeddable fields} to eliminate cycles between clinit and other locks that could lead to
      * deadlock. Static code that doesn't call back into type or field machinery is probably ok but
      * anything else should be made lazy.
@@ -154,7 +176,6 @@ public class HotSpotGraalConstantFieldProvider extends HotSpotConstantFieldProvi
          * called for snippets or replacements.
          */
         static boolean isCalledForSnippets(MetaAccessProvider metaAccess) {
-            assert ImmutableCode.getValue();
             ResolvedJavaMethod makeGraphMethod = null;
             ResolvedJavaMethod initMethod = null;
             try {
@@ -181,8 +202,7 @@ public class HotSpotGraalConstantFieldProvider extends HotSpotConstantFieldProvi
         /**
          * Determine if it's ok to embed the value of {@code field}.
          */
-        static boolean isEmbeddable(HotSpotResolvedJavaField field) {
-            assert ImmutableCode.getValue();
+        static boolean isEmbeddable(ResolvedJavaField field) {
             return !embeddableFields.contains(field);
         }
 

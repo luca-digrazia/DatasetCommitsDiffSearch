@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,26 +20,19 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.compiler.phases;
+package com.oracle.graal.debug;
 
-import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
-
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.debug.Debug.Params;
 import com.oracle.graal.options.OptionValues;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.tiers.HighTierContext;
 
-public class EconomyHighTier extends PhaseSuite<HighTierContext> {
+/**
+ * Defines a service that can modify the {@linkplain Params parameters} for {@link Debug}.
+ */
+public interface DebugInitializationParticipant {
 
-    public EconomyHighTier(OptionValues options) {
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        if (ImmutableCode.getValue(options)) {
-            canonicalizer.disableReadCanonicalization();
-        }
-
-        appendPhase(canonicalizer);
-        appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER));
-    }
+    /**
+     * Modifies the given {@link Debug} initialization parameters as necessary.
+     * @param options TODO
+     */
+    void apply(Params params, OptionValues options);
 }

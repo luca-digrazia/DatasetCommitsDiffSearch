@@ -22,12 +22,13 @@
  */
 package com.oracle.graal.compiler.test;
 
-import java.lang.reflect.*;
+import java.lang.reflect.Array;
 
-import org.junit.*;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.phases.common.*;
+import org.junit.Test;
+
+import com.oracle.graal.phases.common.AbstractInliningPhase;
 
 /**
  * Tests any optimization that commons loads of non-inlineable constants.
@@ -54,7 +55,7 @@ public class CommonedConstantsTest extends GraalCompilerTest {
     @Test
     public void test0() {
         // Ensure the exception path is profiled
-        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(getMethod("test0Snippet"));
+        ResolvedJavaMethod javaMethod = getResolvedJavaMethod("test0Snippet");
         javaMethod.reprofile();
         test0Snippet(array, array.length);
 
@@ -89,7 +90,7 @@ public class CommonedConstantsTest extends GraalCompilerTest {
 
     @Test
     public void test1() {
-        getSuites().getHighTier().findPhase(AbstractInliningPhase.class).remove();
+        createSuites().getHighTier().findPhase(AbstractInliningPhase.class).remove();
         test1Snippet(new String(alphabet));
 
         test("test1Snippet", (Object) null);
@@ -113,7 +114,7 @@ public class CommonedConstantsTest extends GraalCompilerTest {
 
     @Test
     public void test2() {
-        assert getSuites().getHighTier().findPhase(AbstractInliningPhase.class).hasNext();
+        assert createSuites().getHighTier().findPhase(AbstractInliningPhase.class).hasNext();
         test2Snippet(new String(alphabet));
 
         test("test2Snippet", (Object) null);

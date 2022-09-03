@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,36 +22,38 @@
  */
 package com.oracle.graal.java;
 
-import com.oracle.graal.options.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.lir.phases.LIRSuites;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.options.OptionValues;
+import com.oracle.graal.phases.PhaseSuite;
+import com.oracle.graal.phases.tiers.CompilerConfiguration;
+import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.phases.tiers.Suites;
 
-public class DefaultSuitesProvider implements SuitesProvider {
+public class DefaultSuitesProvider extends SuitesProviderBase {
 
-    private final DerivedOptionValue<Suites> defaultSuites;
-    private final PhaseSuite<HighTierContext> defaultGraphBuilderSuite;
+    private final CompilerConfiguration compilerConfiguration;
 
-    public DefaultSuitesProvider() {
-        this.defaultGraphBuilderSuite = createGraphBuilderSuite();
-        this.defaultSuites = new DerivedOptionValue<>(this::createSuites);
+    public DefaultSuitesProvider(CompilerConfiguration compilerConfiguration, Plugins plugins) {
+        super();
+        this.defaultGraphBuilderSuite = createGraphBuilderSuite(plugins);
+        this.compilerConfiguration = compilerConfiguration;
     }
 
-    public Suites getDefaultSuites() {
-        return defaultSuites.getValue();
+    @Override
+    public Suites createSuites(OptionValues options) {
+        return Suites.createSuites(compilerConfiguration, options);
     }
 
-    public Suites createSuites() {
-        return Suites.createDefaultSuites();
-    }
-
-    public PhaseSuite<HighTierContext> getDefaultGraphBuilderSuite() {
-        return defaultGraphBuilderSuite;
-    }
-
-    protected PhaseSuite<HighTierContext> createGraphBuilderSuite() {
+    protected PhaseSuite<HighTierContext> createGraphBuilderSuite(Plugins plugins) {
         PhaseSuite<HighTierContext> suite = new PhaseSuite<>();
-        suite.appendPhase(new GraphBuilderPhase(GraphBuilderConfiguration.getDefault()));
+        suite.appendPhase(new GraphBuilderPhase(GraphBuilderConfiguration.getDefault(plugins)));
         return suite;
     }
 
+    @Override
+    public LIRSuites createLIRSuites(OptionValues options) {
+        return Suites.createLIRSuites(compilerConfiguration, options);
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,49 +22,100 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import com.oracle.graal.loop.phases.*;
-import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.virtual.phases.ea.*;
+import static com.oracle.graal.compiler.common.GraalOptions.ConditionalElimination;
+import static com.oracle.graal.compiler.common.GraalOptions.FullUnroll;
+import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
+import static com.oracle.graal.compiler.common.GraalOptions.LoopPeeling;
+import static com.oracle.graal.compiler.common.GraalOptions.LoopUnswitch;
+import static com.oracle.graal.compiler.common.GraalOptions.OptConvertDeoptsToGuards;
+import static com.oracle.graal.compiler.common.GraalOptions.OptLoopTransform;
+import static com.oracle.graal.compiler.common.GraalOptions.PartialEscapeAnalysis;
+import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
+import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
+
+import com.oracle.graal.loop.DefaultLoopPolicies;
+import com.oracle.graal.loop.LoopPolicies;
+import com.oracle.graal.loop.phases.LoopFullUnrollPhase;
+import com.oracle.graal.loop.phases.LoopPeelingPhase;
+import com.oracle.graal.loop.phases.LoopUnswitchingPhase;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionKey;
+import com.oracle.graal.options.OptionType;
+import com.oracle.graal.options.OptionValues;
+import com.oracle.graal.phases.PhaseSuite;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.ConvertDeoptimizeToGuardPhase;
+import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
+import com.oracle.graal.phases.common.IncrementalCanonicalizerPhase;
+import com.oracle.graal.phases.common.IterativeConditionalEliminationPhase;
+import com.oracle.graal.phases.common.LoweringPhase;
+import com.oracle.graal.phases.common.RemoveValueProxyPhase;
+import com.oracle.graal.phases.common.inlining.InliningPhase;
+import com.oracle.graal.phases.common.instrumentation.HighTierReconcileInstrumentationPhase;
+import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.virtual.phases.ea.PartialEscapePhase;
 
 public class HighTier extends PhaseSuite<HighTierContext> {
 
-    public HighTier() {
-        if (GraalOptions.FullUnroll) {
-            addPhase(new LoopFullUnrollPhase());
-        }
+    public static class Options {
 
-        if (GraalOptions.OptTailDuplication) {
-            addPhase(new TailDuplicationPhase());
-        }
-
-        if (GraalOptions.PartialEscapeAnalysis) {
-            addPhase(new PartialEscapeAnalysisPhase(true, GraalOptions.OptEarlyReadElimination));
-        }
-
-        if (GraalOptions.OptConvertDeoptsToGuards) {
-            addPhase(new ConvertDeoptimizeToGuardPhase());
-        }
-
-        addPhase(new LockEliminationPhase());
-
-        if (GraalOptions.OptLoopTransform) {
-            addPhase(new LoopTransformHighPhase());
-            addPhase(new LoopTransformLowPhase());
-        }
-        addPhase(new RemoveValueProxyPhase());
-
-        if (GraalOptions.CullFrameStates) {
-            addPhase(new CullFrameStatesPhase());
-        }
-
-        if (GraalOptions.OptCanonicalizer) {
-            addPhase(new CanonicalizerPhase());
-        }
-
-        addPhase(new LoweringPhase(LoweringType.BEFORE_GUARDS));
+        // @formatter:off
+        @Option(help = "Enable inlining", type = OptionType.Expert)
+        public static final OptionKey<Boolean> Inline = new OptionKey<>(true);
+        // @formatter:on
     }
 
+    public HighTier(OptionValues options) {
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
+        if (ImmutableCode.getValue(options)) {
+            canonicalizer.disableReadCanonicalization();
+        }
+
+        appendPhase(canonicalizer);
+
+        if (Options.Inline.getValue(options)) {
+            appendPhase(new InliningPhase(canonicalizer));
+            appendPhase(new DeadCodeEliminationPhase(Optional));
+
+            if (ConditionalElimination.getValue(options)) {
+                appendPhase(canonicalizer);
+                appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, false));
+            }
+        }
+
+        if (OptConvertDeoptsToGuards.getValue(options)) {
+            appendPhase(new IncrementalCanonicalizerPhase<>(canonicalizer, new ConvertDeoptimizeToGuardPhase()));
+        }
+
+        LoopPolicies loopPolicies = createLoopPolicies();
+        if (FullUnroll.getValue(options)) {
+            appendPhase(new LoopFullUnrollPhase(canonicalizer, loopPolicies));
+        }
+
+        if (OptLoopTransform.getValue(options)) {
+            if (LoopPeeling.getValue(options)) {
+                appendPhase(new LoopPeelingPhase(loopPolicies));
+            }
+            if (LoopUnswitch.getValue(options)) {
+                appendPhase(new LoopUnswitchingPhase(loopPolicies));
+            }
+        }
+
+        appendPhase(canonicalizer);
+
+        if (PartialEscapeAnalysis.getValue(options)) {
+            appendPhase(new PartialEscapePhase(true, canonicalizer));
+        }
+        appendPhase(new RemoveValueProxyPhase());
+
+        appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER));
+        if (UseGraalInstrumentation.getValue(options)) {
+            appendPhase(new HighTierReconcileInstrumentationPhase());
+        }
+    }
+
+    public LoopPolicies createLoopPolicies() {
+        return new DefaultLoopPolicies();
+    }
 }

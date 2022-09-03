@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,27 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.nodes.CStringNode.*;
-import static com.oracle.graal.replacements.SnippetTemplate.*;
+import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
+import static com.oracle.graal.replacements.nodes.CStringConstant.cstring;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.hotspot.nodes.StubStartNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.extended.ForeignCallNode;
+import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.replacements.nodes.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.replacements.Snippets;
+import com.oracle.graal.replacements.nodes.AssertionNode;
+import com.oracle.graal.word.Word;
+
+import jdk.vm.ci.code.TargetDescription;
 
 public class AssertionSnippets implements Snippets {
 
@@ -51,24 +53,21 @@ public class AssertionSnippets implements Snippets {
     public static final ForeignCallDescriptor ASSERTION_VM_MESSAGE_C = new ForeignCallDescriptor("assertionVmMessageC", void.class, boolean.class, Word.class, long.class, long.class, long.class);
 
     @Snippet
-    public static void assertion(boolean value, @ConstantParameter String message) {
-        if (!value) {
+    public static void assertion(boolean condition, @ConstantParameter String message) {
+        if (!condition) {
             vmMessageC(ASSERTION_VM_MESSAGE_C, true, cstring(message), 0L, 0L, 0L);
         }
     }
 
     @Snippet
-    public static void stubAssertion(boolean value, @ConstantParameter String message) {
-        if (!value) {
+    public static void stubAssertion(boolean condition, @ConstantParameter String message) {
+        if (!condition) {
             vmMessageC(ASSERTION_VM_MESSAGE_C, true, cstring(message), 0L, 0L, 0L);
         }
     }
 
     @NodeIntrinsic(ForeignCallNode.class)
-    private static native void vmMessageC(@ConstantNodeParameter ForeignCallDescriptor stubPrintfC, boolean vmError, Word format, long v1, long v2, long v3);
-
-    @NodeIntrinsic(StubForeignCallNode.class)
-    private static native void stubVmMessageC(@ConstantNodeParameter ForeignCallDescriptor stubPrintfC, boolean vmError, Word format, long v1, long v2, long v3);
+    static native void vmMessageC(@ConstantNodeParameter ForeignCallDescriptor stubPrintfC, boolean vmError, Word format, long v1, long v2, long v3);
 
     public static class Templates extends AbstractTemplates {
 
@@ -82,7 +81,7 @@ public class AssertionSnippets implements Snippets {
         public void lower(AssertionNode assertionNode, LoweringTool tool) {
             StructuredGraph graph = assertionNode.graph();
             Arguments args = new Arguments(graph.start() instanceof StubStartNode ? stubAssertion : assertion, graph.getGuardsStage(), tool.getLoweringStage());
-            args.add("value", assertionNode.value());
+            args.add("condition", assertionNode.condition());
             args.addConst("message", "failed runtime assertion in snippet/stub: " + assertionNode.message() + " (" + graph.method() + ")");
 
             template(args).instantiate(providers.getMetaAccess(), assertionNode, DEFAULT_REPLACER, args);

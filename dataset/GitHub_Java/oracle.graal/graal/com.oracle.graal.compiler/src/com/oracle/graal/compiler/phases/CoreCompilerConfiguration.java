@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,49 +23,49 @@
 package com.oracle.graal.compiler.phases;
 
 import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
-import com.oracle.graal.lir.phases.EconomyAllocationStage;
-import com.oracle.graal.lir.phases.EconomyPostAllocationOptimizationStage;
-import com.oracle.graal.lir.phases.EconomyPreAllocationOptimizationStage;
+import com.oracle.graal.lir.phases.AllocationStage;
 import com.oracle.graal.lir.phases.LIRPhaseSuite;
 import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
+import com.oracle.graal.lir.phases.PostAllocationOptimizationStage;
 import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase.PreAllocationOptimizationContext;
 import com.oracle.graal.options.OptionValues;
+import com.oracle.graal.lir.phases.PreAllocationOptimizationStage;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.tiers.CompilerConfiguration;
 import com.oracle.graal.phases.tiers.HighTierContext;
 import com.oracle.graal.phases.tiers.LowTierContext;
 import com.oracle.graal.phases.tiers.MidTierContext;
 
-public class EconomyCompilerConfiguration implements CompilerConfiguration {
+public class CoreCompilerConfiguration implements CompilerConfiguration {
 
     @Override
     public PhaseSuite<HighTierContext> createHighTier(OptionValues options) {
-        return new EconomyHighTier(options);
+        return new HighTier(options);
     }
 
     @Override
     public PhaseSuite<MidTierContext> createMidTier(OptionValues options) {
-        return new EconomyMidTier(options);
+        return new MidTier(options);
     }
 
     @Override
     public PhaseSuite<LowTierContext> createLowTier(OptionValues options) {
-        return new EconomyLowTier(options);
+        return new LowTier(options);
     }
 
     @Override
     public LIRPhaseSuite<PreAllocationOptimizationContext> createPreAllocationOptimizationStage(OptionValues options) {
-        return new EconomyPreAllocationOptimizationStage();
+        return new PreAllocationOptimizationStage();
     }
 
     @Override
     public LIRPhaseSuite<AllocationContext> createAllocationStage(OptionValues options) {
-        return new EconomyAllocationStage();
+        return new AllocationStage();
     }
 
     @Override
     public LIRPhaseSuite<PostAllocationOptimizationContext> createPostAllocationOptimizationStage(OptionValues options) {
-        return new EconomyPostAllocationOptimizationStage();
+        return new PostAllocationOptimizationStage();
     }
 
 }

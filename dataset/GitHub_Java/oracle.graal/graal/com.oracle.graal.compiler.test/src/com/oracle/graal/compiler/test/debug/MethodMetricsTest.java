@@ -23,9 +23,9 @@
 package com.oracle.graal.compiler.test.debug;
 
 import java.io.PrintStream;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.graal.compiler.test.GraalCompilerTest;
@@ -49,21 +50,19 @@ import com.oracle.graal.debug.DelegatingDebugConfig;
 import com.oracle.graal.debug.DelegatingDebugConfig.Feature;
 import com.oracle.graal.debug.GraalDebugConfig;
 import com.oracle.graal.debug.internal.DebugScope;
-import com.oracle.graal.debug.internal.method.MethodMetricsInlineeScopeInfo;
 import com.oracle.graal.debug.internal.method.MethodMetricsImpl;
+import com.oracle.graal.debug.internal.method.MethodMetricsImpl.CompilationData;
+import com.oracle.graal.debug.internal.method.MethodMetricsInlineeScopeInfo;
 import com.oracle.graal.debug.internal.method.MethodMetricsPrinter;
-import com.oracle.graal.nodes.IfNode;
 import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.LoopBeginNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.calc.BinaryNode;
 import com.oracle.graal.nodes.calc.FixedBinaryNode;
-import com.oracle.graal.nodes.calc.IntegerDivNode;
 import com.oracle.graal.nodes.calc.MulNode;
 import com.oracle.graal.nodes.calc.ShiftNode;
+import com.oracle.graal.nodes.calc.SignedDivNode;
 import com.oracle.graal.nodes.calc.SubNode;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.OptionValue.OverrideScope;
+import com.oracle.graal.options.OptionValues.OverrideScope;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.Phase;
 import com.oracle.graal.phases.PhaseSuite;
@@ -120,69 +119,6 @@ public abstract class MethodMetricsTest extends GraalCompilerTest {
 
     }
 
-    static class CFApplications {
-
-        public static int cf01(int count) {
-            int a = 0;
-            int b = 0;
-            int c = 0;
-            l1: for (int i = 0; i <= count; i++) {
-                if (i > 5) {
-                    for (int j = 0; j < i; j++) {
-                        a += i;
-                        if (a > 500) {
-                            break l1;
-                        }
-                    }
-                } else if (i > 7) {
-                    b += i;
-                } else {
-                    c += i;
-                }
-            }
-            return a + b + c;
-        }
-
-        public static int cf02(int arg) {
-            int a = 0;
-            for (int i = 0; i < arg; i++) {
-                a += i;
-            }
-            return a;
-        }
-
-        private static int cnt;
-
-        public static String cf03(int arg) {
-            cnt = 0;
-            int count = arg;
-            for (int i = 0; i < arg; i++) {
-                count++;
-                foo();
-            }
-            return "ok" + count + "-" + cnt;
-        }
-
-        public static void foo() {
-            cnt++;
-        }
-
-        public static int cf04(int count) {
-            int i1 = 1;
-            int i2 = 2;
-            int i3 = 3;
-            int i4 = 4;
-
-            for (int i = 0; i < count; i++) {
-                i1 = i2;
-                i2 = i3;
-                i3 = i4;
-                i4 = i1;
-            }
-            return i1 + i2 * 10 + i3 * 100 + i4 * 1000;
-        }
-    }
-
     public static final Class<?>[] testSignature = new Class<?>[]{int.class, int.class};
     public static final Object[] testArgs = new Object[]{10, 10};
 
@@ -231,7 +167,7 @@ public abstract class MethodMetricsTest extends GraalCompilerTest {
         static class CountingDivPhase extends Phase {
             @Override
             protected void run(StructuredGraph graph) {
-                Debug.methodMetrics(graph.method()).addToMetric(graph.getNodes().filter(IntegerDivNode.class).count(), "Divs");
+                Debug.methodMetrics(graph.method()).addToMetric(graph.getNodes().filter(SignedDivNode.class).count(), "Divs");
             }
         }
 
@@ -239,30 +175,6 @@ public abstract class MethodMetricsTest extends GraalCompilerTest {
             @Override
             protected void run(StructuredGraph graph) {
                 Debug.methodMetrics(graph.method()).addToMetric(graph.getNodes().filter(x -> x instanceof BinaryNode || x instanceof FixedBinaryNode).count(), "BinOps");
-            }
-        }
-
-        static class CountingLoopBeginsAndIfs extends Phase {
-            @Override
-            protected void run(StructuredGraph graph) {
-                ResolvedJavaMethod method = graph.method();
-                DebugMethodMetrics mm = Debug.methodMetrics(method);
-                mm.addToMetric(graph.getNodes().filter(LoopBeginNode.class).count(), "LoopBegins");
-                mm.addToMetric(graph.getNodes().filter(IfNode.class).count(), "Ifs");
-            }
-        }
-
-        static class CountingMorePhase extends Phase {
-            @Override
-            protected void run(StructuredGraph graph) {
-                ResolvedJavaMethod method = graph.method();
-                DebugMethodMetrics mm = Debug.methodMetrics(method);
-                mm.addToMetric(graph.getNodes().filter(LoopBeginNode.class).count(), "LoopBegins");
-                mm.addToMetric(graph.getNodes().filter(IfNode.class).count(), "Ifs");
-                mm.addToMetric(graph.getNodes().filter(x -> x instanceof BinaryNode || x instanceof FixedBinaryNode).count(), "BinOps");
-                mm.addToMetric(graph.getNodes().filter(SubNode.class).count(), "Subs");
-                mm.addToMetric(graph.getNodes().filter(InvokeNode.class).count(), "Invokes");
-                mm.incrementMetric("PhaseRunsOnMethod");
             }
         }
 
@@ -283,7 +195,7 @@ public abstract class MethodMetricsTest extends GraalCompilerTest {
             @SuppressWarnings("try")
             protected void run(StructuredGraph graph) {
                 // we are in an enhanced debug scope from graal compiler
-                // no we open multiple inlining scopes, record their time
+                // now we open multiple inlining scopes, record their time
                 try (DebugCloseable c1 = timer.start()) {
                     try (DebugCloseable c2 = scopedTimer.start()) {
                         try (DebugCloseable c3 = scopedScopedTimer.start()) {
@@ -305,7 +217,7 @@ public abstract class MethodMetricsTest extends GraalCompilerTest {
                     }
                 }
 
-                // no lets try different counters without the inline enhancement
+                // now lets try different counters without the inline enhancement
                 try (DebugCloseable c1 = timer1.start()) {
                     try (DebugCloseable c2 = scopedTimer1.start()) {
                         try (DebugCloseable c3 = scopedScopedTimer1.start()) {
@@ -325,9 +237,8 @@ public abstract class MethodMetricsTest extends GraalCompilerTest {
     }
 
     static DebugConfig overrideGraalDebugConfig(PrintStream log, String methodFilter, String methodMeter) {
-        DebugConfig config = DebugScope.getConfig();
-        List<DebugDumpHandler> dumpHandlers = config == null ? new ArrayList<>() : config.dumpHandlers().stream().collect(Collectors.toList());
-        List<DebugVerifyHandler> verifyHandlers = config == null ? new ArrayList<>() : config.verifyHandlers().stream().collect(Collectors.toList());
+        List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
+        List<DebugVerifyHandler> verifyHandlers = new ArrayList<>();
         GraalDebugConfig debugConfig = new GraalDebugConfig(
                         GraalDebugConfig.Options.Log.getValue(),
                         GraalDebugConfig.Options.Count.getValue(),
@@ -341,18 +252,12 @@ public abstract class MethodMetricsTest extends GraalCompilerTest {
         return debugConfig;
     }
 
-    private static OverrideScope overrideMetricPrinterConfig() {
-        Map<OptionValue<?>, Object> mapping = new HashMap<>();
-        mapping.put(MethodMetricsPrinter.Options.MethodMeterPrintAscii, true);
-        return OptionValue.override(mapping);
-    }
-
     abstract Phase additionalPhase();
 
     @Override
     protected Suites createSuites() {
         Suites ret = super.createSuites();
-        ListIterator<BasePhase<? super HighTierContext>> iter = ret.getHighTier().findPhase(ConvertDeoptimizeToGuardPhase.class);
+        ListIterator<BasePhase<? super HighTierContext>> iter = ret.getHighTier().findPhase(ConvertDeoptimizeToGuardPhase.class, true);
         PhaseSuite.findNextPhase(iter, CanonicalizerPhase.class);
         iter.add(additionalPhase());
         return ret;
@@ -361,7 +266,7 @@ public abstract class MethodMetricsTest extends GraalCompilerTest {
     @Test
     @SuppressWarnings("try")
     public void test() throws Throwable {
-        try (DebugConfigScope s = Debug.setConfig(getConfig()); OverrideScope o = getOScope();) {
+        try (DebugConfigScope s = Debug.setConfig(getConfig()); OverrideScope mark = overrideOptions(MethodMetricsPrinter.Options.MethodMeterPrintAscii, true);) {
             executeMethod(TestApplication.class.getMethod("m01", testSignature), null, testArgs);
             executeMethod(TestApplication.class.getMethod("m02", testSignature), null, testArgs);
             executeMethod(TestApplication.class.getMethod("m03", testSignature), null, testArgs);
@@ -376,6 +281,11 @@ public abstract class MethodMetricsTest extends GraalCompilerTest {
         }
     }
 
+    @Before
+    public void rememberScopeId() {
+        scopeIdBeforeAccess = DebugScope.getCurrentGlobalScopeId();
+    }
+
     @After
     public void clearMMCache() {
         MethodMetricsImpl.clearMM();
@@ -383,37 +293,72 @@ public abstract class MethodMetricsTest extends GraalCompilerTest {
 
     abstract DebugConfig getConfig();
 
-    OverrideScope getOScope() {
-        return overrideMetricPrinterConfig();
+    abstract void assertValues() throws Throwable;
+
+    @SuppressWarnings("unchecked")
+    private static Map<ResolvedJavaMethod, CompilationData> readMethodMetricsImplData() {
+        Map<ResolvedJavaMethod, CompilationData> threadLocalMap = null;
+        for (Field f : MethodMetricsImpl.class.getDeclaredFields()) {
+            if (f.getName().equals("threadEntries")) {
+                f.setAccessible(true);
+                Object map;
+                try {
+                    map = ((ThreadLocal<?>) f.get(null)).get();
+                } catch (Throwable t) {
+                    throw new RuntimeException(t);
+                }
+                threadLocalMap = (Map<ResolvedJavaMethod, CompilationData>) map;
+                break;
+            }
+        }
+        return threadLocalMap;
     }
 
-    abstract void assertValues() throws Throwable;
+    private long scopeIdBeforeAccess;
+    private long scopeIdAfterAccess;
+
+    protected long readValFromCurrThread(ResolvedJavaMethod method, String metricName) {
+
+        Map<ResolvedJavaMethod, CompilationData> threadLocalMap = readMethodMetricsImplData();
+        assert threadLocalMap != null;
+        CompilationData compilationData = threadLocalMap.get(method);
+        assert compilationData != null;
+        Map<Long, Map<String, Long>> compilations = compilationData.getCompilations();
+        List<Map<String, Long>> compilationEntries = new ArrayList<>();
+        compilations.forEach((x, y) -> {
+            if (x >= scopeIdBeforeAccess && x <= scopeIdAfterAccess) {
+                compilationEntries.add(y);
+            }
+        });
+        List<Map<String, Long>> listView = compilationEntries.stream().filter(x -> x.size() > 0).collect(Collectors.toList());
+        assert listView.size() <= 1 : "There must be at most one none empty compilation data point present:" + listView.size();
+        /*
+         * NOTE: Using the pre-generation of compilation entries for a method has the disadvantage
+         * that during testing we have different points in time when we request the metric. First,
+         * properly, when we use it and then when we want to know the result, but when we check the
+         * result the debug context no longer holds a correct scope with the unique id, so we return
+         * the first compilation entry that is not empty.
+         */
+        Map<String, Long> entries = listView.size() > 0 ? listView.get(0) : null;
+        Long res = entries != null ? entries.get(metricName) : null;
+        return res != null ? res : 0;
+    }
 
     @SuppressWarnings("try")
     void assertValues(String metricName, long[] vals) {
+        scopeIdAfterAccess = DebugScope.getCurrentGlobalScopeId();
         try (DebugConfigScope s = Debug.setConfig(new DelegatingDebugConfig().enable(Feature.METHOD_METRICS))) {
-            Assert.assertEquals(vals[0], ((MethodMetricsImpl) Debug.methodMetrics(asResolvedJavaMethod(TestApplication.class.getMethod("m01",
-                            testSignature)))).getMetricValueFromCompilationIndex(0, metricName));
-            Assert.assertEquals(vals[1], ((MethodMetricsImpl) Debug.methodMetrics(asResolvedJavaMethod(TestApplication.class.getMethod("m02",
-                            testSignature)))).getMetricValueFromCompilationIndex(0, metricName));
-            Assert.assertEquals(vals[2], ((MethodMetricsImpl) Debug.methodMetrics(asResolvedJavaMethod(TestApplication.class.getMethod("m03",
-                            testSignature)))).getMetricValueFromCompilationIndex(0, metricName));
-            Assert.assertEquals(vals[3], ((MethodMetricsImpl) Debug.methodMetrics(asResolvedJavaMethod(TestApplication.class.getMethod("m04",
-                            testSignature)))).getMetricValueFromCompilationIndex(0, metricName));
-            Assert.assertEquals(vals[4], ((MethodMetricsImpl) Debug.methodMetrics(asResolvedJavaMethod(TestApplication.class.getMethod("m05",
-                            testSignature)))).getMetricValueFromCompilationIndex(0, metricName));
-            Assert.assertEquals(vals[5], ((MethodMetricsImpl) Debug.methodMetrics(asResolvedJavaMethod(TestApplication.class.getMethod("m06",
-                            testSignature)))).getMetricValueFromCompilationIndex(0, metricName));
-            Assert.assertEquals(vals[6], ((MethodMetricsImpl) Debug.methodMetrics(asResolvedJavaMethod(TestApplication.class.getMethod("m07",
-                            testSignature)))).getMetricValueFromCompilationIndex(0, metricName));
-            Assert.assertEquals(vals[7], ((MethodMetricsImpl) Debug.methodMetrics(asResolvedJavaMethod(TestApplication.class.getMethod("m08",
-                            testSignature)))).getMetricValueFromCompilationIndex(0, metricName));
-            Assert.assertEquals(vals[8], ((MethodMetricsImpl) Debug.methodMetrics(asResolvedJavaMethod(TestApplication.class.getMethod("m09",
-                            testSignature)))).getMetricValueFromCompilationIndex(0, metricName));
-            Assert.assertEquals(vals[9], ((MethodMetricsImpl) Debug.methodMetrics(asResolvedJavaMethod(TestApplication.class.getMethod("m10",
-                            testSignature)))).getMetricValueFromCompilationIndex(0, metricName));
+            Assert.assertEquals(vals[0], readValFromCurrThread(asResolvedJavaMethod(TestApplication.class.getMethod("m01", testSignature)), metricName));
+            Assert.assertEquals(vals[1], readValFromCurrThread(asResolvedJavaMethod(TestApplication.class.getMethod("m02", testSignature)), metricName));
+            Assert.assertEquals(vals[2], readValFromCurrThread(asResolvedJavaMethod(TestApplication.class.getMethod("m03", testSignature)), metricName));
+            Assert.assertEquals(vals[3], readValFromCurrThread(asResolvedJavaMethod(TestApplication.class.getMethod("m04", testSignature)), metricName));
+            Assert.assertEquals(vals[4], readValFromCurrThread(asResolvedJavaMethod(TestApplication.class.getMethod("m05", testSignature)), metricName));
+            Assert.assertEquals(vals[5], readValFromCurrThread(asResolvedJavaMethod(TestApplication.class.getMethod("m06", testSignature)), metricName));
+            Assert.assertEquals(vals[6], readValFromCurrThread(asResolvedJavaMethod(TestApplication.class.getMethod("m07", testSignature)), metricName));
+            Assert.assertEquals(vals[7], readValFromCurrThread(asResolvedJavaMethod(TestApplication.class.getMethod("m08", testSignature)), metricName));
+            Assert.assertEquals(vals[8], readValFromCurrThread(asResolvedJavaMethod(TestApplication.class.getMethod("m09", testSignature)), metricName));
         } catch (Throwable t) {
-            Assert.fail(t.getMessage());
+            throw new RuntimeException(t);
         }
     }
 

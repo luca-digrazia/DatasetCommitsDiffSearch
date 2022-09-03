@@ -23,10 +23,7 @@
 package com.oracle.graal.compiler.test.debug;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.junit.Test;
 
@@ -41,13 +38,9 @@ import com.oracle.graal.debug.DebugValueFactory;
 import com.oracle.graal.debug.DebugVerifyHandler;
 import com.oracle.graal.debug.GraalDebugConfig;
 import com.oracle.graal.debug.internal.CounterImpl;
-import com.oracle.graal.debug.internal.DebugScope;
 import com.oracle.graal.debug.internal.MemUseTrackerImpl;
 import com.oracle.graal.debug.internal.TimerImpl;
 import com.oracle.graal.debug.internal.method.MethodMetricsImpl;
-import com.oracle.graal.debug.internal.method.MethodMetricsPrinter;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.OptionValue.OverrideScope;
 import com.oracle.graal.phases.Phase;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -62,9 +55,8 @@ public class MethodMetricsTestInterception01 extends MethodMetricsTest {
 
     @Override
     DebugConfig getConfig() {
-        DebugConfig config = DebugScope.getConfig();
-        List<DebugDumpHandler> dumpHandlers = config == null ? new ArrayList<>() : config.dumpHandlers().stream().collect(Collectors.toList());
-        List<DebugVerifyHandler> verifyHandlers = config == null ? new ArrayList<>() : config.verifyHandlers().stream().collect(Collectors.toList());
+        List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
+        List<DebugVerifyHandler> verifyHandlers = new ArrayList<>();
         GraalDebugConfig debugConfig = new GraalDebugConfig(
                         GraalDebugConfig.Options.Log.getValue(),
                         "CountingAddPhase",
@@ -78,17 +70,13 @@ public class MethodMetricsTestInterception01 extends MethodMetricsTest {
         return debugConfig;
     }
 
-    @Override
-    protected OverrideScope getOScope() {
-        Map<OptionValue<?>, Object> mapping = new HashMap<>();
-        mapping.put(MethodMetricsPrinter.Options.MethodMeterPrintAscii, true);
-        return OptionValue.override(mapping);
-    }
+    private DebugValueFactory factory;
 
     @Test
     @Override
     @SuppressWarnings("try")
     public void test() throws Throwable {
+        factory = Debug.getDebugValueFactory();
         Debug.setDebugValueFactory(new DebugValueFactory() {
             @Override
             public DebugTimer createTimer(String name, boolean conditional) {
@@ -112,6 +100,12 @@ public class MethodMetricsTestInterception01 extends MethodMetricsTest {
         });
         super.test();
 
+    }
+
+    @Override
+    public void afterTest() {
+        super.afterTest();
+        Debug.setDebugValueFactory(factory);
     }
 
     @Override

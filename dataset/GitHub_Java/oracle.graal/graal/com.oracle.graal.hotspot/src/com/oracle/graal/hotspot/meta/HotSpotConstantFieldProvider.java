@@ -22,105 +22,55 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.compiler.common.spi.JavaConstantFieldProvider;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.options.OptionValues;
 
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaField;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Implements the default constant folding semantics for Java fields in the HotSpot VM.
  */
-public class HotSpotConstantFieldProvider implements ConstantFieldProvider {
+public class HotSpotConstantFieldProvider extends JavaConstantFieldProvider {
 
-    static class Options {
-        @Option(help = "Determines whether to treat final fields with default values as constant.")//
-        public static final OptionValue<Boolean> TrustFinalDefaultFields = new OptionValue<>(true);
-    }
+    private final GraalHotSpotVMConfig config;
 
-    private final HotSpotVMConfig config;
-
-    public HotSpotConstantFieldProvider(HotSpotVMConfig config) {
+    public HotSpotConstantFieldProvider(GraalHotSpotVMConfig config, MetaAccessProvider metaAccess) {
+        super(metaAccess);
         this.config = config;
     }
 
     @Override
-    public <T> T readConstantField(ResolvedJavaField field, ConstantFieldTool<T> tool) {
-        HotSpotResolvedJavaField hotspotField = (HotSpotResolvedJavaField) field;
-
-        if (hotspotField.isStatic()) {
-            if (isStaticFieldConstant(hotspotField)) {
-                JavaConstant value = tool.readValue();
-                if (hotspotField.isStable() && !value.isDefaultForKind()) {
-                    return tool.foldStableArray(value, getArrayDimension(hotspotField.getType()), hotspotField.isDefaultStable());
-                } else {
-                    return tool.foldConstant(value);
-                }
-            }
-        } else {
-            if (hotspotField.isFinal()) {
-                JavaConstant value = tool.readValue();
-                if (isFinalInstanceFieldValueConstant(value, tool.getReceiver())) {
-                    return tool.foldConstant(value);
-                }
-            } else if (hotspotField.isStable() && config.foldStableValues) {
-                JavaConstant value = tool.readValue();
-                if (isStableInstanceFieldValueConstant(value, tool.getReceiver())) {
-                    return tool.foldStableArray(value, getArrayDimension(hotspotField.getType()), hotspotField.isDefaultStable());
-                }
-            }
+    protected boolean isStableField(ResolvedJavaField field, ConstantFieldTool<?> tool) {
+        if (!config.foldStableValues) {
+            return false;
         }
-        return null;
+        if (field.isStatic() && !isStaticFieldConstant(field, tool.getOptions())) {
+            return false;
+        }
+
+        if (((HotSpotResolvedJavaField) field).isStable()) {
+            return true;
+        }
+        return super.isStableField(field, tool);
     }
 
-    private static int getArrayDimension(JavaType type) {
-        int dimensions = 0;
-        JavaType componentType = type;
-        while ((componentType = componentType.getComponentType()) != null) {
-            dimensions++;
+    @Override
+    protected boolean isFinalField(ResolvedJavaField field, ConstantFieldTool<?> tool) {
+        if (field.isStatic() && !isStaticFieldConstant(field, tool.getOptions())) {
+            return false;
         }
-        return dimensions;
+
+        return super.isFinalField(field, tool);
     }
 
     private static final String SystemClassName = "Ljava/lang/System;";
 
-    /**
-     * Determines if a static field is constant for the purpose of {@link #readConstantField}.
-     */
-    protected boolean isStaticFieldConstant(HotSpotResolvedJavaField staticField) {
-        if (staticField.isFinal() || (staticField.isStable() && config.foldStableValues)) {
-            ResolvedJavaType holder = staticField.getDeclaringClass();
-            if (holder.isInitialized() && !holder.getName().equals(SystemClassName)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Determines if a final instance field is constant for the purpose of
-     * {@link #readConstantField}.
-     *
-     * @param value
-     * @param receiver
-     */
-    protected boolean isFinalInstanceFieldValueConstant(JavaConstant value, JavaConstant receiver) {
-        return !value.isDefaultForKind() || Options.TrustFinalDefaultFields.getValue();
-    }
-
-    /**
-     * Determines if a stable instance field is constant for the purpose of
-     * {@link #readConstantField}.
-     *
-     * @param value
-     * @param receiver
-     */
-    protected boolean isStableInstanceFieldValueConstant(JavaConstant value, JavaConstant receiver) {
-        return !value.isDefaultForKind();
+    protected boolean isStaticFieldConstant(ResolvedJavaField field, @SuppressWarnings("unused") OptionValues options) {
+        ResolvedJavaType declaringClass = field.getDeclaringClass();
+        return declaringClass.isInitialized() && !declaringClass.getName().equals(SystemClassName);
     }
 }

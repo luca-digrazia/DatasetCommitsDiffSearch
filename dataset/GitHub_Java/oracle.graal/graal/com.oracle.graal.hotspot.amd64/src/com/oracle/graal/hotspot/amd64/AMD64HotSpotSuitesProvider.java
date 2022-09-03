@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,27 +20,27 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.compiler.amd64;
+package com.oracle.graal.hotspot.amd64;
 
-import com.oracle.graal.java.DefaultSuitesProvider;
-import com.oracle.graal.lir.amd64.phases.StackMoveOptimizationPhase;
+import com.oracle.graal.compiler.amd64.AMD64SuitesProvider;
+import com.oracle.graal.compiler.common.GraalOptions;
+import com.oracle.graal.hotspot.lir.HotSpotZapRegistersPhase;
 import com.oracle.graal.lir.phases.LIRSuites;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.options.OptionValues;
 import com.oracle.graal.phases.tiers.CompilerConfiguration;
 
-public class AMD64SuitesProvider extends DefaultSuitesProvider {
+public class AMD64HotSpotSuitesProvider extends AMD64SuitesProvider {
 
-    public AMD64SuitesProvider(CompilerConfiguration compilerConfiguration, Plugins plugins) {
+    public AMD64HotSpotSuitesProvider(CompilerConfiguration compilerConfiguration, Plugins plugins) {
         super(compilerConfiguration, plugins);
     }
 
     @Override
     public LIRSuites createLIRSuites(OptionValues options) {
         LIRSuites lirSuites = super.createLIRSuites(options);
-        if (StackMoveOptimizationPhase.Options.LIROptStackMoveOptimizer.getValue(options)) {
-            /* Note: this phase must be inserted <b>after</b> RedundantMoveElimination */
-            lirSuites.getPostAllocationOptimizationStage().appendPhase(new StackMoveOptimizationPhase());
+        if (GraalOptions.DetailedAsserts.getValue(options)) {
+            lirSuites.getPostAllocationOptimizationStage().appendPhase(new HotSpotZapRegistersPhase());
         }
         return lirSuites;
     }

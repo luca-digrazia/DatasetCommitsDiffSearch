@@ -22,14 +22,12 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import jdk.internal.jvmci.options.*;
-import jdk.internal.jvmci.options.OptionValue.*;
+import org.junit.Test;
 
-import org.junit.*;
-
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.jtt.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.compiler.phases.HighTier;
+import com.oracle.graal.jtt.JTTTest;
+import com.oracle.graal.options.OptionValues.OverrideScope;
+import com.oracle.graal.phases.tiers.Suites;
 
 /**
  * Tests the instanceof works, when casting an array of interface.
@@ -89,9 +87,10 @@ public class BC_instanceof01 extends JTTTest {
     }
 
     @Override
-    protected Suites getSuites() {
-        try (OverrideScope scope = OptionValue.override(HighTier.Options.Inline, false)) {
-            return super.getSuites();
+    @SuppressWarnings("try")
+    protected Suites createSuites() {
+        try (OverrideScope mark = overrideOptions(HighTier.Options.Inline, false)) {
+            return super.createSuites();
         }
     }
 
