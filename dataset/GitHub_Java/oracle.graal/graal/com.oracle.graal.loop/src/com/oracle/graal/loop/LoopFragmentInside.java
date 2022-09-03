@@ -287,7 +287,7 @@ public class LoopFragmentInside extends LoopFragment {
                         // Do not mark.
                     } else {
                         // Mark alive by removing from delete set.
-                        oldPhis.remove(i);
+                        oldPhis.set(i, oldPhis.get(oldPhisSize - 1));
                         oldPhisSize--;
                         continue outer;
                     }
