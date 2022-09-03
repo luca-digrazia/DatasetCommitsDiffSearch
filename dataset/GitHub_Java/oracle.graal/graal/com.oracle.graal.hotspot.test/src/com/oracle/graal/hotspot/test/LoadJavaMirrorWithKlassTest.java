@@ -24,15 +24,14 @@ package com.oracle.graal.hotspot.test;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
-import jdk.internal.jvmci.options.OptionValue.*;
-
 import org.junit.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.options.OptionValue.OverrideScope;
 import com.oracle.graal.phases.tiers.*;
 
 public class LoadJavaMirrorWithKlassTest extends GraalCompilerTest {
@@ -56,7 +55,6 @@ public class LoadJavaMirrorWithKlassTest extends GraalCompilerTest {
     }
 
     @Override
-    @SuppressWarnings("try")
     protected Suites createSuites() {
         try (OverrideScope s = OptionValue.override(GraalOptions.ImmutableCode, true)) {
             return super.createSuites();
