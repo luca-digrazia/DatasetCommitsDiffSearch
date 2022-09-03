@@ -30,14 +30,11 @@ import static com.oracle.graal.api.meta.Value.*;
 import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.nodes.IdentityHashCodeStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
 import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
-import static com.oracle.graal.hotspot.stubs.IdentityHashCodeStub.*;
-import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.*;
 import static com.oracle.graal.hotspot.stubs.NewArrayStub.*;
 import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
 import static com.oracle.graal.hotspot.stubs.NewMultiArrayStub.*;
@@ -223,10 +220,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         /*           temps */ null,
                         /*             ret */ ret(Kind.Void));
 
-        addCRuntimeCall(EXCEPTION_HANDLER_FOR_PC, config.handleExceptionForPcAddress,
-                        /*             ret */ ret(word),
-                        /* arg0:    thread */ nativeCallingConvention(word));
-
         addStubCall(REGISTER_FINALIZER,
                         /*             ret */ ret(Kind.Void),
                         /* arg0:    object */ javaCallingConvention(Kind.Object));
@@ -316,13 +309,12 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         /* arg2:     value */                       Kind.Long,
                         /* arg3:     value */                       Kind.Long));
 
-        addCRuntimeCall(STUB_PRINTF_C, config.vmMessageAddress,
+        addCRuntimeCall(STUB_PRINTF_C, config.stubPrintfAddress,
                         /*             ret */ ret(Kind.Void),
-                        /* arg0:   vmError */ nativeCallingConvention(Kind.Boolean,
-                        /* arg1:    format */                         word,
+                        /* arg0:    format */ nativeCallingConvention(Kind.Long,
+                        /* arg1:     value */                         Kind.Long,
                         /* arg2:     value */                         Kind.Long,
-                        /* arg3:     value */                         Kind.Long,
-                        /* arg4:     value */                         Kind.Long));
+                        /* arg3:     value */                         Kind.Long));
 
         addRuntimeCall(LOG_OBJECT, config.logObjectStub,
                         /*           temps */ null,
@@ -341,6 +333,10 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                    /* arg1: receiverThread */                         Kind.Object,
               /* arg1: clearInterrupted */                            Kind.Boolean));
 
+        addRuntimeCall(EXCEPTION_HANDLER, config.handleExceptionStub,
+                        /*           temps */ null,
+                        /*             ret */ ret(Kind.Void));
+
         addRuntimeCall(DEOPT_HANDLER, config.handleDeoptStub,
                         /*           temps */ null,
                         /*             ret */ ret(Kind.Void));
@@ -348,16 +344,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         addRuntimeCall(IC_MISS_HANDLER, config.inlineCacheMissStub,
                         /*           temps */ null,
                         /*             ret */ ret(Kind.Void));
-
-        addStubCall(IDENTITY_HASHCODE,
-                        /*          ret */ ret(Kind.Int),
-                        /* arg0:    obj */ javaCallingConvention(Kind.Object));
-
-        addCRuntimeCall(IDENTITY_HASH_CODE_C, config.identityHashCodeAddress,
-                        /*             ret */ ret(Kind.Int),
-                        /* arg0:    thread */ nativeCallingConvention(word,
-                        /* arg1:    object */                         Kind.Object));
-
         // @formatter:on
     }
 
@@ -455,8 +441,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         registerStub(new NewMultiArrayStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_MULTI_ARRAY)));
         registerStub(new RegisterFinalizerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(REGISTER_FINALIZER)));
         registerStub(new ThreadIsInterruptedStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(THREAD_IS_INTERRUPTED)));
-        registerStub(new IdentityHashCodeStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(IDENTITY_HASHCODE)));
-        registerStub(new ExceptionHandlerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(EXCEPTION_HANDLER)));
     }
 
     private void registerStub(Stub stub) {
@@ -749,7 +733,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             ReadNode memoryRead = graph.add(new ReadNode(load.object(), location, load.stamp()));
             // An unsafe read must not floating outside its block as may float above an explicit
             // null check on its object.
-            memoryRead.dependencies().add(AbstractBeginNode.prevBegin(load));
+            memoryRead.dependencies().add(BeginNode.prevBegin(load));
             graph.replaceFixedWithFixed(load, memoryRead);
         } else if (n instanceof UnsafeStoreNode) {
             UnsafeStoreNode store = (UnsafeStoreNode) n;
@@ -1013,8 +997,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                 return config.deoptReasonDiv0Check;
             case RuntimeConstraint:
                 return config.deoptReasonConstraint;
-            case LoopLimitCheck:
-                return config.deoptReasonLoopLimitCheck;
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
