@@ -46,7 +46,6 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 
-@SuppressWarnings("deprecation")
 abstract class ToJavaNode extends Node {
     static final int LIMIT = 3;
     @Child private Node isExecutable = Message.IS_EXECUTABLE.createNode();
@@ -125,7 +124,7 @@ abstract class ToJavaNode extends Node {
         return false;
     }
 
-    @SuppressWarnings({"unused"})
+    @SuppressWarnings("unused")
     boolean canConvert(Object value, Class<?> targetType, Type genericType, Object languageContext, boolean strict) {
         if (canConvertStrict(value, targetType)) {
             return true;
@@ -157,7 +156,7 @@ abstract class ToJavaNode extends Node {
             } else if (targetType.isArray()) {
                 return primitive.hasKeys(tValue);
             } else {
-                if (!TruffleOptions.AOT) {
+                if (TruffleOptions.AOT) {
                     if (JavaInterop.isJavaFunctionInterface(targetType) && (isExecutable(tValue) || isInstantiable(tValue))) {
                         return true;
                     } else if (targetType.isInterface() && ForeignAccess.sendHasKeys(hasKeysNode, tValue)) {
@@ -166,7 +165,7 @@ abstract class ToJavaNode extends Node {
                         return false;
                     }
                 } else {
-                    // support Function also with AOT
+                    // support Function also without AOT
                     if (targetType == Function.class) {
                         return isExecutable(tValue) || isInstantiable(tValue);
                     } else {
@@ -315,7 +314,7 @@ abstract class ToJavaNode extends Node {
 
     @TruffleBoundary
     private static ClassCastException newClassCastException(String message) {
-        EngineSupport engine = JavaInteropAccessor.ACCESSOR.engine();
+        EngineSupport engine = JavaInterop.ACCESSOR.engine();
         return engine != null ? engine.newClassCastException(message, null) : new ClassCastException(message);
     }
 
