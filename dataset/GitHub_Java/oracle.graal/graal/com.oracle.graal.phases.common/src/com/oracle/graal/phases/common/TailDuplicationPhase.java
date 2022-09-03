@@ -35,15 +35,13 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.graph.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * This class is a phase that looks for opportunities for tail duplication. The static method
- * {@link #tailDuplicate(MergeNode, TailDuplicationDecision, List, PhaseContext)} can also be used
- * to drive tail duplication from other places, e.g., inlining.
+ * {@link #tailDuplicate(MergeNode, TailDuplicationDecision, List)} can also be used to drive tail
+ * duplication from other places, e.g., inlining.
  */
-public class TailDuplicationPhase extends BasePhase<PhaseContext> {
+public class TailDuplicationPhase extends Phase {
 
     /*
      * Various metrics on the circumstances in which tail duplication was/wasn't performed.
@@ -130,14 +128,12 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
     };
 
     @Override
-    protected void run(StructuredGraph graph, PhaseContext phaseContext) {
-        NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure(graph).apply();
-
+    protected void run(StructuredGraph graph) {
         // A snapshot is taken here, so that new MergeNode instances aren't considered for tail
         // duplication.
         for (MergeNode merge : graph.getNodes(MergeNode.class).snapshot()) {
-            if (!(merge instanceof LoopBeginNode) && nodeProbabilities.get(merge) >= GraalOptions.TailDuplicationProbability) {
-                tailDuplicate(merge, DEFAULT_DECISION, null, phaseContext);
+            if (!(merge instanceof LoopBeginNode) && merge.probability() >= GraalOptions.TailDuplicationProbability) {
+                tailDuplicate(merge, DEFAULT_DECISION, null);
             }
         }
     }
@@ -157,9 +153,8 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
      *            size needs to match the merge's end count. Each entry can either be null or a
      *            {@link PiNode}, and is used to replace {@link PiNode#object()} with the
      *            {@link PiNode} in the duplicated branch that corresponds to the entry.
-     * @param phaseContext
      */
-    public static boolean tailDuplicate(MergeNode merge, TailDuplicationDecision decision, List<PiNode> replacements, PhaseContext phaseContext) {
+    public static boolean tailDuplicate(MergeNode merge, TailDuplicationDecision decision, List<PiNode> replacements) {
         assert !(merge instanceof LoopBeginNode);
         assert replacements == null || replacements.size() == merge.forwardEndCount();
         FixedNode fixed = merge;
@@ -169,18 +164,18 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
             fixedCount++;
         }
         if (fixedCount > 1) {
-            if (fixed instanceof AbstractEndNode && !(((AbstractEndNode) fixed).merge() instanceof LoopBeginNode)) {
+            if (fixed instanceof EndNode && !(((EndNode) fixed).merge() instanceof LoopBeginNode)) {
                 metricDuplicationEnd.increment();
                 if (decision.doTransform(merge, fixedCount)) {
                     metricDuplicationEndPerformed.increment();
-                    new DuplicationOperation(merge, replacements).duplicate(phaseContext);
+                    new DuplicationOperation(merge, replacements).duplicate();
                     return true;
                 }
             } else if (merge.stateAfter() != null) {
                 metricDuplicationOther.increment();
                 if (decision.doTransform(merge, fixedCount)) {
                     metricDuplicationOtherPerformed.increment();
-                    new DuplicationOperation(merge, replacements).duplicate(phaseContext);
+                    new DuplicationOperation(merge, replacements).duplicate();
                     return true;
                 }
             }
@@ -209,7 +204,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
         public DuplicationOperation(MergeNode merge, List<PiNode> replacements) {
             this.merge = merge;
             this.replacements = replacements;
-            this.graph = merge.graph();
+            this.graph = (StructuredGraph) merge.graph();
         }
 
         /**
@@ -222,13 +217,9 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
          * <li>Determines the complete set of duplicated nodes.</li>
          * <li>Performs the actual duplication.</li>
          * </ul>
-         * 
-         * @param phaseContext
          */
-        private void duplicate(PhaseContext phaseContext) {
-            Debug.log("tail duplication at merge %s in %s", merge, graph.method());
-
-            int startMark = graph.getMark();
+        private void duplicate() {
+            Debug.log("tail duplication at merge %s in %s (prob %f)", merge, graph.method(), merge.probability());
 
             ValueAnchorNode anchor = addValueAnchor();
 
@@ -246,18 +237,18 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
                 fixed = ((FixedWithNextNode) fixed).next();
             }
 
-            AbstractEndNode endAfter = createNewMerge(fixed, stateAfter);
+            EndNode endAfter = createNewMerge(fixed, stateAfter);
             MergeNode mergeAfter = endAfter.merge();
             fixedNodes.add(endAfter);
             final HashSet<Node> duplicatedNodes = buildDuplicatedNodeSet(fixedNodes, stateAfter);
             mergeAfter.clearEnds();
             expandDuplicated(duplicatedNodes, mergeAfter);
 
-            List<AbstractEndNode> endSnapshot = merge.forwardEnds().snapshot();
+            List<EndNode> endSnapshot = merge.forwardEnds().snapshot();
             List<PhiNode> phiSnapshot = merge.phis().snapshot();
 
             int endIndex = 0;
-            for (final AbstractEndNode forwardEnd : merge.forwardEnds()) {
+            for (final EndNode forwardEnd : merge.forwardEnds()) {
                 Map<Node, Node> duplicates;
                 if (replacements == null || replacements.get(endIndex) == null) {
                     duplicates = graph.addDuplicates(duplicatedNodes, (DuplicationReplacement) null);
@@ -269,14 +260,14 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
                 for (Map.Entry<ValueNode, PhiNode> phi : bottomPhis.entrySet()) {
                     phi.getValue().initializeValueAt(merge.forwardEndIndex(forwardEnd), (ValueNode) duplicates.get(phi.getKey()));
                 }
-                mergeAfter.addForwardEnd((AbstractEndNode) duplicates.get(endAfter));
+                mergeAfter.addForwardEnd((EndNode) duplicates.get(endAfter));
 
                 // re-wire the duplicated ValueAnchorNode to the predecessor of the corresponding
                 // EndNode
                 FixedNode anchorDuplicate = (FixedNode) duplicates.get(anchor);
                 ((FixedWithNextNode) forwardEnd.predecessor()).setNext(anchorDuplicate);
                 // move dependencies on the ValueAnchorNode to the previous BeginNode
-                AbstractBeginNode prevBegin = AbstractBeginNode.prevBegin(anchorDuplicate);
+                BeginNode prevBegin = BeginNode.prevBegin(anchorDuplicate);
                 anchorDuplicate.replaceAtUsages(prevBegin);
 
                 // re-wire the phi duplicates to the correct input
@@ -293,7 +284,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
                 endIndex++;
             }
             GraphUtil.killCFG(merge);
-            for (AbstractEndNode forwardEnd : endSnapshot) {
+            for (EndNode forwardEnd : endSnapshot) {
                 forwardEnd.safeDelete();
             }
             for (PhiNode phi : phiSnapshot) {
@@ -303,7 +294,6 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
                     phi.setMerge(mergeAfter);
                 }
             }
-            new CanonicalizerPhase(null, graph.getNewNodes(startMark)).apply(graph, phaseContext);
             Debug.dump(graph, "After tail duplication at %s", merge);
         }
 
@@ -428,9 +418,11 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
          * @param stateAfterMerge The frame state that should be used for the merge.
          * @return The newly created end node.
          */
-        private AbstractEndNode createNewMerge(FixedNode successor, FrameState stateAfterMerge) {
+        private EndNode createNewMerge(FixedNode successor, FrameState stateAfterMerge) {
             MergeNode newBottomMerge = graph.add(new MergeNode());
-            AbstractEndNode newBottomEnd = graph.add(new EndNode());
+            newBottomMerge.setProbability(successor.probability());
+            EndNode newBottomEnd = graph.add(new EndNode());
+            newBottomEnd.setProbability(successor.probability());
             newBottomMerge.addForwardEnd(newBottomEnd);
             newBottomMerge.setStateAfter(stateAfterMerge);
             ((FixedWithNextNode) successor.predecessor()).setNext(newBottomEnd);
