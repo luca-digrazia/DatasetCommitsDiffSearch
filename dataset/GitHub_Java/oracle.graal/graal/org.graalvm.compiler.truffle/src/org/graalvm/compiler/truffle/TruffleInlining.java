@@ -31,7 +31,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -61,31 +60,26 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
         }
         int[] visitedNodes = {0};
         int nodeCount = sourceTarget.getNonTrivialNodeCount();
-        List<TruffleInliningDecision> exploredCallSites = exploreCallSites(new ArrayList<>(Arrays.asList(sourceTarget)), nodeCount, policy, visitedNodes, new HashMap<>());
+        List<TruffleInliningDecision> exploredCallSites = exploreCallSites(new ArrayList<>(Arrays.asList(sourceTarget)), nodeCount, policy, visitedNodes);
         return decideInlining(exploredCallSites, policy, nodeCount, options);
     }
 
-    private static List<TruffleInliningDecision> exploreCallSites(List<OptimizedCallTarget> stack, int callStackNodeCount, TruffleInliningPolicy policy, int[] visitedNodes,
-                    Map<OptimizedCallTarget, TruffleInliningDecision> rejectedDecisionsCache) {
+    private static List<TruffleInliningDecision> exploreCallSites(List<OptimizedCallTarget> stack, int callStackNodeCount, TruffleInliningPolicy policy, int[] visitedNodes) {
         List<TruffleInliningDecision> exploredCallSites = new ArrayList<>();
-        List<OptimizedCallTarget> toRemoveFromCache = new LinkedList<>();
+        Map<OptimizedCallTarget, TruffleInliningDecision> rejectedDecisionsCache = new HashMap<>();
         OptimizedCallTarget parentTarget = stack.get(stack.size() - 1);
         for (OptimizedDirectCallNode callNode : getCallNodes(parentTarget)) {
             OptimizedCallTarget currentTarget = callNode.getCurrentCallTarget();
             stack.add(currentTarget); // push
             TruffleInliningDecision decision = rejectedDecisionsCache.get(currentTarget);
             if (decision == null) {
-                decision = exploreCallSite(stack, callStackNodeCount, policy, callNode, visitedNodes, rejectedDecisionsCache);
+                decision = exploreCallSite(stack, callStackNodeCount, policy, callNode, visitedNodes);
                 if (!decision.isInline()) {
                     rejectedDecisionsCache.put(currentTarget, decision);
-                    toRemoveFromCache.add(currentTarget);
                 }
             }
             exploredCallSites.add(decision);
             stack.remove(stack.size() - 1); // pop
-        }
-        for (OptimizedCallTarget target : toRemoveFromCache) {
-            rejectedDecisionsCache.remove(target);
         }
         return exploredCallSites;
     }
@@ -105,7 +99,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
     }
 
     private static TruffleInliningDecision exploreCallSite(List<OptimizedCallTarget> callStack, int callStackNodeCount, TruffleInliningPolicy policy, OptimizedDirectCallNode callNode,
-                    int[] visitedNodes, Map<OptimizedCallTarget, TruffleInliningDecision> rejectedDecisionsCache) {
+                    int[] visitedNodes) {
 
         OptimizedCallTarget parentTarget = callStack.get(callStack.size() - 2);
         OptimizedCallTarget currentTarget = callStack.get(callStack.size() - 1);
@@ -126,7 +120,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
              */
             final CompilerOptions options = callNode.getRootNode().getCompilerOptions();
             if (policy.isAllowed(new TruffleInliningProfile(callNode, nodeCount, nodeCount, frequency, recursions), callStackNodeCount, options)) {
-                List<TruffleInliningDecision> exploredCallSites = exploreCallSites(callStack, callStackNodeCount + nodeCount, policy, visitedNodes, rejectedDecisionsCache);
+                List<TruffleInliningDecision> exploredCallSites = exploreCallSites(callStack, callStackNodeCount + nodeCount, policy, visitedNodes);
                 childCallSites = decideInlining(exploredCallSites, policy, nodeCount, options);
                 for (TruffleInliningDecision childCallSite : childCallSites) {
                     if (childCallSite.isInline()) {
