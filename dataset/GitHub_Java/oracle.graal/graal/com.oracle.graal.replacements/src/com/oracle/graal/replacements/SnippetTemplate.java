@@ -27,14 +27,12 @@ import static com.oracle.graal.api.meta.MetaUtil.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.debug.Debug.*;
 import static com.oracle.graal.graph.util.CollectionsAccess.*;
-import static com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates.*;
 import static java.util.FormattableFlags.*;
 
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
@@ -80,51 +78,8 @@ public class SnippetTemplate {
     public static class SnippetInfo {
 
         protected final ResolvedJavaMethod method;
-
-        /**
-         * Lazily constructed parts of {@link SnippetInfo}.
-         */
-        static class Lazy {
-            public Lazy(ResolvedJavaMethod method) {
-                int count = method.getSignature().getParameterCount(false);
-                constantParameters = new boolean[count];
-                varargsParameters = new boolean[count];
-                for (int i = 0; i < count; i++) {
-                    constantParameters[i] = MetaUtil.getParameterAnnotation(ConstantParameter.class, i, method) != null;
-                    varargsParameters[i] = MetaUtil.getParameterAnnotation(VarargsParameter.class, i, method) != null;
-
-                    assert !constantParameters[i] || !varargsParameters[i] : "Parameter cannot be annotated with both @" + ConstantParameter.class.getSimpleName() + " and @" +
-                                    VarargsParameter.class.getSimpleName();
-                }
-
-                // Retrieve the names only when assertions are turned on.
-                assert initNames(method, count);
-            }
-
-            final boolean[] constantParameters;
-            final boolean[] varargsParameters;
-
-            /**
-             * The parameter names, taken from the local variables table. Only used for assertion
-             * checking, so use only within an assert statement.
-             */
-            String[] names;
-
-            private boolean initNames(ResolvedJavaMethod method, int parameterCount) {
-                names = new String[parameterCount];
-                int slotIdx = 0;
-                for (int i = 0; i < names.length; i++) {
-                    names[i] = method.getLocalVariableTable().getLocal(slotIdx, 0).getName();
-
-                    Kind kind = method.getSignature().getParameterKind(i);
-                    slotIdx += kind == Kind.Long || kind == Kind.Double ? 2 : 1;
-                }
-                return true;
-            }
-
-        }
-
-        protected final AtomicReference<Lazy> lazy = new AtomicReference<>(null);
+        protected final boolean[] constantParameters;
+        protected final boolean[] varargsParameters;
 
         /**
          * Times instantiations of all templates derived form this snippet.
@@ -140,18 +95,31 @@ public class SnippetTemplate {
          */
         private final DebugMetric instantiationCounter;
 
-        private Lazy lazy() {
-            if (lazy.get() == null) {
-                lazy.compareAndSet(null, new Lazy(method));
-            }
-            return lazy.get();
-        }
+        /**
+         * The parameter names, taken from the local variables table. Only used for assertion
+         * checking, so use only within an assert statement.
+         */
+        protected final String[] names;
 
         protected SnippetInfo(ResolvedJavaMethod method) {
             this.method = method;
             instantiationCounter = Debug.metric("SnippetInstantiationCount[%s]", method);
             instantiationTimer = Debug.timer("SnippetInstantiationTime[%s]", method);
             assert method.isStatic() : "snippet method must be static: " + MetaUtil.format("%H.%n", method);
+            int count = method.getSignature().getParameterCount(false);
+            constantParameters = new boolean[count];
+            varargsParameters = new boolean[count];
+            for (int i = 0; i < count; i++) {
+                constantParameters[i] = MetaUtil.getParameterAnnotation(ConstantParameter.class, i, method) != null;
+                varargsParameters[i] = MetaUtil.getParameterAnnotation(VarargsParameter.class, i, method) != null;
+
+                assert !isConstantParameter(i) || !isVarargsParameter(i) : "Parameter cannot be annotated with both @" + ConstantParameter.class.getSimpleName() + " and @" +
+                                VarargsParameter.class.getSimpleName();
+            }
+
+            names = new String[count];
+            // Retrieve the names only when assertions are turned on.
+            assert initNames();
         }
 
         private int templateCount;
@@ -165,28 +133,35 @@ public class SnippetTemplate {
             }
         }
 
+        private boolean initNames() {
+            int slotIdx = 0;
+            for (int i = 0; i < names.length; i++) {
+                names[i] = method.getLocalVariableTable().getLocal(slotIdx, 0).getName();
+
+                Kind kind = method.getSignature().getParameterKind(i);
+                slotIdx += kind == Kind.Long || kind == Kind.Double ? 2 : 1;
+            }
+            return true;
+        }
+
         public ResolvedJavaMethod getMethod() {
             return method;
         }
 
         public int getParameterCount() {
-            return lazy().constantParameters.length;
+            return constantParameters.length;
         }
 
         public boolean isConstantParameter(int paramIdx) {
-            return lazy().constantParameters[paramIdx];
+            return constantParameters[paramIdx];
         }
 
         public boolean isVarargsParameter(int paramIdx) {
-            return lazy().varargsParameters[paramIdx];
+            return varargsParameters[paramIdx];
         }
 
         public String getParameterName(int paramIdx) {
-            String[] names = lazy().names;
-            if (names != null) {
-                return names[paramIdx];
-            }
-            return null;
+            return names[paramIdx];
         }
     }
 
@@ -248,7 +223,7 @@ public class SnippetTemplate {
 
         private boolean check(String name, boolean constParam, boolean varargsParam) {
             assert nextParamIdx < info.getParameterCount() : "too many parameters: " + name + "  " + this;
-            assert info.getParameterName(nextParamIdx) == null || info.getParameterName(nextParamIdx).equals(name) : "wrong parameter name: " + name + "  " + this;
+            assert info.names[nextParamIdx] == null || info.names[nextParamIdx].equals(name) : "wrong parameter name: " + name + "  " + this;
             assert constParam == info.isConstantParameter(nextParamIdx) : "Parameter " + (constParam ? "not " : "") + "annotated with @" + ConstantParameter.class.getSimpleName() + ": " + name +
                             "  " + this;
             assert varargsParam == info.isVarargsParameter(nextParamIdx) : "Parameter " + (varargsParam ? "not " : "") + "annotated with @" + VarargsParameter.class.getSimpleName() + ": " + name +
@@ -268,7 +243,7 @@ public class SnippetTemplate {
                 } else if (info.isVarargsParameter(i)) {
                     result.append("varargs ");
                 }
-                result.append(info.getParameterName(i)).append(" = ").append(values[i]);
+                result.append(info.names[i]).append(" = ").append(values[i]);
                 sep = ", ";
             }
             result.append(">");
@@ -285,8 +260,8 @@ public class SnippetTemplate {
                 for (int i = 0; i < info.getParameterCount(); i++) {
                     if (info.isConstantParameter(i)) {
                         sb.append(sep);
-                        if (info.getParameterName(i) != null) {
-                            sb.append(info.getParameterName(i));
+                        if (info.names[i] != null) {
+                            sb.append(info.names[i]);
                         } else {
                             sb.append(i);
                         }
@@ -419,14 +394,13 @@ public class SnippetTemplate {
     private static final DebugMetric SnippetTemplates = Debug.metric("SnippetTemplateCount");
 
     private static final String MAX_TEMPLATES_PER_SNIPPET_PROPERTY_NAME = "graal.maxTemplatesPerSnippet";
+    private static final boolean UseSnippetTemplateCache = Boolean.parseBoolean(System.getProperty("graal.useSnippetTemplateCache", "true"));
     private static final int MaxTemplatesPerSnippet = Integer.getInteger(MAX_TEMPLATES_PER_SNIPPET_PROPERTY_NAME, 50);
 
     /**
      * Base class for snippet classes. It provides a cache for {@link SnippetTemplate}s.
      */
-    public abstract static class AbstractTemplates implements com.oracle.graal.api.replacements.SnippetTemplateCache {
-
-        static final boolean UseSnippetTemplateCache = Boolean.parseBoolean(System.getProperty("graal.useSnippetTemplateCache", "true"));
+    public abstract static class AbstractTemplates implements SnippetTemplateCache {
 
         protected final Providers providers;
         protected final SnippetReflectionProvider snippetReflection;
@@ -444,27 +418,25 @@ public class SnippetTemplate {
             }
         }
 
-        private static Method findMethod(Class<? extends Snippets> declaringClass, String methodName, Method except) {
-            for (Method m : declaringClass.getDeclaredMethods()) {
-                if (m.getName().equals(methodName) && !m.equals(except)) {
-                    return m;
-                }
-            }
-            return null;
-        }
-
         /**
-         * Finds the unique method in {@code declaringClass} named {@code methodName} annotated by
-         * {@link Snippet} and returns a {@link SnippetInfo} value describing it. There must be
-         * exactly one snippet method in {@code declaringClass}.
+         * Finds the method in {@code declaringClass} annotated with {@link Snippet} named
+         * {@code methodName}. If {@code methodName} is null, then there must be exactly one snippet
+         * method in {@code declaringClass}.
          */
         protected SnippetInfo snippet(Class<? extends Snippets> declaringClass, String methodName) {
-            assert methodName != null;
-            Method method = findMethod(declaringClass, methodName, null);
-            assert method != null : "did not find @" + Snippet.class.getSimpleName() + " method in " + declaringClass + " named " + methodName;
-            assert method.getAnnotation(Snippet.class) != null : method + " must be annotated with @" + Snippet.class.getSimpleName();
-            assert findMethod(declaringClass, methodName, method) == null : "found more than one method named " + methodName + " in " + declaringClass;
-            ResolvedJavaMethod javaMethod = providers.getMetaAccess().lookupJavaMethod(method);
+            Method found = null;
+            Class<?> clazz = declaringClass;
+            while (clazz != Object.class) {
+                for (Method method : clazz.getDeclaredMethods()) {
+                    if (method.getAnnotation(Snippet.class) != null && (methodName == null || method.getName().equals(methodName))) {
+                        assert found == null : "found more than one @" + Snippet.class.getSimpleName() + " method in " + declaringClass + (methodName == null ? "" : " named " + methodName);
+                        found = method;
+                    }
+                }
+                clazz = clazz.getSuperclass();
+            }
+            assert found != null : "did not find @" + Snippet.class.getSimpleName() + " method in " + declaringClass + (methodName == null ? "" : " named " + methodName);
+            ResolvedJavaMethod javaMethod = providers.getMetaAccess().lookupJavaMethod(found);
             providers.getReplacements().registerSnippet(javaMethod);
             return new SnippetInfo(javaMethod);
         }
@@ -825,14 +797,14 @@ public class SnippetTemplate {
         assert args.info.getParameterCount() == parameters.length : "number of args (" + args.info.getParameterCount() + ") != number of parameters (" + parameters.length + ")";
         for (int i = 0; i < parameters.length; i++) {
             Object parameter = parameters[i];
-            assert parameter != null : this + " has no parameter named " + args.info.getParameterName(i);
+            assert parameter != null : this + " has no parameter named " + args.info.names[i];
             Object argument = args.values[i];
             if (parameter instanceof ParameterNode) {
                 if (argument instanceof ValueNode) {
                     replacements.put((ParameterNode) parameter, (ValueNode) argument);
                 } else {
                     Kind kind = ((ParameterNode) parameter).getKind();
-                    assert argument != null || kind == Kind.Object : this + " cannot accept null for non-object parameter named " + args.info.getParameterName(i);
+                    assert argument != null || kind == Kind.Object : this + " cannot accept null for non-object parameter named " + args.info.names[i];
                     Constant constant = forBoxed(argument, kind);
                     replacements.put((ParameterNode) parameter, ConstantNode.forConstant(constant, metaAccess, replaceeGraph));
                 }
@@ -864,7 +836,7 @@ public class SnippetTemplate {
                     }
                 }
             } else {
-                assert parameter == CONSTANT_PARAMETER || parameter == UNUSED_PARAMETER : "unexpected entry for parameter: " + args.info.getParameterName(i) + " -> " + parameter;
+                assert parameter == CONSTANT_PARAMETER || parameter == UNUSED_PARAMETER : "unexpected entry for parameter: " + args.info.names[i] + " -> " + parameter;
             }
         }
         return replacements;
@@ -893,6 +865,7 @@ public class SnippetTemplate {
      * lowered and the stamp of the snippet's return value.
      */
     public interface UsageReplacer {
+
         /**
          * Replaces all usages of {@code oldNode} with direct or indirect usages of {@code newNode}.
          */
@@ -1147,11 +1120,14 @@ public class SnippetTemplate {
                         next = fwn.next();
                         fwn.setNext(null);
                     }
+                    returnDuplicate.clearInputs();
                     returnDuplicate.replaceAndDelete(next);
                 }
             }
 
             // Remove the replacee from its graph
+            replacee.clearInputs();
+            replacee.replaceAtUsages(null);
             GraphUtil.killCFG(replacee);
 
             Debug.dump(replaceeGraph, "After lowering %s with %s", replacee, this);
@@ -1238,6 +1214,7 @@ public class SnippetTemplate {
             replacer.replace(replacee, returnValue, new DuplicateMapper(duplicates, replaceeGraph.start()));
 
             if (returnDuplicate.isAlive()) {
+                returnDuplicate.clearInputs();
                 returnDuplicate.replaceAndDelete(next);
             }
 
@@ -1276,12 +1253,12 @@ public class SnippetTemplate {
         for (int i = 0; i < args.info.getParameterCount(); i++) {
             if (args.info.isConstantParameter(i)) {
                 Kind kind = signature.getParameterKind(i);
-                assert checkConstantArgument(metaAccess, method, signature, i, args.info.getParameterName(i), args.values[i], kind);
+                assert checkConstantArgument(metaAccess, method, signature, i, args.info.names[i], args.values[i], kind);
 
             } else if (args.info.isVarargsParameter(i)) {
                 assert args.values[i] instanceof Varargs;
                 Varargs varargs = (Varargs) args.values[i];
-                assert checkVarargs(metaAccess, method, signature, i, args.info.getParameterName(i), varargs);
+                assert checkVarargs(metaAccess, method, signature, i, args.info.names[i], varargs);
             }
         }
         return true;
