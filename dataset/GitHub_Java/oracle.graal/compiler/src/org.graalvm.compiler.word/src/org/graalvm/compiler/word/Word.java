@@ -29,6 +29,13 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import org.graalvm.api.word.ComparableWord;
+import org.graalvm.api.word.LocationIdentity;
+import org.graalvm.api.word.Pointer;
+import org.graalvm.api.word.Signed;
+import org.graalvm.api.word.Unsigned;
+import org.graalvm.api.word.WordBase;
+import org.graalvm.api.word.WordFactory;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.calc.UnsignedMath;
 import org.graalvm.compiler.debug.GraalError;
@@ -48,13 +55,6 @@ import org.graalvm.compiler.nodes.calc.UnsignedRightShiftNode;
 import org.graalvm.compiler.nodes.calc.XorNode;
 import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.address.AddressNode.Address;
-import org.graalvm.word.ComparableWord;
-import org.graalvm.word.LocationIdentity;
-import org.graalvm.word.Pointer;
-import org.graalvm.word.Signed;
-import org.graalvm.word.Unsigned;
-import org.graalvm.word.WordBase;
-import org.graalvm.word.WordFactory;
 
 public abstract class Word extends WordFactory implements Signed, Unsigned, Pointer {
 
@@ -80,8 +80,6 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
     public enum Opcode {
         NODE_CLASS,
         COMPARISON,
-        IS_NULL,
-        IS_NON_NULL,
         NOT,
         READ_POINTER,
         READ_OBJECT,
@@ -425,18 +423,6 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
     @Operation(opcode = Opcode.NOT)
     public Word not() {
         return box(~unbox());
-    }
-
-    @Override
-    @Operation(opcode = Opcode.IS_NULL)
-    public boolean isNull() {
-        return equal(WordFactory.zero());
-    }
-
-    @Override
-    @Operation(opcode = Opcode.IS_NON_NULL)
-    public boolean isNonNull() {
-        return notEqual(WordFactory.zero());
     }
 
     @Override

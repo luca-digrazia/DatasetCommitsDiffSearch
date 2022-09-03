@@ -225,11 +225,6 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         this.loweringStage = loweringStage;
     }
 
-    @Override
-    protected boolean shouldDumpBeforeAtBasicLevel() {
-        return loweringStage == LoweringTool.StandardLoweringStage.HIGH_TIER;
-    }
-
     /**
      * Checks that second lowering of a given graph did not introduce any new nodes.
      *

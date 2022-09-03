@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import org.graalvm.api.word.LocationIdentity;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
@@ -44,7 +45,6 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.java.AbstractNewObjectNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
@@ -54,7 +54,6 @@ import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.spi.VirtualizableAllocation;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
-import org.graalvm.word.LocationIdentity;
 
 // @formatter:off
 @NodeInfo(nameTemplate = "Alloc {i#virtualObjects}",
@@ -112,7 +111,7 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
     public void lower(LoweringTool tool) {
         for (int i = 0; i < virtualObjects.size(); i++) {
             if (ensureVirtual.get(i)) {
-                EnsureVirtualizedNode.ensureVirtualFailure(this, virtualObjects.get(i).stamp(NodeView.DEFAULT));
+                EnsureVirtualizedNode.ensureVirtualFailure(this, virtualObjects.get(i).stamp());
             }
         }
         tool.getLowerer().lower(this, tool);
