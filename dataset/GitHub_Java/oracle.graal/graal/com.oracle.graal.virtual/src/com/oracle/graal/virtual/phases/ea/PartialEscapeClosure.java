@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +22,12 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
+
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.remote.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -123,8 +124,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
     }
 
     private void processNodeWithState(NodeWithState nodeWithState, final BlockT state, final GraphEffectList effects) {
-        for (FrameState fs : nodeWithState.states()) {
-            FrameState frameState = fs;
+        for (FrameState frameState : nodeWithState.states()) {
             if (frameState.usages().count() > 1) {
                 FrameState copy = (FrameState) frameState.copyWithInputs();
                 nodeWithState.asNode().replaceFirstInput(frameState, copy);
@@ -221,7 +221,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     @Override
     protected void processLoopExit(LoopExitNode exitNode, BlockT initialState, BlockT exitState, GraphEffectList effects) {
-        Map<VirtualObjectNode, ProxyNode> proxies = Node.newMap();
+        HashMap<VirtualObjectNode, ProxyNode> proxies = new HashMap<>();
 
         for (ProxyNode proxy : exitNode.proxies()) {
             ObjectState obj = getObjectState(exitState, proxy.value());
@@ -271,9 +271,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     protected class MergeProcessor extends EffectsClosure<BlockT>.MergeProcessor {
 
-        private final HashMap<Object, ValuePhiNode> materializedPhis = Context.newMap();
-        private final Map<ValueNode, ValuePhiNode[]> valuePhis = Node.newIdentityMap();
-        private final Map<ValuePhiNode, VirtualObjectNode> valueObjectVirtuals = Node.newIdentityMap();
+        private final HashMap<Object, ValuePhiNode> materializedPhis = new HashMap<>();
+        private final Map<ValueNode, ValuePhiNode[]> valuePhis = newIdentityMap();
+        private final Map<ValuePhiNode, VirtualObjectNode> valueObjectVirtuals = newNodeIdentityMap();
 
         public MergeProcessor(Block mergeBlock) {
             super(mergeBlock);
@@ -321,7 +321,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             super.merge(states);
 
             // calculate the set of virtual objects that exist in all predecessors
-            Set<VirtualObjectNode> virtualObjTemp = Node.newSet(states.get(0).getVirtualObjects());
+            HashSet<VirtualObjectNode> virtualObjTemp = new HashSet<>(states.get(0).getVirtualObjects());
             for (int i = 1; i < states.size(); i++) {
                 virtualObjTemp.retainAll(states.get(i).getVirtualObjects());
             }
@@ -435,10 +435,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             Kind valueKind = value.getKind();
                             if (valueKind != twoSlotKinds[valueIndex]) {
                                 ValueNode nextValue = objStates[i].getEntry(valueIndex + 1);
-                                if (value.isConstant() && value.asJavaConstant().equals(JavaConstant.INT_0) && nextValue.isConstant() && nextValue.asJavaConstant().equals(JavaConstant.INT_0)) {
+                                if (value.isConstant() && value.asConstant().equals(Constant.INT_0) && nextValue.isConstant() && nextValue.asConstant().equals(Constant.INT_0)) {
                                     // rewrite to a zero constant of the larger kind
                                     objStates[i].setEntry(valueIndex, ConstantNode.defaultForKind(twoSlotKinds[valueIndex], merge.graph()));
-                                    objStates[i].setEntry(valueIndex + 1, ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccessProvider(), merge.graph()));
+                                    objStates[i].setEntry(valueIndex + 1, ConstantNode.forConstant(Constant.forIllegal(), tool.getMetaAccessProvider(), merge.graph()));
                                 } else {
                                     compatible = false;
                                     break outer;
@@ -467,7 +467,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         // skip an entry after a long/double value that occupies two int slots
                         valueIndex++;
                         phis[valueIndex] = null;
-                        values[valueIndex] = ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccessProvider(), merge.graph());
+                        values[valueIndex] = ConstantNode.forConstant(Constant.forIllegal(), tool.getMetaAccessProvider(), merge.graph());
                     }
                     valueIndex++;
                 }
