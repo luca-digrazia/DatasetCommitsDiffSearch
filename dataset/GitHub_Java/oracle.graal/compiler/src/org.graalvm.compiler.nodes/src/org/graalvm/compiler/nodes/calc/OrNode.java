@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -50,7 +48,7 @@ public final class OrNode extends BinaryArithmeticNode<Or> implements BinaryComm
     public static final NodeClass<OrNode> TYPE = NodeClass.create(OrNode.class);
 
     public OrNode(ValueNode x, ValueNode y) {
-        super(TYPE, getArithmeticOpTable(x).getOr(), x, y);
+        super(TYPE, ArithmeticOpTable::getOr, x, y);
     }
 
     public static ValueNode create(ValueNode x, ValueNode y, NodeView view) {
@@ -61,11 +59,6 @@ public final class OrNode extends BinaryArithmeticNode<Or> implements BinaryComm
             return tryConstantFold;
         }
         return canonical(null, op, stamp, x, y, view);
-    }
-
-    @Override
-    protected BinaryOp<Or> getOp(ArithmeticOpTable table) {
-        return table.getOr();
     }
 
     @Override
