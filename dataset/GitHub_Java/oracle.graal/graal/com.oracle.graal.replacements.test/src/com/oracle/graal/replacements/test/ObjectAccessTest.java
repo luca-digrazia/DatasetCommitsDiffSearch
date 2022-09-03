@@ -33,7 +33,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.ReplacementsImpl.*;
 import com.oracle.graal.replacements.Snippet.SnippetInliningPolicy;
 import com.oracle.graal.word.*;
 
@@ -55,7 +54,7 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
     @Override
     protected StructuredGraph parse(Method m) {
         ResolvedJavaMethod resolvedMethod = getMetaAccess().lookupJavaMethod(m);
-        return installer.makeGraph(resolvedMethod, null, resolvedMethod, inliningPolicy.get(), FrameStateProcessing.CollapseFrameForSingleSideEffect);
+        return installer.makeGraph(resolvedMethod, null, inliningPolicy.get(), false);
     }
 
     @Test
@@ -103,7 +102,7 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
     private static void assertRead(StructuredGraph graph, Kind kind, boolean indexConvert, LocationIdentity locationIdentity) {
         ReadNode read = (ReadNode) graph.start().next();
         Assert.assertEquals(kind.getStackKind(), read.kind());
-        Assert.assertEquals(graph.getParameter(0), read.object());
+        Assert.assertEquals(graph.getLocal(0), read.object());
 
         IndexedLocationNode location = (IndexedLocationNode) read.location();
         Assert.assertEquals(kind, location.getValueKind());
@@ -114,9 +113,9 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
             ConvertNode convert = (ConvertNode) location.getIndex();
             Assert.assertEquals(Kind.Int, convert.getFromKind());
             Assert.assertEquals(Kind.Long, convert.getToKind());
-            Assert.assertEquals(graph.getParameter(1), convert.value());
+            Assert.assertEquals(graph.getLocal(1), convert.value());
         } else {
-            Assert.assertEquals(graph.getParameter(1), location.getIndex());
+            Assert.assertEquals(graph.getLocal(1), location.getIndex());
         }
 
         ReturnNode ret = (ReturnNode) read.next();
@@ -125,8 +124,8 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
 
     private static void assertWrite(StructuredGraph graph, Kind kind, boolean indexConvert, LocationIdentity locationIdentity) {
         WriteNode write = (WriteNode) graph.start().next();
-        Assert.assertEquals(graph.getParameter(2), write.value());
-        Assert.assertEquals(graph.getParameter(0), write.object());
+        Assert.assertEquals(graph.getLocal(2), write.value());
+        Assert.assertEquals(graph.getLocal(0), write.object());
         Assert.assertEquals(Kind.Void, write.kind());
         Assert.assertEquals(FrameState.AFTER_BCI, write.stateAfter().bci);
 
@@ -139,9 +138,9 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
             ConvertNode convert = (ConvertNode) location.getIndex();
             Assert.assertEquals(Kind.Int, convert.getFromKind());
             Assert.assertEquals(Kind.Long, convert.getToKind());
-            Assert.assertEquals(graph.getParameter(1), convert.value());
+            Assert.assertEquals(graph.getLocal(1), convert.value());
         } else {
-            Assert.assertEquals(graph.getParameter(1), location.getIndex());
+            Assert.assertEquals(graph.getLocal(1), location.getIndex());
         }
 
         ReturnNode ret = (ReturnNode) write.next();
