@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 
 /**
  * This class contains utility methods for commonly used functional patterns for collections.
@@ -60,20 +59,6 @@ public class CollectionsUtil {
             }
         }
         return false;
-    }
-
-    public static <T> List<T> filterToList(List<T> inputs, Predicate<? super T> predicate) {
-        return filterToList(inputs, predicate, ArrayList::new);
-    }
-
-    public static <T> List<T> filterToList(List<T> inputs, Predicate<? super T> predicate, Supplier<List<T>> listGenerator) {
-        List<T> resultList = listGenerator.get();
-        for (T t : inputs) {
-            if (predicate.test(t)) {
-                resultList.add(t);
-            }
-        }
-        return resultList;
     }
 
     /**
