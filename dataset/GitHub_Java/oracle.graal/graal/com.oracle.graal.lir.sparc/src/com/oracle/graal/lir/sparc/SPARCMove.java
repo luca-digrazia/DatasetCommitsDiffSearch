@@ -33,6 +33,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.ImplicitNullCheck;
 import com.oracle.graal.lir.StandardOp.MoveOp;
@@ -40,7 +41,6 @@ import com.oracle.graal.lir.StandardOp.NullCheck;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.sparc.*;
 import com.oracle.graal.sparc.SPARC.CPUFeature;
-import com.oracle.jvmci.common.*;
 
 public class SPARCMove {
 
@@ -160,11 +160,11 @@ public class SPARCMove {
                         } else if (resultKindSize == 1) {
                             masm.stb(asIntReg(input), tempAddress);
                         } else {
-                            throw JVMCIError.shouldNotReachHere();
+                            throw GraalInternalError.shouldNotReachHere();
                         }
                         break;
                     default:
-                        JVMCIError.shouldNotReachHere();
+                        GraalInternalError.shouldNotReachHere();
                 }
                 delayedControlTransfer.emitControlTransfer(crb, masm);
                 switch (resultKind) {
@@ -190,7 +190,7 @@ public class SPARCMove {
                         masm.lddf(tempAddress, asDoubleReg(result));
                         break;
                     default:
-                        JVMCIError.shouldNotReachHere();
+                        GraalInternalError.shouldNotReachHere();
                         break;
                 }
             }
@@ -230,7 +230,7 @@ public class SPARCMove {
                 if (inputKind == Int || inputKind == Short || inputKind == Char || inputKind == Byte) {
                     masm.movwtos(asIntReg(input), asFloatReg(result));
                 } else {
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
                 }
             } else if (resultKind == Double) {
                 if (inputKind == Int || inputKind == Short || inputKind == Char || inputKind == Byte) {
@@ -248,7 +248,7 @@ public class SPARCMove {
                 if (resultKind == Long) {
                     masm.movdtox(asDoubleReg(input), asLongReg(result));
                 } else {
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
                 }
             }
         }
@@ -304,7 +304,7 @@ public class SPARCMove {
                 case Double:
                     return StackSlot.get(LIRKind.value(Kind.Long), slot.getRawOffset(), slot.getRawAddFrameSize());
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         }
     }
@@ -534,7 +534,7 @@ public class SPARCMove {
             super(TYPE, kind, address, state);
             this.input = input;
             if (!input.isDefaultForKind()) {
-                throw JVMCIError.shouldNotReachHere("Can only store null constants to memory");
+                throw GraalInternalError.shouldNotReachHere("Can only store null constants to memory");
             }
         }
 
@@ -565,9 +565,9 @@ public class SPARCMove {
                         break;
                     case Float:
                     case Double:
-                        throw JVMCIError.shouldNotReachHere("Cannot store float constants to memory");
+                        throw GraalInternalError.shouldNotReachHere("Cannot store float constants to memory");
                     default:
-                        throw JVMCIError.shouldNotReachHere();
+                        throw GraalInternalError.shouldNotReachHere();
                 }
             }
         }
@@ -581,14 +581,14 @@ public class SPARCMove {
                 SPARCAddress resultAddress = (SPARCAddress) crb.asAddress(result);
                 emitStore(input, resultAddress, input.getPlatformKind(), delaySlotLir, null, crb, masm);
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
         } else if (isStackSlot(input)) {
             if (isRegister(result)) {
                 SPARCAddress inputAddress = (SPARCAddress) crb.asAddress(input);
                 emitLoad(inputAddress, result, false, input.getPlatformKind(), delaySlotLir, null, crb, masm);
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
         } else if (isConstant(input)) {
             JavaConstant constant = asConstant(input);
@@ -612,10 +612,10 @@ public class SPARCMove {
                     }
                 }
             } else {
-                throw JVMCIError.shouldNotReachHere("Result is a: " + result);
+                throw GraalInternalError.shouldNotReachHere("Result is a: " + result);
             }
         } else {
-            throw JVMCIError.shouldNotReachHere();
+            throw GraalInternalError.shouldNotReachHere();
         }
     }
 
@@ -640,18 +640,18 @@ public class SPARCMove {
                 if (result.getPlatformKind() == Kind.Float) {
                     masm.fmovs(src, dst);
                 } else {
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
                 }
                 break;
             case Double:
                 if (result.getPlatformKind() == Kind.Double) {
                     masm.fmovd(src, dst);
                 } else {
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
                 }
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere("Input is a: " + input.getKind());
+                throw GraalInternalError.shouldNotReachHere("Input is a: " + input.getKind());
         }
     }
 
@@ -771,11 +771,11 @@ public class SPARCMove {
                         crb.recordInlineDataInCode(input); // relocatable cannot be delayed
                         new Setx(0xDEADDEADDEADDEADL, resultRegister, true).emit(masm);
                     } else {
-                        throw JVMCIError.unimplemented();
+                        throw GraalInternalError.unimplemented();
                     }
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere("missing: " + input.getKind());
+                    throw GraalInternalError.shouldNotReachHere("missing: " + input.getKind());
             }
         }
     }
@@ -792,7 +792,7 @@ public class SPARCMove {
                 masm.casx(asRegister(address), asRegister(cmpValue), asRegister(newValue));
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 
@@ -849,7 +849,7 @@ public class SPARCMove {
                     masm.ldx(addr, dst);
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         }
     }
@@ -888,7 +888,7 @@ public class SPARCMove {
                     masm.stdf(asRegister(input), addr);
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere("missing: " + kind);
+                    throw GraalInternalError.shouldNotReachHere("missing: " + kind);
             }
         }
     }
