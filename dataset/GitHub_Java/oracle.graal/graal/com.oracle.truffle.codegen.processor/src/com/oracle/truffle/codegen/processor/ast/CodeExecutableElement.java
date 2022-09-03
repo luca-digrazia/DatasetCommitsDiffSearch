@@ -225,7 +225,4 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
         return copy;
     }
 
-    public TypeMirror getReceiverType() {
-        throw new UnsupportedOperationException();
-    }
 }
