@@ -66,7 +66,7 @@ public final class TruffleCache {
         this.replacements = replacements;
     }
 
-    public StructuredGraph lookup(final ResolvedJavaMethod method, final NodeInputList<ValueNode> arguments, final Assumptions assumptions) {
+    public StructuredGraph lookup(final ResolvedJavaMethod method, final NodeInputList<ValueNode> arguments) {
 
         StructuredGraph resultGraph = null;
         if (cache.containsKey(method)) {
@@ -105,10 +105,9 @@ public final class TruffleCache {
                         localNode.setStamp(stamp);
                     }
 
-                    Assumptions tmpAssumptions = new Assumptions(false);
-                    optimizeGraph(newGraph, tmpAssumptions);
+                    optimizeGraph(newGraph);
 
-                    HighTierContext context = new HighTierContext(metaAccessProvider, tmpAssumptions, replacements);
+                    HighTierContext context = new HighTierContext(metaAccessProvider, new Assumptions(false), replacements);
                     PartialEscapePhase partialEscapePhase = new PartialEscapePhase(false, new CanonicalizerPhase(true));
                     partialEscapePhase.apply(newGraph, context);
 
@@ -139,17 +138,18 @@ public final class TruffleCache {
                     }
                 }
                 Debug.dump(clonedResultGraph, "after applying constants");
-                optimizeGraph(clonedResultGraph, assumptions);
+                optimizeGraph(clonedResultGraph);
             }
         });
         return clonedResultGraph;
     }
 
-    private void optimizeGraph(StructuredGraph newGraph, Assumptions assumptions) {
+    private void optimizeGraph(StructuredGraph newGraph) {
 
         ConditionalEliminationPhase eliminate = new ConditionalEliminationPhase(metaAccessProvider);
         ConvertDeoptimizeToGuardPhase convertDeoptimizeToGuardPhase = new ConvertDeoptimizeToGuardPhase();
 
+        Assumptions assumptions = new Assumptions(false);
         CanonicalizerPhase.Instance canonicalizerPhase = new CanonicalizerPhase.Instance(metaAccessProvider, assumptions, !AOTCompilation.getValue(), null, null);
 
         Integer maxNodes = TruffleCompilerOptions.TruffleOperationCacheMaxNodes.getValue();
