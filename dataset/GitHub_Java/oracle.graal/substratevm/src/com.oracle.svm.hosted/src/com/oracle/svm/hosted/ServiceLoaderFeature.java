@@ -101,7 +101,6 @@ public class ServiceLoaderFeature implements Feature {
         return Options.UseServiceLoaderFeature.getValue();
     }
 
-    @SuppressWarnings("try")
     @Override
     public void duringAnalysis(DuringAnalysisAccess a) {
         DuringAnalysisAccessImpl access = (DuringAnalysisAccessImpl) a;
