@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,6 +24,7 @@ package org.graalvm.compiler.truffle.common;
 
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.options.OptionValues;
 
 /**
@@ -52,7 +51,8 @@ public interface TruffleCompiler {
 
     /**
      * Compiles {@code compilable} to machine code.
-     *  @param debug a debug context to use or {@code null} if a {@link DebugContext} cannot cross
+     *
+     * @param debug a debug context to use or {@code null} if a {@link DebugContext} cannot cross
      *            the Truffle runtime/compiler boundary represented by this object
      * @param compilationId an identifier to be used for the compilation or {@code null} if a
      *            {@link CompilationIdentifier} cannot cross the Truffle runtime/compiler boundary
@@ -61,9 +61,10 @@ public interface TruffleCompiler {
      * @param compilable the Truffle AST to be compiled
      * @param inlining a guide for Truffle level inlining to be performed during compilation
      * @param task an object that must be periodically queried during compilation to see if the
+     *            compilation has been cancelled by the requestor
      */
-    void doCompile(DebugContext debug, CompilationIdentifier compilationId, OptionValues options, CompilableTruffleAST compilable, TruffleInliningPlan inlining, TruffleCompilationTask task,
-                   TruffleCompilerListener listener);
+    void doCompile(DebugContext debug, CompilationIdentifier compilationId, OptionValues options, CompilableTruffleAST compilable, TruffleInliningPlan inlining, Cancellable task,
+                    TruffleCompilerListener listener);
 
     /**
      * Returns a unique name for the configuration in use by this compiler.

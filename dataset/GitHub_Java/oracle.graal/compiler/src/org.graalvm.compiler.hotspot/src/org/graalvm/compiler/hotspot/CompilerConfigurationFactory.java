@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -34,7 +32,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.graalvm.collections.EconomicMap;
-import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.lir.phases.LIRPhase;
@@ -169,7 +166,6 @@ public abstract class CompilerConfigurationFactory implements Comparable<Compile
     /**
      * @return sorted list of {@link CompilerConfigurationFactory}s
      */
-    @SuppressFBWarnings(value = "DLS_DEAD_LOCAL_STORE", justification = "false positive on dead store to `candidates`")
     private static List<CompilerConfigurationFactory> getAllCandidates() {
         List<CompilerConfigurationFactory> candidates = new ArrayList<>();
         for (CompilerConfigurationFactory candidate : GraalServices.load(CompilerConfigurationFactory.class)) {
