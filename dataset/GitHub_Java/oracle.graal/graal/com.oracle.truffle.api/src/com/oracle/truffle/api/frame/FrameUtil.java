@@ -35,7 +35,14 @@ public final class FrameUtil {
      * @param value the new value of the local variable
      */
     public static void setObjectSafe(Frame frame, FrameSlot slot, Object value) {
-        frame.setObject(slot, value);
+        if (slot.getKind() != FrameSlotKind.Object) {
+            slot.setKind(FrameSlotKind.Object);
+        }
+        try {
+            frame.setObject(slot, value);
+        } catch (FrameSlotTypeException e) {
+            throw new IllegalStateException();
+        }
     }
 
     /**
@@ -47,7 +54,14 @@ public final class FrameUtil {
      * @param value the new value of the local variable
      */
     public static void setByteSafe(Frame frame, FrameSlot slot, byte value) {
-        frame.setByte(slot, value);
+        if (slot.getKind() != FrameSlotKind.Byte) {
+            slot.setKind(FrameSlotKind.Byte);
+        }
+        try {
+            frame.setByte(slot, value);
+        } catch (FrameSlotTypeException e) {
+            throw new IllegalStateException();
+        }
     }
 
     /**
@@ -59,7 +73,14 @@ public final class FrameUtil {
      * @param value the new value of the local variable
      */
     public static void setBooleanSafe(Frame frame, FrameSlot slot, boolean value) {
-        frame.setBoolean(slot, value);
+        if (slot.getKind() != FrameSlotKind.Boolean) {
+            slot.setKind(FrameSlotKind.Boolean);
+        }
+        try {
+            frame.setBoolean(slot, value);
+        } catch (FrameSlotTypeException e) {
+            throw new IllegalStateException();
+        }
     }
 
     /**
@@ -71,7 +92,14 @@ public final class FrameUtil {
      * @param value the new value of the local variable
      */
     public static void setIntSafe(Frame frame, FrameSlot slot, int value) {
-        frame.setInt(slot, value);
+        if (slot.getKind() != FrameSlotKind.Int) {
+            slot.setKind(FrameSlotKind.Int);
+        }
+        try {
+            frame.setInt(slot, value);
+        } catch (FrameSlotTypeException e) {
+            throw new IllegalStateException();
+        }
     }
 
     /**
@@ -83,7 +111,14 @@ public final class FrameUtil {
      * @param value the new value of the local variable
      */
     public static void setLongSafe(Frame frame, FrameSlot slot, long value) {
-        frame.setLong(slot, value);
+        if (slot.getKind() != FrameSlotKind.Long) {
+            slot.setKind(FrameSlotKind.Long);
+        }
+        try {
+            frame.setLong(slot, value);
+        } catch (FrameSlotTypeException e) {
+            throw new IllegalStateException();
+        }
     }
 
     /**
@@ -95,7 +130,14 @@ public final class FrameUtil {
      * @param value the new value of the local variable
      */
     public static void setFloatSafe(Frame frame, FrameSlot slot, float value) {
-        frame.setFloat(slot, value);
+        if (slot.getKind() != FrameSlotKind.Float) {
+            slot.setKind(FrameSlotKind.Float);
+        }
+        try {
+            frame.setFloat(slot, value);
+        } catch (FrameSlotTypeException e) {
+            throw new IllegalStateException();
+        }
     }
 
     /**
@@ -107,6 +149,13 @@ public final class FrameUtil {
      * @param value the new value of the local variable
      */
     public static void setDoubleSafe(Frame frame, FrameSlot slot, double value) {
-        frame.setDouble(slot, value);
+        if (slot.getKind() != FrameSlotKind.Double) {
+            slot.setKind(FrameSlotKind.Double);
+        }
+        try {
+            frame.setDouble(slot, value);
+        } catch (FrameSlotTypeException e) {
+            throw new IllegalStateException();
+        }
     }
 }

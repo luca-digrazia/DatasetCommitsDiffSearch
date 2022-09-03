@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,8 +27,8 @@ package com.oracle.truffle.api.frame;
 import com.oracle.truffle.api.*;
 
 /**
- * Represents a native frame without any local variables. Instances of this type must not be stored in a field or cast
- * to {@link java.lang.Object}.
+ * Represents a native frame without any local variables. Instances of this type must not be stored
+ * in a field or cast to {@link java.lang.Object}.
  */
 public class NativeFrame implements VirtualFrame, PackedFrame {
 
@@ -38,9 +40,10 @@ public class NativeFrame implements VirtualFrame, PackedFrame {
         this.arguments = arguments;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Arguments getArguments() {
-        return arguments;
+    public <T extends Arguments> T getArguments(Class<T> clazz) {
+        return (T) arguments;
     }
 
     @Override
@@ -50,6 +53,16 @@ public class NativeFrame implements VirtualFrame, PackedFrame {
 
     @Override
     public void setObject(FrameSlot slot, Object value) {
+        throw new UnsupportedOperationException("native frame");
+    }
+
+    @Override
+    public byte getByte(FrameSlot slot) {
+        throw new UnsupportedOperationException("native frame");
+    }
+
+    @Override
+    public void setByte(FrameSlot slot, byte value) {
         throw new UnsupportedOperationException("native frame");
     }
 
@@ -104,6 +117,11 @@ public class NativeFrame implements VirtualFrame, PackedFrame {
     }
 
     @Override
+    public Object getValue(FrameSlot slot) {
+        throw new UnsupportedOperationException("native frame");
+    }
+
+    @Override
     public PackedFrame pack() {
         return this;
     }
@@ -124,6 +142,12 @@ public class NativeFrame implements VirtualFrame, PackedFrame {
     }
 
     @Override
-    public void updateToLatestVersion() {
+    public FrameDescriptor getFrameDescriptor() {
+        throw new UnsupportedOperationException("native frame");
+    }
+
+    @Override
+    public boolean isInitialized(FrameSlot slot) {
+        throw new UnsupportedOperationException("native frame");
     }
 }

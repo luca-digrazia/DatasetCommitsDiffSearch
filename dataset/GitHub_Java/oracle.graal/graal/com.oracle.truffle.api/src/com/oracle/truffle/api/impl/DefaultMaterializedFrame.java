@@ -46,7 +46,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame, PackedFrame {
     }
 
     @Override
-    public void setObject(FrameSlot slot, Object value) {
+    public void setObject(FrameSlot slot, Object value) throws FrameSlotTypeException {
         wrapped.setObject(slot, value);
     }
 
@@ -56,7 +56,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame, PackedFrame {
     }
 
     @Override
-    public void setByte(FrameSlot slot, byte value) {
+    public void setByte(FrameSlot slot, byte value) throws FrameSlotTypeException {
         wrapped.setByte(slot, value);
     }
 
@@ -66,7 +66,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame, PackedFrame {
     }
 
     @Override
-    public void setBoolean(FrameSlot slot, boolean value) {
+    public void setBoolean(FrameSlot slot, boolean value) throws FrameSlotTypeException {
         wrapped.setBoolean(slot, value);
     }
 
@@ -76,7 +76,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame, PackedFrame {
     }
 
     @Override
-    public void setInt(FrameSlot slot, int value) {
+    public void setInt(FrameSlot slot, int value) throws FrameSlotTypeException {
         wrapped.setInt(slot, value);
     }
 
@@ -86,7 +86,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame, PackedFrame {
     }
 
     @Override
-    public void setLong(FrameSlot slot, long value) {
+    public void setLong(FrameSlot slot, long value) throws FrameSlotTypeException {
         wrapped.setLong(slot, value);
     }
 
@@ -96,7 +96,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame, PackedFrame {
     }
 
     @Override
-    public void setFloat(FrameSlot slot, float value) {
+    public void setFloat(FrameSlot slot, float value) throws FrameSlotTypeException {
         wrapped.setFloat(slot, value);
     }
 
@@ -106,7 +106,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame, PackedFrame {
     }
 
     @Override
-    public void setDouble(FrameSlot slot, double value) {
+    public void setDouble(FrameSlot slot, double value) throws FrameSlotTypeException {
         wrapped.setDouble(slot, value);
     }
 

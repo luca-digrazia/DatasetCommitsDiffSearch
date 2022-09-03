@@ -47,6 +47,7 @@ public interface Frame {
      * @param clazz the known type of the arguments object as a compile time constant
      * @return the arguments used when calling this method
      */
+    @CompilerDirectives.Unsafe
     <T extends Arguments> T getArguments(Class<T> clazz);
 
     /**
@@ -63,7 +64,7 @@ public interface Frame {
      * @param slot the slot of the local variable
      * @param value the new value of the local variable
      */
-    void setObject(FrameSlot slot, Object value);
+    void setObject(FrameSlot slot, Object value) throws FrameSlotTypeException;
 
     /**
      * Read access to a local variable of type byte.
