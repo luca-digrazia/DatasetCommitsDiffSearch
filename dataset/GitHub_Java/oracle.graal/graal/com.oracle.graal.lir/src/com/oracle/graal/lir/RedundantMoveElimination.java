@@ -32,10 +32,9 @@ import java.util.List;
 import java.util.Map;
 
 import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
@@ -46,7 +45,6 @@ import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase;
 
 import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterArray;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
@@ -57,10 +55,10 @@ import jdk.vm.ci.meta.Value;
  */
 public final class RedundantMoveElimination extends PostAllocationOptimizationPhase {
 
-    private static final DebugCounter deletedMoves = Debug.counter("RedundantMovesEliminated");
+    private static final DebugMetric deletedMoves = Debug.metric("RedundantMovesEliminated");
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
                     PostAllocationOptimizationContext context) {
         Optimization redundantMoveElimination = new Optimization(lirGenRes.getFrameMap());
         redundantMoveElimination.doOptimize(lirGenRes.getLIR());
@@ -106,7 +104,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
 
         Map<AbstractBlockBase<?>, BlockData> blockData = CollectionsFactory.newMap();
 
-        RegisterArray callerSaveRegs;
+        Register[] callerSaveRegs;
 
         /**
          * Contains the register number for registers which can be optimized and -1 for the others.
@@ -386,7 +384,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
                     int sourceIdx = getStateIdx(moveOp.getInput());
                     int destIdx = getStateIdx(moveOp.getResult());
                     if (sourceIdx >= 0 && destIdx >= 0) {
-                        assert isObjectValue(state[sourceIdx]) || LIRKind.isValue(moveOp.getInput()) : "move op moves object but input is not defined as object";
+                        assert isObjectValue(state[sourceIdx]) || moveOp.getInput().getLIRKind().isValue() : "move op moves object but input is not defined as object";
                         state[destIdx] = state[sourceIdx];
                         Debug.log("move value %d from %d to %d", state[sourceIdx], sourceIdx, destIdx);
                         return initValueNum;
@@ -424,7 +422,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
                             /*
                              * Assign a unique number to the output or temp location.
                              */
-                            state[stateIdx] = encodeValueNum(opValueNum++, !LIRKind.isValue(operand));
+                            state[stateIdx] = encodeValueNum(opValueNum++, !operand.getLIRKind().isValue());
                             Debug.log("set def %d for register %s(%d): %d", opValueNum, operand, stateIdx, state[stateIdx]);
                         }
                     }
@@ -555,7 +553,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
                 /*
                  * Moves with mismatching kinds are not moves, but memory loads/stores!
                  */
-                return source.getValueKind().equals(dest.getValueKind());
+                return source.getLIRKind().equals(dest.getLIRKind());
             }
             return false;
         }
