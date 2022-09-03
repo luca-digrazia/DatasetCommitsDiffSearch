@@ -27,8 +27,6 @@ package com.oracle.truffle.api.interop.java;
 import java.util.List;
 import java.util.Map;
 
-import org.graalvm.polyglot.Value;
-
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -47,27 +45,22 @@ abstract class ToJavaNode extends Node {
     @Child private Node isExecutable = Message.IS_EXECUTABLE.createNode();
     @Child private ToPrimitiveNode primitive = ToPrimitiveNode.create();
 
-    public final Object execute(Object value, TypeAndClass<?> type) {
-        return execute(value, type, null);
-    }
+    public abstract Object execute(Object value, TypeAndClass<?> type);
 
-    public abstract Object execute(Object value, TypeAndClass<?> type, Object languageContext);
-
-    @SuppressWarnings("unused")
     @Specialization(guards = "operand == null")
-    protected Object doNull(Object operand, TypeAndClass<?> type, Object languageContext) {
+    @SuppressWarnings("unused")
+    protected Object doNull(Object operand, TypeAndClass<?> type) {
         return null;
     }
 
-    @SuppressWarnings("unused")
     @Specialization(guards = {"operand != null", "operand.getClass() == cachedOperandType", "targetType == cachedTargetType"})
-    protected Object doCached(Object operand, TypeAndClass<?> targetType, Object languageContext,
+    protected Object doCached(Object operand, @SuppressWarnings("unused") TypeAndClass<?> targetType,
                     @Cached("operand.getClass()") Class<?> cachedOperandType,
                     @Cached("targetType") TypeAndClass<?> cachedTargetType) {
-        return convertImpl(cachedOperandType.cast(operand), cachedTargetType, languageContext);
+        return convertImpl(cachedOperandType.cast(operand), cachedTargetType);
     }
 
-    private Object convertImpl(Object value, TypeAndClass<?> targetType, Object languageContext) {
+    private Object convertImpl(Object value, TypeAndClass<?> targetType) {
         Object convertedValue;
         if (isPrimitiveType(targetType.clazz)) {
             convertedValue = primitive.toPrimitive(value, targetType.clazz);
@@ -75,12 +68,10 @@ abstract class ToJavaNode extends Node {
                 return convertedValue;
             }
         }
-        if (languageContext != null && (targetType.clazz == Object.class || targetType.clazz == Value.class)) {
-            convertedValue = value instanceof Value ? value : JavaInterop.toHostValue(value, languageContext);
-        } else if (JavaObject.isJavaInstance(targetType.clazz, value)) {
+        if (JavaObject.isJavaInstance(targetType.clazz, value)) {
             convertedValue = JavaObject.valueOf(value);
         } else if (!TruffleOptions.AOT && value instanceof TruffleObject && JavaInterop.isJavaFunctionInterface(targetType.clazz) && isExecutable((TruffleObject) value)) {
-            convertedValue = JavaInteropReflect.asJavaFunction(targetType.clazz, (TruffleObject) value, languageContext);
+            convertedValue = JavaInteropReflect.asJavaFunction(targetType.clazz, (TruffleObject) value);
         } else if (value == JavaObject.NULL) {
             return null;
         } else if (value instanceof TruffleObject) {
@@ -96,8 +87,8 @@ abstract class ToJavaNode extends Node {
 
     @Specialization(guards = "operand != null", replaces = "doCached")
     @TruffleBoundary
-    protected Object doGeneric(Object operand, TypeAndClass<?> type, Object languageContext) {
-        return convertImpl(operand, type, languageContext);
+    protected Object doGeneric(Object operand, TypeAndClass<?> type) {
+        return convertImpl(operand, type);
     }
 
     private static boolean isPrimitiveType(Class<?> clazz) {
@@ -181,7 +172,7 @@ abstract class ToJavaNode extends Node {
             if (type == null) {
                 return raw;
             }
-            Object real = JavaInterop.findOriginalObject(raw);
+            Object real = JavaInterop.ACCESSOR.engine().findOriginalObject(raw);
             return toJava.execute(real, type);
         }
     }

@@ -33,16 +33,10 @@ final class JavaObject implements TruffleObject {
 
     final Object obj;
     final Class<?> clazz;
-    final Object languageContext;
 
     JavaObject(Object obj, Class<?> clazz) {
-        this(obj, clazz, null);
-    }
-
-    JavaObject(Object obj, Class<?> clazz, Object languageContext) {
         this.obj = obj;
         this.clazz = clazz;
-        this.languageContext = languageContext;
     }
 
     static boolean isInstance(TruffleObject obj) {
