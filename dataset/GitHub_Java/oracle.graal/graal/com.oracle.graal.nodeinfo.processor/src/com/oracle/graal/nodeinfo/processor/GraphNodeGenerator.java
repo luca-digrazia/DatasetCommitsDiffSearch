@@ -47,8 +47,6 @@ import com.oracle.truffle.dsl.processor.java.model.*;
  */
 public class GraphNodeGenerator {
 
-    private static final boolean GENERATE_ASSERTIONS = false;
-
     private final GraphNodeProcessor env;
     private final Types types;
     private final Elements elements;
@@ -285,10 +283,6 @@ public class GraphNodeGenerator {
     enum NodeRefsType {
         Inputs,
         Successors;
-
-        String singular() {
-            return name().substring(0, name().length() - 1);
-        }
     }
 
     CodeCompilationUnit process(TypeElement node, boolean constructorsOnly) {
@@ -342,7 +336,7 @@ public class GraphNodeGenerator {
                 createPositionAccessibleFieldOrderClass(packageElement);
 
                 if (!inputListFields.isEmpty() || !successorListFields.isEmpty()) {
-                    createGetNodeListAtPositionMethod();
+                    createGetNodeListAtMethod();
                     createSetNodeListAtMethod();
                 }
             }
@@ -358,11 +352,6 @@ public class GraphNodeGenerator {
                 createAllIteratorClass(Inputs, inputsIteratorClass.asType(), packageElement, inputFields, inputListFields);
                 createWithModCountIteratorClass(Inputs, inputsIteratorClass.asType(), packageElement);
                 createIterableClass(Inputs, packageElement);
-                createGetNodeAtMethod(NodeRefsType.Inputs, inputFields);
-                createCountMethod(NodeRefsType.Inputs, inputFields.size(), inputListFields.size());
-                if (!inputListFields.isEmpty()) {
-                    createGetNodeListAtIndexMethod(NodeRefsType.Inputs, inputListFields);
-                }
             }
 
             if (hasSuccessors) {
@@ -375,11 +364,6 @@ public class GraphNodeGenerator {
                 createAllIteratorClass(Successors, successorsIteratorClass.asType(), packageElement, successorFields, successorListFields);
                 createWithModCountIteratorClass(Successors, successorsIteratorClass.asType(), packageElement);
                 createIterableClass(Successors, packageElement);
-                createGetNodeAtMethod(NodeRefsType.Successors, successorFields);
-                createCountMethod(NodeRefsType.Successors, successorFields.size(), successorListFields.size());
-                if (!successorListFields.isEmpty()) {
-                    createGetNodeListAtIndexMethod(NodeRefsType.Successors, successorListFields);
-                }
             }
         }
         compilationUnit.add(genClass);
@@ -442,22 +426,6 @@ public class GraphNodeGenerator {
         genClassName = null;
     }
 
-    private CodeVariableElement addParameter(CodeExecutableElement method, TypeMirror type, String name) {
-        return addParameter(method, type, name, true);
-    }
-
-    private CodeVariableElement addParameter(CodeExecutableElement method, TypeMirror type, String name, boolean checkHiding) {
-        CodeVariableElement parameter = new CodeVariableElement(type, name);
-        if (checkHiding && hidesField(parameter.getSimpleName().toString())) {
-            DeclaredType suppress = (DeclaredType) getType(SuppressWarnings.class);
-            CodeAnnotationMirror suppressMirror = new CodeAnnotationMirror(suppress);
-            suppressMirror.setElementValue(suppressMirror.findExecutableElement("value"), new CodeAnnotationValue("hiding"));
-            parameter.getAnnotationMirrors().add(suppressMirror);
-        }
-        method.addParameter(parameter);
-        return parameter;
-    }
-
     /**
      * Checks that a generated method overrides exactly one method in a super type and that the
      * super type is Node.
@@ -480,11 +448,9 @@ public class GraphNodeGenerator {
 
     private ExecutableElement createIsOptionalInputAtMethod() {
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), getType(boolean.class), "isOptionalInputAt");
-        addParameter(method, Position.asType(), "pos");
+        method.addParameter(new CodeVariableElement(Position.asType(), "pos"));
         CodeTreeBuilder b = method.createBuilder();
-        if (GENERATE_ASSERTIONS) {
-            b.startAssert().string("pos.isInput()").end();
-        }
+        b.startAssert().string("pos.isInput()").end();
         if (!optionalInputs.isEmpty()) {
             b.startSwitch().string("pos.getIndex()").end().startBlock();
             int index = 0;
@@ -524,10 +490,9 @@ public class GraphNodeGenerator {
 
         // Constructor
         CodeExecutableElement ctor = new CodeExecutableElement(Collections.emptySet(), null, name);
-        addParameter(ctor, getType(boolean.class), "callForward");
+        ctor.addParameter(new CodeVariableElement(getType(boolean.class), "callForward"));
         CodeTreeBuilder b = ctor.createBuilder();
         b.startStatement().startSuperCall();
-        b.string(genClassName, ".this");
         b.string(String.valueOf(nodeFields.size()));
         b.string(String.valueOf(nodeListFields.size()));
         b.string(String.valueOf(nodeRefsType == NodeRefsType.Inputs));
@@ -547,7 +512,7 @@ public class GraphNodeGenerator {
     private void createGetFieldMethod(CodeTypeElement cls, List<VariableElement> fields, TypeMirror returnType, String name) {
         if (!fields.isEmpty()) {
             CodeExecutableElement method = new CodeExecutableElement(modifiers(PROTECTED, FINAL), returnType, name);
-            addParameter(method, getType(int.class), "at");
+            method.addParameter(new CodeVariableElement(getType(int.class), "at"));
             CodeTreeBuilder b = method.createBuilder();
             createGetFieldCases(b, fields, returnType, null);
             cls.add(method);
@@ -658,7 +623,7 @@ public class GraphNodeGenerator {
 
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), getType(String[].class), "getOrderedFieldNames");
 
-        addParameter(method, getType(boolean.class), "input", false);
+        method.addParameter(new CodeVariableElement(getType(boolean.class), "input"));
 
         CodeTreeBuilder b = method.createBuilder();
         b.startIf().string("input").end().startBlock();
@@ -704,11 +669,10 @@ public class GraphNodeGenerator {
         b.startElseBlock();
         b.startStatement().string("subIndex++").end();
         b.end();
+        DeclaredType nodeListOfNode = types.getDeclaredType(NodeList, types.getWildcardType(Node.asType(), null));
         int count = nodeFieldsSize + nodeListFieldsSize;
         b.startWhile().string("index < " + count).end().startBlock();
-        b.startIf().string("subIndex == 0").end().startBlock();
-        b.startStatement().string("list = getNodeList(index - " + nodeFieldsSize + ")").end();
-        b.end();
+        b.declaration(nodeListOfNode, "list", "getNodeList(index - " + nodeFieldsSize + ")");
         b.startIf().string("subIndex < list.size()").end().startBlock();
         b.startStatement().string("return").end();
         b.end();
@@ -785,16 +749,16 @@ public class GraphNodeGenerator {
 
         // contains(Node) method
         method = new CodeExecutableElement(modifiers(PUBLIC, FINAL), getType(boolean.class), "contains");
-        addParameter(method, Node.asType(), "n");
+        method.addParameter(new CodeVariableElement(Node.asType(), "n"));
         b = method.createBuilder();
-        b.startStatement().string("return " + nodeRefsType.name().toLowerCase() + "Contains(n)").end();
+        b.startStatement().string("return " + nodeRefsType.name().toLowerCase() + "Contain(n)").end();
         cls.add(method);
         genClass.add(cls);
     }
 
     private void createContainsMethod(NodeRefsType nodeRefsType, List<VariableElement> nodeFields, List<VariableElement> nodeListFields) {
-        CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC, FINAL), getType(boolean.class), nodeRefsType.name().toLowerCase() + "Contains");
-        addParameter(method, Node.asType(), "n");
+        CodeExecutableElement method = new CodeExecutableElement(modifiers(PRIVATE, FINAL), getType(boolean.class), nodeRefsType.name().toLowerCase() + "Contain");
+        method.addParameter(new CodeVariableElement(Node.asType(), "n"));
         CodeTreeBuilder b = method.createBuilder();
         for (VariableElement f : nodeFields) {
             b.startIf().string("n == " + f).end().startBlock();
@@ -824,7 +788,7 @@ public class GraphNodeGenerator {
 
     private void createGetNodeAtMethod() {
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC, FINAL), Node.asType(), "getNodeAt");
-        addParameter(method, Position.asType(), "pos");
+        method.addParameter(new CodeVariableElement(Position.asType(), "pos"));
         CodeTreeBuilder b = method.createBuilder();
         b.startIf().string("pos.isInput()").end().startBlock();
         createGetNodeAt(b, inputFields, inputListFields);
@@ -836,79 +800,9 @@ public class GraphNodeGenerator {
         checkOnlyInGenNode(method);
     }
 
-    private void createCountMethod(NodeRefsType nodeRefsType, int nodesCount, int nodeListsCount) {
-        CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC, FINAL), getType(int.class), "get" + nodeRefsType + "Count");
-        CodeTreeBuilder b = method.createBuilder();
-
-        b.startStatement().string("return " + (nodeListsCount << 16 | nodesCount), " /* (" + nodeListsCount + " << 16 | " + nodesCount + ") */").end();
-        genClass.add(method);
-        checkOnlyInGenNode(method);
-    }
-
-    private void createGetNodeAtMethod(NodeRefsType nodeRefsType, List<VariableElement> nodes) {
-        CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC, FINAL), Node.asType(), "get" + nodeRefsType.singular() + "NodeAt");
-        addParameter(method, getType(int.class), "index");
-        CodeTreeBuilder b = method.createBuilder();
-        boolean justOne = nodes.size() == 1;
-        if (!justOne) {
-            b.startSwitch().string("index").end().startBlock();
-        } else if (GENERATE_ASSERTIONS) {
-            b.startAssert().string("index == 0").end();
-        }
-        int index = 0;
-        for (VariableElement f : nodes) {
-            if (!justOne) {
-                b.startCase().string(String.valueOf(index)).end();
-            }
-            b.startReturn();
-            if (!isAssignableWithErasure(f, Node)) {
-                b.cast(((DeclaredType) Node.asType()).asElement().getSimpleName().toString());
-            }
-            b.string(genClassName + ".this." + f.getSimpleName());
-            b.end();
-            index++;
-        }
-        if (!justOne) {
-            b.end();
-            b.startThrow().startNew(getType(NoSuchElementException.class)).end().end();
-        }
-        genClass.add(method);
-        checkOnlyInGenNode(method);
-    }
-
-    private void createGetNodeListAtIndexMethod(NodeRefsType nodeRefsType, List<VariableElement> nodeLists) {
-        CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC, FINAL), types.getDeclaredType(NodeList, types.getWildcardType(Node.asType(), null)), "get" +
-                        nodeRefsType.singular() + "NodeListAt");
-        addParameter(method, getType(int.class), "index");
-        CodeTreeBuilder b = method.createBuilder();
-
-        boolean justOne = nodeLists.size() == 1;
-        if (!justOne) {
-            b.startSwitch().string("index").end().startBlock();
-        } else if (GENERATE_ASSERTIONS) {
-            b.startAssert().string("index == 0").end();
-        }
-        int index = 0;
-        for (VariableElement f : nodeLists) {
-            if (!justOne) {
-                b.startCase().string(String.valueOf(index)).end();
-            }
-            b.startReturn();
-            b.string(genClassName + ".this." + f.getSimpleName());
-            b.end();
-            index++;
-        }
-        if (!justOne) {
-            b.end();
-            b.startThrow().startNew(getType(NoSuchElementException.class)).end().end();
-        }
-        genClass.add(method);
-        checkOnlyInGenNode(method);
-    }
-
-    private void createGetNodeListAtPositionMethod() {
+    private void createGetNodeListAtMethod() {
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC, FINAL), types.getDeclaredType(NodeList, types.getWildcardType(Node.asType(), null)), "getNodeListAt");
-        addParameter(method, Position.asType(), "pos");
+        method.addParameter(new CodeVariableElement(Position.asType(), "pos"));
         CodeTreeBuilder b = method.createBuilder();
         b.startIf().string("pos.isInput()").end().startBlock();
         createGetNodeListAt(b, inputFields, inputListFields);
@@ -928,8 +822,8 @@ public class GraphNodeGenerator {
         suppressMirror.setElementValue(suppressMirror.findExecutableElement("value"), new CodeAnnotationValue("unchecked"));
         method.getAnnotationMirrors().add(suppressMirror);
 
-        addParameter(method, Position.asType(), "pos");
-        addParameter(method, types.getDeclaredType(NodeList, types.getWildcardType(Node.asType(), null)), "list");
+        method.addParameter(new CodeVariableElement(Position.asType(), "pos"));
+        method.addParameter(new CodeVariableElement(types.getDeclaredType(NodeList, types.getWildcardType(Node.asType(), null)), "list"));
         CodeTreeBuilder b = method.createBuilder();
         b.startIf().string("pos.isInput()").end().startBlock();
         createSetNodeListAt(b, inputFields, inputListFields);
@@ -943,7 +837,7 @@ public class GraphNodeGenerator {
 
     private void createGetNameOfMethod() {
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC, FINAL), getType(String.class), "getNameOf");
-        addParameter(method, Position.asType(), "pos");
+        method.addParameter(new CodeVariableElement(Position.asType(), "pos"));
         CodeTreeBuilder b = method.createBuilder();
 
         b.startIf().string("pos.isInput()").end().startBlock();
@@ -958,11 +852,9 @@ public class GraphNodeGenerator {
 
     private void createGetInputTypeAtMethod() {
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC, FINAL), getType(InputType.class), "getInputTypeAt");
-        addParameter(method, Position.asType(), "pos");
+        method.addParameter(new CodeVariableElement(Position.asType(), "pos"));
         CodeTreeBuilder b = method.createBuilder();
-        if (GENERATE_ASSERTIONS) {
-            b.startAssert().string("pos.isInput()").end();
-        }
+        b.startAssert().string("pos.isInput()").end();
         boolean hasNodes = !inputFields.isEmpty();
         boolean hasNodeLists = !inputListFields.isEmpty();
         if (hasNodeLists || hasNodes) {
@@ -990,8 +882,15 @@ public class GraphNodeGenerator {
 
     private void createUpdateOrInitializeNodeAtMethod(boolean isInitialization) {
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC, FINAL), getType(void.class), (isInitialization ? "initialize" : "update") + "NodeAt");
-        addParameter(method, Position.asType(), "pos");
-        addParameter(method, Node.asType(), "newValue");
+        method.addParameter(new CodeVariableElement(Position.asType(), "pos"));
+        CodeVariableElement newValue = new CodeVariableElement(Node.asType(), "newValue");
+        if (hidesField(newValue.getSimpleName().toString())) {
+            DeclaredType suppress = (DeclaredType) getType(SuppressWarnings.class);
+            CodeAnnotationMirror suppressMirror = new CodeAnnotationMirror(suppress);
+            suppressMirror.setElementValue(suppressMirror.findExecutableElement("value"), new CodeAnnotationValue("hiding"));
+            newValue.getAnnotationMirrors().add(suppressMirror);
+        }
+        method.addParameter(newValue);
         CodeTreeBuilder b = method.createBuilder();
         b.startIf().string("pos.isInput()").end().startBlock();
         createUpdateOrInitializeNodeAt(b, inputFields, inputListFields, isInitialization);
@@ -1011,9 +910,7 @@ public class GraphNodeGenerator {
         } else {
             if (hasNodes) {
                 if (!hasNodeLists) {
-                    if (GENERATE_ASSERTIONS) {
-                        b.startAssert().string("pos.getSubIndex() == NOT_ITERABLE").end();
-                    }
+                    b.startAssert().string("pos.getSubIndex() == NOT_ITERABLE").end();
                 } else {
                     b.startIf().string("pos.getSubIndex() == NOT_ITERABLE").end().startBlock();
                 }
@@ -1026,9 +923,7 @@ public class GraphNodeGenerator {
 
             if (hasNodeLists) {
                 if (!hasNodes) {
-                    if (GENERATE_ASSERTIONS) {
-                        b.startAssert().string("pos.getSubIndex() != NOT_ITERABLE").end();
-                    }
+                    b.startAssert().string("pos.getSubIndex() != NOT_ITERABLE").end();
                 } else {
                     b.startElseBlock();
                 }
@@ -1046,9 +941,7 @@ public class GraphNodeGenerator {
         if (!hasNodeLists) {
             b.startThrow().startNew(getType(NoSuchElementException.class)).end().end();
         } else {
-            if (GENERATE_ASSERTIONS) {
-                b.startAssert().string("pos.getSubIndex() == NODE_LIST").end();
-            }
+            b.startAssert().string("pos.getSubIndex() == NODE_LIST").end();
             b.declaration("int", "at", "pos.getIndex() - " + nodes.size());
             createGetFieldCases(b, nodeLists, Node.asType(), "");
         }
@@ -1059,9 +952,7 @@ public class GraphNodeGenerator {
         if (!hasNodeLists) {
             b.startThrow().startNew(getType(NoSuchElementException.class)).end().end();
         } else {
-            if (GENERATE_ASSERTIONS) {
-                b.startAssert().string("pos.getSubIndex() == NODE_LIST").end();
-            }
+            b.startAssert().string("pos.getSubIndex() == NODE_LIST").end();
             b.declaration("int", "at", "pos.getIndex() - " + nodes.size());
             createSetNodeListAtCases(b, nodeLists, Node.asType(), "");
         }
@@ -1096,9 +987,7 @@ public class GraphNodeGenerator {
         } else {
             if (hasNodes) {
                 if (!hasNodeLists) {
-                    if (GENERATE_ASSERTIONS) {
-                        b.startAssert().string("pos.getSubIndex() == NOT_ITERABLE").end();
-                    }
+                    b.startAssert().string("pos.getSubIndex() == NOT_ITERABLE").end();
                 } else {
                     b.startIf().string("pos.getSubIndex() == NOT_ITERABLE").end().startBlock();
                 }
@@ -1111,9 +1000,7 @@ public class GraphNodeGenerator {
 
             if (hasNodeLists) {
                 if (!hasNodes) {
-                    if (GENERATE_ASSERTIONS) {
-                        b.startAssert().string("pos.getSubIndex() != NOT_ITERABLE").end();
-                    }
+                    b.startAssert().string("pos.getSubIndex() != NOT_ITERABLE").end();
                 } else {
                     b.startElseBlock();
                 }
