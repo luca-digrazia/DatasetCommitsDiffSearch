@@ -46,9 +46,6 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native byte[] initializeBytecode(long metaspaceMethod, byte[] code);
 
     @Override
-    public native int exceptionTableLength(long metaspaceMethod);
-
-    @Override
     public native long exceptionTableStart(long metaspaceMethod);
 
     @Override

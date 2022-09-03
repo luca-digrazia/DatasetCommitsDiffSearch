@@ -54,10 +54,13 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     private final HotSpotResolvedObjectType holder;
     private final HotSpotConstantPool constantPool;
     private final HotSpotSignature signature;
+    private final int codeSize;
+    private/* final */int exceptionHandlerCount;
     private boolean callerSensitive;
     private boolean forceInline;
     private boolean dontInline;
     private boolean ignoredBySecurityStackWalk;
+    private Boolean hasBalancedMonitors;
     private Map<Object, Object> compilerStorage;
     private HotSpotMethodData methodData;
     private byte[] code;
@@ -112,6 +115,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
         final int signatureIndex = unsafe.getChar(constMethod + config.constMethodSignatureIndexOffset);
         this.signature = (HotSpotSignature) constantPool.lookupSignature(signatureIndex);
+        this.codeSize = unsafe.getChar(constMethod + config.constMethodCodeSizeOffset);
 
         runtime().getCompilerToVM().initializeMethod(metaspaceMethod, this);
     }
@@ -175,34 +179,32 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public byte[] getCode() {
-        if (getCodeSize() == 0) {
+        if (codeSize == 0) {
             return null;
         }
         if (code == null && holder.isLinked()) {
-            code = runtime().getCompilerToVM().initializeBytecode(metaspaceMethod, new byte[getCodeSize()]);
-            assert code.length == getCodeSize() : "expected: " + getCodeSize() + ", actual: " + code.length;
+            code = runtime().getCompilerToVM().initializeBytecode(metaspaceMethod, new byte[codeSize]);
+            assert code.length == codeSize : "expected: " + codeSize + ", actual: " + code.length;
         }
         return code;
     }
 
     @Override
     public int getCodeSize() {
-        return unsafe.getChar(getConstMethod() + runtime().getConfig().constMethodCodeSizeOffset);
+        return codeSize;
     }
 
     @Override
     public ExceptionHandler[] getExceptionHandlers() {
-        final boolean hasExceptionTable = (getConstMethodFlags() & runtime().getConfig().constMethodHasExceptionTable) != 0;
-        if (!hasExceptionTable) {
+        if (exceptionHandlerCount == 0) {
             return new ExceptionHandler[0];
         }
 
+        ExceptionHandler[] handlers = new ExceptionHandler[exceptionHandlerCount];
         HotSpotVMConfig config = runtime().getConfig();
-        final int exceptionTableLength = runtime().getCompilerToVM().exceptionTableLength(metaspaceMethod);
-        ExceptionHandler[] handlers = new ExceptionHandler[exceptionTableLength];
         long exceptionTableElement = runtime().getCompilerToVM().exceptionTableStart(metaspaceMethod);
 
-        for (int i = 0; i < exceptionTableLength; i++) {
+        for (int i = 0; i < exceptionHandlerCount; i++) {
             final int startPc = unsafe.getChar(exceptionTableElement + config.exceptionTableElementStartPcOffset);
             final int endPc = unsafe.getChar(exceptionTableElement + config.exceptionTableElementEndPcOffset);
             final int handlerPc = unsafe.getChar(exceptionTableElement + config.exceptionTableElementHandlerPcOffset);
@@ -261,21 +263,10 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     }
 
     public boolean hasBalancedMonitors() {
-        HotSpotVMConfig config = runtime().getConfig();
-        final int modifiers = getAllModifiers();
-
-        // Method has no monitorenter/exit bytecodes.
-        if ((modifiers & config.jvmAccHasMonitorBytecodes) == 0) {
-            return false;
+        if (hasBalancedMonitors == null) {
+            hasBalancedMonitors = runtime().getCompilerToVM().hasBalancedMonitors(metaspaceMethod);
         }
-
-        // Check to see if a previous compilation computed the monitor-matching analysis.
-        if ((modifiers & config.jvmAccMonitorMatch) != 0) {
-            return true;
-        }
-
-        // This either happens only once if monitors are balanced or very rarely multiple-times.
-        return runtime().getCompilerToVM().hasBalancedMonitors(metaspaceMethod);
+        return hasBalancedMonitors;
     }
 
     @Override
@@ -310,7 +301,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public StackTraceElement asStackTraceElement(int bci) {
-        if (bci < 0 || bci >= getCodeSize()) {
+        if (bci < 0 || bci >= codeSize) {
             // HotSpot code can only construct stack trace elements for valid bcis
             StackTraceElement ste = runtime().getCompilerToVM().getStackTraceElement(metaspaceMethod, 0);
             return new StackTraceElement(ste.getClassName(), ste.getMethodName(), ste.getFileName(), -1);
@@ -492,12 +483,10 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public LineNumberTable getLineNumberTable() {
-        final boolean hasLineNumberTable = (getConstMethodFlags() & runtime().getConfig().constMethodHasLineNumberTable) != 0;
-        if (!hasLineNumberTable) {
+        long[] values = runtime().getCompilerToVM().getLineNumberTable(metaspaceMethod);
+        if (values == null) {
             return null;
         }
-
-        long[] values = runtime().getCompilerToVM().getLineNumberTable(metaspaceMethod);
         assert values.length % 2 == 0;
         int[] bci = new int[values.length / 2];
         int[] line = new int[values.length / 2];
@@ -510,10 +499,18 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         return new LineNumberTableImpl(line, bci);
     }
 
+    /**
+     * Returns whether or not this method has a local variable table.
+     * 
+     * @return true if this method has a local variable table
+     */
+    private boolean hasLocalVariableTable() {
+        return (getConstMethodFlags() & runtime().getConfig().constMethodHasLocalVariableTable) != 0;
+    }
+
     @Override
     public LocalVariableTable getLocalVariableTable() {
-        final boolean hasLocalVariableTable = (getConstMethodFlags() & runtime().getConfig().constMethodHasLocalVariableTable) != 0;
-        if (!hasLocalVariableTable) {
+        if (!hasLocalVariableTable()) {
             return null;
         }
 

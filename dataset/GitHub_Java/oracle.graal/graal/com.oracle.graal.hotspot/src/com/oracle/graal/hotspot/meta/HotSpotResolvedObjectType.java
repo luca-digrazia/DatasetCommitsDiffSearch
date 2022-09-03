@@ -736,6 +736,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     }
 
     public ResolvedJavaMethod getClassInitializer() {
+        System.out.println(this);
         final long metaspaceMethod = runtime().getCompilerToVM().getClassInitializer(metaspaceKlass());
         if (metaspaceMethod != 0L) {
             return createMethod(metaspaceMethod);
