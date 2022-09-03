@@ -28,31 +28,30 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 
-abstract class LookupFieldNode extends Node {
+abstract class LookupInnerClassNode extends Node {
     static final int LIMIT = 3;
 
-    LookupFieldNode() {
+    LookupInnerClassNode() {
     }
 
-    static LookupFieldNode create() {
-        return LookupFieldNodeGen.create();
+    static LookupInnerClassNode create() {
+        return LookupInnerClassNodeGen.create();
     }
 
-    public abstract JavaFieldDesc execute(Class<?> clazz, String name, boolean onlyStatic);
+    public abstract Class<?> execute(Class<?> outerclass, String name);
 
     @SuppressWarnings("unused")
-    @Specialization(guards = {"onlyStatic == cachedStatic", "clazz == cachedClazz", "cachedName.equals(name)"}, limit = "LIMIT")
-    static JavaFieldDesc doCached(Class<?> clazz, String name, boolean onlyStatic,
-                    @Cached("onlyStatic") boolean cachedStatic,
+    @Specialization(guards = {"clazz == cachedClazz", "cachedName.equals(name)"}, limit = "LIMIT")
+    static Class<?> doCached(Class<?> clazz, String name,
                     @Cached("clazz") Class<?> cachedClazz,
                     @Cached("name") String cachedName,
-                    @Cached("doUncached(clazz, name, onlyStatic)") JavaFieldDesc cachedField) {
-        assert cachedField == JavaInteropReflect.findField(clazz, name, onlyStatic);
-        return cachedField;
+                    @Cached("doUncached(clazz, name)") Class<?> cachedInnerClass) {
+        assert cachedInnerClass == JavaInteropReflect.findInnerClass(clazz, name);
+        return cachedInnerClass;
     }
 
     @Specialization(replaces = "doCached")
-    static JavaFieldDesc doUncached(Class<?> clazz, String name, boolean onlyStatic) {
-        return JavaInteropReflect.findField(clazz, name, onlyStatic);
+    static Class<?> doUncached(Class<?> clazz, String name) {
+        return JavaInteropReflect.findInnerClass(clazz, name);
     }
 }

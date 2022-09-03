@@ -28,31 +28,31 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 
-abstract class LookupFieldNode extends Node {
+abstract class LookupMethodNode extends Node {
     static final int LIMIT = 3;
 
-    LookupFieldNode() {
+    LookupMethodNode() {
     }
 
-    static LookupFieldNode create() {
-        return LookupFieldNodeGen.create();
+    static LookupMethodNode create() {
+        return LookupMethodNodeGen.create();
     }
 
-    public abstract JavaFieldDesc execute(Class<?> clazz, String name, boolean onlyStatic);
+    public abstract JavaMethodDesc execute(Class<?> clazz, String name, boolean onlyStatic);
 
     @SuppressWarnings("unused")
     @Specialization(guards = {"onlyStatic == cachedStatic", "clazz == cachedClazz", "cachedName.equals(name)"}, limit = "LIMIT")
-    static JavaFieldDesc doCached(Class<?> clazz, String name, boolean onlyStatic,
+    static JavaMethodDesc doCached(Class<?> clazz, String name, boolean onlyStatic,
                     @Cached("onlyStatic") boolean cachedStatic,
                     @Cached("clazz") Class<?> cachedClazz,
                     @Cached("name") String cachedName,
-                    @Cached("doUncached(clazz, name, onlyStatic)") JavaFieldDesc cachedField) {
-        assert cachedField == JavaInteropReflect.findField(clazz, name, onlyStatic);
-        return cachedField;
+                    @Cached("doUncached(clazz, name, onlyStatic)") JavaMethodDesc cachedMethod) {
+        assert cachedMethod == JavaInteropReflect.findMethod(clazz, name, onlyStatic);
+        return cachedMethod;
     }
 
     @Specialization(replaces = "doCached")
-    static JavaFieldDesc doUncached(Class<?> clazz, String name, boolean onlyStatic) {
-        return JavaInteropReflect.findField(clazz, name, onlyStatic);
+    static JavaMethodDesc doUncached(Class<?> clazz, String name, boolean onlyStatic) {
+        return JavaInteropReflect.findMethod(clazz, name, onlyStatic);
     }
 }
