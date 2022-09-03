@@ -27,7 +27,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -61,7 +60,7 @@ public class StaticAnalysisResultsBuilder {
      * The universe used to convert analysis metadata to hosted metadata, or {@code null} if no
      * conversion should be performed.
      */
-    protected final Universe converter;
+    private final Universe converter;
 
     /* Caches for JavaTypeProfile with 0, 1, or more types. */
     private final JavaTypeProfile[] types0;
@@ -110,10 +109,10 @@ public class StaticAnalysisResultsBuilder {
 
         ArrayList<BytecodeEntry> entries = new ArrayList<>(method.getCodeSize());
 
-        for (Map.Entry<Object, InstanceOfTypeFlow> entry : originalFlows.getInstanceOfFlows()) {
-            if (BytecodeLocation.isValidBci(entry.getKey())) {
-                int bci = (int) entry.getKey();
-                InstanceOfTypeFlow originalInstanceOf = entry.getValue();
+        for (InstanceOfTypeFlow originalInstanceOf : originalFlows.getInstaceOfFlows()) {
+            if (BytecodeLocation.hasValidBci(originalInstanceOf.getLocation())) {
+
+                int bci = originalInstanceOf.getLocation().getBci();
 
                 /* Fold the instanceof flows. */
                 TypeState instanceOfTypeState = methodFlow.foldTypeFlow(bb, originalInstanceOf);
@@ -123,15 +122,14 @@ public class StaticAnalysisResultsBuilder {
                 if (typeProfile != null) {
                     ensureSize(entries, bci);
                     assert entries.get(bci) == null : "In " + method.format("%h.%n(%p)") + " a profile with bci=" + bci + " already exists: " + entries.get(bci);
-                    entries.set(bci, createBytecodeEntry(method, bci, typeProfile, null, null));
+                    entries.set(bci, new BytecodeEntry(bci, typeProfile, null, null));
                 }
             }
         }
 
-        for (Entry<Object, InvokeTypeFlow> entry : originalFlows.getInvokes()) {
-            if (BytecodeLocation.isValidBci(entry.getKey())) {
-                int bci = (int) entry.getKey();
-                InvokeTypeFlow originalInvoke = entry.getValue();
+        for (InvokeTypeFlow originalInvoke : originalFlows.getInvokes()) {
+            if (BytecodeLocation.hasValidBci(originalInvoke.getLocation())) {
+                int bci = originalInvoke.getLocation().getBci();
 
                 TypeState invokeTypeState = TypeState.forEmpty();
                 if (originalInvoke.getTargetMethod().hasReceiver()) {
@@ -153,7 +151,7 @@ public class StaticAnalysisResultsBuilder {
                 if (typeProfile != null || methodProfile != null || invokeResultTypeProfile != null) {
                     ensureSize(entries, bci);
                     assert entries.get(bci) == null : "In " + method.format("%h.%n(%p)") + " a profile with bci=" + bci + " already exists: " + entries.get(bci);
-                    entries.set(bci, createBytecodeEntry(method, bci, typeProfile, methodProfile, invokeResultTypeProfile));
+                    entries.set(bci, new BytecodeEntry(bci, typeProfile, methodProfile, invokeResultTypeProfile));
                 }
             }
         }
@@ -194,15 +192,6 @@ public class StaticAnalysisResultsBuilder {
             }
         }
 
-        return createStaticAnalysisResults(method, parameterTypeProfiles, resultTypeProfile, first);
-    }
-
-    protected BytecodeEntry createBytecodeEntry(@SuppressWarnings("unused") AnalysisMethod method, int bci, JavaTypeProfile typeProfile, JavaMethodProfile methodProfile,
-                    JavaTypeProfile invokeResultTypeProfile) {
-        return new BytecodeEntry(bci, typeProfile, methodProfile, invokeResultTypeProfile);
-    }
-
-    protected StaticAnalysisResults createStaticAnalysisResults(AnalysisMethod method, JavaTypeProfile[] parameterTypeProfiles, JavaTypeProfile resultTypeProfile, BytecodeEntry first) {
         if (parameterTypeProfiles == null && resultTypeProfile == null && first == null) {
             return StaticAnalysisResults.NO_RESULTS;
         } else {
